@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, TypeOperators, UndecidableInstances, MultiParamTypeClasses, EmptyDataDecls, DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, PolyKinds, GADTs #-}
+{-# LANGUAGE TypeFamilies, TypeOperators, UndecidableInstances, MultiParamTypeClasses, EmptyDataDecls, DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, PolyKinds, GADTs, DeriveGeneric, DeriveDataTypeable #-}
 -- | Defines a generic schema type that can be used to define schemas for Beam tables
 module Database.Beam.Schema where
 
@@ -22,7 +22,7 @@ data t1 :#: t2
 data TableSchema t
 
 type DatabaseSchema = [(Text, ReifiedTableSchema)]
-type ReifiedTableSchema = [(Text, SqlColDesc)]
+type ReifiedTableSchema = [(Text, SQLColumnSchema)]
 
 data GenTable where
     GenTable :: Table t => Proxy t -> GenTable
@@ -49,7 +49,7 @@ type family DBSchemaForGeneric x where
     DBSchemaForGeneric (K1 Generic.R s x) = s
 
 -- * Tables
-data TableId = TableId deriving Show
+data TableId = TableId deriving (Show, Generic, Typeable)
 
 data GenField t f
 
@@ -69,9 +69,9 @@ class Typeable table => Table table where
 
     reifyTableSchema :: Proxy table -> ReifiedTableSchema
     default reifyTableSchema :: ( Generic table
-                                , GReifySchema (WrapFields (GenField table) (SchemaForGeneric (Rep table ()))) ) => Proxy table -> ReifiedTableSchema
+                                , GReifySchema (WrapFields (GenField table) (PrimaryKeyField table :|: SchemaForGeneric (Rep table ()))) ) => Proxy table -> ReifiedTableSchema
     reifyTableSchema table = reifyGenericSchema (schemaProxy table)
-        where schemaProxy :: Proxy table -> Proxy (WrapFields (GenField table) (SchemaForGeneric (Rep table ())))
+        where schemaProxy :: Proxy table -> Proxy (WrapFields (GenField table) (PrimaryKeyField table :|: SchemaForGeneric (Rep table ())))
               schemaProxy _ = Proxy
 
     getSchema :: table -> Schema table
@@ -83,9 +83,16 @@ class Typeable table => Table table where
 
     makeSqlValues :: table -> [SQLValue]
     default makeSqlValues :: (Generic table, GMakeSqlValues (Rep table)) => table -> [SQLValue]
-    makeSqlValues table = gMakeSqlValues (from' table)
+    makeSqlValues table = [SQLNull] ++ gMakeSqlValues (from' table) -- TODO The SQLNull is a hack for autoincrement primary keys...
         where from' :: Generic table => table -> Rep table a
               from' = from
+
+instance (Table table, PrimaryKeyField table ~ IntField TableId) => Field table TableId where
+    type FieldInTable table TableId = PrimaryKeyField table
+
+    fieldName _ _ = "id"
+
+    fieldConstraints _ _ = [SQLPrimaryKey]
 
 -- | Schema combinator. Takes two fields or schemas and combines them into a new schema
 data a :|: b = a :|: b
@@ -230,8 +237,12 @@ class (FieldSchema (FieldInTable table f), Typeable f, Table table) => Field (ta
         where fieldSchema :: Proxy table -> Proxy f -> Proxy (FieldInTable table f)
               fieldSchema _ _ = Proxy
 
-    fieldColDesc :: Proxy table -> Proxy f -> SqlColDesc
-    fieldColDesc table field = colDescFromSettings (fieldSettings table field)
+    fieldConstraints :: Proxy table -> Proxy f -> [SQLConstraint]
+    fieldConstraints _ _ = []
+
+    fieldColDesc :: Proxy table -> Proxy f -> SQLColumnSchema
+    fieldColDesc table field = let base = colDescFromSettings (fieldSettings table field)
+                               in base { csConstraints = csConstraints base ++ fieldConstraints table field }
 
     fieldName :: Proxy table -> Proxy f -> Text
     default fieldName :: ( Generic f, Constructor c
@@ -245,7 +256,7 @@ class Show (FieldSettings fs) => FieldSchema fs where
 
     defSettings :: Proxy fs -> FieldSettings fs
 
-    colDescFromSettings :: FieldSettings fs -> SqlColDesc
+    colDescFromSettings :: FieldSettings fs -> SQLColumnSchema
 
     makeSqlValue :: fs -> SQLValue
 
@@ -271,18 +282,20 @@ instance FieldSchema (TextField name) where
 
     defSettings _ = TextFieldSettings (Varchar Nothing)
 
-    colDescFromSettings (TextFieldSettings (Char n)) = SqlColDesc
+    colDescFromSettings (TextFieldSettings (Char n)) = noConstraints $
+                                                       SqlColDesc
                                                        { colType = SqlCharT
                                                        , colSize = n
                                                        , colOctetLength = Nothing
                                                        , colDecDigits = Nothing
                                                        , colNullable = Nothing }
-    colDescFromSettings (TextFieldSettings (Varchar n)) = SqlColDesc
-                                                       { colType = SqlVarCharT
-                                                       , colSize = n
-                                                       , colOctetLength = Nothing
-                                                       , colDecDigits = Nothing
-                                                       , colNullable = Nothing }
+    colDescFromSettings (TextFieldSettings (Varchar n)) = noConstraints $
+                                                          SqlColDesc
+                                                          { colType = SqlVarCharT
+                                                          , colSize = n
+                                                          , colOctetLength = Nothing
+                                                          , colDecDigits = Nothing
+                                                          , colNullable = Nothing }
 
     makeSqlValue (TextField x) = SQLText x
 
@@ -302,7 +315,8 @@ instance FieldSchema (IntField name) where
                                          deriving Show
 
     defSettings _ = IntFieldDefault
-    colDescFromSettings _ = SqlColDesc
+    colDescFromSettings _ = noConstraints $
+                            SqlColDesc
                             { colType = SqlNumericT
                             , colSize = Nothing
                             , colOctetLength = Nothing
@@ -325,7 +339,8 @@ instance FieldSchema (DateTimeField name) where
                                               deriving Show
 
     defSettings _ = DateTimeDefault
-    colDescFromSettings _ = SqlColDesc
+    colDescFromSettings _ = noConstraints $
+                            SqlColDesc
                             { colType = SqlUTCDateTimeT
                             , colSize = Nothing
                             , colOctetLength = Nothing

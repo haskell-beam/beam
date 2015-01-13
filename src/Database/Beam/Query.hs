@@ -42,6 +42,7 @@ queryToSQL q = selectStatement
           generateExpr (EqE a b) = SQLEqE (generateExpr a) (generateExpr b)
           generateExpr (FieldE (ScopedField i:: ScopedField () table field)) = SQLFieldE (SQLQualifiedFieldName (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field)) (tblId i) )
           generateExpr (StrE s) = SQLValE s
+          generateExpr (IntE i) = SQLValE i
           generateExpr (AndE a b) = SQLAndE (generateExpr a) (generateExpr b)
 
           tblId :: Int -> T.Text

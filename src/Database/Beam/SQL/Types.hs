@@ -5,6 +5,9 @@ import Data.Text (Text)
 
 import Database.HDBC
 
+noConstraints :: SqlColDesc -> SQLColumnSchema
+noConstraints desc = SQLColumnSchema desc []
+
 -- * SQL queries
 
 data SQLCommand = Select SQLSelect
@@ -14,8 +17,16 @@ data SQLCommand = Select SQLSelect
 
 data SQLCreateTable = SQLCreateTable
                     { ctTableName :: Text
-                    , ctFields    :: [(Text, SqlColDesc)] }
+                    , ctFields    :: [(Text, SQLColumnSchema)] }
                       deriving Show
+
+data SQLColumnSchema = SQLColumnSchema
+                     { csType :: SqlColDesc
+                     , csConstraints :: [SQLConstraint] }
+                       deriving Show
+
+data SQLConstraint = SQLPrimaryKey
+                     deriving Show
 
 data SQLInsert = SQLInsert
                { iTableName :: Text
@@ -67,6 +78,7 @@ data SQLValue = SQLInt Integer
               | SQLFloat Float
               | SQLBoolean Bool
               | SQLText Text
+              | SQLNull
                 deriving (Show, Eq)
 
 class Show v => SQLValable v where
@@ -76,6 +88,8 @@ instance SQLValable Bool where
     toSQLVal = SQLBoolean
 instance SQLValable Text where
     toSQLVal = SQLText
+instance SQLValable Int where
+    toSQLVal = SQLInt . fromIntegral
 
 data SQLExpr ty where
     SQLValE :: SQLValable v => v -> SQLExpr v

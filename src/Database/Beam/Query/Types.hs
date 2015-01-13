@@ -70,11 +70,12 @@ instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
           ret = scopeFields q (Proxy :: Proxy a) i :|: scopeFields q (Proxy :: Proxy b) i
       in ret
 instance ScopeFields (WrapFields (QueryField table) (Schema table)) => ScopeFields (QueryTable table) where
-    scopeFields (_ :: Proxy q) (_ :: Proxy (QueryTable table)) i = scopeFields (Proxy :: Proxy q) (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
+    scopeFields (_ :: Proxy q) (_ :: Proxy (QueryTable table)) i = (ScopedField i :: ScopedField q table (NameFor (PrimaryKeyField table))) :|:
+                                                                   scopeFields (Proxy :: Proxy q) (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
 
 type family Scope q a where
     Scope q (a :|: b) = Scope q a :|: Scope q b
-    Scope q (QueryTable x) = Scope q (WrapFields (QueryField x) (Schema x))
+    Scope q (QueryTable x) = ScopedField q x (NameFor (PrimaryKeyField x)) :|: Scope q (WrapFields (QueryField x) (Schema x))
     Scope q (QueryField table field) = ScopedField q table (NameFor field)
 
 getScope :: Query q a -> Scope q a

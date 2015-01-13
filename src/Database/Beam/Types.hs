@@ -2,6 +2,7 @@
 module Database.Beam.Types where
 
 import Database.Beam.Schema
+import Database.Beam.SQL.Types
 
 import Control.Monad.Reader
 
@@ -11,7 +12,6 @@ import Data.Proxy
 import Data.String
 import Data.Typeable
 import Data.List
-import qualified Data.Vector as V
 
 import GHC.Generics
 
@@ -106,7 +106,7 @@ data Beam m = Beam
             { closeBeam :: m ()
 
             , compareSchemas :: forall d. Database d => DatabaseSchema -> Proxy d -> DBSchemaComparison
-            , adjustColDescForBackend :: SqlColDesc -> SqlColDesc
+            , adjustColDescForBackend :: SQLColumnSchema -> SQLColumnSchema
 
             , withHDBCConnection :: forall a. (forall conn. IConnection conn => conn -> m a) -> m a }
 

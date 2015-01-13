@@ -48,7 +48,7 @@ hdbcSchema conn =
     do tables <- getTables conn
        forM tables $ \tbl ->
            do descs <- describeTable conn tbl
-              return (fromString tbl, map (first fromString) descs)
+              return (fromString tbl, map (fromString *** noConstraints) descs)
 
 createStmtFor :: (Table t) => Beam m -> Proxy t -> SQLCreateTable
 createStmtFor beam table =

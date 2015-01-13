@@ -4,7 +4,7 @@ module Database.Beam.SQL
 
     , ppSQL
 
-    , conjugateWhere ) where
+    , conjugateWhere) where
 
 import Database.Beam.Types
 import Database.Beam.SQL.Types
@@ -31,8 +31,14 @@ ppCreateTable :: SQLCreateTable -> Doc
 ppCreateTable (SQLCreateTable tblName schema) =
     text "CREATE TABLE" <+> text (unpack tblName) <+> parens (hsep (punctuate comma (map ppFieldSchema schema)))
 
-ppFieldSchema :: (Text, SqlColDesc) -> Doc
-ppFieldSchema (name, colDesc) = text (unpack name) <+> ppColType colDesc
+ppFieldSchema :: (Text, SQLColumnSchema) -> Doc
+ppFieldSchema (name, colSch) = text (unpack name) <+> ppColSchema colSch
+
+ppColSchema :: SQLColumnSchema -> Doc
+ppColSchema (SQLColumnSchema type_ constraints) = ppColType type_ <+> hsep (map ppConstraint constraints)
+
+ppConstraint :: SQLConstraint -> Doc
+ppConstraint SQLPrimaryKey = text "PRIMARY KEY"
 
 ppColType :: SqlColDesc -> Doc
 ppColType SqlColDesc { colType = SqlVarCharT
@@ -41,6 +47,7 @@ ppColType SqlColDesc { colType = SqlVarCharT
          case size of
            Nothing -> empty
            Just sz -> parens (text (show sz))
+ppColType SqlColDesc { colType = SqlNumericT } = text "INTEGER"
 ppColType SqlColDesc { colType = SqlUTCDateTimeT } = text "DATETIME"
 
 -- ** Insert printing support
@@ -105,6 +112,7 @@ ppVal (SQLFloat f) = text (show f)
 ppVal (SQLText t) = text (show (unpack t))
 ppVal (SQLBoolean True) = text "1"
 ppVal (SQLBoolean False) = text "0"
+ppVal SQLNull = text "NULL"
 
 ppExpr :: SQLExpr a -> Doc
 ppExpr (SQLValE v) = ppVal (toSQLVal v)
