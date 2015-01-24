@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes, ScopedTypeVariables, TypeOperators, FlexibleContexts, GADTs, TypeFamilies #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Combinators where
 
 import Database.Beam.Schema
@@ -6,20 +7,22 @@ import Database.Beam.Query.Types
 import Database.Beam.Query.Rewrite
 
 import Database.Beam.SQL
+import Database.HDBC
 
 import Control.Monad.Writer hiding (All)
 
 import Data.Proxy
 import Data.Semigroup hiding (All)
 import Data.Typeable
+import qualified Data.Text as T
 
 -- * Query combinators
 
 of_ :: Table table => table
 of_ = undefined
 
-allQ :: (Table table, ScopeFields (QueryTable table)) => table -> Query q (QueryTable table)
-allQ (_ :: table) = All (Proxy :: Proxy table) 0
+all_ :: (Table table, ScopeFields (QueryTable table)) => table -> Query q (QueryTable table)
+all_ (_ :: table) = All (Proxy :: Proxy table) 0
 
 maxTableOrdinal :: Query q a -> Int
 maxTableOrdinal q = getMax (execWriter (traverseQueryM maxQ maxE q))
@@ -30,8 +33,8 @@ maxTableOrdinal q = getMax (execWriter (traverseQueryM maxQ maxE q))
           maxE :: QExpr q a -> Writer (Max Int) ()
           maxE _ = return ()
 
-joinQ :: Query q a -> Query q b -> Query q (a :|: b)
-joinQ l r = Join l r'
+join_ :: Query q a -> Query q b -> Query q (a :|: b)
+join_ l r = Join l r'
     where maxOrdL = maxTableOrdinal l + 1
 
           remapQuery :: Query q b -> Maybe (Query q b)
@@ -45,14 +48,13 @@ joinQ l r = Join l r'
 where_ :: Query q a -> (forall q. Scope q a -> QExpr q Bool) -> Query q a
 where_ q mkExpr = Filter q (mkExpr (getScope q))
 
-(#.) :: ( Locate schema name ~ locator
-        , Locator schema locator
-        , LocateResult schema locator ~ ScopedField q table field
-        , LocateResult (FieldInTable table field) Found ~ r
-        , Table table, Field table field) =>
-        schema -> name -> QExpr q r
-s #. field = FieldE (getField' s field)
+-- | Get all related records for a one to many relationship
+(#*) :: ( OneToMany r
+        , ScopeFields (WrapFields (QueryField (OneToManyRange r)) (Schema (OneToManyRange r)))
+        , ScopeFields (WrapFields (QueryField (OneToManyRange r)) (PhantomFieldSchema (OneToManyRange r))) ) =>
+        Query q (QueryTable (OneToManyDomain r)) -> r -> Query q (QueryTable (OneToManyDomain r) :|: QueryTable (OneToManyRange r))
+q #* (r :: r) = (q `join_` allInRange) `where_` (\(domainTbl :|: rangeTbl) -> generateJoinCondition r domainTbl rangeTbl)
+    where allInRange = all_ (of_ :: OneToManyRange r)
 
-
-(#==) :: (SQLValable a, Typeable a) => QExpr q a -> QExpr q a -> QExpr q Bool
-(#==) = EqE
+text_ :: T.Text -> QExpr q T.Text
+text_ = ValE . SqlString . T.unpack

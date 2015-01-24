@@ -2,11 +2,13 @@
 module Database.Beam.SQL.Types where
 
 import Data.Text (Text)
+import Data.Time.Clock
 
 import Database.HDBC
 
-noConstraints :: SqlColDesc -> SQLColumnSchema
+noConstraints, notNull :: SqlColDesc -> SQLColumnSchema
 noConstraints desc = SQLColumnSchema desc []
+notNull desc = SQLColumnSchema desc [SQLNotNull]
 
 -- * SQL queries
 
@@ -26,11 +28,12 @@ data SQLColumnSchema = SQLColumnSchema
                        deriving Show
 
 data SQLConstraint = SQLPrimaryKey
-                     deriving Show
+                   | SQLNotNull
+                     deriving (Show, Eq)
 
 data SQLInsert = SQLInsert
                { iTableName :: Text
-               , iValues    :: [SQLValue] }
+               , iValues    :: [SqlValue] }
                deriving Show
 
 data SQLSelect = SQLSelect
@@ -74,27 +77,31 @@ data SQLOrdering = Asc SQLFieldName
                  | Desc SQLFieldName
                    deriving Show
 
-data SQLValue = SQLInt Integer
-              | SQLFloat Float
-              | SQLBoolean Bool
-              | SQLText Text
-              | SQLNull
-                deriving (Show, Eq)
+-- data SQLValue = SQLInt Integer
+--               | SQLFloat Float
+--               | SQLBoolean Bool
+--               | SQLText Text
+--               | SQLNull
+--                 deriving (Show, Eq)
 
-class Show v => SQLValable v where
-    toSQLVal :: v -> SQLValue
+-- class Show v => SQLValable v where
+--     toSQLVal :: v -> SQLValue
 
-instance SQLValable Bool where
-    toSQLVal = SQLBoolean
-instance SQLValable Text where
-    toSQLVal = SQLText
-instance SQLValable Int where
-    toSQLVal = SQLInt . fromIntegral
+-- instance SQLValable Bool where
+--     toSQLVal = SQLBoolean
+-- instance SQLValable Text where
+--     toSQLVal = SQLText
+-- instance SQLValable Int where
+--     toSQLVal = SQLInt . fromIntegral
+-- instance SQLValable UTCTime where
+--     toSQLVal = undefined
 
 data SQLExpr ty where
-    SQLValE :: SQLValable v => v -> SQLExpr v
+    SQLValE :: SqlValue -> SQLExpr v
+    SQLJustE :: Show v => SQLExpr v -> SQLExpr (Maybe v)
 
     SQLAndE :: SQLExpr Bool -> SQLExpr Bool -> SQLExpr Bool
+    SQLOrE :: SQLExpr Bool -> SQLExpr Bool -> SQLExpr Bool
 
     SQLFieldE :: SQLFieldName -> SQLExpr a
 

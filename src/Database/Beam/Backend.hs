@@ -63,22 +63,24 @@ migrateDB db beam actions =
 
          case action of
            CreateTable t -> do let stmt = createStmtFor beam t
-                               liftIO (putStrLn (concat ["Will run SQL:\n",
-                                                         ppSQL (CreateTableCmd stmt)]))
-                               withHDBCConnection beam (\conn -> liftIO $ do runRaw conn (ppSQL (CreateTableCmd stmt))
+                                   (sql, vals) = ppSQL (CreateTableCmd stmt)
+                               liftIO (putStrLn (concat ["Will run SQL:\n", sql]))
+                               withHDBCConnection beam (\conn -> liftIO $ do runRaw conn sql
                                                                              commit conn)
                                liftIO (putStrLn "Done...")
+
+autoMigrateDB db beam =
+    do actDBSchema <- withHDBCConnection beam hdbcSchema
+       let comparison = compareSchemas beam actDBSchema db
+
+       case comparison of
+         Migration actions -> do liftIO $ putStrLn (concat ["Comparison result: ", show actions])
+                                 migrateDB db beam actions
+         Unknown -> liftIO $ putStrLn "Unknown comparison"
 
 openDatabase :: (Database db, BeamBackend dbSettings, MonadIO m) => Proxy db -> dbSettings -> m (Beam m)
 openDatabase db dbSettings =
   do beam <- openBeam dbSettings
-
-     actDBSchema <- withHDBCConnection beam hdbcSchema
-     let comparison = compareSchemas beam actDBSchema db
-
-     case comparison of
-       Migration actions -> do liftIO $ putStrLn (concat ["Comparison result: ", show actions])
-                               migrateDB db beam actions
-       Unknown -> liftIO $ putStrLn "Unknown comparison"
+     autoMigrateDB db beam
 
      return beam
