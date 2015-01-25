@@ -14,7 +14,9 @@ notNull desc = SQLColumnSchema desc [SQLNotNull]
 
 data SQLCommand = Select SQLSelect
                 | Insert SQLInsert
-                | CreateTableCmd SQLCreateTable
+
+                -- DDL
+                | CreateTable SQLCreateTable
                 deriving Show
 
 data SQLCreateTable = SQLCreateTable

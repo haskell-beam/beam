@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes, GADTs #-}
 module Database.Beam.Types where
 
-import Database.Beam.Schema.Types
+import Database.Beam.Schema.Tables
 import Database.Beam.SQL.Types
 
 import Control.Monad.Reader

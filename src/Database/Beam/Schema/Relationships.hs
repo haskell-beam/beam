@@ -1,7 +1,8 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, UndecidableInstances, MultiParamTypeClasses, DefaultSignatures, FlexibleContexts, FlexibleInstances, ScopedTypeVariables #-}
 module Database.Beam.Schema.Relationships where
 
-import Database.Beam.Schema.Types
+import Database.Beam.Schema.Tables
+import Database.Beam.Schema.Locate
 import Database.Beam.Query.Types
 import Database.Beam.Query.SimpleCombinators
 import Database.Beam.SQL.Types

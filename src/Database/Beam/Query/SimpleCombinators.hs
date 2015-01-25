@@ -2,7 +2,8 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.SimpleCombinators where
 
-import Database.Beam.Schema.Types
+import Database.Beam.Schema.Tables
+import Database.Beam.Schema.Locate
 import Database.Beam.SQL.Types
 
 import Database.Beam.Query.Types

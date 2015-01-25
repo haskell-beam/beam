@@ -15,7 +15,9 @@ import Database.Beam.Query.Rewrite
 import Database.Beam.Query.SimpleCombinators
 import Database.Beam.Query.Combinators
 
-import Database.Beam.Schema.Types
+import Database.Beam.Schema.Tables
+import Database.Beam.Schema.Locate
+import Database.Beam.Schema.Fields
 import Database.Beam.Types
 import Database.Beam.SQL
 import Database.Beam.SQL.Types
@@ -99,15 +101,6 @@ runInsert table beam =
        withHDBCConnection beam (\conn -> liftIO (runSQL conn insertCmd))
        return (Right ())
 
-data NamedQExpr name q a = NamedQExpr (QExpr q a)
-type instance NameFor (NamedQExpr name q a) = name
-
--- genEQExprFor :: ( Locate schema (NameFor f) ~ locator
---                 , Locator schema locator
---                 , LocateResult schema locator ~ ScopedField q table (NameFor f)
---                 , FieldSchema f, Table table, Field table (NameFor f) ) => schema -> f -> QExpr q Bool
--- genEQExprFor schema (field :: f) = mapSchema (\sField -> FieldE sField ==# ValE (makeSqlValue field)) schema field
-
 class EqExprFor schema a where
     eqExprFor :: schema -> a -> QExpr q Bool
 instance (EqExprFor schema a, EqExprFor schema b) => EqExprFor schema (a :|: b) where
@@ -132,23 +125,6 @@ findByPrimaryKeyExpr :: ( Table table
 findByPrimaryKeyExpr schema (QueryTable phantomFields tbl) =
     let pk = primaryKeyForTable phantomFields tbl
     in  eqExprFor schema (mapSchema Gen pk)
-
--- wrapSchema :: schema -> WrapFields GenName schema
--- wrapSchema (a :|: b) = wrapSchema a :|: wrapSchema b
--- wrapSchema a = GenName a
-
--- type family GenEQExprResult schema q where
---     GenEQExprResult (a :|: b) q = GenEQExprResult a q :|: GenEQExprResult b q
---     GenEQExprResult a q = QExpr q Bool
-
--- genEQExprsFor :: schema -> GenEQExprResult schema q
-
--- class GeneratePrimaryKeyExpr schema locator where
---     generatePrimaryKeyExpr :: 
-
--- runUpdate :: (MonadIO m, Table table) => QueryTable table -> Beam m -> m (Either String ())
--- runUpdate (QueryTable pk table) beam =
---     do let 
 
 simpleSelect = SQLSelect
                { selProjection = SQLProjStar

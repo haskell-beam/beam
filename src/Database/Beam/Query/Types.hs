@@ -11,7 +11,9 @@ module Database.Beam.Query.Types
 
     , coerceQueryThread, coerceQExprThread, coerceScopedFieldThread ) where
 
-import Database.Beam.Schema.Types
+import Database.Beam.Schema.Tables
+import Database.Beam.Schema.Locate
+import Database.Beam.Schema.Fields
 import Database.Beam.Types
 import Database.Beam.SQL
 import Database.HDBC

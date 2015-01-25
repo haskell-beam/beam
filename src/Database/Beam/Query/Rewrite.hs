@@ -13,7 +13,7 @@ module Database.Beam.Query.Rewrite
 
 import Database.Beam.Query.Types
 
-import Database.Beam.Schema.Types
+import Database.Beam.Schema.Tables
 import Database.Beam.Types
 import Database.Beam.SQL
 import Database.HDBC
@@ -83,10 +83,10 @@ propEmptySets (GroupBy EmptySet _) = Just EmptySet
 propEmptySets _ = Nothing
 
 -- | Propagates filter clauses that are inside inner joins passed the inner join, so that there is simply one where statement
-propFiltersPassedInnerJoins :: Query q a -> Maybe (Query q a)
-propFiltersPassedInnerJoins (Join (Filter a e) b) = Just (Filter (Join a b) e)
-propFiltersPassedInnerJoins (Join a (Filter b e)) = Just (Filter (Join a b) e)
-propFiltersPassedInnerJoins _ = Nothing
+propFiltersPastInnerJoins :: Query q a -> Maybe (Query q a)
+propFiltersPastInnerJoins (Join (Filter a e) b) = Just (Filter (Join a b) e)
+propFiltersPastInnerJoins (Join a (Filter b e)) = Just (Filter (Join a b) e)
+propFiltersPastInnerJoins _ = Nothing
 
 -- -- | Moves filters to the rightmost subexpression possible. This puts the expression into a canonical form for lowering join expressions
 -- moveFiltersRight _ = Nothing -- Nothing for now, but may be extended as we add more query types
@@ -104,5 +104,5 @@ booleanOpts (AndE (ValE (SqlBool True)) q) = Just q
 booleanOpts (AndE q (ValE (SqlBool True))) = Just q
 booleanOpts x = Nothing
 
-allQueryOpts q = combineFilterOpt q <|> propEmptySets q <|> propFiltersPassedInnerJoins q -- <|> moveFiltersRight q <|> lowerOnClauses q
+allQueryOpts q = combineFilterOpt q <|> propEmptySets q <|> propFiltersPastInnerJoins q -- <|> moveFiltersRight q <|> lowerOnClauses q
 allExprOpts e = booleanOpts e
