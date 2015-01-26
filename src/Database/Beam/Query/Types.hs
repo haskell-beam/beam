@@ -4,7 +4,7 @@ module Database.Beam.Query.Types
     ( ScopedField(..)
     , QueryField, QueryTable(..)
 
-    , Query(..), QExpr(..)
+    , Query(..), QExpr(..), QAssignment(..)
 
     , ScopeFields(..), Scope(..)
     , getScope
@@ -67,13 +67,16 @@ data QExpr q t where
 
     EqE :: (Typeable a, Show a) => QExpr q a -> QExpr q a -> QExpr q Bool
 
-    -- StrE :: T.Text -> QExpr q T.Text
-    -- IntE   :: Int -> QExpr q Int
-    -- BoolE  :: Bool -> QExpr q Bool
     ValE :: SqlValue -> QExpr q a
 
     JustE :: Show a => QExpr q a -> QExpr q (Maybe a)
     NothingE :: QExpr q (Maybe a)
+
+data QAssignment q where
+    QAssignment :: ( Table table, Field table field
+                   , FieldInTable table field ~ fs
+                   , FieldSchema fs ) =>
+                   ScopedField q table field -> QExpr q (FieldType fs) -> QAssignment q
 
 deriving instance Typeable Query
 deriving instance Typeable QExpr
@@ -127,9 +130,6 @@ instance Show (QExpr q t) where
 
     show (EqE a b) = concat ["EqE (", show a, ") (", show b, ")"]
 
-    -- show (StrE s) = concat ["StrE ", show (T.unpack s)]
-    -- show (IntE i) = concat ["IntE ", show i]
-    -- show (BoolE b) = concat ["BoolE ", show b]
     show (ValE v) = concat ["ValE ", show v]
 
     show (JustE b) = concat ["JustE ", show b]
@@ -163,10 +163,6 @@ instance Eq (QExpr q t) where
                                    | otherwise -> False
                                Nothing -> False
 
-    -- StrE a == StrE b = a == b
-    -- IntE a == IntE b = a == b
-    -- BoolE a == BoolE b = a == b
-
     ValE a == ValE b = a == b
 
     JustE a == JustE b = a == b
@@ -189,9 +185,6 @@ coerceQExprThread (FieldE f) = FieldE (coerceScopedFieldThread f)
 coerceQExprThread (AndE a b) = AndE (coerceQExprThread a) (coerceQExprThread b)
 coerceQExprThread (OrE a b) = OrE (coerceQExprThread a) (coerceQExprThread b)
 coerceQExprThread (EqE a b) = EqE (coerceQExprThread a) (coerceQExprThread b)
--- coerceQExprThread (IntE i) = IntE i
--- coerceQExprThread (BoolE b) = BoolE b
--- coerceQExprThread (StrE t) = StrE t
 coerceQExprThread (ValE v) = ValE v
 
 coerceQExprThread (JustE b) = JustE (coerceQExprThread b)

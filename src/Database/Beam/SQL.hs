@@ -29,8 +29,9 @@ type DocAndVals = Writer [SqlValue] Doc
 
 ppCmd :: SQLCommand -> DocAndVals
 ppCmd (Select sel) = ppSel sel
-ppCmd (CreateTableCmd ct) = ppCreateTable ct
+ppCmd (CreateTable ct) = ppCreateTable ct
 ppCmd (Insert i) = ppInsert i
+ppCmd (Update u) = ppUpdate u
 
 -- ** Create table printing support
 
@@ -71,13 +72,31 @@ ppInsert (SQLInsert tblName values) =
        return (text "INSERT INTO" <+> text (unpack tblName) <+> text "VALUES" <+>
                parens (hsep (punctuate comma vals)))
 
+-- ** Update printing support
+
+ppAssignment :: SQLFieldName -> SQLExpr -> DocAndVals
+ppAssignment field expr =
+    do fieldD <- ppFieldName field
+       exprD  <- ppExpr expr
+       return (fieldD <> text "=" <> exprD)
+
+ppUpdate :: SQLUpdate -> DocAndVals
+ppUpdate (SQLUpdate tbls assignments where_) =
+    do assignmentsDs <- mapM (uncurry ppAssignment) assignments
+       whereClause_  <- case where_ of
+                          Nothing -> return empty
+                          Just where_ -> ppWhere where_
+       return (text "UPDATE" <+> hsep (punctuate comma (map (text . unpack) tbls)) <+>
+               text "SET"    <+> hsep (punctuate comma assignmentsDs) <+>
+               whereClause_)
+
 -- ** Select printing support
 
 ppSel :: SQLSelect -> DocAndVals
 ppSel sel =
-    do proj <- ppProj (selProjection sel)
+    do proj   <- ppProj (selProjection sel)
        source <- ppAliased ppSource (selFrom sel)
-       joins <- mapM ppJoin (selJoins sel)
+       joins  <- mapM ppJoin (selJoins sel)
        where_ <- ppWhere  (selWhere sel)
        grouping <- case selGrouping sel of
                      Nothing -> return empty
@@ -137,7 +156,7 @@ ppOrderBy xs = hsep <$> mapM ppOrdering xs
 ppVal :: SqlValue -> DocAndVals
 ppVal val = tell [val] >> return (text "?")
 
-ppExpr :: SQLExpr a -> DocAndVals
+ppExpr :: SQLExpr -> DocAndVals
 ppExpr (SQLValE v) = ppVal v
 ppExpr (SQLJustE v) = ppExpr v
 ppExpr (SQLFieldE name) = ppFieldName name
@@ -145,13 +164,13 @@ ppExpr (SQLEqE a b) = binOp "==" a b
 ppExpr (SQLAndE a b) = binOp "AND" a b
 ppExpr (SQLOrE a b) = binOp "OR" a b
 
-binOp :: String -> SQLExpr a -> SQLExpr b -> DocAndVals
+binOp :: String -> SQLExpr -> SQLExpr -> DocAndVals
 binOp op a b = do aD <- ppExpr a
                   bD <- ppExpr b
                   return (aD <+> text op <+> bD)
 
 -- * SQL statement combinators
 
-conjugateWhere :: SQLSelect -> SQLExpr Bool -> SQLSelect
+conjugateWhere :: SQLSelect -> SQLExpr -> SQLSelect
 conjugateWhere sel@(SQLSelect { selWhere = SQLValE (SqlBool True) }) e = sel { selWhere = e}
 conjugateWhere sel e = sel { selWhere = SQLAndE (selWhere sel) e }

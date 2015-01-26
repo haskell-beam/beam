@@ -58,3 +58,5 @@ q #* (r :: r) = (q `join_` allInRange) `where_` (\(domainTbl :|: rangeTbl) -> ge
 
 text_ :: T.Text -> QExpr q T.Text
 text_ = ValE . SqlString . T.unpack
+num_ :: Integral a => a -> QExpr q a
+num_ = ValE . SqlInteger . fromIntegral

@@ -40,7 +40,7 @@ defaultBeamCompareSchemas actual db = execWriter compare
           genTablesToBeMade = mapMaybe lookupGenTable (S.toList tablesToBeMade)
               where lookupGenTable tblName = find (\(GenTable t) -> dbTableName t == tblName) expGenTables
 
-          compare = tell (Migration (map (\(GenTable t) -> CreateTable t) genTablesToBeMade))
+          compare = tell (Migration (map (\(GenTable t) -> MACreateTable t) genTablesToBeMade))
 
 hdbcSchema :: (IConnection conn, MonadIO m) => conn -> m DatabaseSchema
 hdbcSchema conn =
@@ -62,12 +62,12 @@ migrateDB db beam actions =
       do liftIO (putStrLn (concat ["Performing ", show action]))
 
          case action of
-           CreateTable t -> do let stmt = createStmtFor beam t
-                                   (sql, vals) = ppSQL (CreateTableCmd stmt)
-                               liftIO (putStrLn (concat ["Will run SQL:\n", sql]))
-                               withHDBCConnection beam (\conn -> liftIO $ do runRaw conn sql
-                                                                             commit conn)
-                               liftIO (putStrLn "Done...")
+           MACreateTable t -> do let stmt = createStmtFor beam t
+                                     (sql, vals) = ppSQL (CreateTable stmt)
+                                 liftIO (putStrLn (concat ["Will run SQL:\n", sql]))
+                                 withHDBCConnection beam (\conn -> liftIO $ do runRaw conn sql
+                                                                               commit conn)
+                                 liftIO (putStrLn "Done...")
 
 autoMigrateDB db beam =
     do actDBSchema <- withHDBCConnection beam hdbcSchema

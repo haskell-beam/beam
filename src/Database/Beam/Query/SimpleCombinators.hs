@@ -19,6 +19,14 @@ import Data.Typeable
         schema -> name -> QExpr q r
 s # field = FieldE (getField' s field)
 
+(#!) :: ( Locate schema name ~ locator
+        , Locator schema locator
+        , LocateResult schema locator ~ ScopedField q table field
+        , FieldType (FieldInTable table field) ~ r
+        , Table table, Field table field) =>
+        schema -> name -> ScopedField q table field
+s #! field = getField' s field
+
 (==#) :: (Typeable a, Show a) => QExpr q a -> QExpr q a -> QExpr q Bool
 (==#) = EqE
 

@@ -22,10 +22,10 @@ data DBSchemaComparison = Migration [MigrationAction]
                           deriving Show
 
 data MigrationAction where
-    CreateTable :: Table table => Proxy table -> MigrationAction
+    MACreateTable :: Table table => Proxy table -> MigrationAction
 
 instance Show MigrationAction where
-    show (CreateTable t) = concat ["CreateTable ", unpack (dbTableName t)]
+    show (MACreateTable t) = concat ["MACreateTable ", unpack (dbTableName t)]
 
 data Beam m = Beam
             { closeBeam :: m ()

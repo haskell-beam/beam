@@ -6,7 +6,7 @@ module Database.Beam.Query
     , module Database.Beam.Query.SimpleCombinators
     , module Database.Beam.Query.Combinators
 
-    , runQuery, runInsert
+    , runQuery, runInsert, runUpdate
     , EqExprFor(..)
     , findByPrimaryKeyExpr ) where
 
@@ -23,6 +23,7 @@ import Database.Beam.SQL
 import Database.Beam.SQL.Types
 
 import Control.Applicative
+import Control.Arrow
 import Control.Monad.Identity
 import Control.Monad.Trans
 import Control.Monad.State
@@ -39,6 +40,24 @@ import Database.HDBC
 
 -- * Query Compilation
 
+mkSqlTblId :: Int -> T.Text
+mkSqlTblId i = fromString (concat ["t", show i])
+
+mkQualifiedFieldName :: (Table table, Field table field) => ScopedField q table field -> SQLFieldName
+mkQualifiedFieldName (ScopedField i :: ScopedField q table field) = SQLQualifiedFieldName (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field)) (mkSqlTblId i)
+
+mkUnqualifiedFieldName :: (Table table, Field table field) => ScopedField q table field -> SQLFieldName
+mkUnqualifiedFieldName (ScopedField i :: ScopedField q table field) = SQLFieldName (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field))
+
+mkSqlExpr :: (forall table field q. (Table table, Field table field) => ScopedField q table field -> SQLFieldName) -> QExpr () a -> SQLExpr
+mkSqlExpr f (EqE a b) = SQLEqE (mkSqlExpr f a) (mkSqlExpr f b)
+mkSqlExpr f (FieldE fd) = SQLFieldE (f fd)
+mkSqlExpr f (ValE v) = SQLValE v
+mkSqlExpr f (AndE a b) = SQLAndE (mkSqlExpr f a) (mkSqlExpr f b)
+mkSqlExpr f (OrE a b) = SQLOrE (mkSqlExpr f a) (mkSqlExpr f b)
+mkSqlExpr f (JustE a) = SQLJustE (mkSqlExpr f a)
+mkSqlExpr f NothingE = SQLValE SqlNull
+
 queryToSQL :: Query q a -> SQLSelect
 queryToSQL q = selectStatement
     where q' = coerceQueryThread (rewriteQuery allQueryOpts allExprOpts q)
@@ -47,30 +66,15 @@ queryToSQL q = selectStatement
           sqlTrue = SQLValE (SqlBool True)
 
           generateQuery :: Query () a -> SQLSelect
-          generateQuery (All (tbl :: Proxy table) i) = simpleSelect { selFrom = SQLAliased (SQLSourceTable (dbTableName tbl)) (Just (tblId i)) }
-          generateQuery (Filter q e) = conjugateWhere (generateQuery q) (generateExpr e)
-          generateQuery (Join (All tbl1 i1) y) = continueJoin y (simpleSelect { selFrom = SQLAliased (SQLSourceTable (dbTableName tbl1)) (Just (tblId i1)) })
+          generateQuery (All (tbl :: Proxy table) i) = simpleSelect { selFrom = SQLAliased (SQLSourceTable (dbTableName tbl)) (Just (mkSqlTblId i)) }
+          generateQuery (Filter q e) = conjugateWhere (generateQuery q) (mkSqlExpr mkQualifiedFieldName e)
+          generateQuery (Join (All tbl1 i1) y) = continueJoin y (simpleSelect { selFrom = SQLAliased (SQLSourceTable (dbTableName tbl1)) (Just (mkSqlTblId i1)) })
 --          generateQuery (Join q y) = continueJoin y (simpleSelect { selFrom = SQLAliased (SQLSourceSelect (generateQuery q)) Nothing})
 
           continueJoin :: Query () a -> SQLSelect -> SQLSelect
           continueJoin (Join x y) base = continueJoin y (continueJoin x base)
-          continueJoin (All tbl2 i2) base = base { selJoins = (SQLJoin SQLInnerJoin (SQLAliased (SQLSourceTable (dbTableName tbl2)) (Just (tblId i2))) sqlTrue):selJoins base }
+          continueJoin (All tbl2 i2) base = base { selJoins = (SQLJoin SQLInnerJoin (SQLAliased (SQLSourceTable (dbTableName tbl2)) (Just (mkSqlTblId i2))) sqlTrue):selJoins base }
 --          continueJoin q base = base { selJoins = (SQLJoin SQLInnerJoin (SQLAliased (SQLSourceSelect (generateQuery q)) Nothing) sqlTrue):selJoins base }
-
-          generateExpr :: QExpr () a -> SQLExpr a
-          generateExpr (EqE a b) = SQLEqE (generateExpr a) (generateExpr b)
-          generateExpr (FieldE (ScopedField i:: ScopedField () table field)) = SQLFieldE (SQLQualifiedFieldName (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field)) (tblId i) )
-          -- generateExpr (StrE s) = SQLValE (SqlString (T.unpack s))
-          -- generateExpr (IntE i) = SQLValE (SqlInteger (fromIntegral i))
-          -- generateExpr (BoolE b) = SQLValE (SqlBool b)
-          generateExpr (ValE v) = SQLValE v
-          generateExpr (AndE a b) = SQLAndE (generateExpr a) (generateExpr b)
-          generateExpr (OrE a b) = SQLOrE (generateExpr a) (generateExpr b)
-          generateExpr (JustE a) = SQLJustE (generateExpr a)
-          generateExpr NothingE = SQLValE SqlNull
-
-          tblId :: Int -> T.Text
-          tblId i = fromString (concat ["t", show i])
 
 insertToSQL :: Table table => table -> SQLInsert
 insertToSQL (table :: table) = SQLInsert (dbTableName (Proxy :: Proxy table))
@@ -100,6 +104,32 @@ runInsert table beam =
     do let insertCmd = Insert (insertToSQL table)
        withHDBCConnection beam (\conn -> liftIO (runSQL conn insertCmd))
        return (Right ())
+
+runUpdate :: forall q table.
+             ( ScopeFields (WrapFields (QueryField table) (Schema table))
+             , ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
+             , Table table) => table -> (forall q. Scope q (QueryTable table) -> ([QAssignment q], QExpr q Bool)) -> SQLUpdate
+runUpdate (tbl :: table) mkAssignmentsAndWhere = go
+    where tblProxy :: Proxy (QueryTable table)
+          tblProxy = Proxy
+
+          qProxy :: Proxy ()
+          qProxy = Proxy
+
+          go =
+            let (assignments, whereClause) = mkAssignmentsAndWhere (scopeFields qProxy tblProxy 0)
+                sqlAssignments = map ( \(QAssignment nm ex) -> (mkUnqualifiedFieldName nm, mkSqlExpr mkUnqualifiedFieldName ex) ) assignments
+                sqlWhereClause = Just (mkSqlExpr mkUnqualifiedFieldName whereClause)
+                sqlTables = [dbTableName (Proxy :: Proxy table)]
+            in (SQLUpdate sqlTables sqlAssignments sqlWhereClause)
+
+-- updateEntity :: ( ScopeFields (WrapFields (QueryField table) (Schema table))
+--                 , ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
+--                 , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
+--                 , LocateResult (FullSchema table) locator ~ locateResult
+--                 , EqExprFor (WrapFields (QueryField table) (Scope () (QueryTable table))) (WrapFields Gen locateResult)
+--                 , Table table) => QueryTable table -> SQLUpdate
+-- updateEntity qt@(QueryTable _ table) = runUpdate table (\sch -> ([] , findByPrimaryKeyExpr sch qt))
 
 class EqExprFor schema a where
     eqExprFor :: schema -> a -> QExpr q Bool

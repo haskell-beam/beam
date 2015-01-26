@@ -14,6 +14,7 @@ notNull desc = SQLColumnSchema desc [SQLNotNull]
 
 data SQLCommand = Select SQLSelect
                 | Insert SQLInsert
+                | Update SQLUpdate
 
                 -- DDL
                 | CreateTable SQLCreateTable
@@ -38,11 +39,17 @@ data SQLInsert = SQLInsert
                , iValues    :: [SqlValue] }
                deriving Show
 
+data SQLUpdate = SQLUpdate
+               { uTableNames  :: [Text]
+               , uAssignments :: [(SQLFieldName, SQLExpr)]
+               , uWhere       :: Maybe SQLExpr }
+                 deriving Show
+
 data SQLSelect = SQLSelect
                { selProjection :: SQLProjection
                , selFrom       :: SQLAliased SQLSource
                , selJoins      :: [SQLJoin]
-               , selWhere      :: SQLExpr Bool
+               , selWhere      :: SQLExpr
                , selGrouping   :: Maybe SQLGrouping
                , selOrderBy    :: [SQLOrdering]
                , selLimit      :: Maybe Integer
@@ -67,46 +74,27 @@ data SQLSource = SQLSourceTable Text
 data SQLJoinType = SQLInnerJoin
                    deriving Show
 
-data SQLJoin = SQLJoin SQLJoinType (SQLAliased SQLSource) (SQLExpr Bool)
+data SQLJoin = SQLJoin SQLJoinType (SQLAliased SQLSource) SQLExpr
                deriving Show
 
 data SQLGrouping = SQLGrouping
                  { sqlGroupBy :: [SQLFieldName]
-                 , sqlHaving  :: SQLExpr Bool }
+                 , sqlHaving  :: SQLExpr }
                  deriving Show
 
 data SQLOrdering = Asc SQLFieldName
                  | Desc SQLFieldName
                    deriving Show
 
--- data SQLValue = SQLInt Integer
---               | SQLFloat Float
---               | SQLBoolean Bool
---               | SQLText Text
---               | SQLNull
---                 deriving (Show, Eq)
+data SQLExpr where
+    SQLValE :: SqlValue -> SQLExpr
+    SQLJustE :: SQLExpr -> SQLExpr
 
--- class Show v => SQLValable v where
---     toSQLVal :: v -> SQLValue
+    SQLAndE :: SQLExpr -> SQLExpr -> SQLExpr
+    SQLOrE :: SQLExpr -> SQLExpr -> SQLExpr
 
--- instance SQLValable Bool where
---     toSQLVal = SQLBoolean
--- instance SQLValable Text where
---     toSQLVal = SQLText
--- instance SQLValable Int where
---     toSQLVal = SQLInt . fromIntegral
--- instance SQLValable UTCTime where
---     toSQLVal = undefined
+    SQLFieldE :: SQLFieldName -> SQLExpr
 
-data SQLExpr ty where
-    SQLValE :: SqlValue -> SQLExpr v
-    SQLJustE :: Show v => SQLExpr v -> SQLExpr (Maybe v)
+    SQLEqE :: SQLExpr -> SQLExpr -> SQLExpr
 
-    SQLAndE :: SQLExpr Bool -> SQLExpr Bool -> SQLExpr Bool
-    SQLOrE :: SQLExpr Bool -> SQLExpr Bool -> SQLExpr Bool
-
-    SQLFieldE :: SQLFieldName -> SQLExpr a
-
-    SQLEqE :: Show a => SQLExpr a -> SQLExpr a -> SQLExpr Bool
-
-deriving instance Show ty => Show (SQLExpr ty)
+deriving instance Show SQLExpr
