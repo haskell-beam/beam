@@ -13,24 +13,24 @@ import Data.Typeable
 
 (#) :: ( Locate schema name ~ locator
         , Locator schema locator
-        , LocateResult schema locator ~ ScopedField q table field
+        , LocateResult schema locator ~ ScopedField table field
         , FieldType (FieldInTable table field) ~ r
         , Table table, Field table field) =>
-        schema -> name -> QExpr q r
+        schema -> name -> QExpr r
 s # field = FieldE (getField' s field)
 
 (#!) :: ( Locate schema name ~ locator
         , Locator schema locator
-        , LocateResult schema locator ~ ScopedField q table field
+        , LocateResult schema locator ~ ScopedField table field
         , FieldType (FieldInTable table field) ~ r
         , Table table, Field table field) =>
-        schema -> name -> ScopedField q table field
+        schema -> name -> ScopedField table field
 s #! field = getField' s field
 
-(==#) :: (Typeable a, Show a) => QExpr q a -> QExpr q a -> QExpr q Bool
+(==#) :: (Typeable a, Show a) => QExpr a -> QExpr a -> QExpr Bool
 (==#) = EqE
 
-(&&#), (||#) :: QExpr q Bool -> QExpr q Bool -> QExpr q Bool
+(&&#), (||#) :: QExpr Bool -> QExpr Bool -> QExpr Bool
 (&&#) = AndE
 (||#) = OrE
 

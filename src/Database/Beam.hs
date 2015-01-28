@@ -7,9 +7,7 @@ module Database.Beam
      , module Database.Beam.Schema.Database
      , module Database.Beam.Backend
 
-     , Typeable, Generic
-
-     , justOne ) where
+     , Typeable, Generic ) where
 
 import Database.Beam.Types
 import Database.Beam.SQL
@@ -24,18 +22,3 @@ import Data.Typeable
 import Data.Conduit
 
 import GHC.Generics
-
-justOne :: (MonadIO m, FromSqlValues a) => Query q a -> Beam m -> m (Maybe a)
-justOne q beam =
-  do let justOneSink = await >>= \x ->
-                       case x of
-                         Nothing -> return Nothing
-                         Just  x -> noMoreSink x
-         noMoreSink x = await >>= \nothing ->
-                        case nothing of
-                          Nothing -> return (Just x)
-                          Just  _ -> return Nothing
-     src <- runQuery q beam
-     case src of
-       Left err -> return Nothing
-       Right  x -> x $$ justOneSink

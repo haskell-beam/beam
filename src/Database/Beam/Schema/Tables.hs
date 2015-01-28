@@ -27,6 +27,8 @@ type ReifiedTableSchema = [(Text, SQLColumnSchema)]
 
 data GenTable where
     GenTable :: Table t => Proxy t -> GenTable
+data AnyField table where
+    AnyField :: (Table table, Field table (NameFor fs), FieldSchema fs) => table -> fs -> AnyField table
 
 class ToDatabaseSchema a where
     reifyDBSchema :: Proxy a -> DatabaseSchema
@@ -101,11 +103,15 @@ class ( Typeable table
 
     makeSqlValues :: table -> [SqlValue]
     default makeSqlValues :: (Generic table, GMakeSqlValues (Rep table)) => table -> [SqlValue]
-    makeSqlValues table = makePhantomValues table ++ gMakeSqlValues (from' table) -- TODO The SQLNull is a hack for autoincrement primary keys...
+    makeSqlValues table = makePhantomValues table ++ gMakeSqlValues (from' table)
         where from' :: Generic table => table -> Rep table a
               from' = from
 
-    -- | The default behavior is to assign the default phantom field schema (just an integer primary key) a sinlge value of null, to let autoincrement work
+    fieldValues :: table -> [(AnyField table, SqlValue)]
+    default fieldValues :: (Generic table, GFieldValues table (Rep table)) => table -> [(AnyField table, SqlValue)]
+    fieldValues tbl = gFieldValues tbl (from tbl)
+
+    -- | The default behavior is to assign the default phantom field schema (just an integer primary key) a single value of null, to let autoincrement work
     makePhantomValues :: table -> [SqlValue]
     makePhantomValues _ = [SqlNull]
 
@@ -169,6 +175,22 @@ instance GMakeSqlValues U1 where
     gMakeSqlValues _ = []
 instance FieldSchema x => GMakeSqlValues (K1 Generic.R x) where
     gMakeSqlValues (K1 x) = [makeSqlValue x]
+
+class GFieldValues tbl (x :: * -> *) where
+    gFieldValues :: tbl -> x a -> [(AnyField tbl, SqlValue)]
+instance GFieldValues tbl p => GFieldValues tbl (D1 f p) where
+    gFieldValues t (M1 x) = gFieldValues t x
+instance GFieldValues tbl p => GFieldValues tbl (C1 f p) where
+    gFieldValues t (M1 x) = gFieldValues t x
+instance GFieldValues tbl p => GFieldValues tbl (S1 f p) where
+    gFieldValues t (M1 x) = gFieldValues t x
+instance (GFieldValues tbl f, GFieldValues tbl g) => GFieldValues tbl (f :*: g) where
+    gFieldValues t (f :*: g) = gFieldValues t f ++ gFieldValues t g
+instance GFieldValues tbl U1 where
+    gFieldValues _ _ = []
+instance (Field t (NameFor x), FieldSchema x, Table t) => GFieldValues t (K1 Generic.R x) where
+    gFieldValues tbl (K1 x) = [( AnyField tbl x
+                               , makeSqlValue x )]
 
 type PrimaryKeySchema table = LocateResult (FullSchema table) (LocateAll (FullSchema table) (PrimaryKey table))
 

@@ -7,7 +7,6 @@ module Database.Beam.SQL
 
     , conjugateWhere) where
 
-import Database.Beam.Types
 import Database.Beam.SQL.Types
 
 import Control.Applicative hiding (empty)

@@ -24,14 +24,14 @@ import Control.Monad.Identity
 import Data.Monoid hiding (All)
 
 -- * Rewrite functions for expressions and queries
-rw :: Monad m => (forall q a. Query q a -> m (Maybe (Query q a))) -> (forall q a . QExpr q a -> m (Maybe (QExpr q a))) -> Query q a -> m (Query q a)
+rw :: Monad m => (forall a. Query a -> m (Maybe (Query a))) -> (forall a . QExpr a -> m (Maybe (QExpr a))) -> Query a -> m (Query a)
 rw f fe x = do x' <- f x
                case x' of
                  Nothing -> return x
                  Just x'
                      | x == x' -> return x
                      | otherwise -> rewriteQueryM f fe x'
-rwE :: Monad m => (forall q a. QExpr q a -> m (Maybe (QExpr q a))) -> (forall q a. Query q a -> m (Maybe (Query q a))) -> QExpr q a -> m (QExpr q a)
+rwE :: Monad m => (forall a. QExpr a -> m (Maybe (QExpr a))) -> (forall a. Query a -> m (Maybe (Query a))) -> QExpr a -> m (QExpr a)
 rwE f fq x = do x' <- f x
                 case x' of
                   Nothing -> return x
@@ -39,7 +39,7 @@ rwE f fq x = do x' <- f x
                       | x == x' -> return x
                       | otherwise -> rewriteExprM f fq x'
 
-rewriteQueryM :: Monad m => (forall q a . Query q a -> m (Maybe (Query q a))) -> (forall q a . QExpr q a -> m (Maybe (QExpr q a))) -> Query q a -> m (Query q a)
+rewriteQueryM :: Monad m => (forall a . Query a -> m (Maybe (Query a))) -> (forall a . QExpr a -> m (Maybe (QExpr a))) -> Query a -> m (Query a)
 rewriteQueryM f fe (Filter query e) = do query' <- rewriteQueryM f fe query
                                          e' <- rewriteExprM fe f e
                                          rw f fe (Filter query' e')
@@ -51,13 +51,13 @@ rewriteQueryM f fe (Join q1 q2) = do q1' <- rewriteQueryM f fe q1
                                      rw f fe (Join q1' q2')
 rewriteQueryM f fe x = rw f fe x
 
-rewriteQuery :: (forall q a. Query q a -> Maybe (Query q a)) -> (forall q a. QExpr q a -> Maybe (QExpr q a)) -> Query q a -> Query q a
+rewriteQuery :: (forall a. Query a -> Maybe (Query a)) -> (forall a. QExpr a -> Maybe (QExpr a)) -> Query a -> Query a
 rewriteQuery f fe x = runIdentity (rewriteQueryM (return . f) (return . fe) x)
 
-traverseQueryM :: Monad m => (forall q a. Query q a -> m ()) -> (forall q a. QExpr q a -> m ()) -> Query q a -> m ()
+traverseQueryM :: Monad m => (forall a. Query a -> m ()) -> (forall a. QExpr a -> m ()) -> Query a -> m ()
 traverseQueryM t te x = rewriteQueryM (\x -> t x >> return Nothing) (\x -> te x >> return Nothing) x >> return ()
 
-rewriteExprM :: Monad m => (forall q a . QExpr q a -> m (Maybe (QExpr q a))) -> (forall q a . Query q a -> m (Maybe (Query q a))) -> QExpr q a -> m (QExpr q a)
+rewriteExprM :: Monad m => (forall a . QExpr a -> m (Maybe (QExpr a))) -> (forall a . Query a -> m (Maybe (Query a))) -> QExpr a -> m (QExpr a)
 rewriteExprM f fq (AndE a b) = do a' <- rewriteExprM f fq a
                                   b' <- rewriteExprM f fq b
                                   rwE f fq (AndE a' b')
@@ -68,14 +68,14 @@ rewriteExprM f fq x = rwE f fq x
 
 -- * Query optimizations
 
-combineFilterOpt :: Query q a -> Maybe (Query q a)
+combineFilterOpt :: Query a -> Maybe (Query a)
 combineFilterOpt (Filter (Filter q e1) e2) = Just (Filter q (AndE e1 e2))
 combineFilterOpt (Filter q (ValE (SqlBool True))) = Just q
 combineFilterOpt (Filter q (ValE (SqlBool False))) = Just EmptySet
 combineFilterOpt _ = Nothing
 
 -- | Propagates expressions containing empty sets
-propEmptySets :: Query q a -> Maybe (Query q a)
+propEmptySets :: Query a -> Maybe (Query a)
 propEmptySets (Join EmptySet _) = Just EmptySet
 propEmptySets (Join _ EmptySet) = Just EmptySet
 propEmptySets (Filter EmptySet _) = Just EmptySet
@@ -83,7 +83,7 @@ propEmptySets (GroupBy EmptySet _) = Just EmptySet
 propEmptySets _ = Nothing
 
 -- | Propagates filter clauses that are inside inner joins passed the inner join, so that there is simply one where statement
-propFiltersPastInnerJoins :: Query q a -> Maybe (Query q a)
+propFiltersPastInnerJoins :: Query a -> Maybe (Query a)
 propFiltersPastInnerJoins (Join (Filter a e) b) = Just (Filter (Join a b) e)
 propFiltersPastInnerJoins (Join a (Filter b e)) = Just (Filter (Join a b) e)
 propFiltersPastInnerJoins _ = Nothing
@@ -96,7 +96,7 @@ propFiltersPastInnerJoins _ = Nothing
 -- --   Essentially, expressions containing references to tble
 -- lowerOnClauses
 
-booleanOpts :: QExpr q a -> Maybe (QExpr q a)
+booleanOpts :: QExpr a -> Maybe (QExpr a)
 booleanOpts (AndE (ValE (SqlBool False)) _) = Just (ValE (SqlBool False))
 booleanOpts (AndE _ (ValE (SqlBool False))) = Just (ValE (SqlBool False))
 booleanOpts (AndE (ValE (SqlBool True)) (ValE (SqlBool True))) = Just (ValE (SqlBool True))

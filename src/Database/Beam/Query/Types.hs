@@ -7,14 +7,11 @@ module Database.Beam.Query.Types
     , Query(..), QExpr(..), QAssignment(..)
 
     , ScopeFields(..), Scope(..)
-    , getScope
-
-    , coerceQueryThread, coerceQExprThread, coerceScopedFieldThread ) where
+    , getScope ) where
 
 import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Locate
 import Database.Beam.Schema.Fields
-import Database.Beam.Types
 import Database.Beam.SQL
 import Database.HDBC
 
@@ -30,12 +27,12 @@ import qualified Data.Text as T
 -- * Beam queries
 
 -- | A `ScopedField` represents a field that has been brought in scope via an `allQ`. The `q` type is a thread type that ensures that this field cannot escape this query.
-data ScopedField q table name = ScopedField Int
-                                deriving (Show, Typeable, Eq)
-instance SchemaPart (ScopedField q table name)
-type instance NameFor (ScopedField q table name) = name
-instance Locator (ScopedField q table name) Found where
-    type LocateResult (ScopedField q table name) Found = ScopedField q table name
+data ScopedField table name = ScopedField Int
+                              deriving (Show, Typeable, Eq)
+instance SchemaPart (ScopedField table name)
+type instance NameFor (ScopedField table name) = name
+instance Locator (ScopedField table name) Found where
+    type LocateResult (ScopedField table name) Found = ScopedField table name
     locate a _ = a
 
 data QueryField table field
@@ -51,32 +48,34 @@ instance ( Table table
 instance SchemaPart (QueryTable table)
 
 -- | A query that produces results of type `a`
-data Query s a where
-    All :: (Table table, ScopeFields (QueryTable table)) => Proxy table -> Int -> Query q (QueryTable table)
-    EmptySet :: Query q a
-    Filter ::  Query q a -> QExpr q Bool -> Query q a
-    GroupBy :: Typeable t => Query q a -> [QExpr q t] -> Query q a
-    Join :: Query q schema1 -> Query q schema2 -> Query q (schema1 :|: schema2)
---    Project :: Query q a -> [QExpr q t] -> Query q b
+data Query a where
+    All :: (Table table, ScopeFields (QueryTable table)) => Proxy table -> Int -> Query (QueryTable table)
+    EmptySet :: Query a
+    Filter ::  Query a -> QExpr Bool -> Query a
+    GroupBy :: Typeable t => Query a -> [QExpr t] -> Query a
+    Join :: Query schema1 -> Query schema2 -> Query (schema1 :|: schema2)
+--    Project :: Query a -> [QExpr t] -> Query b
 
-data QExpr q t where
-    FieldE :: (Table table, Field table field) => ScopedField q table field -> QExpr q (FieldType (FieldInTable table field))
+data QExpr t where
+    FieldE :: (Table table, Field table field) => ScopedField table field -> QExpr (FieldType (FieldInTable table field))
 
-    OrE :: QExpr q Bool -> QExpr q Bool -> QExpr q Bool
-    AndE :: QExpr q Bool -> QExpr q Bool -> QExpr q Bool
+    OrE :: QExpr Bool -> QExpr Bool -> QExpr Bool
+    AndE :: QExpr Bool -> QExpr Bool -> QExpr Bool
 
-    EqE :: (Typeable a, Show a) => QExpr q a -> QExpr q a -> QExpr q Bool
+    EqE :: (Typeable a, Show a) => QExpr a -> QExpr a -> QExpr Bool
 
-    ValE :: SqlValue -> QExpr q a
+    ValE :: SqlValue -> QExpr a
 
-    JustE :: Show a => QExpr q a -> QExpr q (Maybe a)
-    NothingE :: QExpr q (Maybe a)
+    JustE :: Show a => QExpr a -> QExpr (Maybe a)
+    NothingE :: QExpr (Maybe a)
 
-data QAssignment q where
+data QAssignment where
     QAssignment :: ( Table table, Field table field
                    , FieldInTable table field ~ fs
                    , FieldSchema fs ) =>
-                   ScopedField q table field -> QExpr q (FieldType fs) -> QAssignment q
+                   ScopedField table field
+                -> QExpr (FieldType fs)
+                -> QAssignment
 
 deriving instance Typeable Query
 deriving instance Typeable QExpr
@@ -84,30 +83,26 @@ deriving instance Typeable QExpr
 -- ** Scoping class
 
 class ScopeFields a where
-    scopeFields :: Proxy q -> Proxy a -> Int -> Scope q a
+    scopeFields :: Proxy a -> Int -> Scope a
 instance ScopeFields (QueryField table field) where
-    scopeFields (_ :: Proxy q) (_ :: Proxy (QueryField table field)) i = ScopedField i :: ScopedField q table (NameFor field)
+    scopeFields (_ :: Proxy (QueryField table field)) i = ScopedField i :: ScopedField table (NameFor field)
 instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
-    scopeFields (q :: Proxy q) (_ :: Proxy (a :|: b)) i =
-      let ret :: Scope q a :|: Scope q b
-          ret = scopeFields q (Proxy :: Proxy a) i :|: scopeFields q (Proxy :: Proxy b) i
-      in ret
+    scopeFields  (_ :: Proxy (a :|: b)) i = scopeFields (Proxy :: Proxy a) i :|: scopeFields (Proxy :: Proxy b) i
 instance ( ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
          , ScopeFields (WrapFields (QueryField table) (Schema table)) ) =>
          ScopeFields (QueryTable table) where
-    scopeFields (_ :: Proxy q) (_ :: Proxy (QueryTable table)) i = scopeFields (Proxy :: Proxy q) (Proxy :: Proxy (WrapFields (QueryField table) (PhantomFieldSchema table))) i :|:
-                                                                   scopeFields (Proxy :: Proxy q) (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
+    scopeFields (_ :: Proxy (QueryTable table)) i = scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (PhantomFieldSchema table))) i :|:
+                                                    scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
 
-type family Scope q a where
-    Scope q (a :|: b) = Scope q a :|: Scope q b
-    Scope q (QueryTable x) = Scope q (WrapFields (QueryField x) (PhantomFieldSchema x)) :|: Scope q (WrapFields (QueryField x) (Schema x))
-    Scope q (QueryField table field) = ScopedField q table (NameFor field)
+type family Scope a where
+    Scope (a :|: b) = Scope a :|: Scope b
+    Scope (QueryTable x) = Scope (WrapFields (QueryField x) (PhantomFieldSchema x)) :|: Scope (WrapFields (QueryField x) (Schema x))
+    Scope (QueryField table field) = ScopedField table (NameFor field)
 
-getScope :: Query q a -> Scope q a
-getScope x@(All _ i) = scopeFields qProxy aProxy i
-    where (qProxy, aProxy) = proxies x
-          proxies :: Query q a -> (Proxy q, Proxy a)
-          proxies _ = (Proxy, Proxy)
+getScope :: Query a -> Scope a
+getScope x@(All _ i) = scopeFields (aProxy x) i
+    where aProxy :: Query a -> Proxy a
+          aProxy _ = Proxy
 getScope EmptySet = undefined
 getScope (Filter q _) = getScope q
 getScope (GroupBy q _) = getScope q
@@ -115,15 +110,15 @@ getScope (Join q1 q2) = getScope q1 :|: getScope q2
 
 -- ** Hand-derived instances for Query and QExpr since their types are too complicated for the deriving mechanism
 
-instance Show (Query s a) where
+instance Show (Query a) where
     show (All table i) = concat ["All ", show i, " :: ", T.unpack . dbTableName $ table]
     show (Filter q e) = concat ["Filter (", show q, ") (", show e, ")"]
     show (GroupBy q es) = concat ["GroupBy (", show q, ") (", show es, ")"]
     show (Join q1 q2) = concat ["Join (", show q1, ") (", show q2, ")"]
     show EmptySet = "EmptySet"
 
-instance Show (QExpr q t) where
-    show (FieldE (table :: ScopedField q table field)) = concat ["FieldE (", show table, ") ", T.unpack (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field))]
+instance Show (QExpr t) where
+    show (FieldE (table :: ScopedField table field)) = concat ["FieldE (", show table, ") ", T.unpack (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field))]
 
     show (AndE a b) = concat ["AndE (", show a, ") (", show b, ")"]
     show (OrE a b) = concat ["OrE (", show a, ") (", show b, ")"]
@@ -135,31 +130,29 @@ instance Show (QExpr q t) where
     show (JustE b) = concat ["JustE ", show b]
     show NothingE = "NothingE"
 
-instance Eq (Query s a) where
+instance Eq (Query a) where
     EmptySet == EmptySet = True
     All _ x == All _ y = x == y
     Filter q1 e1 == Filter q2 e2 = q1 == q2 && e1 == e2
-    GroupBy q1 (es1 :: [QExpr q t1]) == GroupBy q2 (es2 :: [QExpr q t2]) =
+    GroupBy q1 es1 == GroupBy q2 es2 =
         q1 == q2 &&
-        case cast es1' of
+        case cast es1 of
           Nothing -> False
-          Just es1' -> es1' == es2'
-        where es1' = map coerceQExprThread es1
-              es2' = map coerceQExprThread es2
+          Just es1 -> es1 == es2
     Join a1 b1 == Join a2 b2 = a1 == a2 && b1 == b2
     _ == _ = False
 
-instance Eq (QExpr q t) where
-    FieldE (q1 :: ScopedField q1 table1 field1) == FieldE (q2 :: ScopedField q2 table2 field2) =
-        case cast (coerceScopedFieldThread q1) of
+instance Eq (QExpr t) where
+    FieldE q1 == FieldE q2 =
+        case cast q1 of
           Nothing -> False
-          Just q1 -> q1 == coerceScopedFieldThread q2
+          Just q1 -> q1 == q2
 
     AndE a1 b1 == AndE a2 b2 = a1 == a2 && b1 == b2
 
-    EqE a1 b1 == EqE a2 b2 = case cast (coerceQExprThread a1, coerceQExprThread b1) of
+    EqE a1 b1 == EqE a2 b2 = case cast (a1, b1) of
                                Just (a1, b1)
-                                   | a1 == coerceQExprThread a2 && b1 == coerceQExprThread b2 -> True
+                                   | a1 == a2 && b1 == b2 -> True
                                    | otherwise -> False
                                Nothing -> False
 
@@ -169,26 +162,3 @@ instance Eq (QExpr q t) where
     NothingE == NothingE = True
 
     _ == _ = False
-
--- * Query thread coercion
-
--- | Coerces the query thread to () in order to allow for easy typechecks. DO NOT USE UNLESS YOU KNOW WHAT YOU'RE DOING!
-coerceQueryThread :: Query q a -> Query () a
-coerceQueryThread (All q i) = All q i
-coerceQueryThread (Filter q e) = Filter (coerceQueryThread q) (coerceQExprThread e)
-coerceQueryThread (GroupBy q es) = GroupBy (coerceQueryThread q) (map coerceQExprThread es)
-coerceQueryThread (Join a b) = Join (coerceQueryThread a) (coerceQueryThread b)
-coerceQueryThread EmptySet = EmptySet
-
-coerceQExprThread :: QExpr q t -> QExpr () t
-coerceQExprThread (FieldE f) = FieldE (coerceScopedFieldThread f)
-coerceQExprThread (AndE a b) = AndE (coerceQExprThread a) (coerceQExprThread b)
-coerceQExprThread (OrE a b) = OrE (coerceQExprThread a) (coerceQExprThread b)
-coerceQExprThread (EqE a b) = EqE (coerceQExprThread a) (coerceQExprThread b)
-coerceQExprThread (ValE v) = ValE v
-
-coerceQExprThread (JustE b) = JustE (coerceQExprThread b)
-coerceQExprThread NothingE = NothingE
-
-coerceScopedFieldThread :: ScopedField q t f -> ScopedField () t f
-coerceScopedFieldThread (ScopedField i) = ScopedField i
