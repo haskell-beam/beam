@@ -63,7 +63,7 @@ instance (Table table) => Field table TableId where
 
     fieldName _ _ = "id"
 
-    fieldConstraints _ _ = [SQLPrimaryKey]
+    fieldConstraints _ _ = [SQLPrimaryKeyAutoIncrement]
 
 class ( Typeable table
       , Locator (FullSchema table) (LocateAll (FullSchema table) (PrimaryKey table)) )  => Table table where
@@ -196,9 +196,9 @@ type PrimaryKeySchema table = LocateResult (FullSchema table) (LocateAll (FullSc
 
 -- * Primary keys
 
-primaryKeyForTable :: Table table =>
-                      PhantomFieldSchema table -> table -> PrimaryKeySchema table
-primaryKeyForTable phantomData (tbl :: table) = getFields (phantomData :|: getSchema tbl) (undefined :: PrimaryKey table)
+primaryKeyForTable' :: Table table =>
+                       PhantomFieldSchema table -> table -> PrimaryKeySchema table
+primaryKeyForTable' phantomData (tbl :: table) = getFields (phantomData :|: getSchema tbl) (undefined :: PrimaryKey table)
 
 -- * Field and table support
 

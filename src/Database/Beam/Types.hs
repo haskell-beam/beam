@@ -50,6 +50,8 @@ data Beam m = Beam
             , compareSchemas :: forall d. Database d => DatabaseSchema -> Proxy d -> DBSchemaComparison
             , adjustColDescForBackend :: SQLColumnSchema -> SQLColumnSchema
 
+            , getLastInsertedRow :: Text -> m [SqlValue]
+
             , withHDBCConnection :: forall a. (forall conn. IConnection conn => conn -> m a) -> m a }
 
 class BeamBackend dbSettings where
@@ -60,6 +62,7 @@ class BeamBackend dbSettings where
 transBeam :: Functor m => (forall a. (s -> m (a, Maybe b)) -> n a) -> (forall a. n a -> s -> m (a, b)) -> Beam m -> Beam n
 transBeam lift lower beam = beam
                           { closeBeam = lift (const ((,Nothing) <$> closeBeam beam))
+                          , getLastInsertedRow = \s -> lift (const ((, Nothing) <$> getLastInsertedRow beam s))
                           , withHDBCConnection = \f -> lift (\s -> ((id *** Just) <$> withHDBCConnection beam (flip lower s . f))) }
 
 beamNoErrors :: BeamT () m a -> BeamT () m a

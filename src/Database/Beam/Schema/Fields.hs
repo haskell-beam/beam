@@ -98,7 +98,7 @@ instance FromSqlValues field => FromSqlValues (MaybeField field) where
     fromSqlValues' = do val <- peekSqlValue
                         case val of
                           SqlNull -> popSqlValue >> return (MaybeField Nothing)
-                          val -> fromSqlValues'
+                          val -> MaybeField . Just <$> fromSqlValues'
 
 -- ** Text fields
 
