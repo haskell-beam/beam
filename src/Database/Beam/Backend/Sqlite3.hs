@@ -8,6 +8,8 @@ import Control.Monad.Trans
 import Database.HDBC.Sqlite3
 import Database.HDBC
 
+import Data.Text (Text, unpack)
+
 -- * Sqlite3 support
 
 data Sqlite3Settings = Sqlite3Settings FilePath
@@ -20,4 +22,10 @@ instance BeamBackend Sqlite3Settings where
            return Beam { closeBeam = liftIO (disconnect conn)
                        , compareSchemas = defaultBeamCompareSchemas
                        , adjustColDescForBackend = id
+                       , getLastInsertedRow = getLastInsertedRow' conn
                        , withHDBCConnection = \f -> f conn }
+
+getLastInsertedRow' :: MonadIO m => Connection -> Text -> m [SqlValue]
+getLastInsertedRow' conn tblName = do
+  [res] <- liftIO (quickQuery conn (concat ["SELECT * FROM ", unpack tblName, " WHERE ROWID=(SELECT last_insert_rowid()) limit 1"]) [])
+  return res

@@ -53,13 +53,18 @@ join_ l r = Join l r'
 where_ :: Query a -> (Scope a -> QExpr Bool) -> Query a
 where_ q mkExpr = Filter q (mkExpr (getScope q))
 
--- | Get all related records for a one to many relationship
-(#*) :: ( OneToMany r
-        , ScopeFields (WrapFields (QueryField (OneToManyRange r)) (Schema (OneToManyRange r)))
-        , ScopeFields (WrapFields (QueryField (OneToManyRange r)) (PhantomFieldSchema (OneToManyRange r))) ) =>
-        Query (QueryTable (OneToManyDomain r)) -> r -> Query (QueryTable (OneToManyDomain r) :|: QueryTable (OneToManyRange r))
-q #* (r :: r) = (q `join_` allInRange) `where_` (\(domainTbl :|: rangeTbl) -> generateJoinCondition r domainTbl rangeTbl)
-    where allInRange = all_ (of_ :: OneToManyRange r)
+-- | Get all related records for a relationship
+(#@*) :: ( Relationship subject object r
+         , ScopeFields (WrapFields (QueryField object) (Schema object))
+         , ScopeFields (WrapFields (QueryField object) (PhantomFieldSchema object)) ) =>
+         Query (QueryTable subject) -> r -> Query (QueryTable subject :|: QueryTable object)
+q #@* r = injectSubjectAndObjectProxy $
+          \subjectProxy (objectProxy :: Proxy object) ->
+          let allInRange = all_ (of_ :: object)
+          in (q `join_` allInRange) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
+    where injectSubjectAndObjectProxy :: (Proxy subject -> Proxy object -> Query (QueryTable subject :|: QueryTable object))
+                                      -> Query (QueryTable subject :|: QueryTable object)
+          injectSubjectAndObjectProxy f = f Proxy Proxy
 
 (=#) :: (Table table, Field table field
         , FieldInTable table field ~ fs

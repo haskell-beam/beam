@@ -8,7 +8,7 @@ module Database.Beam.Query
 
     , runQuery, runInsert, runUpdate, updateEntity
     , EqExprFor(..)
-    , findByPrimaryKeyExpr
+    , findByPrimaryKeyExpr, primaryKeyForTable
 
     , inBeamTxn, query, insert, save, update, getOne ) where
 
@@ -34,6 +34,8 @@ import Control.Monad.Error
 import Data.Monoid hiding (All)
 import Data.Proxy
 import Data.Data
+import Data.List (find)
+import Data.Maybe
 import Data.String (fromString)
 import Data.Conduit
 import qualified Data.Text as T
@@ -101,11 +103,32 @@ runQuery q beam =
                                                 Nothing -> return ()
                               return (Right source)
 
-runInsert :: (MonadIO m, Table table) => table -> Beam m -> m (Either String ())
-runInsert table beam =
-    do let insertCmd = Insert (insertToSQL table)
+runInsert :: (MonadIO m, Table table, FromSqlValues (QueryTable table)) => table -> Beam m -> m (Either String (QueryTable table))
+runInsert (table :: table) beam =
+    do let insertCmd = Insert sqlInsert
+           sqlInsert@(SQLInsert tblName sqlValues) = (insertToSQL table)
        withHDBCConnection beam (\conn -> liftIO (runSQL' conn insertCmd))
-       return (Right ())
+
+       -- There are three possibilities here:
+       --
+       --   * we have no autoincrement keys, and so we simply have to return the
+       --     newly created QueryTable, or
+       --   * we have autoincrement keys, but all the fields marked autoincrement
+       --     were non-null. In this case, we have all the information needed to
+       --     construct the QueryTable, or
+       --   * we have autoincrement keys, and some of the fields were marked null.
+       --     In this case, we need to ask the backend for the last inserted row.
+       let tableSchema = reifyTableSchema (Proxy :: Proxy table)
+
+           autoIncrementsAreNull = zipWith (\(_, columnSchema) value -> hasAutoIncrementConstraint columnSchema && value == SqlNull) tableSchema sqlValues
+           hasNullAutoIncrements = or autoIncrementsAreNull
+
+           hasAutoIncrementConstraint (SQLColumnSchema { csConstraints = cs }) = isJust (find (\x -> x == SQLPrimaryKeyAutoIncrement || x == SQLAutoIncrement) cs)
+
+       insertedValues <- if hasNullAutoIncrements
+                         then getLastInsertedRow beam tblName
+                         else return sqlValues
+       return (fromSqlValues insertedValues)
 
 runUpdate :: MonadIO m => SQLUpdate -> Beam m -> m (Either String ())
 runUpdate update beam =
@@ -167,8 +190,11 @@ findByPrimaryKeyExpr :: ( Table table
                         , SchemaPart locateResult
                         , EqExprFor schema (WrapFields Gen locateResult) ) => schema -> QueryTable table -> QExpr Bool
 findByPrimaryKeyExpr schema (QueryTable phantomFields tbl) =
-    let pk = primaryKeyForTable phantomFields tbl
+    let pk = primaryKeyForTable' phantomFields tbl
     in  eqExprFor schema (mapSchema Gen pk)
+
+primaryKeyForTable :: Table table => QueryTable table -> PrimaryKeySchema table
+primaryKeyForTable (QueryTable phantom fields) = primaryKeyForTable' phantom fields
 
 simpleSelect = SQLSelect
                { selProjection = SQLProjStar
@@ -223,7 +249,7 @@ query q = BeamT $ \beam ->
                Right x -> return (Success (transPipe (BeamT . const . fmap Success) x))
                Left err -> return (Rollback (InternalError err))
 
-insert :: (MonadIO m, Functor m, Table t) => t -> BeamT e m ()
+insert :: (MonadIO m, Functor m, Table t, FromSqlValues (QueryTable t)) => t -> BeamT e m (QueryTable t)
 insert table = BeamT (\beam -> toBeamResult <$> runInsert table beam)
 
 save :: ( ScopeFields (WrapFields (QueryField table) (Schema table))

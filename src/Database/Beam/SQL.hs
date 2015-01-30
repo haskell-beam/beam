@@ -50,6 +50,8 @@ ppColSchema (SQLColumnSchema type_ constraints) =
 
 ppConstraint :: SQLConstraint -> DocAndVals
 ppConstraint SQLPrimaryKey = return (text "PRIMARY KEY")
+ppConstraint SQLPrimaryKeyAutoIncrement = return (text "PRIMARY KEY")
+ppConstraint SQLAutoIncrement = return (text "AUTOINCREMENT") -- TODO this is different dependingon the backend
 ppConstraint SQLNotNull = return (text "NOT NULL")
 
 ppColType :: SqlColDesc -> DocAndVals

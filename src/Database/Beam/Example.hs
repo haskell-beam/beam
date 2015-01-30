@@ -50,12 +50,17 @@ instance Field TodoListItemTable Description
 instance Field TodoListItemTable DueDate
 instance Field TodoListItemTable TodoList
 
-instance OneToMany TodoListItems where
-    type OneToManyDomain TodoListItems = TodoListTable
-    type OneToManyRange  TodoListItems = TodoListItemTable
+instance Relationship TodoListTable TodoListItemTable TodoListItems where
+    type SubjectFields TodoListTable TodoListItemTable TodoListItems = PrimaryKey TodoListTable
+    type ObjectFields TodoListTable TodoListItemTable TodoListItems = TodoList
 
-    type OneToManyDomainKey TodoListItems = PrimaryKey TodoListTable
-    type OneToManyRangeKey TodoListItems = TodoList
+
+-- instance OneToMany TodoListItems where
+--     type OneToManyDomain TodoListItems = TodoListTable
+--     type OneToManyRange  TodoListItems = TodoListItemTable
+
+--     type OneToManyDomainKey TodoListItems = PrimaryKey TodoListTable
+--     type OneToManyRangeKey TodoListItems = TodoList
 
 data HistDataTable = HistDataTable (IntField CompanyId)
                                    (IntField Revenue)
@@ -86,7 +91,7 @@ test fp = do beam <- openDatabase (Proxy :: Proxy MyDatabase) (Sqlite3Settings f
              runInsert (TodoListItemTable (TextField "Item 3") (TextField "Description of Item 3") (DateTimeField now) (DefaultPKField (IntField 2))) beam
              runInsert (TodoListItemTable (TextField "Item 4") (TextField "Description of Item 4") (DateTimeField now) (DefaultPKField (IntField 2))) beam
 
-             let x = ((all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")) #* TodoListItems
+             let x = ((all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")) #@* TodoListItems
                  y = (all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")
                  xOpt = rewriteQuery allQueryOpts allExprOpts x
 
