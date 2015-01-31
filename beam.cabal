@@ -29,7 +29,6 @@ library
 
                        Database.Beam.Schema.Tables
                        Database.Beam.Schema.Relationships
-                       Database.Beam.Schema.Database
                        Database.Beam.Schema.Fields
                        Database.Beam.Schema.Locate
   build-depends:       base >=4.7 && <4.8, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible

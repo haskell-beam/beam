@@ -47,7 +47,7 @@ newtype BeamT e m a = BeamT { runBeamT :: Beam m -> m (BeamResult e a) }
 data Beam m = Beam
             { closeBeam :: m ()
 
-            , compareSchemas :: forall d. Database d => DatabaseSchema -> Proxy d -> DBSchemaComparison
+            , compareSchemas :: ReifiedDatabaseSchema -> Database -> DBSchemaComparison
             , adjustColDescForBackend :: SQLColumnSchema -> SQLColumnSchema
 
             , getLastInsertedRow :: Text -> m [SqlValue]

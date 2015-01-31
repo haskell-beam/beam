@@ -27,13 +27,13 @@ instance Monoid DBSchemaComparison where
 
     mempty = Migration []
 
-defaultBeamCompareSchemas :: Database db => DatabaseSchema -> Proxy db -> DBSchemaComparison
+defaultBeamCompareSchemas :: ReifiedDatabaseSchema -> Database -> DBSchemaComparison
 defaultBeamCompareSchemas actual db = execWriter compare
-    where expected = reifyDBSchema (dbSchema' db)
+    where expected = reifyDBSchema db
 
           actualTableSet = S.fromList (map fst actual)
           expTableSet = S.fromList (map fst expected)
-          expGenTables = tableNames (dbSchema' db)
+          expGenTables = tables db
 
           tablesToBeMade = expTableSet S.\\ actualTableSet
 
@@ -42,7 +42,7 @@ defaultBeamCompareSchemas actual db = execWriter compare
 
           compare = tell (Migration (map (\(GenTable t) -> MACreateTable t) genTablesToBeMade))
 
-hdbcSchema :: (IConnection conn, MonadIO m) => conn -> m DatabaseSchema
+hdbcSchema :: (IConnection conn, MonadIO m) => conn -> m ReifiedDatabaseSchema
 hdbcSchema conn =
     liftIO $
     do tables <- getTables conn
@@ -56,7 +56,7 @@ createStmtFor beam table =
         tblSchemaInDb' = map (second (adjustColDescForBackend beam)) (reifyTableSchema table)
     in SQLCreateTable (dbTableName table) (tblSchemaInDb')
 
-migrateDB :: (Database db, MonadIO m) => Proxy db -> Beam m -> [MigrationAction] -> m ()
+migrateDB :: MonadIO m => db -> Beam m -> [MigrationAction] -> m ()
 migrateDB db beam actions =
   forM_ actions $ \action ->
       do liftIO (putStrLn (concat ["Performing ", show action]))
@@ -78,7 +78,7 @@ autoMigrateDB db beam =
                                  migrateDB db beam actions
          Unknown -> liftIO $ putStrLn "Unknown comparison"
 
-openDatabase :: (Database db, BeamBackend dbSettings, MonadIO m) => Proxy db -> dbSettings -> m (Beam m)
+openDatabase :: (BeamBackend dbSettings, MonadIO m) => Database -> dbSettings -> m (Beam m)
 openDatabase db dbSettings =
   do beam <- openBeam dbSettings
      autoMigrateDB db beam
