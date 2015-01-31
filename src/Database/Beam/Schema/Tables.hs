@@ -19,37 +19,36 @@ import qualified GHC.Generics as Generic
 -- * Database types
 
 -- | Table composition operator
-data t1 :#: t2
-data TableSchema t
-
-type DatabaseSchema = [(Text, ReifiedTableSchema)]
-type ReifiedTableSchema = [(Text, SQLColumnSchema)]
-
+-- data t1 :#: t2
 data GenTable where
     GenTable :: Table t => Proxy t -> GenTable
+
+type ReifiedDatabaseSchema = [(Text, ReifiedTableSchema)]
+type ReifiedTableSchema = [(Text, SQLColumnSchema)]
+
+newtype Database = Database [GenTable]
+
+database_ :: [GenTable] -> Database
+database_ = Database
+
+table_ :: Table t => t -> GenTable
+table_ t = GenTable (proxyFor t)
+    where proxyFor :: t -> Proxy t
+          proxyFor _ = Proxy
+
+schema_ :: Table t => t
+schema_ = undefined
+
+reifyDBSchema :: Database -> ReifiedDatabaseSchema
+reifyDBSchema (Database tables) = map schemaForTable tables
+    where schemaForTable :: GenTable -> (Text, ReifiedTableSchema)
+          schemaForTable (GenTable t) = (dbTableName t, reifyTableSchema t)
+
+tables :: Database -> [GenTable]
+tables (Database x) = x
+
 data AnyField table where
     AnyField :: (Table table, Field table (NameFor fs), FieldSchema fs) => table -> fs -> AnyField table
-
-class ToDatabaseSchema a where
-    reifyDBSchema :: Proxy a -> DatabaseSchema
-    tableNames :: Proxy a -> [GenTable]
-
-class ToDatabaseSchema (DBSchema d) => Database d where
-    type DBSchema d :: *
-    type DBSchema d = DBSchemaForGeneric (Rep d ())
-
-    dbSchema' :: Proxy d -> Proxy (DBSchema d)
-    default dbSchema' :: (Generic d, DBSchemaForGeneric (Rep d ()) ~ DBSchema d) => Proxy d -> Proxy (DBSchema d)
-    dbSchema' _ = Proxy
-
--- ** Generic database deriving support
-
-type family DBSchemaForGeneric x where
-    DBSchemaForGeneric (M1 D f p x) = DBSchemaForGeneric (p x)
-    DBSchemaForGeneric (M1 C f p x) = DBSchemaForGeneric (p x)
-    DBSchemaForGeneric (M1 S f p x) = DBSchemaForGeneric (p x)
-    DBSchemaForGeneric ((:*:) f g x) = DBSchemaForGeneric (f x) :#: DBSchemaForGeneric (g x)
-    DBSchemaForGeneric (K1 Generic.R s x) = s
 
 -- * Tables
 

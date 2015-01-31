@@ -5,7 +5,6 @@ import Data.Text (Text)
 import Database.Beam.Backend
 import Database.Beam.Schema
 import Database.Beam.Query
-import Database.Beam.Schema.Database
 import Database.Beam.Backend.Sqlite3
 import Database.Beam.SQL
 import Database.Beam.Types
@@ -72,13 +71,13 @@ instance Field HistDataTable CompanyId
 instance Field HistDataTable Revenue
 instance Field HistDataTable Date
 
-data MyDatabase = MyDatabase (TableSchema TodoListTable)
-                             (TableSchema TodoListItemTable)
-                             (TableSchema HistDataTable)
-                             deriving (Generic, Typeable)
-instance Database MyDatabase
+myDatabase :: Database
+myDatabase = database_
+             [ table_ (schema_ :: TodoListTable)
+             , table_ (schema_ :: TodoListItemTable)
+             , table_ (schema_ :: HistDataTable) ]
 
-test fp = do beam <- openDatabase (Proxy :: Proxy MyDatabase) (Sqlite3Settings fp)
+test fp = do beam <- openDatabase myDatabase (Sqlite3Settings fp)
 
              runInsert (TodoListTable (TextField "List 1") (TextField "Description of List 1")) beam
              runInsert (TodoListTable (TextField "List 2") (TextField "Description of List 2")) beam
