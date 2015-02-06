@@ -13,15 +13,31 @@ data a :|: b = a :|: b
 type instance NameFor (a :|: b) = NameFor a :|: NameFor b
 infixr 3 :|:
 
+data a :-> b = a :-> b
+               deriving (Show, Typeable)
+
+data Embedded name a = Embedded a
+                       deriving (Show)
+type instance NameFor (Embedded name a) = name
+type family EmbeddedSchemaFor a
+type instance EmbeddedSchemaFor (Embedded name a) = Embedded name a
+
+type family EmbedIn parent fields where
+    EmbedIn parent (a :|: b) = EmbedIn parent a :|: EmbedIn parent b
+    EmbedIn parent x = Rename (parent :-> NameFor x) x
+
 -- * Field locating support
 
 -- | Type family for all field types that can be named
 type family NameFor t :: *
+type family Rename newName a :: *
 
 -- | The L and R datatypes help the system navigate through the nested `:|:` table constructors
 data L a = L a
 data R a = R a
+data Descend a = Descend a
 
+data Empty = Empty
 data Found = Found
 -- | If you see type check errors with this term in them, then GHC could not find the field you're attempting to access in the schema
 data ErrorNoFieldNamed name
@@ -41,9 +57,15 @@ type family Find a b name :: * where
     Find Found (NotFound b) name = Found
     Find Found Found name = ErrorMultipleFieldsNamed name
 
+type family HasFieldCheckEmbedded schema parent name where
+    HasFieldCheckEmbedded Empty parent name = CheckNamesEqual (NameFor parent) name
+    HasFieldCheckEmbedded (Embedded arentName schema) parent (parentName :-> sub) = HasFieldCheck schema sub
+    HasFieldCheckEmbedded schema parent name = CheckNamesEqual (NameFor parent) name
+
 type family HasFieldCheck schema name where
     HasFieldCheck (a :|: b) name = Find (HasFieldCheck a name) (HasFieldCheck b name) name
-    HasFieldCheck a name = CheckNamesEqual (NameFor a) name
+    HasFieldCheck (Embedded name schema) (name :-> sub) = HasFieldCheck schema sub
+    HasFieldCheck a name = HasFieldCheckEmbedded (EmbeddedSchemaFor a) a name
 
 type family LocateIf leftYes rightYes left right name where
     LocateIf (Duplicates x) r a b name = ErrorMultipleFieldsNamed x
@@ -54,13 +76,14 @@ type family LocateIf leftYes rightYes left right name where
     LocateIf Found (NotFound x) a b name = L (Locate a name)
     LocateIf (NotFound x) Found a b name = R (Locate b name)
 
+type family CheckEmbedded embeddedSchema parent name where
+    CheckEmbedded Empty parent name = CheckNamesEqual (NameFor parent) name
+    CheckEmbedded (Embedded parentName schema) parent (parentName :-> sub) = Descend (Locate schema sub)
+    CheckEmbedded schema parent name = CheckNamesEqual (NameFor parent) name
+
 type family Locate schema name where
     Locate (a :|: b) name = LocateIf (HasFieldCheck a name) (HasFieldCheck b name) a b name
-    Locate a name = CheckNamesEqual (NameFor a) name
-
-type family LookupFields table names where
-    LookupFields schema (name1 :|: name2) = LookupFields schema name1 :|: LookupFields schema name2
-    LookupFields schema name = LocateResultField schema (Locate schema name)
+    Locate a name = CheckEmbedded (EmbeddedSchemaFor a) a name
 
 type family LocateAll schema fields where
     LocateAll schema (a :|: b) = LocateAll schema a :|: LocateAll schema b
@@ -109,6 +132,13 @@ instance (Locator schema a, Locator schema b) => Locator schema (a :|: b) where
 
 instance (SchemaPart a, SchemaPart b) => SchemaPart (a :|: b) where
     mapSchema f (a :|: b) = mapSchema f a :|: mapSchema f b
+
+instance Locator schema a => Locator (Embedded name schema) (Descend a) where
+    type LocateResult (Embedded name schema) (Descend a) = LocateResult schema a
+
+    locate (Embedded schema) locator = locate schema (subLocator locator)
+        where subLocator :: Descend a -> a
+              subLocator _ = undefined
 
 getLocator :: Locate schema name ~ locator => schema -> name -> locator
 getLocator _ _ = undefined

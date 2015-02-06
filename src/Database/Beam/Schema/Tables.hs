@@ -5,10 +5,16 @@ module Database.Beam.Schema.Tables where
 import Database.Beam.SQL.Types
 import Database.Beam.Schema.Locate
 
+import Control.Arrow
+import Control.Applicative
+import Control.Monad.State
+import Control.Monad.Error
+
 import Data.Proxy
 import Data.Typeable
 import Data.Text (Text)
 import Data.String
+import qualified Data.Text as T
 
 import Database.HDBC ( SqlColDesc(..), SqlValue(..), SqlTypeId(..)
                      , fromSql)
@@ -48,17 +54,19 @@ tables :: Database -> [GenTable]
 tables (Database x) = x
 
 data AnyField table where
-    AnyField :: (Table table, Field table (NameFor fs), FieldSchema fs) => table -> fs -> AnyField table
+    AnyField :: (Table table, Field table name, FieldSchema t) => table -> Column name t -> AnyField table
 
 -- * Tables
 
+type family TypeOf x :: *
+
 type FullSchema table = PhantomFieldSchema table :|: Schema table
 
-type DefaultPrimaryKeyFor table = IntField TableId
+type DefaultPrimaryKeyFor table = Column TableId Int
 
 data TableId = TableId deriving (Show, Generic, Typeable)
 instance (Table table) => Field table TableId where
-    type FieldInTable table TableId = IntField table
+    type FieldInTable table TableId = Column TableId Int
 
     fieldName _ _ = "id"
 
@@ -68,6 +76,8 @@ class ( Typeable table
       , Locator (FullSchema table) (LocateAll (FullSchema table) (PrimaryKey table)) )  => Table table where
     type Schema table :: *
     type Schema table = SchemaForGeneric (Rep table)
+    -- type ConcreteSchema table :: *
+    -- type ConcreteSchema table = ConcreteSchemaForGeneric (Rep table)
 
     -- | Phantom fields are fields that are not part of the table definitions but are nonetheless stored in the table
     type PhantomFieldSchema table :: *
@@ -85,9 +95,9 @@ class ( Typeable table
 
     reifyTableSchema :: Proxy table -> ReifiedTableSchema
     default reifyTableSchema :: ( Generic table
-                                , GReifySchema (WrapFields (GenField table) (PhantomFieldSchema table :|: SchemaForGeneric (Rep table))) ) => Proxy table -> ReifiedTableSchema
-    reifyTableSchema table = reifyGenericSchema (schemaProxy table)
-        where schemaProxy :: Proxy table -> Proxy (WrapFields (GenField table) (PhantomFieldSchema table :|: SchemaForGeneric (Rep table)))
+                                , GReifySchema table (PhantomFieldSchema table :|: SchemaForGeneric (Rep table))) => Proxy table -> ReifiedTableSchema
+    reifyTableSchema table = reifyGenericSchema table (schemaProxy table)
+        where schemaProxy :: Proxy table -> Proxy (PhantomFieldSchema table :|: SchemaForGeneric (Rep table))
               schemaProxy _ = Proxy
 
     getSchema :: table -> Schema table
@@ -101,14 +111,16 @@ class ( Typeable table
     fromSchema schema = to (gFromSchema schema)
 
     makeSqlValues :: table -> [SqlValue]
-    default makeSqlValues :: (Generic table, GMakeSqlValues (Rep table)) => table -> [SqlValue]
+    default makeSqlValues :: (Generic table, GMakeSqlValues (Rep table ())) => table -> [SqlValue]
     makeSqlValues table = makePhantomValues table ++ gMakeSqlValues (from' table)
-        where from' :: Generic table => table -> Rep table a
+        where from' :: Generic table => table -> Rep table ()
               from' = from
 
     fieldValues :: table -> [(AnyField table, SqlValue)]
-    default fieldValues :: (Generic table, GFieldValues table (Rep table)) => table -> [(AnyField table, SqlValue)]
-    fieldValues tbl = gFieldValues tbl (from tbl)
+    default fieldValues :: (Generic table, GFieldValues table (Rep table ())) => table -> [(AnyField table, SqlValue)]
+    fieldValues tbl = gFieldValues tbl (from' tbl)
+        where from' :: Generic table => table -> Rep table ()
+              from' = from
 
     -- | The default behavior is to assign the default phantom field schema (just an integer primary key) a single value of null, to let autoincrement work
     makePhantomValues :: table -> [SqlValue]
@@ -135,61 +147,94 @@ instance GHasSchema p => GHasSchema (M1 S f p) where
 instance (GHasSchema f, GHasSchema g) => GHasSchema (f :*: g) where
     gGetSchema (f :*: g) = gGetSchema f :|: gGetSchema g
     gFromSchema (f :|: g) = gFromSchema f :*: gFromSchema g
-instance GHasSchema (K1 Generic.R schema) where
+instance GHasSchema (K1 Generic.R (Column name t)) where
     gGetSchema (K1 x) = x
     gFromSchema x = K1 x
+instance Show (PrimaryKeySchema table) => GHasSchema (K1 Generic.R (ForeignKey table name)) where
+    gGetSchema (K1 x) = x -- Embedded schema
+    gFromSchema x = K1 x -- (ForeignKey x)
 
-class GReifySchema genSchema where
-    reifyGenericSchema :: Proxy genSchema -> ReifiedTableSchema
+class GReifySchema t genSchema where
+    reifyGenericSchema :: Proxy t -> Proxy genSchema -> ReifiedTableSchema
 
-instance (GReifySchema a, GReifySchema b) => GReifySchema (a :|: b) where
-    reifyGenericSchema schema = reifyGenericSchema aProxy ++ reifyGenericSchema bProxy
+instance (GReifySchema t a, GReifySchema t b) => GReifySchema t (a :|: b) where
+    reifyGenericSchema tProxy schema = reifyGenericSchema tProxy aProxy ++ reifyGenericSchema tProxy bProxy
         where (aProxy, bProxy) = proxiesFor schema
               proxiesFor :: Proxy (a :|: b) -> (Proxy a, Proxy b)
               proxiesFor _ = (Proxy, Proxy)
-instance Field t (NameFor f) => GReifySchema (GenField t f) where
-    reifyGenericSchema schema = [(fieldName table field, fieldColDesc table field)]
-        where (table, field) = fieldProxyFor schema
-              fieldProxyFor :: Proxy (GenField t f) -> (Proxy t, Proxy (NameFor f))
-              fieldProxyFor _ = (Proxy, Proxy)
+instance Field t name => GReifySchema t (Column name ty) where
+    reifyGenericSchema table schema = [(fieldName table field, fieldColDesc table field)]
+        where field = fieldProxyFor schema
+              fieldProxyFor :: Proxy (Column name ty) -> Proxy name
+              fieldProxyFor _ = Proxy
+instance ( Reference t name
+         , GReifySchema relatedTbl (PrimaryKeySchema relatedTbl)) =>
+    GReifySchema t (ForeignKey relatedTbl name) where
+    reifyGenericSchema (table :: Proxy table) (Proxy :: Proxy (ForeignKey relatedTbl name)) =
+        let subSchema = reifyGenericSchema (Proxy :: Proxy relatedTbl) (Proxy :: Proxy (PrimaryKeySchema relatedTbl))
+            embedSchema prefix = map ((T.append prefix) *** removeConstraints)
+
+            removeConstraints (SQLColumnSchema desc cs) = SQLColumnSchema desc []
+        in embedSchema (T.concat [ refPrefix (Proxy :: Proxy table) (Proxy :: Proxy name), "_" ]) subSchema
 
 type family SchemaForGeneric g where
     SchemaForGeneric (M1 D f p) = SchemaForGeneric p
     SchemaForGeneric (M1 C f p) = SchemaForGeneric p
     SchemaForGeneric (M1 S f p) = SchemaForGeneric p
     SchemaForGeneric (f :*: g) = SchemaForGeneric f :|: SchemaForGeneric g
-    SchemaForGeneric (K1 Generic.R s) = s
+    SchemaForGeneric (K1 Generic.R (Column name t)) = Column name t
+    SchemaForGeneric (K1 Generic.R (ForeignKey table name)) = ForeignKey table name -- Embedded name (PrimaryKeySchema table)
+-- type family ConcreteSchemaForGeneric g where
+--     ConcreteSchemaForGeneric (M1 D f p) = ConcreteSchemaForGeneric p
+--     ConcreteSchemaForGeneric (M1 C f p) = ConcreteSchemaForGeneric p
+--     ConcreteSchemaForGeneric (M1 S f p) = ConcreteSchemaForGeneric p
+--     ConcreteSchemaForGeneric (f :*: g) = ConcreteSchemaForGeneric f :|: ConcreteSchemaForGeneric g
+--     ConcreteSchemaForGeneric (K1 Generic.R (Column name t)) = Column name t
+--     ConcreteSchemaForGeneric (K1 Generic.R (ForeignKey table name)) = ForeignKey table name
 
-class GMakeSqlValues (x :: * -> *) where
-    gMakeSqlValues :: x a -> [SqlValue]
-instance GMakeSqlValues p => GMakeSqlValues (D1 f p) where
+class GMakeSqlValues x where
+    gMakeSqlValues :: x -> [SqlValue]
+instance GMakeSqlValues (p a) => GMakeSqlValues (D1 f p a) where
     gMakeSqlValues (M1 x) = gMakeSqlValues x
-instance GMakeSqlValues p => GMakeSqlValues (C1 f p) where
+instance GMakeSqlValues (p a) => GMakeSqlValues (C1 f p a) where
     gMakeSqlValues (M1 x) = gMakeSqlValues x
-instance GMakeSqlValues p => GMakeSqlValues (S1 f p) where
+instance GMakeSqlValues (p a) => GMakeSqlValues (S1 f p a) where
     gMakeSqlValues (M1 x) = gMakeSqlValues x
-instance (GMakeSqlValues f, GMakeSqlValues g) => GMakeSqlValues (f :*: g) where
+instance (GMakeSqlValues (f a), GMakeSqlValues (g a)) => GMakeSqlValues ((f :*: g) a) where
     gMakeSqlValues (f :*: g) = gMakeSqlValues f ++ gMakeSqlValues g
-instance GMakeSqlValues U1 where
+instance (GMakeSqlValues f, GMakeSqlValues g) => GMakeSqlValues (f :|: g) where
+    gMakeSqlValues (f :|: g) = gMakeSqlValues f ++ gMakeSqlValues g
+instance GMakeSqlValues (U1 a) where
     gMakeSqlValues _ = []
-instance FieldSchema x => GMakeSqlValues (K1 Generic.R x) where
-    gMakeSqlValues (K1 x) = [makeSqlValue x]
+instance GMakeSqlValues x => GMakeSqlValues (K1 Generic.R x a) where
+    gMakeSqlValues (K1 x) = gMakeSqlValues x
+instance FieldSchema t => GMakeSqlValues (Column n t) where
+    gMakeSqlValues (Column x) = [makeSqlValue x]
+instance GMakeSqlValues (PrimaryKeySchema table) =>
+    GMakeSqlValues (ForeignKey table name) where
+    gMakeSqlValues (ForeignKey schema) = gMakeSqlValues schema
 
-class GFieldValues tbl (x :: * -> *) where
-    gFieldValues :: tbl -> x a -> [(AnyField tbl, SqlValue)]
-instance GFieldValues tbl p => GFieldValues tbl (D1 f p) where
+class GFieldValues tbl (x :: *) where
+    gFieldValues :: tbl -> x -> [(AnyField tbl, SqlValue)]
+instance GFieldValues tbl (p a) => GFieldValues tbl (D1 f p a) where
     gFieldValues t (M1 x) = gFieldValues t x
-instance GFieldValues tbl p => GFieldValues tbl (C1 f p) where
+instance GFieldValues tbl (p a) => GFieldValues tbl (C1 f p a) where
     gFieldValues t (M1 x) = gFieldValues t x
-instance GFieldValues tbl p => GFieldValues tbl (S1 f p) where
+instance GFieldValues tbl (p a) => GFieldValues tbl (S1 f p a) where
     gFieldValues t (M1 x) = gFieldValues t x
-instance (GFieldValues tbl f, GFieldValues tbl g) => GFieldValues tbl (f :*: g) where
+instance (GFieldValues tbl (f a), GFieldValues tbl (g a)) => GFieldValues tbl ((f :*: g) a) where
     gFieldValues t (f :*: g) = gFieldValues t f ++ gFieldValues t g
-instance GFieldValues tbl U1 where
+instance (GFieldValues tbl f, GFieldValues tbl g) => GFieldValues tbl (f :|: g) where
+    gFieldValues t (f :|: g) = gFieldValues t f ++ gFieldValues t g
+instance GFieldValues tbl (U1 a) where
     gFieldValues _ _ = []
-instance (Field t (NameFor x), FieldSchema x, Table t) => GFieldValues t (K1 Generic.R x) where
-    gFieldValues tbl (K1 x) = [( AnyField tbl x
-                               , makeSqlValue x )]
+instance GFieldValues tbl x => GFieldValues tbl (K1 Generic.R x a) where
+    gFieldValues t (K1 x) = gFieldValues t x
+instance (Field t name, FieldSchema x, Table t) => GFieldValues t (Column name x) where
+    gFieldValues tbl field@(Column x) = [( AnyField tbl field
+                                         , makeSqlValue x )]
+instance GFieldValues t (PrimaryKeySchema table) => GFieldValues t (ForeignKey table name) where
+    gFieldValues tbl (ForeignKey schema) = gFieldValues tbl schema
 
 type PrimaryKeySchema table = LocateResult (FullSchema table) (LocateAll (FullSchema table) (PrimaryKey table))
 
@@ -201,16 +246,15 @@ primaryKeyForTable' phantomData (tbl :: table) = getFields (phantomData :|: getS
 
 -- * Field and table support
 
-data GenField t f
-
-class (FieldSchema (FieldInTable table f), Typeable f, Table table) => Field (table :: *) f where
+class (FieldSchema (TypeOf (FieldInTable table f)),
+       Typeable f, Table table) => Field (table :: *) f where
     type FieldInTable table f :: *
-    type FieldInTable table f = LocateResultField (Schema table) (Locate (Schema table) f)
+    type FieldInTable table f = LocateResult (Schema table) (Locate (Schema table) f)
 
-    fieldSettings :: Proxy table -> Proxy f -> FieldSettings (FieldInTable table f)
-    fieldSettings table field = defSettings (fieldSchema table field)
-        where fieldSchema :: Proxy table -> Proxy f -> Proxy (FieldInTable table f)
-              fieldSchema _ _ = Proxy
+    fieldSettings :: Proxy table -> Proxy f -> FieldSettings (TypeOf (FieldInTable table f))
+    fieldSettings table field = defSettings --  (fieldSchema table field)
+        -- where fieldSchema :: Proxy table -> Proxy f -> Proxy (FieldInTable table f)
+        --       fieldSchema _ _ = Proxy
 
     fieldConstraints :: Proxy table -> Proxy f -> [SQLConstraint]
     fieldConstraints _ _ = []
@@ -230,29 +274,91 @@ class (FieldSchema (FieldInTable table f), Typeable f, Table table) => Field (ta
     default fieldNameD :: (Generic f, Rep f ~ D1 x (C1 x1 U1)) => Proxy table -> Proxy f -> f
     fieldNameD _ _ = to (M1 (M1 U1))
 
-class ( Show (FieldSettings fs), Typeable (FieldType fs)
-      , Show (FieldType fs) )  => FieldSchema fs where
+class ( Show (FieldSettings fs), Typeable fs
+      , Show fs )  => FieldSchema fs where
     data FieldSettings fs :: *
-    type FieldType fs :: *
 
-    defSettings :: Proxy fs -> FieldSettings fs
+    defSettings :: FieldSettings fs
 
     colDescFromSettings :: FieldSettings fs -> SQLColumnSchema
 
     makeSqlValue :: fs -> SqlValue
+    fromSqlValue :: FromSqlValuesM fs
 
-    field :: FieldType fs -> fs
-    fieldValue :: fs -> FieldType fs
+class Reference table name where
+    refPrefix :: Proxy table -> Proxy name -> Text
+    default refPrefix :: ( Generic name, Constructor c
+                         , GOneConstructor (Rep name ()) ~ M1 Generic.C c a () ) =>
+                           Proxy table -> Proxy name -> Text
+    refPrefix _ name = fromString (conName (onlyConstructor name))
+        where onlyConstructor :: Proxy name -> GOneConstructor (Rep name ())
+              onlyConstructor _ = undefined
 
--- | Defined here so it can be used as the default primary key field
-data IntField name = IntField Int
-                   deriving Show
-instance FieldSchema (IntField name) where
-    data FieldSettings (IntField name) = IntFieldDefault
-                                         deriving Show
-    type FieldType (IntField name) = Int
+type ReferencedTable table name = TableFor (LocateResult (Schema table) (Locate (Schema table) name))
 
-    defSettings _ = IntFieldDefault
+instance ( Table table, Typeable name
+         , FieldSchema (TypeOf (FieldInTable table (name :-> subField)))
+         , Field (ReferencedTable table name) subField
+
+         , Reference table name) => Field table (name :-> subField) where
+
+    fieldSettings (table :: Proxy table) (_ :: Proxy (name :-> subField)) =
+        undefined
+    fieldConstraints _ _ = []
+    fieldColDesc _ _ = undefined
+    fieldName (table :: Proxy table) (_ :: Proxy (name :-> subField)) =
+        T.concat [ refPrefix table (Proxy :: Proxy name), "_"
+                 , fieldName (Proxy :: Proxy (ReferencedTable table name)) (Proxy :: Proxy subField) ]
+    fieldNameD _ _ = undefined
+
+type FromSqlValuesM a = ErrorT String (State [SqlValue]) a
+popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
+popSqlValue = do st <- get
+                 put (tail st)
+                 return (head st)
+peekSqlValue = head <$> get
+class FromSqlValues a where
+    fromSqlValues' :: FromSqlValuesM a
+instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a :|: b) where
+    fromSqlValues' = (:|:) <$> fromSqlValues' <*> fromSqlValues'
+
+-- class Show (ValueSettings a) => SQLValable a where
+--     data ValueSettings a :: *
+
+--     defValSettings :: ValueSettings a
+--     colDescFromValSettings :: ValueSettings a -> SQLColumnSchema
+--     fromSqlValues'' :: FromSqlValuesM a
+--     makeSqlValue' :: a -> SqlValue
+
+data ForeignKey table name where
+    ForeignKey :: Show (PrimaryKeySchema table) => PrimaryKeySchema table -> ForeignKey table name
+type instance NameFor (ForeignKey table name) = name
+type instance EmbeddedSchemaFor (ForeignKey table name) = Embedded name (PrimaryKeySchema table)
+type instance Rename newName (ForeignKey table name) = ForeignKey table newName
+type family TableFor a where
+    TableFor (ForeignKey table name) = table
+instance Show (ForeignKey table name) where
+    show (ForeignKey schema) = concat ["(ForeignKey (", show schema, "))"]
+
+newtype Column name t = Column t
+    deriving Show
+type instance EmbeddedSchemaFor (Column name t) = Empty
+type instance NameFor (Column name t) = name
+type instance Rename newName (Column name t) = Column newName t
+type instance TypeOf (Column name t) = t
+
+column :: t -> Column name t
+column = Column
+columnValue :: Column name t -> t
+columnValue (Column x) = x
+
+instance FieldSchema t => FromSqlValues (Column name t) where
+    fromSqlValues' = Column <$> fromSqlValue
+
+instance FieldSchema Int where
+    data FieldSettings Int = IntFieldDefault
+                             deriving Show
+    defSettings = IntFieldDefault
     colDescFromSettings _ = notNull $
                             SqlColDesc
                             { colType = SqlNumericT
@@ -260,10 +366,8 @@ instance FieldSchema (IntField name) where
                             , colOctetLength = Nothing
                             , colDecDigits = Nothing
                             , colNullable = Nothing }
-    makeSqlValue (IntField i) = SqlInteger (fromIntegral i)
-
-    field = IntField
-    fieldValue (IntField x) = x
+    makeSqlValue i = SqlInteger (fromIntegral i)
+    fromSqlValue = fromSql <$> popSqlValue
 
 getField :: ( Table table
             , Locate (Schema table) name ~ locator
