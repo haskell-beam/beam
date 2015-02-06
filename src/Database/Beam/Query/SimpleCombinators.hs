@@ -14,7 +14,7 @@ import Data.Typeable
 (#) :: ( Locate schema name ~ locator
         , Locator schema locator
         , LocateResult schema locator ~ ScopedField table field
-        , FieldType (FieldInTable table field) ~ r
+        , TypeOf (FieldInTable table field) ~ r
         , Table table, Field table field) =>
         schema -> name -> QExpr r
 s # field = FieldE (getField' s field)
@@ -22,7 +22,7 @@ s # field = FieldE (getField' s field)
 (#!) :: ( Locate schema name ~ locator
         , Locator schema locator
         , LocateResult schema locator ~ ScopedField table field
-        , FieldType (FieldInTable table field) ~ r
+        , TypeOf (FieldInTable table field) ~ r
         , Table table, Field table field) =>
         schema -> name -> ScopedField table field
 s #! field = getField' s field

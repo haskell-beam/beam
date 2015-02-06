@@ -3,7 +3,7 @@
 -- | Contains definitions for rewriting Beam queries under optimizations
 module Database.Beam.Query.Rewrite
     ( rewriteQueryM, traverseQueryM, rewriteQuery
-    , rewriteExprM
+    , rewriteExprM, traverseExprM
 
     , combineFilterOpt, propEmptySets
 
@@ -56,6 +56,9 @@ rewriteQuery f fe x = runIdentity (rewriteQueryM (return . f) (return . fe) x)
 
 traverseQueryM :: Monad m => (forall a. Query a -> m ()) -> (forall a. QExpr a -> m ()) -> Query a -> m ()
 traverseQueryM t te x = rewriteQueryM (\x -> t x >> return Nothing) (\x -> te x >> return Nothing) x >> return ()
+
+traverseExprM :: Monad m => (forall a. QExpr a -> m()) -> (forall a. Query a -> m ()) -> QExpr a -> m ()
+traverseExprM te t x = rewriteExprM (\x -> te x >> return Nothing) (\x -> t x >> return Nothing) x >> return ()
 
 rewriteExprM :: Monad m => (forall a . QExpr a -> m (Maybe (QExpr a))) -> (forall a . Query a -> m (Maybe (Query a))) -> QExpr a -> m (QExpr a)
 rewriteExprM f fq (AndE a b) = do a' <- rewriteExprM f fq a

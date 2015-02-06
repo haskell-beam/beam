@@ -36,7 +36,7 @@ maxTableOrdinal q = getMax (execWriter (traverseQueryM maxQ maxE q))
 
 join_ :: Query a -> Query b -> Query (a :|: b)
 join_ l r = Join l r'
-    where maxOrdL = maxTableOrdinal l + 1
+    where maxOrdL = max (maxTableOrdinal l) (maxTableOrdinal r) + 1
 
           remapQuery :: Query b -> Maybe (Query b)
           remapQuery (All tbl i)
@@ -45,7 +45,9 @@ join_ l r = Join l r'
           remapQuery _ = Nothing
 
           remapExpr :: QExpr b -> Maybe (QExpr b)
-          remapExpr (FieldE (ScopedField i :: ScopedField table field)) = Just (FieldE (ScopedField (i + maxOrdL) :: ScopedField table field))
+          remapExpr (FieldE (ScopedField i :: ScopedField table field))
+              | i < maxOrdL = Just (FieldE (ScopedField (i + maxOrdL) :: ScopedField table field))
+              | otherwise = Nothing
           remapExpr _ = Nothing
 
           r' = rewriteQuery remapQuery remapExpr r
@@ -66,11 +68,21 @@ q #@* r = injectSubjectAndObjectProxy $
                                       -> Query (QueryTable subject :|: QueryTable object)
           injectSubjectAndObjectProxy f = f Proxy Proxy
 
+(#*@) :: ( Relationship subject object r
+         , ScopeFields (QueryTable subject) ) =>
+         Query (QueryTable object) -> r -> Query (QueryTable subject :|: QueryTable object)
+q #*@ r = let query = (all_ of_ `join_` q) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
+
+              proxies :: Query (QueryTable subject :|: QueryTable object) -> (Proxy subject, Proxy object)
+              proxies _ = (Proxy, Proxy)
+              (subjectProxy, objectProxy) = proxies query
+          in query
+
 (=#) :: (Table table, Field table field
-        , FieldInTable table field ~ fs
+        , FieldInTable table field ~ Column name fs
         , FieldSchema fs) =>
         ScopedField table field
-     -> QExpr (FieldType fs)
+     -> QExpr fs
      -> QAssignment
 (=#) = QAssignment
 

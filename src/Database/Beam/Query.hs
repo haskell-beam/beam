@@ -10,7 +10,9 @@ module Database.Beam.Query
     , EqExprFor(..)
     , findByPrimaryKeyExpr, primaryKeyForTable
 
-    , inBeamTxn, query, insert, save, update, getOne ) where
+    , inBeamTxn, query, insert, save, update, getOne
+    , findByPk_
+    , ref, pk) where
 
 import Database.Beam.Query.Types
 import Database.Beam.Query.Rewrite
@@ -152,7 +154,7 @@ updateEntity :: ( ScopeFields (WrapFields (QueryField table) (Schema table))
                 , ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
                 , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
                 , LocateResult (FullSchema table) locator ~ locateResult
-                , EqExprFor (Scope (QueryTable table)) (WrapFields Gen locateResult)
+                , EqExprFor (Scope (QueryTable table)) locateResult
                 , MakeAssignmentsFor table (Scope (QueryTable table)) (FullSchema table)
                 , SchemaPart locateResult
                 , Table table) => QueryTable table -> SQLUpdate
@@ -163,38 +165,54 @@ class Table t => MakeAssignmentsFor t s a where
     makeAssignments :: t -> s -> a -> [QAssignment]
 instance (MakeAssignmentsFor t sa a, MakeAssignmentsFor t sb b) => MakeAssignmentsFor t (sa :|: sb) (a :|: b) where
     makeAssignments t (sa :|: sb) (a :|: b) = makeAssignments t sa a ++ makeAssignments t sb b
-instance ( Field t fn
-         , FieldSchema f
-         , NameFor f ~ fn ) => MakeAssignmentsFor t (ScopedField t fn) f where
-    makeAssignments t field f = [QAssignment field (ValE (makeSqlValue f))]
+instance ( Field t name
+         , FieldSchema cTy ) => MakeAssignmentsFor t (ScopedField t name) (Column name cTy) where
+    makeAssignments t field (Column x) = [QAssignment field (ValE (makeSqlValue x))]
+instance MakeAssignmentsFor t s (EmbedIn name (PrimaryKeySchema table)) => MakeAssignmentsFor t s (ForeignKey table name) where
+    makeAssignments t schema (ForeignKey fk) = makeAssignments t schema fk
 
 class EqExprFor schema a where
     eqExprFor :: schema -> a -> QExpr Bool
 instance (EqExprFor schema a, EqExprFor schema b) => EqExprFor schema (a :|: b) where
     eqExprFor schema (a :|: b) = eqExprFor schema a &&# eqExprFor schema b
-instance ( Locate schema (NameFor n) ~ locator
+instance ( Locate schema name ~ locator
          , Locator schema locator
-         , LocateResult schema locator ~ ScopedField table (NameFor n)
-         , FieldSchema n
-         , Table table, Field table (NameFor n)) => EqExprFor schema (Gen n) where
+         , LocateResult schema locator ~ ScopedField table name
+         , FieldSchema ty
+         , Table table, Field table name) => EqExprFor schema (Column name ty) where
 
-    eqExprFor schema (Gen a :: Gen a) = FieldE field' ==# ValE (makeSqlValue a)
-        where ScopedField i = getField' schema (undefined :: NameFor a)
+    eqExprFor schema (Column a :: Column name a) = FieldE field' ==# ValE (makeSqlValue a)
+        where ScopedField i = getField' schema (undefined :: name)
 
-              field' :: forall q. ScopedField table (NameFor a)
+              field' :: ScopedField table name
               field' = ScopedField i
 
 findByPrimaryKeyExpr :: ( Table table
                         , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
                         , LocateResult (FullSchema table) locator ~ locateResult
                         , SchemaPart locateResult
-                        , EqExprFor schema (WrapFields Gen locateResult) ) => schema -> QueryTable table -> QExpr Bool
+                        , EqExprFor schema locateResult ) => schema -> QueryTable table -> QExpr Bool
 findByPrimaryKeyExpr schema (QueryTable phantomFields tbl) =
     let pk = primaryKeyForTable' phantomFields tbl
-    in  eqExprFor schema (mapSchema Gen pk)
+    in  eqExprFor schema pk
 
-primaryKeyForTable :: Table table => QueryTable table -> PrimaryKeySchema table
+findByPk_ :: ( Table table
+             , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
+             , LocateResult (FullSchema table) locator ~ locateResult
+             , SchemaPart locateResult
+             , ScopeFields (QueryTable table)
+             , EqExprFor (Scope (QueryTable table)) locateResult ) =>
+             PrimaryKeySchema table -> Query (QueryTable table)
+findByPk_ primaryKey = let query = all_ (queriedTable query) `where_`
+                                   (\table -> eqExprFor table primaryKey)
+
+                           queriedTable :: Query (QueryTable table) -> table
+                           queriedTable _ = undefined
+                       in query
+
+pk,primaryKeyForTable :: Table table => QueryTable table -> PrimaryKeySchema table
 primaryKeyForTable (QueryTable phantom fields) = primaryKeyForTable' phantom fields
+pk = primaryKeyForTable
 
 simpleSelect = SQLSelect
                { selProjection = SQLProjStar
@@ -256,7 +274,7 @@ save :: ( ScopeFields (WrapFields (QueryField table) (Schema table))
         , ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
         , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
         , LocateResult (FullSchema table) locator ~ locateResult
-        , EqExprFor (Scope (QueryTable table)) (WrapFields Gen locateResult)
+        , EqExprFor (Scope (QueryTable table)) locateResult
         , MakeAssignmentsFor table (Scope (QueryTable table)) (FullSchema table)
         , SchemaPart locateResult
         , Table table
@@ -267,7 +285,7 @@ update :: ( ScopeFields (WrapFields (QueryField table) (Schema table))
           , ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
           , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
           , LocateResult (FullSchema table) locator ~ locateResult
-          , EqExprFor (Scope (QueryTable table)) (WrapFields Gen locateResult)
+          , EqExprFor (Scope (QueryTable table)) locateResult
           , SchemaPart locateResult
           , Table table
           , MonadIO m, Functor m) =>
@@ -298,3 +316,6 @@ getOne q =
                             Just  _ -> return Nothing
        src <- query q
        src $$ justOneSink
+
+ref :: (Table t, Show (PrimaryKeySchema t)) => QueryTable t -> ForeignKey t name
+ref qt = ForeignKey (primaryKeyForTable qt)

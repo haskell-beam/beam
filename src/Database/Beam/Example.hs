@@ -30,40 +30,35 @@ data Revenue = Revenue deriving (Generic, Typeable)
 
 data TodoListItems = TodoListItems deriving (Generic, Typeable)
 
-data TodoListTable = TodoListTable (TextField Name)
-                                   (TextField Description)
+data TodoListTable = TodoListTable (Column Name Text)
+                                   (Column Description Text)
                                    deriving (Generic, Typeable, Show)
 instance Table TodoListTable
 instance Field TodoListTable Name
 instance Field TodoListTable Description where
     fieldSettings _ _ = TextFieldSettings (Varchar (Just 100))
 
-data TodoListItemTable = TodoListItemTable (TextField Name)
-                                           (TextField Description)
-                                           (DateTimeField DueDate)
-                                           (DefaultPKField TodoListTable TodoList)
+data TodoListItemTable = TodoListItemTable (Column Name Text)
+                                           (Column Description Text)
+                                           (Column DueDate UTCTime)
+                                           (ForeignKey TodoListTable TodoList)
                           deriving (Generic, Typeable, Show)
 instance Table TodoListItemTable
 instance Field TodoListItemTable Name
 instance Field TodoListItemTable Description
 instance Field TodoListItemTable DueDate
-instance Field TodoListItemTable TodoList
+instance Reference TodoListItemTable TodoList
+-- instance Field TodoListItemTable (TodoList :-> TableId) where
+--     fieldName _ _ = "TodoList_id"
+--     fieldNameD _ _ = TodoList :-> TableId
 
 instance Relationship TodoListTable TodoListItemTable TodoListItems where
     type SubjectFields TodoListTable TodoListItemTable TodoListItems = PrimaryKey TodoListTable
-    type ObjectFields TodoListTable TodoListItemTable TodoListItems = TodoList
+    type ObjectFields TodoListTable TodoListItemTable TodoListItems = TodoList :-> TableId
 
-
--- instance OneToMany TodoListItems where
---     type OneToManyDomain TodoListItems = TodoListTable
---     type OneToManyRange  TodoListItems = TodoListItemTable
-
---     type OneToManyDomainKey TodoListItems = PrimaryKey TodoListTable
---     type OneToManyRangeKey TodoListItems = TodoList
-
-data HistDataTable = HistDataTable (IntField CompanyId)
-                                   (IntField Revenue)
-                                   (DateTimeField Date)
+data HistDataTable = HistDataTable (Column CompanyId Int)
+                                   (Column Revenue Int)
+                                   (Column Date UTCTime)
                      deriving (Generic, Typeable, Show)
 instance Table HistDataTable where
     type PrimaryKey HistDataTable = CompanyId :|: Date
@@ -79,16 +74,16 @@ myDatabase = database_
 
 test fp = do beam <- openDatabase myDatabase (Sqlite3Settings fp)
 
-             runInsert (TodoListTable (TextField "List 1") (TextField "Description of List 1")) beam
-             runInsert (TodoListTable (TextField "List 2") (TextField "Description of List 2")) beam
+             Right l1 <- runInsert (TodoListTable (column "List 1") (column "Description of List 1")) beam
+             Right l2 <- runInsert (TodoListTable (column "List 2") (column "Description of List 2")) beam
 
              now <- getCurrentTime
 
-             runInsert (TodoListItemTable (TextField "Item 1") (TextField "Description of Item 1") (DateTimeField now) (DefaultPKField (IntField 1))) beam
-             runInsert (TodoListItemTable (TextField "Item 2") (TextField "Description of Item 2") (DateTimeField now) (DefaultPKField (IntField 1))) beam
+             runInsert (TodoListItemTable (column "Item 1") (column "Description of Item 1") (column now) (ref l1)) beam
+             runInsert (TodoListItemTable (column "Item 2") (column "Description of Item 2") (column now) (ref l1)) beam
 
-             runInsert (TodoListItemTable (TextField "Item 3") (TextField "Description of Item 3") (DateTimeField now) (DefaultPKField (IntField 2))) beam
-             runInsert (TodoListItemTable (TextField "Item 4") (TextField "Description of Item 4") (DateTimeField now) (DefaultPKField (IntField 2))) beam
+             runInsert (TodoListItemTable (column "Item 3") (column "Description of Item 3") (column now) (ref l2)) beam
+             runInsert (TodoListItemTable (column "Item 4") (column "Description of Item 4") (column now) (ref l2)) beam
 
              let x = ((all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")) #@* TodoListItems
                  y = (all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")

@@ -31,12 +31,16 @@ data ScopedField table name = ScopedField Int
                               deriving (Show, Typeable, Eq)
 instance SchemaPart (ScopedField table name)
 type instance NameFor (ScopedField table name) = name
+type instance EmbeddedSchemaFor (ScopedField table name) = Empty
+type instance Rename newName (ScopedField table name) = ScopedField table newName
 instance Locator (ScopedField table name) Found where
     type LocateResult (ScopedField table name) Found = ScopedField table name
     locate a _ = a
 
 data QueryField table field
 data QueryTable table = QueryTable (PhantomFieldSchema table) table
+type instance NameFor (QueryField table field) = NameFor field
+type instance Rename newName (QueryField table field) = QueryField table (Rename newName field)
 
 instance (Show (PhantomFieldSchema table), Show table) => Show (QueryTable table) where
     show (QueryTable phantoms table) = concat ["QueryTable (", show phantoms, ") (", show table, ")"]
@@ -57,7 +61,7 @@ data Query a where
 --    Project :: Query a -> [QExpr t] -> Query b
 
 data QExpr t where
-    FieldE :: (Table table, Field table field) => ScopedField table field -> QExpr (FieldType (FieldInTable table field))
+    FieldE :: (Table table, Field table field) => ScopedField table field -> QExpr (TypeOf (FieldInTable table field))
 
     OrE :: QExpr Bool -> QExpr Bool -> QExpr Bool
     AndE :: QExpr Bool -> QExpr Bool -> QExpr Bool
@@ -71,10 +75,10 @@ data QExpr t where
 
 data QAssignment where
     QAssignment :: ( Table table, Field table field
-                   , FieldInTable table field ~ fs
-                   , FieldSchema fs ) =>
+                   , FieldInTable table field ~ column
+                   , FieldSchema (TypeOf column) ) =>
                    ScopedField table field
-                -> QExpr (FieldType fs)
+                -> QExpr (TypeOf column)
                 -> QAssignment
 
 deriving instance Typeable Query
@@ -84,8 +88,8 @@ deriving instance Typeable QExpr
 
 class ScopeFields a where
     scopeFields :: Proxy a -> Int -> Scope a
-instance ScopeFields (QueryField table field) where
-    scopeFields (_ :: Proxy (QueryField table field)) i = ScopedField i :: ScopedField table (NameFor field)
+instance ScopeFields (QueryField table (Column name t)) where
+    scopeFields (_ :: Proxy (QueryField table (Column name t))) i = ScopedField i :: ScopedField table name
 instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
     scopeFields  (_ :: Proxy (a :|: b)) i = scopeFields (Proxy :: Proxy a) i :|: scopeFields (Proxy :: Proxy b) i
 instance ( ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
@@ -94,10 +98,17 @@ instance ( ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table)
     scopeFields (_ :: Proxy (QueryTable table)) i = scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (PhantomFieldSchema table))) i :|:
                                                     scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
 
+instance ScopeFields (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl))) =>
+    ScopeFields (QueryField table (ForeignKey relTbl name)) where
+    scopeFields (_ :: Proxy (QueryField table (ForeignKey relTbl name))) i =
+        scopeFields (Proxy :: Proxy (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl)))) i
+
 type family Scope a where
     Scope (a :|: b) = Scope a :|: Scope b
     Scope (QueryTable x) = Scope (WrapFields (QueryField x) (PhantomFieldSchema x)) :|: Scope (WrapFields (QueryField x) (Schema x))
-    Scope (QueryField table field) = ScopedField table (NameFor field)
+    --Scope (QueryField table field) = ScopedField table (NameFor field)
+    Scope (QueryField table (Column name t)) = ScopedField table name
+    Scope (QueryField table (ForeignKey relTbl name)) = Scope (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl)))
 
 getScope :: Query a -> Scope a
 getScope x@(All _ i) = scopeFields (aProxy x) i
