@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, MultiParamTypeClasses, EmptyDataDecls, DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, PolyKinds, GADTs, DeriveGeneric, DeriveDataTypeable, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances, RankNTypes #-}
 module Database.Beam.Schema.Fields where
 
-import Database.Beam.Schema.Locate
 import Database.Beam.Schema.Tables
 import Database.Beam.SQL.Types
 
@@ -29,30 +28,30 @@ import qualified GHC.Generics as Generic
 
 -- * Generic fields
 
-instance Locator (Column name t) Found where
-    type LocateResult (Column name t) Found = Column name t
+-- instance Locator (Column name t) Found where
+--     type LocateResult (Column name t) Found = Column name t
 
-    locate f _ = f
+--     locate f _ = f
 
-instance SchemaPart (Column name t)
+-- instance SchemaPart (Column name t)
 
-instance Locator (ForeignKey table name) Found where
-    type LocateResult (ForeignKey table name) Found = ForeignKey table name
+-- instance Locator (ForeignKey table name) Found where
+--     type LocateResult (ForeignKey table name) Found = ForeignKey table name
 
-    locate f _ = f
+--     locate f _ = f
 
-instance Locator (PrimaryKeySchema table) a =>
-    Locator (ForeignKey table name) (Descend a) where
-    type LocateResult (ForeignKey table name) (Descend a) = LocateResult (PrimaryKeySchema table) a
+-- instance Locator (PrimaryKeySchema table) a =>
+--     Locator (ForeignKey table name) (Descend a) where
+--     type LocateResult (ForeignKey table name) (Descend a) = LocateResult (PrimaryKeySchema table) a
 
-    locate (ForeignKey s) locator = locate s (subLocator locator)
-        where subLocator :: Descend a -> a
-              subLocator _ = undefined
+--     locate (ForeignKey s) locator = locate s (subLocator locator)
+--         where subLocator :: Descend a -> a
+--               subLocator _ = undefined
 
-instance (FromSqlValues (PrimaryKeySchema table), Show (PrimaryKeySchema table)) =>
-    FromSqlValues (ForeignKey table name) where
-    fromSqlValues' = ForeignKey <$> fromSqlValues'
-    valuesNeeded (_ :: Proxy (ForeignKey table name)) = valuesNeeded (Proxy :: Proxy (PrimaryKeySchema table))
+-- instance (FromSqlValues (PrimaryKeySchema table), Show (PrimaryKeySchema table)) =>
+--     FromSqlValues (ForeignKey table name) where
+--     fromSqlValues' = ForeignKey <$> fromSqlValues'
+--     valuesNeeded (_ :: Proxy (ForeignKey table name)) = valuesNeeded (Proxy :: Proxy (PrimaryKeySchema table))
 
 -- * Relationship fields
 

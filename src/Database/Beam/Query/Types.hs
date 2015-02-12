@@ -1,7 +1,7 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
-    ( ScopedField(..)
+    ( ScopedField(..), ScopedTable(..), Entity(..)
     , QueryField, QueryTable(..), QueryExpr(..)
 
     , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..)
@@ -10,7 +10,6 @@ module Database.Beam.Query.Types
     , getScope ) where
 
 import Database.Beam.Schema.Tables
-import Database.Beam.Schema.Locate
 import Database.Beam.Schema.Fields
 import Database.Beam.SQL
 import Database.HDBC
@@ -28,34 +27,23 @@ import qualified Data.Text as T
 -- * Beam queries
 
 -- | A `ScopedField` represents a field that has been brought in scope via an `allQ`. The `q` type is a thread type that ensures that this field cannot escape this query.
-data ScopedField table name = ScopedField Int
-                              deriving (Show, Typeable, Eq)
-instance SchemaPart (ScopedField table name)
-type instance NameFor (ScopedField table name) = name
-type instance EmbeddedSchemaFor (ScopedField table name) = Empty
-type instance Rename newName (ScopedField table name) = ScopedField table newName
-instance Locator (ScopedField table name) Found where
-    type LocateResult (ScopedField table name) Found = ScopedField table name
-    locate a _ = a
+data ScopedField (table :: (* -> *) -> *) ty = ScopedField Int T.Text
+                                               deriving (Show, Typeable, Eq)
+type ScopedTable (table :: (* -> *) -> *) = QueryTable table (ScopedField table) --ScopedTable (PhantomFields table (ScopedField table)) (table (ScopedField table))
+type Entity table = QueryTable table Identity
 
 data QueryField table field
-data QueryTable table = QueryTable (PhantomFieldSchema table) table
-type instance NameFor (QueryField table field) = NameFor field
-type instance Rename newName (QueryField table field) = QueryField table (Rename newName field)
-
-instance (Show (PhantomFieldSchema table), Show table) => Show (QueryTable table) where
+data QueryTable table f = QueryTable
+                        { phantomFields :: PhantomFields table f
+                        , tableFields   :: table f }
+instance (Show (PhantomFields table Identity), Show (table Identity)) => Show (QueryTable table Identity) where
     show (QueryTable phantoms table) = concat ["QueryTable (", show phantoms, ") (", show table, ")"]
 
-instance ( Table table
-         , FromSqlValues (PhantomFieldSchema table)
-         , FromSqlValues (Schema table)) => FromSqlValues (QueryTable table) where
-    fromSqlValues' = QueryTable <$> fromSqlValues' <*> (fromSchema <$> fromSqlValues')
-    valuesNeeded (_ :: Proxy (QueryTable tbl)) = valuesNeeded (Proxy :: Proxy (PhantomFieldSchema tbl)) + valuesNeeded (Proxy :: Proxy (Schema tbl))
-instance SchemaPart (QueryTable table)
+instance Table table => FromSqlValues (QueryTable table Identity) where
+    fromSqlValues' = QueryTable <$> phantomFromSqlValues (Proxy :: Proxy table) <*> (tableFromSqlValues :: FromSqlValuesM (table Identity))
+    valuesNeeded (_ :: Proxy (QueryTable tbl Identity)) = phantomValuesNeeded (Proxy :: Proxy tbl) + tableValuesNeeded (Proxy :: Proxy tbl)
 
 data QueryExpr t = QueryExpr t deriving (Show, Read, Eq, Ord)
-type instance NameFor (QueryExpr t) = () -- QueryExpr's cannot be referred to by name
-type instance Rename newName (QueryExpr t) = QueryExpr t
 
 instance FieldSchema t => FromSqlValues (QueryExpr t) where
     fromSqlValues' = QueryExpr <$> fromSqlValue
@@ -73,7 +61,7 @@ data GenQExpr where
 
 -- | A query that produces results of type `a`
 data Query a where
-    All :: (Table table, ScopeFields (QueryTable table)) => Proxy table -> Int -> Query (QueryTable table)
+    All :: (Table table, ScopeFields (Entity table)) => Proxy table -> Int -> Query (Entity table)
     EmptySet :: Query a
     Filter ::  Query a -> QExpr Bool -> Query a
     GroupBy :: Query a -> GenQExpr -> Query a
@@ -95,8 +83,8 @@ data Query a where
     Offset :: Query a -> Integer -> Query a
 
 data QExpr t where
-    FieldE :: (Table table, Field table field) => ScopedField table field -> QExpr (TypeOf (FieldInTable table field))
-    MaybeFieldE :: (Table table, Field table field) => Maybe (ScopedField table field) -> QExpr (Maybe (TypeOf (FieldInTable table field)))
+    FieldE :: (Table table, Typeable ty) => ScopedField table ty -> QExpr ty
+    MaybeFieldE :: (Table table, Typeable ty) => Maybe (ScopedField table ty) -> QExpr (Maybe ty)
 
     OrE :: QExpr Bool -> QExpr Bool -> QExpr Bool
     AndE :: QExpr Bool -> QExpr Bool -> QExpr Bool
@@ -118,11 +106,9 @@ data QExpr t where
     CountE :: Typeable a => QExpr a -> QExpr Int
 
 data QAssignment where
-    QAssignment :: ( Table table, Field table field
-                   , FieldInTable table field ~ column
-                   , FieldSchema (TypeOf column) ) =>
-                   ScopedField table field
-                -> QExpr (TypeOf column)
+    QAssignment :: Table table =>
+                   ScopedField table ty
+                -> QExpr ty
                 -> QAssignment
 
 deriving instance Typeable Query
@@ -132,29 +118,33 @@ deriving instance Typeable QExpr
 
 class ScopeFields a where
     scopeFields :: Proxy a -> Int -> Scope a
-instance ScopeFields (QueryField table (Column name t)) where
-    scopeFields (_ :: Proxy (QueryField table (Column name t))) i = ScopedField i :: ScopedField table name
 instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
     scopeFields  (_ :: Proxy (a :|: b)) i = scopeFields (Proxy :: Proxy a) i :|: scopeFields (Proxy :: Proxy b) i
-instance ( ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
-         , ScopeFields (WrapFields (QueryField table) (Schema table)) ) =>
-         ScopeFields (QueryTable table) where
-    scopeFields (_ :: Proxy (QueryTable table)) i = scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (PhantomFieldSchema table))) i :|:
-                                                    scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
-instance ScopeFields (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl))) =>
-    ScopeFields (QueryField table (ForeignKey relTbl name)) where
-    scopeFields (_ :: Proxy (QueryField table (ForeignKey relTbl name))) i =
-        scopeFields (Proxy :: Proxy (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl)))) i
-instance ScopeFields t => ScopeFields (Maybe t) where
-    scopeFields (_ :: Proxy (Maybe t)) = Just . scopeFields (Proxy :: Proxy t)
+instance Table table => ScopeFields (QueryTable table Identity) where
+    scopeFields (_ :: Proxy (QueryTable table Identity)) i = QueryTable scopedPhantom scopedTable
+        where scopedPhantom :: PhantomFields table (ScopedField table)
+              scopedPhantom = changePhantomRep scopeField (Proxy :: Proxy table) $
+                              phantomFieldSettings (Proxy :: Proxy table)
+              scopedTable = changeRep scopeField $
+                            (tblFieldSettings :: TableSettings table)
+
+              scopeField :: TableField table a -> ScopedField table a
+              scopeField tf = ScopedField i (fieldName tf)
+
+
+--     scopeFields (_ :: Proxy (QueryTable table)) i = scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (PhantomFieldSchema table))) i :|:
+--                                                     scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
+-- instance ScopeFields (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl))) =>
+--     ScopeFields (QueryField table (ForeignKey relTbl name)) where
+--     scopeFields (_ :: Proxy (QueryField table (ForeignKey relTbl name))) i =
+--         scopeFields (Proxy :: Proxy (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl)))) i
+-- instance ScopeFields t => ScopeFields (Maybe t) where
+--     scopeFields (_ :: Proxy (Maybe t)) = Just . scopeFields (Proxy :: Proxy t)
 
 type family Scope a where
     Scope (Maybe t) = Maybe (Scope t)
     Scope (a :|: b) = Scope a :|: Scope b
-    Scope (QueryTable x) = Scope (WrapFields (QueryField x) (PhantomFieldSchema x)) :|: Scope (WrapFields (QueryField x) (Schema x))
-    --Scope (QueryField table field) = ScopedField table (NameFor field)
-    Scope (QueryField table (Column name t)) = ScopedField table name
-    Scope (QueryField table (ForeignKey relTbl name)) = Scope (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl)))
+    Scope (QueryTable x Identity) = ScopedTable x
     Scope (QueryExpr t) = QExpr t
 
 getScope :: Query a -> Scope a
@@ -190,8 +180,8 @@ instance Show (Query a) where
     show EmptySet = "EmptySet"
 
 instance Show (QExpr t) where
-    show (FieldE (table :: ScopedField table field)) = concat ["FieldE (", show table, ") ", T.unpack (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field))]
-    show (MaybeFieldE (table :: Maybe (ScopedField table field))) = concat ["MaybeFieldE (", show table, ") ", T.unpack (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field))]
+    show (FieldE x) = concat ["FieldE (", show x, ")"]
+    show (MaybeFieldE x) = concat ["MaybeFieldE (", show x, ")"]
 
     show (AndE a b) = concat ["AndE (", show a, ") (", show b, ")"]
     show (OrE a b) = concat ["OrE (", show a, ") (", show b, ")"]
