@@ -10,6 +10,7 @@ import Database.Beam.SQL
 import Database.HDBC
 
 import Control.Monad.Writer hiding (All)
+import Control.Monad.Identity
 
 import Data.Proxy
 import Data.Semigroup hiding (All)
@@ -19,11 +20,11 @@ import qualified Data.Text as T
 
 -- * Query combinators
 
-of_ :: Table table => table
+of_ :: Table table => table Identity
 of_ = undefined
 
-all_ :: (Table table, ScopeFields (QueryTable table)) => table -> Query (QueryTable table)
-all_ (_ :: table) = All (Proxy :: Proxy table) 0
+all_ :: (Table table, ScopeFields (Entity table)) => table Identity -> Query (Entity table)
+all_ (_ :: table Identity) = All (Proxy :: Proxy table) 0
 
 maxTableOrdinal :: Query a -> Int
 maxTableOrdinal q = getMax (execWriter (traverseQueryM maxQ maxE q))
@@ -48,8 +49,8 @@ rewriteForJoin l r = r'
           remapQuery _ = Nothing
 
           remapExpr :: QExpr b -> Maybe (QExpr b)
-          remapExpr (FieldE (ScopedField i :: ScopedField table field))
-              | i < maxOrdL = Just (FieldE (ScopedField (i + maxOrdL) :: ScopedField table field))
+          remapExpr (FieldE (ScopedField i tbl :: ScopedField table ty))
+              | i < maxOrdL = Just (FieldE (ScopedField (i + maxOrdL) tbl :: ScopedField table ty))
               | otherwise = Nothing
           remapExpr _ = Nothing
 
@@ -82,36 +83,36 @@ groupBy_ q mkExpr = GroupBy q (GenQExpr (mkExpr (getScope q)))
 where_ :: Query a -> (Scope a -> QExpr Bool) -> Query a
 where_ q mkExpr = Filter q (mkExpr (getScope q))
 
--- | Get all related records for a relationship
-(#@*) :: ( Relationship subject object r
-         , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
-         , ScopeFields (QueryTable object) ) =>
-         Query (QueryTable subject) -> r -> Query (QueryTable subject :|: QueryTable object)
-q #@* r = injectSubjectAndObjectProxy $
-          \subjectProxy (objectProxy :: Proxy object) ->
-          let allInRange = all_ (of_ :: object)
-          in (q `join_` allInRange) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
-    where injectSubjectAndObjectProxy :: (Proxy subject -> Proxy object -> Query (QueryTable subject :|: QueryTable object))
-                                      -> Query (QueryTable subject :|: QueryTable object)
-          injectSubjectAndObjectProxy f = f Proxy Proxy
+-- -- | Get all related records for a relationship
+-- (#@*) :: ( Relationship subject object r
+--          , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
+--          , ScopeFields (QueryTable object) ) =>
+--          Query (QueryTable subject) -> r -> Query (QueryTable subject :|: QueryTable object)
+-- q #@* r = injectSubjectAndObjectProxy $
+--           \subjectProxy (objectProxy :: Proxy object) ->
+--           let allInRange = all_ (of_ :: object)
+--           in (q `join_` allInRange) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
+--     where injectSubjectAndObjectProxy :: (Proxy subject -> Proxy object -> Query (QueryTable subject :|: QueryTable object))
+--                                       -> Query (QueryTable subject :|: QueryTable object)
+--           injectSubjectAndObjectProxy f = f Proxy Proxy
 
-(#*@) :: ( Relationship subject object r
-         , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
-         , ScopeFields (QueryTable subject) ) =>
-         Query (QueryTable object) -> r -> Query (QueryTable subject :|: QueryTable object)
-q #*@ r = let query = (all_ of_ `join_` q) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
+-- (#*@) :: ( Relationship subject object r
+--          , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
+--          , ScopeFields (QueryTable subject) ) =>
+--          Query (QueryTable object) -> r -> Query (QueryTable subject :|: QueryTable object)
+-- q #*@ r = let query = (all_ of_ `join_` q) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
 
-              proxies :: Query (QueryTable subject :|: QueryTable object) -> (Proxy subject, Proxy object)
-              proxies _ = (Proxy, Proxy)
-              (subjectProxy, objectProxy) = proxies query
-          in query
+--               proxies :: Query (QueryTable subject :|: QueryTable object) -> (Proxy subject, Proxy object)
+--               proxies _ = (Proxy, Proxy)
+--               (subjectProxy, objectProxy) = proxies query
+--           in query
 
-(=#) :: (Table table, Field table field
-        , FieldInTable table field ~ Column name fs
-        , FieldSchema fs) =>
-        ScopedField table field
-     -> QExpr fs
-     -> QAssignment
+(#) :: (Table table, Typeable ty) => (a -> ScopedField table ty) -> a -> QExpr ty
+f # t = field_ (f t)
+
+infixr 5 #
+
+(=#) :: Table table => ScopedField table ty -> QExpr ty -> QAssignment
 (=#) = QAssignment
 
 list_ :: [QExpr a] -> QExpr [a]
@@ -130,6 +131,8 @@ val_ :: Convertible a SqlValue => a -> QExpr a
 val_ = ValE . convert
 enum_ :: Show a => a -> QExpr (BeamEnum a)
 enum_ = ValE . SqlString . show
+field_ :: (Table table, Typeable ty) => ScopedField table ty -> QExpr ty
+field_ = FieldE
 
 just_ :: Show a => QExpr a -> QExpr (Maybe a)
 just_ = JustE

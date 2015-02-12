@@ -1,101 +1,86 @@
-{-# LANGUAGE TypeOperators, OverloadedStrings, DeriveDataTypeable, DeriveGeneric, TypeFamilies, MultiParamTypeClasses, DefaultSignatures, FunctionalDependencies, FlexibleContexts, FlexibleInstances, UndecidableInstances, ScopedTypeVariables, DataKinds, KindSignatures, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeOperators, OverloadedStrings, DeriveDataTypeable, DeriveGeneric, TypeFamilies, MultiParamTypeClasses, DefaultSignatures, FunctionalDependencies, FlexibleContexts, FlexibleInstances, UndecidableInstances, ScopedTypeVariables, DataKinds, KindSignatures, GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 module Example where
 import Data.Text (Text)
-
-import Database.Beam.Backend
-import Database.Beam.Schema
-import Database.Beam.Query
-import Database.Beam.Backend.Sqlite3
-import Database.Beam.SQL
-import Database.Beam.Types
-
-import Control.Monad.Trans
-
-import Data.Time.Clock
-import Data.Conduit
-
-import Database.HDBC.Sqlite3
-import Database.HDBC
 
 import GHC.Generics
 import Data.Typeable
 
-data Name = Name deriving (Generic, Typeable)
-data Description = Description deriving (Generic, Typeable)
-data DueDate = DueDate deriving (Generic, Typeable)
-data TodoList = TodoList deriving (Generic, Typeable)
-data Date = Date deriving (Generic, Typeable)
-data CompanyId = CompanyId deriving (Generic, Typeable)
-data Revenue = Revenue deriving (Generic, Typeable)
+import Database.Beam
+import Database.Beam.Backend.Sqlite3
 
-data TodoListItems = TodoListItems deriving (Generic, Typeable)
+import Data.Conduit
+import qualified Data.Conduit.List as C
+import Data.Time.Clock
 
-data TodoListTable = TodoListTable (Column Name Text)
-                                   (Column Description Text)
-                                   deriving (Generic, Typeable, Show)
-instance Table TodoListTable
-instance Field TodoListTable Name
-instance Field TodoListTable Description where
-    fieldSettings _ _ = TextFieldSettings (Varchar (Just 100))
+import Control.Monad.Trans
 
-data TodoListItemTable = TodoListItemTable (Column Name Text)
-                                           (Column Description Text)
-                                           (Column DueDate UTCTime)
-                                           (ForeignKey TodoListTable TodoList)
-                          deriving (Generic, Typeable, Show)
-instance Table TodoListItemTable
-instance Field TodoListItemTable Name
-instance Field TodoListItemTable Description
-instance Field TodoListItemTable DueDate
-instance Reference TodoListItemTable TodoList
--- instance Field TodoListItemTable (TodoList :-> TableId) where
---     fieldName _ _ = "TodoList_id"
---     fieldNameD _ _ = TodoList :-> TableId
+data TodoList column = TodoList
+                     { todoListName :: column Text
+                     , todoListDescription :: column (Maybe Text) }
+                       deriving (Generic, Typeable)
+deriving instance (Show (column Text), Show (column (Maybe Text))) => Show (TodoList column)
+instance Table TodoList
 
-instance Relationship TodoListTable TodoListItemTable TodoListItems where
-    type SubjectFields TodoListTable TodoListItemTable TodoListItems = PrimaryKey TodoListTable
-    type ObjectFields TodoListTable TodoListItemTable TodoListItems = TodoList :-> TableId
+data TodoItem column = TodoItem
+                     { todoItemName :: column Text
+                     , todoItemDescription :: column Text
+                     , todoItemDueDate :: column UTCTime
+                     , todoItemList :: ForeignKey TodoList column }
+                     deriving (Generic, Typeable)
+deriving instance ( Show (column Text), Show (column UTCTime)
+                  , Show (ForeignKey TodoList column) ) => Show (TodoItem column)
+instance Table TodoItem
 
-data HistDataTable = HistDataTable (Column CompanyId Int)
-                                   (Column Revenue Int)
-                                   (Column Date UTCTime)
-                     deriving (Generic, Typeable, Show)
-instance Table HistDataTable where
-    type PrimaryKey HistDataTable = CompanyId :|: Date
-instance Field HistDataTable CompanyId
-instance Field HistDataTable Revenue
-instance Field HistDataTable Date
+-- instance Relationship TodoListTable TodoListItemTable TodoListItems where
+--     type SubjectFields TodoListTable TodoListItemTable TodoListItems = PrimaryKey TodoListTable
+--     type ObjectFields TodoListTable TodoListItemTable TodoListItems = TodoList :-> TableId
+
+-- data HistDataTable = HistDataTable (Column CompanyId Int)
+--                                    (Column Revenue Int)
+--                                    (Column Date UTCTime)
+--                      deriving (Generic, Typeable, Show)
+-- instance Table HistDataTable where
+--     type PrimaryKey HistDataTable = CompanyId :|: Date
+-- instance Field HistDataTable CompanyId
+-- instance Field HistDataTable Revenue
+-- instance Field HistDataTable Date
 
 myDatabase :: Database
 myDatabase = database_
-             [ table_ (schema_ :: TodoListTable)
-             , table_ (schema_ :: TodoListItemTable)
-             , table_ (schema_ :: HistDataTable) ]
+             [ table_ (schema_ :: Simple TodoList)
+             , table_ (schema_ :: Simple TodoItem) ]
 
 test fp = do beam <- openDatabase myDatabase (Sqlite3Settings fp)
+             inBeamTxn beam $ beamNoErrors $
+              do l1 <- insert (TodoList (column "List 1") (column (Just "Description of List 1")))
+                 l2 <- insert (TodoList (column "List 2") (column Nothing))
+                 mapM_ (liftIO . putStrLn . show) [l1, l1]
 
-             Right l1 <- runInsert (TodoListTable (column "List 1") (column "Description of List 1")) beam
-             Right l2 <- runInsert (TodoListTable (column "List 2") (column "Description of List 2")) beam
+                 now <- liftIO getCurrentTime
+                 i1 <- insert (TodoItem (column "Item 1") (column "Desc for Item 1") (column now) (ref l1))
+                 i2 <- insert (TodoItem (column "Item 2") (column "Desc for Item 2") (column now) (ref l1))
+                 mapM_ (liftIO . putStrLn . show) [i1, i2]
 
-             now <- getCurrentTime
+                 src <- query (all_ (of_ :: Simple TodoList)
+                               `leftJoin_` ( all_ (of_ :: Simple TodoItem)
+                                           , (\(QueryTable (PK listId) todoList :|: QueryTable _ todoItem) ->
+                                              field_ listId ==# tableId . reference . todoItemList # todoItem)))
+                 es <- src $$ C.consume
+                 liftIO (mapM_ (putStrLn . show) es)
 
-             runInsert (TodoListItemTable (column "Item 1") (column "Description of Item 1") (column now) (ref l1)) beam
-             runInsert (TodoListItemTable (column "Item 2") (column "Description of Item 2") (column now) (ref l1)) beam
+                 return ()
 
-             runInsert (TodoListItemTable (column "Item 3") (column "Description of Item 3") (column now) (ref l2)) beam
-             runInsert (TodoListItemTable (column "Item 4") (column "Description of Item 4") (column now) (ref l2)) beam
+--              let x = ((all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")) #@* TodoListItems
+--                  y = (all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")
+--                  xOpt = rewriteQuery allQueryOpts allExprOpts x
 
-             let x = ((all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")) #@* TodoListItems
-                 y = (all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")
-                 xOpt = rewriteQuery allQueryOpts allExprOpts x
-
-             putStrLn (concat ["Query fully optimized is: ", show xOpt ])
-             src <- runQuery x beam
-             let printAllLines = await >>=
-                                 \x -> case x of
-                                         Nothing -> return ()
-                                         Just  x -> liftIO (putStrLn (show x)) >> printAllLines
-             case src of
-               Left err -> putStrLn (concat ["There was an error with the request: ", err])
-               Right src -> src $$ printAllLines
-             withHDBCConnection beam commit
+--              putStrLn (concat ["Query fully optimized is: ", show xOpt ])
+--              src <- runQuery x beam
+--              let printAllLines = await >>=
+--                                  \x -> case x of
+--                                          Nothing -> return ()
+--                                          Just  x -> liftIO (putStrLn (show x)) >> printAllLines
+--              case src of
+--                Left err -> putStrLn (concat ["There was an error with the request: ", err])
+--                Right src -> src $$ printAllLines
+--              withHDBCConnection beam commit
