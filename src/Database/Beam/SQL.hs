@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs, TupleSections #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.SQL
     ( module Database.Beam.SQL.Types
@@ -96,23 +96,22 @@ ppUpdate (SQLUpdate tbls assignments where_) =
 ppSel :: SQLSelect -> DocAndVals
 ppSel sel =
     do proj   <- ppProj (selProjection sel)
-       source <- ppAliased ppSource (selFrom sel)
-       joins  <- mapM ppJoin (selJoins sel)
+       source <- ppFrom (selFrom sel)
        where_ <- ppWhere  (selWhere sel)
        grouping <- case selGrouping sel of
                      Nothing -> return empty
-                     Just grouping -> (text "GROUP BY" <+>) <$> ppGrouping grouping
+                     Just grouping -> ppGrouping grouping
        orderBy <- ppOrderBy (selOrderBy sel)
        let limit = maybe empty ((text "LIMIT" <+>) . text . show) (selLimit sel)
            offset = maybe empty ((text "OFFSET" <+>) . text . show) (selOffset sel)
        return (text "SELECT" <+> proj <+> text "FROM" <+> source <+>
-               hsep joins <+> where_ <+> grouping <+> orderBy <+> limit <+> offset)
+               where_ <+> grouping <+> orderBy <+> limit <+> offset)
 
 ppProj :: SQLProjection -> DocAndVals
 ppProj SQLProjStar = return (text "*")
-ppProj (SQLProjFields fields) =
-    do fields <- mapM (ppAliased ppFieldName) fields
-       return (hsep (punctuate comma fields))
+ppProj (SQLProj es) =
+    do es <- mapM (ppAliased ppExpr) es
+       return (hsep (punctuate comma es))
 
 ppAliased :: (a -> DocAndVals) -> SQLAliased a -> DocAndVals
 ppAliased ppSub (SQLAliased x (Just as)) = do sub <- ppSub x
@@ -131,39 +130,62 @@ ppFieldName (SQLQualifiedFieldName t table) = return (text "`" <> text (unpack t
                                                       text (unpack t) <> text "`")
 ppFieldName (SQLFieldName t) = return (text (unpack t))
 
-ppGrouping grouping = do fieldNames <- mapM ppFieldName (sqlGroupBy grouping)
+ppGrouping grouping = do exprs <- mapM ppExpr (sqlGroupBy grouping)
                          having <-  ppHaving (sqlHaving grouping)
-                         return (text "GROUP BY" <+> hsep (punctuate comma fieldNames) <+> having)
+                         return (text "GROUP BY" <+> hsep (punctuate comma exprs) <+> having)
 
 ppHaving (SQLValE v)
          | safeFromSql v == Right True = return empty
 ppHaving expr = (text "HAVING" <+>) <$> ppExpr expr
 
-ppJoin (SQLJoin SQLInnerJoin source on_) = do sourceDoc <- ppAliased ppSource source
-                                              onDoc <-  ppOn on_
-                                              return (text "INNER JOIN" <+> sourceDoc <+> onDoc)
+ppFrom x = fst <$> ppFrom' x
+
+ppFrom' (SQLFromSource a) = (,False) <$> ppAliased ppSource a
+ppFrom' (SQLJoin jType x y on_) = do (xDoc, _) <- ppFrom' x
+                                     jTypeDoc <- ppJType jType
+                                     (yDoc, yIsJoin) <- ppFrom' y
+                                     onDoc <- ppOn on_
+                                     return (xDoc <+> jTypeDoc <+> if yIsJoin then yDoc else yDoc <+> onDoc, True)
+
+ppJType SQLInnerJoin = return (text "INNER JOIN")
+ppJType SQLLeftJoin = return (text "LEFT JOIN")
+ppJType SQLRightJoin = return (text "RIGHT JOIN")
+ppJType SQLOuterJoin = return (text "OUTER JOIN")
 
 ppOn (SQLValE v)
      | safeFromSql v == Right True = return empty
 ppOn expr = (text "ON" <+>) <$> ppExpr expr
 
 ppOrderBy [] = return empty
-ppOrderBy xs = hsep <$> mapM ppOrdering xs
-    where ppOrdering (Asc name) = do fieldName <- ppFieldName name
-                                     return (fieldName <+> text "ASC")
-          ppOrdering (Desc name) = do fieldName <- ppFieldName name
-                                      return (fieldName <+> text "DESC")
+ppOrderBy xs = (text "ORDER BY" <+>) . hsep <$> mapM ppOrdering xs
+    where ppOrdering (Asc e) = do eDoc <- ppExpr e
+                                  return (eDoc <+> text "ASC")
+          ppOrdering (Desc e) = do eDoc <- ppExpr e
+                                   return (eDoc <+> text "DESC")
 
 ppVal :: SqlValue -> DocAndVals
 ppVal val = tell [val] >> return (text "?")
 
 ppExpr :: SQLExpr -> DocAndVals
 ppExpr (SQLValE v) = ppVal v
-ppExpr (SQLJustE v) = ppExpr v
 ppExpr (SQLFieldE name) = ppFieldName name
 ppExpr (SQLEqE a b) = binOp "==" a b
+ppExpr (SQLLtE a b) = binOp "<" a b
+ppExpr (SQLGtE a b) = binOp ">" a b
+ppExpr (SQLLeE a b) = binOp "<=" a b
+ppExpr (SQLGeE a b) = binOp ">=" a b
+ppExpr (SQLNeqE a b) = binOp "<>" a b
 ppExpr (SQLAndE a b) = binOp "AND" a b
 ppExpr (SQLOrE a b) = binOp "OR" a b
+ppExpr (SQLIsNothingE q) = do qDoc <- ppExpr q
+                              return (qDoc <+> text "IS NULL")
+ppExpr (SQLInE x xs) = do xDoc <- ppExpr x
+                          xsDoc <- ppExpr xs
+                          return (xDoc <+> text "IN" <+> xsDoc)
+ppExpr (SQLListE xs) = do xsDoc <- mapM ppExpr xs
+                          return (parens (hsep (punctuate comma xsDoc)))
+ppExpr (SQLCountE x) = do xDoc <- ppExpr x
+                          return (text "COUNT" <> parens xDoc)
 
 binOp :: String -> SQLExpr -> SQLExpr -> DocAndVals
 binOp op a b = do aD <- ppExpr a

@@ -61,6 +61,7 @@ data AnyField table where
 type family TypeOf x :: *
 
 type FullSchema table = PhantomFieldSchema table :|: Schema table
+type LookupInTable table name = LocateResult (FullSchema table) (Locate (FullSchema table) name)
 
 type DefaultPrimaryKeyFor table = Column TableId Int
 
@@ -73,11 +74,10 @@ instance (Table table) => Field table TableId where
     fieldConstraints _ _ = [SQLPrimaryKeyAutoIncrement]
 
 class ( Typeable table
-      , Locator (FullSchema table) (LocateAll (FullSchema table) (PrimaryKey table)) )  => Table table where
+      , Locator (FullSchema table) (LocateAll (FullSchema table) (PrimaryKey table))
+      , MakeNulls (Schema table), MakeNulls (PhantomFieldSchema table) )  => Table table where
     type Schema table :: *
     type Schema table = SchemaForGeneric (Rep table)
-    -- type ConcreteSchema table :: *
-    -- type ConcreteSchema table = ConcreteSchemaForGeneric (Rep table)
 
     -- | Phantom fields are fields that are not part of the table definitions but are nonetheless stored in the table
     type PhantomFieldSchema table :: *
@@ -116,15 +116,45 @@ class ( Typeable table
         where from' :: Generic table => table -> Rep table ()
               from' = from
 
-    fieldValues :: table -> [(AnyField table, SqlValue)]
-    default fieldValues :: (Generic table, GFieldValues table (Rep table ())) => table -> [(AnyField table, SqlValue)]
-    fieldValues tbl = gFieldValues tbl (from' tbl)
-        where from' :: Generic table => table -> Rep table ()
-              from' = from
-
     -- | The default behavior is to assign the default phantom field schema (just an integer primary key) a single value of null, to let autoincrement work
     makePhantomValues :: table -> [SqlValue]
     makePhantomValues _ = [SqlNull]
+
+-- | This instance is useful for nullable foreign keys and for reading tables from outer joins
+instance ( Locator fullSchema (LocateAll fullSchema (PrimaryKey t))
+         , fullSchema ~ (Maybe (PhantomFieldSchema t) :|: Maybe (Schema t))
+         , Table t) => Table (Maybe t) where
+    type Schema (Maybe t) = Maybe (Schema t)
+    type PhantomFieldSchema (Maybe t) = Maybe (PhantomFieldSchema t)
+    type PrimaryKey (Maybe t) = PrimaryKey t
+
+    dbTableName (_ :: Proxy (Maybe t)) = dbTableName (Proxy :: Proxy t)
+    reifyTableSchema (_ :: Proxy (Maybe t)) = reifyTableSchema (Proxy :: Proxy t)
+
+    getSchema x = getSchema <$> x
+    fromSchema x = fromSchema <$> x
+    makeSqlValues (x :: Maybe t) = maybe (makeNulls (Proxy :: Proxy (Schema t))) makeSqlValues x
+    makePhantomValues (x :: Maybe t) = maybe (makeNulls (Proxy :: Proxy (PhantomFieldSchema t))) makePhantomValues x
+instance FromSqlValues t => FromSqlValues (Maybe t) where
+    valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
+    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
+                     do values <- get
+                        let colCount = valuesNeeded (Proxy :: Proxy t)
+                            colValues = take colCount values
+                        if all (==SqlNull) colValues
+                        then put (drop colCount values) >> return Nothing
+                        else Just <$> fromSqlValues'
+
+class MakeNulls a where
+    makeNulls :: Proxy a -> [SqlValue]
+instance (MakeNulls a, MakeNulls b) => MakeNulls (a :|: b) where
+    makeNulls (_ :: Proxy (a :|: b)) = makeNulls (Proxy :: Proxy a) ++ makeNulls (Proxy :: Proxy b)
+instance MakeNulls (Column name t) where
+    makeNulls _ = [SqlNull]
+instance MakeNulls (PrimaryKeySchema table) => MakeNulls (ForeignKey table name) where
+    makeNulls (_ :: Proxy (ForeignKey table name)) = makeNulls (Proxy :: Proxy (PrimaryKeySchema table))
+instance MakeNulls t => MakeNulls (Maybe t) where
+    makeNulls (_ :: Proxy (Maybe t)) = makeNulls (Proxy :: Proxy t)
 
 -- ** Generic Table deriving support
 
@@ -151,8 +181,8 @@ instance GHasSchema (K1 Generic.R (Column name t)) where
     gGetSchema (K1 x) = x
     gFromSchema x = K1 x
 instance Show (PrimaryKeySchema table) => GHasSchema (K1 Generic.R (ForeignKey table name)) where
-    gGetSchema (K1 x) = x -- Embedded schema
-    gFromSchema x = K1 x -- (ForeignKey x)
+    gGetSchema (K1 x) = x
+    gFromSchema x = K1 x
 
 class GReifySchema t genSchema where
     reifyGenericSchema :: Proxy t -> Proxy genSchema -> ReifiedTableSchema
@@ -171,11 +201,7 @@ instance ( Reference t name
          , GReifySchema relatedTbl (PrimaryKeySchema relatedTbl)) =>
     GReifySchema t (ForeignKey relatedTbl name) where
     reifyGenericSchema (table :: Proxy table) (Proxy :: Proxy (ForeignKey relatedTbl name)) =
-        let subSchema = reifyGenericSchema (Proxy :: Proxy relatedTbl) (Proxy :: Proxy (PrimaryKeySchema relatedTbl))
-            embedSchema prefix = map ((T.append prefix) *** removeConstraints)
-
-            removeConstraints (SQLColumnSchema desc cs) = SQLColumnSchema desc []
-        in embedSchema (T.concat [ refPrefix (Proxy :: Proxy table) (Proxy :: Proxy name), "_" ]) subSchema
+        reifyFKSchema (Proxy :: Proxy table) (Proxy :: Proxy name)
 
 type family SchemaForGeneric g where
     SchemaForGeneric (M1 D f p) = SchemaForGeneric p
@@ -183,14 +209,7 @@ type family SchemaForGeneric g where
     SchemaForGeneric (M1 S f p) = SchemaForGeneric p
     SchemaForGeneric (f :*: g) = SchemaForGeneric f :|: SchemaForGeneric g
     SchemaForGeneric (K1 Generic.R (Column name t)) = Column name t
-    SchemaForGeneric (K1 Generic.R (ForeignKey table name)) = ForeignKey table name -- Embedded name (PrimaryKeySchema table)
--- type family ConcreteSchemaForGeneric g where
---     ConcreteSchemaForGeneric (M1 D f p) = ConcreteSchemaForGeneric p
---     ConcreteSchemaForGeneric (M1 C f p) = ConcreteSchemaForGeneric p
---     ConcreteSchemaForGeneric (M1 S f p) = ConcreteSchemaForGeneric p
---     ConcreteSchemaForGeneric (f :*: g) = ConcreteSchemaForGeneric f :|: ConcreteSchemaForGeneric g
---     ConcreteSchemaForGeneric (K1 Generic.R (Column name t)) = Column name t
---     ConcreteSchemaForGeneric (K1 Generic.R (ForeignKey table name)) = ForeignKey table name
+    SchemaForGeneric (K1 Generic.R (ForeignKey table name)) = ForeignKey table name
 
 class GMakeSqlValues x where
     gMakeSqlValues :: x -> [SqlValue]
@@ -214,28 +233,6 @@ instance GMakeSqlValues (PrimaryKeySchema table) =>
     GMakeSqlValues (ForeignKey table name) where
     gMakeSqlValues (ForeignKey schema) = gMakeSqlValues schema
 
-class GFieldValues tbl (x :: *) where
-    gFieldValues :: tbl -> x -> [(AnyField tbl, SqlValue)]
-instance GFieldValues tbl (p a) => GFieldValues tbl (D1 f p a) where
-    gFieldValues t (M1 x) = gFieldValues t x
-instance GFieldValues tbl (p a) => GFieldValues tbl (C1 f p a) where
-    gFieldValues t (M1 x) = gFieldValues t x
-instance GFieldValues tbl (p a) => GFieldValues tbl (S1 f p a) where
-    gFieldValues t (M1 x) = gFieldValues t x
-instance (GFieldValues tbl (f a), GFieldValues tbl (g a)) => GFieldValues tbl ((f :*: g) a) where
-    gFieldValues t (f :*: g) = gFieldValues t f ++ gFieldValues t g
-instance (GFieldValues tbl f, GFieldValues tbl g) => GFieldValues tbl (f :|: g) where
-    gFieldValues t (f :|: g) = gFieldValues t f ++ gFieldValues t g
-instance GFieldValues tbl (U1 a) where
-    gFieldValues _ _ = []
-instance GFieldValues tbl x => GFieldValues tbl (K1 Generic.R x a) where
-    gFieldValues t (K1 x) = gFieldValues t x
-instance (Field t name, FieldSchema x, Table t) => GFieldValues t (Column name x) where
-    gFieldValues tbl field@(Column x) = [( AnyField tbl field
-                                         , makeSqlValue x )]
-instance GFieldValues t (PrimaryKeySchema table) => GFieldValues t (ForeignKey table name) where
-    gFieldValues tbl (ForeignKey schema) = gFieldValues tbl schema
-
 type PrimaryKeySchema table = LocateResult (FullSchema table) (LocateAll (FullSchema table) (PrimaryKey table))
 
 -- * Primary keys
@@ -252,9 +249,7 @@ class (FieldSchema (TypeOf (FieldInTable table f)),
     type FieldInTable table f = LocateResult (Schema table) (Locate (Schema table) f)
 
     fieldSettings :: Proxy table -> Proxy f -> FieldSettings (TypeOf (FieldInTable table f))
-    fieldSettings table field = defSettings --  (fieldSchema table field)
-        -- where fieldSchema :: Proxy table -> Proxy f -> Proxy (FieldInTable table f)
-        --       fieldSchema _ _ = Proxy
+    fieldSettings table field = defSettings
 
     fieldConstraints :: Proxy table -> Proxy f -> [SQLConstraint]
     fieldConstraints _ _ = []
@@ -294,6 +289,26 @@ class Reference table name where
         where onlyConstructor :: Proxy name -> GOneConstructor (Rep name ())
               onlyConstructor _ = undefined
 
+    reifyFKSchema :: Proxy table -> Proxy name -> ReifiedTableSchema
+    default reifyFKSchema :: ( LookupInTable table name ~ ForeignKey relatedTbl name
+                             , GReifySchema relatedTbl (PrimaryKeySchema relatedTbl)) =>
+                             Proxy table -> Proxy name -> ReifiedTableSchema
+    reifyFKSchema (table :: Proxy table) (name :: Proxy name) =
+        let fkProxy = Proxy :: Proxy (LookupInTable table name)
+
+            relatedTblProxy :: (LookupInTable table name ~ ForeignKey relatedTbl name) =>
+                               Proxy (LookupInTable table name) -> Proxy relatedTbl
+            relatedTblProxy _ = Proxy
+            schemaProxy :: Proxy relatedTbl -> Proxy (PrimaryKeySchema relatedTbl)
+            schemaProxy _ = Proxy
+
+            subSchema = reifyGenericSchema (relatedTblProxy fkProxy) (schemaProxy (relatedTblProxy fkProxy))
+            embedSchema prefix = map ((T.append prefix) *** removeConstraints)
+
+            removeConstraints (SQLColumnSchema desc cs) = SQLColumnSchema desc $
+                                                          filter (\x -> x /= SQLPrimaryKey && x /= SQLPrimaryKeyAutoIncrement && x /= SQLAutoIncrement) cs
+        in embedSchema (T.concat [ refPrefix table name, "_" ]) subSchema
+
 type ReferencedTable table name = TableFor (LocateResult (Schema table) (Locate (Schema table) name))
 
 instance ( Table table, Typeable name
@@ -319,22 +334,18 @@ popSqlValue = do st <- get
 peekSqlValue = head <$> get
 class FromSqlValues a where
     fromSqlValues' :: FromSqlValuesM a
+    valuesNeeded :: Proxy a -> Int
 instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a :|: b) where
     fromSqlValues' = (:|:) <$> fromSqlValues' <*> fromSqlValues'
-
--- class Show (ValueSettings a) => SQLValable a where
---     data ValueSettings a :: *
-
---     defValSettings :: ValueSettings a
---     colDescFromValSettings :: ValueSettings a -> SQLColumnSchema
---     fromSqlValues'' :: FromSqlValuesM a
---     makeSqlValue' :: a -> SqlValue
+    valuesNeeded (_ :: Proxy (a :|: b)) = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b)
 
 data ForeignKey table name where
     ForeignKey :: Show (PrimaryKeySchema table) => PrimaryKeySchema table -> ForeignKey table name
 type instance NameFor (ForeignKey table name) = name
 type instance EmbeddedSchemaFor (ForeignKey table name) = Embedded name (PrimaryKeySchema table)
 type instance Rename newName (ForeignKey table name) = ForeignKey table newName
+instance RenameFields newName (ForeignKey table name) where
+    renameFields _ (ForeignKey schema) = ForeignKey schema
 type family TableFor a where
     TableFor (ForeignKey table name) = table
 instance Show (ForeignKey table name) where
@@ -345,6 +356,8 @@ newtype Column name t = Column t
 type instance EmbeddedSchemaFor (Column name t) = Empty
 type instance NameFor (Column name t) = name
 type instance Rename newName (Column name t) = Column newName t
+instance RenameFields newName (Column name t) where
+    renameFields _ (Column t) = Column t
 type instance TypeOf (Column name t) = t
 
 column :: t -> Column name t
@@ -354,6 +367,7 @@ columnValue (Column x) = x
 
 instance FieldSchema t => FromSqlValues (Column name t) where
     fromSqlValues' = Column <$> fromSqlValue
+    valuesNeeded _ = 1
 
 instance FieldSchema Int where
     data FieldSettings Int = IntFieldDefault

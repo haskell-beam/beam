@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances, OverloadedStrings #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query
     ( module Database.Beam.Query.Types
@@ -11,8 +11,10 @@ module Database.Beam.Query
     , findByPrimaryKeyExpr, primaryKeyForTable
 
     , inBeamTxn, query, insert, save, update, getOne
-    , findByPk_
-    , ref, pk) where
+    , findByPk_, matching_
+    , ref, pk
+
+    , debugQuerySQL ) where
 
 import Database.Beam.Query.Types
 import Database.Beam.Query.Rewrite
@@ -30,6 +32,7 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad.Identity
 import Control.Monad.Trans
+import Control.Monad.Writer (tell, execWriter, Writer)
 import Control.Monad.State
 import Control.Monad.Error
 
@@ -40,11 +43,40 @@ import Data.List (find)
 import Data.Maybe
 import Data.String (fromString)
 import Data.Conduit
+import qualified Data.Set as S
 import qualified Data.Text as T
 
 import Database.HDBC
 
 -- * Query Compilation
+
+mkSqlExpr :: ScopingRule -> (forall table field q. (Table table, Field table field) => ScopedField table field -> SQLFieldName) -> QExpr a -> SQLExpr
+mkSqlExpr s f (EqE a b) = SQLEqE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (NeqE a b) = SQLNeqE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (LtE a b) = SQLLtE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (GtE a b) = SQLGtE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (LeE a b) = SQLLeE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (GeE a b) = SQLGeE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (FieldE fd) = SQLFieldE (s (f fd))
+mkSqlExpr s f (MaybeFieldE (Just fd)) = SQLFieldE (s (f fd))
+mkSqlExpr s f (MaybeFieldE Nothing) = SQLValE SqlNull
+mkSqlExpr s f (ValE v) = SQLValE v
+mkSqlExpr s f (AndE a b) = SQLAndE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (OrE a b) = SQLOrE (mkSqlExpr s f a) (mkSqlExpr s f b)
+mkSqlExpr s f (JustE a) = mkSqlExpr s f a
+mkSqlExpr s f NothingE = SQLValE SqlNull
+mkSqlExpr s f (IsNothingE q) = SQLIsNothingE (mkSqlExpr s f q)
+mkSqlExpr s f (InE x xs) = SQLInE (mkSqlExpr s f x) (mkSqlExpr s f xs)
+mkSqlExpr s f (ListE xs) = SQLListE (map (mkSqlExpr s f) xs)
+mkSqlExpr s f (CountE x) = SQLCountE (mkSqlExpr s f x)
+
+relabelSubqueryFields :: T.Text -- ^ Join name
+                      -> S.Set T.Text -- ^ Tables that are part of this join
+                      -> SQLFieldName
+                      -> SQLFieldName
+relabelSubqueryFields joinName renamedTables (SQLQualifiedFieldName fieldName tableName)
+    | tableName `S.member` renamedTables = SQLQualifiedFieldName (tableName <> "_" <> fieldName) joinName
+relabelSubqueryFields _ _ x = x
 
 mkSqlTblId :: Int -> T.Text
 mkSqlTblId i = fromString (concat ["t", show i])
@@ -55,38 +87,129 @@ mkQualifiedFieldName (ScopedField i :: ScopedField table field) = SQLQualifiedFi
 mkUnqualifiedFieldName :: (Table table, Field table field) => ScopedField table field -> SQLFieldName
 mkUnqualifiedFieldName (ScopedField i :: ScopedField table field) = SQLFieldName (fieldName (Proxy :: Proxy table) (Proxy :: Proxy field))
 
-mkSqlExpr :: (forall table field q. (Table table, Field table field) => ScopedField table field -> SQLFieldName) -> QExpr a -> SQLExpr
-mkSqlExpr f (EqE a b) = SQLEqE (mkSqlExpr f a) (mkSqlExpr f b)
-mkSqlExpr f (FieldE fd) = SQLFieldE (f fd)
-mkSqlExpr f (ValE v) = SQLValE v
-mkSqlExpr f (AndE a b) = SQLAndE (mkSqlExpr f a) (mkSqlExpr f b)
-mkSqlExpr f (OrE a b) = SQLOrE (mkSqlExpr f a) (mkSqlExpr f b)
-mkSqlExpr f (JustE a) = SQLJustE (mkSqlExpr f a)
-mkSqlExpr f NothingE = SQLValE SqlNull
+instance (Project a, Project b) => Project (a :|: b) where
+    project r (a :|: b) = project r a ++ project r b
+instance (Table table, Field table field) => Project (ScopedField table field) where
+    project r x = [ SQLFieldE . r . mkQualifiedFieldName $ x ]
+instance Project a => Project (Maybe a) where
+    project r (Just x) = project r x
+    project _ Nothing = error "project: Nothing"
+instance Project (QExpr a) where
+    project r e = [mkSqlExpr r mkQualifiedFieldName e]
 
-queryToSQL :: Query a -> SQLSelect
+capture :: State s a -> State s (a, s)
+capture action = do orig <- get
+                    res <- action
+                    after <- get
+                    put orig
+                    return (res, after)
+
+queryToSQL :: Project (Scope a) => Query a -> SQLSelect
 queryToSQL q = selectStatement
     where q' = rewriteQuery allQueryOpts allExprOpts q
-          selectStatement = generateQuery q'
+          selectStatement = let (s, r) = runState (generateQuery q') id
+                            in projectSelect r q' s
+
+          projection :: Project (Scope a) => ScopingRule -> Query a -> [SQLAliased SQLExpr]
+          projection r = map (flip SQLAliased Nothing) . project r . getScope
+
+          projectSelect :: Project (Scope a) => ScopingRule -> Query a -> SQLSelect -> SQLSelect
+          projectSelect r q s = s { selProjection = SQLProj . projection r $ q }
+
+          aliasedSubquery :: SQLSelect -> SQLSelect
+          aliasedSubquery s = s { selProjection = SQLProj proj' }
+              where SQLProj proj = selProjection s
+                    proj' = map aliasField proj
+
+                    aliasField (SQLAliased e@(SQLFieldE (SQLQualifiedFieldName f tbl)) _) = SQLAliased e (Just (tbl <> "_" <> f))
+                    aliasField x = error "aliasField: Malformed projection"
+
+          getAllTables :: Query a -> S.Set T.Text
+          getAllTables q = execWriter (rewriteQueryM recordAll (\_ -> return Nothing) q)
+              where recordAll :: Query a -> Writer (S.Set T.Text) (Maybe (Query a))
+                    recordAll (All _ i) = tell (S.singleton (mkSqlTblId i)) >> return Nothing
+                    recordAll _ = return Nothing
 
           sqlTrue = SQLValE (SqlBool True)
 
-          generateQuery :: Query a -> SQLSelect
-          generateQuery (All (tbl :: Proxy table) i) = simpleSelect { selFrom = SQLAliased (SQLSourceTable (dbTableName tbl)) (Just (mkSqlTblId i)) }
-          generateQuery (Filter q e) = conjugateWhere (generateQuery q) (mkSqlExpr mkQualifiedFieldName e)
-          generateQuery (Join (All tbl1 i1) y) = continueJoin y (simpleSelect { selFrom = SQLAliased (SQLSourceTable (dbTableName tbl1)) (Just (mkSqlTblId i1)) })
---          generateQuery (Join q y) = continueJoin y (simpleSelect { selFrom = SQLAliased (SQLSourceSelect (generateQuery q)) Nothing})
+          generateQuery :: Query a -> State ScopingRule SQLSelect
+          generateQuery (All (tbl :: Proxy table) i) = pure (simpleSelect { selFrom = SQLFromSource (SQLAliased (SQLSourceTable (dbTableName tbl)) (Just (mkSqlTblId i))) })
+          generateQuery (Filter q e) = do q' <- generateQuery q
+                                          scopingRule <- get
+                                          pure (conjugateWhere q' (mkSqlExpr scopingRule mkQualifiedFieldName e))
+          generateQuery (Join x y) = genJoin SQLInnerJoin x y Nothing
 
-          continueJoin :: Query a -> SQLSelect -> SQLSelect
-          continueJoin (Join x y) base = continueJoin y (continueJoin x base)
-          continueJoin (All tbl2 i2) base = base { selJoins = (SQLJoin SQLInnerJoin (SQLAliased (SQLSourceTable (dbTableName tbl2)) (Just (mkSqlTblId i2))) sqlTrue):selJoins base }
+          generateQuery (LeftJoin x y e) = genJoin SQLLeftJoin x y (Just e)
+          generateQuery (RightJoin x y e) = genJoin SQLRightJoin x y (Just e)
+          generateQuery (OuterJoin x y e) = genJoin SQLOuterJoin x y (Just e)
+          generateQuery (Project q _) = generateQuery q
+          generateQuery (Limit q i) = do q' <- generateQuery q
+                                         pure (q' { selLimit =
+                                                    case selLimit q' of
+                                                      Nothing -> Just i
+                                                      Just i' -> Just (min i i') })
+          generateQuery (Offset q i) = do q' <- generateQuery q
+                                          pure (q' { selOffset =
+                                                     case selOffset q' of
+                                                       Nothing -> Just i
+                                                       Just i' -> Just (i + i') })
+          generateQuery (GroupBy q (GenQExpr e)) = do q' <- generateQuery q
+                                                      scopingRule <- get
+                                                      pure (q' { selGrouping = Just (mempty { sqlGroupBy = [mkSqlExpr scopingRule mkQualifiedFieldName e] }) <>
+                                                                               selGrouping q' })
+          generateQuery (OrderBy q (GenQExpr e) ord) = do q' <- generateQuery q
+                                                          scopingRule <- get
+                                                          let e' = mkSqlExpr scopingRule mkQualifiedFieldName e
+                                                          pure (q' { selOrderBy = case ord of
+                                                                                    Ascending  -> [Asc e'] <> selOrderBy q'
+                                                                                    Descending -> [Desc e'] <> selOrderBy q' } )
+
+          genJoin :: Project (Scope b) => SQLJoinType -> Query a -> Query b -> Maybe (QExpr Bool) -> State ScopingRule SQLSelect
+          genJoin joinType x y e = do (qx, xScoping) <- capture (generateQuery x)
+
+                                      case isSimple qx of
+                                        False -> do (qy, yScoping) <- capture (generateQuery y)
+                                                    modify ((yScoping . xScoping) .)
+                                                    scopingRule <- get
+                                                    pure (simpleSelect {
+                                                            selFrom = SQLJoin joinType (SQLFromSource (SQLAliased (SQLSourceSelect qx) Nothing))
+                                                                                       (SQLFromSource (SQLAliased (SQLSourceSelect qy) Nothing))
+                                                                                       (maybe sqlTrue (mkSqlExpr scopingRule mkQualifiedFieldName) e) })
+                                        True  -> do (qy, yScoping) <- capture (generateQuery y)
+                                                    case isSimple qy of
+                                                      True -> do modify ((yScoping . xScoping) .)
+                                                                 scopingRule <- get
+                                                                 pure (qx { selFrom = SQLJoin joinType
+                                                                                              (selFrom qx)
+                                                                                              (selFrom qy)
+                                                                                              (maybe sqlTrue (mkSqlExpr scopingRule mkQualifiedFieldName) e) })
+                                                      False -> do let qyProj = aliasedSubquery (projectSelect yScoping y qy)
+                                                                      joinName = "j_" <> T.intercalate "_" (S.toList tableNames)
+                                                                      tableNames = getAllTables y
+                                                                  modify (relabelSubqueryFields joinName tableNames .)
+                                                                  qx <- generateQuery x -- Rebuild x with y's new scoping rules. TODO figure out how to remove this step
+                                                                  scopingRule <- get
+                                                                  pure (qx  { selFrom = SQLJoin joinType
+                                                                                                (selFrom qx)
+                                                                                                (SQLFromSource (SQLAliased (SQLSourceSelect qyProj) (Just joinName)))
+                                                                                                (maybe sqlTrue (mkSqlExpr scopingRule mkQualifiedFieldName) e) } )
+          combineWheres x y = case (selWhere x, selWhere y) of
+                                (SQLValE (SqlBool True), y) -> y
+                                (x, SQLValE (SqlBool True)) -> x
+                                (x, y) -> SQLAndE x y
+
+          isSimple s = isNothing (selGrouping s) && null (selOrderBy s) && selLimit s == Nothing && selOffset s == Nothing
+
+          -- continueJoin :: Query a -> SQLSelect -> SQLSelect
+          -- continueJoin (Join x y) base = continueJoin y (continueJoin x base)
+          -- continueJoin (All tbl2 i2) base = base { selJoins = (SQLJoin SQLInnerJoin (SQLAliased (SQLSourceTable (dbTableName tbl2)) (Just (mkSqlTblId i2))) sqlTrue):selJoins base }
 --          continueJoin q base = base { selJoins = (SQLJoin SQLInnerJoin (SQLAliased (SQLSourceSelect (generateQuery q)) Nothing) sqlTrue):selJoins base }
 
 insertToSQL :: Table table => table -> SQLInsert
 insertToSQL (table :: table) = SQLInsert (dbTableName (Proxy :: Proxy table))
                                          (makeSqlValues table)
 
-runQuery :: (MonadIO m, FromSqlValues a) => Query a -> Beam m -> m (Either String (Source m a))
+runQuery :: (MonadIO m, FromSqlValues a, Project (Scope a)) => Query a -> Beam m -> m (Either String (Source m a))
 runQuery q beam =
     do let selectCmd = Select (queryToSQL q)
 
@@ -137,21 +260,19 @@ runUpdate update beam =
     do withHDBCConnection beam (\conn -> liftIO (runSQL' conn (Update update)))
        return (Right ())
 
-updateWhere :: ( ScopeFields (WrapFields (QueryField table) (Schema table))
-               , ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
+updateWhere :: ( ScopeFields (QueryTable table)
                , Table table) => table -> (Scope (QueryTable table) -> ([QAssignment], QExpr Bool)) -> SQLUpdate
 updateWhere (_ :: table) mkAssignmentsAndWhere = go
     where tblProxy :: Proxy (QueryTable table)
           tblProxy = Proxy
           go =
             let (assignments, whereClause) = mkAssignmentsAndWhere (scopeFields tblProxy 0)
-                sqlAssignments = map ( \(QAssignment nm ex) -> (mkUnqualifiedFieldName nm, mkSqlExpr mkUnqualifiedFieldName ex) ) assignments
-                sqlWhereClause = Just (mkSqlExpr mkUnqualifiedFieldName whereClause)
+                sqlAssignments = map ( \(QAssignment nm ex) -> (mkUnqualifiedFieldName nm, mkSqlExpr id mkUnqualifiedFieldName ex) ) assignments
+                sqlWhereClause = Just (mkSqlExpr id mkUnqualifiedFieldName whereClause)
                 sqlTables = [dbTableName (Proxy :: Proxy table)]
             in (SQLUpdate sqlTables sqlAssignments sqlWhereClause)
 
-updateEntity :: ( ScopeFields (WrapFields (QueryField table) (Schema table))
-                , ScopeFields (WrapFields (QueryField table) (PhantomFieldSchema table))
+updateEntity :: ( ScopeFields (QueryTable table)
                 , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
                 , LocateResult (FullSchema table) locator ~ locateResult
                 , EqExprFor (Scope (QueryTable table)) locateResult
@@ -168,8 +289,10 @@ instance (MakeAssignmentsFor t sa a, MakeAssignmentsFor t sb b) => MakeAssignmen
 instance ( Field t name
          , FieldSchema cTy ) => MakeAssignmentsFor t (ScopedField t name) (Column name cTy) where
     makeAssignments t field (Column x) = [QAssignment field (ValE (makeSqlValue x))]
-instance MakeAssignmentsFor t s (EmbedIn name (PrimaryKeySchema table)) => MakeAssignmentsFor t s (ForeignKey table name) where
-    makeAssignments t schema (ForeignKey fk) = makeAssignments t schema fk
+instance ( EmbedIn name (PrimaryKeySchema table) ~ embedded
+         , RenameFields (NameFor embedded) (PrimaryKeySchema table)
+         , MakeAssignmentsFor t s (Rename (NameFor embedded) (PrimaryKeySchema table)) ) => MakeAssignmentsFor t s (ForeignKey table name) where
+    makeAssignments t schema (ForeignKey fk :: ForeignKey table name) = makeAssignments t schema (renameFields (Proxy :: Proxy (NameFor (EmbedIn name (PrimaryKeySchema table)))) fk)
 
 class EqExprFor schema a where
     eqExprFor :: schema -> a -> QExpr Bool
@@ -210,6 +333,21 @@ findByPk_ primaryKey = let query = all_ (queriedTable query) `where_`
                            queriedTable _ = undefined
                        in query
 
+-- | Get all records whose relationships match
+matching_ :: ( hasManyPKSchema ~ PrimaryKeySchema hasMany
+             , embeddedPKSchemaNames ~ NameFor (EmbedIn name (PrimaryKeySchema hasMany))
+
+             , Reference hasOne name
+             , LookupInTable hasOne name ~ ForeignKey hasMany name
+             , RenameFields embeddedPKSchemaNames hasManyPKSchema
+             , EqExprFor (Scope (QueryTable hasOne)) (Rename embeddedPKSchemaNames hasManyPKSchema)
+             , ScopeFields (QueryTable hasOne)
+             , Table hasMany, Table hasOne ) =>
+             name -> QueryTable hasMany -> Query (QueryTable hasOne)
+matching_ (name :: name) (hasMany :: QueryTable hasMany) = all_ of_ `where_` (\hasOneS -> eqExprFor hasOneS (renameFields fkNamesProxy (pk hasMany)))
+    where fkNamesProxy :: Proxy (NameFor (EmbedIn name (PrimaryKeySchema hasMany)))
+          fkNamesProxy = Proxy
+
 pk,primaryKeyForTable :: Table table => QueryTable table -> PrimaryKeySchema table
 primaryKeyForTable (QueryTable phantom fields) = primaryKeyForTable' phantom fields
 pk = primaryKeyForTable
@@ -217,7 +355,6 @@ pk = primaryKeyForTable
 simpleSelect = SQLSelect
                { selProjection = SQLProjStar
                , selFrom = undefined
-               , selJoins = []
                , selWhere = SQLValE (SqlBool True)
                , selGrouping = Nothing
                , selOrderBy = []
@@ -260,7 +397,7 @@ inBeamTxn beam action = do res <- runBeamT action beam
 toBeamResult :: Either String a -> BeamResult e a
 toBeamResult = (Rollback . InternalError) ||| Success
 
-query :: (MonadIO m, Functor m, FromSqlValues a) => Query a -> BeamT e m (Source (BeamT e m) a)
+query :: (MonadIO m, Functor m, FromSqlValues a, Project (Scope a)) => Query a -> BeamT e m (Source (BeamT e m) a)
 query q = BeamT $ \beam ->
           do res <- runQuery q beam
              case res of
@@ -304,7 +441,7 @@ set :: ( ScopeFields (WrapFields (QueryField table) (Schema table))
     -> BeamT e m ()
 set tbl mkAssignments mkWhere = BeamT (\beam -> toBeamResult <$> runUpdate (updateWhere tbl (mkAssignments &&& mkWhere)) beam)
 
-getOne :: (MonadIO m, Functor m, FromSqlValues a) => Query a -> BeamT e m (Maybe a)
+getOne :: (MonadIO m, Functor m, FromSqlValues a, Project (Scope a)) => Query a -> BeamT e m (Maybe a)
 getOne q =
     do let justOneSink = await >>= \x ->
                          case x of
@@ -319,3 +456,6 @@ getOne q =
 
 ref :: (Table t, Show (PrimaryKeySchema t)) => QueryTable t -> ForeignKey t name
 ref qt = ForeignKey (primaryKeyForTable qt)
+
+debugQuerySQL :: Project (Scope a) => Query a -> (String, [SqlValue])
+debugQuerySQL q = ppSQL (Select (queryToSQL q))

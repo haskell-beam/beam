@@ -34,8 +34,11 @@ maxTableOrdinal q = getMax (execWriter (traverseQueryM maxQ maxE q))
           maxE :: QExpr a -> Writer (Max Int) ()
           maxE _ = return ()
 
-join_ :: Query a -> Query b -> Query (a :|: b)
-join_ l r = Join l r'
+join_ :: (Project (Scope a), Project (Scope b)) => Query a -> Query b -> Query (a :|: b)
+join_ l r = Join l (rewriteForJoin l r)
+
+rewriteForJoin :: Query a -> Query b -> Query b
+rewriteForJoin l r = r'
     where maxOrdL = max (maxTableOrdinal l) (maxTableOrdinal r) + 1
 
           remapQuery :: Query b -> Maybe (Query b)
@@ -52,13 +55,37 @@ join_ l r = Join l r'
 
           r' = rewriteQuery remapQuery remapExpr r
 
+leftJoin_ :: (Project (Scope a), Project (Scope b)) => Query a -> (Query b, Scope (a :|: b) -> QExpr Bool) -> Query (a :|: Maybe b)
+leftJoin_ l (r, mkOn) = LeftJoin l r' (mkOn (getScope l :|: getScope r'))
+    where r' = rewriteForJoin l r
+rightJoin_ :: (Project (Scope a), Project (Scope b)) => Query a -> (Query b, Scope (a :|: b) -> QExpr Bool) -> Query (Maybe a :|: b)
+rightJoin_ l (r, mkOn) = RightJoin l r' (mkOn (getScope l :|: getScope r'))
+    where r' = rewriteForJoin l r
+outerJoin_ :: (Project (Scope a), Project (Scope b)) => Query a -> (Query b, Scope (a :|: b) -> QExpr Bool) -> Query (Maybe a :|: Maybe b)
+outerJoin_ l (r, mkOn) = OuterJoin l r' (mkOn ((getScope l) :|: (getScope r')))
+    where r' = rewriteForJoin l r
+
+project_ :: Query a -> (Scope a -> Scope b) -> Query b
+project_ = Project
+
+limit_, offset_ :: Query a -> Integer -> Query a
+limit_ = Limit
+offset_ = Offset
+
+sortAsc_, sortDesc_ :: Typeable b => Query a -> (Scope a -> QExpr b) -> Query a
+sortAsc_ q mkExpr = OrderBy q (GenQExpr (mkExpr (getScope q))) Ascending
+sortDesc_ q mkExpr = OrderBy q (GenQExpr (mkExpr (getScope q))) Descending
+
+groupBy_ :: Typeable b => Query a -> (Scope a -> QExpr b) -> Query a
+groupBy_ q mkExpr = GroupBy q (GenQExpr (mkExpr (getScope q)))
+
 where_ :: Query a -> (Scope a -> QExpr Bool) -> Query a
 where_ q mkExpr = Filter q (mkExpr (getScope q))
 
 -- | Get all related records for a relationship
 (#@*) :: ( Relationship subject object r
-         , ScopeFields (WrapFields (QueryField object) (Schema object))
-         , ScopeFields (WrapFields (QueryField object) (PhantomFieldSchema object)) ) =>
+         , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
+         , ScopeFields (QueryTable object) ) =>
          Query (QueryTable subject) -> r -> Query (QueryTable subject :|: QueryTable object)
 q #@* r = injectSubjectAndObjectProxy $
           \subjectProxy (objectProxy :: Proxy object) ->
@@ -69,6 +96,7 @@ q #@* r = injectSubjectAndObjectProxy $
           injectSubjectAndObjectProxy f = f Proxy Proxy
 
 (#*@) :: ( Relationship subject object r
+         , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
          , ScopeFields (QueryTable subject) ) =>
          Query (QueryTable object) -> r -> Query (QueryTable subject :|: QueryTable object)
 q #*@ r = let query = (all_ of_ `join_` q) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
@@ -86,14 +114,27 @@ q #*@ r = let query = (all_ of_ `join_` q) `where_` (\(sTbl :|: oTbl) -> joinCon
      -> QAssignment
 (=#) = QAssignment
 
+list_ :: [QExpr a] -> QExpr [a]
+list_ = ListE
+in_ :: (Typeable a, Show a)=> QExpr a -> QExpr [a] -> QExpr Bool
+in_ = InE
+
+count_ :: Typeable a => QExpr a -> QExpr Int
+count_ = CountE
+
 text_ :: T.Text -> QExpr T.Text
 text_ = ValE . SqlString . T.unpack
 num_ :: Integral a => a -> QExpr a
 num_ = ValE . SqlInteger . fromIntegral
 val_ :: Convertible a SqlValue => a -> QExpr a
 val_ = ValE . convert
+enum_ :: Show a => a -> QExpr (BeamEnum a)
+enum_ = ValE . SqlString . show
 
 just_ :: Show a => QExpr a -> QExpr (Maybe a)
 just_ = JustE
 nothing_ :: QExpr (Maybe a)
 nothing_ = NothingE
+
+isNothing_ :: Typeable a => QExpr (Maybe a) -> QExpr Bool
+isNothing_ = IsNothingE
