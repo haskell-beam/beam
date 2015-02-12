@@ -24,7 +24,6 @@ library
 
                        Database.Beam.Query.Types
                        Database.Beam.Query.Rewrite
-                       Database.Beam.Query.SimpleCombinators
                        Database.Beam.Query.Combinators
 
                        Database.Beam.Schema.Tables

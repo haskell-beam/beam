@@ -4,7 +4,7 @@ module Database.Beam.Query.Types
     ( ScopedField(..), ScopedTable(..), Entity(..)
     , QueryField, QueryTable(..), QueryExpr(..)
 
-    , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..)
+    , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..), GenScopedField(..)
 
     , ScopeFields(..), Scope(..), Project(..), ScopingRule
     , getScope ) where
@@ -58,6 +58,8 @@ data QOrder = Ascending | Descending deriving (Show, Read, Eq, Ord, Enum)
 
 data GenQExpr where
     GenQExpr :: Typeable t => QExpr t -> GenQExpr
+data GenScopedField table where
+    GenScopedField :: (Table table, Typeable t, Show t) => ScopedField table t -> GenScopedField table
 
 -- | A query that produces results of type `a`
 data Query a where
