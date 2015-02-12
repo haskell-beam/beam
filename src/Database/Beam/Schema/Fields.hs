@@ -6,6 +6,7 @@ import Database.Beam.Schema.Tables
 import Database.Beam.SQL.Types
 
 import Control.Applicative
+import Control.Arrow
 import Control.Monad.State
 import Control.Monad.Error
 
@@ -51,6 +52,7 @@ instance Locator (PrimaryKeySchema table) a =>
 instance (FromSqlValues (PrimaryKeySchema table), Show (PrimaryKeySchema table)) =>
     FromSqlValues (ForeignKey table name) where
     fromSqlValues' = ForeignKey <$> fromSqlValues'
+    valuesNeeded (_ :: Proxy (ForeignKey table name)) = valuesNeeded (Proxy :: Proxy (PrimaryKeySchema table))
 
 -- * Relationship fields
 
@@ -103,6 +105,23 @@ instance FieldSchema a => FieldSchema (Maybe a) where
                         val -> Just <$> fromSqlValue
 
 deriving instance Show (FieldSettings a) => Show (FieldSettings (Maybe a))
+
+-- ** Enum fields
+
+newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
+    deriving (Show, Typeable)
+
+instance (Enum a, Show a, Read a, Typeable a) => FieldSchema (BeamEnum a) where
+    data FieldSettings (BeamEnum a) = EnumSettings
+                                    { maxNameSize :: Maybe Int }
+                                      deriving Show
+
+    defSettings = EnumSettings Nothing
+
+    colDescFromSettings (EnumSettings nameSize) = colDescFromSettings (defSettings { charOrVarChar = Varchar nameSize })
+
+    makeSqlValue (BeamEnum x) = SqlString (show x)
+    fromSqlValue = BeamEnum . read . fromSql <$> popSqlValue
 
 -- ** Text field
 

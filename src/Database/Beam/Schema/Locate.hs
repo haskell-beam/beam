@@ -11,7 +11,10 @@ import qualified GHC.Generics as Generic
 data a :|: b = a :|: b
                deriving Show
 type instance NameFor (a :|: b) = NameFor a :|: NameFor b
-infixr 3 :|:
+type instance Rename (aName :|: bName) (a :|: b) = Rename aName a :|: Rename bName b
+instance (RenameFields aName a, RenameFields bName b) => RenameFields (aName :|: bName) (a :|: b) where
+    renameFields (_ :: Proxy (aName :|: bName)) (a :|: b) = renameFields (Proxy :: Proxy aName) a :|: renameFields (Proxy :: Proxy bName) b
+infixl 3 :|:
 
 data a :-> b = a :-> b
                deriving (Show, Typeable)
@@ -26,6 +29,9 @@ type family EmbedIn parent fields where
     EmbedIn parent (a :|: b) = EmbedIn parent a :|: EmbedIn parent b
     EmbedIn parent x = Rename (parent :-> NameFor x) x
 
+class RenameFields name a where
+    renameFields :: Proxy name -> a -> Rename name a
+
 -- * Field locating support
 
 -- | Type family for all field types that can be named
@@ -35,6 +41,7 @@ type family Rename newName a :: *
 -- | The L and R datatypes help the system navigate through the nested `:|:` table constructors
 data L a = L a
 data R a = R a
+data M a = M a
 data Descend a = Descend a
 
 data Empty = Empty
@@ -59,10 +66,11 @@ type family Find a b name :: * where
 
 type family HasFieldCheckEmbedded schema parent name where
     HasFieldCheckEmbedded Empty parent name = CheckNamesEqual (NameFor parent) name
-    HasFieldCheckEmbedded (Embedded arentName schema) parent (parentName :-> sub) = HasFieldCheck schema sub
+    HasFieldCheckEmbedded (Embedded parentName schema) parent (parentName :-> sub) = HasFieldCheck schema sub
     HasFieldCheckEmbedded schema parent name = CheckNamesEqual (NameFor parent) name
 
 type family HasFieldCheck schema name where
+    HasFieldCheck (Maybe t) name = HasFieldCheck t name
     HasFieldCheck (a :|: b) name = Find (HasFieldCheck a name) (HasFieldCheck b name) name
     HasFieldCheck (Embedded name schema) (name :-> sub) = HasFieldCheck schema sub
     HasFieldCheck a name = HasFieldCheckEmbedded (EmbeddedSchemaFor a) a name
@@ -82,6 +90,7 @@ type family CheckEmbedded embeddedSchema parent name where
     CheckEmbedded schema parent name = CheckNamesEqual (NameFor parent) name
 
 type family Locate schema name where
+    Locate (Maybe t) name = M (Locate t name)
     Locate (a :|: b) name = LocateIf (HasFieldCheck a name) (HasFieldCheck b name) a b name
     Locate a name = CheckEmbedded (EmbeddedSchemaFor a) a name
 
@@ -109,6 +118,14 @@ class SchemaPart a where
     mapSchema :: (forall x. SchemaPart x => x -> f x) -> a -> WrapFields f a
     default mapSchema :: WrapFields f a ~ f a => (forall x. SchemaPart x => x -> f x) -> a -> WrapFields f a
     mapSchema f a = f a
+
+instance Locator a ma => Locator (Maybe a) (M ma) where
+    type LocateResult (Maybe a) (M ma) = Maybe (LocateResult a ma)
+
+    locate Nothing _ = Nothing
+    locate (Just x) l = Just (locate x (subLocator l))
+        where subLocator :: M ma -> ma
+              subLocator _ = undefined
 
 instance Locator a la => Locator (a :|: b) (L la) where
     type LocateResult (a :|: b) (L la) = LocateResult a la
