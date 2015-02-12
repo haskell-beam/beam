@@ -117,11 +117,11 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
                              -> PhantomFields table g
     changePhantomRep (f :: forall a. f a -> g a) (_ :: Proxy table) t = to' (gChangeRep f (from' t) :: Rep (PhantomFields table g) ())
 
-    allValues :: (forall a. f a -> b) -> PhantomFields table f -> table f -> [b]
+    allValues :: (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> table f -> [b]
     default allValues :: ( Generic (PhantomFields table f)
                          , Generic (table f)
                          , GAllValues f (Rep (PhantomFields table f) () :|: Rep (table f) ()) ) =>
-                         (forall a. f a -> b) -> PhantomFields table f -> table f -> [b]
+                         (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> table f -> [b]
     allValues f phantom tbl = gAllValues f (from' phantom :|: from' tbl)
 
     -- | Should return the primary key for the column as a field set (columns joined by :|:). By keeping this polymorphic over column,
@@ -184,21 +184,6 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
                                  Proxy table -> Int
     tableValuesNeeded (table :: Proxy table) = length (gReifySchema (from' (tblFieldSettings :: TableSettings table)))
 
--- -- | This instance is useful for nullable foreign keys and for reading tables from outer joins
--- instance ( Locator fullSchema (LocateAll fullSchema (PrimaryKey t))
---          , fullSchema ~ (Maybe (PhantomFieldSchema t) :|: Maybe (Schema t))
---          , Table t) => Table (Maybe t) where
---     type Schema (Maybe t) = Maybe (Schema t)
---     type PhantomFieldSchema (Maybe t) = Maybe (PhantomFieldSchema t)
---     type PrimaryKey (Maybe t) = PrimaryKey t
-
---     dbTableName (_ :: Proxy (Maybe t)) = dbTableName (Proxy :: Proxy t)
---     reifyTableSchema (_ :: Proxy (Maybe t)) = reifyTableSchema (Proxy :: Proxy t)
-
---     getSchema x = getSchema <$> x
---     fromSchema x = fromSchema <$> x
---     makeSqlValues (x :: Maybe t) = maybe (makeNulls (Proxy :: Proxy (Schema t))) makeSqlValues x
---     makePhantomValues (x :: Maybe t) = maybe (makeNulls (Proxy :: Proxy (PhantomFieldSchema t))) makePhantomValues x
 instance FromSqlValues t => FromSqlValues (Maybe t) where
     valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
     fromSqlValues' = mfix $ \(_ :: Maybe t) ->
@@ -208,17 +193,6 @@ instance FromSqlValues t => FromSqlValues (Maybe t) where
                         if all (==SqlNull) colValues
                         then put (drop colCount values) >> return Nothing
                         else Just <$> fromSqlValues'
-
--- class MakeNulls a where
---     makeNulls :: Proxy a -> [SqlValue]
--- instance (MakeNulls a, MakeNulls b) => MakeNulls (a :|: b) where
---     makeNulls (_ :: Proxy (a :|: b)) = makeNulls (Proxy :: Proxy a) ++ makeNulls (Proxy :: Proxy b)
--- instance MakeNulls (Column name t) where
---     makeNulls _ = [SqlNull]
--- instance MakeNulls (PrimaryKeySchema table) => MakeNulls (ForeignKey table name) where
---     makeNulls (_ :: Proxy (ForeignKey table name)) = makeNulls (Proxy :: Proxy (PrimaryKeySchema table))
--- instance MakeNulls t => MakeNulls (Maybe t) where
---     makeNulls (_ :: Proxy (Maybe t)) = makeNulls (Proxy :: Proxy t)
 
 -- ** Generic Table deriving support
 
@@ -263,7 +237,7 @@ instance ( Generic (PrimaryKey table x)
     gChangeRep f (K1 (ForeignKey x)) = K1 (ForeignKey (to' (gChangeRep f (from' x))))
 
 class GAllValues (f :: * -> *) x where
-    gAllValues :: (forall a. f a -> b) -> x -> [b]
+    gAllValues :: (forall a. FieldSchema a => f a -> b) -> x -> [b]
 instance (GAllValues f a, GAllValues f b) => GAllValues f (a :|: b) where
     gAllValues f (a :|: b) = gAllValues f a ++ gAllValues f b
 instance (GAllValues f (a x), GAllValues f (b x)) => GAllValues f ((a :*: b) x) where
@@ -274,13 +248,13 @@ instance (GAllValues f (p x)) => GAllValues f (C1 g p x) where
     gAllValues f (M1 a) = gAllValues f a
 instance (GAllValues f (p x)) => GAllValues f (S1 g p x) where
     gAllValues f (M1 a) = gAllValues f a
-instance GAllValues f (K1 Generic.R (f x) a) where
+instance FieldSchema x => GAllValues f (K1 Generic.R (f x) a) where
     gAllValues f (K1 a) = [f a]
 instance ( Generic (PrimaryKey related f)
          , GAllValues f (Rep (PrimaryKey related f) ()) ) =>
     GAllValues f (K1 Generic.R (ForeignKey related f) a) where
     gAllValues f (K1 (ForeignKey x)) = gAllValues f (from' x)
-instance GAllValues f (f a) where
+instance FieldSchema a => GAllValues f (f a) where
     gAllValues f x = [f x]
 
 class GDefaultTableFieldSettings x where

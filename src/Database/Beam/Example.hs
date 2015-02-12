@@ -61,6 +61,9 @@ test fp = do beam <- openDatabase myDatabase (Sqlite3Settings fp)
                  i2 <- insert (TodoItem (column "Item 2") (column "Desc for Item 2") (column now) (ref l1))
                  mapM_ (liftIO . putStrLn . show) [i1, i2]
 
+                 let l1' = l1 { tableFields = (tableFields l1) { todoListDescription = column (Just "Modified description") } }
+                 save l1'
+
                  src <- query (all_ (of_ :: Simple TodoList)
                                `leftJoin_` ( all_ (of_ :: Simple TodoItem)
                                            , (\(QueryTable (PK listId) todoList :|: QueryTable _ todoItem) ->

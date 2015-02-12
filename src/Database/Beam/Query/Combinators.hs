@@ -109,8 +109,22 @@ where_ q mkExpr = Filter q (mkExpr (getScope q))
 
 (#) :: (Table table, Typeable ty) => (a -> ScopedField table ty) -> a -> QExpr ty
 f # t = field_ (f t)
-
 infixr 5 #
+
+(<#), (>#), (<=#), (>=#), (==#) :: (Typeable a, Show a) => QExpr a -> QExpr a -> QExpr Bool
+(==#) = EqE
+(<#) = LtE
+(>#) = GtE
+(<=#) = LeE
+(>=#) = GeE
+
+(&&#), (||#) :: QExpr Bool -> QExpr Bool -> QExpr Bool
+(&&#) = AndE
+(||#) = OrE
+
+infixr 3 &&#
+infixr 2 ||#
+infix 4 ==#
 
 (=#) :: Table table => ScopedField table ty -> QExpr ty -> QAssignment
 (=#) = QAssignment
