@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
     ( ScopedField(..), ScopedTable(..), Entity(..)
-    , QueryField, QueryTable(..), QueryExpr(..)
+    , QueryField, QueryExpr(..)
 
     , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..), GenScopedField(..)
 
@@ -15,7 +15,6 @@ import Database.Beam.SQL
 import Database.HDBC
 
 import Control.Applicative
-import Control.Monad.Identity
 import Control.Monad.Writer hiding (All)
 
 import Data.Monoid hiding (All)
@@ -29,20 +28,9 @@ import qualified Data.Text as T
 -- | A `ScopedField` represents a field that has been brought in scope via an `allQ`. The `q` type is a thread type that ensures that this field cannot escape this query.
 data ScopedField (table :: (* -> *) -> *) ty = ScopedField Int T.Text
                                                deriving (Show, Typeable, Eq)
-type ScopedTable (table :: (* -> *) -> *) = QueryTable table (ScopedField table) --ScopedTable (PhantomFields table (ScopedField table)) (table (ScopedField table))
-type Entity table = QueryTable table Identity
+type ScopedTable (table :: (* -> *) -> *) = Entity table (ScopedField table)
 
 data QueryField table field
-data QueryTable table f = QueryTable
-                        { phantomFields :: PhantomFields table f
-                        , tableFields   :: table f }
-instance (Show (PhantomFields table Identity), Show (table Identity)) => Show (QueryTable table Identity) where
-    show (QueryTable phantoms table) = concat ["QueryTable (", show phantoms, ") (", show table, ")"]
-
-instance Table table => FromSqlValues (QueryTable table Identity) where
-    fromSqlValues' = QueryTable <$> phantomFromSqlValues (Proxy :: Proxy table) <*> (tableFromSqlValues :: FromSqlValuesM (table Identity))
-    valuesNeeded (_ :: Proxy (QueryTable tbl Identity)) = phantomValuesNeeded (Proxy :: Proxy tbl) + tableValuesNeeded (Proxy :: Proxy tbl)
-
 data QueryExpr t = QueryExpr t deriving (Show, Read, Eq, Ord)
 
 instance FieldSchema t => FromSqlValues (QueryExpr t) where
@@ -63,7 +51,7 @@ data GenScopedField table where
 
 -- | A query that produces results of type `a`
 data Query a where
-    All :: (Table table, ScopeFields (Entity table)) => Proxy table -> Int -> Query (Entity table)
+    All :: (Table table, ScopeFields (Entity table Column)) => Proxy table -> Int -> Query (Entity table Column)
     EmptySet :: Query a
     Filter ::  Query a -> QExpr Bool -> Query a
     GroupBy :: Query a -> GenQExpr -> Query a
@@ -122,8 +110,8 @@ class ScopeFields a where
     scopeFields :: Proxy a -> Int -> Scope a
 instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
     scopeFields  (_ :: Proxy (a :|: b)) i = scopeFields (Proxy :: Proxy a) i :|: scopeFields (Proxy :: Proxy b) i
-instance Table table => ScopeFields (QueryTable table Identity) where
-    scopeFields (_ :: Proxy (QueryTable table Identity)) i = QueryTable scopedPhantom scopedTable
+instance Table table => ScopeFields (Entity table Column) where
+    scopeFields (_ :: Proxy (Entity table Column)) i = Entity scopedPhantom scopedTable
         where scopedPhantom :: PhantomFields table (ScopedField table)
               scopedPhantom = changePhantomRep scopeField (Proxy :: Proxy table) $
                               phantomFieldSettings (Proxy :: Proxy table)
@@ -146,7 +134,7 @@ instance Table table => ScopeFields (QueryTable table Identity) where
 type family Scope a where
     Scope (Maybe t) = Maybe (Scope t)
     Scope (a :|: b) = Scope a :|: Scope b
-    Scope (QueryTable x Identity) = ScopedTable x
+    Scope (Entity x Column) = ScopedTable x
     Scope (QueryExpr t) = QExpr t
 
 getScope :: Query a -> Scope a

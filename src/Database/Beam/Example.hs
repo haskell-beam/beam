@@ -31,6 +31,15 @@ deriving instance ( Show (column Text), Show (column UTCTime)
                   , Show (ForeignKey TodoList column) ) => Show (TodoItem column)
 instance Table TodoItem
 
+data TodoLog column = TodoLog
+                    { todoLogList :: ForeignKey TodoList (Nullable column)
+                    , todoLogItem :: ForeignKey TodoItem (Nullable column)
+                    , todoLogEnty :: column Text }
+                      deriving (Generic, Typeable)
+deriving instance ( Show (column Text)
+                  , Show (column (Maybe Int)) ) => Show (TodoLog column)
+instance Table TodoLog
+
 -- instance Relationship TodoListTable TodoListItemTable TodoListItems where
 --     type SubjectFields TodoListTable TodoListItemTable TodoListItems = PrimaryKey TodoListTable
 --     type ObjectFields TodoListTable TodoListItemTable TodoListItems = TodoList :-> TableId
@@ -45,10 +54,17 @@ instance Table TodoItem
 -- instance Field HistDataTable Revenue
 -- instance Field HistDataTable Date
 
+data MyDatabase table = MyDatabase
+    { todoListTable :: table TodoList
+    , todoItemTable :: table TodoItem
+    , todoLogTable  :: table TodoLog }
+      deriving (Generic, Typeable)
+
 myDatabase :: Database
 myDatabase = database_
              [ table_ (schema_ :: Simple TodoList)
-             , table_ (schema_ :: Simple TodoItem) ]
+             , table_ (schema_ :: Simple TodoItem)
+             , table_ (schema_ :: Simple TodoLog) ]
 
 test fp = do beam <- openDatabase myDatabase (Sqlite3Settings fp)
              inBeamTxn beam $ beamNoErrors $
@@ -64,10 +80,16 @@ test fp = do beam <- openDatabase myDatabase (Sqlite3Settings fp)
                  let l1' = l1 { tableFields = (tableFields l1) { todoListDescription = column (Just "Modified description") } }
                  save l1'
 
-                 src <- query (all_ (of_ :: Simple TodoList)
+                 let todoLog = TodoLog (justRef l2) (nothingRef (all_ (of_ :: Simple TodoItem))) (column "Test log entry")
+                 insert todoLog
+
+                 src <- query ( all_ (of_ :: Simple TodoList)
                                `leftJoin_` ( all_ (of_ :: Simple TodoItem)
-                                           , (\(QueryTable (PK listId) todoList :|: QueryTable _ todoItem) ->
-                                              field_ listId ==# tableId . reference . todoItemList # todoItem)))
+                                           , (\(Entity (PK listId) todoList :|: Entity _ todoItem) ->
+                                              field_ listId ==# tableId . reference . todoItemList # todoItem))
+                               `leftJoin_` ( all_ (of_ :: Simple TodoLog)
+                                           , \(Entity (PK listId) _ :|: _ :|: Entity _ todoLog) ->
+                                               just_ (field_ listId) ==# tableId . reference . todoLogList #? todoLog ))
                  es <- src $$ C.consume
                  liftIO (mapM_ (putStrLn . show) es)
 

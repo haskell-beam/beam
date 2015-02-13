@@ -10,7 +10,6 @@ import Database.Beam.SQL
 import Database.HDBC
 
 import Control.Monad.Writer hiding (All)
-import Control.Monad.Identity
 
 import Data.Proxy
 import Data.Semigroup hiding (All)
@@ -20,11 +19,11 @@ import qualified Data.Text as T
 
 -- * Query combinators
 
-of_ :: Table table => table Identity
+of_ :: Table table => table Column
 of_ = undefined
 
-all_ :: (Table table, ScopeFields (Entity table)) => table Identity -> Query (Entity table)
-all_ (_ :: table Identity) = All (Proxy :: Proxy table) 0
+all_ :: (Table table, ScopeFields (Entity table Column)) => table Column -> Query (Entity table Column)
+all_ (_ :: table Column) = All (Proxy :: Proxy table) 0
 
 maxTableOrdinal :: Query a -> Int
 maxTableOrdinal q = getMax (execWriter (traverseQueryM maxQ maxE q))
@@ -109,7 +108,12 @@ where_ q mkExpr = Filter q (mkExpr (getScope q))
 
 (#) :: (Table table, Typeable ty) => (a -> ScopedField table ty) -> a -> QExpr ty
 f # t = field_ (f t)
-infixr 5 #
+
+(#?) :: (Table table, Typeable ty) => (a -> Nullable (ScopedField table) ty) -> a -> QExpr (Maybe ty)
+f #? t = let Nullable x = f t
+         in field_ x
+
+infixr 5 #, #?
 
 (<#), (>#), (<=#), (>=#), (==#) :: (Typeable a, Show a) => QExpr a -> QExpr a -> QExpr Bool
 (==#) = EqE

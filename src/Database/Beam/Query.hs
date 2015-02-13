@@ -10,7 +10,7 @@ module Database.Beam.Query
 
     , inBeamTxn, query, insert, save, getOne, update
     --, findByPk_, matching_
-    , ref, pk
+    , ref, justRef, nothingRef, pk
 
     , debugQuerySQL ) where
 
@@ -26,7 +26,6 @@ import Database.Beam.SQL.Types
 
 import Control.Applicative
 import Control.Arrow
-import Control.Monad.Identity
 import Control.Monad.Trans
 import Control.Monad.Writer (tell, execWriter, Writer)
 import Control.Monad.State
@@ -90,7 +89,7 @@ instance (Project a, Project b) => Project (a :|: b) where
 instance Project (ScopedField table ty) where
     project r x = [ SQLFieldE . r . mkQualifiedFieldName $ x ]
 instance Table table => Project (ScopedTable table) where
-    project r (QueryTable phantom tbl :: ScopedTable table) =
+    project r (Entity phantom tbl :: ScopedTable table) =
         allValues getScopedField phantom tbl
         where getScopedField :: ScopedField table field -> SQLExpr
               getScopedField = SQLFieldE . r . mkQualifiedFieldName
@@ -227,7 +226,7 @@ runQuery q beam =
                                                 Nothing -> return ()
                               return (Right source)
 
-runInsert :: (MonadIO m, Table table, FromSqlValues (Entity table)) => Simple table -> Beam m -> m (Either String (Entity table))
+runInsert :: (MonadIO m, Table table, FromSqlValues (Entity table Column)) => Simple table -> Beam m -> m (Either String (Entity table Column))
 runInsert (table :: Simple table) beam =
     do let insertCmd = Insert sqlInsert
            sqlInsert@(SQLInsert tblName sqlValues) = (insertToSQL table)
@@ -250,6 +249,7 @@ runInsert (table :: Simple table) beam =
            hasAutoIncrementConstraint (SQLColumnSchema { csConstraints = cs }) = isJust (find (\x -> x == SQLPrimaryKeyAutoIncrement || x == SQLAutoIncrement) cs)
 
        insertedValues <- if hasNullAutoIncrements
+                         -- TODO, this needs to ensure that the values are returned in the correct column order
                          then getLastInsertedRow beam tblName
                          else return sqlValues
        return (fromSqlValues insertedValues)
@@ -259,10 +259,10 @@ runUpdate update beam =
     do withHDBCConnection beam (\conn -> liftIO (runSQL' conn (Update update)))
        return (Right ())
 
-updateWhere :: ( ScopeFields (Entity table)
-               , Table table) => Proxy table -> (Scope (Entity table) -> ([QAssignment], QExpr Bool)) -> SQLUpdate
+updateWhere :: ( ScopeFields (Entity table Column)
+               , Table table) => Proxy table -> (Scope (Entity table Column) -> ([QAssignment], QExpr Bool)) -> SQLUpdate
 updateWhere (_ :: Proxy table) mkAssignmentsAndWhere = go
-    where tblProxy :: Proxy (Entity table)
+    where tblProxy :: Proxy (Entity table Column)
           tblProxy = Proxy
           go =
             let (assignments, whereClause) = mkAssignmentsAndWhere (scopeFields tblProxy 0)
@@ -271,36 +271,36 @@ updateWhere (_ :: Proxy table) mkAssignmentsAndWhere = go
                 sqlTables = [dbTableName (Proxy :: Proxy table)]
             in (SQLUpdate sqlTables sqlAssignments sqlWhereClause)
 
-updateEntity :: ( Generic (PrimaryKey table Identity)
+updateEntity :: ( Generic (PrimaryKey table Column)
                 , Generic (PrimaryKey table (ScopedField table))
                 , Table table
-                , GAllValues Identity (Rep (PrimaryKey table Identity) ())
-                , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())) => Entity table -> SQLUpdate
-updateEntity qt@(QueryTable phantom table :: Entity table) = updateWhere tProxy
-                                                                         (\s -> (assignments, findByPrimaryKeyExpr s qt))
+                , GAllValues Column (Rep (PrimaryKey table Column) ())
+                , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())) => Entity table Column -> SQLUpdate
+updateEntity qt@(Entity phantom table :: Entity table Column) = updateWhere tProxy
+                                                         (\s -> (assignments, findByPrimaryKeyExpr s qt))
     where tProxy = Proxy :: Proxy table
           fieldNames = allValues fieldName (phantomFieldSettings tProxy) (tblFieldSettings :: TableSettings table)
           exprs = allValues mkValE phantom table
 
-          mkValE :: FieldSchema a => Identity a -> GenQExpr
-          mkValE (x :: Identity a) = GenQExpr (ValE (makeSqlValue (runIdentity x)) :: QExpr a)
+          mkValE :: FieldSchema a => Column a -> GenQExpr
+          mkValE (x :: Column a) = GenQExpr (ValE (makeSqlValue (columnValue x)) :: QExpr a)
 
           assignments = zipWith (\name (GenQExpr (q :: QExpr ty)) -> QAssignment (ScopedField 0 name :: ScopedField table ty) q) fieldNames exprs
 
-findByPrimaryKeyExpr :: ( Generic (PrimaryKey table Identity)
+findByPrimaryKeyExpr :: ( Generic (PrimaryKey table Column)
                         , Generic (PrimaryKey table (ScopedField table))
                         , Table table
-                        , GAllValues Identity (Rep (PrimaryKey table Identity) ())
+                        , GAllValues Column (Rep (PrimaryKey table Column) ())
                         , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())) =>
-                        ScopedTable table -> Entity table -> QExpr Bool
-findByPrimaryKeyExpr scope (table :: Entity table) =
+                        ScopedTable table -> Entity table Column -> QExpr Bool
+findByPrimaryKeyExpr scope (table :: Entity table Column) =
     foldl1 (&&#) $
     zipWith (\(GenScopedField (x :: ScopedField table ty)) (GenQExpr (q :: QExpr ty2)) ->
                  case cast q of
                    Just q -> FieldE (x :: ScopedField table ty) ==# (q :: QExpr ty) :: QExpr Bool
                    Nothing -> val_ False) pkFieldNames pkValueExprs
-    where QueryTable scopePhantom scopeFields = scope
-          QueryTable tablePhantom tableFields = table
+    where Entity scopePhantom scopeFields = scope
+          Entity tablePhantom tableFields = table
 
           pkFields = primaryKey scopePhantom scopeFields
           pkValues = primaryKey tablePhantom tableFields
@@ -310,8 +310,11 @@ findByPrimaryKeyExpr scope (table :: Entity table) =
 
           mkScopedField :: (Table table, FieldSchema a) => ScopedField table a -> GenScopedField table
           mkScopedField = GenScopedField
-          mkValE :: FieldSchema a => Identity a -> GenQExpr
-          mkValE (x :: Identity a) = GenQExpr (ValE (makeSqlValue (runIdentity x)) :: QExpr a)
+          mkValE :: FieldSchema a => Column a -> GenQExpr
+          mkValE (x :: Column a) = GenQExpr (ValE (makeSqlValue (columnValue x)) :: QExpr a)
+
+          from' :: Generic a => a -> Rep a ()
+          from' = from
 
 -- findByPk_ :: ( Table table
 --              , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
@@ -394,34 +397,34 @@ query q = BeamT $ \beam ->
                Right x -> return (Success (transPipe (BeamT . const . fmap Success) x))
                Left err -> return (Rollback (InternalError err))
 
-insert :: (MonadIO m, Functor m, Table t, FromSqlValues (Entity t)) => Simple t -> BeamT e m (Entity t)
+insert :: (MonadIO m, Functor m, Table t, FromSqlValues (Entity t Column)) => Simple t -> BeamT e m (Entity t Column)
 insert table = BeamT (\beam -> toBeamResult <$> runInsert table beam)
 
 save :: ( MonadIO m, Functor m, Table table
         , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())
         , Generic (PrimaryKey table (ScopedField table))
-        , GAllValues Identity (Rep (PrimaryKey table Identity) ())
-        , Generic (PrimaryKey table Identity)) => Entity table -> BeamT e m ()
+        , GAllValues Column (Rep (PrimaryKey table Column) ())
+        , Generic (PrimaryKey table Column)) => Entity table Column -> BeamT e m ()
 save qt = BeamT (\beam -> toBeamResult <$> runUpdate (updateEntity qt) beam)
 
 update :: ( MonadIO m, Functor m, Table table
           , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())
           , Generic (PrimaryKey table (ScopedField table))
-          , GAllValues Identity (Rep (PrimaryKey table Identity) ())
-          , Generic (PrimaryKey table Identity)) =>
-          Entity table
-       -> (Scope (Entity table) -> [QAssignment])
+          , GAllValues Column (Rep (PrimaryKey table Column) ())
+          , Generic (PrimaryKey table Column)) =>
+          Entity table Column
+       -> (Scope (Entity table Column) -> [QAssignment])
        -> BeamT e m ()
-update (qt :: Entity table) mkAssignments = set (Proxy :: Proxy table) mkAssignments (flip findByPrimaryKeyExpr qt)
+update (qt :: Entity table Column) mkAssignments = set (Proxy :: Proxy table) mkAssignments (flip findByPrimaryKeyExpr qt)
 
 set :: ( MonadIO m, Functor m, Table table
        , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())
        , Generic (PrimaryKey table (ScopedField table))
-       , GAllValues Identity (Rep (PrimaryKey table Identity) ())
-       , Generic (PrimaryKey table Identity)) =>
+       , GAllValues Column (Rep (PrimaryKey table Column) ())
+       , Generic (PrimaryKey table Column)) =>
        Proxy table
-    -> (Scope (Entity table) -> [QAssignment])
-    -> (Scope (Entity table) -> QExpr Bool)
+    -> (Scope (Entity table Column) -> [QAssignment])
+    -> (Scope (Entity table Column) -> QExpr Bool)
     -> BeamT e m ()
 set tbl mkAssignments mkWhere = BeamT (\beam -> toBeamResult <$> runUpdate (updateWhere tbl (mkAssignments &&& mkWhere)) beam)
 
@@ -438,11 +441,34 @@ getOne q =
        src <- query q
        src $$ justOneSink
 
-ref :: Table t => QueryTable t c -> ForeignKey t c
-ref = ForeignKey . pk
+from' :: Generic a => a -> Rep a ()
+from' = from
+to' :: Generic a => Rep a () -> a
+to' = to
 
-pk :: Table t => QueryTable t c -> PrimaryKey t c
-pk (QueryTable phantom fields) = primaryKey phantom fields
+ref :: Table t => Entity t c -> ForeignKey t c
+ref = ForeignKey . pk
+justRef :: ( Table related
+           , Generic (PrimaryKey related Column)
+           , Generic (PrimaryKey related (Nullable Column))
+           , GChangeRep (Rep (PrimaryKey related Column) ()) (Rep (PrimaryKey related (Nullable Column)) ()) Column (Nullable Column) ) =>
+           Entity related Column -> ForeignKey related (Nullable Column)
+justRef (e :: Entity related Column) = ForeignKey (to' (gChangeRep just (from' (pk e))))
+    where just :: Column a -> Nullable Column a
+          just x = Nullable (column (Just (columnValue x)))
+nothingRef :: ( Table related
+              , Generic (PrimaryKey related (TableField related))
+              , Generic (PrimaryKey related (Nullable Column))
+              , GChangeRep (Rep (PrimaryKey related (TableField related)) ()) (Rep (PrimaryKey related (Nullable Column)) ()) (TableField related) (Nullable Column)) =>
+              Query (Entity related Column) -> ForeignKey related (Nullable Column)
+nothingRef (_ :: Query (Entity related Column)) = ForeignKey (to' (gChangeRep nothing (from' (pk entitySettings))))
+    where nothing :: TableField related a -> Nullable Column a
+          nothing x = Nullable (column Nothing)
+
+          entitySettings = Entity (phantomFieldSettings (Proxy :: Proxy related)) (tblFieldSettings :: TableSettings related)
+
+pk :: Table t => Entity t c -> PrimaryKey t c
+pk (Entity phantom fields) = primaryKey phantom fields
 
 debugQuerySQL :: Project (Scope a) => Query a -> (String, [SqlValue])
 debugQuerySQL q = ppSQL (Select (queryToSQL q))
