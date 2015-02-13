@@ -24,25 +24,6 @@ import qualified GHC.Generics as Generic
 
 -- * Fields
 
--- ** Maybe field
-
-instance FieldSchema a => FieldSchema (Maybe a) where
-    data FieldSettings (Maybe a) = MaybeFieldSettings (FieldSettings a)
-
-    defSettings = MaybeFieldSettings defSettings
-
-    colDescFromSettings (MaybeFieldSettings settings) = let SQLColumnSchema desc constraints = colDescFromSettings settings
-                                                        in SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
-
-    makeSqlValue Nothing = SqlNull
-    makeSqlValue (Just x) = makeSqlValue x
-    fromSqlValue = do val <- peekSqlValue
-                      case val of
-                        SqlNull -> Nothing <$ popSqlValue
-                        val -> Just <$> fromSqlValue
-
-deriving instance Show (FieldSettings a) => Show (FieldSettings (Maybe a))
-
 -- ** Enum fields
 
 newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
@@ -68,6 +49,7 @@ data CharOrVarchar = Char (Maybe Int)
 
 
 instance FieldSchema Text where
+    -- | Settings for a text field
     data FieldSettings Text = TextFieldSettings
                             { charOrVarChar :: CharOrVarchar }
                               deriving Show

@@ -1,6 +1,33 @@
 {-# LANGUAGE TypeFamilies, TypeOperators,  MultiParamTypeClasses, EmptyDataDecls, DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, PolyKinds, GADTs, DeriveGeneric, DeriveDataTypeable, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances, RankNTypes #-}
 -- | Defines a generic schema type that can be used to define schemas for Beam tables
-module Database.Beam.Schema.Tables where
+module Database.Beam.Schema.Tables
+    (
+    -- * Database types
+      database_, table_, schema_, reifyDBSchema, tables
+    , Database, ReifiedDatabaseSchema(..), ReifiedTableSchema(..), GenTable(..)
+
+    , (:|:)(..)
+
+    , PK(..)
+
+    -- * Column constructors
+    , Column, column, columnValue
+    , Nullable(..), Dummy(..), TableField(..)
+
+    , Simple(..), TableSettings(..)
+
+    -- * Tables
+    , Table(..), Entity(..), defTblFieldSettings, defFieldSettings
+    , GChangeRep(..), GAllValues(..)
+
+    -- * Fields
+    , FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
+    , popSqlValue, peekSqlValue
+    , fieldColDesc
+
+    -- * Foreign keys
+    , ForeignKey(..), reference)
+    where
 
 import Database.Beam.SQL.Types
 --import Database.Beam.Schema.Locate
@@ -9,7 +36,6 @@ import Control.Arrow
 import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Error
-import Control.Monad.Identity
 
 import Data.Proxy
 import Data.Typeable
@@ -27,7 +53,6 @@ import qualified GHC.Generics as Generic
 
 -- * Database types
 
--- | Table composition operator
 data GenTable where
     GenTable :: Table t => Proxy t -> GenTable
 
@@ -60,31 +85,76 @@ data a :|: b = a :|: b
                deriving Show
 infixl 3 :|:
 
--- * Tables
+-- * Column constructors
 
-newtype PK column = PK
-                  { tableId :: column Int }
-                    deriving Generic
+-- | The standard column constructor. Computationally and representationally, there is no cost to using this constructor,
+--   since it is defined as a newtype. Use the 'column' and 'columnValue' functions to construct and deconstruct values.
+newtype Column t = Column { columnValue :: t }
+instance Show x => Show (Column x) where
+    show = show . columnValue
+column :: t -> Column t
+column = Column
 
-deriving instance Show (column Int) => Show (PK column)
+-- | Support for NULLable Foreign Key references.
+--
+-- > data MyTable column = MyTable
+-- >                     { nullableRef :: ForeignKey AnotherTable (Nullable column)
+-- >                     , ... }
+-- >                       deriving (Generic, Typeable)
+--
+--   For now, using this type requires tedious newtype wrapping/unwrapping, but later versions of Beam
+--   will implement Nullable as a closed type family:
+--
+-- > type family Nullable (column :: * -> *) ty where
+-- >     Nullable column ty = column (Maybe ty)
+--
+--   Currently, this definition is blocked by GHC Bug #10085.
+newtype Nullable (column :: * -> *) ty = Nullable (column (Maybe ty))
+deriving instance Show (column (Maybe ty)) => Show (Nullable column ty)
 
+-- | A dummy column constructor that can never be constructed.
 newtype Dummy a = Dummy Void
     deriving Typeable
 
+-- * Tables
+
+-- | Default primary key type. Just uses one 'Int' column
+newtype PK column = PK
+                  { tableId :: column Int }
+                    deriving Generic
+instance Show (column Int) => Show (PK column) where
+    showsPrec d (PK x) = showParen (d > 10) $ showString "PK ". showsPrec 11 x
+
+-- | Column constructor that lets you specify settings for a field of type `ty` in `table`.
+--
+--   For example, consider the simple Employee table
+--
+-- > data Employee column = Employee
+-- >                      { employeeName  :: column Text
+-- >                      , employeeAge   :: column Int
+-- >                      , employeeEmail :: column Text }
+-- >                        deriving (Generic, Typeable)
+--
+--   You can customize the fields of `Employee` by overwriting `tableSettings` in the `Table` class.
+--
+-- > instance Table Employee where
+-- >     tblFieldSettings = tblSettings
+-- >                      { employeeName = (employeeName tblSettings)
+-- >                                     { fieldName = "firstAndLastName"
+-- >                                     , fieldSettings = TextFieldSettings
+-- >                                                     { charOrVarChar = Varchar (Just 128) } } }
+-- >                      where tblSettings = defTblFieldSettings
 data TableField table ty = TableField
-                         { fieldFromTable :: forall f. table f -> f ty
-                         , fieldName      :: Text
-                         , fieldConstraints :: [SQLConstraint]
-                         , fieldSettings  :: FieldSettings ty }
+                         { fieldName        :: Text             -- ^ The field name
+                         , fieldConstraints :: [SQLConstraint]  -- ^ Constraints for the field (such as AutoIncrement, PrimaryKey, etc)
+                         , fieldSettings    :: FieldSettings ty -- ^ Settings for the field
+                         }
+deriving instance Show (FieldSettings ty) => Show (TableField t ty)
 
-instance Show (FieldSettings ty) => Show (TableField t ty) where
-    show tf = concat $
-              [ "TableField { fieldName = ", show (fieldName tf)
-              , ", fieldConstraints = ", show (fieldConstraints tf)
-              , ", fieldSettings = ", show (fieldSettings tf) ]
+-- | A version of `table` under the straightforward `Column` constructor. This is normally what you want.
+type Simple table = table Column
 
--- | The simple type can be used to get a version of the table without the functor constraint
-type Simple table = table Identity
+-- | Type alias for `table` under the `TableField` column constructor, which provides a way of setting options for fields
 type TableSettings table = table (TableField table)
 
 from' :: Generic x => x -> Rep x ()
@@ -93,10 +163,48 @@ from' = from
 to' :: Generic x => Rep x () -> x
 to' = to
 
+-- | The big Kahuna! All beam tables implement this class.
+--
+--   The kind of all table types is `(* -> *) -> *`. This is because all table types are actually /table type constructors/.
+--   Every table type takes in another type constructor, called the /column constructor/, and uses that constructor to create
+--   columns. Every type passed to the column constructor, must be an instance of 'FieldSchema'.
+--
+--   This class is 100% Generic-derivable. You never have to specify any of the methods yourself, unless you want to customize
+--   beyond Beam's standard behavior (such as renaming fields in the database, customizing field types, etc.)
+--
+--   An example table:
+--
+-- > data BlogPost column = BlogPost
+-- >                      { blogPostBody    :: column Text
+-- >                      , blogPostDate    :: column UTCTime
+-- >                      , blogPostAuthor  :: ForeignKey Author column
+-- >                      , blogPostTagline :: column (Maybe Text)
+-- >                      , blogPostImageGallery :: ForeignKey ImageGallery (Nullable column) }
+-- >                        deriving (Generic, Typeable)
+-- > instance Table BlogPost
+--
+--   We can interpret this as follows:
+--
+--     * The `blogPostBody`, `blogPostDate`, and `blogPostTagline` fields are of types `Text`, `UTCTime`, and `Maybe Text` respectfully
+--     * `blogPostBody` and `blogPostDate` are mandatory (and will be given SQL NOT NULL constraints). The `blogPostTagline` field may be 'Nothing'.
+--     * `blogPostAuthor` references the `Author` model (not given here), and is required.
+--     * `blogPostImageGallery` references the `ImageGallery` model (not given here), but this relation is not required (i.e., it may be 'Nothing').
+--
 class Typeable table  => Table (table :: (* -> *) -> *) where
+
+    -- | A data type representing the types of primary keys for this table. This type must be an instance of 'Generic'.
+    --
+    --   Uses 'PK' by default.
     type PrimaryKey table (column :: * -> *) :: *
     type PrimaryKey table column = PK column
 
+    -- | Phantom fields are fields that are not part of the table type definition, but which nonetheless appear in the SQL table.
+    --
+    --   By default, this is used to inject the default primary key `id' column into the SQL table, but you could use it to define
+    --   your own implicit fields. You can override the 'makePhantomValues' method to automatically set these fields whenever the
+    --   table is being inserted or updated in the database.
+    --
+    --   By default, this is 'PK' and 'phantomFieldSettings' ensures that this column is set to auto increment.
     type PhantomFields table (column :: (* -> *)) :: *
     type PhantomFields table column = PK column
 
@@ -124,7 +232,7 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
                          (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> table f -> [b]
     allValues f phantom tbl = gAllValues f (from' phantom :|: from' tbl)
 
-    -- | Should return the primary key for the column as a field set (columns joined by :|:). By keeping this polymorphic over column,
+    -- | Given a table and its phantom fields, this should return the PrimaryKey from the table. By keeping this polymorphic over column,
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
     primaryKey :: PhantomFields table column -> table column -> PrimaryKey table column
     default primaryKey :: ( PrimaryKey table column ~ PhantomFields table column) =>
@@ -152,24 +260,24 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
                                 Proxy table -> ReifiedTableSchema
     reifyTableSchema (table :: Proxy table) = gReifySchema (from' (phantomFieldSettings table) :|: from' (tblFieldSettings :: TableSettings table))
 
-    makeSqlValues :: table Identity -> [SqlValue]
-    default makeSqlValues :: (Generic (table Identity), GMakeSqlValues (Rep (table Identity) ())) => table Identity -> [SqlValue]
+    makeSqlValues :: table Column -> [SqlValue]
+    default makeSqlValues :: (Generic (table Column), GMakeSqlValues (Rep (table Column) ())) => table Column -> [SqlValue]
     makeSqlValues table = makePhantomValues table ++ gMakeSqlValues (from' table)
 
     -- | The default behavior is to assign the default phantom field schema (just an integer primary key) a single value of null, to let autoincrement work
-    makePhantomValues :: table Identity -> [SqlValue]
+    makePhantomValues :: table Column -> [SqlValue]
     makePhantomValues _ = [SqlNull]
 
-    phantomFromSqlValues :: Proxy table -> FromSqlValuesM (PhantomFields table Identity)
-    default phantomFromSqlValues :: ( Generic (PhantomFields table Identity)
-                                    , GFromSqlValues (Rep (PhantomFields table Identity)) ) =>
-                                    Proxy table -> FromSqlValuesM (PhantomFields table Identity)
-    phantomFromSqlValues (_ :: Proxy table) = to <$> (gFromSqlValues :: FromSqlValuesM (Rep (PhantomFields table Identity) ()))
+    phantomFromSqlValues :: Proxy table -> FromSqlValuesM (PhantomFields table Column)
+    default phantomFromSqlValues :: ( Generic (PhantomFields table Column)
+                                    , GFromSqlValues (Rep (PhantomFields table Column)) ) =>
+                                    Proxy table -> FromSqlValuesM (PhantomFields table Column)
+    phantomFromSqlValues (_ :: Proxy table) = to <$> (gFromSqlValues :: FromSqlValuesM (Rep (PhantomFields table Column) ()))
 
-    tableFromSqlValues :: FromSqlValuesM (table Identity)
-    default tableFromSqlValues :: ( Generic (table Identity)
-                                  , GFromSqlValues (Rep (table Identity)) ) =>
-                                  FromSqlValuesM (table Identity)
+    tableFromSqlValues :: FromSqlValuesM (table Column)
+    default tableFromSqlValues :: ( Generic (table Column)
+                                  , GFromSqlValues (Rep (table Column)) ) =>
+                                  FromSqlValuesM (table Column)
     tableFromSqlValues = to <$> gFromSqlValues
 
     phantomValuesNeeded :: Proxy table -> Int
@@ -194,11 +302,6 @@ instance FromSqlValues t => FromSqlValues (Maybe t) where
                         then put (drop colCount values) >> return Nothing
                         else Just <$> fromSqlValues'
 
--- ** Generic Table deriving support
-
-type family GOneConstructor g where
-    GOneConstructor (M1 D f p x) = p x
-
 defTblFieldSettings :: ( Generic (TableSettings table)
                        ,  GDefaultTableFieldSettings (Rep (TableSettings table) ())) =>
                        TableSettings table
@@ -208,8 +311,7 @@ defTblFieldSettings = withProxy $ \proxy -> to' (gDefTblFieldSettings proxy)
 
 defFieldSettings :: FieldSchema fs => Text -> TableField table fs
 defFieldSettings name = TableField
-                      { fieldFromTable = undefined
-                      , fieldName = name
+                      { fieldName = name
                       , fieldConstraints = []
                       , fieldSettings = settings}
     where settings = defSettings
@@ -230,11 +332,20 @@ instance ( GChangeRep (a1 p) (a2 p) x y, GChangeRep (b1 p) (b2 p) x y) => GChang
     gChangeRep f (a :*: b) = gChangeRep f a :*: gChangeRep f b
 instance GChangeRep (K1 Generic.R (x a) p) (K1 Generic.R (y a) p) x y where
     gChangeRep f (K1 x) = K1 (f x)
+instance GChangeRep (K1 Generic.R (Nullable x a) p) (K1 Generic.R (Nullable y a) p) x y where
+    gChangeRep f (K1 (Nullable x)) = K1 (Nullable (f x))
 instance ( Generic (PrimaryKey table x)
          , Generic (PrimaryKey table y)
          , GChangeRep (Rep (PrimaryKey table x) ()) (Rep (PrimaryKey table y) ()) x y ) =>
     GChangeRep (K1 Generic.R (ForeignKey table x) p) (K1 Generic.R (ForeignKey table y) p) x y where
     gChangeRep f (K1 (ForeignKey x)) = K1 (ForeignKey (to' (gChangeRep f (from' x))))
+instance ( Generic (PrimaryKey table (Nullable x))
+         , Generic (PrimaryKey table (Nullable y))
+         , GChangeRep (Rep (PrimaryKey table (Nullable x)) ()) (Rep (PrimaryKey table (Nullable y)) ()) x y ) =>
+    GChangeRep (K1 Generic.R (ForeignKey table (Nullable x)) p) (K1 Generic.R (ForeignKey table (Nullable y)) p) x y where
+    gChangeRep f (K1 (ForeignKey x)) = K1 (ForeignKey (to' (gChangeRep f (from' x))))
+instance GChangeRep (Nullable f a) (Nullable g a) f g where
+    gChangeRep f (Nullable x) = Nullable (f x)
 
 class GAllValues (f :: * -> *) x where
     gAllValues :: (forall a. FieldSchema a => f a -> b) -> x -> [b]
@@ -250,9 +361,11 @@ instance (GAllValues f (p x)) => GAllValues f (S1 g p x) where
     gAllValues f (M1 a) = gAllValues f a
 instance FieldSchema x => GAllValues f (K1 Generic.R (f x) a) where
     gAllValues f (K1 a) = [f a]
-instance ( Generic (PrimaryKey related f)
-         , GAllValues f (Rep (PrimaryKey related f) ()) ) =>
-    GAllValues f (K1 Generic.R (ForeignKey related f) a) where
+instance FieldSchema x => GAllValues f (K1 Generic.R (Nullable f x) a) where
+    gAllValues f (K1 (Nullable a)) = [f a]
+instance ( Generic (PrimaryKey related g)
+         , GAllValues f (Rep (PrimaryKey related g) ()) ) =>
+    GAllValues f (K1 Generic.R (ForeignKey related g) a) where
     gAllValues f (K1 (ForeignKey x)) = gAllValues f (from' x)
 instance FieldSchema a => GAllValues f (f a) where
     gAllValues f x = [f x]
@@ -292,14 +405,35 @@ instance ( Table table, Table related
               primaryKeySettings' = to' (gChangeRep convertToForeignKeyField (from' primaryKeySettings))
 
               convertToForeignKeyField :: TableField related c -> TableField table c
-              convertToForeignKeyField tf = tf { fieldFromTable = undefined
-                                               , fieldName = keyName <> "_" <> fieldName tf
+              convertToForeignKeyField tf = tf { fieldName = keyName <> "_" <> fieldName tf
                                                , fieldConstraints = removeConstraints (fieldConstraints tf) }
 
 
               removeConstraints = filter (\x -> x /= SQLPrimaryKey && x /= SQLPrimaryKeyAutoIncrement && x /= SQLAutoIncrement)
 
               keyName = T.pack (selName (undefined :: S1 f (K1 Generic.R (ForeignKey related (TableField table))) ()))
+
+instance ( Table table, Table related
+         , Selector f
+
+         , Generic (PrimaryKey related (TableField related))
+         , Generic (PrimaryKey related (TableField table))
+         , Generic (PrimaryKey related (Nullable (TableField table)))
+         , GChangeRep (Rep (PrimaryKey related (TableField table)) ()) (Rep (PrimaryKey related (Nullable (TableField table))) ())
+                      (TableField table) (Nullable (TableField table))
+         , GChangeRep (Rep (PrimaryKey related (TableField related)) ()) (Rep (PrimaryKey related (TableField table)) ()) (TableField related) (TableField table) ) =>
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (ForeignKey related (Nullable (TableField table)))) p) where
+
+    gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (ForeignKey related (Nullable (TableField table)))) p )) =
+        M1 $ K1 $ ForeignKey $ settings
+        where M1 (K1 (ForeignKey nonNullSettings)) = gDefTblFieldSettings (Proxy :: Proxy (S1 f (K1 Generic.R (ForeignKey related (TableField table))) p))
+              nonNullSettingsRep = from' nonNullSettings :: Rep (PrimaryKey related (TableField table)) ()
+
+              settings :: PrimaryKey related (Nullable (TableField table))
+              settings = to' (gChangeRep removeNotNullConstraints nonNullSettingsRep)
+
+              removeNotNullConstraints :: TableField table ty -> Nullable (TableField table) ty
+              removeNotNullConstraints tf = Nullable ( tf { fieldSettings = MaybeFieldSettings (fieldSettings tf) } )
 
 class GReifySchema genSchema where
     gReifySchema :: genSchema -> ReifiedTableSchema
@@ -313,13 +447,16 @@ instance GReifySchema (a p) => GReifySchema (S1 f a p) where
     gReifySchema (M1 a) = gReifySchema a
 instance FieldSchema f => GReifySchema (K1 Generic.R (TableField t f) p) where
     gReifySchema (K1 x) = [(fieldName x, fieldColDesc (fieldSettings x) (fieldConstraints x))]
+instance FieldSchema f => GReifySchema (K1 Generic.R (Nullable (TableField t) f) p) where
+    gReifySchema (K1 (Nullable x)) = [(fieldName x, fieldColDesc (fieldSettings x) (fieldConstraints x))]
 instance (GReifySchema (a p), GReifySchema (b p)) => GReifySchema ((a :*: b) p) where
     gReifySchema (a :*: b) = gReifySchema a ++ gReifySchema b
-instance ( Generic (PrimaryKey related (TableField table))
-         , GReifySchema (Rep (PrimaryKey related (TableField table)) ()) ) =>
-    GReifySchema (K1 Generic.R (ForeignKey related (TableField table)) p) where
+instance ( Generic (PrimaryKey related f)
+         , GReifySchema (Rep (PrimaryKey related f) ()) ) =>
+    GReifySchema (K1 Generic.R (ForeignKey related f) p) where
 
     gReifySchema (K1 (ForeignKey x)) = gReifySchema (from' x)
+
 
 class GFromSqlValues schema where
     gFromSqlValues :: FromSqlValuesM (schema a)
@@ -329,15 +466,17 @@ instance GFromSqlValues x => GFromSqlValues (C1 f x) where
     gFromSqlValues = M1 <$> gFromSqlValues
 instance GFromSqlValues x => GFromSqlValues (S1 f x) where
     gFromSqlValues = M1 <$> gFromSqlValues
-instance FieldSchema x => GFromSqlValues (K1 Generic.R (Identity x)) where
-    gFromSqlValues = K1 . return <$> fromSqlValue
+instance FieldSchema x => GFromSqlValues (K1 Generic.R (Column x)) where
+    gFromSqlValues = K1 . column <$> fromSqlValue
 instance (GFromSqlValues a, GFromSqlValues b) => GFromSqlValues (a :*: b) where
     gFromSqlValues = (:*:) <$> gFromSqlValues <*> gFromSqlValues
-instance ( Generic (PrimaryKey related Identity)
-         , GFromSqlValues (Rep (PrimaryKey related Identity)) ) =>
-    GFromSqlValues (K1 Generic.R (ForeignKey related Identity)) where
+instance ( Generic (PrimaryKey related f)
+         , GFromSqlValues (Rep (PrimaryKey related f)) ) =>
+    GFromSqlValues (K1 Generic.R (ForeignKey related f)) where
 
     gFromSqlValues = K1 . ForeignKey . to' <$> gFromSqlValues
+instance FieldSchema (Maybe x) => GFromSqlValues (K1 Generic.R (Nullable Column x)) where
+    gFromSqlValues = K1 . Nullable . Column <$> fromSqlValue
 
 class GMakeSqlValues x where
     gMakeSqlValues :: x -> [SqlValue]
@@ -353,12 +492,26 @@ instance (GMakeSqlValues f, GMakeSqlValues g) => GMakeSqlValues (f :|: g) where
     gMakeSqlValues (f :|: g) = gMakeSqlValues f ++ gMakeSqlValues g
 instance GMakeSqlValues (U1 a) where
     gMakeSqlValues _ = []
-instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Identity x) a) where
-    gMakeSqlValues (K1 x) = [makeSqlValue (runIdentity x)]
-instance ( Generic (PrimaryKey related Identity)
-         , GMakeSqlValues (Rep (PrimaryKey related Identity) ()) ) =>
-    GMakeSqlValues (K1 Generic.R (ForeignKey related Identity) a) where
+instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Column x) a) where
+    gMakeSqlValues (K1 x) = [makeSqlValue (columnValue x)]
+instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Nullable Column x) a) where
+    gMakeSqlValues (K1 (Nullable x)) = [makeSqlValue (columnValue x)]
+instance ( Generic (PrimaryKey related f)
+         , GMakeSqlValues (Rep (PrimaryKey related f) ()) ) =>
+    GMakeSqlValues (K1 Generic.R (ForeignKey related f) a) where
     gMakeSqlValues (K1 (ForeignKey x)) = gMakeSqlValues (from' x)
+
+data Entity table f = Entity
+                    { phantomFields :: PhantomFields table f
+                    , tableFields   :: table f }
+instance (Show (PhantomFields table Column), Show (table Column)) => Show (Entity table Column) where
+    showsPrec d (Entity phantoms table) =
+        showParen (d > 10) $
+        showString "Entity " . showsPrec 11 phantoms . showString " " . showsPrec 11 table
+
+instance Table table => FromSqlValues (Entity table Column) where
+    fromSqlValues' = Entity <$> phantomFromSqlValues (Proxy :: Proxy table) <*> (tableFromSqlValues :: FromSqlValuesM (table Column))
+    valuesNeeded (_ :: Proxy (Entity tbl Column)) = phantomValuesNeeded (Proxy :: Proxy tbl) + tableValuesNeeded (Proxy :: Proxy tbl)
 
 -- * Field and table support
 
@@ -386,13 +539,10 @@ instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a :|: b) where
     fromSqlValues' = (:|:) <$> fromSqlValues' <*> fromSqlValues'
     valuesNeeded (_ :: Proxy (a :|: b)) = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b)
 
-data ForeignKey table column = ForeignKey { reference :: (PrimaryKey table column) }
+data ForeignKey table column = ForeignKey (PrimaryKey table column)
 deriving instance Show (PrimaryKey table column) => Show (ForeignKey table column)
-
-column :: t -> Identity t
-column = return
-columnValue :: Identity t -> t
-columnValue = runIdentity
+reference :: ForeignKey table column -> PrimaryKey table column
+reference (ForeignKey x) = x
 
 instance FieldSchema Int where
     data FieldSettings Int = IntFieldDefault
@@ -408,5 +558,18 @@ instance FieldSchema Int where
     makeSqlValue i = SqlInteger (fromIntegral i)
     fromSqlValue = fromSql <$> popSqlValue
 
-instance Show x => Show (Identity x) where
-    show = show . runIdentity
+instance FieldSchema a => FieldSchema (Maybe a) where
+    data FieldSettings (Maybe a) = MaybeFieldSettings (FieldSettings a)
+
+    defSettings = MaybeFieldSettings defSettings
+
+    colDescFromSettings (MaybeFieldSettings settings) = let SQLColumnSchema desc constraints = colDescFromSettings settings
+                                                        in SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
+
+    makeSqlValue Nothing = SqlNull
+    makeSqlValue (Just x) = makeSqlValue x
+    fromSqlValue = do val <- peekSqlValue
+                      case val of
+                        SqlNull -> Nothing <$ popSqlValue
+                        val -> Just <$> fromSqlValue
+deriving instance Show (FieldSettings a) => Show (FieldSettings (Maybe a))
