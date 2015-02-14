@@ -9,7 +9,7 @@ module Database.Beam.Query
     , findByPrimaryKeyExpr
 
     , inBeamTxn, query, insert, save, getOne, update
-    --, findByPk_, matching_
+    , findByPk_ --, matching_
     , ref, justRef, nothingRef, pk
 
     , debugQuerySQL ) where
@@ -47,7 +47,7 @@ import GHC.Generics
 
 -- * Query Compilation
 
-mkSqlExpr :: ScopingRule -> (forall table ty. ScopedField table ty -> SQLFieldName) -> QExpr a -> SQLExpr
+mkSqlExpr :: ScopingRule -> (forall table c ty. ScopedField table c ty -> SQLFieldName) -> QExpr a -> SQLExpr
 mkSqlExpr s f (EqE a b) = SQLEqE (mkSqlExpr s f a) (mkSqlExpr s f b)
 mkSqlExpr s f (NeqE a b) = SQLNeqE (mkSqlExpr s f a) (mkSqlExpr s f b)
 mkSqlExpr s f (LtE a b) = SQLLtE (mkSqlExpr s f a) (mkSqlExpr s f b)
@@ -78,20 +78,20 @@ relabelSubqueryFields _ _ x = x
 mkSqlTblId :: Int -> T.Text
 mkSqlTblId i = fromString (concat ["t", show i])
 
-mkQualifiedFieldName :: ScopedField table ty -> SQLFieldName
+mkQualifiedFieldName :: ScopedField table c ty -> SQLFieldName
 mkQualifiedFieldName (ScopedField i fieldName) = SQLQualifiedFieldName fieldName (mkSqlTblId i)
 
-mkUnqualifiedFieldName :: ScopedField table field -> SQLFieldName
+mkUnqualifiedFieldName :: ScopedField table c field -> SQLFieldName
 mkUnqualifiedFieldName (ScopedField i fieldName) = SQLFieldName fieldName
 
 instance (Project a, Project b) => Project (a :|: b) where
     project r (a :|: b) = project r a ++ project r b
-instance Project (ScopedField table ty) where
+instance Project (ScopedField table c ty) where
     project r x = [ SQLFieldE . r . mkQualifiedFieldName $ x ]
-instance Table table => Project (ScopedTable table) where
-    project r (Entity phantom tbl :: ScopedTable table) =
+instance Table table => Project (Entity table (ScopedField table c)) where
+    project r (Entity phantom tbl :: Entity table (ScopedField table c)) =
         allValues getScopedField phantom tbl
-        where getScopedField :: ScopedField table field -> SQLExpr
+        where getScopedField :: ScopedField table c field -> SQLExpr
               getScopedField = SQLFieldE . r . mkQualifiedFieldName
 
 instance Project a => Project (Maybe a) where
@@ -265,17 +265,17 @@ updateWhere (_ :: Proxy table) mkAssignmentsAndWhere = go
     where tblProxy :: Proxy (Entity table Column)
           tblProxy = Proxy
           go =
-            let (assignments, whereClause) = mkAssignmentsAndWhere (scopeFields tblProxy 0)
+            let (assignments, whereClause) = mkAssignmentsAndWhere (scopeFields tblProxy (Proxy :: Proxy Column) 0)
                 sqlAssignments = map ( \(QAssignment nm ex) -> (mkUnqualifiedFieldName nm, mkSqlExpr id mkUnqualifiedFieldName ex) ) assignments
                 sqlWhereClause = Just (mkSqlExpr id mkUnqualifiedFieldName whereClause)
                 sqlTables = [dbTableName (Proxy :: Proxy table)]
             in (SQLUpdate sqlTables sqlAssignments sqlWhereClause)
 
 updateEntity :: ( Generic (PrimaryKey table Column)
-                , Generic (PrimaryKey table (ScopedField table))
+                , Generic (PrimaryKey table (ScopedField table Column))
                 , Table table
                 , GAllValues Column (Rep (PrimaryKey table Column) ())
-                , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())) => Entity table Column -> SQLUpdate
+                , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())) => Entity table Column -> SQLUpdate
 updateEntity qt@(Entity phantom table :: Entity table Column) = updateWhere tProxy
                                                          (\s -> (assignments, findByPrimaryKeyExpr s qt))
     where tProxy = Proxy :: Proxy table
@@ -285,50 +285,31 @@ updateEntity qt@(Entity phantom table :: Entity table Column) = updateWhere tPro
           mkValE :: FieldSchema a => Column a -> GenQExpr
           mkValE (x :: Column a) = GenQExpr (ValE (makeSqlValue (columnValue x)) :: QExpr a)
 
-          assignments = zipWith (\name (GenQExpr (q :: QExpr ty)) -> QAssignment (ScopedField 0 name :: ScopedField table ty) q) fieldNames exprs
+          assignments = zipWith (\name (GenQExpr (q :: QExpr ty)) -> QAssignment (ScopedField 0 name :: ScopedField table Column ty) q) fieldNames exprs
 
 findByPrimaryKeyExpr :: ( Generic (PrimaryKey table Column)
-                        , Generic (PrimaryKey table (ScopedField table))
+                        , Generic (PrimaryKey table (ScopedField table Column))
                         , Table table
                         , GAllValues Column (Rep (PrimaryKey table Column) ())
-                        , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())) =>
-                        ScopedTable table -> Entity table Column -> QExpr Bool
-findByPrimaryKeyExpr scope (table :: Entity table Column) =
-    foldl1 (&&#) $
-    zipWith (\(GenScopedField (x :: ScopedField table ty)) (GenQExpr (q :: QExpr ty2)) ->
-                 case cast q of
-                   Just q -> FieldE (x :: ScopedField table ty) ==# (q :: QExpr ty) :: QExpr Bool
-                   Nothing -> val_ False) pkFieldNames pkValueExprs
-    where Entity scopePhantom scopeFields = scope
-          Entity tablePhantom tableFields = table
+                        , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())) =>
+                        Entity table (ScopedField table Column) -> Entity table Column -> QExpr Bool
+findByPrimaryKeyExpr (Entity phantom fields) (table :: Entity table Column) = primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy table) (primaryKey phantom fields) (primaryKey tablePhantom tableFields)
+    where Entity tablePhantom tableFields = table
 
-          pkFields = primaryKey scopePhantom scopeFields
-          pkValues = primaryKey tablePhantom tableFields
+findByPk_ :: ( Generic (PrimaryKey table Column)
+             , Generic (PrimaryKey table (ScopedField table Column))
+             , Table table
+             , GAllValues Column (Rep (PrimaryKey table Column) ())
+             , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())) =>
+             PrimaryKey table Column -> Query (Entity table Column)
+findByPk_ pk = let query = all_ (queriedTable query) `where_`
+                           (\(Entity phantom fields) -> primaryKeyExpr (tblProxy query) (tblProxy query) (primaryKey phantom fields) pk)
 
-          pkFieldNames = gAllValues mkScopedField (from' pkFields :: Rep (PrimaryKey table (ScopedField table)) ())
-          pkValueExprs = gAllValues mkValE (from' pkValues)
-
-          mkScopedField :: (Table table, FieldSchema a) => ScopedField table a -> GenScopedField table
-          mkScopedField = GenScopedField
-          mkValE :: FieldSchema a => Column a -> GenQExpr
-          mkValE (x :: Column a) = GenQExpr (ValE (makeSqlValue (columnValue x)) :: QExpr a)
-
-          from' :: Generic a => a -> Rep a ()
-          from' = from
-
--- findByPk_ :: ( Table table
---              , LocateAll (FullSchema table) (PrimaryKey table) ~ locator
---              , LocateResult (FullSchema table) locator ~ locateResult
---              , SchemaPart locateResult
---              , ScopeFields (QueryTable table)
---              , EqExprFor (Scope (QueryTable table)) locateResult ) =>
---              PrimaryKeySchema table -> Query (QueryTable table)
--- findByPk_ primaryKey = let query = all_ (queriedTable query) `where_`
---                                    (\table -> eqExprFor table primaryKey)
-
---                            queriedTable :: Query (QueryTable table) -> table
---                            queriedTable _ = undefined
---                        in query
+                   queriedTable :: Query (Entity table Column) -> table Column
+                   queriedTable _ = undefined
+                   tblProxy :: Query (Entity table Column) -> Proxy table
+                   tblProxy _ = Proxy
+               in query
 
 -- -- | Get all records whose relationships match
 -- matching_ :: ( hasManyPKSchema ~ PrimaryKeySchema hasMany
@@ -401,15 +382,15 @@ insert :: (MonadIO m, Functor m, Table t, FromSqlValues (Entity t Column)) => Si
 insert table = BeamT (\beam -> toBeamResult <$> runInsert table beam)
 
 save :: ( MonadIO m, Functor m, Table table
-        , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())
-        , Generic (PrimaryKey table (ScopedField table))
+        , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())
+        , Generic (PrimaryKey table (ScopedField table Column))
         , GAllValues Column (Rep (PrimaryKey table Column) ())
         , Generic (PrimaryKey table Column)) => Entity table Column -> BeamT e m ()
 save qt = BeamT (\beam -> toBeamResult <$> runUpdate (updateEntity qt) beam)
 
 update :: ( MonadIO m, Functor m, Table table
-          , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())
-          , Generic (PrimaryKey table (ScopedField table))
+          , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())
+          , Generic (PrimaryKey table (ScopedField table Column))
           , GAllValues Column (Rep (PrimaryKey table Column) ())
           , Generic (PrimaryKey table Column)) =>
           Entity table Column
@@ -418,8 +399,8 @@ update :: ( MonadIO m, Functor m, Table table
 update (qt :: Entity table Column) mkAssignments = set (Proxy :: Proxy table) mkAssignments (flip findByPrimaryKeyExpr qt)
 
 set :: ( MonadIO m, Functor m, Table table
-       , GAllValues (ScopedField table) (Rep (PrimaryKey table (ScopedField table)) ())
-       , Generic (PrimaryKey table (ScopedField table))
+       , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())
+       , Generic (PrimaryKey table (ScopedField table Column))
        , GAllValues Column (Rep (PrimaryKey table Column) ())
        , Generic (PrimaryKey table Column)) =>
        Proxy table

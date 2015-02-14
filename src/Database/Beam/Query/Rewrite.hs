@@ -114,7 +114,7 @@ rewriteExprM f fq x = rwE f fq x
 -- * Query optimizations
 
 combineProjections :: Query a -> Maybe (Query a)
-combineProjections (Project (Project q g) f) = Just (Project q (f . g))
+combineProjections (Project (Project q g) f) = Just (Project q (\r -> f r . g r))
 combineProjections _ = Nothing
 
 combineFilterOpt :: Query a -> Maybe (Query a)
