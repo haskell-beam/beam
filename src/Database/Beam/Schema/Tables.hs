@@ -11,8 +11,8 @@ module Database.Beam.Schema.Tables
     , PK(..)
 
     -- * Column constructors
-    , Column, column, columnValue
-    , Nullable(..), Dummy(..), TableField(..)
+    , Column, column, columnValue, ColumnType(..)
+    , Nullable, Dummy(..), TableField(..)
 
     , Simple(..), TableSettings(..)
 
@@ -26,7 +26,7 @@ module Database.Beam.Schema.Tables
     , fieldColDesc
 
     -- * Foreign keys
-    , ForeignKey(..), reference)
+    , ForeignKey(..), reference, tentative)
     where
 
 import Database.Beam.SQL.Types
@@ -89,11 +89,24 @@ infixl 3 :|:
 
 -- | The standard column constructor. Computationally and representationally, there is no cost to using this constructor,
 --   since it is defined as a newtype. Use the 'column' and 'columnValue' functions to construct and deconstruct values.
-newtype Column t = Column { columnValue :: t }
+newtype Column t = Column t deriving Typeable
 instance Show x => Show (Column x) where
     show = show . columnValue
-column :: t -> Column t
-column = Column
+
+class Typeable c => IsColumn c where
+    type ColumnType c a :: *
+    column :: ColumnType c a -> c a
+    columnValue :: c a -> ColumnType c a
+
+instance IsColumn Column where
+    type ColumnType Column x = x
+    columnValue (Column x) = x
+    column = Column
+
+instance IsColumn c => IsColumn (Nullable c) where
+    type ColumnType (Nullable c) x = ColumnType c (Maybe x)
+    columnValue (Nullable x) = columnValue x
+    column = Nullable . column
 
 -- | Support for NULLable Foreign Key references.
 --
@@ -101,16 +114,8 @@ column = Column
 -- >                     { nullableRef :: ForeignKey AnotherTable (Nullable column)
 -- >                     , ... }
 -- >                       deriving (Generic, Typeable)
---
---   For now, using this type requires tedious newtype wrapping/unwrapping, but later versions of Beam
---   will implement Nullable as a closed type family:
---
--- > type family Nullable (column :: * -> *) ty where
--- >     Nullable column ty = column (Maybe ty)
---
---   Currently, this definition is blocked by GHC Bug #10085.
-newtype Nullable (column :: * -> *) ty = Nullable (column (Maybe ty))
-deriving instance Show (column (Maybe ty)) => Show (Nullable column ty)
+newtype Nullable c x = Nullable (c (Maybe x)) deriving Typeable
+deriving instance Show (c (Maybe x)) => Show (Nullable c x)
 
 -- | A dummy column constructor that can never be constructed.
 newtype Dummy a = Dummy Void
@@ -543,6 +548,8 @@ data ForeignKey table column = ForeignKey (PrimaryKey table column)
 deriving instance Show (PrimaryKey table column) => Show (ForeignKey table column)
 reference :: ForeignKey table column -> PrimaryKey table column
 reference (ForeignKey x) = x
+tentative :: Nullable c x -> c (Maybe x)
+tentative (Nullable x) = x
 
 instance FieldSchema Int where
     data FieldSettings Int = IntFieldDefault

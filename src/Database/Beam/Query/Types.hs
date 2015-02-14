@@ -1,12 +1,12 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances, TypeSynonymInstances #-}
+{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances, TypeSynonymInstances, RoleAnnotations #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
-    ( ScopedField(..), ScopedTable(..), Entity(..)
+    ( ScopedField(..), Entity(..)
     , QueryField, QueryExpr(..)
 
     , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..), GenScopedField(..)
 
-    , ScopeFields(..), Scope(..), Project(..), ScopingRule
+    , ScopeFields(..), Scope(..), Scope'(..), Project(..), ScopingRule
     , getScope ) where
 
 import Database.Beam.Schema.Tables
@@ -26,9 +26,10 @@ import qualified Data.Text as T
 -- * Beam queries
 
 -- | A `ScopedField` represents a field that has been brought in scope via an `allQ`. The `q` type is a thread type that ensures that this field cannot escape this query.
-data ScopedField (table :: (* -> *) -> *) ty = ScopedField Int T.Text
-                                               deriving (Show, Typeable, Eq)
-type ScopedTable (table :: (* -> *) -> *) = Entity table (ScopedField table)
+data ScopedField (table :: (* -> *) -> *) (c :: * -> *) ty =
+    ScopedField Int T.Text
+    deriving (Show, Typeable, Eq)
+--type ScopedTable (table :: (* -> *) -> *) = Entity table (ScopedField table)
 
 data QueryField table field
 data QueryExpr t = QueryExpr t deriving (Show, Read, Eq, Ord)
@@ -46,8 +47,8 @@ data QOrder = Ascending | Descending deriving (Show, Read, Eq, Ord, Enum)
 
 data GenQExpr where
     GenQExpr :: Typeable t => QExpr t -> GenQExpr
-data GenScopedField table where
-    GenScopedField :: (Table table, Typeable t, Show t) => ScopedField table t -> GenScopedField table
+data GenScopedField table c where
+    GenScopedField :: (Table table, Typeable t, Show t) => ScopedField table c t -> GenScopedField table c
 
 -- | A query that produces results of type `a`
 data Query a where
@@ -67,14 +68,14 @@ data Query a where
     OuterJoin :: (Project (Scope schema1), Project (Scope schema2)) =>
                  Query schema1 -> Query schema2 -> QExpr Bool -> Query (Maybe schema1 :|: Maybe schema2)
 
-    Project :: Query a -> (Scope a -> Scope b) -> Query b
+    Project :: Query a -> (forall c. Proxy c -> Scope' a c -> Scope' b c) -> Query b
 
     Limit :: Query a -> Integer -> Query a
     Offset :: Query a -> Integer -> Query a
 
 data QExpr t where
-    FieldE :: (Table table, Typeable ty) => ScopedField table ty -> QExpr ty
-    MaybeFieldE :: (Table table, Typeable ty) => Maybe (ScopedField table ty) -> QExpr (Maybe ty)
+    FieldE :: (Table table, Typeable c, Typeable ty) => ScopedField table c ty -> QExpr (ColumnType c ty)
+    MaybeFieldE :: (Table table, Typeable c, Typeable ty) => Maybe (ScopedField table c ty) -> QExpr (Maybe (ColumnType c ty))
 
     OrE :: QExpr Bool -> QExpr Bool -> QExpr Bool
     AndE :: QExpr Bool -> QExpr Bool -> QExpr Bool
@@ -97,8 +98,8 @@ data QExpr t where
 
 data QAssignment where
     QAssignment :: Table table =>
-                   ScopedField table ty
-                -> QExpr ty
+                   ScopedField table c ty
+                -> QExpr (ColumnType c ty)
                 -> QAssignment
 
 deriving instance Typeable Query
@@ -107,18 +108,18 @@ deriving instance Typeable QExpr
 -- ** Scoping class
 
 class ScopeFields a where
-    scopeFields :: Proxy a -> Int -> Scope a
+    scopeFields :: Proxy a -> Proxy c -> Int -> Scope' a c
 instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
-    scopeFields  (_ :: Proxy (a :|: b)) i = scopeFields (Proxy :: Proxy a) i :|: scopeFields (Proxy :: Proxy b) i
-instance Table table => ScopeFields (Entity table Column) where
-    scopeFields (_ :: Proxy (Entity table Column)) i = Entity scopedPhantom scopedTable
-        where scopedPhantom :: PhantomFields table (ScopedField table)
+    scopeFields  (_ :: Proxy (a :|: b)) c i = scopeFields (Proxy :: Proxy a) c i :|: scopeFields (Proxy :: Proxy b) c i
+instance Table table => ScopeFields (Entity table d) where
+    scopeFields (_ :: Proxy (Entity table d)) (_ :: Proxy c) i = Entity scopedPhantom scopedTable
+        where scopedPhantom :: PhantomFields table (ScopedField table c)
               scopedPhantom = changePhantomRep scopeField (Proxy :: Proxy table) $
                               phantomFieldSettings (Proxy :: Proxy table)
               scopedTable = changeRep scopeField $
                             (tblFieldSettings :: TableSettings table)
 
-              scopeField :: TableField table a -> ScopedField table a
+              scopeField :: TableField table a -> ScopedField table c a
               scopeField tf = ScopedField i (fieldName tf)
 
 
@@ -131,27 +132,33 @@ instance Table table => ScopeFields (Entity table Column) where
 -- instance ScopeFields t => ScopeFields (Maybe t) where
 --     scopeFields (_ :: Proxy (Maybe t)) = Just . scopeFields (Proxy :: Proxy t)
 
-type family Scope a where
-    Scope (Maybe t) = Maybe (Scope t)
-    Scope (a :|: b) = Scope a :|: Scope b
-    Scope (Entity x Column) = ScopedTable x
-    Scope (QueryExpr t) = QExpr t
+type family Scope' a c where
+    Scope' (Maybe t) c = Scope' t (Nullable c)
+    Scope' (a :|: b) c = Scope' a c :|: Scope' b c
+    -- Scope' (Entity x c) (Nullable c) = Entity x (Nullable (ScopedField x))
+    Scope' (Entity x a) c = Entity x c --(ScopedField x c)
+    Scope' (QueryExpr t) c = QExpr t
 
-getScope :: Query a -> Scope a
-getScope x@(All _ i) = scopeFields (aProxy x) i
+type Scope a = Scope' a Column
+
+getScope' :: IsColumn c => Proxy c -> Query a -> Scope' a c
+getScope' f x@(All _ i) = scopeFields (aProxy x) f i
     where aProxy :: Query a -> Proxy a
           aProxy _ = Proxy
-getScope EmptySet = error "getScope: EmptySet"
-getScope (Filter q _) = getScope q
-getScope (GroupBy q _) = getScope q
-getScope (Join q1 q2) = getScope q1 :|: getScope q2
-getScope (LeftJoin q1 q2 _) = getScope q1 :|: Just (getScope q2)
-getScope (RightJoin q1 q2 _) = Just (getScope q1) :|: getScope q2
-getScope (OuterJoin q1 q2 _) = Just (getScope q1) :|: Just (getScope q2)
-getScope (Project q f) = f (getScope q)
-getScope (Limit q _) = getScope q
-getScope (Offset q _) = getScope q
-getScope (OrderBy q _ _) = getScope q
+getScope' _ EmptySet = error "getScope': EmptySet"
+getScope' f (Filter q _) = getScope' f q
+getScope' f (GroupBy q _) = getScope' f q
+getScope' f (Join q1 q2) = getScope' f q1 :|: getScope' f q2
+getScope' (f :: Proxy c) (LeftJoin q1 q2 _) = getScope' f q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
+getScope' (f :: Proxy c) (RightJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' f q2
+getScope' (f :: Proxy c) (OuterJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
+getScope' f (Project q proj) = proj f (getScope' f q)
+getScope' f (Limit q _) = getScope' f q
+getScope' f (Offset q _) = getScope' f q
+getScope' f (OrderBy q _ _) = getScope' f q
+
+getScope :: Query a -> Scope a
+getScope = getScope' (Proxy :: Proxy Column)
 
 -- ** Hand-derived instances for Query and QExpr since their types are too complicated for the deriving mechanism
 
@@ -195,7 +202,6 @@ instance Show (QExpr t) where
 
     show (CountE x) = concat ["CountE (", show x, ")"]
 
-
 instance Eq (Query a) where
     EmptySet == EmptySet = True
     All _ x == All _ y = x == y
@@ -203,6 +209,8 @@ instance Eq (Query a) where
     GroupBy q1 es1 == GroupBy q2 es2 = q1 == q2 && es1 == es2
     OrderBy q1 es1 ord1 == OrderBy q2 es2 ord2 = q1 == q2 && es1 == es2 && ord1 == ord2
     Join a1 b1 == Join a2 b2 = a1 == a2 && b1 == b2
+    Limit q1 l1 == Limit q2 l2 = q1 == q2 && l1 == l2
+    Offset q1 l1 == Offset q2 l2 = q1 == q2 && l1 == l2
     _ == _ = False
 
 instance Eq (QExpr t) where
@@ -239,8 +247,6 @@ instance Eq (QExpr t) where
     CountE a == CountE b = case cast a of
                              Nothing -> False
                              Just a' -> a' == b
-
-
 
     _ == _ = False
 
