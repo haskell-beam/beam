@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, TypeOperators,  MultiParamTypeClasses, EmptyDataDecls, DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, PolyKinds, GADTs, DeriveGeneric, DeriveDataTypeable, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances, RankNTypes #-}
+{-# LANGUAGE TypeFamilies, TypeOperators,  MultiParamTypeClasses, EmptyDataDecls, DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, PolyKinds, GADTs, DeriveGeneric, DeriveDataTypeable, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances, RankNTypes, RoleAnnotations #-}
 -- | Defines a generic schema type that can be used to define schemas for Beam tables
 module Database.Beam.Schema.Tables
     (
@@ -11,14 +11,14 @@ module Database.Beam.Schema.Tables
     , PK(..)
 
     -- * Column constructors
-    , Column, column, columnValue, ColumnType(..)
-    , Nullable, Dummy(..), TableField(..)
+    , Column(..), IsColumn(..), ColumnType(..)
+    , Nullable(..), Dummy(..), TableField(..)
 
     , Simple(..), TableSettings(..)
 
     -- * Tables
-    , Table(..), Entity(..), defTblFieldSettings, defFieldSettings
-    , GChangeRep(..), GAllValues(..)
+    , Table(..), Entity(..), allValues, defTblFieldSettings, defFieldSettings
+    , ChangeRep(..), AllValues(..)
 
     -- * Fields
     , FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
@@ -213,29 +213,35 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
     type PhantomFields table (column :: (* -> *)) :: *
     type PhantomFields table column = PK column
 
+    pkChangeRep :: Proxy table -> (forall a. f a -> g a) -> PrimaryKey table f -> PrimaryKey table g
+    default pkChangeRep :: ChangeRep (PrimaryKey table f) (PrimaryKey table g) f g =>
+                           Proxy table -> (forall a. f a -> g a) -> PrimaryKey table f -> PrimaryKey table g
+    pkChangeRep _ = changeRep'
+
+    phantomChangeRep :: Proxy table -> (forall a. f a -> g a) -> PhantomFields table f -> PhantomFields table g
+    default phantomChangeRep :: ChangeRep (PhantomFields table f) (PhantomFields table g) f g =>
+                                Proxy table -> (forall a. f a -> g a) -> PhantomFields table f -> PhantomFields table g
+    phantomChangeRep _ = changeRep'
+
     changeRep :: (forall a. f a -> g a) -> table f -> table g
-    default changeRep :: ( Generic (table f)
-                         , Generic (table g)
-                         , GChangeRep (Rep (table f) ()) (Rep (table g) ()) f g ) =>
+    default changeRep :: ChangeRep (table f) (table g) f g =>
                          (forall a. f a -> g a) -> table f -> table g
-    changeRep f t = to' (gChangeRep f (from' t))
+    changeRep = changeRep'
 
-    changePhantomRep :: (forall a. f a -> g a) -> Proxy table -> PhantomFields table f -> PhantomFields table g
-    default changePhantomRep :: ( Generic (PhantomFields table f)
-                                , Generic (PhantomFields table g)
-                                , GChangeRep (Rep (PhantomFields table f) ()) (Rep (PhantomFields table g) ()) f g ) =>
-                                (forall a. f a -> g a)
-                             -> Proxy table
-                             -> PhantomFields table f
-                             -> PhantomFields table g
-    changePhantomRep (f :: forall a. f a -> g a) (_ :: Proxy table) t = to' (gChangeRep f (from' t) :: Rep (PhantomFields table g) ())
+    pkAllValues :: Proxy table -> (forall a. FieldSchema a => f a -> b) -> PrimaryKey table f -> [b]
+    default pkAllValues :: AllValues f (PrimaryKey table f) =>
+                           Proxy table -> (forall a. FieldSchema a => f a -> b) -> PrimaryKey table f -> [b]
+    pkAllValues _ = allValues'
 
-    allValues :: (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> table f -> [b]
-    default allValues :: ( Generic (PhantomFields table f)
-                         , Generic (table f)
-                         , GAllValues f (Rep (PhantomFields table f) () :|: Rep (table f) ()) ) =>
-                         (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> table f -> [b]
-    allValues f phantom tbl = gAllValues f (from' phantom :|: from' tbl)
+    phantomAllValues :: Proxy table -> (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> [b]
+    default phantomAllValues :: AllValues f (PhantomFields table f) =>
+                                Proxy table -> (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> [b]
+    phantomAllValues _ = allValues'
+
+    fieldAllValues :: (forall a. FieldSchema a => f a -> b) -> table f -> [b]
+    default fieldAllValues :: AllValues f (table f) =>
+                              (forall a. FieldSchema a => f a -> b) -> table f -> [b]
+    fieldAllValues = allValues'
 
     -- | Given a table and its phantom fields, this should return the PrimaryKey from the table. By keeping this polymorphic over column,
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
@@ -352,10 +358,15 @@ instance ( Generic (PrimaryKey table (Nullable x))
 instance GChangeRep (Nullable f a) (Nullable g a) f g where
     gChangeRep f (Nullable x) = Nullable (f x)
 
+class ChangeRep x y f g where
+    changeRep' :: (forall a. f a -> g a) -> x -> y
+instance ( Generic x, Generic y
+         , GChangeRep (Rep x ()) (Rep y ()) f g) =>
+    ChangeRep x y f g where
+    changeRep' f x = to' (gChangeRep f (from' x))
+
 class GAllValues (f :: * -> *) x where
     gAllValues :: (forall a. FieldSchema a => f a -> b) -> x -> [b]
-instance (GAllValues f a, GAllValues f b) => GAllValues f (a :|: b) where
-    gAllValues f (a :|: b) = gAllValues f a ++ gAllValues f b
 instance (GAllValues f (a x), GAllValues f (b x)) => GAllValues f ((a :*: b) x) where
     gAllValues f (a :*: b) = gAllValues f a ++ gAllValues f b
 instance (GAllValues f (p x)) => GAllValues f (D1 g p x) where
@@ -374,6 +385,14 @@ instance ( Generic (PrimaryKey related g)
     gAllValues f (K1 (ForeignKey x)) = gAllValues f (from' x)
 instance FieldSchema a => GAllValues f (f a) where
     gAllValues f x = [f x]
+
+class AllValues f x where
+    allValues' :: (forall a. FieldSchema a => f a -> b) -> x -> [b]
+instance (Generic x, GAllValues f (Rep x ())) => AllValues f x where
+    allValues' f x = gAllValues f (from' x)
+
+allValues :: Table t => (forall a. FieldSchema a => f a -> b) -> PhantomFields t f -> t f -> [b]
+allValues f p (t :: t f) = phantomAllValues (Proxy :: Proxy t) f p ++ fieldAllValues f t
 
 class GDefaultTableFieldSettings x where
     gDefTblFieldSettings :: Proxy x -> x

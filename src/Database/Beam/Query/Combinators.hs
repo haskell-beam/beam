@@ -68,7 +68,7 @@ outerJoin_ :: (Project (Scope a), Project (Scope b)) => Query a -> (Query b, Sco
 outerJoin_ l (r, mkOn) = OuterJoin l r' (mkOn ((getScope l) :|: (getScope r')))
     where r' = rewriteForJoin l r
 
-project_ :: Query a -> (forall c. Typeable c => Proxy c -> Scope' a c -> Scope' b c) -> Query b
+project_ :: (Rescopable a, Rescopable b) =>  Query a -> (Scope a -> Scope b) -> Query b
 project_ q a = Project q a
 
 limit_, offset_ :: Query a -> Integer -> Query a
@@ -86,11 +86,7 @@ where_ :: Query a -> (Scope a -> QExpr Bool) -> Query a
 where_ q mkExpr = Filter q (mkExpr (getScope q))
 
 
-primaryKeyExpr :: ( Generic (PrimaryKey table Column)
-                  , Generic (PrimaryKey table (ScopedField related Column))
-                  , Table table, Table related
-                  , GAllValues Column (Rep (PrimaryKey table Column) ())
-                  , GAllValues (ScopedField related Column) (Rep (PrimaryKey table (ScopedField related Column)) ())) =>
+primaryKeyExpr :: ( Table table, Table related ) =>
                   Proxy table -> Proxy related -> PrimaryKey table (ScopedField related Column) -> PrimaryKey table Column -> QExpr Bool
 primaryKeyExpr (_ :: Proxy table) (_ :: Proxy related) pkFields pkValues =
     foldl1 (&&#) $
@@ -98,8 +94,8 @@ primaryKeyExpr (_ :: Proxy table) (_ :: Proxy related) pkFields pkValues =
                  case cast q of
                    Just q -> FieldE (x :: ScopedField related Column ty) ==# (q :: QExpr (ColumnType Column ty)) :: QExpr Bool
                    Nothing -> val_ False) pkFieldNames pkValueExprs
-    where pkFieldNames = gAllValues mkScopedField (from' pkFields :: Rep (PrimaryKey table (ScopedField related Column)) ())
-          pkValueExprs = gAllValues mkValE (from' pkValues)
+    where pkFieldNames = pkAllValues (Proxy :: Proxy table) mkScopedField pkFields
+          pkValueExprs = pkAllValues (Proxy :: Proxy table) mkValE pkValues
 
           mkScopedField :: (Table table, FieldSchema a) => ScopedField related Column a -> GenScopedField related Column
           mkScopedField = GenScopedField
@@ -109,10 +105,7 @@ primaryKeyExpr (_ :: Proxy table) (_ :: Proxy related) pkFields pkValues =
           from' :: Generic a => a -> Rep a ()
           from' = from
 
-(@->) :: ( Generic (PrimaryKey related Column), Generic (PrimaryKey related (ScopedField related Column))
-         , Table related
-         , GAllValues Column (Rep (PrimaryKey related Column) ())
-         , GAllValues (ScopedField related Column) (Rep (PrimaryKey related (ScopedField related Column)) ())) =>
+(@->) :: Table related =>
          Entity table Column -> (forall a. table a -> ForeignKey related a) -> Query (Entity related Column)
 (Entity _ table) @-> (f :: forall a. table a -> ForeignKey related a) =
     all_ (of_ :: related Column)
@@ -120,10 +113,7 @@ primaryKeyExpr (_ :: Proxy table) (_ :: Proxy related) pkFields pkValues =
     where pk :: PrimaryKey related Column
           ForeignKey pk = f table
 
-(<-@) :: ( Generic (PrimaryKey table Column), Generic (PrimaryKey table (ScopedField related Column))
-         , Table related, Table table
-         , GAllValues Column (Rep (PrimaryKey table Column) ())
-         , GAllValues (ScopedField related Column) (Rep (PrimaryKey table (ScopedField related Column)) ())) =>
+(<-@) :: ( Table related, Table table ) =>
          (forall a. related a -> ForeignKey table a) -> Entity table Column -> Query (Entity related Column)
 (f :: forall a. related a -> ForeignKey table a) <-@ (Entity phantom fields) =
     all_ (of_ :: related Column)
@@ -131,17 +121,11 @@ primaryKeyExpr (_ :: Proxy table) (_ :: Proxy related) pkFields pkValues =
                 let ForeignKey pk = f scope
                 in primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy related) pk (primaryKey phantom fields))
 
-foreignKeyJoin :: ( tblFields ~ PrimaryKey related (ScopedField table Column)
-                  , relFields ~ PrimaryKey related (ScopedField related Column)
-                  , Generic tblFields
-                  , Generic relFields
-                  , GAllValues (ScopedField table Column) (Rep tblFields ())
-                  , GAllValues (ScopedField related Column) (Rep relFields ())
-                  , Table table, Table related ) =>
+foreignKeyJoin :: ( Table table, Table related ) =>
                   Proxy table -> Proxy related -> PrimaryKey related (ScopedField table Column) -> PrimaryKey related (ScopedField related Column) -> QExpr Bool
 foreignKeyJoin (_ :: Proxy table) (_ :: Proxy related) parent related = foldl1 (&&#) fieldEqExprs
-    where parentFields = gAllValues genPar  (from' parent)
-          relatedFields = gAllValues genRel (from' related)
+    where parentFields = pkAllValues (Proxy :: Proxy related) genPar parent
+          relatedFields = pkAllValues (Proxy :: Proxy related) genRel related
 
           from' :: Generic a => a -> Rep a ()
           from' = from
@@ -159,13 +143,9 @@ foreignKeyJoin (_ :: Proxy table) (_ :: Proxy related) parent related = foldl1 (
                                   FieldE (ScopedField i name :: ScopedField table' c' ty) ==# FieldE y) parentFields relatedFields
 
 -- | Given a query for a table, and an accessor for a foreignkey reference, return a query that joins the two tables
-(==>) :: ( Table table, Table related, Generic tblFields, Generic relFields
-         , GAllValues (ScopedField table Column) (Rep tblFields ())
-         , GAllValues (ScopedField related Column) (Rep relFields ())
-         , tblFields ~ PrimaryKey related (ScopedField table Column)
-         , relFields ~ PrimaryKey related (ScopedField related Column)
+(==>) :: ( Table table, Table related
          , Project (Entity related (ScopedField related Column))
-         , Project (Entity table (ScopedField table Column))) =>
+         , Project (Entity table (ScopedField table Column)) ) =>
          Query (Entity table Column) -> (forall a. table a -> ForeignKey related a) -> Query (Entity table Column :|: Entity related Column)
 q ==> (f :: forall a. table a -> ForeignKey related a) =
     join_ q (All (Proxy :: Proxy related) 0) `where_`
@@ -173,13 +153,9 @@ q ==> (f :: forall a. table a -> ForeignKey related a) =
     where fk scope = let ForeignKey x = f scope
                      in x
 
-(<==) :: ( Table table, Table related , Generic tblFields, Generic relFields
-         , GAllValues (ScopedField table Column) (Rep tblFields ())
-         , GAllValues (ScopedField related Column) (Rep relFields ())
-         , tblFields ~ PrimaryKey table (ScopedField table Column)
-         , relFields ~ PrimaryKey table (ScopedField related Column)
+(<==) :: ( Table table, Table related
          , Project (Entity related (ScopedField related Column))
-         , Project (Entity table (ScopedField table Column))) =>
+         , Project (Entity table (ScopedField table Column)) ) =>
          Query (Entity table Column) -> (forall a. related a -> ForeignKey table a) -> Query (Entity table Column :|: Entity related Column)
 q <== (f :: forall a. related a -> ForeignKey table a) =
     join_ q (All (Proxy :: Proxy related) 0) `where_`
