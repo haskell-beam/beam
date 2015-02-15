@@ -6,7 +6,7 @@ module Database.Beam.Query.Types
 
     , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..), GenScopedField(..)
 
-    , ScopeFields(..), Scope(..), Scope'(..), Project(..), ScopingRule
+    , ScopeFields(..), Scope(..), Scope'(..), Project(..), Rescopable(..), ScopingRule
     , getScope ) where
 
 import Database.Beam.Schema.Tables
@@ -19,9 +19,12 @@ import Control.Monad.Writer hiding (All)
 
 import Data.Monoid hiding (All)
 import Data.Proxy
+import Data.Coerce
 import Data.Data
 import Data.String
 import qualified Data.Text as T
+
+import Unsafe.Coerce
 
 -- * Beam queries
 
@@ -57,18 +60,18 @@ data Query a where
     Filter ::  Query a -> QExpr Bool -> Query a
     GroupBy :: Query a -> GenQExpr -> Query a
     OrderBy :: Query a -> GenQExpr -> QOrder -> Query a
-    Join :: (Project (Scope schema1), Project (Scope schema2)) =>
+    Join :: ( Project (Scope schema1), Project (Scope schema2) ) =>
             Query schema1 -> Query schema2 -> Query (schema1 :|: schema2)
 
     -- More joins...
-    LeftJoin :: (Project (Scope schema1), Project (Scope schema2)) =>
+    LeftJoin :: ( Project (Scope schema1), Project (Scope schema2) ) =>
                 Query schema1 -> Query schema2 -> QExpr Bool -> Query (schema1 :|: Maybe schema2)
-    RightJoin :: (Project (Scope schema1), Project (Scope schema2)) =>
+    RightJoin :: ( Project (Scope schema1), Project (Scope schema2) ) =>
                  Query schema1 -> Query schema2 -> QExpr Bool -> Query (Maybe schema1 :|: schema2)
-    OuterJoin :: (Project (Scope schema1), Project (Scope schema2)) =>
+    OuterJoin :: ( Project (Scope schema1), Project (Scope schema2)) =>
                  Query schema1 -> Query schema2 -> QExpr Bool -> Query (Maybe schema1 :|: Maybe schema2)
 
-    Project :: Query a -> (forall c. Proxy c -> Scope' a c -> Scope' b c) -> Query b
+    Project :: (Rescopable a, Rescopable b) => Query a -> (Scope a -> Scope b) -> Query b
 
     Limit :: Query a -> Integer -> Query a
     Offset :: Query a -> Integer -> Query a
@@ -114,7 +117,7 @@ instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
 instance Table table => ScopeFields (Entity table d) where
     scopeFields (_ :: Proxy (Entity table d)) (_ :: Proxy c) i = Entity scopedPhantom scopedTable
         where scopedPhantom :: PhantomFields table (ScopedField table c)
-              scopedPhantom = changePhantomRep scopeField (Proxy :: Proxy table) $
+              scopedPhantom = phantomChangeRep (Proxy :: Proxy table) scopeField $
                               phantomFieldSettings (Proxy :: Proxy table)
               scopedTable = changeRep scopeField $
                             (tblFieldSettings :: TableSettings table)
@@ -122,26 +125,30 @@ instance Table table => ScopeFields (Entity table d) where
               scopeField :: TableField table a -> ScopedField table c a
               scopeField tf = ScopedField i (fieldName tf)
 
-
---     scopeFields (_ :: Proxy (QueryTable table)) i = scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (PhantomFieldSchema table))) i :|:
---                                                     scopeFields (Proxy :: Proxy (WrapFields (QueryField table) (Schema table))) i
--- instance ScopeFields (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl))) =>
---     ScopeFields (QueryField table (ForeignKey relTbl name)) where
---     scopeFields (_ :: Proxy (QueryField table (ForeignKey relTbl name))) i =
---         scopeFields (Proxy :: Proxy (EmbedIn name (WrapFields (QueryField table) (PrimaryKeySchema relTbl)))) i
--- instance ScopeFields t => ScopeFields (Maybe t) where
---     scopeFields (_ :: Proxy (Maybe t)) = Just . scopeFields (Proxy :: Proxy t)
-
 type family Scope' a c where
     Scope' (Maybe t) c = Scope' t (Nullable c)
     Scope' (a :|: b) c = Scope' a c :|: Scope' b c
     -- Scope' (Entity x c) (Nullable c) = Entity x (Nullable (ScopedField x))
-    Scope' (Entity x a) c = Entity x c --(ScopedField x c)
+    Scope' (Entity x a) c = Entity x (ScopedField x c)
     Scope' (QueryExpr t) c = QExpr t
 
 type Scope a = Scope' a Column
 
-getScope' :: IsColumn c => Proxy c -> Query a -> Scope' a c
+class Rescopable a where
+    rescope :: Proxy a -> Proxy c -> Proxy d ->  Scope' a c -> Scope' a d
+instance Rescopable t => Rescopable (Maybe t) where
+    rescope (Proxy :: Proxy (Maybe t)) (Proxy :: Proxy c) (Proxy :: Proxy d) s =
+        rescope (Proxy :: Proxy t) (Proxy :: Proxy (Nullable c)) (Proxy :: Proxy (Nullable d)) s
+instance (Rescopable a, Rescopable b) => Rescopable (a :|: b) where
+    rescope (_ :: Proxy (a :|: b)) c d (a :|: b) = rescope (Proxy :: Proxy a) c d a :|: rescope (Proxy :: Proxy b) c d b
+instance Table x => Rescopable (Entity x a) where
+    rescope (_ :: Proxy (Entity x a)) (_ :: Proxy c) (_ :: Proxy d) (Entity phantom fields) = Entity (phantomChangeRep (Proxy :: Proxy x) scopeField phantom) (changeRep scopeField fields)
+        where scopeField :: ScopedField x c t -> ScopedField x d t
+              scopeField = coerce -- type-safe coercion thanks to GHC!
+instance Rescopable (QueryExpr t) where
+    rescope _ _ _ q = q
+
+getScope' :: Proxy c -> Query a -> Scope' a c
 getScope' f x@(All _ i) = scopeFields (aProxy x) f i
     where aProxy :: Query a -> Proxy a
           aProxy _ = Proxy
@@ -152,7 +159,10 @@ getScope' f (Join q1 q2) = getScope' f q1 :|: getScope' f q2
 getScope' (f :: Proxy c) (LeftJoin q1 q2 _) = getScope' f q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
 getScope' (f :: Proxy c) (RightJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' f q2
 getScope' (f :: Proxy c) (OuterJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
-getScope' f (Project q proj) = proj f (getScope' f q)
+getScope' (f :: Proxy c) (Project (q :: Query b) proj :: Query a) = rescope (Proxy :: Proxy a) (Proxy :: Proxy Column) (Proxy :: Proxy c) $
+                                                                    proj $
+                                                                    rescope (Proxy :: Proxy b) (Proxy :: Proxy c) (Proxy :: Proxy Column) $
+                                                                    getScope' f q
 getScope' f (Limit q _) = getScope' f q
 getScope' f (Offset q _) = getScope' f q
 getScope' f (OrderBy q _ _) = getScope' f q

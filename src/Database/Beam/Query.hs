@@ -271,11 +271,7 @@ updateWhere (_ :: Proxy table) mkAssignmentsAndWhere = go
                 sqlTables = [dbTableName (Proxy :: Proxy table)]
             in (SQLUpdate sqlTables sqlAssignments sqlWhereClause)
 
-updateEntity :: ( Generic (PrimaryKey table Column)
-                , Generic (PrimaryKey table (ScopedField table Column))
-                , Table table
-                , GAllValues Column (Rep (PrimaryKey table Column) ())
-                , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())) => Entity table Column -> SQLUpdate
+updateEntity :: Table table => Entity table Column -> SQLUpdate
 updateEntity qt@(Entity phantom table :: Entity table Column) = updateWhere tProxy
                                                          (\s -> (assignments, findByPrimaryKeyExpr s qt))
     where tProxy = Proxy :: Proxy table
@@ -287,20 +283,12 @@ updateEntity qt@(Entity phantom table :: Entity table Column) = updateWhere tPro
 
           assignments = zipWith (\name (GenQExpr (q :: QExpr ty)) -> QAssignment (ScopedField 0 name :: ScopedField table Column ty) q) fieldNames exprs
 
-findByPrimaryKeyExpr :: ( Generic (PrimaryKey table Column)
-                        , Generic (PrimaryKey table (ScopedField table Column))
-                        , Table table
-                        , GAllValues Column (Rep (PrimaryKey table Column) ())
-                        , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())) =>
+findByPrimaryKeyExpr :: Table table =>
                         Entity table (ScopedField table Column) -> Entity table Column -> QExpr Bool
 findByPrimaryKeyExpr (Entity phantom fields) (table :: Entity table Column) = primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy table) (primaryKey phantom fields) (primaryKey tablePhantom tableFields)
     where Entity tablePhantom tableFields = table
 
-findByPk_ :: ( Generic (PrimaryKey table Column)
-             , Generic (PrimaryKey table (ScopedField table Column))
-             , Table table
-             , GAllValues Column (Rep (PrimaryKey table Column) ())
-             , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())) =>
+findByPk_ :: Table table =>
              PrimaryKey table Column -> Query (Entity table Column)
 findByPk_ pk = let query = all_ (queriedTable query) `where_`
                            (\(Entity phantom fields) -> primaryKeyExpr (tblProxy query) (tblProxy query) (primaryKey phantom fields) pk)
@@ -310,21 +298,6 @@ findByPk_ pk = let query = all_ (queriedTable query) `where_`
                    tblProxy :: Query (Entity table Column) -> Proxy table
                    tblProxy _ = Proxy
                in query
-
--- -- | Get all records whose relationships match
--- matching_ :: ( hasManyPKSchema ~ PrimaryKeySchema hasMany
---              , embeddedPKSchemaNames ~ NameFor (EmbedIn name (PrimaryKeySchema hasMany))
-
---              , Reference hasOne name
---              , LookupInTable hasOne name ~ ForeignKey hasMany name
---              , RenameFields embeddedPKSchemaNames hasManyPKSchema
---              , EqExprFor (Scope (QueryTable hasOne)) (Rename embeddedPKSchemaNames hasManyPKSchema)
---              , ScopeFields (QueryTable hasOne)
---              , Table hasMany, Table hasOne ) =>
---              name -> QueryTable hasMany -> Query (QueryTable hasOne)
--- matching_ (name :: name) (hasMany :: QueryTable hasMany) = all_ of_ `where_` (\hasOneS -> eqExprFor hasOneS (renameFields fkNamesProxy (pk hasMany)))
---     where fkNamesProxy :: Proxy (NameFor (EmbedIn name (PrimaryKeySchema hasMany)))
---           fkNamesProxy = Proxy
 
 simpleSelect = SQLSelect
                { selProjection = SQLProjStar
@@ -381,28 +354,16 @@ query q = BeamT $ \beam ->
 insert :: (MonadIO m, Functor m, Table t, FromSqlValues (Entity t Column)) => Simple t -> BeamT e m (Entity t Column)
 insert table = BeamT (\beam -> toBeamResult <$> runInsert table beam)
 
-save :: ( MonadIO m, Functor m, Table table
-        , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())
-        , Generic (PrimaryKey table (ScopedField table Column))
-        , GAllValues Column (Rep (PrimaryKey table Column) ())
-        , Generic (PrimaryKey table Column)) => Entity table Column -> BeamT e m ()
+save :: ( MonadIO m, Functor m, Table table ) => Entity table Column -> BeamT e m ()
 save qt = BeamT (\beam -> toBeamResult <$> runUpdate (updateEntity qt) beam)
 
-update :: ( MonadIO m, Functor m, Table table
-          , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())
-          , Generic (PrimaryKey table (ScopedField table Column))
-          , GAllValues Column (Rep (PrimaryKey table Column) ())
-          , Generic (PrimaryKey table Column)) =>
+update :: ( MonadIO m, Functor m, Table table ) =>
           Entity table Column
        -> (Scope (Entity table Column) -> [QAssignment])
        -> BeamT e m ()
 update (qt :: Entity table Column) mkAssignments = set (Proxy :: Proxy table) mkAssignments (flip findByPrimaryKeyExpr qt)
 
-set :: ( MonadIO m, Functor m, Table table
-       , GAllValues (ScopedField table Column) (Rep (PrimaryKey table (ScopedField table Column)) ())
-       , Generic (PrimaryKey table (ScopedField table Column))
-       , GAllValues Column (Rep (PrimaryKey table Column) ())
-       , Generic (PrimaryKey table Column)) =>
+set :: ( MonadIO m, Functor m, Table table ) =>
        Proxy table
     -> (Scope (Entity table Column) -> [QAssignment])
     -> (Scope (Entity table Column) -> QExpr Bool)
@@ -429,22 +390,16 @@ to' = to
 
 ref :: Table t => Entity t c -> ForeignKey t c
 ref = ForeignKey . pk
-justRef :: ( Table related
-           , Generic (PrimaryKey related Column)
-           , Generic (PrimaryKey related (Nullable Column))
-           , GChangeRep (Rep (PrimaryKey related Column) ()) (Rep (PrimaryKey related (Nullable Column)) ()) Column (Nullable Column) ) =>
+justRef :: Table related =>
            Entity related Column -> ForeignKey related (Nullable Column)
-justRef (e :: Entity related Column) = ForeignKey (to' (gChangeRep just (from' (pk e))))
+justRef (e :: Entity related Column) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (pk e))
     where just :: Column a -> Nullable Column a
-          just x = Nullable (column (Just (columnValue x)))
-nothingRef :: ( Table related
-              , Generic (PrimaryKey related (TableField related))
-              , Generic (PrimaryKey related (Nullable Column))
-              , GChangeRep (Rep (PrimaryKey related (TableField related)) ()) (Rep (PrimaryKey related (Nullable Column)) ()) (TableField related) (Nullable Column)) =>
+          just x = column (Just (columnValue x))
+nothingRef :: Table related =>
               Query (Entity related Column) -> ForeignKey related (Nullable Column)
-nothingRef (_ :: Query (Entity related Column)) = ForeignKey (to' (gChangeRep nothing (from' (pk entitySettings))))
+nothingRef (_ :: Query (Entity related Column)) = ForeignKey (pkChangeRep (Proxy :: Proxy related) nothing (pk entitySettings))
     where nothing :: TableField related a -> Nullable Column a
-          nothing x = Nullable (column Nothing)
+          nothing x = column Nothing
 
           entitySettings = Entity (phantomFieldSettings (Proxy :: Proxy related)) (tblFieldSettings :: TableSettings related)
 
