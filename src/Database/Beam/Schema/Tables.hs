@@ -91,12 +91,13 @@ infixl 3 :|:
 --   since it is defined as a newtype. Use the 'column' and 'columnValue' functions to construct and deconstruct values.
 newtype Column t = Column t deriving Typeable
 instance Show x => Show (Column x) where
-    show = show . columnValue
+    show (Column x) = show x
 
 class Typeable c => IsColumn c where
     type ColumnType c a :: *
     column :: ColumnType c a -> c a
-    columnValue :: c a -> ColumnType c a
+    -- | The `Typeable` constraint is because it is impossible to use non-Typeable data in a QExpr, so we enforce that throughout beam
+    columnValue :: Typeable a => c a -> ColumnType c a
 
 instance IsColumn Column where
     type ColumnType Column x = x

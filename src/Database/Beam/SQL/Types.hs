@@ -112,10 +112,11 @@ data SQLExpr where
     SQLEqE, SQLLtE, SQLGtE, SQLLeE, SQLGeE, SQLNeqE :: SQLExpr -> SQLExpr -> SQLExpr
 
     SQLIsNothingE :: SQLExpr -> SQLExpr
+    SQLIsJustE :: SQLExpr -> SQLExpr
 
     SQLInE :: SQLExpr -> SQLExpr -> SQLExpr
     SQLListE :: [SQLExpr] -> SQLExpr
 
-    SQLCountE :: SQLExpr -> SQLExpr
+    SQLCountE, SQLMaxE, SQLMinE, SQLSumE, SQLAverageE :: SQLExpr -> SQLExpr
 
 deriving instance Show SQLExpr

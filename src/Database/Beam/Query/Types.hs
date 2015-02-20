@@ -15,6 +15,7 @@ import Database.Beam.SQL
 import Database.HDBC
 
 import Control.Applicative
+import Control.Monad.State
 import Control.Monad.Writer hiding (All)
 
 import Data.Monoid hiding (All)
@@ -32,7 +33,10 @@ import Unsafe.Coerce
 data ScopedField (table :: (* -> *) -> *) (c :: * -> *) ty =
     ScopedField Int T.Text
     deriving (Show, Typeable, Eq)
---type ScopedTable (table :: (* -> *) -> *) = Entity table (ScopedField table)
+instance (Table table, IsColumn c) => IsColumn (ScopedField table c) where
+    type ColumnType (ScopedField table c) a = QExpr (ColumnType c a)
+    column = error "ScopedField.column: cannot inject value"
+    columnValue s = FieldE s
 
 data QueryField table field
 data QueryExpr t = QueryExpr t deriving (Show, Read, Eq, Ord)
@@ -44,7 +48,7 @@ instance FieldSchema t => FromSqlValues (QueryExpr t) where
 type ScopingRule = SQLFieldName -> SQLFieldName
 
 class Project s where
-    project :: ScopingRule -> s -> [SQLExpr]
+    project :: ScopingRule -> s -> [SQLAliased SQLExpr]
 
 data QOrder = Ascending | Descending deriving (Show, Read, Eq, Ord, Enum)
 
@@ -71,6 +75,7 @@ data Query a where
     OuterJoin :: ( Project (Scope schema1), Project (Scope schema2)) =>
                  Query schema1 -> Query schema2 -> QExpr Bool -> Query (Maybe schema1 :|: Maybe schema2)
 
+    -- TODO Remove the function here, and just store a Scope b
     Project :: (Rescopable a, Rescopable b) => Query a -> (Scope a -> Scope b) -> Query b
 
     Limit :: Query a -> Integer -> Query a
@@ -91,6 +96,7 @@ data QExpr t where
     NothingE :: QExpr (Maybe a)
 
     IsNothingE :: Typeable a => QExpr (Maybe a) -> QExpr Bool
+    IsJustE :: Typeable a => QExpr (Maybe a) -> QExpr Bool
 
     InE :: (Typeable a, Show a) => QExpr a -> QExpr [a] -> QExpr Bool
 
@@ -98,6 +104,10 @@ data QExpr t where
 
     -- Aggregate functions
     CountE :: Typeable a => QExpr a -> QExpr Int
+    MinE, MaxE, SumE, AverageE :: Typeable a => QExpr a -> QExpr a
+
+    -- TODO Hack
+    RefE :: Int -> QExpr a -> QExpr b
 
 data QAssignment where
     QAssignment :: Table table =>
@@ -130,23 +140,28 @@ type family Scope' a c where
     Scope' (a :|: b) c = Scope' a c :|: Scope' b c
     -- Scope' (Entity x c) (Nullable c) = Entity x (Nullable (ScopedField x))
     Scope' (Entity x a) c = Entity x (ScopedField x c)
-    Scope' (QueryExpr t) c = QExpr t
+    Scope' (QueryExpr t) c = QExpr (ColumnType c t)
 
 type Scope a = Scope' a Column
 
 class Rescopable a where
-    rescope :: Proxy a -> Proxy c -> Proxy d ->  Scope' a c -> Scope' a d
+    rescope :: Proxy a -> Proxy c -> Proxy d ->  Scope' a c -> State Int (Scope' a d)
 instance Rescopable t => Rescopable (Maybe t) where
     rescope (Proxy :: Proxy (Maybe t)) (Proxy :: Proxy c) (Proxy :: Proxy d) s =
         rescope (Proxy :: Proxy t) (Proxy :: Proxy (Nullable c)) (Proxy :: Proxy (Nullable d)) s
 instance (Rescopable a, Rescopable b) => Rescopable (a :|: b) where
-    rescope (_ :: Proxy (a :|: b)) c d (a :|: b) = rescope (Proxy :: Proxy a) c d a :|: rescope (Proxy :: Proxy b) c d b
+    rescope (_ :: Proxy (a :|: b)) c d (a :|: b) = do x <- rescope (Proxy :: Proxy a) c d a
+                                                      y <- rescope (Proxy :: Proxy b) c d b
+                                                      return (x :|: y)
 instance Table x => Rescopable (Entity x a) where
-    rescope (_ :: Proxy (Entity x a)) (_ :: Proxy c) (_ :: Proxy d) (Entity phantom fields) = Entity (phantomChangeRep (Proxy :: Proxy x) scopeField phantom) (changeRep scopeField fields)
+    rescope (_ :: Proxy (Entity x a)) (_ :: Proxy c) (_ :: Proxy d) (Entity phantom fields) = pure $ Entity (phantomChangeRep (Proxy :: Proxy x) scopeField phantom) (changeRep scopeField fields)
         where scopeField :: ScopedField x c t -> ScopedField x d t
               scopeField = coerce -- type-safe coercion thanks to GHC!
 instance Rescopable (QueryExpr t) where
-    rescope _ _ _ q = q
+    rescope _ _ _ (RefE i q) = pure (RefE i q)
+    rescope _ _ _ q = do x <- get -- TODO this whole system is totally broken
+                         put (x + 1)
+                         pure (RefE x q)
 
 getScope' :: Proxy c -> Query a -> Scope' a c
 getScope' f x@(All _ i) = scopeFields (aProxy x) f i
@@ -159,10 +174,10 @@ getScope' f (Join q1 q2) = getScope' f q1 :|: getScope' f q2
 getScope' (f :: Proxy c) (LeftJoin q1 q2 _) = getScope' f q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
 getScope' (f :: Proxy c) (RightJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' f q2
 getScope' (f :: Proxy c) (OuterJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
-getScope' (f :: Proxy c) (Project (q :: Query b) proj :: Query a) = rescope (Proxy :: Proxy a) (Proxy :: Proxy Column) (Proxy :: Proxy c) $
-                                                                    proj $
-                                                                    rescope (Proxy :: Proxy b) (Proxy :: Proxy c) (Proxy :: Proxy Column) $
-                                                                    getScope' f q
+getScope' (f :: Proxy c) (Project (q :: Query b) proj :: Query a) = let scope = getScope' f q
+                                                                        beforeProj = evalState (rescope (Proxy :: Proxy b) (Proxy :: Proxy c) (Proxy :: Proxy Column) scope) 0
+                                                                        afterProj = proj beforeProj
+                                                                    in evalState (rescope (Proxy :: Proxy a) (Proxy :: Proxy Column) (Proxy :: Proxy c) afterProj) 0
 getScope' f (Limit q _) = getScope' f q
 getScope' f (Offset q _) = getScope' f q
 getScope' f (OrderBy q _ _) = getScope' f q
@@ -206,11 +221,16 @@ instance Show (QExpr t) where
     show NothingE = "NothingE"
 
     show (IsNothingE b) = concat ["IsNothingE ", show b]
+    show (IsJustE b) = concat ["IsJustE ", show b]
 
     show (InE a xs) = concat ["InE (", show a, ") ", show xs]
     show (ListE xs) = concat ["ListE ", show xs]
 
     show (CountE x) = concat ["CountE (", show x, ")"]
+    show (MinE x) = concat ["MinE (", show x, ")"]
+    show (MaxE x) = concat ["MaxE (", show x, ")"]
+    show (SumE x) = concat ["SumE (", show x, ")"]
+    show (AverageE x) = concat ["AverageE (", show x, ")"]
 
 instance Eq (Query a) where
     EmptySet == EmptySet = True
@@ -234,6 +254,7 @@ instance Eq (QExpr t) where
           Just q1 -> q1 == q2
 
     AndE a1 b1 == AndE a2 b2 = a1 == a2 && b1 == b2
+    OrE a1 b1 == OrE a2 b2 = a1 == a2 && b1 == b2
 
     EqE a1 b1 == EqE a2 b2 = case cast (a1, b1) of
                                Just (a1, b1)
@@ -249,6 +270,9 @@ instance Eq (QExpr t) where
     IsNothingE a == IsNothingE b = case cast a of
                                      Just a' -> a' == b
                                      Nothing -> False
+    IsJustE a == IsJustE b = case cast a of
+                               Just a' -> a' == b
+                               Nothing -> False
     InE a as == InE b bs = case cast (a, as) of
                              Nothing -> False
                              Just (a', as') -> a' == b && as' == bs
@@ -257,6 +281,18 @@ instance Eq (QExpr t) where
     CountE a == CountE b = case cast a of
                              Nothing -> False
                              Just a' -> a' == b
+    MinE a == MinE b = case cast a of
+                         Nothing -> False
+                         Just a' -> a' == b
+    MaxE a == MaxE b = case cast a of
+                         Nothing -> False
+                         Just a' -> a' == b
+    SumE a == SumE b = case cast a of
+                         Nothing -> False
+                         Just a' -> a' == b
+    AverageE a == AverageE b = case cast a of
+                                 Nothing -> False
+                                 Just a' -> a' == b
 
     _ == _ = False
 
