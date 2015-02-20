@@ -6,7 +6,9 @@ module Database.Beam
      , module Database.Beam.Schema
      , module Database.Beam.Backend
 
-     , Typeable, Generic ) where
+     , Typeable, Generic
+
+     , liftIO ) where
 
 import Database.Beam.Types
 import Database.Beam.SQL

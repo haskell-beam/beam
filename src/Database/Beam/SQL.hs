@@ -179,6 +179,8 @@ ppExpr (SQLAndE a b) = binOp "AND" a b
 ppExpr (SQLOrE a b) = binOp "OR" a b
 ppExpr (SQLIsNothingE q) = do qDoc <- ppExpr q
                               return (qDoc <+> text "IS NULL")
+ppExpr (SQLIsJustE q) = do qDoc <- ppExpr q
+                           return (qDoc <+> text "IS NOT NULL")
 ppExpr (SQLInE x xs) = do xDoc <- ppExpr x
                           xsDoc <- ppExpr xs
                           return (xDoc <+> text "IN" <+> xsDoc)
@@ -186,6 +188,14 @@ ppExpr (SQLListE xs) = do xsDoc <- mapM ppExpr xs
                           return (parens (hsep (punctuate comma xsDoc)))
 ppExpr (SQLCountE x) = do xDoc <- ppExpr x
                           return (text "COUNT" <> parens xDoc)
+ppExpr (SQLMinE x) = do xDoc <- ppExpr x
+                        return (text "MIN" <> parens xDoc)
+ppExpr (SQLMaxE x) = do xDoc <- ppExpr x
+                        return (text "MAX" <> parens xDoc)
+ppExpr (SQLSumE x) = do xDoc <- ppExpr x
+                        return (text "SUM" <> parens xDoc)
+ppExpr (SQLAverageE x) = do xDoc <- ppExpr x
+                            return (text "AVERAGE" <> parens xDoc)
 
 binOp :: String -> SQLExpr -> SQLExpr -> DocAndVals
 binOp op a b = do aD <- ppExpr a

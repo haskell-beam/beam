@@ -153,6 +153,7 @@ q ==> (f :: forall a. table a -> ForeignKey related a) =
     where fk scope = let ForeignKey x = f scope
                      in x
 
+-- | Like '(==>)' but with its arguments reversed
 (<==) :: ( Table table, Table related
          , Project (Entity related (ScopedField related Column))
          , Project (Entity table (ScopedField table Column)) ) =>
@@ -162,38 +163,27 @@ q <== (f :: forall a. related a -> ForeignKey table a) =
               (\(Entity tablePhantom tableFields :|: Entity _ related) -> foreignKeyJoin (Proxy :: Proxy related) (Proxy :: Proxy table)
                                                                                          (reference . f $ related) (primaryKey tablePhantom tableFields))
 
--- -- | Get all related records for a relationship
--- (#@*) :: ( Relationship subject object r
---          , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
---          , ScopeFields (QueryTable object) ) =>
---          Query (QueryTable subject) -> r -> Query (QueryTable subject :|: QueryTable object)
--- q #@* r = injectSubjectAndObjectProxy $
---           \subjectProxy (objectProxy :: Proxy object) ->
---           let allInRange = all_ (of_ :: object)
---           in (q `join_` allInRange) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
---     where injectSubjectAndObjectProxy :: (Proxy subject -> Proxy object -> Query (QueryTable subject :|: QueryTable object))
---                                       -> Query (QueryTable subject :|: QueryTable object)
---           injectSubjectAndObjectProxy f = f Proxy Proxy
+-- | Given a query for a table, and an accessor for a foreignkey reference, return a query that returns all rows from the left query, regardless of whether
+--   an associated row exists for the foreign key (a LEFT JOIN)
+(=>?) :: ( Table table, Table related
+         , Project (Entity related (ScopedField related Column))
+         , Project (Entity table (ScopedField table Column)) ) =>
+         Query (Entity table Column) -> (forall a. table a -> ForeignKey related a) -> Query (Entity table Column :|: Maybe (Entity related Column))
+q =>? (f :: forall a. table a -> ForeignKey related a) =
+    leftJoin_ q (All (Proxy :: Proxy related) 0,
+                 \(Entity _ table :|: Entity relatedPhantom relatedFields) -> foreignKeyJoin (Proxy :: Proxy table) (Proxy :: Proxy related) (fk table) (primaryKey relatedPhantom relatedFields))
+    where fk scope = let ForeignKey x = f scope
+                     in x
 
--- (#*@) :: ( Relationship subject object r
---          , Project (Scope (QueryTable subject)), Project (Scope (QueryTable object))
---          , ScopeFields (QueryTable subject) ) =>
---          Query (QueryTable object) -> r -> Query (QueryTable subject :|: QueryTable object)
--- q #*@ r = let query = (all_ of_ `join_` q) `where_` (\(sTbl :|: oTbl) -> joinCondition r subjectProxy objectProxy sTbl oTbl)
-
---               proxies :: Query (QueryTable subject :|: QueryTable object) -> (Proxy subject, Proxy object)
---               proxies _ = (Proxy, Proxy)
---               (subjectProxy, objectProxy) = proxies query
---           in query
-
-(#) :: (Table table, Typeable c, Typeable ty) => (a -> ScopedField table c ty) -> a -> QExpr (ColumnType c ty)
-f # t = field_ (f t)
-
--- (#?) :: (Table table, Typeable ty) => (a -> Nullable (ScopedField table) ty) -> a -> QExpr (Maybe ty)
--- f #? t = let Nullable x = f t
---          in field_ x
-
-infixr 5 # --, #?
+(<=?) :: ( Table table, Table related
+         , Project (Entity related (ScopedField related Column))
+         , Project (Entity table (ScopedField table Column)) ) =>
+        Query (Entity table Column) -> (forall a. related a -> ForeignKey table a) -> Query (Entity table Column :|: Maybe (Entity related Column))
+q <=? (f :: forall a. related a -> ForeignKey table a) =
+    leftJoin_ q
+              (All (Proxy :: Proxy related) 0,
+               \(Entity tablePhantom tableFields :|: Entity _ related) -> foreignKeyJoin (Proxy :: Proxy related) (Proxy :: Proxy table)
+                                                                                         (reference . f $ related) (primaryKey tablePhantom tableFields))
 
 (<#), (>#), (<=#), (>=#), (==#) :: (Typeable a, Show a) => QExpr a -> QExpr a -> QExpr Bool
 (==#) = EqE
@@ -221,6 +211,13 @@ in_ = InE
 count_ :: Typeable a => QExpr a -> QExpr Int
 count_ = CountE
 
+min_, max_, sum_, average_ :: Typeable a => QExpr a -> QExpr a
+min_ = MinE
+max_ = MaxE
+sum_ = SumE
+average_ = AverageE
+
+
 text_ :: T.Text -> QExpr T.Text
 text_ = ValE . SqlString . T.unpack
 num_ :: Integral a => a -> QExpr a
@@ -237,5 +234,6 @@ just_ = JustE
 nothing_ :: QExpr (Maybe a)
 nothing_ = NothingE
 
-isNothing_ :: Typeable a => QExpr (Maybe a) -> QExpr Bool
+isNothing_, isJust_ :: Typeable a => QExpr (Maybe a) -> QExpr Bool
 isNothing_ = IsNothingE
+isJust_ = IsJustE
