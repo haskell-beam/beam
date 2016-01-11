@@ -104,11 +104,23 @@ rewriteExprM f fq (JustE a) = do a' <- rewriteExprM f fq a
                                  rwE f fq (JustE a')
 rewriteExprM f fq (IsNothingE a) = do a' <- rewriteExprM f fq a
                                       rwE f fq (IsNothingE a')
+rewriteExprM f fq (IsJustE a) = do a' <- rewriteExprM f fq a
+                                   rwE f fq (IsJustE a')
 rewriteExprM f fq (InE a b) = rewriteBin f fq InE a b
 rewriteExprM f fq (ListE as) = do as' <- mapM (rewriteExprM f fq) as
                                   rwE f fq (ListE as')
 rewriteExprM f fq (CountE x) = do x' <- rewriteExprM f fq x
                                   rwE f fq (CountE x')
+rewriteExprM f fq (MinE x) = do x' <- rewriteExprM f fq x
+                                rwE f fq (MinE x')
+rewriteExprM f fq (MaxE x) = do x' <- rewriteExprM f fq x
+                                rwE f fq (MaxE x')
+rewriteExprM f fq (SumE x) = do x' <- rewriteExprM f fq x
+                                rwE f fq (SumE x')
+rewriteExprM f fq (AverageE x) = do x' <- rewriteExprM f fq x
+                                    rwE f fq (AverageE x')
+rewriteExprM f fq (RefE i x) = do x' <- rewriteExprM f fq x
+                                  rwE f fq (RefE i x')
 rewriteExprM f fq x = rwE f fq x
 
 -- * Query optimizations
