@@ -19,7 +19,9 @@ data TodoList column = TodoList
                      , todoListDescription :: column (Maybe Text) }
                        deriving (Generic, Typeable)
 deriving instance (Show (column Text), Show (column (Maybe Text))) => Show (TodoList column)
-instance Table TodoList
+instance Table TodoList where
+    tblFieldSettings = defTblFieldSettings
+                       & todoListName .~ 
 
 data TodoItem column = TodoItem
                      { todoItemName :: column Text
@@ -39,20 +41,6 @@ data TodoLog column = TodoLog
 deriving instance ( Show (column Text)
                   , Show (column (Maybe Int)) ) => Show (TodoLog column)
 instance Table TodoLog
-
--- instance Relationship TodoListTable TodoListItemTable TodoListItems where
---     type SubjectFields TodoListTable TodoListItemTable TodoListItems = PrimaryKey TodoListTable
---     type ObjectFields TodoListTable TodoListItemTable TodoListItems = TodoList :-> TableId
-
--- data HistDataTable = HistDataTable (Column CompanyId Int)
---                                    (Column Revenue Int)
---                                    (Column Date UTCTime)
---                      deriving (Generic, Typeable, Show)
--- instance Table HistDataTable where
---     type PrimaryKey HistDataTable = CompanyId :|: Date
--- instance Field HistDataTable CompanyId
--- instance Field HistDataTable Revenue
--- instance Field HistDataTable Date
 
 data MyDatabase table = MyDatabase
     { todoListTable :: table TodoList
@@ -90,22 +78,6 @@ test fp = do beam <- openDatabase myDatabase (Sqlite3Settings fp)
                                `leftJoin_` ( all_ (of_ :: Simple TodoLog)
                                            , \(Entity (PK listId) _ :|: _ :|: Entity _ todoLog) ->
                                                just_ (field_ listId) ==# tableId . reference . todoLogList #? todoLog ))
-                 es <- src $$ C.consume
-                 liftIO (mapM_ (putStrLn . show) es)
+                 es <- src $$ C.mapM_ (liftIO . putStrLn . show)
 
                  return ()
-
---              let x = ((all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")) #@* TodoListItems
---                  y = (all_ (of_ :: TodoListTable)) `where_` (\tbl -> (tbl # Name) ==# text_ "List 1")
---                  xOpt = rewriteQuery allQueryOpts allExprOpts x
-
---              putStrLn (concat ["Query fully optimized is: ", show xOpt ])
---              src <- runQuery x beam
---              let printAllLines = await >>=
---                                  \x -> case x of
---                                          Nothing -> return ()
---                                          Just  x -> liftIO (putStrLn (show x)) >> printAllLines
---              case src of
---                Left err -> putStrLn (concat ["There was an error with the request: ", err])
---                Right src -> src $$ printAllLines
---              withHDBCConnection beam commit

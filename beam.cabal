@@ -29,6 +29,6 @@ library
                        Database.Beam.Schema.Tables
                        Database.Beam.Schema.Relationships
                        Database.Beam.Schema.Fields
-  build-depends:       base >=4.7 && <4.8, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible, void
+  build-depends:       base >=4.7 && <4.8, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible, void, lens-sop, fclabels
   hs-source-dirs:      src
   default-language:    Haskell2010
