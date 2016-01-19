@@ -17,7 +17,7 @@ module Database.Beam.Schema.Tables
     , Simple(..), TableSettings(..)
 
     -- * Tables
-    , Table(..), Entity(..), allValues, defTblFieldSettings, defFieldSettings
+    , Table(..), allValues, defTblFieldSettings, defFieldSettings
     , ChangeRep(..), AllValues(..)
 
     -- * Fields
@@ -38,6 +38,7 @@ import Control.Monad.State
 import Control.Monad.Error
 
 import Data.Proxy
+import Data.Coerce
 import Data.Typeable
 import Data.Text (Text)
 import Data.String
@@ -125,10 +126,10 @@ newtype Dummy a = Dummy Void
 -- * Tables
 
 -- | Default primary key type. Just uses one 'Int' column
-newtype PK column = PK
-                  { tableId :: column Int }
-                    deriving Generic
-instance Show (column Int) => Show (PK column) where
+newtype PK column t = PK
+                    { tableId :: column t }
+                      deriving Generic
+instance Show (column t) => Show (PK column t) where
     showsPrec d (PK x) = showParen (d > 10) $ showString "PK ". showsPrec 11 x
 
 -- | Column constructor that lets you specify settings for a field of type `ty` in `table`.
@@ -199,30 +200,14 @@ to' = to
 class Typeable table  => Table (table :: (* -> *) -> *) where
 
     -- | A data type representing the types of primary keys for this table. This type must be an instance of 'Generic'.
-    --
-    --   Uses 'PK' by default.
     type PrimaryKey table (column :: * -> *) :: *
-    type PrimaryKey table column = PK column
-
-    -- | Phantom fields are fields that are not part of the table type definition, but which nonetheless appear in the SQL table.
-    --
-    --   By default, this is used to inject the default primary key `id' column into the SQL table, but you could use it to define
-    --   your own implicit fields. You can override the 'makePhantomValues' method to automatically set these fields whenever the
-    --   table is being inserted or updated in the database.
-    --
-    --   By default, this is 'PK' and 'phantomFieldSettings' ensures that this column is set to auto increment.
-    type PhantomFields table (column :: (* -> *)) :: *
-    type PhantomFields table column = PK column
 
     pkChangeRep :: Proxy table -> (forall a. f a -> g a) -> PrimaryKey table f -> PrimaryKey table g
-    default pkChangeRep :: ChangeRep (PrimaryKey table f) (PrimaryKey table g) f g =>
+    default pkChangeRep :: ( Generic (PrimaryKey table f)
+                           , Generic (PrimaryKey table g)
+                           , ChangeRep (PrimaryKey table f) (PrimaryKey table g) f g) =>
                            Proxy table -> (forall a. f a -> g a) -> PrimaryKey table f -> PrimaryKey table g
     pkChangeRep _ = changeRep'
-
-    phantomChangeRep :: Proxy table -> (forall a. f a -> g a) -> PhantomFields table f -> PhantomFields table g
-    default phantomChangeRep :: ChangeRep (PhantomFields table f) (PhantomFields table g) f g =>
-                                Proxy table -> (forall a. f a -> g a) -> PhantomFields table f -> PhantomFields table g
-    phantomChangeRep _ = changeRep'
 
     changeRep :: (forall a. f a -> g a) -> table f -> table g
     default changeRep :: ChangeRep (table f) (table g) f g =>
@@ -234,69 +219,38 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
                            Proxy table -> (forall a. FieldSchema a => f a -> b) -> PrimaryKey table f -> [b]
     pkAllValues _ = allValues'
 
-    phantomAllValues :: Proxy table -> (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> [b]
-    default phantomAllValues :: AllValues f (PhantomFields table f) =>
-                                Proxy table -> (forall a. FieldSchema a => f a -> b) -> PhantomFields table f -> [b]
-    phantomAllValues _ = allValues'
-
     fieldAllValues :: (forall a. FieldSchema a => f a -> b) -> table f -> [b]
     default fieldAllValues :: AllValues f (table f) =>
                               (forall a. FieldSchema a => f a -> b) -> table f -> [b]
     fieldAllValues = allValues'
 
-    -- | Given a table and its phantom fields, this should return the PrimaryKey from the table. By keeping this polymorphic over column,
+    -- | Given a table, this should return the PrimaryKey from the table. By keeping this polymorphic over column,
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
-    primaryKey :: PhantomFields table column -> table column -> PrimaryKey table column
-    default primaryKey :: ( PrimaryKey table column ~ PhantomFields table column) =>
-                          PhantomFields table column -> table column -> PrimaryKey table column
-    primaryKey pk _ = pk
+    primaryKey :: table column -> PrimaryKey table column
 
     tblFieldSettings :: TableSettings table
     default tblFieldSettings :: ( Generic (TableSettings table)
                                 , GDefaultTableFieldSettings (Rep (TableSettings table) ())) => TableSettings table
     tblFieldSettings = defTblFieldSettings
 
-    phantomFieldSettings :: Proxy table -> PhantomFields table (TableField table)
-    default phantomFieldSettings :: ( PhantomFields table (TableField table) ~ PK (TableField table) ) =>
-                                    Proxy table -> PhantomFields table (TableField table)
-    phantomFieldSettings _ = PK ( (defFieldSettings "id")
-                                  { fieldConstraints = [SQLPrimaryKeyAutoIncrement] })
-
     dbTableName :: Proxy table -> Text
     dbTableName (_ :: Proxy table) = T.pack (tyConName (typeRepTyCon (typeOf (undefined :: table Dummy))))
 
     reifyTableSchema :: Proxy table -> ReifiedTableSchema
-    default reifyTableSchema :: ( GReifySchema (Rep (PhantomFields table (TableField table)) () :|: Rep (TableSettings table) ())
-                                , Generic (PhantomFields table (TableField table))
+    default reifyTableSchema :: ( GReifySchema (Rep (TableSettings table) ())
                                 , Generic (TableSettings table) ) =>
                                 Proxy table -> ReifiedTableSchema
-    reifyTableSchema (table :: Proxy table) = gReifySchema (from' (phantomFieldSettings table) :|: from' (tblFieldSettings :: TableSettings table))
+    reifyTableSchema (table :: Proxy table) = gReifySchema (from' (tblFieldSettings :: TableSettings table))
 
     makeSqlValues :: table Column -> [SqlValue]
     default makeSqlValues :: (Generic (table Column), GMakeSqlValues (Rep (table Column) ())) => table Column -> [SqlValue]
-    makeSqlValues table = makePhantomValues table ++ gMakeSqlValues (from' table)
-
-    -- | The default behavior is to assign the default phantom field schema (just an integer primary key) a single value of null, to let autoincrement work
-    makePhantomValues :: table Column -> [SqlValue]
-    makePhantomValues _ = [SqlNull]
-
-    phantomFromSqlValues :: Proxy table -> FromSqlValuesM (PhantomFields table Column)
-    default phantomFromSqlValues :: ( Generic (PhantomFields table Column)
-                                    , GFromSqlValues (Rep (PhantomFields table Column)) ) =>
-                                    Proxy table -> FromSqlValuesM (PhantomFields table Column)
-    phantomFromSqlValues (_ :: Proxy table) = to <$> (gFromSqlValues :: FromSqlValuesM (Rep (PhantomFields table Column) ()))
+    makeSqlValues table = gMakeSqlValues (from' table)
 
     tableFromSqlValues :: FromSqlValuesM (table Column)
     default tableFromSqlValues :: ( Generic (table Column)
                                   , GFromSqlValues (Rep (table Column)) ) =>
                                   FromSqlValuesM (table Column)
     tableFromSqlValues = to <$> gFromSqlValues
-
-    phantomValuesNeeded :: Proxy table -> Int
-    default phantomValuesNeeded :: ( GReifySchema (Rep (PhantomFields table (TableField table)) ())
-                                   , Generic (PhantomFields table (TableField table)) ) =>
-                                   Proxy table -> Int
-    phantomValuesNeeded table = length (gReifySchema (from' (phantomFieldSettings table)))
 
     tableValuesNeeded :: Proxy table -> Int
     default tableValuesNeeded :: ( GReifySchema (Rep (TableSettings table) ())
@@ -392,8 +346,8 @@ class AllValues f x where
 instance (Generic x, GAllValues f (Rep x ())) => AllValues f x where
     allValues' f x = gAllValues f (from' x)
 
-allValues :: Table t => (forall a. FieldSchema a => f a -> b) -> PhantomFields t f -> t f -> [b]
-allValues f p (t :: t f) = phantomAllValues (Proxy :: Proxy t) f p ++ fieldAllValues f t
+allValues :: Table t => (forall a. FieldSchema a => f a -> b) -> t f -> [b]
+allValues f (t :: t f) = fieldAllValues f t
 
 class GDefaultTableFieldSettings x where
     gDefTblFieldSettings :: Proxy x -> x
@@ -422,9 +376,8 @@ instance ( Table table, Table related
 
     gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (ForeignKey related (TableField table))) p )) = M1 $ K1 $ ForeignKey $ primaryKeySettings'
         where tableSettings = tblFieldSettings :: TableSettings related
-              phantomTblSettings = phantomFieldSettings (Proxy :: Proxy related)
               primaryKeySettings :: PrimaryKey related (TableField related)
-              primaryKeySettings = primaryKey phantomTblSettings tableSettings
+              primaryKeySettings = primaryKey tableSettings
 
               primaryKeySettings' :: PrimaryKey related (TableField table)
               primaryKeySettings' = to' (gChangeRep convertToForeignKeyField (from' primaryKeySettings))
@@ -434,7 +387,7 @@ instance ( Table table, Table related
                                                , fieldConstraints = removeConstraints (fieldConstraints tf) }
 
 
-              removeConstraints = filter (\x -> x /= SQLPrimaryKey && x /= SQLPrimaryKeyAutoIncrement && x /= SQLAutoIncrement)
+              removeConstraints = filter (\x -> x /= SQLPrimaryKey && x /= SQLAutoIncrement)
 
               keyName = T.pack (selName (undefined :: S1 f (K1 Generic.R (ForeignKey related (TableField table))) ()))
 
@@ -477,10 +430,11 @@ instance FieldSchema f => GReifySchema (K1 Generic.R (Nullable (TableField t) f)
 instance (GReifySchema (a p), GReifySchema (b p)) => GReifySchema ((a :*: b) p) where
     gReifySchema (a :*: b) = gReifySchema a ++ gReifySchema b
 instance ( Generic (PrimaryKey related f)
+         , Table related
          , GReifySchema (Rep (PrimaryKey related f) ()) ) =>
     GReifySchema (K1 Generic.R (ForeignKey related f) p) where
 
-    gReifySchema (K1 (ForeignKey x)) = gReifySchema (from' x)
+    gReifySchema (K1 (ForeignKey x :: ForeignKey related f)) = gReifySchema (from' x)
 
 
 class GFromSqlValues schema where
@@ -526,17 +480,17 @@ instance ( Generic (PrimaryKey related f)
     GMakeSqlValues (K1 Generic.R (ForeignKey related f) a) where
     gMakeSqlValues (K1 (ForeignKey x)) = gMakeSqlValues (from' x)
 
-data Entity table f = Entity
-                    { phantomFields :: PhantomFields table f
-                    , tableFields   :: table f }
-instance (Show (PhantomFields table Column), Show (table Column)) => Show (Entity table Column) where
-    showsPrec d (Entity phantoms table) =
-        showParen (d > 10) $
-        showString "Entity " . showsPrec 11 phantoms . showString " " . showsPrec 11 table
+-- data Entity table f = Entity
+--                     { phantomFields :: PhantomFields table f
+--                     , tableFields   :: table f }
+-- instance (Show (PhantomFields table Column), Show (table Column)) => Show (Entity table Column) where
+--     showsPrec d (Entity phantoms table) =
+--         showParen (d > 10) $
+--         showString "Entity " . showsPrec 11 phantoms . showString " " . showsPrec 11 table
 
-instance Table table => FromSqlValues (Entity table Column) where
-    fromSqlValues' = Entity <$> phantomFromSqlValues (Proxy :: Proxy table) <*> (tableFromSqlValues :: FromSqlValuesM (table Column))
-    valuesNeeded (_ :: Proxy (Entity tbl Column)) = phantomValuesNeeded (Proxy :: Proxy tbl) + tableValuesNeeded (Proxy :: Proxy tbl)
+-- instance Table table => FromSqlValues (Entity table Column) where
+--     fromSqlValues' = Entity <$> phantomFromSqlValues (Proxy :: Proxy table) <*> (tableFromSqlValues :: FromSqlValuesM (table Column))
+--     valuesNeeded (_ :: Proxy (Entity tbl Column)) = phantomValuesNeeded (Proxy :: Proxy tbl) + tableValuesNeeded (Proxy :: Proxy tbl)
 
 -- * Field and table support
 

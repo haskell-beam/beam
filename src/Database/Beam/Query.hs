@@ -11,7 +11,7 @@ module Database.Beam.Query
     , inBeamTxn, query, queryList, getOne
     , insert, save, update
     , findByPk_ --, matching_
-    , ref, justRef, nothingRef, pk
+    , ref, justRef, nothingRef
 
     , debugQuerySQL ) where
 
@@ -101,9 +101,9 @@ instance (Project a, Project b) => Project (a :|: b) where
     project r (a :|: b) = project r a ++ project r b
 instance Project (ScopedField table c ty) where
     project r x = [ SQLAliased (SQLFieldE . r . mkQualifiedFieldName $ x) Nothing ]
-instance Table table => Project (Entity table (ScopedField table c)) where
-    project r (Entity phantom tbl :: Entity table (ScopedField table c)) =
-        allValues getScopedField phantom tbl
+instance Table table => Project (table (ScopedField table c)) where
+    project r (tbl :: table (ScopedField table c)) =
+        allValues getScopedField tbl
         where getScopedField :: ScopedField table c field -> SQLAliased SQLExpr
               getScopedField x = SQLAliased (SQLFieldE . r . mkQualifiedFieldName $ x) Nothing
 instance Project (QExpr a) where
@@ -237,7 +237,7 @@ runQuery q beam =
                                                 Nothing -> return ()
                               return (Right source)
 
-runInsert :: (MonadIO m, Table table, FromSqlValues (Entity table Column)) => Simple table -> Beam m -> m (Either String (Entity table Column))
+runInsert :: (MonadIO m, Table table, FromSqlValues (table Column)) => Simple table -> Beam m -> m (Either String (table Column))
 runInsert (table :: Simple table) beam =
     do let insertCmd = Insert sqlInsert
            sqlInsert@(SQLInsert tblName sqlValues) = (insertToSQL table)
@@ -257,11 +257,11 @@ runInsert (table :: Simple table) beam =
            autoIncrementsAreNull = zipWith (\(_, columnSchema) value -> hasAutoIncrementConstraint columnSchema && value == SqlNull) tableSchema sqlValues
            hasNullAutoIncrements = or autoIncrementsAreNull
 
-           hasAutoIncrementConstraint (SQLColumnSchema { csConstraints = cs }) = isJust (find (\x -> x == SQLPrimaryKeyAutoIncrement || x == SQLAutoIncrement) cs)
+           hasAutoIncrementConstraint (SQLColumnSchema { csConstraints = cs }) = isJust (find (== SQLAutoIncrement) cs)
 
        insertedValues <- if hasNullAutoIncrements
                          -- TODO, this needs to ensure that the values are returned in the correct column order
-                         then getLastInsertedRow beam tblName
+                         then liftIO (putStrLn "Got null auto increments") >> getLastInsertedRow beam tblName
                          else return sqlValues
        return (fromSqlValues insertedValues)
 
@@ -270,10 +270,10 @@ runUpdate update beam =
     do withHDBCConnection beam (\conn -> liftIO (runSQL' conn (Update update)))
        return (Right ())
 
-updateWhere :: ( ScopeFields (Entity table Column)
-               , Table table) => Proxy table -> (Scope (Entity table Column) -> ([QAssignment], QExpr Bool)) -> SQLUpdate
+updateWhere :: ( ScopeFields (table Column)
+               , Table table) => Proxy table -> (Scope (table Column) -> ([QAssignment], QExpr Bool)) -> SQLUpdate
 updateWhere (_ :: Proxy table) mkAssignmentsAndWhere = go
-    where tblProxy :: Proxy (Entity table Column)
+    where tblProxy :: Proxy (table Column)
           tblProxy = Proxy
           go =
             let (assignments, whereClause) = mkAssignmentsAndWhere (scopeFields tblProxy (Proxy :: Proxy Column) 0)
@@ -282,12 +282,12 @@ updateWhere (_ :: Proxy table) mkAssignmentsAndWhere = go
                 sqlTables = [dbTableName (Proxy :: Proxy table)]
             in (SQLUpdate sqlTables sqlAssignments sqlWhereClause)
 
-updateEntity :: Table table => Entity table Column -> SQLUpdate
-updateEntity qt@(Entity phantom table :: Entity table Column) = updateWhere tProxy
-                                                         (\s -> (assignments, findByPrimaryKeyExpr s qt))
+updateEntity :: Table table => table Column -> SQLUpdate
+updateEntity qt@(table :: table Column) = updateWhere tProxy
+                                                      (\s -> (assignments, findByPrimaryKeyExpr s qt))
     where tProxy = Proxy :: Proxy table
-          fieldNames = allValues fieldName (phantomFieldSettings tProxy) (tblFieldSettings :: TableSettings table)
-          exprs = allValues mkValE phantom table
+          fieldNames = allValues fieldName (tblFieldSettings :: TableSettings table)
+          exprs = allValues mkValE table
 
           mkValE :: FieldSchema a => Column a -> GenQExpr
           mkValE (x :: Column a) = GenQExpr (ValE (makeSqlValue (columnValue x)) :: QExpr a)
@@ -295,18 +295,17 @@ updateEntity qt@(Entity phantom table :: Entity table Column) = updateWhere tPro
           assignments = zipWith (\name (GenQExpr (q :: QExpr ty)) -> QAssignment (ScopedField 0 name :: ScopedField table Column ty) q) fieldNames exprs
 
 findByPrimaryKeyExpr :: Table table =>
-                        Entity table (ScopedField table Column) -> Entity table Column -> QExpr Bool
-findByPrimaryKeyExpr (Entity phantom fields) (table :: Entity table Column) = primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy table) (primaryKey phantom fields) (primaryKey tablePhantom tableFields)
-    where Entity tablePhantom tableFields = table
+                        table (ScopedField table Column) -> table Column -> QExpr Bool
+findByPrimaryKeyExpr fields (tableFields :: table Column) = primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy table) (primaryKey fields) (primaryKey tableFields)
 
 findByPk_ :: Table table =>
-             PrimaryKey table Column -> Query (Entity table Column)
+             PrimaryKey table Column -> Query (table Column)
 findByPk_ pk = let query = all_ (queriedTable query) `where_`
-                           (\(Entity phantom fields) -> primaryKeyExpr (tblProxy query) (tblProxy query) (primaryKey phantom fields) pk)
+                           (\fields -> primaryKeyExpr (tblProxy query) (tblProxy query) (primaryKey fields) pk)
 
-                   queriedTable :: Query (Entity table Column) -> table Column
+                   queriedTable :: Query (table Column) -> table Column
                    queriedTable _ = undefined
-                   tblProxy :: Query (Entity table Column) -> Proxy table
+                   tblProxy :: Query (table Column) -> Proxy table
                    tblProxy _ = Proxy
                in query
 
@@ -366,22 +365,22 @@ queryList :: (MonadIO m, Functor m, FromSqlValues a, Project (Scope a)) => Query
 queryList q = do src <- query q
                  src $$ C.consume
 
-insert :: (MonadIO m, Functor m, Table t, FromSqlValues (Entity t Column)) => Simple t -> BeamT e m (Entity t Column)
+insert :: (MonadIO m, Functor m, Table t, FromSqlValues (t Column)) => Simple t -> BeamT e m (t Column)
 insert table = BeamT (\beam -> toBeamResult <$> runInsert table beam)
 
-save :: ( MonadIO m, Functor m, Table table ) => Entity table Column -> BeamT e m ()
+save :: ( MonadIO m, Functor m, Table table ) => table Column -> BeamT e m ()
 save qt = BeamT (\beam -> toBeamResult <$> runUpdate (updateEntity qt) beam)
 
 update :: ( MonadIO m, Functor m, Table table ) =>
-          Entity table Column
-       -> (Scope (Entity table Column) -> [QAssignment])
+          table Column
+       -> (Scope (table Column) -> [QAssignment])
        -> BeamT e m ()
-update (qt :: Entity table Column) mkAssignments = set (Proxy :: Proxy table) mkAssignments (flip findByPrimaryKeyExpr qt)
+update (qt :: table Column) mkAssignments = set (Proxy :: Proxy table) mkAssignments (flip findByPrimaryKeyExpr qt)
 
 set :: ( MonadIO m, Functor m, Table table ) =>
        Proxy table
-    -> (Scope (Entity table Column) -> [QAssignment])
-    -> (Scope (Entity table Column) -> QExpr Bool)
+    -> (Scope (table Column) -> [QAssignment])
+    -> (Scope (table Column) -> QExpr Bool)
     -> BeamT e m ()
 set tbl mkAssignments mkWhere = BeamT (\beam -> toBeamResult <$> runUpdate (updateWhere tbl (mkAssignments &&& mkWhere)) beam)
 
@@ -403,23 +402,21 @@ from' = from
 to' :: Generic a => Rep a () -> a
 to' = to
 
-ref :: Table t => Entity t c -> ForeignKey t c
-ref = ForeignKey . pk
+ref :: Table t => t c -> ForeignKey t c
+ref = ForeignKey . primaryKey
 justRef :: Table related =>
-           Entity related Column -> ForeignKey related (Nullable Column)
-justRef (e :: Entity related Column) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (pk e))
+           related Column -> ForeignKey related (Nullable Column)
+justRef (e :: related Column) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (primaryKey e))
     where just :: Column a -> Nullable Column a
           just (Column x) = column (Just x)
 nothingRef :: Table related =>
-              Query (Entity related Column) -> ForeignKey related (Nullable Column)
-nothingRef (_ :: Query (Entity related Column)) = ForeignKey (pkChangeRep (Proxy :: Proxy related) nothing (pk entitySettings))
+              Query (related Column) -> ForeignKey related (Nullable Column)
+nothingRef (_ :: Query (related Column)) = ForeignKey (pkChangeRep (Proxy :: Proxy related) nothing (primaryKey fieldSettings))
     where nothing :: TableField related a -> Nullable Column a
           nothing x = column Nothing
 
-          entitySettings = Entity (phantomFieldSettings (Proxy :: Proxy related)) (tblFieldSettings :: TableSettings related)
-
-pk :: Table t => Entity t c -> PrimaryKey t c
-pk (Entity phantom fields) = primaryKey phantom fields
+          fieldSettings :: TableSettings related
+          fieldSettings = tblFieldSettings
 
 debugQuerySQL :: Project (Scope a) => Query a -> (String, [SqlValue])
 debugQuerySQL q = ppSQL (Select (queryToSQL q))

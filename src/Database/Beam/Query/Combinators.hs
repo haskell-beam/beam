@@ -25,7 +25,7 @@ import GHC.Generics
 of_ :: Table table => table Column
 of_ = undefined
 
-all_ :: (Table table, ScopeFields (Entity table Column)) => table Column -> Query (Entity table Column)
+all_ :: (Table table, ScopeFields (table Column)) => table Column -> Query (table Column)
 all_ (_ :: table Column) = All (Proxy :: Proxy table) 0
 
 maxTableOrdinal :: Query a -> Int
@@ -106,20 +106,20 @@ primaryKeyExpr (_ :: Proxy table) (_ :: Proxy related) pkFields pkValues =
           from' = from
 
 (@->) :: Table related =>
-         Entity table Column -> (forall a. table a -> ForeignKey related a) -> Query (Entity related Column)
-(Entity _ table) @-> (f :: forall a. table a -> ForeignKey related a) =
+         table Column -> (forall a. table a -> ForeignKey related a) -> Query (related Column)
+table @-> (f :: forall a. table a -> ForeignKey related a) =
     all_ (of_ :: related Column)
-      `where_` (\(Entity phantom fields) -> primaryKeyExpr (Proxy :: Proxy related) (Proxy :: Proxy related) (primaryKey phantom fields) pk)
+      `where_` (\fields -> primaryKeyExpr (Proxy :: Proxy related) (Proxy :: Proxy related) (primaryKey fields) pk)
     where pk :: PrimaryKey related Column
           ForeignKey pk = f table
 
 (<-@) :: ( Table related, Table table ) =>
-         (forall a. related a -> ForeignKey table a) -> Entity table Column -> Query (Entity related Column)
-(f :: forall a. related a -> ForeignKey table a) <-@ (Entity phantom fields) =
+         (forall a. related a -> ForeignKey table a) -> table Column -> Query (related Column)
+(f :: forall a. related a -> ForeignKey table a) <-@ fields =
     all_ (of_ :: related Column)
-      `where_` (\(Entity _ scope) ->
+      `where_` (\scope ->
                 let ForeignKey pk = f scope
-                in primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy related) pk (primaryKey phantom fields))
+                in primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy related) pk (primaryKey fields))
 
 foreignKeyJoin :: ( Table table, Table related ) =>
                   Proxy table -> Proxy related -> PrimaryKey related (ScopedField table Column) -> PrimaryKey related (ScopedField related Column) -> QExpr Bool
@@ -144,46 +144,46 @@ foreignKeyJoin (_ :: Proxy table) (_ :: Proxy related) parent related = foldl1 (
 
 -- | Given a query for a table, and an accessor for a foreignkey reference, return a query that joins the two tables
 (==>) :: ( Table table, Table related
-         , Project (Entity related (ScopedField related Column))
-         , Project (Entity table (ScopedField table Column)) ) =>
-         Query (Entity table Column) -> (forall a. table a -> ForeignKey related a) -> Query (Entity table Column :|: Entity related Column)
+         , Project (related (ScopedField related Column))
+         , Project (table (ScopedField table Column)) ) =>
+         Query (table Column) -> (forall a. table a -> ForeignKey related a) -> Query (table Column :|: related Column)
 q ==> (f :: forall a. table a -> ForeignKey related a) =
     join_ q (All (Proxy :: Proxy related) 0) `where_`
-      (\(Entity _ table :|: Entity relatedPhantom relatedFields) -> foreignKeyJoin (Proxy :: Proxy table) (Proxy :: Proxy related) (fk table) (primaryKey relatedPhantom relatedFields))
+      (\(table :|: relatedFields) -> foreignKeyJoin (Proxy :: Proxy table) (Proxy :: Proxy related) (fk table) (primaryKey relatedFields))
     where fk scope = let ForeignKey x = f scope
                      in x
 
 -- | Like '(==>)' but with its arguments reversed
 (<==) :: ( Table table, Table related
-         , Project (Entity related (ScopedField related Column))
-         , Project (Entity table (ScopedField table Column)) ) =>
-         Query (Entity table Column) -> (forall a. related a -> ForeignKey table a) -> Query (Entity table Column :|: Entity related Column)
+         , Project (related (ScopedField related Column))
+         , Project (table (ScopedField table Column)) ) =>
+         Query (table Column) -> (forall a. related a -> ForeignKey table a) -> Query (table Column :|: related Column)
 q <== (f :: forall a. related a -> ForeignKey table a) =
     join_ q (All (Proxy :: Proxy related) 0) `where_`
-              (\(Entity tablePhantom tableFields :|: Entity _ related) -> foreignKeyJoin (Proxy :: Proxy related) (Proxy :: Proxy table)
-                                                                                         (reference . f $ related) (primaryKey tablePhantom tableFields))
+              (\(tableFields :|: related) -> foreignKeyJoin (Proxy :: Proxy related) (Proxy :: Proxy table)
+                                                            (reference . f $ related) (primaryKey tableFields))
 
 -- | Given a query for a table, and an accessor for a foreignkey reference, return a query that returns all rows from the left query, regardless of whether
 --   an associated row exists for the foreign key (a LEFT JOIN)
 (=>?) :: ( Table table, Table related
-         , Project (Entity related (ScopedField related Column))
-         , Project (Entity table (ScopedField table Column)) ) =>
-         Query (Entity table Column) -> (forall a. table a -> ForeignKey related a) -> Query (Entity table Column :|: Maybe (Entity related Column))
+         , Project (related (ScopedField related Column))
+         , Project (table (ScopedField table Column)) ) =>
+         Query (table Column) -> (forall a. table a -> ForeignKey related a) -> Query (table Column :|: Maybe (related Column))
 q =>? (f :: forall a. table a -> ForeignKey related a) =
     leftJoin_ q (All (Proxy :: Proxy related) 0,
-                 \(Entity _ table :|: Entity relatedPhantom relatedFields) -> foreignKeyJoin (Proxy :: Proxy table) (Proxy :: Proxy related) (fk table) (primaryKey relatedPhantom relatedFields))
+                 \(table :|: relatedFields) -> foreignKeyJoin (Proxy :: Proxy table) (Proxy :: Proxy related) (fk table) (primaryKey relatedFields))
     where fk scope = let ForeignKey x = f scope
                      in x
 
 (<=?) :: ( Table table, Table related
-         , Project (Entity related (ScopedField related Column))
-         , Project (Entity table (ScopedField table Column)) ) =>
-        Query (Entity table Column) -> (forall a. related a -> ForeignKey table a) -> Query (Entity table Column :|: Maybe (Entity related Column))
+         , Project (related (ScopedField related Column))
+         , Project (table (ScopedField table Column)) ) =>
+        Query (table Column) -> (forall a. related a -> ForeignKey table a) -> Query (table Column :|: Maybe (related Column))
 q <=? (f :: forall a. related a -> ForeignKey table a) =
     leftJoin_ q
               (All (Proxy :: Proxy related) 0,
-               \(Entity tablePhantom tableFields :|: Entity _ related) -> foreignKeyJoin (Proxy :: Proxy related) (Proxy :: Proxy table)
-                                                                                         (reference . f $ related) (primaryKey tablePhantom tableFields))
+               \(tableFields :|: related) -> foreignKeyJoin (Proxy :: Proxy related) (Proxy :: Proxy table)
+                                                            (reference . f $ related) (primaryKey tableFields))
 
 (<#), (>#), (<=#), (>=#), (==#) :: (Typeable a, Show a) => QExpr a -> QExpr a -> QExpr Bool
 (==#) = EqE

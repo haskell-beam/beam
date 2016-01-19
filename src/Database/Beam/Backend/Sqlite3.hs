@@ -2,6 +2,7 @@ module Database.Beam.Backend.Sqlite3 where
 
 import Database.Beam.Types
 import Database.Beam.Backend
+import Database.Beam.SQL.Types
 
 import Control.Monad.Trans
 
@@ -21,7 +22,8 @@ instance BeamBackend Sqlite3Settings where
 
            return Beam { closeBeam = liftIO (disconnect conn)
                        , compareSchemas = defaultBeamCompareSchemas
-                       , adjustColDescForBackend = id
+                       , adjustColDescForBackend =
+                           \cs -> cs { csConstraints = filter (/=SQLAutoIncrement) (csConstraints cs) }
                        , getLastInsertedRow = getLastInsertedRow' conn
                        , withHDBCConnection = \f -> f conn }
 

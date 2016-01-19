@@ -47,7 +47,6 @@ data CharOrVarchar = Char (Maybe Int)
                    | Varchar (Maybe Int)
                      deriving Show
 
-
 instance FieldSchema Text where
     -- | Settings for a text field
     data FieldSettings Text = TextFieldSettings
@@ -90,3 +89,25 @@ instance FieldSchema UTCTime where
                             , colNullable = Nothing }
     makeSqlValue = SqlUTCTime
     fromSqlValue = fromSql <$> popSqlValue
+
+-- ** Auto-increment fields
+
+data AutoId = UnassignedId
+            | AssignedId !Int
+              deriving (Show, Read, Eq, Ord, Generic)
+
+instance FieldSchema AutoId where
+    data FieldSettings AutoId = AutoIdDefault
+                                deriving Show
+    defSettings = AutoIdDefault
+    colDescFromSettings _ = SQLColumnSchema desc [SQLNotNull, SQLAutoIncrement]
+        where desc = SqlColDesc
+                     { colType = SqlNumericT
+                     , colSize = Nothing
+                     , colOctetLength = Nothing
+                     , colDecDigits = Nothing
+                     , colNullable = Nothing }
+
+    makeSqlValue UnassignedId = SqlNull
+    makeSqlValue (AssignedId i) = SqlInteger (fromIntegral i)
+    fromSqlValue = maybe UnassignedId AssignedId . fromSql <$> popSqlValue
