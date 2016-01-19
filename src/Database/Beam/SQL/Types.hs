@@ -32,8 +32,7 @@ data SQLColumnSchema = SQLColumnSchema
                      , csConstraints :: [SQLConstraint] }
                        deriving Show
 
-data SQLConstraint = SQLPrimaryKeyAutoIncrement
-                   | SQLPrimaryKey
+data SQLConstraint = SQLPrimaryKey
                    | SQLAutoIncrement
                    | SQLNotNull
                      deriving (Show, Eq)

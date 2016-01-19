@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances, TypeSynonymInstances, RoleAnnotations #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
-    ( ScopedField(..), Entity(..)
+    ( ScopedField(..)
     , QueryField, QueryExpr(..)
 
     , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..), GenScopedField(..)
@@ -59,7 +59,7 @@ data GenScopedField table c where
 
 -- | A query that produces results of type `a`
 data Query a where
-    All :: (Table table, ScopeFields (Entity table Column)) => Proxy table -> Int -> Query (Entity table Column)
+    All :: (Table table, ScopeFields (table Column)) => Proxy table -> Int -> Query (table Column)
     EmptySet :: Query a
     Filter ::  Query a -> QExpr Bool -> Query a
     GroupBy :: Query a -> GenQExpr -> Query a
@@ -124,12 +124,9 @@ class ScopeFields a where
     scopeFields :: Proxy a -> Proxy c -> Int -> Scope' a c
 instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
     scopeFields  (_ :: Proxy (a :|: b)) c i = scopeFields (Proxy :: Proxy a) c i :|: scopeFields (Proxy :: Proxy b) c i
-instance Table table => ScopeFields (Entity table d) where
-    scopeFields (_ :: Proxy (Entity table d)) (_ :: Proxy c) i = Entity scopedPhantom scopedTable
-        where scopedPhantom :: PhantomFields table (ScopedField table c)
-              scopedPhantom = phantomChangeRep (Proxy :: Proxy table) scopeField $
-                              phantomFieldSettings (Proxy :: Proxy table)
-              scopedTable = changeRep scopeField $
+instance Table table => ScopeFields (table d) where
+    scopeFields (_ :: Proxy (table d)) (_ :: Proxy c) i = scopedTable
+        where scopedTable = changeRep scopeField $
                             (tblFieldSettings :: TableSettings table)
 
               scopeField :: TableField table a -> ScopedField table c a
@@ -139,8 +136,8 @@ type family Scope' a c where
     Scope' (Maybe t) c = Scope' t (Nullable c)
     Scope' (a :|: b) c = Scope' a c :|: Scope' b c
     -- Scope' (Entity x c) (Nullable c) = Entity x (Nullable (ScopedField x))
-    Scope' (Entity x a) c = Entity x (ScopedField x c)
     Scope' (QueryExpr t) c = QExpr (ColumnType c t)
+    Scope' (x a) c = x (ScopedField x c)
 
 type Scope a = Scope' a Column
 
@@ -153,8 +150,8 @@ instance (Rescopable a, Rescopable b) => Rescopable (a :|: b) where
     rescope (_ :: Proxy (a :|: b)) c d (a :|: b) = do x <- rescope (Proxy :: Proxy a) c d a
                                                       y <- rescope (Proxy :: Proxy b) c d b
                                                       return (x :|: y)
-instance Table x => Rescopable (Entity x a) where
-    rescope (_ :: Proxy (Entity x a)) (_ :: Proxy c) (_ :: Proxy d) (Entity phantom fields) = pure $ Entity (phantomChangeRep (Proxy :: Proxy x) scopeField phantom) (changeRep scopeField fields)
+instance Table x => Rescopable (x a) where
+    rescope (_ :: Proxy (x a)) (_ :: Proxy c) (_ :: Proxy d) fields = pure (changeRep scopeField fields)
         where scopeField :: ScopedField x c t -> ScopedField x d t
               scopeField = coerce -- type-safe coercion thanks to GHC!
 instance Rescopable (QueryExpr t) where

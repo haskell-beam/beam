@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs, ScopedTypeVariables #-}
 module Database.Beam.Backend where
 
 import Database.Beam.Types
@@ -16,6 +16,7 @@ import Data.String
 import Data.Maybe
 import Data.List
 import Data.Proxy
+import Data.Text (Text)
 import qualified Data.Set as S
 
 import Database.HDBC
@@ -51,9 +52,16 @@ hdbcSchema conn =
               return (fromString tbl, map (fromString *** noConstraints) descs)
 
 createStmtFor :: (Table t) => Beam m -> Proxy t -> SQLCreateTable
-createStmtFor beam table =
+createStmtFor beam (table :: Proxy t) =
     let tblSchema = reifyTableSchema table
-        tblSchemaInDb' = map (second (adjustColDescForBackend beam)) (reifyTableSchema table)
+        tblSchema' = map addPrimaryKeyConstraint tblSchema
+        tblSchemaInDb' = map (second (adjustColDescForBackend beam)) tblSchema'
+
+        addPrimaryKeyConstraint (name, sch)
+            | any (==name) primaryKeyFields = (name, sch { csConstraints = SQLPrimaryKey:csConstraints sch })
+            | otherwise = (name, sch)
+
+        primaryKeyFields = pkAllValues (Proxy :: Proxy t) (fieldName :: forall a. TableField t a -> Text) (primaryKey (tblFieldSettings :: TableSettings t))
     in SQLCreateTable (dbTableName table) (tblSchemaInDb')
 
 migrateDB :: MonadIO m => db -> Beam m -> [MigrationAction] -> m ()
