@@ -26,14 +26,14 @@ import Data.Monoid hiding (All)
 import Data.Typeable
 
 -- * Rewrite functions for expressions and queries
-rw :: Monad m => (forall a. Query a -> m (Maybe (Query a))) -> (forall a . QExpr a -> m (Maybe (QExpr a))) -> Query a -> m (Query a)
+rw :: Monad m => (forall a. Query db a -> m (Maybe (Query db a))) -> (forall a . QExpr a -> m (Maybe (QExpr a))) -> Query db a -> m (Query db a)
 rw f fe x = do x' <- f x
                case x' of
                  Nothing -> return x
                  Just x'
                      | x == x' -> return x
                      | otherwise -> rewriteQueryM f fe x'
-rwE :: Monad m => (forall a. QExpr a -> m (Maybe (QExpr a))) -> (forall a. Query a -> m (Maybe (Query a))) -> QExpr a -> m (QExpr a)
+rwE :: Monad m => (forall a. QExpr a -> m (Maybe (QExpr a))) -> (forall a. Query db a -> m (Maybe (Query db a))) -> QExpr a -> m (QExpr a)
 rwE f fq x = do x' <- f x
                 case x' of
                   Nothing -> return x
@@ -41,7 +41,7 @@ rwE f fq x = do x' <- f x
                       | x == x' -> return x
                       | otherwise -> rewriteExprM f fq x'
 
-rewriteQueryM :: Monad m => (forall a . Query a -> m (Maybe (Query a))) -> (forall a . QExpr a -> m (Maybe (QExpr a))) -> Query a -> m (Query a)
+rewriteQueryM :: Monad m => (forall a . Query db a -> m (Maybe (Query db a))) -> (forall a . QExpr a -> m (Maybe (QExpr a))) -> Query db a -> m (Query db a)
 rewriteQueryM f fe (Filter query e) = do query' <- rewriteQueryM f fe query
                                          e' <- rewriteExprM fe f e
                                          rw f fe (Filter query' e')
@@ -68,30 +68,30 @@ rewriteQueryM f fe (OuterJoin q1 q2 e) = do q1' <- rewriteQueryM f fe q1
                                             q2' <- rewriteQueryM f fe q2
                                             e' <- rewriteExprM fe f e
                                             rw f fe (OuterJoin q1' q2' e')
-rewriteQueryM f fe (Project q g) = do q' <- rewriteQueryM f fe q
-                                      rw f fe (Project q' g)
+-- rewriteQueryM f fe (Project q g) = do q' <- rewriteQueryM f fe q
+--                                       rw f fe (Project q' g)
 rewriteQueryM f fe (Limit q i) = do q' <- rewriteQueryM f fe q
                                     rw f fe (Limit q' i)
 rewriteQueryM f fe (Offset q i) = do q' <- rewriteQueryM f fe q
                                      rw f fe (Offset q' i)
 rewriteQueryM f fe x = rw f fe x
 
-rewriteQuery :: (forall a. Query a -> Maybe (Query a)) -> (forall a. QExpr a -> Maybe (QExpr a)) -> Query a -> Query a
+rewriteQuery :: (forall a. Query db a -> Maybe (Query db a)) -> (forall a. QExpr a -> Maybe (QExpr a)) -> Query db a -> Query db a
 rewriteQuery f fe x = runIdentity (rewriteQueryM (return . f) (return . fe) x)
 
-traverseQueryM :: Monad m => (forall a. Query a -> m ()) -> (forall a. QExpr a -> m ()) -> Query a -> m ()
+traverseQueryM :: Monad m => (forall a. Query db a -> m ()) -> (forall a. QExpr a -> m ()) -> Query db a -> m ()
 traverseQueryM t te x = rewriteQueryM (\x -> t x >> return Nothing) (\x -> te x >> return Nothing) x >> return ()
 
-traverseExprM :: Monad m => (forall a. QExpr a -> m()) -> (forall a. Query a -> m ()) -> QExpr a -> m ()
+traverseExprM :: Monad m => (forall a. QExpr a -> m()) -> (forall a. Query db a -> m ()) -> QExpr a -> m ()
 traverseExprM te t x = rewriteExprM (\x -> te x >> return Nothing) (\x -> t x >> return Nothing) x >> return ()
 
-rewriteBin :: (Monad m, Show a, Typeable a, Show b, Typeable b) => (forall a . QExpr a -> m (Maybe (QExpr a))) -> (forall a . Query a -> m (Maybe (Query a)))
+rewriteBin :: (Monad m, Show a, Typeable a, Show b, Typeable b) => (forall a . QExpr a -> m (Maybe (QExpr a))) -> (forall a . Query db a -> m (Maybe (Query db a)))
            -> (QExpr a -> QExpr b -> QExpr c) -> QExpr a -> QExpr b -> m (QExpr c)
 rewriteBin f fq g a b = do a' <- rewriteExprM f fq a
                            b' <- rewriteExprM f fq b
                            rwE f fq (g a' b')
 
-rewriteExprM :: Monad m => (forall a . QExpr a -> m (Maybe (QExpr a))) -> (forall a . Query a -> m (Maybe (Query a))) -> QExpr a -> m (QExpr a)
+rewriteExprM :: Monad m => (forall a . QExpr a -> m (Maybe (QExpr a))) -> (forall a . Query db a -> m (Maybe (Query db a))) -> QExpr a -> m (QExpr a)
 rewriteExprM f fq (AndE a b) = rewriteBin f fq AndE a b
 rewriteExprM f fq (OrE a b) = rewriteBin f fq OrE a b
 rewriteExprM f fq (EqE a b) = rewriteBin f fq EqE a b
@@ -125,18 +125,18 @@ rewriteExprM f fq x = rwE f fq x
 
 -- * Query optimizations
 
-combineProjections :: Query a -> Maybe (Query a)
-combineProjections (Project (Project q g) f) = Just (Project q (f . g))
-combineProjections _ = Nothing
+-- combineProjections :: Query a -> Maybe (Query a)
+-- combineProjections (Project (Project q g) f) = Just (Project q (f . g))
+-- combineProjections _ = Nothing
 
-combineFilterOpt :: Query a -> Maybe (Query a)
+combineFilterOpt :: Query db a -> Maybe (Query db a)
 combineFilterOpt (Filter (Filter q e1) e2) = Just (Filter q (AndE e1 e2))
 combineFilterOpt (Filter q (ValE (SqlBool True))) = Just q
 combineFilterOpt (Filter q (ValE (SqlBool False))) = Just EmptySet
 combineFilterOpt _ = Nothing
 
 -- | Propagates expressions containing empty sets
-propEmptySets :: Query a -> Maybe (Query a)
+propEmptySets :: Query db a -> Maybe (Query db a)
 propEmptySets (Join EmptySet _) = Just EmptySet
 propEmptySets (Join _ EmptySet) = Just EmptySet
 propEmptySets (Filter EmptySet _) = Just EmptySet
@@ -144,7 +144,7 @@ propEmptySets (GroupBy EmptySet _) = Just EmptySet
 propEmptySets _ = Nothing
 
 -- | Propagates filter clauses that are inside inner joins passed the inner join, so that there is simply one where statement
-propFiltersPastInnerJoins :: Query a -> Maybe (Query a)
+propFiltersPastInnerJoins :: Query db a -> Maybe (Query db a)
 propFiltersPastInnerJoins (Join (Filter a e) b) = Just (Filter (Join a b) e)
 propFiltersPastInnerJoins (Join a (Filter b e)) = Just (Filter (Join a b) e)
 propFiltersPastInnerJoins _ = Nothing
@@ -169,5 +169,5 @@ booleanOpts (OrE (ValE (SqlBool True)) (ValE (SqlBool True))) = Just (ValE (SqlB
 
 booleanOpts x = Nothing
 
-allQueryOpts q = combineProjections q <|> combineFilterOpt q <|> propEmptySets q <|> propFiltersPastInnerJoins q -- <|> moveFiltersRight q <|> lowerOnClauses q
+allQueryOpts q = combineFilterOpt q <|> propEmptySets q <|> propFiltersPastInnerJoins q -- <|> moveFiltersRight q <|> lowerOnClauses q
 allExprOpts e = booleanOpts e

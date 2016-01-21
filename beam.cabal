@@ -22,13 +22,9 @@ library
                        Database.Beam.Schema Database.Beam.Backend.Sqlite3
   other-modules:       Database.Beam.SQL.Types
 
-                       Database.Beam.Query.Types
-                       Database.Beam.Query.Rewrite
-                       Database.Beam.Query.Combinators
-
                        Database.Beam.Schema.Tables
-                       Database.Beam.Schema.Relationships
                        Database.Beam.Schema.Fields
-  build-depends:       base >=4.7 && <4.9, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible, void, lens-sop, fclabels
+  build-depends:       base >=4.7 && <4.9, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible, void, microlens
   hs-source-dirs:      src
   default-language:    Haskell2010
+  default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts
