@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                beam
-version:             0.2.0.0
+version:             0.3.0.0
 synopsis:            A non-TH ORM in Haskell
 -- description:
 homepage:            http://travis.athougies.net/projects/beam
