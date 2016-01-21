@@ -2,22 +2,14 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query
     ( module Database.Beam.Query.Types
-    , module Database.Beam.Query.Rewrite
     , module Database.Beam.Query.Combinators
 
-    , runQuery, runInsert, runUpdate,  updateEntity
-    , findByPrimaryKeyExpr
-
-    , inBeamTxn, query, queryList, getOne
-    , insert, save, update
-    , findByPk_ --, matching_
-    , ref, justRef, nothingRef
-
-    , debugQuerySQL ) where
+    , beamTxn, insertInto, query, queryList
+    , ref, justRef )where
 
 import Database.Beam.Query.Types
-import Database.Beam.Query.Rewrite
 import Database.Beam.Query.Combinators
+import Database.Beam.Query.Internal
 
 import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Fields
@@ -31,12 +23,14 @@ import Control.Monad.Trans
 import Control.Monad.Writer (tell, execWriter, Writer)
 import Control.Monad.State
 import Control.Monad.Error
+import Control.Monad.Identity
 
 import Data.Monoid hiding (All)
 import Data.Proxy
 import Data.Data
 import Data.List (find)
 import Data.Maybe
+import Data.Convertible
 import Data.String (fromString)
 import Data.Conduit
 import qualified Data.Conduit.List as C
@@ -44,203 +38,29 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 
 import Database.HDBC
-import Debug.Trace
 
-import GHC.Generics
+import Unsafe.Coerce
 
--- * Query Compilation
+-- * Query
 
-mkSqlExpr :: ScopingRule -> (forall table c ty. ScopedField table c ty -> SQLFieldName) -> QExpr a -> SQLExpr
-mkSqlExpr s f (EqE a b) = SQLEqE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (NeqE a b) = SQLNeqE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (LtE a b) = SQLLtE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (GtE a b) = SQLGtE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (LeE a b) = SQLLeE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (GeE a b) = SQLGeE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (FieldE fd) = SQLFieldE (s (f fd))
-mkSqlExpr s f (MaybeFieldE (Just fd)) = SQLFieldE (s (f fd))
-mkSqlExpr s f (MaybeFieldE Nothing) = SQLValE SqlNull
-mkSqlExpr s f (ValE v) = SQLValE v
-mkSqlExpr s f (AndE a b) = SQLAndE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (OrE a b) = SQLOrE (mkSqlExpr s f a) (mkSqlExpr s f b)
-mkSqlExpr s f (JustE a) = mkSqlExpr s f a
-mkSqlExpr s f NothingE = SQLValE SqlNull
-mkSqlExpr s f (IsNothingE q) = SQLIsNothingE (mkSqlExpr s f q)
-mkSqlExpr s f (IsJustE q) = SQLIsJustE (mkSqlExpr s f q)
-mkSqlExpr s f (InE x xs) = SQLInE (mkSqlExpr s f x) (mkSqlExpr s f xs)
-mkSqlExpr s f (ListE xs) = SQLListE (map (mkSqlExpr s f) xs)
-mkSqlExpr s f (CountE x) = SQLCountE (mkSqlExpr s f x)
-mkSqlExpr s f (MinE x) = SQLMinE (mkSqlExpr s f x)
-mkSqlExpr s f (MaxE x) = SQLMaxE (mkSqlExpr s f x)
-mkSqlExpr s f (SumE x) = SQLSumE (mkSqlExpr s f x)
-mkSqlExpr s f (AverageE x) = SQLAverageE (mkSqlExpr s f x)
-mkSqlExpr s f (RefE i x) = SQLFieldE (s (SQLFieldName (mkSqlExprId i)))
+runSQL' :: IConnection conn => conn -> SQLCommand -> IO (Either String (IO (Maybe [SqlValue])))
+runSQL' conn cmd = do
+  let (sql, vals) = ppSQL cmd
+  putStrLn ("Will execute " ++ sql ++ " with " ++ show vals)
+  stmt <- prepare conn sql
+  execute stmt vals
+  return (Right (fetchRow stmt))
 
-relabelSubqueryFields :: T.Text -- ^ Join name
-                      -> S.Set T.Text -- ^ table names
-                      -> S.Set T.Text -- ^ expression names
-                      -> SQLFieldName
-                      -> SQLFieldName
-relabelSubqueryFields joinName tableNames _ (SQLQualifiedFieldName fieldName tableName)
-    | tableName `S.member` tableNames = SQLQualifiedFieldName (tableName <> "_" <> fieldName) joinName
-relabelSubqueryFields joinName _ exprNames (SQLFieldName x)
-    | x `S.member` exprNames = SQLQualifiedFieldName x joinName
-relabelSubqueryFields joinName _ _ x = x
+-- * Data updating
 
-mkSqlTblId, mkSqlExprId :: Int -> T.Text
-mkSqlTblId i = fromString (concat ["t", show i])
-mkSqlExprId i = fromString (concat ["f", show i])
+insertToSQL :: Table table => T.Text -> table Identity -> SQLInsert
+insertToSQL name (table :: table Identity) = SQLInsert name
+                                                       (makeSqlValues table)
 
-mkQualifiedFieldName :: ScopedField table c ty -> SQLFieldName
-mkQualifiedFieldName (ScopedField i fieldName) = SQLQualifiedFieldName fieldName (mkSqlTblId i)
-
-mkUnqualifiedFieldName :: ScopedField table c field -> SQLFieldName
-mkUnqualifiedFieldName (ScopedField i fieldName) = SQLFieldName fieldName
-
-instance (Project a, Project b) => Project (a :|: b) where
-    project r (a :|: b) = project r a ++ project r b
-instance Project (ScopedField table c ty) where
-    project r x = [ SQLAliased (SQLFieldE . r . mkQualifiedFieldName $ x) Nothing ]
-instance Table table => Project (table (ScopedField table c)) where
-    project r (tbl :: table (ScopedField table c)) =
-        allValues getScopedField tbl
-        where getScopedField :: ScopedField table c field -> SQLAliased SQLExpr
-              getScopedField x = SQLAliased (SQLFieldE . r . mkQualifiedFieldName $ x) Nothing
-instance Project (QExpr a) where
-    project r (RefE i x) = [SQLAliased (mkSqlExpr r mkQualifiedFieldName x) (Just (mkSqlExprId i))]
-    project r e = [SQLAliased (mkSqlExpr r mkQualifiedFieldName e) Nothing]
-
-capture :: State s a -> State s (a, s)
-capture action = do orig <- get
-                    res <- action
-                    after <- get
-                    put orig
-                    return (res, after)
-
-queryToSQL :: Project (Scope a) => Query a -> SQLSelect
-queryToSQL q = selectStatement
-    where q' = rewriteQuery allQueryOpts allExprOpts q
-          selectStatement = let (s, r) = runState (generateQuery q') id
-                            in projectSelect r q' s
-
-          projectSelect :: Project (Scope a) => ScopingRule -> Query a -> SQLSelect -> SQLSelect
-          projectSelect r q s = s { selProjection = SQLProj . project r . getScope $ q }
-
-          aliasedSubquery :: SQLSelect -> SQLSelect
-          aliasedSubquery s = s { selProjection = SQLProj proj' }
-              where SQLProj proj = selProjection s
-                    proj' = map aliasField proj
-
-                    -- TODO what if there's a QueryExpr here?
-                    aliasField (SQLAliased e@(SQLFieldE (SQLQualifiedFieldName f tbl)) Nothing) = SQLAliased e (Just (tbl <> "_" <> f))
-                    aliasField (SQLAliased e (Just f)) = SQLAliased e (Just f)
-                    aliasField _ = error "aliasField: malformed projection"
-
-          getAllTables :: Query a -> S.Set T.Text
-          getAllTables q = execWriter (rewriteQueryM recordAll (\_ -> return Nothing) q)
-              where recordAll :: Query a -> Writer (S.Set T.Text) (Maybe (Query a))
-                    recordAll (All _ i) = tell (S.singleton (mkSqlTblId i)) >> return Nothing
-                    recordAll _ = return Nothing
-
-          sqlTrue = SQLValE (SqlBool True)
-
-          generateQuery :: Query a -> State ScopingRule SQLSelect
-          generateQuery (All (tbl :: Proxy table) i) = pure (simpleSelect { selFrom = SQLFromSource (SQLAliased (SQLSourceTable (dbTableName tbl)) (Just (mkSqlTblId i))) })
-          generateQuery (Filter q e) = do q' <- generateQuery q
-                                          scopingRule <- get
-                                          pure (conjugateWhere q' (mkSqlExpr scopingRule mkQualifiedFieldName e))
-          generateQuery (Join x y) = genJoin SQLInnerJoin x y Nothing
-
-          generateQuery (LeftJoin x y e) = genJoin SQLLeftJoin x y (Just e)
-          generateQuery (RightJoin x y e) = genJoin SQLRightJoin x y (Just e)
-          generateQuery (OuterJoin x y e) = genJoin SQLOuterJoin x y (Just e)
-          generateQuery (Project q _) = generateQuery q
-          generateQuery (Limit q i) = do q' <- generateQuery q
-                                         pure (q' { selLimit =
-                                                    case selLimit q' of
-                                                      Nothing -> Just i
-                                                      Just i' -> Just (min i i') })
-          generateQuery (Offset q i) = do q' <- generateQuery q
-                                          pure (q' { selOffset =
-                                                     case selOffset q' of
-                                                       Nothing -> Just i
-                                                       Just i' -> Just (i + i') })
-          generateQuery (GroupBy q (GenQExpr e)) = do q' <- generateQuery q
-                                                      scopingRule <- get
-                                                      pure (q' { selGrouping = Just (mempty { sqlGroupBy = [mkSqlExpr scopingRule mkQualifiedFieldName e] }) <>
-                                                                               selGrouping q' })
-          generateQuery (OrderBy q (GenQExpr e) ord) = do q' <- generateQuery q
-                                                          scopingRule <- get
-                                                          let e' = mkSqlExpr scopingRule mkQualifiedFieldName e
-                                                          pure (q' { selOrderBy = case ord of
-                                                                                    Ascending  -> [Asc e'] <> selOrderBy q'
-                                                                                    Descending -> [Desc e'] <> selOrderBy q' } )
-
-          genJoin :: Project (Scope b) => SQLJoinType -> Query a -> Query b -> Maybe (QExpr Bool) -> State ScopingRule SQLSelect
-          genJoin joinType x y e = do (qx, xScoping) <- capture (generateQuery x)
-
-                                      case isSimple qx of
-                                        False -> do (qy, yScoping) <- capture (generateQuery y)
-                                                    modify ((yScoping . xScoping) .)
-                                                    scopingRule <- get
-                                                    pure (simpleSelect {
-                                                            selFrom = SQLJoin joinType (SQLFromSource (SQLAliased (SQLSourceSelect qx) Nothing))
-                                                                                       (SQLFromSource (SQLAliased (SQLSourceSelect qy) Nothing))
-                                                                                       (maybe sqlTrue (mkSqlExpr scopingRule mkQualifiedFieldName) e) })
-                                        True  -> do (qy, yScoping) <- capture (generateQuery y)
-                                                    case isSimple qy of
-                                                      True -> do modify ((yScoping . xScoping) .)
-                                                                 scopingRule <- get
-                                                                 pure (qx { selFrom = SQLJoin joinType
-                                                                                              (selFrom qx)
-                                                                                              (selFrom qy)
-                                                                                              (maybe sqlTrue (mkSqlExpr scopingRule mkQualifiedFieldName) e) })
-                                                      False -> do let qyProj'@(SQLSelect { selProjection = SQLProj qyProjList }) = projectSelect yScoping y qy
-                                                                      qyProj     = aliasedSubquery qyProj'
-                                                                      joinName   = "j_" <> T.intercalate "_" (S.toList tableNames)
-                                                                      tableNames = getAllTables y
-                                                                      exprNames  = S.fromList (catMaybes (map (\(SQLAliased _ f) -> f) qyProjList ))
-                                                                  modify (relabelSubqueryFields joinName tableNames exprNames .)
-                                                                  qx <- generateQuery x -- Rebuild x with y's new scoping rules. TODO figure out how to remove this step
-                                                                  scopingRule <- get
-                                                                  pure (qx  { selFrom = SQLJoin joinType
-                                                                                                (selFrom qx)
-                                                                                                (SQLFromSource (SQLAliased (SQLSourceSelect qyProj) (Just joinName)))
-                                                                                                (maybe sqlTrue (mkSqlExpr scopingRule mkQualifiedFieldName) e) } )
-          combineWheres x y = case (selWhere x, selWhere y) of
-                                (SQLValE (SqlBool True), y) -> y
-                                (x, SQLValE (SqlBool True)) -> x
-                                (x, y) -> SQLAndE x y
-
-          isSimple s = isNothing (selGrouping s) && null (selOrderBy s) && selLimit s == Nothing && selOffset s == Nothing
-
-insertToSQL :: Table table => Simple table -> SQLInsert
-insertToSQL (table :: Simple table) = SQLInsert (dbTableName (Proxy :: Proxy table))
-                                                (makeSqlValues table)
-
-runQuery :: (MonadIO m, FromSqlValues a, Project (Scope a)) => Query a -> Beam m -> m (Either String (Source m a))
-runQuery q beam =
-    do let selectCmd = Select (queryToSQL q)
-
-       res <- withHDBCConnection beam $ \conn ->
-              do liftIO $ runSQL' conn selectCmd
-
-       case res of
-         Left err -> return (Left err)
-         Right fetchRow -> do let source = do row <- liftIO fetchRow
-                                              case row of
-                                                Just row ->
-                                                    case fromSqlValues row of
-                                                      Left err -> fail err
-                                                      Right  q -> do yield q
-                                                                     source
-                                                Nothing -> return ()
-                              return (Right source)
-
-runInsert :: (MonadIO m, Table table, FromSqlValues (table Column)) => Simple table -> Beam m -> m (Either String (table Column))
-runInsert (table :: Simple table) beam =
+runInsert :: (MonadIO m, Table table, FromSqlValues (table Identity)) => T.Text -> table Identity -> Beam d m -> m (Either String (table Identity))
+runInsert tableName (table :: table Identity) beam =
     do let insertCmd = Insert sqlInsert
-           sqlInsert@(SQLInsert tblName sqlValues) = (insertToSQL table)
+           sqlInsert@(SQLInsert tblName sqlValues) = (insertToSQL tableName table)
        withHDBCConnection beam (\conn -> liftIO (runSQL' conn insertCmd))
 
        -- There are three possibilities here:
@@ -260,63 +80,78 @@ runInsert (table :: Simple table) beam =
            hasAutoIncrementConstraint (SQLColumnSchema { csConstraints = cs }) = isJust (find (== SQLAutoIncrement) cs)
 
        insertedValues <- if hasNullAutoIncrements
-                         -- TODO, this needs to ensure that the values are returned in the correct column order
                          then liftIO (putStrLn "Got null auto increments") >> getLastInsertedRow beam tblName
                          else return sqlValues
        return (fromSqlValues insertedValues)
 
-runUpdate :: MonadIO m => SQLUpdate -> Beam m -> m (Either String ())
-runUpdate update beam =
-    do withHDBCConnection beam (\conn -> liftIO (runSQL' conn (Update update)))
-       return (Right ())
+insertInto :: (MonadIO m, Functor m, Table table, FromSqlValues (table Identity)) =>
+              DatabaseTable db table -> table Identity -> BeamT e db m (table Identity)
+insertInto (DatabaseTable _ name) data_ =
+    BeamT (\beam -> toBeamResult <$> runInsert name data_ beam)
 
-updateWhere :: ( ScopeFields (table Column)
-               , Table table) => Proxy table -> (Scope (table Column) -> ([QAssignment], QExpr Bool)) -> SQLUpdate
-updateWhere (_ :: Proxy table) mkAssignmentsAndWhere = go
-    where tblProxy :: Proxy (table Column)
-          tblProxy = Proxy
-          go =
-            let (assignments, whereClause) = mkAssignmentsAndWhere (scopeFields tblProxy (Proxy :: Proxy Column) 0)
-                sqlAssignments = map ( \(QAssignment nm ex) -> (mkUnqualifiedFieldName nm, mkSqlExpr id mkUnqualifiedFieldName ex) ) assignments
-                sqlWhereClause = Just (mkSqlExpr id mkUnqualifiedFieldName whereClause)
-                sqlTables = [dbTableName (Proxy :: Proxy table)]
-            in (SQLUpdate sqlTables sqlAssignments sqlWhereClause)
+queryToSQL :: Projectible a => (forall s. Q db s a) -> SQLSelect
+queryToSQL q = let (res, qb) = runState (runQ q) emptyQb
+                   emptyQb = QueryBuilder 0 Nothing (ValE (SqlBool True)) Nothing Nothing
+                   projection = map (\(GenQExpr q) -> SQLAliased (optimizeExpr q) Nothing) (project res)
 
-updateEntity :: Table table => table Column -> SQLUpdate
-updateEntity qt@(table :: table Column) = updateWhere tProxy
-                                                      (\s -> (assignments, findByPrimaryKeyExpr s qt))
-    where tProxy = Proxy :: Proxy table
-          fieldNames = allValues fieldName (tblFieldSettings :: TableSettings table)
-          exprs = allValues mkValE table
+                   optimizeExpr :: QExpr a -> SQLExpr
+                   optimizeExpr = mkSqlExpr . runIdentity . rewriteExprM (return . allExprOpts)
 
-          mkValE :: FieldSchema a => Column a -> GenQExpr
-          mkValE (x :: Column a) = GenQExpr (ValE (makeSqlValue (columnValue x)) :: QExpr a)
+                   sel = SQLSelect
+                         { selProjection = SQLProj projection
+                         , selFrom = qbFrom qb
+                         , selWhere = optimizeExpr (qbWhere qb)
+                         , selGrouping = Nothing
+                         , selOrderBy = []
+                         , selLimit = qbLimit qb
+                         , selOffset = qbOffset qb }
+               in sel
 
-          assignments = zipWith (\name (GenQExpr (q :: QExpr ty)) -> QAssignment (ScopedField 0 name :: ScopedField table Column ty) q) fieldNames exprs
+-- * BeamT actions
 
-findByPrimaryKeyExpr :: Table table =>
-                        table (ScopedField table Column) -> table Column -> QExpr Bool
-findByPrimaryKeyExpr fields (tableFields :: table Column) = primaryKeyExpr (Proxy :: Proxy table) (Proxy :: Proxy table) (primaryKey fields) (primaryKey tableFields)
+beamTxn :: MonadIO m => Beam db m -> (DatabaseSettings db -> BeamT e db m a) -> m (BeamResult e a)
+beamTxn beam action = do res <- runBeamT (action (beamDbSettings beam)) beam
+                         withHDBCConnection beam $
+                             case res of
+                               Success  x -> liftIO . commit
+                               Rollback e -> liftIO . rollback
+                         return res
 
-findByPk_ :: Table table =>
-             PrimaryKey table Column -> Query (table Column)
-findByPk_ pk = let query = all_ (queriedTable query) `where_`
-                           (\fields -> primaryKeyExpr (tblProxy query) (tblProxy query) (primaryKey fields) pk)
+toBeamResult :: Either String a -> BeamResult e a
+toBeamResult = (Rollback . InternalError) ||| Success
 
-                   queriedTable :: Query (table Column) -> table Column
-                   queriedTable _ = undefined
-                   tblProxy :: Query (table Column) -> Proxy table
-                   tblProxy _ = Proxy
-               in query
+runQuery :: ( MonadIO m
+            , FromSqlValues (QExprToIdentity a)
+            , Projectible a ) =>
+            (forall s. Q db s a) -> Beam db m -> m (Either String (Source m (QExprToIdentity a)))
+runQuery q beam =
+    do let selectCmd = Select (queryToSQL q)
 
-simpleSelect = SQLSelect
-               { selProjection = SQLProjStar
-               , selFrom = undefined
-               , selWhere = SQLValE (SqlBool True)
-               , selGrouping = Nothing
-               , selOrderBy = []
-               , selLimit = Nothing
-               , selOffset = Nothing }
+       res <- withHDBCConnection beam $ \conn ->
+              do liftIO $ runSQL' conn selectCmd
+
+       case res of
+         Left err -> return (Left err)
+         Right fetchRow -> do let source = do row <- liftIO fetchRow
+                                              case row of
+                                                Just row ->
+                                                    case fromSqlValues row of
+                                                      Left err -> fail err
+                                                      Right  q -> do yield q
+                                                                     source
+                                                Nothing -> return ()
+                              return (Right source)
+
+query :: (MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. Q db s a) -> BeamT e db m (Source (BeamT e db m) (QExprToIdentity a))
+query q = BeamT $ \beam ->
+          do res <- runQuery q beam
+             case res of
+               Right x -> return (Success (transPipe (BeamT . const . fmap Success) x))
+               Left err -> return (Rollback (InternalError err))
+
+queryList :: (MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. Q db s a) -> BeamT e db m [QExprToIdentity a]
+queryList q = do src <- query q
+                 src $$ C.consume
 
 fromSqlValues :: FromSqlValues a => [SqlValue] -> Either String a
 fromSqlValues vals =
@@ -325,98 +160,21 @@ fromSqlValues vals =
       (Right _,  _) -> Left "fromSqlValues: Not all values were consumed"
       (Left err, _) -> Left err
 
-runSQL' :: IConnection conn => conn -> SQLCommand -> IO (Either String (IO (Maybe [SqlValue])))
-runSQL' conn cmd = do
-  let (sql, vals) = ppSQL cmd
-  putStrLn ("Will execute " ++ sql ++ " with " ++ show vals)
-  stmt <- prepare conn sql
-  execute stmt vals
-  return (Right (fetchRow stmt))
-
-allResults :: IO (Maybe [SqlValue]) -> IO [[SqlValue]]
-allResults getMore = keepGetting id
-    where keepGetting a = do
-            row <- getMore
-            case row of
-              Nothing -> return (a [])
-              Just row -> keepGetting ((row :) . a)
-
--- * BeamT actions
-
-inBeamTxn :: MonadIO m => Beam m -> BeamT e m a -> m (BeamResult e a)
-inBeamTxn beam action = do res <- runBeamT action beam
-                           withHDBCConnection beam $
-                             case res of
-                               Success  x -> liftIO . commit
-                               Rollback e -> liftIO . rollback
-                           return res
-
-toBeamResult :: Either String a -> BeamResult e a
-toBeamResult = (Rollback . InternalError) ||| Success
-
-query :: (MonadIO m, Functor m, FromSqlValues a, Project (Scope a)) => Query a -> BeamT e m (Source (BeamT e m) a)
-query q = BeamT $ \beam ->
-          do res <- runQuery q beam
-             case res of
-               Right x -> return (Success (transPipe (BeamT . const . fmap Success) x))
-               Left err -> return (Rollback (InternalError err))
-
-queryList :: (MonadIO m, Functor m, FromSqlValues a, Project (Scope a)) => Query a -> BeamT e m [a]
-queryList q = do src <- query q
-                 src $$ C.consume
-
-insert :: (MonadIO m, Functor m, Table t, FromSqlValues (t Column)) => Simple t -> BeamT e m (t Column)
-insert table = BeamT (\beam -> toBeamResult <$> runInsert table beam)
-
-save :: ( MonadIO m, Functor m, Table table ) => table Column -> BeamT e m ()
-save qt = BeamT (\beam -> toBeamResult <$> runUpdate (updateEntity qt) beam)
-
-update :: ( MonadIO m, Functor m, Table table ) =>
-          table Column
-       -> (Scope (table Column) -> [QAssignment])
-       -> BeamT e m ()
-update (qt :: table Column) mkAssignments = set (Proxy :: Proxy table) mkAssignments (flip findByPrimaryKeyExpr qt)
-
-set :: ( MonadIO m, Functor m, Table table ) =>
-       Proxy table
-    -> (Scope (table Column) -> [QAssignment])
-    -> (Scope (table Column) -> QExpr Bool)
-    -> BeamT e m ()
-set tbl mkAssignments mkWhere = BeamT (\beam -> toBeamResult <$> runUpdate (updateWhere tbl (mkAssignments &&& mkWhere)) beam)
-
-getOne :: (MonadIO m, Functor m, FromSqlValues a, Project (Scope a)) => Query a -> BeamT e m (Maybe a)
-getOne q =
-    do let justOneSink = await >>= \x ->
-                         case x of
-                           Nothing -> return Nothing
-                           Just  x -> noMoreSink x
-           noMoreSink x = await >>= \nothing ->
-                          case nothing of
-                            Nothing -> return (Just x)
-                            Just  _ -> return Nothing
-       src <- query q
-       src $$ justOneSink
-
-from' :: Generic a => a -> Rep a ()
-from' = from
-to' :: Generic a => Rep a () -> a
-to' = to
+-- * Generic combinators
 
 ref :: Table t => t c -> ForeignKey t c
 ref = ForeignKey . primaryKey
 justRef :: Table related =>
-           related Column -> ForeignKey related (Nullable Column)
-justRef (e :: related Column) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (primaryKey e))
-    where just :: Column a -> Nullable Column a
-          just (Column x) = column (Just x)
-nothingRef :: Table related =>
-              Query (related Column) -> ForeignKey related (Nullable Column)
-nothingRef (_ :: Query (related Column)) = ForeignKey (pkChangeRep (Proxy :: Proxy related) nothing (primaryKey fieldSettings))
-    where nothing :: TableField related a -> Nullable Column a
-          nothing x = column Nothing
+           related Identity -> ForeignKey related (Nullable Identity)
+justRef (e :: related Identity) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (primaryKey e))
+    where just :: Columnar' Identity a -> Columnar' (Nullable Identity) a
+          just (Columnar' x) = Columnar' (Just (unsafeCoerce x)) -- TODO : Why is unsafecoerce necessary here?
 
-          fieldSettings :: TableSettings related
-          fieldSettings = tblFieldSettings
+-- nothingRef :: Table related =>
+--               Query db (related Identity) -> ForeignKey related (Nullable Identity)
+-- nothingRef (_ :: Query db (related Identity)) = ForeignKey (pkChangeRep (Proxy :: Proxy related) nothing (primaryKey fieldSettings))
+--     where nothing :: Columnar' (TableField related) a -> Columnar' (Nullable Identity) a
+--           nothing x = Columnar' Nothing
 
-debugQuerySQL :: Project (Scope a) => Query a -> (String, [SqlValue])
-debugQuerySQL q = ppSQL (Select (queryToSQL q))
+--           fieldSettings :: TableSettings related
+--           fieldSettings = tblFieldSettings

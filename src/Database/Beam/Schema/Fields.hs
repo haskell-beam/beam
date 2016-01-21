@@ -25,10 +25,6 @@ import qualified GHC.Generics as Generic
 -- * Fields
 
 -- ** Enum fields
-
-newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
-    deriving (Show, Typeable)
-
 instance (Enum a, Show a, Read a, Typeable a) => FieldSchema (BeamEnum a) where
     data FieldSettings (BeamEnum a) = EnumSettings
                                     { maxNameSize :: Maybe Int }

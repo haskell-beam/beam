@@ -13,6 +13,10 @@ noConstraints desc = SQLColumnSchema desc []
 notNull desc = SQLColumnSchema desc [SQLNotNull]
 
 -- * SQL queries
+--
+--   Types for most forms of SQL queries and data updates/inserts. This is the internal representation used by Beam.
+--   Typically, you'd use the typed representation 'QExpr' and 'Q' to guarantee type-safety, and let Beam do the
+--   low-level conversion to Sql
 
 data SQLCommand = Select SQLSelect
                 | Insert SQLInsert
@@ -50,7 +54,7 @@ data SQLUpdate = SQLUpdate
 
 data SQLSelect = SQLSelect
                { selProjection :: SQLProjection
-               , selFrom       :: SQLFrom
+               , selFrom       :: Maybe SQLFrom
                , selWhere      :: SQLExpr
                , selGrouping   :: Maybe SQLGrouping
                , selOrderBy    :: [SQLOrdering]

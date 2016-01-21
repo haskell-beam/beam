@@ -15,12 +15,16 @@ import Control.Monad.Writer hiding ((<>))
 
 import Data.Maybe
 import Data.Text (Text, unpack)
+import Data.String
 
 import Database.HDBC
 
 import Text.PrettyPrint
 
 -- * Pretty printing support
+
+-- | Convert a 'SQLCommand' into a SQL expression (with placeholders) and literal values to be submitted to the SQL server.
+--   Splitting into a SQL expression and literals prevents SQL injection attacks.
 ppSQL :: SQLCommand -> (String, [SqlValue])
 ppSQL c = first render (runWriter (ppCmd c))
 
@@ -37,7 +41,13 @@ ppCmd (Update u) = ppUpdate u
 ppCreateTable :: SQLCreateTable -> DocAndVals
 ppCreateTable (SQLCreateTable tblName schema) =
     do fieldSchemas <- mapM ppFieldSchema schema
-       return (text "CREATE TABLE" <+> text (unpack tblName) <+> parens (hsep (punctuate comma fieldSchemas)))
+       let primaryKeys = filter (any (==SQLPrimaryKey) . csConstraints . snd) schema
+           primaryKeyExpr = case primaryKeys of
+                              [] -> []
+                              keys ->
+                                  let primaryKeys = map (text . unpack . fst) keys
+                                  in [text "PRIMARY KEY(" <+> hsep (punctuate comma primaryKeys) <+> text ")" ]
+       return (text "CREATE TABLE" <+> text (unpack tblName) <+> parens (hsep (punctuate comma (fieldSchemas ++ primaryKeyExpr))))
 
 ppFieldSchema :: (Text, SQLColumnSchema) -> DocAndVals
 ppFieldSchema (name, colSch) = (text (unpack name) <+>) <$> ppColSchema colSch
@@ -49,7 +59,7 @@ ppColSchema (SQLColumnSchema type_ constraints) =
        return (typeDoc <+> hsep constraints)
 
 ppConstraint :: SQLConstraint -> DocAndVals
-ppConstraint SQLPrimaryKey = return (text "PRIMARY KEY")
+ppConstraint SQLPrimaryKey = return empty --(text "PRIMARY KEY")
 --ppConstraint SQLPrimaryKeyAutoIncrement = return (text "PRIMARY KEY")
 ppConstraint SQLAutoIncrement = return (text "AUTOINCREMENT") -- TODO this is different dependingon the backend
 ppConstraint SQLNotNull = return (text "NOT NULL")
@@ -96,7 +106,10 @@ ppUpdate (SQLUpdate tbls assignments where_) =
 ppSel :: SQLSelect -> DocAndVals
 ppSel sel =
     do proj   <- ppProj (selProjection sel)
-       source <- ppFrom (selFrom sel)
+       source <- case selFrom sel of
+                   Nothing -> pure empty
+                   Just from -> do source <- ppFrom from
+                                   pure (text "FROM " <+> source)
        where_ <- ppWhere  (selWhere sel)
        grouping <- case selGrouping sel of
                      Nothing -> return empty
@@ -104,7 +117,7 @@ ppSel sel =
        orderBy <- ppOrderBy (selOrderBy sel)
        let limit = maybe empty ((text "LIMIT" <+>) . text . show) (selLimit sel)
            offset = maybe empty ((text "OFFSET" <+>) . text . show) (selOffset sel)
-       return (text "SELECT" <+> proj <+> text "FROM" <+> source <+>
+       return (text "SELECT" <+> proj <+> source <+>
                where_ <+> grouping <+> orderBy <+> limit <+> offset)
 
 ppProj :: SQLProjection -> DocAndVals

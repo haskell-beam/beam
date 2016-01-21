@@ -17,10 +17,11 @@ data Sqlite3Settings = Sqlite3Settings FilePath
                        deriving Show
 
 instance BeamBackend Sqlite3Settings where
-    openBeam (Sqlite3Settings fp) =
+    openBeam dbSettings (Sqlite3Settings fp) =
         do conn <- liftIO (connectSqlite3 fp)
 
-           return Beam { closeBeam = liftIO (disconnect conn)
+           return Beam { beamDbSettings = dbSettings
+                       , closeBeam = liftIO (disconnect conn)
                        , compareSchemas = defaultBeamCompareSchemas
                        , adjustColDescForBackend =
                            \cs -> cs { csConstraints = filter (/=SQLAutoIncrement) (csConstraints cs) }

@@ -1,13 +1,10 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances, TypeSynonymInstances, RoleAnnotations #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, KindSignatures, ScopedTypeVariables, GADTs, TypeFamilies, RankNTypes, FlexibleInstances, OverloadedStrings #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
-    ( ScopedField(..)
-    , QueryField, QueryExpr(..)
+    ( Q(..), QExpr(..), QExprToIdentity(..)
+    , rewriteExprM, allExprOpts, mkSqlExpr ) where
 
-    , Query(..), QExpr(..), QAssignment(..), QOrder(..), GenQExpr(..), GenScopedField(..)
-
-    , ScopeFields(..), Scope(..), Scope'(..), Project(..), Rescopable(..), ScopingRule
-    , getScope ) where
+import Database.Beam.Query.Internal
 
 import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Fields
@@ -17,284 +14,100 @@ import Database.HDBC
 import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Writer hiding (All)
+import Control.Monad.Identity
 
 import Data.Monoid hiding (All)
 import Data.Proxy
 import Data.Coerce
 import Data.Data
+import Data.Maybe
 import Data.String
 import qualified Data.Text as T
 
 import Unsafe.Coerce
 
 -- * Beam queries
+instance IsString (QExpr T.Text) where
+    fromString = ValE . SqlString
 
--- | A `ScopedField` represents a field that has been brought in scope via an `allQ`. The `q` type is a thread type that ensures that this field cannot escape this query.
-data ScopedField (table :: (* -> *) -> *) (c :: * -> *) ty =
-    ScopedField Int T.Text
-    deriving (Show, Typeable, Eq)
-instance (Table table, IsColumn c) => IsColumn (ScopedField table c) where
-    type ColumnType (ScopedField table c) a = QExpr (ColumnType c a)
-    column = error "ScopedField.column: cannot inject value"
-    columnValue s = FieldE s
+newtype Q (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State QueryBuilder a}
+    deriving (Monad, Applicative, Functor, MonadFix, MonadState QueryBuilder)
 
-data QueryField table field
-data QueryExpr t = QueryExpr t deriving (Show, Read, Eq, Ord)
+type family QExprToIdentity x
+type instance QExprToIdentity (table QExpr) = table Identity
+type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
+type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
 
-instance FieldSchema t => FromSqlValues (QueryExpr t) where
-    fromSqlValues' = QueryExpr <$> fromSqlValue
-    valuesNeeded _ = 1
+-- * Rewrite
 
-type ScopingRule = SQLFieldName -> SQLFieldName
+rwE :: Monad m => (forall a. QExpr a -> m (Maybe (QExpr a))) -> QExpr a -> m (QExpr a)
+rwE f x = do x' <- f x
+             case x' of
+               Nothing -> return x
+               Just x'
+                   | x == x' -> return x
+                   | otherwise -> rewriteExprM f x'
 
-class Project s where
-    project :: ScopingRule -> s -> [SQLAliased SQLExpr]
+rewriteBin :: (Monad m, Typeable a, Typeable b) => (forall a . QExpr a -> m (Maybe (QExpr a)))
+           -> (QExpr a -> QExpr b -> QExpr c) -> QExpr a -> QExpr b -> m (QExpr c)
+rewriteBin f g a b = do a' <- rewriteExprM f a
+                        b' <- rewriteExprM f b
+                        rwE f (g a' b')
 
-data QOrder = Ascending | Descending deriving (Show, Read, Eq, Ord, Enum)
+rewriteExprM :: Monad m => (forall a . QExpr a -> m (Maybe (QExpr a))) -> QExpr a -> m (QExpr a)
+rewriteExprM f (AndE a b) = rewriteBin f AndE a b
+rewriteExprM f (OrE a b) = rewriteBin f OrE a b
+rewriteExprM f (EqE a b) = rewriteBin f EqE a b
+rewriteExprM f (NeqE a b) = rewriteBin f NeqE a b
+rewriteExprM f (LtE a b) = rewriteBin f LtE a b
+rewriteExprM f (LeE a b) = rewriteBin f LeE a b
+rewriteExprM f (GtE a b) = rewriteBin f GtE a b
+rewriteExprM f (GeE a b) = rewriteBin f GeE a b
+-- rewriteExprM f (JustE a) = do a' <- rewriteExprM f a
+--                               rwE f (JustE a')
+-- rewriteExprM f (IsNothingE a) = do a' <- rewriteExprM f a
+--                                    rwE f (IsNothingE a')
+-- rewriteExprM f (IsJustE a) = do a' <- rewriteExprM f a
+--                                 rwE f (IsJustE a')
+-- rewriteExprM f (InE a b) = rewriteBin f InE a b
+-- rewriteExprM f (ListE as) = do as' <- mapM (rewriteExprM f fq) as
+--                                rwE f (ListE as')
+-- rewriteExprM f (CountE x) = do x' <- rewriteExprM f x
+--                                rwE f (CountE x')
+-- rewriteExprM f (MinE x) = do x' <- rewriteExprM f x
+--                              rwE f (MinE x')
+-- rewriteExprM f (MaxE x) = do x' <- rewriteExprM f x
+--                              rwE f (MaxE x')
+-- rewriteExprM f (SumE x) = do x' <- rewriteExprM f x
+--                              rwE f (SumE x')
+-- rewriteExprM f (AverageE x) = do x' <- rewriteExprM f x
+--                                  rwE f (AverageE x')
+-- rewriteExprM f (RefE i x) = do x' <- rewriteExprM f x
+--                                rwE f (RefE i x')
+rewriteExprM f x = rwE f x
 
-data GenQExpr where
-    GenQExpr :: Typeable t => QExpr t -> GenQExpr
-data GenScopedField table c where
-    GenScopedField :: (Table table, Typeable t, Show t) => ScopedField table c t -> GenScopedField table c
+booleanOpts :: QExpr a -> Maybe (QExpr a)
+booleanOpts (AndE (ValE (SqlBool False)) _) = Just (ValE (SqlBool False))
+booleanOpts (AndE _ (ValE (SqlBool False))) = Just (ValE (SqlBool False))
+booleanOpts (AndE (ValE (SqlBool True)) q) = Just q
+booleanOpts (AndE q (ValE (SqlBool True))) = Just q
 
--- | A query that produces results of type `a`
-data Query a where
-    All :: (Table table, ScopeFields (table Column)) => Proxy table -> Int -> Query (table Column)
-    EmptySet :: Query a
-    Filter ::  Query a -> QExpr Bool -> Query a
-    GroupBy :: Query a -> GenQExpr -> Query a
-    OrderBy :: Query a -> GenQExpr -> QOrder -> Query a
-    Join :: ( Project (Scope schema1), Project (Scope schema2) ) =>
-            Query schema1 -> Query schema2 -> Query (schema1 :|: schema2)
+booleanOpts (OrE q (ValE (SqlBool False))) = Just q
+booleanOpts (OrE (ValE (SqlBool False)) q) = Just q
+booleanOpts (OrE (ValE (SqlBool True)) (ValE (SqlBool True))) = Just (ValE (SqlBool True))
 
-    -- More joins...
-    LeftJoin :: ( Project (Scope schema1), Project (Scope schema2) ) =>
-                Query schema1 -> Query schema2 -> QExpr Bool -> Query (schema1 :|: Maybe schema2)
-    RightJoin :: ( Project (Scope schema1), Project (Scope schema2) ) =>
-                 Query schema1 -> Query schema2 -> QExpr Bool -> Query (Maybe schema1 :|: schema2)
-    OuterJoin :: ( Project (Scope schema1), Project (Scope schema2)) =>
-                 Query schema1 -> Query schema2 -> QExpr Bool -> Query (Maybe schema1 :|: Maybe schema2)
+booleanOpts x = Nothing
 
-    -- TODO Remove the function here, and just store a Scope b
-    Project :: (Rescopable a, Rescopable b) => Query a -> (Scope a -> Scope b) -> Query b
+allExprOpts e = booleanOpts e
 
-    Limit :: Query a -> Integer -> Query a
-    Offset :: Query a -> Integer -> Query a
-
-data QExpr t where
-    FieldE :: (Table table, Typeable c, Typeable ty) => ScopedField table c ty -> QExpr (ColumnType c ty)
-    MaybeFieldE :: (Table table, Typeable c, Typeable ty) => Maybe (ScopedField table c ty) -> QExpr (Maybe (ColumnType c ty))
-
-    OrE :: QExpr Bool -> QExpr Bool -> QExpr Bool
-    AndE :: QExpr Bool -> QExpr Bool -> QExpr Bool
-
-    EqE, NeqE, LtE, GtE, LeE, GeE :: (Typeable a, Show a) => QExpr a -> QExpr a -> QExpr Bool
-
-    ValE :: SqlValue -> QExpr a
-
-    JustE :: Show a => QExpr a -> QExpr (Maybe a)
-    NothingE :: QExpr (Maybe a)
-
-    IsNothingE :: Typeable a => QExpr (Maybe a) -> QExpr Bool
-    IsJustE :: Typeable a => QExpr (Maybe a) -> QExpr Bool
-
-    InE :: (Typeable a, Show a) => QExpr a -> QExpr [a] -> QExpr Bool
-
-    ListE :: [QExpr a] -> QExpr [a]
-
-    -- Aggregate functions
-    CountE :: Typeable a => QExpr a -> QExpr Int
-    MinE, MaxE, SumE, AverageE :: Typeable a => QExpr a -> QExpr a
-
-    -- TODO Hack
-    RefE :: Int -> QExpr a -> QExpr b
-
-data QAssignment where
-    QAssignment :: Table table =>
-                   ScopedField table c ty
-                -> QExpr (ColumnType c ty)
-                -> QAssignment
-
-deriving instance Typeable Query
-deriving instance Typeable QExpr
-
--- ** Scoping class
-
-class ScopeFields a where
-    scopeFields :: Proxy a -> Proxy c -> Int -> Scope' a c
-instance (ScopeFields a, ScopeFields b) => ScopeFields (a :|: b) where
-    scopeFields  (_ :: Proxy (a :|: b)) c i = scopeFields (Proxy :: Proxy a) c i :|: scopeFields (Proxy :: Proxy b) c i
-instance Table table => ScopeFields (table d) where
-    scopeFields (_ :: Proxy (table d)) (_ :: Proxy c) i = scopedTable
-        where scopedTable = changeRep scopeField $
-                            (tblFieldSettings :: TableSettings table)
-
-              scopeField :: TableField table a -> ScopedField table c a
-              scopeField tf = ScopedField i (fieldName tf)
-
-type family Scope' a c where
-    Scope' (Maybe t) c = Scope' t (Nullable c)
-    Scope' (a :|: b) c = Scope' a c :|: Scope' b c
-    -- Scope' (Entity x c) (Nullable c) = Entity x (Nullable (ScopedField x))
-    Scope' (QueryExpr t) c = QExpr (ColumnType c t)
-    Scope' (x a) c = x (ScopedField x c)
-
-type Scope a = Scope' a Column
-
-class Rescopable a where
-    rescope :: Proxy a -> Proxy c -> Proxy d ->  Scope' a c -> State Int (Scope' a d)
-instance Rescopable t => Rescopable (Maybe t) where
-    rescope (Proxy :: Proxy (Maybe t)) (Proxy :: Proxy c) (Proxy :: Proxy d) s =
-        rescope (Proxy :: Proxy t) (Proxy :: Proxy (Nullable c)) (Proxy :: Proxy (Nullable d)) s
-instance (Rescopable a, Rescopable b) => Rescopable (a :|: b) where
-    rescope (_ :: Proxy (a :|: b)) c d (a :|: b) = do x <- rescope (Proxy :: Proxy a) c d a
-                                                      y <- rescope (Proxy :: Proxy b) c d b
-                                                      return (x :|: y)
-instance Table x => Rescopable (x a) where
-    rescope (_ :: Proxy (x a)) (_ :: Proxy c) (_ :: Proxy d) fields = pure (changeRep scopeField fields)
-        where scopeField :: ScopedField x c t -> ScopedField x d t
-              scopeField = coerce -- type-safe coercion thanks to GHC!
-instance Rescopable (QueryExpr t) where
-    rescope _ _ _ (RefE i q) = pure (RefE i q)
-    rescope _ _ _ q = do x <- get -- TODO this whole system is totally broken
-                         put (x + 1)
-                         pure (RefE x q)
-
-getScope' :: Proxy c -> Query a -> Scope' a c
-getScope' f x@(All _ i) = scopeFields (aProxy x) f i
-    where aProxy :: Query a -> Proxy a
-          aProxy _ = Proxy
-getScope' _ EmptySet = error "getScope': EmptySet"
-getScope' f (Filter q _) = getScope' f q
-getScope' f (GroupBy q _) = getScope' f q
-getScope' f (Join q1 q2) = getScope' f q1 :|: getScope' f q2
-getScope' (f :: Proxy c) (LeftJoin q1 q2 _) = getScope' f q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
-getScope' (f :: Proxy c) (RightJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' f q2
-getScope' (f :: Proxy c) (OuterJoin q1 q2 _) = getScope' (Proxy :: Proxy (Nullable c)) q1 :|: getScope' (Proxy :: Proxy (Nullable c)) q2
-getScope' (f :: Proxy c) (Project (q :: Query b) proj :: Query a) = let scope = getScope' f q
-                                                                        beforeProj = evalState (rescope (Proxy :: Proxy b) (Proxy :: Proxy c) (Proxy :: Proxy Column) scope) 0
-                                                                        afterProj = proj beforeProj
-                                                                    in evalState (rescope (Proxy :: Proxy a) (Proxy :: Proxy Column) (Proxy :: Proxy c) afterProj) 0
-getScope' f (Limit q _) = getScope' f q
-getScope' f (Offset q _) = getScope' f q
-getScope' f (OrderBy q _ _) = getScope' f q
-
-getScope :: Query a -> Scope a
-getScope = getScope' (Proxy :: Proxy Column)
-
--- ** Hand-derived instances for Query and QExpr since their types are too complicated for the deriving mechanism
-
-instance Show (Query a) where
-    show (All table i) = concat ["All ", show i, " :: ", T.unpack . dbTableName $ table]
-    show (Filter q e) = concat ["Filter (", show q, ") (", show e, ")"]
-    show (GroupBy q es) = concat ["GroupBy (", show q, ") (", show es, ")"]
-    show (OrderBy q es ord) = concat ["OrderBy (", show q, ") (", show es, ") ", show ord]
-    show (Join q1 q2) = concat ["Join (", show q1, ") (", show q2, ")"]
-    show (LeftJoin q1 q2 e) = concat ["LeftJoin (", show q1, ") (", show q2, ") (", show e, ")"]
-    show (OuterJoin q1 q2 e) = concat ["OuterJoin (", show q1, ") (", show q2, ") (", show e, ")"]
-    show (RightJoin q1 q2 e) = concat ["RightJoin (", show q1, ") (", show q2, ") (", show e, ")"]
-    show (Project q _) = concat ["Project (", show q, ") _"]
-    show (Limit q i) = concat ["Limit (", show q, ") ", show i]
-    show (Offset q i) = concat ["Offset (", show q, ") ", show i]
-    show EmptySet = "EmptySet"
-
-instance Show (QExpr t) where
-    show (FieldE x) = concat ["FieldE (", show x, ")"]
-    show (MaybeFieldE x) = concat ["MaybeFieldE (", show x, ")"]
-
-    show (AndE a b) = concat ["AndE (", show a, ") (", show b, ")"]
-    show (OrE a b) = concat ["OrE (", show a, ") (", show b, ")"]
-
-    show (EqE a b) = concat ["EqE (", show a, ") (", show b, ")"]
-    show (LtE a b) = concat ["LtE (", show a, ") (", show b, ")"]
-    show (GtE a b) = concat ["GtE (", show a, ") (", show b, ")"]
-    show (LeE a b) = concat ["LeE (", show a, ") (", show b, ")"]
-    show (GeE a b) = concat ["GeE (", show a, ") (", show b, ")"]
-    show (NeqE a b) = concat ["NeqE (", show a, ") (", show b, ")"]
-
-    show (ValE v) = concat ["ValE ", show v]
-
-    show (JustE b) = concat ["JustE ", show b]
-    show NothingE = "NothingE"
-
-    show (IsNothingE b) = concat ["IsNothingE ", show b]
-    show (IsJustE b) = concat ["IsJustE ", show b]
-
-    show (InE a xs) = concat ["InE (", show a, ") ", show xs]
-    show (ListE xs) = concat ["ListE ", show xs]
-
-    show (CountE x) = concat ["CountE (", show x, ")"]
-    show (MinE x) = concat ["MinE (", show x, ")"]
-    show (MaxE x) = concat ["MaxE (", show x, ")"]
-    show (SumE x) = concat ["SumE (", show x, ")"]
-    show (AverageE x) = concat ["AverageE (", show x, ")"]
-
-instance Eq (Query a) where
-    EmptySet == EmptySet = True
-    All _ x == All _ y = x == y
-    Filter q1 e1 == Filter q2 e2 = q1 == q2 && e1 == e2
-    GroupBy q1 es1 == GroupBy q2 es2 = q1 == q2 && es1 == es2
-    OrderBy q1 es1 ord1 == OrderBy q2 es2 ord2 = q1 == q2 && es1 == es2 && ord1 == ord2
-    Join a1 b1 == Join a2 b2 = a1 == a2 && b1 == b2
-    Limit q1 l1 == Limit q2 l2 = q1 == q2 && l1 == l2
-    Offset q1 l1 == Offset q2 l2 = q1 == q2 && l1 == l2
-    _ == _ = False
-
-instance Eq (QExpr t) where
-    FieldE q1 == FieldE q2 =
-        case cast q1 of
-          Nothing -> False
-          Just q1 -> q1 == q2
-    MaybeFieldE q1 == MaybeFieldE q2 =
-        case cast q1 of
-          Nothing -> False
-          Just q1 -> q1 == q2
-
-    AndE a1 b1 == AndE a2 b2 = a1 == a2 && b1 == b2
-    OrE a1 b1 == OrE a2 b2 = a1 == a2 && b1 == b2
-
-    EqE a1 b1 == EqE a2 b2 = case cast (a1, b1) of
-                               Just (a1, b1)
-                                   | a1 == a2 && b1 == b2 -> True
-                                   | otherwise -> False
-                               Nothing -> False
-
-    ValE a == ValE b = a == b
-
-    JustE a == JustE b = a == b
-    NothingE == NothingE = True
-
-    IsNothingE a == IsNothingE b = case cast a of
-                                     Just a' -> a' == b
-                                     Nothing -> False
-    IsJustE a == IsJustE b = case cast a of
-                               Just a' -> a' == b
-                               Nothing -> False
-    InE a as == InE b bs = case cast (a, as) of
-                             Nothing -> False
-                             Just (a', as') -> a' == b && as' == bs
-    ListE a == ListE b = a == b
-
-    CountE a == CountE b = case cast a of
-                             Nothing -> False
-                             Just a' -> a' == b
-    MinE a == MinE b = case cast a of
-                         Nothing -> False
-                         Just a' -> a' == b
-    MaxE a == MaxE b = case cast a of
-                         Nothing -> False
-                         Just a' -> a' == b
-    SumE a == SumE b = case cast a of
-                         Nothing -> False
-                         Just a' -> a' == b
-    AverageE a == AverageE b = case cast a of
-                                 Nothing -> False
-                                 Just a' -> a' == b
-
-    _ == _ = False
-
-deriving instance Show GenQExpr
-instance Eq GenQExpr where
-    GenQExpr q1 == GenQExpr q2 = case cast q1 of
-                                   Nothing -> False
-                                   Just q1 -> q1 == q2
+mkSqlExpr :: QExpr a -> SQLExpr
+mkSqlExpr (FieldE tblName tblOrd fieldName) = SQLFieldE (SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd)))
+mkSqlExpr (OrE a b) = SQLOrE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (AndE a b) = SQLAndE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (EqE a b) = SQLEqE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (NeqE a b) = SQLNeqE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (LtE a b) = SQLLtE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (GtE a b) = SQLGtE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (LeE a b) = SQLLeE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (GeE a b) = SQLGeE (mkSqlExpr a) (mkSqlExpr b)
+mkSqlExpr (ValE v) = SQLValE v

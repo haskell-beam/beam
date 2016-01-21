@@ -18,6 +18,7 @@ import Data.List
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Set as S
+import qualified Data.Map as M
 
 import Database.HDBC
 
@@ -28,20 +29,25 @@ instance Monoid DBSchemaComparison where
 
     mempty = Migration []
 
-defaultBeamCompareSchemas :: ReifiedDatabaseSchema -> Database -> DBSchemaComparison
+reifyDBSchema :: Database db => DatabaseSettings db -> ReifiedDatabaseSchema
+reifyDBSchema dbSettings =
+    let tables = allTableSettings dbSettings
+    in map (\(GenDatabaseTable (DatabaseTable table name)) -> (name, reifyTableSchema table)) tables
+
+defaultBeamCompareSchemas :: Database db => ReifiedDatabaseSchema -> DatabaseSettings db -> DBSchemaComparison
 defaultBeamCompareSchemas actual db = execWriter compare
-    where expected = reifyDBSchema db
+    where dbTables = allTableSettings db
 
-          actualTableSet = S.fromList (map fst actual)
-          expTableSet = S.fromList (map fst expected)
-          expGenTables = tables db
+          expected = S.fromList (map (\(GenDatabaseTable (DatabaseTable _ name)) -> name) dbTables)
+          actualTables = S.fromList (map fst actual)
 
-          tablesToBeMade = expTableSet S.\\ actualTableSet
+          tablesToBeMadeNames = expected S.\\ actualTables
+          tablesToBeMade = mapMaybe (\(GenDatabaseTable (DatabaseTable table name)) ->
+                                         if name `S.member` tablesToBeMadeNames
+                                         then Just (MACreateTable name table)
+                                         else Nothing) dbTables
 
-          genTablesToBeMade = mapMaybe lookupGenTable (S.toList tablesToBeMade)
-              where lookupGenTable tblName = find (\(GenTable t) -> dbTableName t == tblName) expGenTables
-
-          compare = tell (Migration (map (\(GenTable t) -> MACreateTable t) genTablesToBeMade))
+          compare = tell (Migration tablesToBeMade)
 
 hdbcSchema :: (IConnection conn, MonadIO m) => conn -> m ReifiedDatabaseSchema
 hdbcSchema conn =
@@ -51,8 +57,8 @@ hdbcSchema conn =
            do descs <- describeTable conn tbl
               return (fromString tbl, map (fromString *** noConstraints) descs)
 
-createStmtFor :: (Table t) => Beam m -> Proxy t -> SQLCreateTable
-createStmtFor beam (table :: Proxy t) =
+createStmtFor :: (Table t) => Beam db m -> Text -> Proxy t -> SQLCreateTable
+createStmtFor beam name (table :: Proxy t) =
     let tblSchema = reifyTableSchema table
         tblSchema' = map addPrimaryKeyConstraint tblSchema
         tblSchemaInDb' = map (second (adjustColDescForBackend beam)) tblSchema'
@@ -61,21 +67,24 @@ createStmtFor beam (table :: Proxy t) =
             | any (==name) primaryKeyFields = (name, sch { csConstraints = SQLPrimaryKey:csConstraints sch })
             | otherwise = (name, sch)
 
-        primaryKeyFields = pkAllValues (Proxy :: Proxy t) (fieldName :: forall a. TableField t a -> Text) (primaryKey (tblFieldSettings :: TableSettings t))
-    in SQLCreateTable (dbTableName table) (tblSchemaInDb')
+        _fieldName' :: Columnar' (TableField t) x -> Text
+        _fieldName' (Columnar' x) = _fieldName x
 
-migrateDB :: MonadIO m => db -> Beam m -> [MigrationAction] -> m ()
+        primaryKeyFields = pkAllValues (Proxy :: Proxy t) _fieldName' (primaryKey (tblFieldSettings :: TableSettings t))
+    in SQLCreateTable name (tblSchemaInDb')
+
+migrateDB :: MonadIO m => DatabaseSettings db -> Beam db m -> [MigrationAction] -> m ()
 migrateDB db beam actions =
   forM_ actions $ \action ->
       do liftIO (putStrLn (concat ["Performing ", show action]))
 
          case action of
-           MACreateTable t -> do let stmt = createStmtFor beam t
-                                     (sql, vals) = ppSQL (CreateTable stmt)
-                                 liftIO (putStrLn (concat ["Will run SQL:\n", sql]))
-                                 withHDBCConnection beam (\conn -> liftIO $ do runRaw conn sql
-                                                                               commit conn)
-                                 liftIO (putStrLn "Done...")
+           MACreateTable name t -> do let stmt = createStmtFor beam name t
+                                          (sql, vals) = ppSQL (CreateTable stmt)
+                                      liftIO (putStrLn (concat ["Will run SQL:\n", sql]))
+                                      withHDBCConnection beam (\conn -> liftIO $ do runRaw conn sql
+                                                                                    commit conn)
+                                      liftIO (putStrLn "Done...")
 
 autoMigrateDB db beam =
     do actDBSchema <- withHDBCConnection beam hdbcSchema
@@ -86,9 +95,9 @@ autoMigrateDB db beam =
                                  migrateDB db beam actions
          Unknown -> liftIO $ putStrLn "Unknown comparison"
 
-openDatabase :: (BeamBackend dbSettings, MonadIO m) => Database -> dbSettings -> m (Beam m)
+openDatabase :: (BeamBackend dbSettings, MonadIO m, Database db) => DatabaseSettings db -> dbSettings -> m (Beam db m)
 openDatabase db dbSettings =
-  do beam <- openBeam dbSettings
+  do beam <- openBeam db dbSettings
      autoMigrateDB db beam
 
      return beam
