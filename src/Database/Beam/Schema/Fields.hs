@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeFamilies, TypeOperators, MultiParamTypeClasses, EmptyDataDecls, DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, PolyKinds, GADTs, DeriveGeneric, DeriveDataTypeable, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances, RankNTypes #-}
 module Database.Beam.Schema.Fields where
 
 import Database.Beam.Schema.Tables
@@ -24,7 +23,6 @@ import qualified GHC.Generics as Generic
 
 -- * Fields
 
--- ** Enum fields
 instance (Enum a, Show a, Read a, Typeable a) => FieldSchema (BeamEnum a) where
     data FieldSettings (BeamEnum a) = EnumSettings
                                     { maxNameSize :: Maybe Int }
@@ -36,6 +34,7 @@ instance (Enum a, Show a, Read a, Typeable a) => FieldSchema (BeamEnum a) where
 
     makeSqlValue (BeamEnum x) = SqlString (show x)
     fromSqlValue = BeamEnum . read . fromSql <$> popSqlValue
+instance (Enum a, Show a, Read a, Typeable a) => FromSqlValues (BeamEnum a)
 
 -- ** Text field
 
@@ -68,8 +67,7 @@ instance FieldSchema Text where
 
     makeSqlValue x = SqlString (unpack x)
     fromSqlValue = fromSql <$> popSqlValue
-
--- ** Date time fields
+instance FromSqlValues Text
 
 instance FieldSchema UTCTime where
     data FieldSettings UTCTime = DateTimeDefault
@@ -85,6 +83,7 @@ instance FieldSchema UTCTime where
                             , colNullable = Nothing }
     makeSqlValue = SqlUTCTime
     fromSqlValue = fromSql <$> popSqlValue
+instance FromSqlValues UTCTime
 
 -- ** Auto-increment fields
 
@@ -107,3 +106,5 @@ instance FieldSchema AutoId where
     makeSqlValue UnassignedId = SqlNull
     makeSqlValue (AssignedId i) = SqlInteger (fromIntegral i)
     fromSqlValue = maybe UnassignedId AssignedId . fromSql <$> popSqlValue
+
+instance FromSqlValues AutoId

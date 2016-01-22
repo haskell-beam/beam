@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances, OverloadedStrings #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query
     ( module Database.Beam.Query.Types
@@ -14,6 +13,7 @@ import Database.Beam.Query.Internal
 import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Fields
 import Database.Beam.Types
+import Database.Beam.Internal
 import Database.Beam.SQL
 import Database.Beam.SQL.Types
 
@@ -43,10 +43,10 @@ import Unsafe.Coerce
 
 -- * Query
 
-runSQL' :: IConnection conn => conn -> SQLCommand -> IO (Either String (IO (Maybe [SqlValue])))
-runSQL' conn cmd = do
+runSQL' :: IConnection conn => Bool -> conn -> SQLCommand -> IO (Either String (IO (Maybe [SqlValue])))
+runSQL' debug conn cmd = do
   let (sql, vals) = ppSQL cmd
-  putStrLn ("Will execute " ++ sql ++ " with " ++ show vals)
+  when debug (putStrLn ("Will execute " ++ sql ++ " with " ++ show vals))
   stmt <- prepare conn sql
   execute stmt vals
   return (Right (fetchRow stmt))
@@ -60,8 +60,8 @@ insertToSQL name (table :: table Identity) = SQLInsert name
 runInsert :: (MonadIO m, Table table, FromSqlValues (table Identity)) => T.Text -> table Identity -> Beam d m -> m (Either String (table Identity))
 runInsert tableName (table :: table Identity) beam =
     do let insertCmd = Insert sqlInsert
-           sqlInsert@(SQLInsert tblName sqlValues) = (insertToSQL tableName table)
-       withHDBCConnection beam (\conn -> liftIO (runSQL' conn insertCmd))
+           sqlInsert@(SQLInsert tblName sqlValues) = insertToSQL tableName table
+       withHDBCConnection beam (\conn -> liftIO (runSQL' (beamDebug beam) conn insertCmd))
 
        -- There are three possibilities here:
        --
@@ -77,10 +77,10 @@ runInsert tableName (table :: table Identity) beam =
            autoIncrementsAreNull = zipWith (\(_, columnSchema) value -> hasAutoIncrementConstraint columnSchema && value == SqlNull) tableSchema sqlValues
            hasNullAutoIncrements = or autoIncrementsAreNull
 
-           hasAutoIncrementConstraint (SQLColumnSchema { csConstraints = cs }) = isJust (find (== SQLAutoIncrement) cs)
+           hasAutoIncrementConstraint SQLColumnSchema { csConstraints = cs } = isJust (find (== SQLAutoIncrement) cs)
 
        insertedValues <- if hasNullAutoIncrements
-                         then liftIO (putStrLn "Got null auto increments") >> getLastInsertedRow beam tblName
+                         then getLastInsertedRow beam tblName
                          else return sqlValues
        return (fromSqlValues insertedValues)
 
@@ -88,24 +88,6 @@ insertInto :: (MonadIO m, Functor m, Table table, FromSqlValues (table Identity)
               DatabaseTable db table -> table Identity -> BeamT e db m (table Identity)
 insertInto (DatabaseTable _ name) data_ =
     BeamT (\beam -> toBeamResult <$> runInsert name data_ beam)
-
-queryToSQL :: Projectible a => (forall s. Q db s a) -> SQLSelect
-queryToSQL q = let (res, qb) = runState (runQ q) emptyQb
-                   emptyQb = QueryBuilder 0 Nothing (ValE (SqlBool True)) Nothing Nothing
-                   projection = map (\(GenQExpr q) -> SQLAliased (optimizeExpr q) Nothing) (project res)
-
-                   optimizeExpr :: QExpr a -> SQLExpr
-                   optimizeExpr = mkSqlExpr . runIdentity . rewriteExprM (return . allExprOpts)
-
-                   sel = SQLSelect
-                         { selProjection = SQLProj projection
-                         , selFrom = qbFrom qb
-                         , selWhere = optimizeExpr (qbWhere qb)
-                         , selGrouping = Nothing
-                         , selOrderBy = []
-                         , selLimit = qbLimit qb
-                         , selOffset = qbOffset qb }
-               in sel
 
 -- * BeamT actions
 
@@ -122,13 +104,14 @@ toBeamResult = (Rollback . InternalError) ||| Success
 
 runQuery :: ( MonadIO m
             , FromSqlValues (QExprToIdentity a)
-            , Projectible a ) =>
-            (forall s. Q db s a) -> Beam db m -> m (Either String (Source m (QExprToIdentity a)))
+            , Projectible a
+            , IsQuery q ) =>
+            (forall s. q db s a) -> Beam db m -> m (Either String (Source m (QExprToIdentity a)))
 runQuery q beam =
-    do let selectCmd = Select (queryToSQL q)
+    do let selectCmd = Select (snd (queryToSQL' (toQ q)))
 
        res <- withHDBCConnection beam $ \conn ->
-              do liftIO $ runSQL' conn selectCmd
+                liftIO $ runSQL' (beamDebug beam) conn selectCmd
 
        case res of
          Left err -> return (Left err)
@@ -142,14 +125,14 @@ runQuery q beam =
                                                 Nothing -> return ()
                               return (Right source)
 
-query :: (MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. Q db s a) -> BeamT e db m (Source (BeamT e db m) (QExprToIdentity a))
+query :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. q db s a) -> BeamT e db m (Source (BeamT e db m) (QExprToIdentity a))
 query q = BeamT $ \beam ->
           do res <- runQuery q beam
              case res of
                Right x -> return (Success (transPipe (BeamT . const . fmap Success) x))
                Left err -> return (Rollback (InternalError err))
 
-queryList :: (MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. Q db s a) -> BeamT e db m [QExprToIdentity a]
+queryList :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. q db s a) -> BeamT e db m [QExprToIdentity a]
 queryList q = do src <- query q
                  src $$ C.consume
 

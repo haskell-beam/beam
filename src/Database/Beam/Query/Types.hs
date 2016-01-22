@@ -1,8 +1,14 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, KindSignatures, ScopedTypeVariables, GADTs, TypeFamilies, RankNTypes, FlexibleInstances, OverloadedStrings #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
-    ( Q(..), QExpr(..), QExprToIdentity(..)
-    , rewriteExprM, allExprOpts, mkSqlExpr ) where
+    ( Q(..), QExpr(..), QExprToIdentity(..), TopLevelQ, IsQuery
+
+    , Projectible(..)
+
+    , Aggregation(..)
+
+    , queryToSQL'
+
+    , rewriteExprM, allExprOpts, mkSqlExpr, optimizeExpr ) where
 
 import Database.Beam.Query.Internal
 
@@ -30,15 +36,23 @@ import Unsafe.Coerce
 instance IsString (QExpr T.Text) where
     fromString = ValE . SqlString
 
-newtype Q (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State QueryBuilder a}
-    deriving (Monad, Applicative, Functor, MonadFix, MonadState QueryBuilder)
-
 type family QExprToIdentity x
 type instance QExprToIdentity (table QExpr) = table Identity
+type instance QExprToIdentity (QExpr a) = a
 type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
 type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
 
--- * Rewrite
+instance IsQuery Q where
+    toQ = id
+instance IsQuery TopLevelQ where
+    toQ (TopLevelQ q) = q
+
+-- * Aggregations
+
+data Aggregation a = GroupAgg (QExpr a)
+                   | GenericAgg T.Text [GenQExpr]
+
+-- * Rewriting and optimization
 
 rwE :: Monad m => (forall a. QExpr a -> m (Maybe (QExpr a))) -> QExpr a -> m (QExpr a)
 rwE f x = do x' <- f x
@@ -100,6 +114,9 @@ booleanOpts x = Nothing
 
 allExprOpts e = booleanOpts e
 
+optimizeExpr :: QExpr a -> SQLExpr
+optimizeExpr = mkSqlExpr . runIdentity . rewriteExprM (return . allExprOpts)
+
 mkSqlExpr :: QExpr a -> SQLExpr
 mkSqlExpr (FieldE tblName tblOrd fieldName) = SQLFieldE (SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd)))
 mkSqlExpr (OrE a b) = SQLOrE (mkSqlExpr a) (mkSqlExpr b)
@@ -111,3 +128,19 @@ mkSqlExpr (GtE a b) = SQLGtE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (LeE a b) = SQLLeE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (GeE a b) = SQLGeE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (ValE v) = SQLValE v
+mkSqlExpr (FuncE f args) = SQLFuncE f (map (\(GenQExpr e) -> mkSqlExpr e) args)
+
+queryToSQL' :: Projectible a => Q db s a -> (a, SQLSelect)
+queryToSQL' q = let (res, qb) = runState (runQ q) emptyQb
+                    emptyQb = QueryBuilder 0 Nothing (ValE (SqlBool True)) Nothing Nothing [] Nothing
+                    projection = map (\(GenQExpr q) -> SQLAliased (optimizeExpr q) Nothing) (project res)
+
+                    sel = SQLSelect
+                          { selProjection = SQLProj projection
+                          , selFrom = qbFrom qb
+                          , selWhere = optimizeExpr (qbWhere qb)
+                          , selGrouping = qbGrouping qb
+                          , selOrderBy = qbOrdering qb
+                          , selLimit = qbLimit qb
+                          , selOffset = qbOffset qb }
+                in (res, sel)

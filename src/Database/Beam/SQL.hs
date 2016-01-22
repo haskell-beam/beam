@@ -1,11 +1,10 @@
-{-# LANGUAGE GADTs, TupleSections #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.SQL
-    ( module Database.Beam.SQL.Types
+    ( -- * SQL pretty printing
+      ppSQL
 
-    , ppSQL
-
-    , conjugateWhere) where
+      -- * Untyped SQL types
+    , module Database.Beam.SQL.Types ) where
 
 import Database.Beam.SQL.Types
 
@@ -41,7 +40,7 @@ ppCmd (Update u) = ppUpdate u
 ppCreateTable :: SQLCreateTable -> DocAndVals
 ppCreateTable (SQLCreateTable tblName schema) =
     do fieldSchemas <- mapM ppFieldSchema schema
-       let primaryKeys = filter (any (==SQLPrimaryKey) . csConstraints . snd) schema
+       let primaryKeys = filter (elem SQLPrimaryKey . csConstraints . snd) schema
            primaryKeyExpr = case primaryKeys of
                               [] -> []
                               keys ->
@@ -170,7 +169,7 @@ ppOn (SQLValE v)
 ppOn expr = (text "ON" <+>) <$> ppExpr expr
 
 ppOrderBy [] = return empty
-ppOrderBy xs = (text "ORDER BY" <+>) . hsep <$> mapM ppOrdering xs
+ppOrderBy xs = (text "ORDER BY" <+>) . hsep . punctuate comma <$> mapM ppOrdering xs
     where ppOrdering (Asc e) = do eDoc <- ppExpr e
                                   return (eDoc <+> text "ASC")
           ppOrdering (Desc e) = do eDoc <- ppExpr e
@@ -199,24 +198,20 @@ ppExpr (SQLInE x xs) = do xDoc <- ppExpr x
                           return (xDoc <+> text "IN" <+> xsDoc)
 ppExpr (SQLListE xs) = do xsDoc <- mapM ppExpr xs
                           return (parens (hsep (punctuate comma xsDoc)))
-ppExpr (SQLCountE x) = do xDoc <- ppExpr x
-                          return (text "COUNT" <> parens xDoc)
-ppExpr (SQLMinE x) = do xDoc <- ppExpr x
-                        return (text "MIN" <> parens xDoc)
-ppExpr (SQLMaxE x) = do xDoc <- ppExpr x
-                        return (text "MAX" <> parens xDoc)
-ppExpr (SQLSumE x) = do xDoc <- ppExpr x
-                        return (text "SUM" <> parens xDoc)
-ppExpr (SQLAverageE x) = do xDoc <- ppExpr x
-                            return (text "AVERAGE" <> parens xDoc)
+-- ppExpr (SQLCountE x) = do xDoc <- ppExpr x
+--                           return (text "COUNT" <> parens xDoc)
+-- ppExpr (SQLMinE x) = do xDoc <- ppExpr x
+--                         return (text "MIN" <> parens xDoc)
+-- ppExpr (SQLMaxE x) = do xDoc <- ppExpr x
+--                         return (text "MAX" <> parens xDoc)
+-- ppExpr (SQLSumE x) = do xDoc <- ppExpr x
+--                         return (text "SUM" <> parens xDoc)
+-- ppExpr (SQLAverageE x) = do xDoc <- ppExpr x
+--                             return (text "AVERAGE" <> parens xDoc)
+ppExpr (SQLFuncE f args) = do argDocs <- mapM ppExpr args
+                              return (text (unpack f) <> parens (hsep (punctuate comma argDocs)) )
 
 binOp :: String -> SQLExpr -> SQLExpr -> DocAndVals
 binOp op a b = do aD <- ppExpr a
                   bD <- ppExpr b
                   return (aD <+> text op <+> bD)
-
--- * SQL statement combinators
-
-conjugateWhere :: SQLSelect -> SQLExpr -> SQLSelect
-conjugateWhere sel@(SQLSelect { selWhere = SQLValE (SqlBool True) }) e = sel { selWhere = e}
-conjugateWhere sel e = sel { selWhere = SQLAndE (selWhere sel) e }

@@ -1,5 +1,5 @@
-{-# LANGUAGE ScopedTypeVariables, TypeOperators, TypeFamilies, RankNTypes, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Database.Beam.Schema.Lenses where
+module Database.Beam.Schema.Lenses
+    ( tableConfigLenses ) where
 
 import Database.Beam.Types
 import Database.Beam.Schema.Tables
@@ -14,14 +14,6 @@ import Data.Proxy
 import GHC.Generics
 
 import Lens.Micro hiding (to)
-
-type family GenericTableLens t a where
-    GenericTableLens t (M1 s d a) = M1 s d (GenericTableLens t a)
---    GenericTableLens t f (K1 R (ForeignKey rel f)) = K1 R (LensFor t (PrimaryKey rel f))
---    GenericTableLens t f (K1 R (f x)) = K1 R (LensFor t f x)
-    GenericTableLens t (K1 R (LensFor t x)) = K1 R (LensFor t x)
-    GenericTableLens t (a :*: b) = GenericTableLens t a :*: GenericTableLens t b
-    GenericTableLens t U1 = U1
 
 class GTableLenses t (m :: * -> *) a (lensType :: * -> *) where
     gTableLenses :: Proxy a -> Lens' (t m) (a p) -> lensType ()
@@ -45,7 +37,7 @@ tableLenses' :: ( lensType ~ Lenses t f
                 , GTableLenses t f (Rep (t f)) (Rep (t lensType)) ) =>
                  Proxy t -> Proxy f -> t lensType
 tableLenses' (Proxy :: Proxy t) (Proxy :: Proxy f) =
-    to (gTableLenses (Proxy :: Proxy (Rep (t f))) ((\f x -> to <$> (f (from x))) :: Lens' (t f) (Rep (t f) ())))
+    to (gTableLenses (Proxy :: Proxy (Rep (t f))) ((\f x -> to <$> f (from x)) :: Lens' (t f) (Rep (t f) ())))
 
 tableLenses :: ( lensType ~ Lenses t f
                 , Generic (t lensType)
@@ -67,6 +59,36 @@ simpleTableLenses :: ( lensType ~ Lenses t Identity
                      t (Lenses t Identity)
 simpleTableLenses = tableLenses
 
+-- | Automatically deduce lenses for 'TableSettings table'. You can expose the lenses at global level by doing a
+--   top-level pattern match on 'tableConfigLenses', replacing every column in the pattern with `LensFor <nameOfLensForField>'.
+--
+--   For example,
+--
+-- > data AuthorT f = AuthorT
+-- >                { _authorEmail     :: Columnar f Text
+-- >                , _authorFirstName :: Columnar f Text
+-- >                , _authorLastName  :: Columnar f Text }
+-- >                  deriving Generic
+-- >
+-- > data BlogPostT f = BlogPost
+-- >                  { _blogPostSlug    :: Columnar f Text
+-- >                  , _blogPostBody    :: Columnar f Text
+-- >                  , _blogPostDate    :: Columnar f UTCTime
+-- >                  , _blogPostAuthor  :: ForeignKey AuthorT f
+-- >                  , _blogPostTagline :: Columnar f (Maybe Text) }
+-- >                    deriving Generic
+-- > instance Table BlogPostT where
+-- >    type PrimaryKey BlogPostT f = PK f Text
+-- >    primaryKey = PK . _blogPostSlug
+-- > instance Table AuthorT where
+-- >    type PrimaryKey AuthorT f = PK f Text
+-- >    primaryKey = PK . _authorEmail
+--
+-- > BlogPost (LensFor blogPostSlug
+-- >          (LensFor blogPostBody)
+-- >          (LensFor blogPostDate)
+-- >          (ForeignKey (PK (LensFor blogPostAuthorEmail)))
+-- >          (LensFor blogPostTagLine) = tableConfigLenses
 tableConfigLenses :: ( lensType ~ Lenses t (TableField t)
                      , Generic (t lensType)
                      , Generic (t (TableField t))

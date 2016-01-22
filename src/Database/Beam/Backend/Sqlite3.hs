@@ -1,6 +1,7 @@
 module Database.Beam.Backend.Sqlite3 where
 
 import Database.Beam.Types
+import Database.Beam.Internal
 import Database.Beam.Backend
 import Database.Beam.SQL.Types
 
@@ -21,6 +22,7 @@ instance BeamBackend Sqlite3Settings where
         do conn <- liftIO (connectSqlite3 fp)
 
            return Beam { beamDbSettings = dbSettings
+                       , beamDebug = False
                        , closeBeam = liftIO (disconnect conn)
                        , compareSchemas = defaultBeamCompareSchemas
                        , adjustColDescForBackend =
