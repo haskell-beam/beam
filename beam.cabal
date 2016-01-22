@@ -20,6 +20,7 @@ library
   exposed-modules:     Database.Beam Database.Beam.Backend Database.Beam.Types
                        Database.Beam.SQL Database.Beam.Query
                        Database.Beam.Schema Database.Beam.Backend.Sqlite3
+                       Database.Beam.Internal
   other-modules:       Database.Beam.SQL.Types
 
                        Database.Beam.Schema.Tables
@@ -27,4 +28,6 @@ library
   build-depends:       base >=4.7 && <4.9, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible, void, microlens
   hs-source-dirs:      src
   default-language:    Haskell2010
-  default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts
+  default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
+                       GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
+                       DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric

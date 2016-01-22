@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs, TypeOperators, MultiParamTypeClasses, FlexibleInstances, StandaloneDeriving, FlexibleContexts, RankNTypes, TypeFamilies, UndecidableInstances #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 -- | Contains definitions for rewriting Beam queries under optimizations
 module Database.Beam.Query.Rewrite
@@ -80,7 +79,7 @@ rewriteQuery :: (forall a. Query db a -> Maybe (Query db a)) -> (forall a. QExpr
 rewriteQuery f fe x = runIdentity (rewriteQueryM (return . f) (return . fe) x)
 
 traverseQueryM :: Monad m => (forall a. Query db a -> m ()) -> (forall a. QExpr a -> m ()) -> Query db a -> m ()
-traverseQueryM t te x = rewriteQueryM (\x -> t x >> return Nothing) (\x -> te x >> return Nothing) x >> return ()
+traverseQueryM t te x = void (rewriteQueryM (\x -> t x >> return Nothing) (\x -> te x >> return Nothing) x)
 
 traverseExprM :: Monad m => (forall a. QExpr a -> m()) -> (forall a. Query db a -> m ()) -> QExpr a -> m ()
 traverseExprM te t x = rewriteExprM (\x -> te x >> return Nothing) (\x -> t x >> return Nothing) x >> return ()

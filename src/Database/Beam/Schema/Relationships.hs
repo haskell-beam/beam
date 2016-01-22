@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeFamilies, TypeOperators, UndecidableInstances, MultiParamTypeClasses, DefaultSignatures, FlexibleContexts, FlexibleInstances, ScopedTypeVariables, FunctionalDependencies #-}
 module Database.Beam.Schema.Relationships where
 
 import Database.Beam.Schema.Tables

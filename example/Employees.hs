@@ -41,6 +41,12 @@ data GroupT f = Group
               , _groupLocation :: Columnar f Text }
                 deriving (Generic)
 
+data OrderT f = Order
+              { _orderId  :: Columnar f AutoId
+              , _orderTakenBy :: ForeignKey EmployeeT f
+              , _orderAmount :: Columnar f Int }
+              deriving Generic
+
 Employee (LensFor employeeIdC)
          (LensFor employeeFirstNameC)
          (LensFor employeeLastNameC)
@@ -53,60 +59,57 @@ Group (LensFor groupIdC)
       (ForeignKey (PK (LensFor groupDeptIdC)))
       (LensFor groupLocationC) = tableConfigLenses
 
+Order (LensFor orderIdC)
+      (ForeignKey (PK (LensFor orderTakenByIdC)))
+      (LensFor orderAmountC) = tableConfigLenses
+
 data EmployeeDatabase q = EmployeeDatabase
                         { _employees   :: q EmployeeT
                         , _departments :: q DepartmentT
-                        , _groups      :: q GroupT }
+                        , _groups      :: q GroupT
+                        , _orders      :: q OrderT }
                         deriving Generic
 
 instance Table EmployeeT where
     type PrimaryKey EmployeeT f = PK f AutoId
     primaryKey x = PK (_employeeId x)
-
-    tblFieldSettings = defTblFieldSettings
-                       & employeeIdC . fieldName .~ "id"
-                       & employeeFirstNameC . fieldName .~ "first_name"
-                       & employeeLastNameC . fieldName .~ "last_name"
-                       & employeeGroupIdC . fieldName .~ "group_id"
-                       & employeeDeptIdC . fieldName .~ "dept_id"
-                       & employeePositionC . fieldName .~ "position"
 instance Table DepartmentT where
     type PrimaryKey DepartmentT f = PK f Text
     primaryKey x = PK (_deptId x)
 
     tblFieldSettings = defTblFieldSettings
-                        & deptIdC . fieldName .~ "id"
                         & deptIdC . fieldSettings .~ TextFieldSettings (Varchar (Just 32))
 instance Table GroupT where
     type PrimaryKey GroupT f = (Columnar f Text, Columnar f Text)
     primaryKey (Group groupId (ForeignKey (PK deptId)) _ ) = (groupId, deptId)
 
     tblFieldSettings = defTblFieldSettings
-                       & groupIdC . fieldName .~ "id"
-                       & groupDeptIdC . fieldName .~ "dept_id"
-                       & groupLocationC . fieldName .~ "location"
+
+instance Table OrderT where
+    type PrimaryKey OrderT f = PK f AutoId
+    primaryKey x = PK (_orderId x)
+
+    tblFieldSettings = defTblFieldSettings
 
 type Employee = EmployeeT Identity
 type Department = DepartmentT Identity
 type Group = GroupT Identity
+type Order = OrderT Identity
 
 deriving instance Show Group
 deriving instance Show Employee
 deriving instance Show Department
+deriving instance Show Order
 
-instance Database EmployeeDatabase where
-    allTables f (EmployeeDatabase emps depts groups) = [f emps, f depts, f groups]
+instance Database EmployeeDatabase
 employeeDb :: DatabaseSettings EmployeeDatabase
-employeeDb = EmployeeDatabase (DatabaseTable (Proxy :: Proxy EmployeeT) "employees")
-                              (DatabaseTable (Proxy :: Proxy DepartmentT) "departments")
-                              (DatabaseTable (Proxy :: Proxy GroupT) "groups")
+employeeDb = autoDbSettings
 
 -- * main functions
 main = do [sqliteDbPath] <- getArgs
           beam <- openDatabase employeeDb (Sqlite3Settings sqliteDbPath)
-          pure ()
 
-          beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT) ->
+          beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->
             do let departments = [ Department "accounting"
                                  , Department "operations"
                                  , Department "product"
@@ -119,23 +122,58 @@ main = do [sqliteDbPath] <- getArgs
 
                                , Employee UnassignedId "Maurice" "Davies" (ForeignKey ("OpsGroup1", "operations")) DepartmentLead
                                , Employee UnassignedId "Bob" "Lee" (ForeignKey ("OpsGroup2", "operations")) Analyst
-                               , Employee UnassignedId "Constantine" "Nevos" (ForeignKey ("OpsGroup3", "operations")) Analyst ]
+                               , Employee UnassignedId "Constantine" "Nevos" (ForeignKey ("OpsGroup3", "operations")) Analyst
+
+                               , Employee UnassignedId "Tom" "Jones" (ForeignKey ("Alpha", "sales")) DepartmentLead
+                               , Employee UnassignedId "Toby" "Roberts" (ForeignKey ("Alpha", "sales")) Analyst
+                               , Employee UnassignedId "Katy" "Barry" (ForeignKey ("Beta", "sales")) Analyst
+                               , Employee UnassignedId "Amy" "Zely" (ForeignKey ("Beta", "sales")) Analyst
+                               , Employee UnassignedId "Pierre" "Berger" (ForeignKey ("Gamma", "sales")) Analyst
+                               , Employee UnassignedId "Blaise" "Solle" (ForeignKey ("Gamma", "sales")) Analyst  ]
 
                    groups = [ Group "ItGroup1" (ForeignKey (PK "IT")) "New York"
                             , Group "ItGroup2" (ForeignKey (PK "IT")) "Los Angeles"
                             , Group "OpsGroup1" (ForeignKey (PK "operations")) "Boston"
                             , Group "OpsGroup2" (ForeignKey (PK "operations")) "Los Angeles"
-                            , Group "OpsGroup3" (ForeignKey (PK "operations")) "New York" ]
+                            , Group "OpsGroup3" (ForeignKey (PK "operations")) "New York"
+
+                            , Group "Alpha" (ForeignKey (PK "sales")) "Los Angeles"
+                            , Group "Beta" (ForeignKey (PK "sales")) "New York"
+                            , Group "Gamma" (ForeignKey (PK "sales")) "Boston"]
 
                mapM_ (insertInto departmentsT) departments
                mapM_ (insertInto groupsT) groups
 
-               employees'@[ jamesSmith, taylorJones, samanthaNolen
-                          , mauriceDavies, bobLee, constantineNevos ] <-
+               employees'@[ _, _, _, _, _, _
+                          , tomJones, tobyRoberts, katyBarry
+                          , amyZely, pierreBerger, blaiseSolle ] <-
                    mapM (insertInto employeesT) employees
-
                liftIO (putStrLn "Inserted employees")
                liftIO (mapM_ (putStrLn . show) employees')
+
+               let orders = [ Order UnassignedId (ref tomJones) 100
+                            , Order UnassignedId (ref tomJones) 500
+                            , Order UnassignedId (ref tomJones) 2500
+
+                            , Order UnassignedId (ref tobyRoberts) 400
+                            , Order UnassignedId (ref tobyRoberts) 550
+
+                            , Order UnassignedId (ref katyBarry) 50
+                            , Order UnassignedId (ref katyBarry) 430
+                            , Order UnassignedId (ref katyBarry) 80
+                            , Order UnassignedId (ref katyBarry) 210
+
+                            , Order UnassignedId (ref amyZely) 200
+                            , Order UnassignedId (ref amyZely) 50
+
+                            , Order UnassignedId (ref pierreBerger) 300
+                            , Order UnassignedId (ref pierreBerger) 140
+                            , Order UnassignedId (ref pierreBerger) 20
+
+                            , Order UnassignedId (ref blaiseSolle) 350
+                            , Order UnassignedId (ref blaiseSolle) 1000 ]
+
+               mapM_ (insertInto ordersT) orders
 
                liftIO (putStrLn "---- Query 1: All departments")
                q1 <- queryList (all_ departmentsT)
@@ -146,7 +184,7 @@ main = do [sqliteDbPath] <- getArgs
                      do employee <- all_ employeesT
                         group <- related_ groupsT (_employeeGroup employee)
 
-                        guard_ (_groupLocation group ==# "New York")
+                        guard_ (_groupLocation group ==. "New York")
 
                         pure (employee, group)
                liftIO (mapM_ (putStrLn . show) q2)
@@ -155,26 +193,37 @@ main = do [sqliteDbPath] <- getArgs
                q3 <- queryList $
                      do employee <- all_ employeesT
                         group <- related_ groupsT (_employeeGroup employee)
-                        guard_ (_groupLocation group ==# "Los Angeles")
+                        guard_ (_groupLocation group ==. "Los Angeles")
 
                         dept <- related_ departmentsT (_groupDeptId group)
                         pure (employee, dept)
                liftIO (mapM_ (putStrLn . show) q3)
 
-               {-
-                 q4 <- queryList $
-                       do (orderAmount, region) <- limit_ 1 $
-                                                   orderBy (\(amount, location) -> Desc amount) $
-                                                   aggregate (\(amount, location) -> (group_ location, sum_ amount)) $
-                                                   do order <- all_ ordersT
-                                                      employee <- related_ employeesT (_orderTakenBy order)
-                                                      group <- related groupsT (_employeeGroup employee)
+               liftIO (putStrLn "\n---- Query 4: Total orders by region")
+               q4 <- queryList $
+                     aggregate (\(amount, location) -> (group_ location, sum_ amount)) $
+                               do order <- all_ ordersT
+                                  employee <- related_ employeesT (_orderTakenBy order)
+                                  group <- related_ groupsT (_employeeGroup employee)
 
-                                                      guard_ (_orderCreated order >=# val_ yearAgo)
+--                                  guard_ (_orderCreated order >=# val_ yearAgo)
 
-                                                      pure (_orderAmount order, _groupLocation group)
-                          employee <- all_ employeesT
-                          group <- related groupsT (_employeeGroup employee)
-                          guard_ (_groupLocation group ==# region)
-                          pure employee
-                -}
+                                  pure (_orderAmount order, _groupLocation group)
+               liftIO (mapM_ (putStrLn . show) q4)
+
+               liftIO (putStrLn "\n---- Query 5: All employees in the highest grossing region")
+               q5 <- queryList $
+                     do (_, highestGrossingRegion) <- subquery_ $
+                                                      limit_ 1 $
+                                                      orderBy (\(amount, location) -> desc_ amount) $
+                                                      aggregate (\(amount, location) -> (sum_ amount, group_ location)) $
+                                                      do order <- all_ ordersT
+                                                         employee <- related_ employeesT (_orderTakenBy order)
+                                                         group <- related_ groupsT (_employeeGroup employee)
+
+                                                         pure (_orderAmount order, _groupLocation group)
+                        employee <- all_ employeesT
+                        group <- related_ groupsT (_employeeGroup employee)
+                        guard_ (_groupLocation group ==. highestGrossingRegion)
+                        pure employee
+               liftIO (mapM_ (putStrLn . show) q5)

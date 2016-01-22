@@ -1,4 +1,3 @@
-{-# LANGUAGE StandaloneDeriving, GADTs, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.SQL.Types where
 
@@ -120,6 +119,6 @@ data SQLExpr where
     SQLInE :: SQLExpr -> SQLExpr -> SQLExpr
     SQLListE :: [SQLExpr] -> SQLExpr
 
-    SQLCountE, SQLMaxE, SQLMinE, SQLSumE, SQLAverageE :: SQLExpr -> SQLExpr
+    SQLFuncE :: Text -> [SQLExpr] -> SQLExpr
 
 deriving instance Show SQLExpr
