@@ -74,8 +74,7 @@ contain a reference to a `UserT` table.
 >     data PrimaryKey AddressT f = AddressId (Columnar f AutoId) deriving Generic
 >     primaryKey = AddressId . _addressId
 
-This has all the lines you'd expect for the schema above. The only lines of particular interest are
-the declarations for `_addressId` and `_addressForUser`.
+The lines of particular interest are he declarations for `_addressId` and `_addressForUser`.
 
 The `_addressId` field is declared with type `AutoId`. `AutoId` is defined in `Database.Beam.Schema.Fields` as
 
@@ -88,7 +87,7 @@ key. Note that depending on your backend, such a field may only be possible if i
 as the primary key, which it is in our example.
 
 The second field of interest is `_addressForUser`, which is declared as a `PrimaryKey UserT f`. This
-pulls in all the columns necessary for referencing a `UserT`. Later, we'll also see how Beam can use
+pulls in all the columns necessary for referencing a `UserT`. Later, we'll also see how beam can use
 the field to automatically create JOINs.
 
 Specifiying Field Options
@@ -109,10 +108,10 @@ type `TableField table x`.
 
 Because `TableField`s are deeply nested structures, it's easiest to use lenses to modify them. Beam
 does not depend on the `lens` library, but lenses are plain old polymorphic Haskell data types, so
-we can still make use of them even without that library. In this example, we pulled in the
+we can still make use of them without that library. In this example, we pulled in the
 `microlens` library, which contains many common `lens` functions, but which does not use Template
-Haskell. `microlens` is 100% compatible with `lens`, so Beam is agnostic when it comes to library
-choice.
+Haskell. `microlens` is 100% compatible with `lens`, and in general, beam is agnostic when it comes
+to a choice of lens library.
 
 Nevertheless, without Template Haskell we are typically left without any easy way to derive
 lenses. Luckily for us, we'll see how beam let's us automatically derive these lenses. For now,
@@ -142,7 +141,7 @@ For our purposes, we need only look at the definition of `FieldSettings Text`
 
 Let's use these lenses and this knowledge to modify the default storage type for these two
 fields. We're going to override the `tblFieldSettings` value in the `Table AddressT`
-instantiation. We can use `defTblFieldSettings` to get the automatically derived settings from Beam,
+instantiation. We can use `defTblFieldSettings` to get the automatically derived settings from beam,
 so that we can only override the parts we're interested in.
 
 >     tblFieldSettings = defTblFieldSettings
@@ -168,8 +167,8 @@ start with the finish product, and then explain what's going on.
 
 This is a pattern match at the top level. `tableConfigLenses` uses GHC's generics mechanism and a
 special column tag to automatically replace all instances of `Columnar f x` in the data structure
-with the `LensFor` newtype. Note how it even replaced the `Colunmar f x`s that were embedded in
-`_addressForUser` embedded primary key field.
+with the `LensFor` newtype. Note how it even replaced the `Colunmar f x`s that were embedded in the
+`_addressForUser` primary key field.
 
 We can ask GHC for the types of the derived lenses. As a reminder, the type of a simple van
 Laarhoven lens from a data structure `a` to a substructure `b` is
@@ -296,7 +295,7 @@ element. For example,
 < *NextSteps> do { user <- usersList; address <- addressesList; guard (fst user == fst address); return (user, address) }
 < [((1,"james"),(1,"address1")),((1,"james"),(1,"address2")),((3,"tom"),(3,"address3"))]
 
-Using monads to express joins.
+The query monad
 -----
 
 As I claimed in the first tutorial, queries support many of the same interfaces and operations lists
@@ -348,7 +347,7 @@ The output for this query is
 < (User {_userEmail = "betty@example.com", _userFirstName = "Betty", _userLastName = "Jones", _userPassword = "82b054bd83ffad9b6cf8bdb98ce3cc2f"},Address {_addressId = AssignedId 3, _addressLine1 = "9999 Residence Ave", _addressLine2 = Nothing, _addressCity = "Sugarland", _addressState = "TX", _addressZip = "8989", _addressForUser = UserId "betty@example.com"})
 
 Of course this is kind of messy because it involves manually matching the primary key of `User` with
-the reference in `Address`. Alternatively, we can use the `references_` combinator to have Beam
+the reference in `Address`. Alternatively, we can use the `references_` combinator to have beam
 automatically generate a `QExpr` expression that can match primary keys together.
 
 >           putStrLn "All pairs of users with their related addresses (using references_)"
@@ -498,7 +497,7 @@ Just for fun, let's remove all users named Sam. After all, they don't have any a
 >               deleteWhere usersT (\user -> _userFirstName user ==. val_ "Sam")
 >           pure ()
 
-Again, Beam produces the SQL we'd expect
+Again, beam produces the SQL we'd expect
 
 < Deleting Sam
 < Will execute DELETE FROM cart_users WHERE first_name == ? with [SqlString "Sam"]
@@ -510,11 +509,11 @@ In this tutorial we created our first beam relationship. We saw how to use `tabl
 the `microlens` library to change the default storage options beam chose for us. We used the monadic
 tquery interface to write queries that used SQL joins, and we saw how beam makes it easy to
 tautomatically pull related tables into our queries. Finally we used the `updateWhere`, `saveTo`,
-t`deleteWhere`, and `deleteFrom` functions to update and delete rows in our tables.
+`deleteWhere`, and `deleteFrom` functions to update and delete rows in our tables.
 
 At this point, we've covered enough of the beam interface to start writing interesting
 programs. Take some time to explore beam and create your own databases. For more information on the
-Beam Query API, including all the combinators you can use for `QExpr`s, see the haddock
+beam query API, including all the combinators you can use for `QExpr`s, see the haddock
 documentation for `Database.Beam.Query`. If you're interested in all the different field types
 supported by Beam, see the module source for `Database.Beam.Fields`.
 

@@ -131,8 +131,8 @@ figure most of it out.
 The next step is to create a description of the particular database we'd like to create. This
 involves giving each of the tables in our database a name. If you've named all your database
 selectors using camel case, beam can automatically figure out what all the table names should be. If
-you haven't, or you have multiple tables holding the same type in your database, you might have to
-manually name your tables. For now, we'll let beam do the hard work.
+you haven't, you would have to manually name your tables. Since we followed the convention, we can
+let beam do all the hard work.
 
 > shoppingCartDb :: DatabaseSettings ShoppingCartDb
 > shoppingCartDb = autoDbSettings
@@ -161,11 +161,11 @@ To make sure that beam correctly inferred the database schema, let's dump it.
 This will dump the SQL CREATE TABLE statements to the console.
 
 < Dumping database schema ...
-< CREATE TABLE user (email VARCHAR NOT NULL, first_name VARCHAR NOT NULL, last_name VARCHAR NOT NULL, password VARCHAR NOT NULL, PRIMARY KEY( email ))
+< CREATE TABLE cart_users (email VARCHAR NOT NULL, first_name VARCHAR NOT NULL, last_name VARCHAR NOT NULL, password VARCHAR NOT NULL, PRIMARY KEY( email ))
 
-Beam automatically converted our `UserT` data type to a table by creating a table named the same as
-the table type without the trailing 'T', and converting CamelCase to under_case. It also
-automatically assigned names to the columns by converting CamelCase to under_case, and dropping the prefix.
+Beam automatically converted our `UserT` table in the `_shoppingCartUsers` selector to a table named
+`cart_users`. As we stated above, this comes from un-CamelCase-ing the selector name and dropping
+the first component. Beam followed the same rule to derive the column names.
 
 Now let's add a few users. We'll give each user an MD5 encoded password too.
 

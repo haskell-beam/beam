@@ -26,7 +26,7 @@ data EmployeeT f = Employee
                  { _employeeId         :: Columnar f AutoId
                  , _employeeFirstName  :: Columnar f Text
                  , _employeeLastName   :: Columnar f Text
-                 , _employeeGroup      :: ForeignKey GroupT f
+                 , _employeeGroup      :: PrimaryKey GroupT f
 
                  , _employeePosition   :: Columnar f (BeamEnum Position) }
                  deriving (Generic)
@@ -37,30 +37,30 @@ data DepartmentT f = Department
 
 data GroupT f = Group
               { _groupId       :: Columnar f Text
-              , _groupDeptId   :: ForeignKey DepartmentT f
+              , _groupDeptId   :: PrimaryKey DepartmentT f
               , _groupLocation :: Columnar f Text }
                 deriving (Generic)
 
 data OrderT f = Order
               { _orderId  :: Columnar f AutoId
-              , _orderTakenBy :: ForeignKey EmployeeT f
+              , _orderTakenBy :: PrimaryKey EmployeeT f
               , _orderAmount :: Columnar f Int }
               deriving Generic
 
 Employee (LensFor employeeIdC)
          (LensFor employeeFirstNameC)
          (LensFor employeeLastNameC)
-         (ForeignKey (LensFor employeeDeptIdC, LensFor employeeGroupIdC))
+         (GroupId (LensFor employeeDeptIdC) (LensFor employeeGroupIdC))
          (LensFor employeePositionC) = tableConfigLenses
 
 Department (LensFor deptIdC) = tableConfigLenses
 
 Group (LensFor groupIdC)
-      (ForeignKey (PK (LensFor groupDeptIdC)))
+      (DepartmentId (LensFor groupDeptIdC))
       (LensFor groupLocationC) = tableConfigLenses
 
 Order (LensFor orderIdC)
-      (ForeignKey (PK (LensFor orderTakenByIdC)))
+      (EmployeeId (LensFor orderTakenByIdC))
       (LensFor orderAmountC) = tableConfigLenses
 
 data EmployeeDatabase q = EmployeeDatabase
@@ -71,35 +71,47 @@ data EmployeeDatabase q = EmployeeDatabase
                         deriving Generic
 
 instance Table EmployeeT where
-    type PrimaryKey EmployeeT f = PK f AutoId
-    primaryKey x = PK (_employeeId x)
+    data PrimaryKey EmployeeT f = EmployeeId (Columnar f AutoId)
+                                deriving Generic
+    primaryKey = EmployeeId . _employeeId
 instance Table DepartmentT where
-    type PrimaryKey DepartmentT f = PK f Text
-    primaryKey x = PK (_deptId x)
+    data PrimaryKey DepartmentT f = DepartmentId (Columnar f Text)
+                                  deriving Generic
+    primaryKey = DepartmentId . _deptId
 
     tblFieldSettings = defTblFieldSettings
                         & deptIdC . fieldSettings .~ TextFieldSettings (Varchar (Just 32))
 instance Table GroupT where
-    type PrimaryKey GroupT f = (Columnar f Text, Columnar f Text)
-    primaryKey (Group groupId (ForeignKey (PK deptId)) _ ) = (groupId, deptId)
+    data PrimaryKey GroupT f = GroupId (Columnar f Text) (Columnar f Text)
+                             deriving Generic
+    primaryKey (Group groupId (DepartmentId deptId) _ ) = GroupId groupId deptId
 
     tblFieldSettings = defTblFieldSettings
 
 instance Table OrderT where
-    type PrimaryKey OrderT f = PK f AutoId
-    primaryKey x = PK (_orderId x)
+    data PrimaryKey OrderT f = OrderId (Columnar f AutoId)
+                             deriving Generic
+    primaryKey = OrderId . _orderId
 
     tblFieldSettings = defTblFieldSettings
 
 type Employee = EmployeeT Identity
+type EmployeeId = PrimaryKey EmployeeT Identity
 type Department = DepartmentT Identity
+type DepartmentId = PrimaryKey DepartmentT Identity
 type Group = GroupT Identity
+type GroupId = PrimaryKey GroupT Identity
 type Order = OrderT Identity
+type OrderId = PrimaryKey OrderT Identity
 
 deriving instance Show Group
+deriving instance Show GroupId
 deriving instance Show Employee
+deriving instance Show EmployeeId
 deriving instance Show Department
+deriving instance Show DepartmentId
 deriving instance Show Order
+deriving instance Show OrderId
 
 instance Database EmployeeDatabase
 employeeDb :: DatabaseSettings EmployeeDatabase
@@ -116,30 +128,30 @@ main = do [sqliteDbPath] <- getArgs
                                  , Department "sales"
                                  , Department "IT" ]
 
-                   employees = [ Employee UnassignedId "James" "Smith" (ForeignKey ("ItGroup1", "IT")) DepartmentLead
-                               , Employee UnassignedId "Taylor" "Jones" (ForeignKey ("ItGroup1", "IT")) Analyst
-                               , Employee UnassignedId "Samantha" "Nolen" (ForeignKey ("ItGroup2", "IT")) Analyst
+                   employees = [ Employee UnassignedId "James" "Smith" (GroupId "ItGroup1" "IT") DepartmentLead
+                               , Employee UnassignedId "Taylor" "Jones" (GroupId "ItGroup1" "IT") Analyst
+                               , Employee UnassignedId "Samantha" "Nolen" (GroupId "ItGroup2" "IT") Analyst
 
-                               , Employee UnassignedId "Maurice" "Davies" (ForeignKey ("OpsGroup1", "operations")) DepartmentLead
-                               , Employee UnassignedId "Bob" "Lee" (ForeignKey ("OpsGroup2", "operations")) Analyst
-                               , Employee UnassignedId "Constantine" "Nevos" (ForeignKey ("OpsGroup3", "operations")) Analyst
+                               , Employee UnassignedId "Maurice" "Davies" (GroupId "OpsGroup1" "operations") DepartmentLead
+                               , Employee UnassignedId "Bob" "Lee" (GroupId "OpsGroup2" "operations") Analyst
+                               , Employee UnassignedId "Constantine" "Nevos" (GroupId "OpsGroup3" "operations") Analyst
 
-                               , Employee UnassignedId "Tom" "Jones" (ForeignKey ("Alpha", "sales")) DepartmentLead
-                               , Employee UnassignedId "Toby" "Roberts" (ForeignKey ("Alpha", "sales")) Analyst
-                               , Employee UnassignedId "Katy" "Barry" (ForeignKey ("Beta", "sales")) Analyst
-                               , Employee UnassignedId "Amy" "Zely" (ForeignKey ("Beta", "sales")) Analyst
-                               , Employee UnassignedId "Pierre" "Berger" (ForeignKey ("Gamma", "sales")) Analyst
-                               , Employee UnassignedId "Blaise" "Solle" (ForeignKey ("Gamma", "sales")) Analyst  ]
+                               , Employee UnassignedId "Tom" "Jones" (GroupId "Alpha" "sales") DepartmentLead
+                               , Employee UnassignedId "Toby" "Roberts" (GroupId "Alpha" "sales") Analyst
+                               , Employee UnassignedId "Katy" "Barry" (GroupId "Beta" "sales") Analyst
+                               , Employee UnassignedId "Amy" "Zely" (GroupId "Beta" "sales") Analyst
+                               , Employee UnassignedId "Pierre" "Berger" (GroupId "Gamma" "sales") Analyst
+                               , Employee UnassignedId "Blaise" "Solle" (GroupId "Gamma" "sales") Analyst  ]
 
-                   groups = [ Group "ItGroup1" (ForeignKey (PK "IT")) "New York"
-                            , Group "ItGroup2" (ForeignKey (PK "IT")) "Los Angeles"
-                            , Group "OpsGroup1" (ForeignKey (PK "operations")) "Boston"
-                            , Group "OpsGroup2" (ForeignKey (PK "operations")) "Los Angeles"
-                            , Group "OpsGroup3" (ForeignKey (PK "operations")) "New York"
+                   groups = [ Group "ItGroup1" (DepartmentId "IT") "New York"
+                            , Group "ItGroup2" (DepartmentId "IT") "Los Angeles"
+                            , Group "OpsGroup1" (DepartmentId "operations") "Boston"
+                            , Group "OpsGroup2" (DepartmentId "operations") "Los Angeles"
+                            , Group "OpsGroup3" (DepartmentId "operations") "New York"
 
-                            , Group "Alpha" (ForeignKey (PK "sales")) "Los Angeles"
-                            , Group "Beta" (ForeignKey (PK "sales")) "New York"
-                            , Group "Gamma" (ForeignKey (PK "sales")) "Boston"]
+                            , Group "Alpha" (DepartmentId "sales") "Los Angeles"
+                            , Group "Beta" (DepartmentId "sales") "New York"
+                            , Group "Gamma" (DepartmentId "sales") "Boston"]
 
                mapM_ (insertInto departmentsT) departments
                mapM_ (insertInto groupsT) groups
@@ -151,27 +163,27 @@ main = do [sqliteDbPath] <- getArgs
                liftIO (putStrLn "Inserted employees")
                liftIO (mapM_ (putStrLn . show) employees')
 
-               let orders = [ Order UnassignedId (ref tomJones) 100
-                            , Order UnassignedId (ref tomJones) 500
-                            , Order UnassignedId (ref tomJones) 2500
+               let orders = [ Order UnassignedId (pk tomJones) 100
+                            , Order UnassignedId (pk tomJones) 500
+                            , Order UnassignedId (pk tomJones) 2500
 
-                            , Order UnassignedId (ref tobyRoberts) 400
-                            , Order UnassignedId (ref tobyRoberts) 550
+                            , Order UnassignedId (pk tobyRoberts) 400
+                            , Order UnassignedId (pk tobyRoberts) 550
 
-                            , Order UnassignedId (ref katyBarry) 50
-                            , Order UnassignedId (ref katyBarry) 430
-                            , Order UnassignedId (ref katyBarry) 80
-                            , Order UnassignedId (ref katyBarry) 210
+                            , Order UnassignedId (pk katyBarry) 50
+                            , Order UnassignedId (pk katyBarry) 430
+                            , Order UnassignedId (pk katyBarry) 80
+                            , Order UnassignedId (pk katyBarry) 210
 
-                            , Order UnassignedId (ref amyZely) 200
-                            , Order UnassignedId (ref amyZely) 50
+                            , Order UnassignedId (pk amyZely) 200
+                            , Order UnassignedId (pk amyZely) 50
 
-                            , Order UnassignedId (ref pierreBerger) 300
-                            , Order UnassignedId (ref pierreBerger) 140
-                            , Order UnassignedId (ref pierreBerger) 20
+                            , Order UnassignedId (pk pierreBerger) 300
+                            , Order UnassignedId (pk pierreBerger) 140
+                            , Order UnassignedId (pk pierreBerger) 20
 
-                            , Order UnassignedId (ref blaiseSolle) 350
-                            , Order UnassignedId (ref blaiseSolle) 1000 ]
+                            , Order UnassignedId (pk blaiseSolle) 350
+                            , Order UnassignedId (pk blaiseSolle) 1000 ]
 
                mapM_ (insertInto ordersT) orders
 

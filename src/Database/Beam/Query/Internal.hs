@@ -5,6 +5,7 @@ import Database.Beam.Schema
 
 import qualified Data.Text as T
 import Data.Typeable
+import Data.Coerce
 
 import Control.Applicative
 import Control.Monad.State
@@ -24,10 +25,6 @@ newtype Q (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State QueryBuild
 --   directly to 'query' or 'queryList'
 newtype TopLevelQ db s a = TopLevelQ (Q db s a)
 
-data GenQExpr where
-    GenQExpr :: Typeable t => QExpr t -> GenQExpr
-deriving instance Show GenQExpr
-
 data QueryBuilder = QueryBuilder
                   { qbNextTblRef :: Int
                   , qbFrom  :: Maybe SQLFrom
@@ -40,81 +37,14 @@ data QueryBuilder = QueryBuilder
 
 -- * QExpr type
 
-data QExpr t where
-    FieldE :: { eFieldTblName :: T.Text
-              , eFieldTblOrd  :: Maybe Int
-              , eFieldName    :: T.Text } -> QExpr t
+data QField = QField
+            { qFieldTblName :: T.Text
+            , qFieldTblOrd  :: Maybe Int
+            , qFieldName    :: T.Text }
+              deriving (Show, Eq, Ord)
 
-    OrE :: QExpr Bool -> QExpr Bool -> QExpr Bool
-    AndE :: QExpr Bool -> QExpr Bool -> QExpr Bool
-    NotE :: QExpr Bool -> QExpr Bool
-
-    EqE, NeqE, LtE, GtE, LeE, GeE :: Typeable a => QExpr a -> QExpr a -> QExpr Bool
-
-    ValE :: SqlValue -> QExpr a
-
-    FuncE :: T.Text -> [GenQExpr] -> QExpr a
-
-    -- JustE :: Show a => QExpr a -> QExpr (Maybe a)
-    -- NothingE :: QExpr (Maybe a)
-
-    -- IsNothingE :: Typeable a => QExpr (Maybe a) -> QExpr Bool
-    -- IsJustE :: Typeable a => QExpr (Maybe a) -> QExpr Bool
-
-    -- InE :: (Typeable a, Show a) => QExpr a -> QExpr [a] -> QExpr Bool
-
-    -- ListE :: [QExpr a] -> QExpr [a]
-deriving instance Show (QExpr t)
-
--- * QExpr ordering
-
-instance Eq GenQExpr where
-    GenQExpr a == GenQExpr b =
-        case cast a of
-          Nothing -> False
-          Just a -> a == b
-
-binOpEq :: (Typeable a, Typeable b) => QExpr a -> QExpr a -> QExpr b -> QExpr b -> Bool
-binOpEq a1 b1 a2 b2 =
-    case cast (a1, b1) of
-      Just (a1, b1) -> a1 == a2 && b1 == b2
-      Nothing -> False
-
-instance Eq (QExpr t) where
-    FieldE tblName1 tblOrd1 fieldName1 == FieldE tblName2 tblOrd2 fieldName2 =
-        tblName1 == tblName2 && tblOrd1 == tblOrd2 && fieldName1 == fieldName2
-
-    AndE a1 b1 == AndE a2 b2 = a1 == a2 && b1 == b2
-    OrE a1 b1 == OrE a2 b2 = a1 == a2 && b1 == b2
-
-    NotE a == NotE b = a == b
-
-    EqE a1 b1 == EqE a2 b2 = binOpEq a1 b1 a2 b2
-    NeqE a1 b1 == NeqE a2 b2 = binOpEq a1 b1 a2 b2
-    LtE a1 b1 == LtE a2 b2 = binOpEq a1 b1 a2 b2
-    GtE a1 b1 == GtE a2 b2 = binOpEq a1 b1 a2 b2
-    LeE a1 b1 == LeE a2 b2 = binOpEq a1 b1 a2 b2
-    GeE a1 b1 == GeE a2 b2 = binOpEq a1 b1 a2 b2
-
-    ValE a == ValE b = a == b
-
-    FuncE af aArgs == FuncE bf bArgs = af == bf && aArgs == bArgs
-
-    -- JustE a == JustE b = a == b
-    -- NothingE == NothingE = True
-
-    -- IsNothingE a == IsNothingE b = case cast a of
-    --                                  Just a' -> a' == b
-    --                                  Nothing -> False
-    -- IsJustE a == IsJustE b = case cast a of
-    --                            Just a' -> a' == b
-    --                            Nothing -> False
-    -- InE a as == InE b bs = case cast (a, as) of
-    --                          Nothing -> False
-    --                          Just (a', as') -> a' == b && as' == bs
-    -- ListE a == ListE b = a == b
-
-    _ == _ = False
+newtype QExpr t = QExpr (SQLExpr' QField)
+    deriving (Show, Eq)
 
 -- * Sql Projections
 --
@@ -124,9 +54,9 @@ instance Eq (QExpr t) where
 --   size 5. If you need more, follow the implementations here.
 
 class Projectible a where
-    project :: a -> [GenQExpr]
+    project :: a -> [SQLExpr' QField]
 instance Typeable a => Projectible (QExpr a) where
-    project x = [GenQExpr x]
+    project (QExpr x) = [x]
 instance (Projectible a, Projectible b) => Projectible (a, b) where
     project (a, b) = project a ++ project b
 instance ( Projectible a
@@ -146,9 +76,9 @@ instance ( Projectible a
     project (a, b, c, d, e) = project a ++ project b ++ project c ++ project d ++ project e
 
 instance Table t => Projectible (t QExpr) where
-    project t = fieldAllValues (\(Columnar' q) -> GenQExpr q) t
+    project t = fieldAllValues (\(Columnar' (QExpr e)) -> e) t
 
 tableVal :: Table tbl => tbl Identity -> tbl QExpr
 tableVal = changeRep valToQExpr . makeSqlValues
     where valToQExpr :: Columnar' SqlValue' a -> Columnar' QExpr a
-          valToQExpr (Columnar' (SqlValue' v)) = Columnar' (ValE v)
+          valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))

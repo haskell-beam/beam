@@ -5,7 +5,7 @@ module Database.Beam.Query.Combinators
 
     , limit_, offset_
 
-    , (<.), (>.), (<=.), (>=.), (==.), (&&.), (||.)
+    , (<.), (>.), (<=.), (>=.), (==.), (&&.), (||.), not_, div_, mod_
     , HaskellLiteralForQExpr(..), SqlValable(..)
     , enum_
 
@@ -31,14 +31,26 @@ import Control.Monad.Identity
 import Data.Monoid
 import Data.String
 import Data.Maybe
-import Data.Typeable
 import Data.Convertible
 import Data.Text (Text)
 import Data.Coerce
 
+instance IsString (QExpr Text) where
+    fromString = QExpr . SQLValE . SqlString
+instance (Num a, Convertible a SqlValue) => Num (QExpr a) where
+    fromInteger x = let res :: QExpr a
+                        res = val_ (fromInteger x)
+                    in res
+    QExpr a + QExpr b = QExpr (SQLBinOpE "+" a b)
+    QExpr a - QExpr b = QExpr (SQLBinOpE "-" a b)
+    QExpr a * QExpr b = QExpr (SQLBinOpE "*" a b)
+    negate (QExpr a) = QExpr (SQLUnOpE "-" a)
+    abs (QExpr x) = QExpr (SQLFuncE "ABS" [x])
+    signum x = error "signum: not defined for QExpr. Use CASE...WHEN"
+
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: Database db => DatabaseTable db table -> Q db s (table QExpr)
-all_ tbl = join_ tbl (ValE (SqlBool True))
+all_ tbl = join_ tbl (val_ True)
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given SQLExpr
 join_ :: Database db => DatabaseTable db table -> QExpr Bool -> Q db s (table QExpr)
@@ -48,7 +60,7 @@ join_ (DatabaseTable table name :: DatabaseTable db table) on =
                                  , qbFrom = from
                                  , qbWhere = where_ } ->
            let (from', where') = case from of
-                                   Nothing -> (Just newSource, AndE where_ on)
+                                   Nothing -> (Just newSource, where_ &&. on)
                                    Just from -> ( Just (SQLJoin SQLInnerJoin from newSource (optimizeExpr on)),
                                                   where_ )
                newSource = SQLFromSource (SQLAliased (SQLSourceTable name) (Just (fromString ("t" <> show curTbl))))
@@ -60,12 +72,12 @@ join_ (DatabaseTable table name :: DatabaseTable db table) on =
            tableSettings = tblFieldSettings
 
            mkScopedField :: Columnar' (TableField table) a -> Columnar' QExpr a
-           mkScopedField (Columnar' f) = Columnar' (FieldE name (Just curTbl) (_fieldName f))
+           mkScopedField (Columnar' f) = Columnar' (QExpr (SQLFieldE (QField name (Just curTbl) (_fieldName f))))
        pure (changeRep mkScopedField tableSettings)
 
 -- | Only allow results for which the 'QExpr' yields 'True'
 guard_ :: QExpr Bool -> Q db s ()
-guard_ guardE' = modify $ \qb@QueryBuilder { qbWhere = guardE } -> qb { qbWhere = AndE guardE guardE' }
+guard_ guardE' = modify $ \qb@QueryBuilder { qbWhere = guardE } -> qb { qbWhere = guardE &&. guardE' }
 
 -- | Introduce all entries of the given table which are referenced by the given 'ForeignKey'
 related_ :: (Database db, Table rel) => DatabaseTable db rel -> PrimaryKey rel QExpr -> Q db s (rel QExpr)
@@ -110,45 +122,51 @@ offset_ offset' q =
 -- ** Combinators for boolean expressions
 
 class SqlOrd a where
-    decomposeToGenQExprs :: a -> [GenQExpr]
-    (==.), (/=.) :: Typeable a => a -> a -> QExpr Bool
+    decomposeToGenQExprs :: a -> [SQLExpr' QField]
+    (==.), (/=.) :: a -> a -> QExpr Bool
     a ==. b = let aExprs = decomposeToGenQExprs a
                   bExprs = decomposeToGenQExprs b
 
-                  combine :: GenQExpr -> GenQExpr -> QExpr Bool
-                  combine (GenQExpr a) (GenQExpr b) =
-                      case cast a of
-                        Just a -> EqE a b
-                        Nothing -> error "(==.): The 'impossible' happened -- decomposeToGenQExprs returned QExprs of different types"
-              in foldr (&&.) (ValE (SqlBool True)) (zipWith combine aExprs bExprs)
-    a /=. b = NotE (a ==. b)
+                  combine :: SQLExpr' QField -> SQLExpr' QField -> QExpr Bool
+                  combine a b = QExpr a ==. QExpr b
+              in foldr (&&.) (val_ True) (zipWith combine aExprs bExprs)
+    a /=. b = not_ (a ==. b)
 
-instance Typeable a => SqlOrd (QExpr a) where
-    decomposeToGenQExprs e = [GenQExpr e]
-    (==.) = EqE
-    (/=.) = NeqE
+instance SqlOrd (QExpr a) where
+    decomposeToGenQExprs (QExpr e) = [e]
+    (==.) = binOpE "=="
+    (/=.) = binOpE "<>"
 
 instance {-# OVERLAPPING #-} Table tbl => SqlOrd (PrimaryKey tbl QExpr) where
-    decomposeToGenQExprs = pkAllValues (\(Columnar' e) -> GenQExpr e)
+    decomposeToGenQExprs = pkAllValues (\(Columnar' (QExpr e)) -> e)
 instance {-# OVERLAPPING #-} Table tbl => SqlOrd (tbl QExpr) where
-    decomposeToGenQExprs = fieldAllValues (\(Columnar' e) -> GenQExpr e)
+    decomposeToGenQExprs = fieldAllValues (\(Columnar' (QExpr e)) -> e)
 
-(<.), (>.), (<=.), (>=.) :: Typeable a => QExpr a -> QExpr a -> QExpr Bool
-(<.) = LtE
-(>.) = GtE
-(<=.) = LeE
-(>=.) = GeE
+binOpE op (QExpr a) (QExpr b) = QExpr (SQLBinOpE op a b)
+
+(<.), (>.), (<=.), (>=.) :: QExpr a -> QExpr a -> QExpr Bool
+(<.) = binOpE "<"
+(>.) = binOpE ">"
+(<=.) = binOpE "<="
+(>=.) = binOpE ">="
 
 (&&.), (||.) :: QExpr Bool -> QExpr Bool -> QExpr Bool
-(&&.) = AndE
-(||.) = OrE
+(&&.) = binOpE "AND"
+(||.) = binOpE "OR"
 
 infixr 3 &&.
 infixr 2 ||.
 infix 4 ==., /=.
 
+not_ :: QExpr Bool -> QExpr Bool
+not_ (QExpr a) = QExpr (SQLUnOpE "NOT" a)
+
+mod_, div_ :: Integral a => QExpr a -> QExpr a -> QExpr a
+div_ = binOpE "/"
+mod_ = binOpE "%"
+
 enum_ :: Show a => a -> QExpr (BeamEnum a)
-enum_ = ValE . SqlString . show
+enum_ = QExpr . SQLValE . SqlString . show
 
 -- * Marshalling between Haskell literals and QExprs
 
@@ -159,7 +177,7 @@ type instance HaskellLiteralForQExpr (table QExpr) = table Identity
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
 instance Convertible a SqlValue => SqlValable (QExpr a) where
-    val_ = ValE . convert
+    val_ = QExpr . SQLValE . convert
 
 -- NOTE: This shouldn't cause problems because both overlapping instances are in the same module.
 --       GHC should prefer the PrimaryKey one for primary keys and the table one for everything else.
@@ -167,11 +185,11 @@ instance Convertible a SqlValue => SqlValable (QExpr a) where
 instance {-# OVERLAPPING #-} Table tbl => SqlValable (PrimaryKey tbl QExpr) where
     val_ = pkChangeRep valToQExpr . pkMakeSqlValues
         where valToQExpr :: Columnar' SqlValue' a -> Columnar' QExpr a
-              valToQExpr (Columnar' (SqlValue' v)) = Columnar' (ValE v)
+              valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))
 instance {-# OVERLAPPING #-} Table tbl => SqlValable (tbl QExpr) where
     val_ = changeRep valToQExpr . makeSqlValues
         where valToQExpr :: Columnar' SqlValue' a -> Columnar' QExpr a
-              valToQExpr (Columnar' (SqlValue' v)) = Columnar' (ValE v)
+              valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))
 
 -- * Aggregators
 
@@ -186,12 +204,12 @@ instance Table t => Aggregating (t Aggregation) where
     liftAggToQExpr = changeRep (\(Columnar' x) -> Columnar' (liftAggToQExpr x))
 instance Aggregating (Aggregation a) where
     type LiftAggregationsToQExpr (Aggregation a) = QExpr a
-    aggToSql (GroupAgg e) = let eSql = optimizeExpr e
+    aggToSql (GroupAgg e) = let eSql = optimizeExpr' e
                             in mempty { sqlGroupBy = [eSql] }
     aggToSql (GenericAgg f qExprs) = mempty
 
-    liftAggToQExpr (GroupAgg e) = e
-    liftAggToQExpr (GenericAgg f qExprs) = FuncE f qExprs
+    liftAggToQExpr (GroupAgg e) = QExpr e
+    liftAggToQExpr (GenericAgg f qExprs) = QExpr (SQLFuncE f qExprs)
 instance (Aggregating a, Aggregating b) => Aggregating (a, b) where
     type LiftAggregationsToQExpr (a, b) = ( LiftAggregationsToQExpr a
                                           , LiftAggregationsToQExpr b )
@@ -220,13 +238,13 @@ instance (Aggregating a, Aggregating b, Aggregating c, Aggregating d, Aggregatin
     liftAggToQExpr (a, b, c, d, e) = (liftAggToQExpr a, liftAggToQExpr b, liftAggToQExpr c, liftAggToQExpr d, liftAggToQExpr e)
 
 group_ :: QExpr a -> Aggregation a
-group_ = GroupAgg
+group_ (QExpr a) = GroupAgg a
 
-sum_ :: (Num a, Typeable a) => QExpr a -> Aggregation a
-sum_ over = GenericAgg "SUM" [GenQExpr over]
+sum_ :: Num a => QExpr a -> Aggregation a
+sum_ (QExpr over) = GenericAgg "SUM" [over]
 
-count_ :: Typeable a => QExpr a -> Aggregation Int
-count_ over = GenericAgg "COUNT" [GenQExpr over]
+count_ :: QExpr a -> Aggregation Int
+count_ (QExpr over) = GenericAgg "COUNT" [over]
 
 aggregate :: (Projectible a, Aggregating agg) => (a -> agg) -> (forall s. Q db s a) -> Q db s (LiftAggregationsToQExpr agg)
 aggregate aggregator q =
@@ -291,7 +309,7 @@ instance Subqueryable (QExpr a) where
            (tblName, tblOrd) <- ask
            let fieldName = fromString ("e" <> show i)
            tell [SQLAliased (optimizeExpr e) (Just fieldName)]
-           pure (FieldE tblName (Just tblOrd) fieldName)
+           pure (QExpr (SQLFieldE (QField tblName (Just tblOrd) fieldName)))
 instance ( Subqueryable a
          , Subqueryable b ) =>
     Subqueryable (a, b) where

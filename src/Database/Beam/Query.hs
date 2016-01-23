@@ -117,7 +117,7 @@ updateWhere tbl@(DatabaseTable _ name :: DatabaseTable db tbl) mkAssignments mkW
     do let assignments = mkAssignments tblExprs
            where_ = mkWhere tblExprs
 
-           tblExprs = changeRep (\(Columnar' fieldS) -> Columnar' (FieldE name Nothing (_fieldName fieldS))) (tblFieldSettings :: TableSettings tbl)
+           tblExprs = changeRep (\(Columnar' fieldS) -> Columnar' (QExpr (SQLFieldE (QField name Nothing (_fieldName fieldS))))) (tblFieldSettings :: TableSettings tbl)
 
        case updateToSQL name assignments where_ of
          Nothing -> pure () -- Assignments were empty, so do nothing
@@ -135,7 +135,7 @@ saveTo tbl (newValues :: tbl Identity) =
 
 deleteWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl QExpr -> QExpr Bool) -> BeamT e db m ()
 deleteWhere (DatabaseTable _ name :: DatabaseTable db tbl) mkWhere =
-    let tblExprs = changeRep (\(Columnar' fieldS) -> Columnar' (FieldE name Nothing (_fieldName fieldS))) (tblFieldSettings :: TableSettings tbl)
+    let tblExprs = changeRep (\(Columnar' fieldS) -> Columnar' (QExpr (SQLFieldE (QField name Nothing (_fieldName fieldS))))) (tblFieldSettings :: TableSettings tbl)
 
         cmd = Delete SQLDelete
               { dTableName = name

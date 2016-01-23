@@ -198,25 +198,18 @@ ppVal val = tell [val] >> return (text "?")
 ppExpr :: SQLExpr -> DocAndVals
 ppExpr (SQLValE v) = ppVal v
 ppExpr (SQLFieldE name) = ppFieldName name
-ppExpr (SQLEqE a b) = binOp "==" a b
-ppExpr (SQLLtE a b) = binOp "<" a b
-ppExpr (SQLGtE a b) = binOp ">" a b
-ppExpr (SQLLeE a b) = binOp "<=" a b
-ppExpr (SQLGeE a b) = binOp ">=" a b
-ppExpr (SQLNeqE a b) = binOp "<>" a b
-ppExpr (SQLAndE a b) = binOp "AND" a b
-ppExpr (SQLOrE a b) = binOp "OR" a b
+ppExpr (SQLBinOpE op a b) =
+    do aD <- ppExpr a
+       bD <- ppExpr b
+       return (parens (aD <+> text (unpack op) <+> bD))
+ppExpr (SQLUnOpE op a) = do aDoc <- ppExpr a
+                            return (parens (text (unpack op) <+> parens aDoc))
 ppExpr (SQLIsNothingE q) = do qDoc <- ppExpr q
                               return (qDoc <+> text "IS NULL")
 ppExpr (SQLIsJustE q) = do qDoc <- ppExpr q
                            return (qDoc <+> text "IS NOT NULL")
-ppExpr (SQLInE x xs) = do xDoc <- ppExpr x
-                          xsDoc <- ppExpr xs
-                          return (xDoc <+> text "IN" <+> xsDoc)
 ppExpr (SQLListE xs) = do xsDoc <- mapM ppExpr xs
                           return (parens (hsep (punctuate comma xsDoc)))
-ppExpr (SQLNotE x) = do xDoc <- ppExpr x
-                        return (text "NOT" <+> parens xDoc)
 -- ppExpr (SQLCountE x) = do xDoc <- ppExpr x
 --                           return (text "COUNT" <> parens xDoc)
 -- ppExpr (SQLMinE x) = do xDoc <- ppExpr x
@@ -229,8 +222,3 @@ ppExpr (SQLNotE x) = do xDoc <- ppExpr x
 --                             return (text "AVERAGE" <> parens xDoc)
 ppExpr (SQLFuncE f args) = do argDocs <- mapM ppExpr args
                               return (text (unpack f) <> parens (hsep (punctuate comma argDocs)) )
-
-binOp :: String -> SQLExpr -> SQLExpr -> DocAndVals
-binOp op a b = do aD <- ppExpr a
-                  bD <- ppExpr b
-                  return (aD <+> text op <+> bD)
