@@ -118,7 +118,8 @@ optimizeExpr :: QExpr a -> SQLExpr
 optimizeExpr = mkSqlExpr . runIdentity . rewriteExprM (return . allExprOpts)
 
 mkSqlExpr :: QExpr a -> SQLExpr
-mkSqlExpr (FieldE tblName tblOrd fieldName) = SQLFieldE (SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd)))
+mkSqlExpr (FieldE tblName (Just tblOrd) fieldName) = SQLFieldE (SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd)))
+mkSqlExpr (FieldE tblName Nothing fieldName) = SQLFieldE (SQLFieldName fieldName)
 mkSqlExpr (OrE a b) = SQLOrE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (AndE a b) = SQLAndE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (EqE a b) = SQLEqE (mkSqlExpr a) (mkSqlExpr b)
@@ -128,6 +129,7 @@ mkSqlExpr (GtE a b) = SQLGtE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (LeE a b) = SQLLeE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (GeE a b) = SQLGeE (mkSqlExpr a) (mkSqlExpr b)
 mkSqlExpr (ValE v) = SQLValE v
+mkSqlExpr (NotE v) = SQLNotE (mkSqlExpr v)
 mkSqlExpr (FuncE f args) = SQLFuncE f (map (\(GenQExpr e) -> mkSqlExpr e) args)
 
 queryToSQL' :: Projectible a => Q db s a -> (a, SQLSelect)

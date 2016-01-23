@@ -103,8 +103,15 @@ The only thing we need to provide is the type of the primary keys for users, and
 extract the primary key from any `UserT f` object. To do this, we just add the following lines to
 the instance declaration.
 
->     type PrimaryKey UserT f = PK f Text
->     primaryKey = PK . _userEmail
+>     data PrimaryKey UserT f = UserId (Columnar f Text) deriving Generic
+>     primaryKey = UserId . _userEmail
+
+It would be nice to have a type synonym for `PrimaryKey UserT f`, so we make one now. We can also
+derive an instance of `Show`.
+
+> type UserId = PrimaryKey UserT Identity
+> deriving instance Show UserId
+
 
 Defining our database
 ========
@@ -122,10 +129,10 @@ figure most of it out.
 >
 
 The next step is to create a description of the particular database we'd like to create. This
-involves giving each of the tables in our database a name. If you've named all your table data types
-using camel case and suffixed them with a 'T', beam can automatically figure out what all the table
-names should be. If you haven't, or you have multiple tables holding the same type in your database,
-you might have to manually name your tables. For now, we'll let beam do the hard work.
+involves giving each of the tables in our database a name. If you've named all your database
+selectors using camel case, beam can automatically figure out what all the table names should be. If
+you haven't, or you have multiple tables holding the same type in your database, you might have to
+manually name your tables. For now, we'll let beam do the hard work.
 
 > shoppingCartDb :: DatabaseSettings ShoppingCartDb
 > shoppingCartDb = autoDbSettings
@@ -167,7 +174,6 @@ Now let's add a few users. We'll give each user an MD5 encoded password too.
 >            do insertInto usersT (User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c" {- james -})
 >               insertInto usersT (User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -})
 >               insertInto usersT (User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -})
->           pure ()
 
 The `insertInto` function inserts a value into a table that can hold that type.
 
@@ -295,4 +301,6 @@ a partial shopping cart database that contains information about users. In the n
 delve deeper into the some of the query types and show how we can create relations between
 tables. We'll also use the monadic query interface to create SQL joins.
 
-Until next time!
+Until next time! In the mean-time, feel free to send questions to travis@athougies.net.
+
+(Update) Checkout NextSteps.lhs for the next tutorial in the sequence.

@@ -1,6 +1,5 @@
 module Database.Beam.Backend.Sqlite3 where
 
-import Database.Beam.Types
 import Database.Beam.Internal
 import Database.Beam.Backend
 import Database.Beam.SQL.Types

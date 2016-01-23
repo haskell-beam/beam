@@ -99,6 +99,8 @@ rewriteExprM f fq (LtE a b) = rewriteBin f fq LtE a b
 rewriteExprM f fq (LeE a b) = rewriteBin f fq LeE a b
 rewriteExprM f fq (GtE a b) = rewriteBin f fq GtE a b
 rewriteExprM f fq (GeE a b) = rewriteBin f fq GeE a b
+rewriteExprM f fq (NotE a) = do a' <- rewriteExprM f fq a
+                                rwE f fq (NotE a')
 rewriteExprM f fq (JustE a) = do a' <- rewriteExprM f fq a
                                  rwE f fq (JustE a')
 rewriteExprM f fq (IsNothingE a) = do a' <- rewriteExprM f fq a

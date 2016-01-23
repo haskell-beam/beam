@@ -9,8 +9,9 @@ module Database.Beam.Schema.Tables
     , autoDbSettings
     , allTableSettings
 
-    , PK(..), BeamEnum(..)
+    , BeamEnum(..)
 
+    , SqlValue'(..)
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
@@ -23,13 +24,11 @@ module Database.Beam.Schema.Tables
     -- * Tables
     , Table(..), defTblFieldSettings, defFieldSettings
     , reifyTableSchema, tableValuesNeeded
+    , pk
 
     -- * Fields
     , FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
-    , popSqlValue, peekSqlValue
-
-    -- * Foreign keys
-    , ForeignKey(..), reference )
+    , popSqlValue, peekSqlValue )
     where
 
 import Database.Beam.SQL.Types
@@ -109,6 +108,7 @@ data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
 newtype Exposed x = Exposed x
+newtype SqlValue' x = SqlValue' SqlValue
 
 newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
     deriving (Show, Typeable)
@@ -129,18 +129,18 @@ newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
 --
 -- > Columnar (Nullable c) x = Columnar c (Maybe x)
 --
---   The 'Nullable' type is used when referencing 'ForeignKey's that we want to include optionally.
---   For example, if we have a table with a 'ForeignKey', like the following
+--   The 'Nullable' type is used when referencing 'PrimaryKey's that we want to include optionally.
+--   For example, if we have a table with a 'PrimaryKey', like the following
 --
 -- > data BeamTableT f = BeamTableT
--- >                   { _refToAnotherTable :: ForeignKey AnotherTableT f
+-- >                   { _refToAnotherTable :: PrimaryKey AnotherTableT f
 -- >                   , ... }
 --
 --   we would typically be required to provide values for the 'PrimaryKey' embedded into 'BeamTableT'. We can use
 --   'Nullable' to lift this constraint.
 --
 -- > data BeamTableT f = BeamTableT
--- >                   { _refToAnotherTable :: ForeignKey AnotherTableT (Nullable f)
+-- >                   { _refToAnotherTable :: PrimaryKey AnotherTableT (Nullable f)
 -- >                   , ... }
 --
 --   Now we can use 'justRef' and 'nothingRef' to refer to this table optionally. The embedded 'PrimaryKey' in '_refToAnotherTable'
@@ -173,49 +173,12 @@ newtype Columnar' f a = Columnar' (Columnar f a)
 -- | Support for NULLable Foreign Key references.
 --
 -- > data MyTable f = MyTable
--- >                { nullableRef :: ForeignKey AnotherTable (Nullable f)
+-- >                { nullableRef :: PrimaryKey AnotherTable (Nullable f)
 -- >                , ... }
 -- >                 deriving (Generic, Typeable)
 --
 -- See 'Columnar' for more information.
 data Nullable (c :: * -> *) x
-
--- | Simple newtype that allows us to declare single-fielded primary keys.
---
---   For example, consider the following table with an 'AutoId' field that we would like to use as the primary key
---
--- > data BeamTableT f = BeamTable
--- >                   { _beamTableId :: Columnar f AutoId
--- >                   , ... }
--- >                    deriving Generic
---
---   When instantiating 'Table' for 'BeamTableT', we would like to do the following
---
--- > instance Table BeamTableT where
--- >     type PrimaryKey BeamTableT f = Columnar f AutoId
--- >     primaryKey = _beamTableId
---
---   Unfortunately, this does not work, due to limitations in the default deriving mechanism. Instead, we need to wrap this in 'PK'.
---
--- > instance Table BeamTableT where
--- >     type PrimaryKey BeamTableT f = PK f AutoId
--- >     primaryKey = PK . _beamTableId
---
---   Note that types with multiple primary keys are not affected by this problem. It is perfectly acceptable to do
---
--- > data BeamTableT = BeamTable'
--- >                 { _beamTableId1 :: Columnar f Text
--- >                 , _beamTableId2 :: Columnar f Int
--- >                 , ... }
--- >                  deriving Generic
--- >
--- > instance Table BeamTableT where
--- >    type PrimaryKey BeamTableT f = (Columnar f Text, Columnar f Int)
--- >    primaryKey t = (_beamTableId1 t, _beamTableId2 t)
-newtype PK f t = PK { tableId :: Columnar f t }
-                      deriving Generic
-instance Show (Columnar f t) => Show (PK f t) where
-    showsPrec d (PK x) = showParen (d > 10) $ showString "PK ". showsPrec 11 x
 
 -- | Metadata for a field of type 'ty' in 'table'.
 --
@@ -286,9 +249,9 @@ to' = to
 -- >                  { _blogPostSlug    :: Columnar f Text
 -- >                  , _blogPostBody    :: Columnar f Text
 -- >                  , _blogPostDate    :: Columnar f UTCTime
--- >                  , _blogPostAuthor  :: ForeignKey AuthorT f
+-- >                  , _blogPostAuthor  :: PrimaryKey AuthorT f
 -- >                  , _blogPostTagline :: Columnar f (Maybe Text)
--- >                  , _blogPostImageGallery :: ForeignKey ImageGalleryT (Nullable f) }
+-- >                  , _blogPostImageGallery :: PrimaryKey ImageGalleryT (Nullable f) }
 -- >                    deriving Generic
 -- > instance Table BlogPostT where
 -- >    type PrimaryKey BlogPostT f = PK f Text
@@ -305,36 +268,36 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
 
     -- | A data type representing the types of primary keys for this table.
     --   In order to play nicely with the default deriving mechanism, this type must be an instance of 'Generic'.
-    type PrimaryKey table (column :: * -> *) :: *
+    data PrimaryKey table (column :: * -> *) :: *
 
     -- | Given a table, this should return the PrimaryKey from the table. By keeping this polymorphic over column,
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
     primaryKey :: table column -> PrimaryKey table column
 
-    pkChangeRep :: Proxy table -> (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey table f -> PrimaryKey table g
+    pkChangeRep :: (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey table f -> PrimaryKey table g
     default pkChangeRep :: ( Generic (PrimaryKey table f)
                            , Generic (PrimaryKey table g)
                            , Generic (PrimaryKey table Exposed)
                            , GChangeRep (Rep (PrimaryKey table Exposed) ())
                                         (Rep (PrimaryKey table f) ()) (Rep (PrimaryKey table g) ())
                                         f g ) =>
-                           Proxy table -> (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey table f -> PrimaryKey table g
-    pkChangeRep (tbl :: Proxy table) f x = to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey table Exposed) ()))
-                                                           f (from' x))
+                           (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey table f -> PrimaryKey table g
+    pkChangeRep f x = to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey table Exposed) ()))
+                                      f (from' x))
 
-    changeRep :: (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
+    changeRep :: (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> table f -> table g
     default changeRep :: ( ChangeRep table f g ) =>
-                         (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
-    changeRep (f :: forall a. Columnar' f a -> Columnar' g a) =
+                         (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> table f -> table g
+    changeRep (f :: forall a. FieldSchema a => Columnar' f a -> Columnar' g a) =
         changeRep' (Proxy :: Proxy f) (Proxy :: Proxy g) (Proxy :: Proxy table) f
 
-    pkAllValues :: Proxy table -> (forall a. FieldSchema a => Columnar' f a -> b) -> PrimaryKey table f -> [b]
+    pkAllValues :: (forall a. FieldSchema a => Columnar' f a -> b) -> PrimaryKey table f -> [b]
     default pkAllValues :: AllValues f (PrimaryKey table f) (PrimaryKey table Exposed) =>
-                           Proxy table -> (forall a. FieldSchema a => Columnar' f a -> b) -> PrimaryKey table f -> [b]
-    pkAllValues _ = allValues' (Proxy :: Proxy (PrimaryKey table Exposed))
+                           (forall a. FieldSchema a => Columnar' f a -> b) -> PrimaryKey table f -> [b]
+    pkAllValues = allValues' (Proxy :: Proxy (PrimaryKey table Exposed))
 
     fieldAllValues :: (forall a. FieldSchema a => Columnar' f a -> b) -> table f -> [b]
-    default fieldAllValues :: AllValues f (table f) (table Exposed)=>
+    default fieldAllValues :: AllValues f (table f) (table Exposed) =>
                               (forall a. FieldSchema a => Columnar' f a -> b) -> table f -> [b]
     fieldAllValues = allValues' (Proxy :: Proxy (table Exposed))
 
@@ -343,9 +306,19 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
                                 , GDefaultTableFieldSettings (Rep (TableSettings table) ())) => TableSettings table
     tblFieldSettings = defTblFieldSettings
 
-    makeSqlValues :: table Identity -> [SqlValue]
-    default makeSqlValues :: (Generic (table Identity), GMakeSqlValues (Rep (table Exposed) ()) (Rep (table Identity) ())) => table Identity -> [SqlValue]
-    makeSqlValues table = gMakeSqlValues (Proxy :: Proxy (Rep (table Exposed) ())) (from' table)
+    pkMakeSqlValues :: PrimaryKey table Identity -> PrimaryKey table SqlValue'
+    default pkMakeSqlValues :: ( Generic (PrimaryKey table Identity)
+                               , Generic (PrimaryKey table SqlValue')
+                               , GMakeSqlValues (Rep (PrimaryKey table Exposed) ()) (Rep (PrimaryKey table Identity) ()) (Rep (PrimaryKey table SqlValue') ())) =>
+                             PrimaryKey table Identity -> PrimaryKey table SqlValue'
+    pkMakeSqlValues table = to' (gMakeSqlValues (Proxy :: Proxy (Rep (PrimaryKey table Exposed) ())) (from' table))
+
+    makeSqlValues :: table Identity -> table SqlValue'
+    default makeSqlValues :: ( Generic (table Identity)
+                             , Generic (table SqlValue')
+                             , GMakeSqlValues (Rep (table Exposed) ()) (Rep (table Identity) ()) (Rep (table SqlValue') ())) =>
+                             table Identity -> table SqlValue'
+    makeSqlValues table = to' (gMakeSqlValues (Proxy :: Proxy (Rep (table Exposed) ())) (from' table))
 
     tableFromSqlValues :: FromSqlValuesM (table Identity)
     default tableFromSqlValues :: ( Generic (table Identity)
@@ -359,6 +332,10 @@ reifyTableSchema (Proxy :: Proxy table) = fieldAllValues (\(Columnar' (TableFiel
 
 tableValuesNeeded :: Table table => Proxy table -> Int
 tableValuesNeeded (Proxy :: Proxy table) = length (fieldAllValues (\_ -> ()) (tblFieldSettings :: TableSettings table))
+
+-- | Synonym for 'primaryKey'
+pk :: Table t => t f -> PrimaryKey t f
+pk = primaryKey
 
 instance FromSqlValues t => FromSqlValues (Maybe t) where
     valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
@@ -389,7 +366,7 @@ fieldColDesc settings cs =let base = colDescFromSettings settings
                           in base { csConstraints = csConstraints base ++ cs }
 
 class GChangeRep (ty :: *) x y f g where
-    gChangeRep :: Proxy ty -> (forall a. Columnar' f a -> Columnar' g a) -> x -> y
+    gChangeRep :: Proxy ty -> (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> x -> y
 instance GChangeRep (ty p) (a p) (b p) x y => GChangeRep (M1 s h ty p) (M1 s f a p) (M1 s g b p) x y where
     gChangeRep _ f (M1 x) = M1 (gChangeRep (Proxy :: Proxy (ty p)) f x)
 instance ( GChangeRep (t1 p) (a1 p) (a2 p) x y, GChangeRep (t2 p) (b1 p) (b2 p) x y) => GChangeRep ((t1 :*: t2) p) ((a1 :*: b1) p) ((a2 :*: b2) p) x y where
@@ -401,11 +378,14 @@ instance ( Generic (PrimaryKey rel x)
                       (Rep (PrimaryKey rel x) ())
                       (Rep (PrimaryKey rel y) ())
                       x y ) =>
-    GChangeRep (K1 Generic.R (ForeignKey rel Exposed) p) (K1 Generic.R (ForeignKey rel x) p) (K1 Generic.R (ForeignKey rel y) p) x y where
-    gChangeRep _ (f :: forall b. Columnar' f b -> Columnar' g b) (K1 (ForeignKey x)) =
-        K1 (ForeignKey (to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey rel Exposed) ())) f (from' x))))
-instance (xa ~ Columnar x a, ya ~ Columnar y a) => GChangeRep (K1 Generic.R (Exposed a) p) (K1 Generic.R xa p) (K1 Generic.R ya p) x y where
-    gChangeRep (_ :: Proxy (K1 Generic.R (Exposed a) p)) (f :: forall b. Columnar' f b -> Columnar' g b) (K1 x) =
+    GChangeRep (K1 Generic.R (PrimaryKey rel Exposed) p) (K1 Generic.R (PrimaryKey rel x) p) (K1 Generic.R (PrimaryKey rel y) p) x y where
+    gChangeRep _ f (K1 x) =
+        K1 (to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey rel Exposed) ())) f (from' x)))
+
+instance ( xa ~ Columnar x a, ya ~ Columnar y a, FieldSchema a) =>
+         GChangeRep (K1 Generic.R (Exposed a) p) (K1 Generic.R xa p) (K1 Generic.R ya p) x y where
+
+    gChangeRep (_ :: Proxy (K1 Generic.R (Exposed a) p)) (f :: forall b. FieldSchema b => Columnar' f b -> Columnar' g b) (K1 x) =
         let x' = Columnar' x :: Columnar' f a
             Columnar' y' = f x' :: Columnar' g a
         in K1 y'
@@ -415,18 +395,18 @@ instance (xa ~ Columnar x a, ya ~ Columnar y a) => GChangeRep (K1 Generic.R (Exp
 -- instance ( Generic (PrimaryKey table x)
 --          , Generic (PrimaryKey table y)
 --          , GChangeRep (Rep (PrimaryKey table x) ()) (Rep (PrimaryKey table y) ()) x y ) =>
---     GChangeRep (K1 Generic.R (ForeignKey table x) p) (K1 Generic.R (ForeignKey table y) p) x y where
---     gChangeRep f (K1 (ForeignKey x)) = K1 (ForeignKey (to' (gChangeRep f (from' x))))
+--     GChangeRep (K1 Generic.R (PrimaryKey table x) p) (K1 Generic.R (PrimaryKey table y) p) x y where
+--     gChangeRep f (K1 (PrimaryKey x)) = K1 (PrimaryKey (to' (gChangeRep f (from' x))))
 -- instance ( Generic (PrimaryKey table (Nullable x))
 --          , Generic (PrimaryKey table (Nullable y))
 --          , GChangeRep (Rep (PrimaryKey table (Nullable x)) ()) (Rep (PrimaryKey table (Nullable y)) ()) x y ) =>
---     GChangeRep (K1 Generic.R (ForeignKey table (Nullable x)) p) (K1 Generic.R (ForeignKey table (Nullable y)) p) x y where
---     gChangeRep f (K1 (ForeignKey x)) = K1 (ForeignKey (to' (gChangeRep f (from' x))))
+--     GChangeRep (K1 Generic.R (PrimaryKey table (Nullable x)) p) (K1 Generic.R (PrimaryKey table (Nullable y)) p) x y where
+--     gChangeRep f (K1 (PrimaryKey x)) = K1 (PrimaryKey (to' (gChangeRep f (from' x))))
 -- instance GChangeRep (Nullable f a) (Nullable g a) f g where
 --     gChangeRep f (Nullable x) = Nullable (f x)
 
 class ChangeRep x f g where
-    changeRep' :: Proxy f -> Proxy g -> Proxy x -> (forall a. Columnar' f a -> Columnar' g a) -> x f -> x g
+    changeRep' :: Proxy f -> Proxy g -> Proxy x -> (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> x f -> x g
 instance ( Generic (x f)
          , Generic (x g)
          , Generic (x Exposed)
@@ -442,8 +422,8 @@ instance (GAllValues f (ty x) (p x)) => GAllValues f (M1 s h ty x) (M1 s g p x) 
     gAllValues Proxy f (M1 a) = gAllValues (Proxy :: Proxy (ty x)) f a
 instance ( Generic (PrimaryKey rel f)
          , GAllValues f (Rep (PrimaryKey rel Exposed) ()) (Rep (PrimaryKey rel f) ()) ) =>
-    GAllValues f (K1 Generic.R (ForeignKey rel Exposed) a) (K1 Generic.R (ForeignKey rel f) a) where
-    gAllValues Proxy f (K1 (ForeignKey x)) =
+    GAllValues f (K1 Generic.R (PrimaryKey rel Exposed) a) (K1 Generic.R (PrimaryKey rel f) a) where
+    gAllValues Proxy f (K1 x) =
         gAllValues (Proxy :: Proxy (Rep (PrimaryKey rel Exposed) ())) f (from' x)
 instance (FieldSchema x, fx ~ Columnar f x) => GAllValues f (K1 Generic.R (Exposed x) a) (K1 Generic.R fx a) where
     gAllValues Proxy f (K1 a) = [f (Columnar' a :: Columnar' f x)]
@@ -452,8 +432,8 @@ instance (FieldSchema x, fx ~ Columnar f x) => GAllValues f (K1 Generic.R (Expos
 --     gAllValues f (K1 (Nullable a)) = [f a]
 -- instance ( Generic (PrimaryKey related g)
 --          , GAllValues f (Rep (PrimaryKey related g) ()) ) =>
---     GAllValues f (K1 Generic.R (ForeignKey related g) a) where
---     gAllValues f (K1 (ForeignKey x)) = gAllValues f (from' x)
+--     GAllValues f (K1 Generic.R (PrimaryKey related g) a) where
+--     gAllValues f (K1 (PrimaryKey x)) = gAllValues f (from' x)
 -- instance FieldSchema a => GAllValues f (f a) where
 --     gAllValues f x = [f x]
 
@@ -489,9 +469,9 @@ instance ( Table table, Table related
          , GChangeRep (Rep (PrimaryKey related Exposed) ())
                       (Rep (PrimaryKey related (TableField related)) ()) (Rep (PrimaryKey related (TableField table)) ())
                       (TableField related) (TableField table) ) =>
-    GDefaultTableFieldSettings (S1 f (K1 Generic.R (ForeignKey related (TableField table))) p) where
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (TableField table))) p) where
 
-    gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (ForeignKey related (TableField table))) p )) = M1 . K1 . ForeignKey $ primaryKeySettings'
+    gDefTblFieldSettings _ = M1 . K1 $ primaryKeySettings'
         where tableSettings = tblFieldSettings :: TableSettings related
               primaryKeySettings :: PrimaryKey related (TableField related)
               primaryKeySettings = primaryKey tableSettings
@@ -508,7 +488,7 @@ instance ( Table table, Table related
 
               removeConstraints = filter (\x -> x /= SQLPrimaryKey && x /= SQLAutoIncrement)
 
-              keyName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (ForeignKey related (TableField table))) ())))
+              keyName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey related (TableField table))) ())))
 
 instance ( Table table, Table related
          , Selector f
@@ -521,11 +501,11 @@ instance ( Table table, Table related
                       (TableField table) (Nullable (TableField table))
          , GChangeRep (Rep (PrimaryKey related Exposed) ())
                       (Rep (PrimaryKey related (TableField related)) ()) (Rep (PrimaryKey related (TableField table)) ()) (TableField related) (TableField table) ) =>
-    GDefaultTableFieldSettings (S1 f (K1 Generic.R (ForeignKey related (Nullable (TableField table)))) p) where
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (Nullable (TableField table)))) p) where
 
-    gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (ForeignKey related (Nullable (TableField table)))) p )) =
-        M1 . K1 . ForeignKey $ settings
-        where M1 (K1 (ForeignKey nonNullSettings)) = gDefTblFieldSettings (Proxy :: Proxy (S1 f (K1 Generic.R (ForeignKey related (TableField table))) p))
+    gDefTblFieldSettings _ =
+        M1 . K1 $ settings
+        where M1 (K1 nonNullSettings) = gDefTblFieldSettings (Proxy :: Proxy (S1 f (K1 Generic.R (PrimaryKey related (TableField table))) p))
               nonNullSettingsRep = from' nonNullSettings :: Rep (PrimaryKey related (TableField table)) ()
 
               settings :: PrimaryKey related (Nullable (TableField table))
@@ -534,7 +514,6 @@ instance ( Table table, Table related
               removeNotNullConstraints :: Columnar' (TableField table) ty -> Columnar' (Nullable (TableField table)) ty
               removeNotNullConstraints (Columnar' tf) =
                   Columnar' $
-                            -- Nullable $
                   tf { _fieldSettings = MaybeFieldSettings (_fieldSettings tf) }
 
 class GFromSqlValues (ty :: * -> *) (schema :: * -> *) where
@@ -549,30 +528,31 @@ instance (GFromSqlValues t1 a, GFromSqlValues t2 b) => GFromSqlValues (t1 :*: t2
     gFromSqlValues _ = (:*:) <$> gFromSqlValues (Proxy :: Proxy t1) <*> gFromSqlValues (Proxy :: Proxy t2)
 instance ( Generic (PrimaryKey related f)
          , GFromSqlValues (Rep (PrimaryKey related Exposed)) (Rep (PrimaryKey related f)) ) =>
-    GFromSqlValues (K1 Generic.R (ForeignKey related Exposed)) (K1 Generic.R (ForeignKey related f)) where
+    GFromSqlValues (K1 Generic.R (PrimaryKey related Exposed)) (K1 Generic.R (PrimaryKey related f)) where
 
-    gFromSqlValues _ = K1 . ForeignKey . to' <$> gFromSqlValues (Proxy :: Proxy (Rep (PrimaryKey related Exposed)))
+    gFromSqlValues _ = K1 . to' <$> gFromSqlValues (Proxy :: Proxy (Rep (PrimaryKey related Exposed)))
 -- instance FieldSchema (Maybe x) => GFromSqlValues (K1 Generic.R (Nullable Column x)) where
 --     gFromSqlValues = K1 . Nullable . Column <$> fromSqlValue
 
-class GMakeSqlValues ty x where
-    gMakeSqlValues :: Proxy ty -> x -> [SqlValue]
-instance GMakeSqlValues (ty a) (p a) => GMakeSqlValues (M1 s f ty a) (M1 s f p a) where
-    gMakeSqlValues _ (M1 x) = gMakeSqlValues (Proxy :: Proxy (ty a)) x
-instance (GMakeSqlValues (t1 a) (f a), GMakeSqlValues (t2 a) (g a)) => GMakeSqlValues ((t1 :*: t2) a) ((f :*: g) a) where
-    gMakeSqlValues _ (f :*: g) = gMakeSqlValues (Proxy :: Proxy (t1 a)) f ++ gMakeSqlValues (Proxy :: Proxy (t2 a)) g
-instance GMakeSqlValues (U1 a) (U1 a) where
-    gMakeSqlValues _ _ = []
-instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Exposed x) a) (K1 Generic.R x a) where
-    gMakeSqlValues _ (K1 x) = [makeSqlValue x]
-instance FieldSchema (BeamEnum x) => GMakeSqlValues (K1 Generic.R (Exposed (BeamEnum x)) a) (K1 Generic.R x a) where
-    gMakeSqlValues _ (K1 x) = [makeSqlValue (BeamEnum x)]
+class GMakeSqlValues ty x sql where
+    gMakeSqlValues :: Proxy ty -> x -> sql
+instance GMakeSqlValues (ty a) (p a) (sql a) => GMakeSqlValues (M1 s f ty a) (M1 s f p a) (M1 s f sql a) where
+    gMakeSqlValues _ (M1 x) = M1 (gMakeSqlValues (Proxy :: Proxy (ty a)) x)
+instance (GMakeSqlValues (t1 a) (f a) (sql1 a), GMakeSqlValues (t2 a) (g a) (sql2 a)) => GMakeSqlValues ((t1 :*: t2) a) ((f :*: g) a) ((sql1 :*: sql2) a) where
+    gMakeSqlValues _ (f :*: g) = gMakeSqlValues (Proxy :: Proxy (t1 a)) f :*: gMakeSqlValues (Proxy :: Proxy (t2 a)) g
+instance GMakeSqlValues (U1 x) (U1 a) (U1 sql) where
+    gMakeSqlValues _ _ = U1
+instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Exposed x) a) (K1 Generic.R x a) (K1 Generic.R (SqlValue' x) a) where
+    gMakeSqlValues _ (K1 x) = K1 (SqlValue' (makeSqlValue x))
+instance FieldSchema (BeamEnum x) => GMakeSqlValues (K1 Generic.R (Exposed (BeamEnum x)) a) (K1 Generic.R x a) (K1 Generic.R (SqlValue' (BeamEnum x)) a) where
+    gMakeSqlValues _ (K1 x) = K1 (SqlValue' (makeSqlValue (BeamEnum x)))
 -- instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Nullable Column x) a) where
 --     gMakeSqlValues (K1 (Nullable x)) = [makeSqlValue (columnValue x)]
 instance ( Generic (PrimaryKey related f)
-         , GMakeSqlValues (Rep (PrimaryKey related Exposed) ()) (Rep (PrimaryKey related f) ()) ) =>
-    GMakeSqlValues (K1 Generic.R (ForeignKey related Exposed) a) (K1 Generic.R (ForeignKey related f) a) where
-    gMakeSqlValues _ (K1 (ForeignKey x)) = gMakeSqlValues (Proxy :: Proxy (Rep (PrimaryKey related Exposed) ())) (from' x)
+         , Generic (PrimaryKey related SqlValue')
+         , GMakeSqlValues (Rep (PrimaryKey related Exposed) ()) (Rep (PrimaryKey related f) ()) (Rep (PrimaryKey related SqlValue') ()) ) =>
+    GMakeSqlValues (K1 Generic.R (PrimaryKey related Exposed) a) (K1 Generic.R (PrimaryKey related f) a) (K1 Generic.R (PrimaryKey related SqlValue') ()) where
+    gMakeSqlValues _ (K1 x) = K1 (to' (gMakeSqlValues (Proxy :: Proxy (Rep (PrimaryKey related Exposed) ())) (from' x)))
 
 class ( Show (FieldSettings fs), Typeable fs
       , Show fs )  => FieldSchema fs where
@@ -609,37 +589,6 @@ instance (FromSqlValues a, FromSqlValues b, FromSqlValues c) => FromSqlValues (a
     fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
     valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
 
--- | Mechanism to embed references to SQL into Haskell data type.
---
---   If 'table' is an instance of 'Table', we can use 'ForeignKey' to embed the 'PrimaryKey' of 'table' into
---   a related table.
---
--- > data AuthorT f = AuthorT
--- >                { _authorEmail     :: Columnar f Text
--- >                , _authorFirstName :: Columnar f Text
--- >                , _authorLastName  :: Columnar f Text }
--- >                  deriving Generic
--- >
--- > data BlogPostT f = BlogPost
--- >                  { _blogPostSlug    :: Columnar f Text
--- >                  , _blogPostBody    :: Columnar f Text
--- >                  , _blogPostDate    :: Columnar f UTCTime
--- >                  , _blogPostAuthor  :: ForeignKey AuthorT f
--- >                  , _blogPostTagline :: Columnar f (Maybe Text) }
--- >                    deriving Generic
--- > instance Table BlogPostT where
--- >    type PrimaryKey BlogPostT f = PK f Text
--- >    primaryKey = PK . _blogPostSlug
--- > instance Table AuthorT where
--- >    type PrimaryKey AuthorT f = PK f Text
--- >    primaryKey = PK . _authorEmail
-data ForeignKey table column = ForeignKey (PrimaryKey table column)
-deriving instance Show (PrimaryKey table column) => Show (ForeignKey table column)
-
--- | Given a 'ForeignKey' to `table`, return the 'PrimaryKey' of the related table.
-reference :: ForeignKey table f -> PrimaryKey table f
-reference (ForeignKey x) = x
-
 instance FieldSchema Int where
     data FieldSettings Int = IntFieldDefault
                              deriving Show
@@ -675,11 +624,18 @@ deriving instance Show (FieldSettings a) => Show (FieldSettings (Maybe a))
 
 unCamelCase :: String -> [String]
 unCamelCase "" = []
-unCamelCase s = let (comp, next) = span isLower s
-                    next' = case next of
-                              [] -> []
-                              x:xs -> toLower x:xs
-                in map toLower comp:unCamelCase next'
+unCamelCase s
+    | (comp@(_:_), next) <- span (not . isUpper) s =
+          let next' = case next of
+                        [] -> []
+                        x:xs -> toLower x:xs
+          in map toLower comp:unCamelCase next'
+    | otherwise =
+        let (comp@(_:_), next) = span isUpper s
+            next' = case next of
+                      [] -> []
+                      x:xs -> toLower x:xs
+        in map toLower comp:unCamelCase next'
 
 unCamelCaseSel :: String -> String
 unCamelCaseSel ('_':xs) = unCamelCaseSel xs

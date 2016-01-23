@@ -1,6 +1,5 @@
 module Database.Beam.Backend where
 
-import Database.Beam.Types
 import Database.Beam.Internal
 import Database.Beam.Schema
 import Database.Beam.SQL.Types
@@ -71,7 +70,7 @@ createStmtFor beam name (table :: Proxy t) =
         _fieldName' :: Columnar' (TableField t) x -> Text
         _fieldName' (Columnar' x) = _fieldName x
 
-        primaryKeyFields = pkAllValues (Proxy :: Proxy t) _fieldName' (primaryKey (tblFieldSettings :: TableSettings t))
+        primaryKeyFields = pkAllValues _fieldName' (primaryKey (tblFieldSettings :: TableSettings t))
     in SQLCreateTable name tblSchemaInDb'
 
 migrateDB :: MonadIO m => DatabaseSettings db -> Beam db m -> [MigrationAction] -> m ()

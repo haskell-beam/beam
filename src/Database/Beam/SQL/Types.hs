@@ -20,6 +20,7 @@ notNull desc = SQLColumnSchema desc [SQLNotNull]
 data SQLCommand = Select SQLSelect
                 | Insert SQLInsert
                 | Update SQLUpdate
+                | Delete SQLDelete
 
                 -- DDL
                 | CreateTable SQLCreateTable
@@ -49,6 +50,11 @@ data SQLUpdate = SQLUpdate
                { uTableNames  :: [Text]
                , uAssignments :: [(SQLFieldName, SQLExpr)]
                , uWhere       :: Maybe SQLExpr }
+                 deriving Show
+
+data SQLDelete = SQLDelete
+               { dTableName   :: Text
+               , dWhere       :: Maybe SQLExpr }
                  deriving Show
 
 data SQLSelect = SQLSelect
@@ -111,6 +117,7 @@ data SQLExpr where
 
     SQLFieldE :: SQLFieldName -> SQLExpr
 
+    SQLNotE :: SQLExpr -> SQLExpr
     SQLEqE, SQLLtE, SQLGtE, SQLLeE, SQLGeE, SQLNeqE :: SQLExpr -> SQLExpr -> SQLExpr
 
     SQLIsNothingE :: SQLExpr -> SQLExpr
