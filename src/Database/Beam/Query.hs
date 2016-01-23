@@ -3,8 +3,10 @@ module Database.Beam.Query
     ( module Database.Beam.Query.Types
     , module Database.Beam.Query.Combinators
 
-    , beamTxn, insertInto, query, queryList
-    , ref, justRef )where
+    , beamTxn, insertInto, query, queryList, getOne
+    , updateWhere, saveTo
+    , deleteWhere, deleteFrom )
+    where
 
 import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
@@ -12,7 +14,6 @@ import Database.Beam.Query.Internal
 
 import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Fields
-import Database.Beam.Types
 import Database.Beam.Internal
 import Database.Beam.SQL
 import Database.Beam.SQL.Types
@@ -51,11 +52,11 @@ runSQL' debug conn cmd = do
   execute stmt vals
   return (Right (fetchRow stmt))
 
--- * Data updating
+-- * Data insertion, updating, and deletion
 
 insertToSQL :: Table table => T.Text -> table Identity -> SQLInsert
 insertToSQL name (table :: table Identity) = SQLInsert name
-                                                       (makeSqlValues table)
+                                                       (fieldAllValues (\(Columnar' (SqlValue' x)) -> x) (makeSqlValues table))
 
 runInsert :: (MonadIO m, Table table, FromSqlValues (table Identity)) => T.Text -> table Identity -> Beam d m -> m (Either String (table Identity))
 runInsert tableName (table :: table Identity) beam =
@@ -88,6 +89,66 @@ insertInto :: (MonadIO m, Functor m, Table table, FromSqlValues (table Identity)
               DatabaseTable db table -> table Identity -> BeamT e db m (table Identity)
 insertInto (DatabaseTable _ name) data_ =
     BeamT (\beam -> toBeamResult <$> runInsert name data_ beam)
+
+updateToSQL :: Table table => T.Text -> table QExpr -> QExpr Bool -> Maybe SQLUpdate
+updateToSQL tblName (setTo :: table QExpr) where_ =
+    let setExprs = fieldAllValues (\(Columnar' x) -> optimizeExpr x) setTo
+        setColumns = fieldAllValues (\(Columnar' fieldS) -> _fieldName fieldS) (tblFieldSettings :: TableSettings table)
+
+        isInteresting columnName (SQLFieldE (SQLFieldName fName))
+            | fName == columnName = Nothing
+        isInteresting columnName newE = Just (SQLFieldName columnName, newE)
+
+        assignments = catMaybes (zipWith isInteresting setColumns setExprs)
+
+        where_' = case optimizeExpr where_ of
+                    SQLValE (SqlBool True) -> Nothing
+                    where_' -> Just where_'
+
+    in case assignments of
+         [] -> Nothing
+         _  -> Just SQLUpdate
+               { uTableNames = [tblName]
+               , uAssignments = assignments
+               , uWhere = where_' }
+
+updateWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl QExpr -> tbl QExpr) -> (tbl QExpr -> QExpr Bool) -> BeamT e db m ()
+updateWhere tbl@(DatabaseTable _ name :: DatabaseTable db tbl) mkAssignments mkWhere =
+    do let assignments = mkAssignments tblExprs
+           where_ = mkWhere tblExprs
+
+           tblExprs = changeRep (\(Columnar' fieldS) -> Columnar' (FieldE name Nothing (_fieldName fieldS))) (tblFieldSettings :: TableSettings tbl)
+
+       case updateToSQL name assignments where_ of
+         Nothing -> pure () -- Assignments were empty, so do nothing
+         Just upd ->
+             let updateCmd = Update upd
+             in BeamT $ \beam ->
+                 withHDBCConnection beam $ \conn ->
+                     do liftIO (runSQL' (beamDebug beam) conn updateCmd)
+                        pure (Success ())
+
+saveTo :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> tbl Identity -> BeamT e db m ()
+saveTo tbl (newValues :: tbl Identity) =
+    updateWhere tbl (\_ -> tableVal newValues) (val_ (primaryKey newValues) `references_`)
+
+
+deleteWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl QExpr -> QExpr Bool) -> BeamT e db m ()
+deleteWhere (DatabaseTable _ name :: DatabaseTable db tbl) mkWhere =
+    let tblExprs = changeRep (\(Columnar' fieldS) -> Columnar' (FieldE name Nothing (_fieldName fieldS))) (tblFieldSettings :: TableSettings tbl)
+
+        cmd = Delete SQLDelete
+              { dTableName = name
+              , dWhere = case optimizeExpr (mkWhere tblExprs) of
+                           SQLValE (SqlBool True) -> Nothing
+                           where_ -> Just where_ }
+    in BeamT $ \beam ->
+        withHDBCConnection beam $ \conn ->
+            do liftIO (runSQL' (beamDebug beam) conn cmd)
+               pure (Success ())
+
+deleteFrom :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> PrimaryKey tbl Identity -> BeamT e db m ()
+deleteFrom tbl pkToDelete = deleteWhere tbl (\tbl -> primaryKey tbl ==. val_ pkToDelete)
 
 -- * BeamT actions
 
@@ -136,6 +197,19 @@ queryList :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a)
 queryList q = do src <- query q
                  src $$ C.consume
 
+getOne :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. q db s a) -> BeamT e db m (Maybe (QExprToIdentity a))
+getOne q =
+    do let justOneSink = await >>= \x ->
+                         case x of
+                           Nothing -> return Nothing
+                           Just  x -> noMoreSink x
+           noMoreSink x = await >>= \nothing ->
+                          case nothing of
+                            Nothing -> return (Just x)
+                            Just  _ -> return Nothing
+       src <- query q
+       src $$ justOneSink
+
 fromSqlValues :: FromSqlValues a => [SqlValue] -> Either String a
 fromSqlValues vals =
     case runState (runErrorT fromSqlValues') vals of
@@ -145,13 +219,13 @@ fromSqlValues vals =
 
 -- * Generic combinators
 
-ref :: Table t => t c -> ForeignKey t c
-ref = ForeignKey . primaryKey
-justRef :: Table related =>
-           related Identity -> ForeignKey related (Nullable Identity)
-justRef (e :: related Identity) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (primaryKey e))
-    where just :: Columnar' Identity a -> Columnar' (Nullable Identity) a
-          just (Columnar' x) = Columnar' (Just (unsafeCoerce x)) -- TODO : Why is unsafecoerce necessary here?
+-- ref :: Table t => t c -> ForeignKey t c
+-- ref = ForeignKey . primaryKey
+-- justRef :: Table related =>
+--            related Identity -> ForeignKey related (Nullable Identity)
+-- justRef (e :: related Identity) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (primaryKey e))
+--     where just :: Columnar' Identity a -> Columnar' (Nullable Identity) a
+--           just (Columnar' x) = Columnar' (Just (unsafeCoerce x)) -- TODO : Why is unsafecoerce necessary here?
 
 -- nothingRef :: Table related =>
 --               Query db (related Identity) -> ForeignKey related (Nullable Identity)

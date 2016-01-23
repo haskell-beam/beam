@@ -17,7 +17,7 @@ build-type:          Simple
 cabal-version:       >=1.18
 
 library
-  exposed-modules:     Database.Beam Database.Beam.Backend Database.Beam.Types
+  exposed-modules:     Database.Beam Database.Beam.Backend
                        Database.Beam.SQL Database.Beam.Query
                        Database.Beam.Schema Database.Beam.Backend.Sqlite3
                        Database.Beam.Internal

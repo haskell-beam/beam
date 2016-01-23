@@ -26,6 +26,7 @@ newtype TopLevelQ db s a = TopLevelQ (Q db s a)
 
 data GenQExpr where
     GenQExpr :: Typeable t => QExpr t -> GenQExpr
+deriving instance Show GenQExpr
 
 data QueryBuilder = QueryBuilder
                   { qbNextTblRef :: Int
@@ -41,11 +42,12 @@ data QueryBuilder = QueryBuilder
 
 data QExpr t where
     FieldE :: { eFieldTblName :: T.Text
-              , eFieldTblOrd  :: Int
+              , eFieldTblOrd  :: Maybe Int
               , eFieldName    :: T.Text } -> QExpr t
 
     OrE :: QExpr Bool -> QExpr Bool -> QExpr Bool
     AndE :: QExpr Bool -> QExpr Bool -> QExpr Bool
+    NotE :: QExpr Bool -> QExpr Bool
 
     EqE, NeqE, LtE, GtE, LeE, GeE :: Typeable a => QExpr a -> QExpr a -> QExpr Bool
 
@@ -62,6 +64,7 @@ data QExpr t where
     -- InE :: (Typeable a, Show a) => QExpr a -> QExpr [a] -> QExpr Bool
 
     -- ListE :: [QExpr a] -> QExpr [a]
+deriving instance Show (QExpr t)
 
 -- * QExpr ordering
 
@@ -83,6 +86,8 @@ instance Eq (QExpr t) where
 
     AndE a1 b1 == AndE a2 b2 = a1 == a2 && b1 == b2
     OrE a1 b1 == OrE a2 b2 = a1 == a2 && b1 == b2
+
+    NotE a == NotE b = a == b
 
     EqE a1 b1 == EqE a2 b2 = binOpEq a1 b1 a2 b2
     NeqE a1 b1 == NeqE a2 b2 = binOpEq a1 b1 a2 b2
@@ -142,3 +147,8 @@ instance ( Projectible a
 
 instance Table t => Projectible (t QExpr) where
     project t = fieldAllValues (\(Columnar' q) -> GenQExpr q) t
+
+tableVal :: Table tbl => tbl Identity -> tbl QExpr
+tableVal = changeRep valToQExpr . makeSqlValues
+    where valToQExpr :: Columnar' SqlValue' a -> Columnar' QExpr a
+          valToQExpr (Columnar' (SqlValue' v)) = Columnar' (ValE v)

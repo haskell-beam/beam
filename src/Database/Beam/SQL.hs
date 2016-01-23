@@ -34,6 +34,7 @@ ppCmd (Select sel) = ppSel sel
 ppCmd (CreateTable ct) = ppCreateTable ct
 ppCmd (Insert i) = ppInsert i
 ppCmd (Update u) = ppUpdate u
+ppCmd (Delete d) = ppDelete d
 
 -- ** Create table printing support
 
@@ -71,6 +72,13 @@ ppColType SqlColDesc { colType = SqlVarCharT
             case size of
               Nothing -> empty
               Just sz -> parens (text (show sz)))
+ppColType SqlColDesc { colType = SqlCharT
+                     , colSize = size } =
+    return
+      (text "CHAR" <+>
+            case size of
+              Nothing -> empty
+              Just sz -> parens (text (show sz)))
 ppColType SqlColDesc { colType = SqlNumericT } = return (text "INTEGER")
 ppColType SqlColDesc { colType = SqlUTCDateTimeT } = return (text "DATETIME")
 
@@ -99,6 +107,15 @@ ppUpdate (SQLUpdate tbls assignments where_) =
        return (text "UPDATE" <+> hsep (punctuate comma (map (text . unpack) tbls)) <+>
                text "SET"    <+> hsep (punctuate comma assignmentsDs) <+>
                whereClause_)
+
+-- ** Delete printing support
+
+ppDelete :: SQLDelete -> DocAndVals
+ppDelete (SQLDelete tbl where_) =
+    do whereClause_ <- case where_ of
+                         Nothing -> return empty
+                         Just where_ -> ppWhere where_
+       return (text "DELETE FROM" <+> text (unpack tbl) <+> whereClause_)
 
 -- ** Select printing support
 
@@ -198,6 +215,8 @@ ppExpr (SQLInE x xs) = do xDoc <- ppExpr x
                           return (xDoc <+> text "IN" <+> xsDoc)
 ppExpr (SQLListE xs) = do xsDoc <- mapM ppExpr xs
                           return (parens (hsep (punctuate comma xsDoc)))
+ppExpr (SQLNotE x) = do xDoc <- ppExpr x
+                        return (text "NOT" <+> parens xDoc)
 -- ppExpr (SQLCountE x) = do xDoc <- ppExpr x
 --                           return (text "COUNT" <> parens xDoc)
 -- ppExpr (SQLMinE x) = do xDoc <- ppExpr x

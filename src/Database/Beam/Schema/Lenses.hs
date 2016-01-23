@@ -1,7 +1,7 @@
 module Database.Beam.Schema.Lenses
     ( tableConfigLenses ) where
 
-import Database.Beam.Types
+import Database.Beam.Internal
 import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Fields
 
@@ -28,8 +28,8 @@ instance Generic (t m) => GTableLenses t m (K1 R x) (K1 R (LensFor (t m) x)) whe
 instance ( Generic (PrimaryKey rel m)
          , Generic (PrimaryKey rel (Lenses t m))
          , GTableLenses t m (Rep (PrimaryKey rel m)) (Rep (PrimaryKey rel (Lenses t m))) ) =>
-         GTableLenses t m (K1 R (ForeignKey rel m)) (K1 R (ForeignKey rel (Lenses t m))) where
-    gTableLenses _ lensToHere = K1 (ForeignKey (to (gTableLenses (Proxy :: Proxy (Rep (PrimaryKey rel m))) (\f -> lensToHere (\(K1 (ForeignKey x)) -> K1 . ForeignKey . to <$> f (from x))))))
+         GTableLenses t m (K1 R (PrimaryKey rel m)) (K1 R (PrimaryKey rel (Lenses t m))) where
+    gTableLenses _ lensToHere = K1 (to (gTableLenses (Proxy :: Proxy (Rep (PrimaryKey rel m))) (\f -> lensToHere (\(K1 x) -> K1 . to <$> f (from x)))))
 
 tableLenses' :: ( lensType ~ Lenses t f
                 , Generic (t lensType)
