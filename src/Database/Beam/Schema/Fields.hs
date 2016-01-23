@@ -11,7 +11,6 @@ import Control.Monad.Error
 import Data.Time.Clock
 import Data.Text (Text, unpack)
 import Data.Proxy
-import Data.Default
 import Data.String
 import Data.Typeable
 
