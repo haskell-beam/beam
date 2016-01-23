@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
-    ( Q(..), QExpr(..), QExprToIdentity(..), TopLevelQ, IsQuery
+    ( Q, QExpr, QExprToIdentity(..), TopLevelQ, IsQuery
 
     , Projectible(..)
 
@@ -8,7 +8,7 @@ module Database.Beam.Query.Types
 
     , queryToSQL'
 
-    , rewriteExprM, allExprOpts, mkSqlExpr, optimizeExpr ) where
+    , allExprOpts, mkSqlField, optimizeExpr, optimizeExpr' ) where
 
 import Database.Beam.Query.Internal
 
@@ -29,12 +29,11 @@ import Data.Data
 import Data.Maybe
 import Data.String
 import qualified Data.Text as T
+import Data.Generics.Uniplate.Data
 
 import Unsafe.Coerce
 
 -- * Beam queries
-instance IsString (QExpr T.Text) where
-    fromString = ValE . SqlString
 
 type family QExprToIdentity x
 type instance QExprToIdentity (table QExpr) = table Identity
@@ -49,93 +48,65 @@ instance IsQuery TopLevelQ where
 
 -- * Aggregations
 
-data Aggregation a = GroupAgg (QExpr a)
-                   | GenericAgg T.Text [GenQExpr]
+data Aggregation a = GroupAgg (SQLExpr' QField)
+                   | GenericAgg T.Text [SQLExpr' QField]
 
 -- * Rewriting and optimization
 
-rwE :: Monad m => (forall a. QExpr a -> m (Maybe (QExpr a))) -> QExpr a -> m (QExpr a)
-rwE f x = do x' <- f x
-             case x' of
-               Nothing -> return x
-               Just x'
-                   | x == x' -> return x
-                   | otherwise -> rewriteExprM f x'
+-- rwE :: Monad m => (forall a. QExpr a -> m (Maybe (QExpr a))) -> QExpr a -> m (QExpr a)
+-- rwE f x = do x' <- f x
+--              case x' of
+--                Nothing -> return x
+--                Just x'
+--                    | x == x' -> return x
+--                    | otherwise -> rewriteExprM f x'
 
-rewriteBin :: (Monad m, Typeable a, Typeable b) => (forall a . QExpr a -> m (Maybe (QExpr a)))
-           -> (QExpr a -> QExpr b -> QExpr c) -> QExpr a -> QExpr b -> m (QExpr c)
-rewriteBin f g a b = do a' <- rewriteExprM f a
-                        b' <- rewriteExprM f b
-                        rwE f (g a' b')
-
-rewriteExprM :: Monad m => (forall a . QExpr a -> m (Maybe (QExpr a))) -> QExpr a -> m (QExpr a)
-rewriteExprM f (AndE a b) = rewriteBin f AndE a b
-rewriteExprM f (OrE a b) = rewriteBin f OrE a b
-rewriteExprM f (EqE a b) = rewriteBin f EqE a b
-rewriteExprM f (NeqE a b) = rewriteBin f NeqE a b
-rewriteExprM f (LtE a b) = rewriteBin f LtE a b
-rewriteExprM f (LeE a b) = rewriteBin f LeE a b
-rewriteExprM f (GtE a b) = rewriteBin f GtE a b
-rewriteExprM f (GeE a b) = rewriteBin f GeE a b
--- rewriteExprM f (JustE a) = do a' <- rewriteExprM f a
---                               rwE f (JustE a')
+-- rewriteExprM :: Monad m => (forall a . QExpr a -> m (Maybe (QExpr a))) -> QExpr a -> m (QExpr a)
+-- rewriteExprM f (BinOpE op a b) =
+--     do a' <- rewriteExprM f a
+--        b' <- rewriteExprM f b
+--        rwE f (BinOpE op a' b')
+-- rewriteExprM f (UnOpE op a) =
+--     do a' <- rewriteExprM f a
+--        rwE f (UnOpE op a')
+-- -- rewriteExprM f (JustE a) = do a' <- rewriteExprM f a
+-- --                               rwE f (JustE a')
 -- rewriteExprM f (IsNothingE a) = do a' <- rewriteExprM f a
 --                                    rwE f (IsNothingE a')
 -- rewriteExprM f (IsJustE a) = do a' <- rewriteExprM f a
 --                                 rwE f (IsJustE a')
--- rewriteExprM f (InE a b) = rewriteBin f InE a b
--- rewriteExprM f (ListE as) = do as' <- mapM (rewriteExprM f fq) as
---                                rwE f (ListE as')
--- rewriteExprM f (CountE x) = do x' <- rewriteExprM f x
---                                rwE f (CountE x')
--- rewriteExprM f (MinE x) = do x' <- rewriteExprM f x
---                              rwE f (MinE x')
--- rewriteExprM f (MaxE x) = do x' <- rewriteExprM f x
---                              rwE f (MaxE x')
--- rewriteExprM f (SumE x) = do x' <- rewriteExprM f x
---                              rwE f (SumE x')
--- rewriteExprM f (AverageE x) = do x' <- rewriteExprM f x
---                                  rwE f (AverageE x')
--- rewriteExprM f (RefE i x) = do x' <- rewriteExprM f x
---                                rwE f (RefE i x')
-rewriteExprM f x = rwE f x
+-- -- rewriteExprM f (InE a b) = rewriteBin f InE a b
+-- -- rewriteExprM f (ListE as) = do as' <- mapM (rewriteExprM f fq) as
+-- --                                rwE f (ListE as')
+-- rewriteExprM f x = rwE f x
 
-booleanOpts :: QExpr a -> Maybe (QExpr a)
-booleanOpts (AndE (ValE (SqlBool False)) _) = Just (ValE (SqlBool False))
-booleanOpts (AndE _ (ValE (SqlBool False))) = Just (ValE (SqlBool False))
-booleanOpts (AndE (ValE (SqlBool True)) q) = Just q
-booleanOpts (AndE q (ValE (SqlBool True))) = Just q
+booleanOpts :: SQLExpr -> Maybe SQLExpr
+booleanOpts (SQLBinOpE "AND" (SQLValE (SqlBool False)) _) = Just (SQLValE (SqlBool False))
+booleanOpts (SQLBinOpE "AND" _ (SQLValE (SqlBool False))) = Just (SQLValE (SqlBool False))
+booleanOpts (SQLBinOpE "AND" (SQLValE (SqlBool True)) q) = Just q
+booleanOpts (SQLBinOpE "AND" q (SQLValE (SqlBool True))) = Just q
 
-booleanOpts (OrE q (ValE (SqlBool False))) = Just q
-booleanOpts (OrE (ValE (SqlBool False)) q) = Just q
-booleanOpts (OrE (ValE (SqlBool True)) (ValE (SqlBool True))) = Just (ValE (SqlBool True))
+booleanOpts (SQLBinOpE "OR" q (SQLValE (SqlBool False))) = Just q
+booleanOpts (SQLBinOpE "OR" (SQLValE (SqlBool False)) q) = Just q
+booleanOpts (SQLBinOpE "OR" (SQLValE (SqlBool True)) (SQLValE (SqlBool True))) = Just (SQLValE (SqlBool True))
 
 booleanOpts x = Nothing
 
-allExprOpts e = booleanOpts e
+allExprOpts e = pure (booleanOpts e)
 
+optimizeExpr' :: SQLExpr' QField -> SQLExpr
+optimizeExpr' = runIdentity . rewriteM allExprOpts . fmap mkSqlField
 optimizeExpr :: QExpr a -> SQLExpr
-optimizeExpr = mkSqlExpr . runIdentity . rewriteExprM (return . allExprOpts)
+optimizeExpr (QExpr e) = optimizeExpr' e
 
-mkSqlExpr :: QExpr a -> SQLExpr
-mkSqlExpr (FieldE tblName (Just tblOrd) fieldName) = SQLFieldE (SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd)))
-mkSqlExpr (FieldE tblName Nothing fieldName) = SQLFieldE (SQLFieldName fieldName)
-mkSqlExpr (OrE a b) = SQLOrE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (AndE a b) = SQLAndE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (EqE a b) = SQLEqE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (NeqE a b) = SQLNeqE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (LtE a b) = SQLLtE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (GtE a b) = SQLGtE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (LeE a b) = SQLLeE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (GeE a b) = SQLGeE (mkSqlExpr a) (mkSqlExpr b)
-mkSqlExpr (ValE v) = SQLValE v
-mkSqlExpr (NotE v) = SQLNotE (mkSqlExpr v)
-mkSqlExpr (FuncE f args) = SQLFuncE f (map (\(GenQExpr e) -> mkSqlExpr e) args)
+mkSqlField :: QField -> SQLFieldName
+mkSqlField (QField tblName (Just tblOrd) fieldName) = SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd))
+mkSqlField (QField tblName Nothing fieldName) = SQLFieldName fieldName
 
 queryToSQL' :: Projectible a => Q db s a -> (a, SQLSelect)
 queryToSQL' q = let (res, qb) = runState (runQ q) emptyQb
-                    emptyQb = QueryBuilder 0 Nothing (ValE (SqlBool True)) Nothing Nothing [] Nothing
-                    projection = map (\(GenQExpr q) -> SQLAliased (optimizeExpr q) Nothing) (project res)
+                    emptyQb = QueryBuilder 0 Nothing (QExpr (SQLValE (SqlBool True))) Nothing Nothing [] Nothing
+                    projection = map (\q -> SQLAliased (optimizeExpr' q) Nothing) (project res)
 
                     sel = SQLSelect
                           { selProjection = SQLProj projection

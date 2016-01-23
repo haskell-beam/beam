@@ -4,6 +4,8 @@ module Database.Beam.SQL.Types where
 import Data.Text (Text)
 import Data.Time.Clock
 import Data.Monoid
+import Data.Data
+import Data.Functor
 
 import Database.HDBC
 
@@ -69,7 +71,7 @@ data SQLSelect = SQLSelect
 
 data SQLFieldName = SQLFieldName Text
                   | SQLQualifiedFieldName Text Text
-                    deriving Show
+                    deriving (Show, Eq, Data)
 
 data SQLAliased a = SQLAliased a (Maybe Text)
                     deriving Show
@@ -102,30 +104,25 @@ instance Monoid SQLGrouping where
         SQLGrouping (group1 <> group2) (andE having1 having2)
         where andE (SQLValE (SqlBool True)) h = h
               andE h (SQLValE (SqlBool True)) = h
-              andE a b = SQLAndE a b
+              andE a b = SQLBinOpE "AND" a b
     mempty = SQLGrouping mempty (SQLValE (SqlBool True))
 
 data SQLOrdering = Asc SQLExpr
                  | Desc SQLExpr
                    deriving Show
 
-data SQLExpr where
-    SQLValE :: SqlValue -> SQLExpr
+data SQLExpr' f = SQLValE SqlValue
+                | SQLFieldE f
 
-    SQLAndE :: SQLExpr -> SQLExpr -> SQLExpr
-    SQLOrE :: SQLExpr -> SQLExpr -> SQLExpr
+                | SQLBinOpE Text (SQLExpr' f) (SQLExpr' f)
+                | SQLUnOpE Text (SQLExpr' f)
 
-    SQLFieldE :: SQLFieldName -> SQLExpr
+                | SQLIsNothingE (SQLExpr' f)
+                | SQLIsJustE (SQLExpr' f)
 
-    SQLNotE :: SQLExpr -> SQLExpr
-    SQLEqE, SQLLtE, SQLGtE, SQLLeE, SQLGeE, SQLNeqE :: SQLExpr -> SQLExpr -> SQLExpr
+                | SQLListE [SQLExpr' f]
 
-    SQLIsNothingE :: SQLExpr -> SQLExpr
-    SQLIsJustE :: SQLExpr -> SQLExpr
-
-    SQLInE :: SQLExpr -> SQLExpr -> SQLExpr
-    SQLListE :: [SQLExpr] -> SQLExpr
-
-    SQLFuncE :: Text -> [SQLExpr] -> SQLExpr
-
-deriving instance Show SQLExpr
+                | SQLFuncE Text [SQLExpr' f]
+                  deriving (Show, Functor, Eq, Data)
+deriving instance Data SqlValue
+type SQLExpr = SQLExpr' SQLFieldName

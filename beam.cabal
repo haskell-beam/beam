@@ -3,10 +3,10 @@
 
 name:                beam
 version:             0.3.0.0
-synopsis:            A non-TH ORM in Haskell
+synopsis:            A type-safe SQL mapper for Haskell that doesn't use Template Haskell
 -- description:
 homepage:            http://travis.athougies.net/projects/beam
--- license:
+license:             MIT
 license-file:        LICENSE
 author:              Travis Athougies
 maintainer:          travis@athougies.net
@@ -25,9 +25,9 @@ library
 
                        Database.Beam.Schema.Tables
                        Database.Beam.Schema.Fields
-  build-depends:       base >=4.7 && <4.9, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible, void, microlens
+  build-depends:       base >=4.7 && <4.9, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers, conduit, data-default, convertible, void, microlens, uniplate
   hs-source-dirs:      src
   default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
-                       DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric
+                       DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable

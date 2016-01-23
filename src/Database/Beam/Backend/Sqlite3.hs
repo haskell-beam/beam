@@ -1,6 +1,7 @@
 module Database.Beam.Backend.Sqlite3 where
 
 import Database.Beam.Internal
+import Database.Beam.Query.Internal
 import Database.Beam.Backend
 import Database.Beam.SQL.Types
 
@@ -33,3 +34,6 @@ getLastInsertedRow' :: MonadIO m => Connection -> Text -> m [SqlValue]
 getLastInsertedRow' conn tblName = do
   [res] <- liftIO (quickQuery conn (concat ["SELECT * FROM ", unpack tblName, " WHERE ROWID=(SELECT last_insert_rowid()) limit 1"]) [])
   return res
+
+(++.) :: QExpr Text -> QExpr Text -> QExpr Text
+QExpr a ++. QExpr b = QExpr (SQLBinOpE "||" a b)

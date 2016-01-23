@@ -12,7 +12,7 @@
 --   For a series of tutorials, see my series of blog posts at
 --
 --   * [Beam tutorial (part 1)](http://travis.athougies.net/posts/2016-01-21-beam-tutorial-1.html)
---   * [Beam tutorial (part 2)](http://travis.athougies.net/posts/2016-02-22-beam-tutorial-2.html)
+--   * [Beam tutorial (part 2)](http://travis.athougies.net/posts/2016-01-22-beam-tutorial-part-2.html)
 module Database.Beam
      ( module Database.Beam.SQL
      , module Database.Beam.Query

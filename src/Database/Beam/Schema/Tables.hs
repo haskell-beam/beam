@@ -331,7 +331,7 @@ reifyTableSchema (Proxy :: Proxy table) = fieldAllValues (\(Columnar' (TableFiel
                                                                   (name, fieldColDesc settings constraints)) (tblFieldSettings :: TableSettings table)
 
 tableValuesNeeded :: Table table => Proxy table -> Int
-tableValuesNeeded (Proxy :: Proxy table) = length (fieldAllValues (\_ -> ()) (tblFieldSettings :: TableSettings table))
+tableValuesNeeded (Proxy :: Proxy table) = length (fieldAllValues (const ()) (tblFieldSettings :: TableSettings table))
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f
@@ -625,7 +625,7 @@ deriving instance Show (FieldSettings a) => Show (FieldSettings (Maybe a))
 unCamelCase :: String -> [String]
 unCamelCase "" = []
 unCamelCase s
-    | (comp@(_:_), next) <- span (not . isUpper) s =
+    | (comp@(_:_), next) <- break isUpper s =
           let next' = case next of
                         [] -> []
                         x:xs -> toLower x:xs
