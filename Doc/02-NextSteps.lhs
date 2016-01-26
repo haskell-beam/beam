@@ -1,7 +1,7 @@
 Introduction
 =======
 
-In the previous tutorial (NextSteps.lhs), we created a simple database with one table. We then used
+In the previous tutorial (01-BasicTutorial.lhs), we created a simple database with one table. We then used
 the beam interface to add entities into that table and query them. In this tutorial, we'll see how
 to update and delete rows and how to establish and query relations between tables.
 
@@ -14,7 +14,7 @@ When we last left off, we had a database with one table, `UserT`. We duplicate a
 this point from the last tutorial here.
 
 >{-# LANGUAGE StandaloneDeriving, TypeSynonymInstances, FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings #-}
-> module NextSteps where
+> module Main where
 >
 > import Database.Beam
 > import Database.Beam.Backend.Sqlite3
@@ -123,17 +123,18 @@ let's just assume the following lenses exist:
 We also have the following lenses of interest to interface with `TableField table`:
 
 < fieldName :: Lens' (TableField table ty) Text
-< fieldSettings :: Lens (TableField table a) (TableField table b) (FieldSettings a) (FieldSettings b)
+< fieldSchema :: Lens (TableField table a) (TableField table b) (FieldSchema a) (FieldSchema b)
 
-`FieldSettings a` is the type of settings beam will except for a field of type `a`. It is declared
-as an associated type family of the `FieldSchema` class. See `Database.Beam.Schema.Fields` for more
-information.
+A `FieldSchema a` is a record type that contains information on how to
+serialize and deserialize the particular column. Beam automatically
+chooses a default field schema for you using the
+`HasDefaultFieldSchema` type class.
 
-For our purposes, we need only look at the definition of `FieldSettings Text`
+For our purposes, we need only look at the `textSchema` column schema
+constructor. It takes in a sum type `CharOrVarchar` and produces the
+appropriate schema for a `Text` field.
 
-< data FieldSettings Text = TextFieldSettings
-<                         { charOrVarChar :: CharOrVarchar }
-<                           deriving Show
+< textSchema :: CharOrVarchar -> FieldSchema Text
 <
 < data CharOrVarchar = Char (Maybe Int)
 <                    | Varchar (Maybe Int)
@@ -145,8 +146,8 @@ instantiation. We can use `defTblFieldSettings` to get the automatically derived
 so that we can only override the parts we're interested in.
 
 >     tblFieldSettings = defTblFieldSettings
->                        & addressStateC . fieldSettings .~ TextFieldSettings (Char (Just 2))
->                        & addressZipC . fieldSettings .~ TextFieldSettings (Varchar (Just 5))
+>                        & addressStateC . fieldSchema .~ textSchema (Char (Just 2))
+>                        & addressZipC . fieldSchema .~ textSchema (Varchar (Just 5))
 
 This completes our `Table AddressT` instantiation.
 
@@ -208,7 +209,7 @@ open up a connection for us to use in the rest of the tutorial.
 > shoppingCartDb = autoDbSettings
 >
 > main :: IO ()
-> main = do beam <- openDatabaseDebug shoppingCartDb (Sqlite3Settings "shoppingcart2.db")
+> main = do beam <- openDatabaseDebug shoppingCartDb AutoMigrate (Sqlite3Settings "shoppingcart2.db")
 >           dumpSchema shoppingCartDb -- Just to see what it's like
 
 Before we add addresses, we need to add some users that we can reference.

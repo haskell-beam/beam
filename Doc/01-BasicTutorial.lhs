@@ -18,7 +18,7 @@ Beam makes extensive use of GHC's Generics mechanism. This extension means beam 
 rely on template haskell.
 
 >{-# LANGUAGE StandaloneDeriving, TypeSynonymInstances, FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings #-}
-> module BasicTutorial where
+> module Main where
 
 To start defining beam schemas and queries, you only need to import the `Database.Beam`.
 To interface with an actual database, you'll need to import one of the database backends.
@@ -142,14 +142,15 @@ Adding users to our database
 ========
 
 Let's add some users to our database. First, we'll open a connection to a SQLite3 database using
-beam.  The `openDatabase` function will open the database and then automatically attempt to make the
+beam.  The `openDatabase` function will open the database and optionally attempt to make the
 schema of the opened database match the schema implied by the data types. Below we use the
 `openDatabaseDebug` function to put beam into debug mode. This will cause beam to log every sql
 statement executed. `openDatabaseDebug` and `openDatabase` have the same type signature, so they can
-be used interchangeably.
+be used interchangeably. In the call below, we pass in `AutoMigrate` to have beam automatically
+attempt to match up the real database schema with what it would expect based on the Haskell types.
 
 > main :: IO ()
-> main = do beam <- openDatabaseDebug shoppingCartDb (Sqlite3Settings "shoppingcart1.db")
+> main = do beam <- openDatabaseDebug shoppingCartDb AutoMigrate (Sqlite3Settings "shoppingcart1.db")
 >
 
 To make sure that beam correctly inferred the database schema, let's dump it.
@@ -303,4 +304,4 @@ tables. We'll also use the monadic query interface to create SQL joins.
 
 Until next time! In the mean-time, feel free to send questions to travis@athougies.net.
 
-(Update) Checkout NextSteps.lhs for the next tutorial in the sequence.
+(Update) Checkout 02-NextSteps.lhs for the next tutorial in the sequence.

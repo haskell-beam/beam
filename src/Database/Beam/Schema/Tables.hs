@@ -9,25 +9,25 @@ module Database.Beam.Schema.Tables
     , autoDbSettings
     , allTableSettings
 
-    , BeamEnum(..)
-
     , SqlValue'(..)
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
     , Columnar(..), Columnar'(..)
     , Nullable(..), TableField(..)
-    , fieldName, fieldConstraints, fieldSettings
+    , fieldName, fieldConstraints, fieldSchema, maybeFieldSchema
 
     , TableSettings(..)
 
     -- * Tables
-    , Table(..), defTblFieldSettings, defFieldSettings
+    , Table(..), defTblFieldSettings
     , reifyTableSchema, tableValuesNeeded
     , pk
+    , pkAllValues, fieldAllValues, pkChangeRep, changeRep
+    , pkMakeSqlValues, makeSqlValues
 
     -- * Fields
-    , FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
+    , HasDefaultFieldSchema(..), FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
     , popSqlValue, peekSqlValue )
     where
 
@@ -36,6 +36,7 @@ import Database.Beam.SQL.Types
 import Control.Arrow
 import Control.Applicative
 import Control.Monad.State
+import Control.Monad.Writer
 import Control.Monad.Error
 import Control.Monad.Identity
 
@@ -110,9 +111,6 @@ data LensFor t x where
 newtype Exposed x = Exposed x
 newtype SqlValue' x = SqlValue' SqlValue
 
-newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
-    deriving (Show, Typeable)
-
 -- | A type family that we use to "tag" columns in our table datatypes.
 --
 --   This is what allows us to use the same table type to hold table data, describe table settings,
@@ -121,13 +119,9 @@ newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
 --   The basic rules are
 --
 -- > Columnar Identity x = x
--- > Columnar Identity (BeamEnum x) = x
 --
 --   Thus, any Beam table applied to 'Identity' will yield a simplified version of the data type, that contains
---   just what you'd expect. Enum types tagged with 'BeamEnum', are automatically unwrapped in the simplified data
---   structure.
---
--- > Columnar (Nullable c) x = Columnar c (Maybe x)
+--   just what you'd expect.
 --
 --   The 'Nullable' type is used when referencing 'PrimaryKey's that we want to include optionally.
 --   For example, if we have a table with a 'PrimaryKey', like the following
@@ -158,7 +152,6 @@ newtype BeamEnum a = BeamEnum { unBeamEnum :: a }
 type family Columnar (f :: * -> *) x where
     Columnar Exposed x = Exposed x
 
-    Columnar Identity (BeamEnum x) = x
     Columnar Identity x = x
 
     Columnar (Lenses t Identity) x = LensFor (t Identity) (Columnar Identity x)
@@ -210,16 +203,16 @@ data Nullable (c :: * -> *) x
 data TableField (table :: (* -> *) -> *) ty = TableField
                                             { _fieldName        :: Text             -- ^ The field name
                                             , _fieldConstraints :: [SQLConstraint]  -- ^ Constraints for the field (such as AutoIncrement, PrimaryKey, etc)
-                                            , _fieldSettings    :: FieldSettings ty -- ^ Settings for the field
+                                            , _fieldSchema      :: FieldSchema ty   -- ^ SQL storage informationa for the field
                                             }
-deriving instance Show (FieldSettings ty) => Show (TableField t ty)
+deriving instance Show (TableField t ty)
 
 fieldName :: Lens' (TableField table ty) Text
 fieldName f (TableField name cs s) = (\name' -> TableField name' cs s) <$> f name
 fieldConstraints :: Lens' (TableField table ty) [SQLConstraint]
 fieldConstraints f (TableField name cs s) = (\cs' -> TableField name cs' s) <$> f cs
-fieldSettings :: Lens (TableField table a) (TableField table b) (FieldSettings a) (FieldSettings b)
-fieldSettings f (TableField name cs s) = (\s' -> TableField name cs s') <$> f s
+fieldSchema :: Lens (TableField table a) (TableField table b) (FieldSchema a) (FieldSchema b)
+fieldSchema f (TableField name cs s) = (\s' -> TableField name cs s') <$> f s
 
 type TableSettings table = table (TableField table)
 
@@ -274,57 +267,24 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
     primaryKey :: table column -> PrimaryKey table column
 
-    pkChangeRep :: (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey table f -> PrimaryKey table g
-    default pkChangeRep :: ( Generic (PrimaryKey table f)
-                           , Generic (PrimaryKey table g)
-                           , Generic (PrimaryKey table Exposed)
-                           , GChangeRep (Rep (PrimaryKey table Exposed) ())
-                                        (Rep (PrimaryKey table f) ()) (Rep (PrimaryKey table g) ())
-                                        f g ) =>
-                           (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey table f -> PrimaryKey table g
-    pkChangeRep f x = to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey table Exposed) ()))
-                                      f (from' x))
-
-    changeRep :: (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> table f -> table g
-    default changeRep :: ( ChangeRep table f g ) =>
-                         (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> table f -> table g
-    changeRep (f :: forall a. FieldSchema a => Columnar' f a -> Columnar' g a) =
-        changeRep' (Proxy :: Proxy f) (Proxy :: Proxy g) (Proxy :: Proxy table) f
-
-    pkAllValues :: (forall a. FieldSchema a => Columnar' f a -> b) -> PrimaryKey table f -> [b]
-    default pkAllValues :: AllValues f (PrimaryKey table f) (PrimaryKey table Exposed) =>
-                           (forall a. FieldSchema a => Columnar' f a -> b) -> PrimaryKey table f -> [b]
-    pkAllValues = allValues' (Proxy :: Proxy (PrimaryKey table Exposed))
-
-    fieldAllValues :: (forall a. FieldSchema a => Columnar' f a -> b) -> table f -> [b]
-    default fieldAllValues :: AllValues f (table f) (table Exposed) =>
-                              (forall a. FieldSchema a => Columnar' f a -> b) -> table f -> [b]
-    fieldAllValues = allValues' (Proxy :: Proxy (table Exposed))
-
     tblFieldSettings :: TableSettings table
     default tblFieldSettings :: ( Generic (TableSettings table)
                                 , GDefaultTableFieldSettings (Rep (TableSettings table) ())) => TableSettings table
     tblFieldSettings = defTblFieldSettings
 
-    pkMakeSqlValues :: PrimaryKey table Identity -> PrimaryKey table SqlValue'
-    default pkMakeSqlValues :: ( Generic (PrimaryKey table Identity)
-                               , Generic (PrimaryKey table SqlValue')
-                               , GMakeSqlValues (Rep (PrimaryKey table Exposed) ()) (Rep (PrimaryKey table Identity) ()) (Rep (PrimaryKey table SqlValue') ())) =>
-                             PrimaryKey table Identity -> PrimaryKey table SqlValue'
-    pkMakeSqlValues table = to' (gMakeSqlValues (Proxy :: Proxy (Rep (PrimaryKey table Exposed) ())) (from' table))
+    zipTablesM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+    default zipTablesM :: ( GZipTables f g h (Rep (table Exposed)) (Rep (table f)) (Rep (table g)) (Rep (table h))
+                         , Generic (table f), Generic (table g), Generic (table h) ) =>
+                        Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+    zipTablesM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (table Exposed))) combine (from' f) (from' g)
+                                return (to' hRep)
 
-    makeSqlValues :: table Identity -> table SqlValue'
-    default makeSqlValues :: ( Generic (table Identity)
-                             , Generic (table SqlValue')
-                             , GMakeSqlValues (Rep (table Exposed) ()) (Rep (table Identity) ()) (Rep (table SqlValue') ())) =>
-                             table Identity -> table SqlValue'
-    makeSqlValues table = to' (gMakeSqlValues (Proxy :: Proxy (Rep (table Exposed) ())) (from' table))
-
-    tableFromSqlValues :: FromSqlValuesM (table Identity)
-    default tableFromSqlValues :: ( Generic (table Identity)
-                                  , GFromSqlValues (Rep (table Exposed)) (Rep (table Identity)) ) =>
-                                  FromSqlValuesM (table Identity)
-    tableFromSqlValues = to <$> gFromSqlValues (Proxy :: Proxy (Rep (table Exposed)))
+    zipPkM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
+    default zipPkM :: ( GZipTables f g h (Rep (PrimaryKey table Exposed)) (Rep (PrimaryKey table f)) (Rep (PrimaryKey table g)) (Rep (PrimaryKey table h))
+                      , Generic (PrimaryKey table f), Generic (PrimaryKey table g), Generic (PrimaryKey table h)
+                      , Monad m) => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
+    zipPkM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (PrimaryKey table Exposed))) combine (from' f) (from' g)
+                            return (to' hRep)
 
 reifyTableSchema :: Table table => Proxy table -> ReifiedTableSchema
 reifyTableSchema (Proxy :: Proxy table) = fieldAllValues (\(Columnar' (TableField name constraints settings)) ->
@@ -332,6 +292,30 @@ reifyTableSchema (Proxy :: Proxy table) = fieldAllValues (\(Columnar' (TableFiel
 
 tableValuesNeeded :: Table table => Proxy table -> Int
 tableValuesNeeded (Proxy :: Proxy table) = length (fieldAllValues (const ()) (tblFieldSettings :: TableSettings table))
+
+pkAllValues :: Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
+pkAllValues (f :: forall a. Columnar' f a -> b) (pk :: PrimaryKey table f) = execWriter (zipPkM combine pk pk)
+    where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
+          combine x _ = do tell [f x]
+                           return x
+
+fieldAllValues :: Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
+fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: table f) = execWriter (zipTablesM combine tbl tbl)
+    where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
+          combine x _ = do tell [f x]
+                           return x
+
+pkChangeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
+pkChangeRep f pk = runIdentity (zipPkM (\x _ -> return (f x))  pk pk)
+
+changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
+changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
+
+pkMakeSqlValues :: Table t => PrimaryKey t Identity -> PrimaryKey t SqlValue'
+pkMakeSqlValues pk = runIdentity (zipPkM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) pk (primaryKey tblFieldSettings))
+
+makeSqlValues :: Table t => t Identity -> t SqlValue'
+makeSqlValues tbl = runIdentity (zipTablesM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) tbl tblFieldSettings)
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f
@@ -354,97 +338,51 @@ defTblFieldSettings = withProxy $ \proxy -> to' (gDefTblFieldSettings proxy)
     where withProxy :: (Proxy (Rep (TableSettings table) ()) -> TableSettings table) -> TableSettings table
           withProxy f = f Proxy
 
-defFieldSettings :: FieldSchema fs => Text -> TableField table fs
-defFieldSettings name = TableField
-                      { _fieldName = name
-                      , _fieldConstraints = []
-                      , _fieldSettings = settings}
-    where settings = defSettings
+fieldColDesc :: FieldSchema fs -> [SQLConstraint] -> SQLColumnSchema
+fieldColDesc schema cs = let base = fsColDesc schema
+                         in base { csConstraints = csConstraints base ++ cs }
 
-fieldColDesc :: FieldSchema fs => FieldSettings fs -> [SQLConstraint] -> SQLColumnSchema
-fieldColDesc settings cs =let base = colDescFromSettings settings
-                          in base { csConstraints = csConstraints base ++ cs }
+class GZipTables f g h (exposedRep :: * -> *) fRep gRep hRep where
+    gZipTables :: Monad m => Proxy exposedRep -> (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> fRep () -> gRep () -> m (hRep ())
+instance ( GZipTables f g h exp1 f1 g1 h1
+         , GZipTables f g h exp2 f2 g2 h2) =>
+    GZipTables f g h (exp1 :*: exp2) (f1 :*: f2) (g1 :*: g2) (h1 :*: h2) where
 
-class GChangeRep (ty :: *) x y f g where
-    gChangeRep :: Proxy ty -> (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> x -> y
-instance GChangeRep (ty p) (a p) (b p) x y => GChangeRep (M1 s h ty p) (M1 s f a p) (M1 s g b p) x y where
-    gChangeRep _ f (M1 x) = M1 (gChangeRep (Proxy :: Proxy (ty p)) f x)
-instance ( GChangeRep (t1 p) (a1 p) (a2 p) x y, GChangeRep (t2 p) (b1 p) (b2 p) x y) => GChangeRep ((t1 :*: t2) p) ((a1 :*: b1) p) ((a2 :*: b2) p) x y where
-    gChangeRep _ f (a :*: b) =
-        gChangeRep (Proxy :: Proxy (t1 p)) f a :*: gChangeRep (Proxy :: Proxy (t2 p)) f b
-instance ( Generic (PrimaryKey rel x)
-         , Generic (PrimaryKey rel y)
-         , GChangeRep (Rep (PrimaryKey rel Exposed) ())
-                      (Rep (PrimaryKey rel x) ())
-                      (Rep (PrimaryKey rel y) ())
-                      x y ) =>
-    GChangeRep (K1 Generic.R (PrimaryKey rel Exposed) p) (K1 Generic.R (PrimaryKey rel x) p) (K1 Generic.R (PrimaryKey rel y) p) x y where
-    gChangeRep _ f (K1 x) =
-        K1 (to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey rel Exposed) ())) f (from' x)))
-
-instance ( xa ~ Columnar x a, ya ~ Columnar y a, FieldSchema a) =>
-         GChangeRep (K1 Generic.R (Exposed a) p) (K1 Generic.R xa p) (K1 Generic.R ya p) x y where
-
-    gChangeRep (_ :: Proxy (K1 Generic.R (Exposed a) p)) (f :: forall b. FieldSchema b => Columnar' f b -> Columnar' g b) (K1 x) =
-        let x' = Columnar' x :: Columnar' f a
-            Columnar' y' = f x' :: Columnar' g a
-        in K1 y'
-
--- instance GChangeRep (K1 Generic.R (Nullable x a) p) (K1 Generic.R (Nullable y a) p) x y where
---     gChangeRep f (K1 (Nullable x)) = K1 (Nullable (f x))
--- instance ( Generic (PrimaryKey table x)
---          , Generic (PrimaryKey table y)
---          , GChangeRep (Rep (PrimaryKey table x) ()) (Rep (PrimaryKey table y) ()) x y ) =>
---     GChangeRep (K1 Generic.R (PrimaryKey table x) p) (K1 Generic.R (PrimaryKey table y) p) x y where
---     gChangeRep f (K1 (PrimaryKey x)) = K1 (PrimaryKey (to' (gChangeRep f (from' x))))
--- instance ( Generic (PrimaryKey table (Nullable x))
---          , Generic (PrimaryKey table (Nullable y))
---          , GChangeRep (Rep (PrimaryKey table (Nullable x)) ()) (Rep (PrimaryKey table (Nullable y)) ()) x y ) =>
---     GChangeRep (K1 Generic.R (PrimaryKey table (Nullable x)) p) (K1 Generic.R (PrimaryKey table (Nullable y)) p) x y where
---     gChangeRep f (K1 (PrimaryKey x)) = K1 (PrimaryKey (to' (gChangeRep f (from' x))))
--- instance GChangeRep (Nullable f a) (Nullable g a) f g where
---     gChangeRep f (Nullable x) = Nullable (f x)
-
-class ChangeRep x f g where
-    changeRep' :: Proxy f -> Proxy g -> Proxy x -> (forall a. FieldSchema a => Columnar' f a -> Columnar' g a) -> x f -> x g
-instance ( Generic (x f)
-         , Generic (x g)
-         , Generic (x Exposed)
-         , GChangeRep (Rep (x Exposed) ()) (Rep (x f) ()) (Rep (x g) ()) f g) =>
-    ChangeRep x f g where
-    changeRep' _ _ (Proxy :: Proxy x) f x = to' (gChangeRep (Proxy :: Proxy (Rep (x Exposed) ())) f (from' x))
-
-class GAllValues (f :: * -> *) (ty :: *) x where
-    gAllValues :: Proxy ty  -> (forall a. FieldSchema a => Columnar' f a -> b) -> x -> [b]
-instance (GAllValues f (t1 x) (a x), GAllValues f (t2 x) (b x)) => GAllValues f ((t1 :*: t2) x) ((a :*: b) x) where
-    gAllValues Proxy f (a :*: b) = gAllValues (Proxy :: Proxy (t1 x)) f a ++ gAllValues (Proxy :: Proxy (t2 x)) f b
-instance (GAllValues f (ty x) (p x)) => GAllValues f (M1 s h ty x) (M1 s g p x) where
-    gAllValues Proxy f (M1 a) = gAllValues (Proxy :: Proxy (ty x)) f a
+        gZipTables _ combine (f1 :*: f2) (g1 :*: g2) =
+            do h1 <- gZipTables (Proxy :: Proxy exp1) combine f1 g1
+               h2 <- gZipTables (Proxy :: Proxy exp2) combine f2 g2
+               return (h1 :*: h2)
+instance GZipTables f g h exp fRep gRep hRep =>
+    GZipTables f g h (M1 x y exp) (M1 x y fRep) (M1 x y gRep) (M1 x y hRep) where
+        gZipTables _ combine (M1 f) (M1 g) = do h <- gZipTables (Proxy :: Proxy exp) combine f g
+                                                return (M1 h)
+instance ( fa ~ Columnar f a
+         , ga ~ Columnar g a
+         , ha ~ Columnar h a) =>
+    GZipTables f g h (K1 Generic.R (Exposed a)) (K1 Generic.R fa) (K1 Generic.R ga) (K1 Generic.R ha) where
+        gZipTables _ combine (K1 f) (K1 g) = do Columnar' h <- combine (Columnar' f :: Columnar' f a) (Columnar' g :: Columnar' g a)
+                                                return (K1 (h :: Columnar h a))
 instance ( Generic (PrimaryKey rel f)
-         , GAllValues f (Rep (PrimaryKey rel Exposed) ()) (Rep (PrimaryKey rel f) ()) ) =>
-    GAllValues f (K1 Generic.R (PrimaryKey rel Exposed) a) (K1 Generic.R (PrimaryKey rel f) a) where
-    gAllValues Proxy f (K1 x) =
-        gAllValues (Proxy :: Proxy (Rep (PrimaryKey rel Exposed) ())) f (from' x)
-instance (FieldSchema x, fx ~ Columnar f x) => GAllValues f (K1 Generic.R (Exposed x) a) (K1 Generic.R fx a) where
-    gAllValues Proxy f (K1 a) = [f (Columnar' a :: Columnar' f x)]
+         , Generic (PrimaryKey rel g)
+         , Generic (PrimaryKey rel h)
 
--- instance FieldSchema x => GAllValues f (K1 Generic.R (Nullable f x) a) where
---     gAllValues f (K1 (Nullable a)) = [f a]
--- instance ( Generic (PrimaryKey related g)
---          , GAllValues f (Rep (PrimaryKey related g) ()) ) =>
---     GAllValues f (K1 Generic.R (PrimaryKey related g) a) where
---     gAllValues f (K1 (PrimaryKey x)) = gAllValues f (from' x)
--- instance FieldSchema a => GAllValues f (f a) where
---     gAllValues f x = [f x]
+         , GZipTables f g h (Rep (PrimaryKey rel Exposed)) (Rep (PrimaryKey rel f)) (Rep (PrimaryKey rel g)) (Rep (PrimaryKey rel h))) =>
+    GZipTables f g h (K1 Generic.R (PrimaryKey rel Exposed)) (K1 Generic.R (PrimaryKey rel f)) (K1 Generic.R (PrimaryKey rel g)) (K1 Generic.R (PrimaryKey rel h)) where
+    gZipTables _ combine (K1 f) (K1 g) = do hRep <- gZipTables (Proxy :: Proxy (Rep (PrimaryKey rel Exposed))) combine (from' f) (from' g)
+                                            return (K1 (to' hRep))
 
-type AllValues f xf xExposed = ( Generic xf
-                               , Generic xExposed
-                               , GAllValues f (Rep xExposed ()) (Rep xf ()))
+instance  ( Generic (PrimaryKey rel (Nullable f))
+          , Generic (PrimaryKey rel (Nullable g))
+          , Generic (PrimaryKey rel (Nullable h))
 
-allValues' :: AllValues f xf xExposed =>
-              Proxy xExposed -> (forall a. FieldSchema a => Columnar' f a -> b) -> xf -> [b]
-allValues' (Proxy :: Proxy xExposed) f x =
-    gAllValues (Proxy :: Proxy (Rep xExposed ())) f (from' x)
+          , GZipTables f g h (Rep (PrimaryKey rel (Nullable Exposed))) (Rep (PrimaryKey rel (Nullable f))) (Rep (PrimaryKey rel (Nullable g))) (Rep (PrimaryKey rel (Nullable h)))) =>
+         GZipTables f g h
+                    (K1 Generic.R (PrimaryKey rel (Nullable Exposed)))
+                    (K1 Generic.R (PrimaryKey rel (Nullable f)))
+                    (K1 Generic.R (PrimaryKey rel (Nullable g)))
+                    (K1 Generic.R (PrimaryKey rel (Nullable h))) where
+    gZipTables _ combine (K1 f) (K1 g) = do hRep <- gZipTables (Proxy :: Proxy (Rep (PrimaryKey rel (Nullable Exposed)))) combine (from' f) (from' g)
+                                            return (K1 (to' hRep))
 
 class GDefaultTableFieldSettings x where
     gDefTblFieldSettings :: Proxy x -> x
@@ -455,10 +393,10 @@ instance GDefaultTableFieldSettings (p x) => GDefaultTableFieldSettings (C1 f p 
 instance (GDefaultTableFieldSettings (a p), GDefaultTableFieldSettings (b p)) => GDefaultTableFieldSettings ((a :*: b) p) where
     gDefTblFieldSettings (_ :: Proxy ((a :*: b) p)) = gDefTblFieldSettings (Proxy :: Proxy (a p)) :*: gDefTblFieldSettings (Proxy :: Proxy (b p))
 
-instance (Table table, FieldSchema field, Selector f ) =>
+instance (Table table, HasDefaultFieldSchema field, Selector f ) =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField table field)) p) where
     gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (TableField table field)) p)) = M1 (K1 s)
-        where s = defFieldSettings (T.pack name)
+        where s = TableField (T.pack name) [] defFieldSchema
               name = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (TableField table field)) ()))
 
 instance ( Table table, Table related
@@ -466,9 +404,9 @@ instance ( Table table, Table related
 
          , Generic (PrimaryKey related (TableField related))
          , Generic (PrimaryKey related (TableField table))
-         , GChangeRep (Rep (PrimaryKey related Exposed) ())
-                      (Rep (PrimaryKey related (TableField related)) ()) (Rep (PrimaryKey related (TableField table)) ())
-                      (TableField related) (TableField table) ) =>
+         , GZipTables (TableField related) (TableField related) (TableField table)
+                      (Rep (PrimaryKey related Exposed))
+                      (Rep (PrimaryKey related (TableField related))) (Rep (PrimaryKey related (TableField related))) (Rep (PrimaryKey related (TableField table))) ) =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (TableField table))) p) where
 
     gDefTblFieldSettings _ = M1 . K1 $ primaryKeySettings'
@@ -477,11 +415,11 @@ instance ( Table table, Table related
               primaryKeySettings = primaryKey tableSettings
 
               primaryKeySettings' :: PrimaryKey related (TableField table)
-              primaryKeySettings' = to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey related Exposed) ())) convertToForeignKeyField (from' primaryKeySettings))
+              primaryKeySettings' = to' (runIdentity (gZipTables (Proxy :: Proxy (Rep (PrimaryKey related Exposed))) convertToForeignKeyField (from' primaryKeySettings) (from' primaryKeySettings)))
 
-              convertToForeignKeyField :: Columnar' (TableField related) c -> Columnar' (TableField table) c
-              convertToForeignKeyField (Columnar' tf) =
-                  Columnar' $
+              convertToForeignKeyField :: Columnar' (TableField related) c -> Columnar' (TableField related) c -> Identity (Columnar' (TableField table) c)
+              convertToForeignKeyField (Columnar' tf) _ =
+                  pure . Columnar' $
                   tf { _fieldName = keyName <> "__" <> _fieldName tf
                      , _fieldConstraints = removeConstraints (_fieldConstraints tf) }
 
@@ -496,11 +434,16 @@ instance ( Table table, Table related
          , Generic (PrimaryKey related (TableField related))
          , Generic (PrimaryKey related (TableField table))
          , Generic (PrimaryKey related (Nullable (TableField table)))
-         , GChangeRep (Rep (PrimaryKey related Exposed) ())
-                      (Rep (PrimaryKey related (TableField table)) ()) (Rep (PrimaryKey related (Nullable (TableField table))) ())
-                      (TableField table) (Nullable (TableField table))
-         , GChangeRep (Rep (PrimaryKey related Exposed) ())
-                      (Rep (PrimaryKey related (TableField related)) ()) (Rep (PrimaryKey related (TableField table)) ()) (TableField related) (TableField table) ) =>
+         , GZipTables (TableField table) (TableField table) (Nullable (TableField table))
+                      (Rep (PrimaryKey related Exposed))
+                      (Rep (PrimaryKey related (TableField table)))
+                      (Rep (PrimaryKey related (TableField table)))
+                      (Rep (PrimaryKey related (Nullable (TableField table))))
+         , GZipTables (TableField related) (TableField related) (TableField table)
+                      (Rep (PrimaryKey related Exposed))
+                      (Rep (PrimaryKey related (TableField related)))
+                      (Rep (PrimaryKey related (TableField related)))
+                      (Rep (PrimaryKey related (TableField table)))) =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (Nullable (TableField table)))) p) where
 
     gDefTblFieldSettings _ =
@@ -509,61 +452,24 @@ instance ( Table table, Table related
               nonNullSettingsRep = from' nonNullSettings :: Rep (PrimaryKey related (TableField table)) ()
 
               settings :: PrimaryKey related (Nullable (TableField table))
-              settings = to' (gChangeRep (Proxy :: Proxy (Rep (PrimaryKey related Exposed) ())) removeNotNullConstraints nonNullSettingsRep)
+              settings = to' (runIdentity (gZipTables (Proxy :: Proxy (Rep (PrimaryKey related Exposed))) removeNotNullConstraints nonNullSettingsRep nonNullSettingsRep))
 
-              removeNotNullConstraints :: Columnar' (TableField table) ty -> Columnar' (Nullable (TableField table)) ty
-              removeNotNullConstraints (Columnar' tf) =
-                  Columnar' $
-                  tf { _fieldSettings = MaybeFieldSettings (_fieldSettings tf) }
+              removeNotNullConstraints :: Columnar' (TableField table) ty -> Columnar' (TableField table) ty -> Identity (Columnar' (Nullable (TableField table)) ty)
+              removeNotNullConstraints (Columnar' tf) _ =
+                  pure . Columnar' $
+                  tf { _fieldSchema = maybeFieldSchema (_fieldSchema tf) }
 
-class GFromSqlValues (ty :: * -> *) (schema :: * -> *) where
-    gFromSqlValues :: Proxy ty -> FromSqlValuesM (schema a)
-instance GFromSqlValues ty x => GFromSqlValues (M1 s f ty) (M1 s f x) where
-    gFromSqlValues _ = M1 <$> gFromSqlValues (Proxy :: Proxy ty)
-instance FieldSchema x => GFromSqlValues (K1 Generic.R (Exposed x)) (K1 Generic.R x) where
-    gFromSqlValues _ = K1 <$> fromSqlValue
-instance FieldSchema (BeamEnum x) => GFromSqlValues (K1 Generic.R (Exposed (BeamEnum x))) (K1 Generic.R x) where
-    gFromSqlValues _ = K1 . unBeamEnum <$> fromSqlValue
-instance (GFromSqlValues t1 a, GFromSqlValues t2 b) => GFromSqlValues (t1 :*: t2) (a :*: b) where
-    gFromSqlValues _ = (:*:) <$> gFromSqlValues (Proxy :: Proxy t1) <*> gFromSqlValues (Proxy :: Proxy t2)
-instance ( Generic (PrimaryKey related f)
-         , GFromSqlValues (Rep (PrimaryKey related Exposed)) (Rep (PrimaryKey related f)) ) =>
-    GFromSqlValues (K1 Generic.R (PrimaryKey related Exposed)) (K1 Generic.R (PrimaryKey related f)) where
+data FieldSchema ty = FieldSchema
+                    { fsColDesc :: SQLColumnSchema
+                    , fsHumanReadable :: String
+                    , fsMakeSqlValue :: ty -> SqlValue
+                    , fsFromSqlValue :: FromSqlValuesM ty }
+instance Show (FieldSchema ty) where
+    show (FieldSchema desc hr _ _) = concat ["FieldSchema (", show desc, ") (", show hr, ") _ _"]
 
-    gFromSqlValues _ = K1 . to' <$> gFromSqlValues (Proxy :: Proxy (Rep (PrimaryKey related Exposed)))
--- instance FieldSchema (Maybe x) => GFromSqlValues (K1 Generic.R (Nullable Column x)) where
---     gFromSqlValues = K1 . Nullable . Column <$> fromSqlValue
-
-class GMakeSqlValues ty x sql where
-    gMakeSqlValues :: Proxy ty -> x -> sql
-instance GMakeSqlValues (ty a) (p a) (sql a) => GMakeSqlValues (M1 s f ty a) (M1 s f p a) (M1 s f sql a) where
-    gMakeSqlValues _ (M1 x) = M1 (gMakeSqlValues (Proxy :: Proxy (ty a)) x)
-instance (GMakeSqlValues (t1 a) (f a) (sql1 a), GMakeSqlValues (t2 a) (g a) (sql2 a)) => GMakeSqlValues ((t1 :*: t2) a) ((f :*: g) a) ((sql1 :*: sql2) a) where
-    gMakeSqlValues _ (f :*: g) = gMakeSqlValues (Proxy :: Proxy (t1 a)) f :*: gMakeSqlValues (Proxy :: Proxy (t2 a)) g
-instance GMakeSqlValues (U1 x) (U1 a) (U1 sql) where
-    gMakeSqlValues _ _ = U1
-instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Exposed x) a) (K1 Generic.R x a) (K1 Generic.R (SqlValue' x) a) where
-    gMakeSqlValues _ (K1 x) = K1 (SqlValue' (makeSqlValue x))
-instance FieldSchema (BeamEnum x) => GMakeSqlValues (K1 Generic.R (Exposed (BeamEnum x)) a) (K1 Generic.R x a) (K1 Generic.R (SqlValue' (BeamEnum x)) a) where
-    gMakeSqlValues _ (K1 x) = K1 (SqlValue' (makeSqlValue (BeamEnum x)))
--- instance FieldSchema x => GMakeSqlValues (K1 Generic.R (Nullable Column x) a) where
---     gMakeSqlValues (K1 (Nullable x)) = [makeSqlValue (columnValue x)]
-instance ( Generic (PrimaryKey related f)
-         , Generic (PrimaryKey related SqlValue')
-         , GMakeSqlValues (Rep (PrimaryKey related Exposed) ()) (Rep (PrimaryKey related f) ()) (Rep (PrimaryKey related SqlValue') ()) ) =>
-    GMakeSqlValues (K1 Generic.R (PrimaryKey related Exposed) a) (K1 Generic.R (PrimaryKey related f) a) (K1 Generic.R (PrimaryKey related SqlValue') ()) where
-    gMakeSqlValues _ (K1 x) = K1 (to' (gMakeSqlValues (Proxy :: Proxy (Rep (PrimaryKey related Exposed) ())) (from' x)))
-
-class ( Show (FieldSettings fs), Typeable fs
-      , Show fs )  => FieldSchema fs where
-    data FieldSettings fs :: *
-
-    defSettings :: FieldSettings fs
-
-    colDescFromSettings :: FieldSettings fs -> SQLColumnSchema
-
-    makeSqlValue :: fs -> SqlValue
-    fromSqlValue :: FromSqlValuesM fs
+-- | Type class for types which can construct a default 'TableField' given a column name.
+class HasDefaultFieldSchema fs where
+    defFieldSchema :: FieldSchema fs
 
 type FromSqlValuesM a = ErrorT String (State [SqlValue]) a
 popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
@@ -574,13 +480,16 @@ peekSqlValue = head <$> get
 class FromSqlValues a where
     fromSqlValues' :: FromSqlValuesM a
     valuesNeeded :: Proxy a -> Int
-
-    default fromSqlValues' :: FieldSchema a => FromSqlValuesM a
-    fromSqlValues' = fromSqlValue
-    default valuesNeeded :: FieldSchema a => Proxy a -> Int
     valuesNeeded _ = 1
+
+    default fromSqlValues' :: HasDefaultFieldSchema a => FromSqlValuesM a
+    fromSqlValues' = fsFromSqlValue defFieldSchema
 instance Table tbl => FromSqlValues (tbl Identity) where
-    fromSqlValues' = tableFromSqlValues
+    fromSqlValues' = zipTablesM combine settings settings
+        where settings :: TableSettings tbl
+              settings = tblFieldSettings
+
+              combine (Columnar' tf) x = Columnar' <$> fsFromSqlValue (_fieldSchema tf)
     valuesNeeded _ = tableValuesNeeded (Proxy :: Proxy tbl)
 instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
     fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
@@ -588,37 +497,12 @@ instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
 instance (FromSqlValues a, FromSqlValues b, FromSqlValues c) => FromSqlValues (a, b, c) where
     fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
     valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
-
-instance FieldSchema Int where
-    data FieldSettings Int = IntFieldDefault
-                             deriving Show
-    defSettings = IntFieldDefault
-    colDescFromSettings _ = notNull
-                            SqlColDesc
-                            { colType = SqlNumericT
-                            , colSize = Nothing
-                            , colOctetLength = Nothing
-                            , colDecDigits = Nothing
-                            , colNullable = Nothing }
-    makeSqlValue i = SqlInteger (fromIntegral i)
-    fromSqlValue = fromSql <$> popSqlValue
-instance FromSqlValues Int
-
-instance FieldSchema a => FieldSchema (Maybe a) where
-    data FieldSettings (Maybe a) = MaybeFieldSettings (FieldSettings a)
-
-    defSettings = MaybeFieldSettings defSettings
-
-    colDescFromSettings (MaybeFieldSettings settings) = let SQLColumnSchema desc constraints = colDescFromSettings settings
-                                                        in SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
-
-    makeSqlValue Nothing = SqlNull
-    makeSqlValue (Just x) = makeSqlValue x
-    fromSqlValue = do val <- peekSqlValue
-                      case val of
-                        SqlNull -> Nothing <$ popSqlValue
-                        val -> Just <$> fromSqlValue
-deriving instance Show (FieldSettings a) => Show (FieldSettings (Maybe a))
+instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d) => FromSqlValues (a, b, c, d) where
+    fromSqlValues' = (,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
+    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d)
+instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d, FromSqlValues e) => FromSqlValues (a, b, c, d, e) where
+    fromSqlValues' = (,,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
+    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d) + valuesNeeded (Proxy :: Proxy e)
 
 -- Internal functions
 
@@ -642,3 +526,17 @@ unCamelCaseSel ('_':xs) = unCamelCaseSel xs
 unCamelCaseSel xs = case unCamelCase xs of
                       [xs] -> xs
                       _:xs -> intercalate "_" xs
+
+maybeFieldSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
+maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
+                            in FieldSchema
+                               { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
+                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
+                               , fsMakeSqlValue = \x ->
+                                                  case x of
+                                                    Nothing -> SqlNull
+                                                    Just x -> fsMakeSqlValue base x
+                               , fsFromSqlValue = do val <- peekSqlValue
+                                                     case val of
+                                                       SqlNull -> Nothing <$ popSqlValue
+                                                       val -> Just <$> fsFromSqlValue base }

@@ -22,18 +22,35 @@ import qualified GHC.Generics as Generic
 
 -- * Fields
 
-instance (Enum a, Show a, Read a, Typeable a) => FieldSchema (BeamEnum a) where
-    data FieldSettings (BeamEnum a) = EnumSettings
-                                    { maxNameSize :: Maybe Int }
-                                      deriving Show
+enumSchema :: (Enum a, Show a, Read a, Typeable a) => FieldSchema a
+enumSchema = let schema :: (Enum a, Typeable a) => FieldSchema a
+                 schema = FieldSchema
+                          { fsColDesc = fsColDesc intSchema
+                          , fsHumanReadable = "enumField"
+                          , fsMakeSqlValue = SqlInteger . fromIntegral . fromEnum
+                          , fsFromSqlValue = do val <- fromSql <$> popSqlValue
+                                                pure (toEnum val) }
+             in schema
+instance HasDefaultFieldSchema a => HasDefaultFieldSchema (Maybe a) where
+    defFieldSchema = maybeFieldSchema defFieldSchema
 
-    defSettings = EnumSettings Nothing
+-- ** Int Field
 
-    colDescFromSettings (EnumSettings nameSize) = colDescFromSettings (defSettings { charOrVarChar = Varchar nameSize })
-
-    makeSqlValue (BeamEnum x) = SqlString (show x)
-    fromSqlValue = BeamEnum . read . fromSql <$> popSqlValue
-instance (Enum a, Show a, Read a, Typeable a) => FromSqlValues (BeamEnum a)
+intSchema :: FieldSchema Int
+intSchema = FieldSchema
+          { fsColDesc = notNull
+                        SqlColDesc
+                        { colType = SqlNumericT
+                        , colSize = Nothing
+                        , colOctetLength = Nothing
+                        , colDecDigits = Nothing
+                        , colNullable = Nothing }
+          , fsHumanReadable = "intSchema"
+          , fsMakeSqlValue = SqlInteger . fromIntegral
+          , fsFromSqlValue = fromSql <$> popSqlValue }
+instance HasDefaultFieldSchema Int where
+    defFieldSchema = intSchema
+instance FromSqlValues Int
 
 -- ** Text field
 
@@ -41,47 +58,49 @@ data CharOrVarchar = Char (Maybe Int)
                    | Varchar (Maybe Int)
                      deriving Show
 
-instance FieldSchema Text where
-    -- | Settings for a text field
-    data FieldSettings Text = TextFieldSettings
-                            { charOrVarChar :: CharOrVarchar }
-                              deriving Show
+textSchema :: CharOrVarchar -> FieldSchema Text
+textSchema charOrVarchar = FieldSchema
+                           { fsColDesc = colDesc
+                           , fsHumanReadable = "textSchema (" ++ show charOrVarchar ++ ")"
+                           , fsMakeSqlValue = SqlString . unpack
+                           , fsFromSqlValue = fromSql <$> popSqlValue }
+    where colDesc = case charOrVarchar of
+                      Char n -> notNull $
+                                SqlColDesc
+                                { colType = SqlCharT
+                                , colSize = n
+                                , colOctetLength = Nothing
+                                , colDecDigits = Nothing
+                                , colNullable = Nothing }
+                      Varchar n -> notNull $
+                                   SqlColDesc
+                                   { colType = SqlVarCharT
+                                   , colSize = n
+                                   , colOctetLength = Nothing
+                                   , colDecDigits = Nothing
+                                   , colNullable = Nothing }
+defaultTextSchema :: FieldSchema Text
+defaultTextSchema = textSchema (Varchar Nothing)
 
-    defSettings = TextFieldSettings (Varchar Nothing)
-
-    colDescFromSettings (TextFieldSettings (Char n)) = notNull $
-                                                       SqlColDesc
-                                                       { colType = SqlCharT
-                                                       , colSize = n
-                                                       , colOctetLength = Nothing
-                                                       , colDecDigits = Nothing
-                                                       , colNullable = Nothing }
-    colDescFromSettings (TextFieldSettings (Varchar n)) = notNull $
-                                                          SqlColDesc
-                                                          { colType = SqlVarCharT
-                                                          , colSize = n
-                                                          , colOctetLength = Nothing
-                                                          , colDecDigits = Nothing
-                                                          , colNullable = Nothing }
-
-    makeSqlValue x = SqlString (unpack x)
-    fromSqlValue = fromSql <$> popSqlValue
+instance HasDefaultFieldSchema Text where
+    defFieldSchema = defaultTextSchema
 instance FromSqlValues Text
 
-instance FieldSchema UTCTime where
-    data FieldSettings UTCTime = DateTimeDefault
-                                 deriving Show
+dateTimeSchema :: FieldSchema UTCTime
+dateTimeSchema = FieldSchema
+                 { fsColDesc = notNull $
+                               SqlColDesc
+                               { colType = SqlUTCDateTimeT
+                               , colSize = Nothing
+                               , colOctetLength = Nothing
+                               , colDecDigits = Nothing
+                              , colNullable = Nothing }
+                 , fsHumanReadable = "dateTimeField"
+                 , fsMakeSqlValue = SqlUTCTime
+                 , fsFromSqlValue = fromSql <$> popSqlValue }
 
-    defSettings = DateTimeDefault
-    colDescFromSettings _ = notNull $
-                            SqlColDesc
-                            { colType = SqlUTCDateTimeT
-                            , colSize = Nothing
-                            , colOctetLength = Nothing
-                            , colDecDigits = Nothing
-                            , colNullable = Nothing }
-    makeSqlValue = SqlUTCTime
-    fromSqlValue = fromSql <$> popSqlValue
+instance HasDefaultFieldSchema UTCTime where
+    defFieldSchema = dateTimeSchema
 instance FromSqlValues UTCTime
 
 -- ** Auto-increment fields
@@ -90,20 +109,21 @@ data AutoId = UnassignedId
             | AssignedId !Int
               deriving (Show, Read, Eq, Ord, Generic)
 
-instance FieldSchema AutoId where
-    data FieldSettings AutoId = AutoIdDefault
-                                deriving Show
-    defSettings = AutoIdDefault
-    colDescFromSettings _ = SQLColumnSchema desc [SQLNotNull, SQLAutoIncrement]
-        where desc = SqlColDesc
-                     { colType = SqlNumericT
-                     , colSize = Nothing
-                     , colOctetLength = Nothing
-                     , colDecDigits = Nothing
-                     , colNullable = Nothing }
-
-    makeSqlValue UnassignedId = SqlNull
-    makeSqlValue (AssignedId i) = SqlInteger (fromIntegral i)
-    fromSqlValue = maybe UnassignedId AssignedId . fromSql <$> popSqlValue
-
+autoIdSchema :: FieldSchema AutoId
+autoIdSchema = FieldSchema
+               { fsColDesc = SQLColumnSchema desc [SQLNotNull, SQLAutoIncrement]
+               , fsHumanReadable = "autoIdSchema"
+               , fsMakeSqlValue = \x -> case x of
+                                          UnassignedId -> SqlNull
+                                          AssignedId i -> SqlInteger (fromIntegral i)
+               , fsFromSqlValue = maybe UnassignedId AssignedId . fromSql <$> popSqlValue }
+    where desc = SqlColDesc
+                 { colType = SqlNumericT
+                 , colSize = Nothing
+                 , colOctetLength = Nothing
+                 , colDecDigits = Nothing
+                 , colNullable = Nothing }
+instance HasDefaultFieldSchema AutoId where
+    defFieldSchema = autoIdSchema
 instance FromSqlValues AutoId
+

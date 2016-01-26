@@ -7,3 +7,6 @@ dist
 .#*
 #*
 graveyard
+*.o
+*.hi
+

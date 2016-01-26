@@ -21,6 +21,9 @@ import System.Environment
 data Position = DepartmentLead
               | Analyst
                 deriving (Show, Read, Eq, Ord, Enum)
+instance HasDefaultFieldSchema Position where
+    defFieldSchema = enumSchema
+instance FromSqlValues Position
 
 data EmployeeT f = Employee
                  { _employeeId         :: Columnar f AutoId
@@ -28,7 +31,7 @@ data EmployeeT f = Employee
                  , _employeeLastName   :: Columnar f Text
                  , _employeeGroup      :: PrimaryKey GroupT f
 
-                 , _employeePosition   :: Columnar f (BeamEnum Position) }
+                 , _employeePosition   :: Columnar f Position }
                  deriving (Generic)
 
 data DepartmentT f = Department
@@ -80,7 +83,7 @@ instance Table DepartmentT where
     primaryKey = DepartmentId . _deptId
 
     tblFieldSettings = defTblFieldSettings
-                        & deptIdC . fieldSettings .~ TextFieldSettings (Varchar (Just 32))
+                        & deptIdC . fieldSchema .~ textSchema (Varchar (Just 32))
 instance Table GroupT where
     data PrimaryKey GroupT f = GroupId (Columnar f Text) (Columnar f Text)
                              deriving Generic
@@ -119,7 +122,7 @@ employeeDb = autoDbSettings
 
 -- * main functions
 main = do [sqliteDbPath] <- getArgs
-          beam <- openDatabase employeeDb (Sqlite3Settings sqliteDbPath)
+          beam <- openDatabaseDebug employeeDb AutoMigrate (Sqlite3Settings sqliteDbPath)
 
           beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->
             do let departments = [ Department "accounting"

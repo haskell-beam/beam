@@ -13,9 +13,9 @@
 --
 --   * [Beam tutorial (part 1)](http://travis.athougies.net/posts/2016-01-21-beam-tutorial-1.html)
 --   * [Beam tutorial (part 2)](http://travis.athougies.net/posts/2016-01-22-beam-tutorial-part-2.html)
+--   * [Beam tutorial (part 3)](http://travis.athougies.net/posts/2016-01-25-beam-tutorial-part-3.html)
 module Database.Beam
-     ( module Database.Beam.SQL
-     , module Database.Beam.Query
+     ( module Database.Beam.Query
      , module Database.Beam.Schema
      , module Database.Beam.Backend
 

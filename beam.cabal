@@ -2,10 +2,10 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                beam
-version:             0.3.0.0
+version:             0.3.2.0
 synopsis:            A type-safe SQL mapper for Haskell that doesn't use Template Haskell
 description:         See the documentation on [my blog](http://travis.athougies.net/tags/beam.html) and on [GitHub](https://github.com/tathougies/beam/tree/master/Doc).
-homepage:            http://travis.athougies.net/projects/beam
+homepage:            http://travis.athougies.net/projects/beam.html
 license:             MIT
 license-file:        LICENSE
 author:              Travis Athougies
@@ -15,6 +15,8 @@ category:            Database
 build-type:          Simple
 -- extra-source-files:
 cabal-version:       >=1.18
+bug-reports:         https://github.com/tathougies/beam/issues
+
 
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
@@ -36,3 +38,8 @@ library
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable
+
+source-repository head
+  type: git
+  location: https://github.com/tathougies/beam.git
+
