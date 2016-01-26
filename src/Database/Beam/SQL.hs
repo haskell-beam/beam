@@ -205,20 +205,18 @@ ppExpr (SQLBinOpE op a b) =
 ppExpr (SQLUnOpE op a) = do aDoc <- ppExpr a
                             return (parens (text (unpack op) <+> parens aDoc))
 ppExpr (SQLIsNothingE q) = do qDoc <- ppExpr q
-                              return (qDoc <+> text "IS NULL")
+                              return (parens (qDoc <+> text "IS NULL"))
 ppExpr (SQLIsJustE q) = do qDoc <- ppExpr q
-                           return (qDoc <+> text "IS NOT NULL")
+                           return (parens (qDoc <+> text "IS NOT NULL"))
 ppExpr (SQLListE xs) = do xsDoc <- mapM ppExpr xs
                           return (parens (hsep (punctuate comma xsDoc)))
--- ppExpr (SQLCountE x) = do xDoc <- ppExpr x
---                           return (text "COUNT" <> parens xDoc)
--- ppExpr (SQLMinE x) = do xDoc <- ppExpr x
---                         return (text "MIN" <> parens xDoc)
--- ppExpr (SQLMaxE x) = do xDoc <- ppExpr x
---                         return (text "MAX" <> parens xDoc)
--- ppExpr (SQLSumE x) = do xDoc <- ppExpr x
---                         return (text "SUM" <> parens xDoc)
--- ppExpr (SQLAverageE x) = do xDoc <- ppExpr x
---                             return (text "AVERAGE" <> parens xDoc)
 ppExpr (SQLFuncE f args) = do argDocs <- mapM ppExpr args
                               return (text (unpack f) <> parens (hsep (punctuate comma argDocs)) )
+ppExpr (SQLExistsE q) = do selectDoc <- ppSel q
+                           pure (parens (text "EXISTS (" <> selectDoc <> text ")"))
+ppExpr (SQLCaseE clauses else_) = do whenClauses <- forM clauses $ \(cond, then_) ->
+                                                    do condDoc <- ppExpr cond
+                                                       thenDoc <- ppExpr then_
+                                                       pure (text "WHEN" <+> condDoc <+> text "THEN" <+> thenDoc)
+                                     elseDoc <- ppExpr else_
+                                     pure (parens (text "CASE" <+> hsep whenClauses <+> text "ELSE" <+> elseDoc <+> text "END"))

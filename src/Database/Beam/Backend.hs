@@ -22,6 +22,13 @@ import qualified Data.Map as M
 
 import Database.HDBC
 
+-- | Passed to 'openDatabase' or 'openDatabaseDebug' to specify
+--   whether you want beam to automatically attempt to make the database
+--   schema match the haskell schema.
+data MigrationStrategy = DontMigrate
+                       | AutoMigrate
+                         deriving Show
+
 instance Monoid DBSchemaComparison where
     mappend (Migration a) (Migration b) = Migration (a <> b)
     mappend _ Unknown = Unknown
@@ -95,15 +102,17 @@ autoMigrateDB db beam =
                                  migrateDB db beam actions
          Unknown -> when (beamDebug beam) (liftIO $ putStrLn "Unknown comparison")
 
-openDatabaseDebug, openDatabase :: (BeamBackend dbSettings, MonadIO m, Database db) => DatabaseSettings db -> dbSettings -> m (Beam db m)
+openDatabaseDebug, openDatabase :: (BeamBackend dbSettings, MonadIO m, Database db) => DatabaseSettings db -> MigrationStrategy -> dbSettings -> m (Beam db m)
 openDatabase = openDatabase' False
 openDatabaseDebug = openDatabase' True
 
-openDatabase' :: (BeamBackend dbSettings, MonadIO m, Database db) => Bool -> DatabaseSettings db -> dbSettings -> m (Beam db m)
-openDatabase' isDebug db dbSettings =
+openDatabase' :: (BeamBackend dbSettings, MonadIO m, Database db) => Bool -> DatabaseSettings db -> MigrationStrategy -> dbSettings -> m (Beam db m)
+openDatabase' isDebug db strat dbSettings =
   do beam <- openBeam db dbSettings
      let beam' = beam { beamDebug = isDebug }
-     autoMigrateDB db beam'
+     case strat of
+       DontMigrate -> pure ()
+       AutoMigrate -> autoMigrateDB db beam'
 
      return beam'
 

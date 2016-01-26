@@ -67,37 +67,37 @@ data SQLSelect = SQLSelect
                , selOrderBy    :: [SQLOrdering]
                , selLimit      :: Maybe Integer
                , selOffset     :: Maybe Integer }
-                 deriving Show
+                 deriving (Show, Eq, Data)
 
 data SQLFieldName = SQLFieldName Text
                   | SQLQualifiedFieldName Text Text
                     deriving (Show, Eq, Data)
 
 data SQLAliased a = SQLAliased a (Maybe Text)
-                    deriving Show
+                    deriving (Show, Eq, Data)
 
 data SQLProjection = SQLProjStar -- ^ The * from SELECT *
                    | SQLProj [SQLAliased SQLExpr]
-                     deriving Show
+                     deriving (Show, Eq, Data)
 
 data SQLSource = SQLSourceTable Text
                | SQLSourceSelect SQLSelect
-                 deriving Show
+                 deriving (Show, Eq, Data)
 
 data SQLJoinType = SQLInnerJoin
                  | SQLLeftJoin
                  | SQLRightJoin
                  | SQLOuterJoin
-                   deriving Show
+                   deriving (Show, Eq, Data)
 
 data SQLFrom = SQLFromSource (SQLAliased SQLSource)
              | SQLJoin SQLJoinType SQLFrom SQLFrom SQLExpr
-               deriving Show
+               deriving (Show, Eq, Data)
 
 data SQLGrouping = SQLGrouping
                  { sqlGroupBy :: [SQLExpr]
                  , sqlHaving  :: SQLExpr }
-                 deriving (Show)
+                 deriving (Show, Eq, Data)
 
 instance Monoid SQLGrouping where
     mappend (SQLGrouping group1 having1) (SQLGrouping group2 having2) =
@@ -109,7 +109,7 @@ instance Monoid SQLGrouping where
 
 data SQLOrdering = Asc SQLExpr
                  | Desc SQLExpr
-                   deriving Show
+                   deriving (Show, Eq, Data)
 
 data SQLExpr' f = SQLValE SqlValue
                 | SQLFieldE f
@@ -123,6 +123,10 @@ data SQLExpr' f = SQLValE SqlValue
                 | SQLListE [SQLExpr' f]
 
                 | SQLFuncE Text [SQLExpr' f]
+
+                | SQLExistsE SQLSelect
+
+                | SQLCaseE [(SQLExpr' f, SQLExpr' f)] (SQLExpr' f)
                   deriving (Show, Functor, Eq, Data)
 deriving instance Data SqlValue
 type SQLExpr = SQLExpr' SQLFieldName

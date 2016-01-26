@@ -14,21 +14,27 @@ import Control.Monad.Identity
 
 import Database.HDBC
 
+-- | Type class for any query like entity, currently `Q` and `TopLevelQ`
 class IsQuery q where
     toQ :: q db s a -> Q db s a
 
+-- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
+-- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
+-- implemented.
 newtype Q (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State QueryBuilder a}
     deriving (Monad, Applicative, Functor, MonadFix, MonadState QueryBuilder)
 
 -- | Wrapper for 'Q's that have been modified in such a way that they can no longer be joined against
---   without the use of 'subquery'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
+--   without the use of 'subquery_'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
 --   directly to 'query' or 'queryList'
 newtype TopLevelQ db s a = TopLevelQ (Q db s a)
+
+data QNested s
 
 data QueryBuilder = QueryBuilder
                   { qbNextTblRef :: Int
                   , qbFrom  :: Maybe SQLFrom
-                  , qbWhere :: QExpr Bool
+                  , qbWhere :: SQLExpr' QField
 
                   , qbLimit  :: Maybe Integer
                   , qbOffset :: Maybe Integer
@@ -43,20 +49,30 @@ data QField = QField
             , qFieldName    :: T.Text }
               deriving (Show, Eq, Ord)
 
-newtype QExpr t = QExpr (SQLExpr' QField)
+-- | The type of lifted beam expressions that will yield the haskell type `t` when run with
+-- `queryList` or `query`. In the future, this will include a thread argument meant to prevent
+-- cross-usage of expressions, but this is unimplemented for technical reasons.
+newtype QExpr s t = QExpr (SQLExpr' QField)
     deriving (Show, Eq)
+
+-- * Aggregations
+
+data Aggregation s a = GroupAgg (SQLExpr' QField)
+                     | ProjectAgg (SQLExpr' QField)
 
 -- * Sql Projections
 --
---   Here we define a typeclass for all haskell data types that can be used
---   to create a projection in a SQL select statement. This includes all tables
---   as well as all tuple classes. Projections are only defined on tuples up to
---   size 5. If you need more, follow the implementations here.
+
+-- | Typeclass for all haskell data types that can be used to create a projection in a SQL select
+-- statement. This includes all tables as well as all tuple classes. Projections are only defined on
+-- tuples up to size 5. If you need more, follow the implementations here.
 
 class Projectible a where
     project :: a -> [SQLExpr' QField]
-instance Typeable a => Projectible (QExpr a) where
+instance Typeable a => Projectible (QExpr s a) where
     project (QExpr x) = [x]
+instance Projectible () where
+    project () = [SQLValE (SqlInteger 1)]
 instance (Projectible a, Projectible b) => Projectible (a, b) where
     project (a, b) = project a ++ project b
 instance ( Projectible a
@@ -75,10 +91,12 @@ instance ( Projectible a
          , Projectible e ) => Projectible (a, b, c, d, e) where
     project (a, b, c, d, e) = project a ++ project b ++ project c ++ project d ++ project e
 
-instance Table t => Projectible (t QExpr) where
+instance Table t => Projectible (t (QExpr s)) where
+    project t = fieldAllValues (\(Columnar' (QExpr e)) -> e) t
+instance Table t => Projectible (t (Nullable (QExpr s))) where
     project t = fieldAllValues (\(Columnar' (QExpr e)) -> e) t
 
-tableVal :: Table tbl => tbl Identity -> tbl QExpr
+tableVal :: Table tbl => tbl Identity -> tbl (QExpr s)
 tableVal = changeRep valToQExpr . makeSqlValues
-    where valToQExpr :: Columnar' SqlValue' a -> Columnar' QExpr a
+    where valToQExpr :: Columnar' SqlValue' a -> Columnar' (QExpr s) a
           valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))

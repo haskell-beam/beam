@@ -35,5 +35,5 @@ getLastInsertedRow' conn tblName = do
   [res] <- liftIO (quickQuery conn (concat ["SELECT * FROM ", unpack tblName, " WHERE ROWID=(SELECT last_insert_rowid()) limit 1"]) [])
   return res
 
-(++.) :: QExpr Text -> QExpr Text -> QExpr Text
+(++.) :: QExpr s Text -> QExpr s Text -> QExpr s Text
 QExpr a ++. QExpr b = QExpr (SQLBinOpE "||" a b)

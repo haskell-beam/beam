@@ -1,8 +1,12 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query
-    ( module Database.Beam.Query.Types
+    ( -- * Query type
+      module Database.Beam.Query.Types
+
+    -- * General query combinators
     , module Database.Beam.Query.Combinators
 
+    -- * Run queries in MonadIO
     , beamTxn, insertInto, query, queryList, getOne
     , updateWhere, saveTo
     , deleteWhere, deleteFrom )
@@ -85,13 +89,14 @@ runInsert tableName (table :: table Identity) beam =
                          else return sqlValues
        return (fromSqlValues insertedValues)
 
+-- | Insert the given row value into the table specified by the first argument.
 insertInto :: (MonadIO m, Functor m, Table table, FromSqlValues (table Identity)) =>
               DatabaseTable db table -> table Identity -> BeamT e db m (table Identity)
 insertInto (DatabaseTable _ name) data_ =
     BeamT (\beam -> toBeamResult <$> runInsert name data_ beam)
 
-updateToSQL :: Table table => T.Text -> table QExpr -> QExpr Bool -> Maybe SQLUpdate
-updateToSQL tblName (setTo :: table QExpr) where_ =
+updateToSQL :: Table table => T.Text -> table (QExpr s) -> QExpr s Bool -> Maybe SQLUpdate
+updateToSQL tblName (setTo :: table (QExpr s)) where_ =
     let setExprs = fieldAllValues (\(Columnar' x) -> optimizeExpr x) setTo
         setColumns = fieldAllValues (\(Columnar' fieldS) -> _fieldName fieldS) (tblFieldSettings :: TableSettings table)
 
@@ -112,7 +117,9 @@ updateToSQL tblName (setTo :: table QExpr) where_ =
                , uAssignments = assignments
                , uWhere = where_' }
 
-updateWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl QExpr -> tbl QExpr) -> (tbl QExpr -> QExpr Bool) -> BeamT e db m ()
+-- | Update every entry in the given table where the third argument yields true, using the second
+-- argument to give the new values.
+updateWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl (QExpr s) -> tbl (QExpr s)) -> (tbl (QExpr s) -> QExpr s Bool) -> BeamT e db m ()
 updateWhere tbl@(DatabaseTable _ name :: DatabaseTable db tbl) mkAssignments mkWhere =
     do let assignments = mkAssignments tblExprs
            where_ = mkWhere tblExprs
@@ -128,12 +135,14 @@ updateWhere tbl@(DatabaseTable _ name :: DatabaseTable db tbl) mkAssignments mkW
                      do liftIO (runSQL' (beamDebug beam) conn updateCmd)
                         pure (Success ())
 
+-- | Use the 'PrimaryKey' of the given table entry to update the corresponding table row in the
+-- database.
 saveTo :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> tbl Identity -> BeamT e db m ()
 saveTo tbl (newValues :: tbl Identity) =
     updateWhere tbl (\_ -> tableVal newValues) (val_ (primaryKey newValues) `references_`)
 
-
-deleteWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl QExpr -> QExpr Bool) -> BeamT e db m ()
+-- | Delete all entries in the given table matched by the expression
+deleteWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl (QExpr s) -> QExpr s Bool) -> BeamT e db m ()
 deleteWhere (DatabaseTable _ name :: DatabaseTable db tbl) mkWhere =
     let tblExprs = changeRep (\(Columnar' fieldS) -> Columnar' (QExpr (SQLFieldE (QField name Nothing (_fieldName fieldS))))) (tblFieldSettings :: TableSettings tbl)
 
@@ -147,11 +156,15 @@ deleteWhere (DatabaseTable _ name :: DatabaseTable db tbl) mkWhere =
             do liftIO (runSQL' (beamDebug beam) conn cmd)
                pure (Success ())
 
+-- | Delete the entry referenced by the given 'PrimaryKey' in the given table.
 deleteFrom :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> PrimaryKey tbl Identity -> BeamT e db m ()
 deleteFrom tbl pkToDelete = deleteWhere tbl (\tbl -> primaryKey tbl ==. val_ pkToDelete)
 
 -- * BeamT actions
 
+-- | Run the 'BeamT' action in a database transaction. On successful
+-- completion, the transaction will be committed. Use 'throwError' to
+-- stop the transaction and report an error.
 beamTxn :: MonadIO m => Beam db m -> (DatabaseSettings db -> BeamT e db m a) -> m (BeamResult e a)
 beamTxn beam action = do res <- runBeamT (action (beamDbSettings beam)) beam
                          withHDBCConnection beam $
@@ -167,9 +180,10 @@ runQuery :: ( MonadIO m
             , FromSqlValues (QExprToIdentity a)
             , Projectible a
             , IsQuery q ) =>
-            (forall s. q db s a) -> Beam db m -> m (Either String (Source m (QExprToIdentity a)))
+            q db s a -> Beam db m -> m (Either String (Source m (QExprToIdentity a)))
 runQuery q beam =
-    do let selectCmd = Select (snd (queryToSQL' (toQ q)))
+    do let selectCmd = Select select
+           (_, _, select) = queryToSQL' (toQ q) 0
 
        res <- withHDBCConnection beam $ \conn ->
                 liftIO $ runSQL' (beamDebug beam) conn selectCmd
@@ -186,18 +200,24 @@ runQuery q beam =
                                                 Nothing -> return ()
                               return (Right source)
 
-query :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. q db s a) -> BeamT e db m (Source (BeamT e db m) (QExprToIdentity a))
+-- | Run the given query in the transaction and yield a 'Source' that can be used to read results
+-- incrementally. If your result set is small and you want to just get a list, use 'queryList'.
+query :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m (Source (BeamT e db m) (QExprToIdentity a))
 query q = BeamT $ \beam ->
           do res <- runQuery q beam
              case res of
                Right x -> return (Success (transPipe (BeamT . const . fmap Success) x))
                Left err -> return (Rollback (InternalError err))
 
-queryList :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. q db s a) -> BeamT e db m [QExprToIdentity a]
+-- | Execute 'query' and use the 'Data.Conduit.List.consume' function to return a list of
+-- results. Best used for small result sets.
+queryList :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m [QExprToIdentity a]
 queryList q = do src <- query q
                  src $$ C.consume
 
-getOne :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => (forall s. q db s a) -> BeamT e db m (Maybe (QExprToIdentity a))
+-- | Execute the query using 'query' and return exactly one result. The return value will be
+-- 'Nothing' if either zero or more than one values were returned.
+getOne :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m (Maybe (QExprToIdentity a))
 getOne q =
     do let justOneSink = await >>= \x ->
                          case x of
@@ -216,22 +236,3 @@ fromSqlValues vals =
       (Right a, []) -> Right a
       (Right _,  _) -> Left "fromSqlValues: Not all values were consumed"
       (Left err, _) -> Left err
-
--- * Generic combinators
-
--- ref :: Table t => t c -> ForeignKey t c
--- ref = ForeignKey . primaryKey
--- justRef :: Table related =>
---            related Identity -> ForeignKey related (Nullable Identity)
--- justRef (e :: related Identity) = ForeignKey (pkChangeRep (Proxy :: Proxy related) just (primaryKey e))
---     where just :: Columnar' Identity a -> Columnar' (Nullable Identity) a
---           just (Columnar' x) = Columnar' (Just (unsafeCoerce x)) -- TODO : Why is unsafecoerce necessary here?
-
--- nothingRef :: Table related =>
---               Query db (related Identity) -> ForeignKey related (Nullable Identity)
--- nothingRef (_ :: Query db (related Identity)) = ForeignKey (pkChangeRep (Proxy :: Proxy related) nothing (primaryKey fieldSettings))
---     where nothing :: Columnar' (TableField related) a -> Columnar' (Nullable Identity) a
---           nothing x = Columnar' Nothing
-
---           fieldSettings :: TableSettings related
---           fieldSettings = tblFieldSettings
