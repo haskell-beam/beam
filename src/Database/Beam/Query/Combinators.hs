@@ -396,7 +396,7 @@ desc_ e = Desc (optimizeExpr e)
 
 -- * Subqueries
 
-class Subqueryable a s where
+class Subqueryable a s | a -> s where
     type Unnested a s
     subqueryProjections :: Proxy s -> a -> RWS (Text, Int) [SQLAliased SQLExpr] Int (Unnested a s)
 instance Subqueryable (QExpr (QNested s) a) s where
@@ -510,7 +510,7 @@ instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Id
 
 -- | Type class for anything which can be checked for null-ness. This includes 'QExpr (Maybe a)' as
 -- well as 'Table's or 'PrimaryKey's over 'Nullable QExpr'.
-class SqlDeconstructMaybe a nonNullA s | a -> nonNullA where
+class SqlDeconstructMaybe a nonNullA s | a -> nonNullA, a -> s, nonNullA -> s where
     -- | Returns a 'QExpr' that evaluates to true when the first argument is not null
     isJust_ :: a -> QExpr s Bool
 
