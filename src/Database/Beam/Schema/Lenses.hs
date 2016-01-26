@@ -74,20 +74,20 @@ simpleTableLenses = tableLenses
 -- >                  { _blogPostSlug    :: Columnar f Text
 -- >                  , _blogPostBody    :: Columnar f Text
 -- >                  , _blogPostDate    :: Columnar f UTCTime
--- >                  , _blogPostAuthor  :: ForeignKey AuthorT f
+-- >                  , _blogPostAuthor  :: PrimaryKey AuthorT f
 -- >                  , _blogPostTagline :: Columnar f (Maybe Text) }
 -- >                    deriving Generic
 -- > instance Table BlogPostT where
--- >    type PrimaryKey BlogPostT f = PK f Text
--- >    primaryKey = PK . _blogPostSlug
+-- >    data PrimaryKey BlogPostT f = BlogPostId (Columnar f Text)
+-- >    primaryKey = BlogPostId . _blogPostSlug
 -- > instance Table AuthorT where
--- >    type PrimaryKey AuthorT f = PK f Text
--- >    primaryKey = PK . _authorEmail
+-- >    data PrimaryKey AuthorT f = AuthorId (Columnar f Text)
+-- >    primaryKey = AuthorId . _authorEmail
 --
 -- > BlogPost (LensFor blogPostSlug
 -- >          (LensFor blogPostBody)
 -- >          (LensFor blogPostDate)
--- >          (ForeignKey (PK (LensFor blogPostAuthorEmail)))
+-- >          (AuthorId (LensFor blogPostAuthorEmail))
 -- >          (LensFor blogPostTagLine) = tableConfigLenses
 tableConfigLenses :: ( lensType ~ Lenses t (TableField t)
                      , Generic (t lensType)

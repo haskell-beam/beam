@@ -273,7 +273,7 @@ orders. Instead of a `Just (Order ..)`, `Nothing` is returned instead.
 < (User {_userEmail = "sam@example.com", _userFirstName = "Sam", _userLastName = "Taylor", _userPassword = "332532dcfaa1cbf61e2a266bd723612c"},Nothing)
 
 Next, perhaps our marketing team wanted to send e-mails out to all users with no orders. We can use
-`isNothing_` or `isJust_` to determine the status if a nullable table or `QExpr (Maybe x)`. The
+`isNothing_` or `isJust_` to determine the status if a nullable table or `QExpr s (Maybe x)`. The
 following query uses `isNothing_` to find users who have no associated orders.
 
 >           putStrLn "All users without any orders, using WHERE"
@@ -340,7 +340,7 @@ into our query with a left join. `maybe_` is to `QExpr` what `maybe` is to norma
 values. `maybe_` is polymorphic to either `QExpr`s or full on tables of `QExpr`s. For our purposes,
 the type of `maybe_` is
 
-< maybe_ :: QExpr a -> (QExpr b -> QExpr a) -> QExpr (Maybe b) -> QExpr a
+< maybe_ :: QExpr s a -> (QExpr s b -> QExpr s a) -> QExpr s (Maybe b) -> QExpr s a
 
 With that in mind, we can write the query to get the total spent by user
 
@@ -417,7 +417,7 @@ Uh-oh! There's an error in the result set!
 < ----
 
 Here we hit one of the limitations of beam's mapping to SQL, and really one of the limitations of
-SQL itself. Notice that the type of `shippingInfoId` in the aggregate expression is `QExpr (Maybe
+SQL itself. Notice that the type of `shippingInfoId` in the aggregate expression is `QExpr s (Maybe
 (Maybe Int))` because based on the Haskell query we constructed, `shippingInfoId` could be nullable
 at two levels: either it's null in the order, or it's null because the entire order is nothing. SQL
 makes no distinction between these two values, since they're both returned as `NULL`. When beam

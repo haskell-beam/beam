@@ -193,8 +193,8 @@ data Nullable (c :: * -> *) x
 -- > Employee (LensFor employeeIdC) (LensFor employeeDepartmentC) (LensFor employeeFirstNameC) (LensFor employeeLastNameC) = tableConfigLenses
 -- >
 -- > instance Table EmployeeT where
--- >    type PrimaryKey EmployeeT f = PK f AutoId
--- >    primaryKey = PK . _beamEmployeeId
+-- >    data PrimaryKey EmployeeT f = EmployeeId (Columnar f AutoId)
+-- >    primaryKey = EmployeeId . _beamEmployeeId
 -- >
 -- >    tblFieldSettings = defTblFieldSettings
 -- >                     & employeeFirstNameC . fieldName .~ "fname"
@@ -247,8 +247,8 @@ to' = to
 -- >                  , _blogPostImageGallery :: PrimaryKey ImageGalleryT (Nullable f) }
 -- >                    deriving Generic
 -- > instance Table BlogPostT where
--- >    type PrimaryKey BlogPostT f = PK f Text
--- >    primaryKey = PK . _blogPostSlug
+-- >    data PrimaryKey BlogPostT f = BlogPostId (Columnar f Text)
+-- >    primaryKey = BlogPostId . _blogPostSlug
 --
 --   We can interpret this as follows:
 --

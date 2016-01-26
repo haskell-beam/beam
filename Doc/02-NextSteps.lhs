@@ -323,8 +323,8 @@ You'll get output like the following
 < ----
 
 Just like with lists we can also use a construct similar to guard to ensure that we only retrieve
-users and addresses that are related. The `guard_` function takes in expression of type `QExpr Bool`
-which represents a SQL expression that returns a boolean. `QExpr Bool`s support all the common
+users and addresses that are related. The `guard_` function takes in expression of type `QExpr s Bool`
+which represents a SQL expression that returns a boolean. `QExpr s Bool`s support all the common
 operators we have on regular `Bool`, except they're suffixed with a `.`. For example, where you'd
 use `(&&)` on two Haskell-level `Bool`s, we'd use `(&&.)` on `QExpr`-level bools.
 
@@ -420,9 +420,13 @@ There are four functions that we're interested in: `save`, `updateWhere`, `delet
 `deleteWhere`. Let's look at their type signatures to see how they work.
 
 < save :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> tbl Identity -> BeamT db m ()
-< updateWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl QExpr -> tbl SetExpr) -> (tbl QExpr -> QExpr Bool) -> BeamT db m ()
+< updateWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl (QExpr s) -> tbl SetExpr) -> (tbl (QExpr s) -> QExpr s Bool) -> BeamT db m ()
 < deleteFrom :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> tbl Identity -> BeamT db m ()
-< deleteWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl QExpr -> QExpr Bool) -> BeamT db m ()
+< deleteWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl (QExpr s) -> QExpr s Bool) -> BeamT db m ()
+
+Note that in the declarations above `QExpr` is the type of all expressions allowed in SQL, and the
+`s` parameter is a threading parameter that prevents `QExpr`s from being used in inappropriate
+contexts, similar to how the `s` in `ST s` allows you to use mutable data in a pure fashion.
 
 Updates
 -------
