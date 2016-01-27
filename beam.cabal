@@ -4,7 +4,7 @@
 name:                beam
 version:             0.3.2.0
 synopsis:            A type-safe SQL mapper for Haskell that doesn't use Template Haskell
-description:         See the documentation on [my blog](http://travis.athougies.net/tags/beam.html) and on [GitHub](https://github.com/tathougies/beam/tree/master/Doc).
+description:         See the documentation on <http://travis.athougies.net/tags/beam.html my blog> and on <https://github.com/tathougies/beam/tree/master/Doc GitHub>.
 homepage:            http://travis.athougies.net/projects/beam.html
 license:             MIT
 license-file:        LICENSE
