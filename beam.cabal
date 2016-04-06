@@ -46,7 +46,7 @@ test-suite spec
   hs-source-dirs:     test
   main-is:            Spec.hs
   build-depends:      base >=4.7 && <4.9, text, beam, hspec, QuickCheck
-  extensions: StandaloneDeriving, TypeSynonymInstances,FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings
+  extensions:         StandaloneDeriving, TypeSynonymInstances,FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings
 
 source-repository head
   type: git
