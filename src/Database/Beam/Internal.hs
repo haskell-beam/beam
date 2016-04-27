@@ -1,49 +1,68 @@
 module Database.Beam.Internal where
 
 
-import Database.Beam.Schema.Tables
-import Database.Beam.SQL.Types
+import {-# SOURCE #-} Database.Beam.Schema.Tables
+import {-# SOURCE #-} Database.Beam.SQL.Types
 
 import Control.Applicative
 import Control.Monad
 import Control.Arrow
 import Control.Monad.Error
 import Control.Monad.Reader
+import Control.Monad.Identity
 
 import Data.Text (Text, unpack)
+import Data.Time
 import Data.Proxy
 import Data.String
 import Data.Typeable
+import Data.Data
 
 import Database.HDBC
 
-data DBSchemaComparison = Migration [MigrationAction]
-                        | Unknown
-                          deriving Show
+data DBSchemaComparison be = Migration [MigrationAction be]
+                           | Unknown
 
-data MigrationAction where
-    MACreateTable :: Table table => Text -> Proxy table -> MigrationAction
+data MigrationAction be where
+    MACreateTable :: Table table => Text -> TableSettings be table -> MigrationAction be
 
-instance Show MigrationAction where
-    show (MACreateTable name t) = concat ["MACreateTable ", unpack name , " ", "(Proxy :: ", show (typeOf t), ")"]
+data BeamValue = BeamInteger Integer
+               | BeamString String
+               | BeamUTCTime UTCTime
+               | BeamNull
+                 deriving (Show, Eq, Ord)
 
-class BeamBackend backendSettings where
-    openBeam :: (MonadIO m, Database d) => DatabaseSettings d -> backendSettings -> m (Beam d m)
+class (Eq (BeamBackendValue be), Data (BeamBackendValue be), Show (BeamBackendValue be), Data be) => BeamBackend be where
+    data BeamBackendValue be :: *
 
-data Beam d m = Beam
-              { beamDbSettings :: DatabaseSettings d
-              , beamDebug :: Bool
+    openBeam :: (MonadIO m, Database d) => DatabaseSettings be d -> be -> m (Beam be d m)
 
-              , closeBeam :: m ()
+    sqlNull :: BeamBackendValue be
+    sqlInteger :: Integer -> BeamBackendValue be
+    sqlString :: String -> BeamBackendValue be
+    sqlUTCTime :: UTCTime -> BeamBackendValue be
+    sqlBool :: Bool -> BeamBackendValue be
 
-              , compareSchemas :: ReifiedDatabaseSchema -> DatabaseSettings d -> DBSchemaComparison
-              , adjustColDescForBackend :: SQLColumnSchema -> SQLColumnSchema
+    fromBackendValue :: BeamBackendValue be -> Maybe BeamValue
+    backendAsBool :: BeamBackendValue be -> Bool
 
-              , getLastInsertedRow :: Text -> m [SqlValue]
+data Beam be d m = Beam
+                 { beamDbSettings :: DatabaseSettings be d
+                 , beamDebug :: Bool
 
-              , withHDBCConnection :: forall a. (forall conn. IConnection conn => conn -> m a) -> m a }
+                 , closeBeam :: m ()
 
-newtype BeamT e d m a = BeamT { runBeamT :: Beam d m -> m (BeamResult e a) }
+                 , compareSchemas :: ReifiedDatabaseSchema -> DatabaseSettings be d -> DBSchemaComparison be
+                 , adjustColDescForBackend :: SQLColumnSchema -> SQLColumnSchema
+
+                 , getLastInsertedRow :: Text -> m [BeamBackendValue be]
+
+                 , beamExecute :: String -> [BeamBackendValue be] -> m (Either String (IO (Maybe [BeamBackendValue be])))
+                 , beamDescribeDatabase :: m ReifiedDatabaseSchema
+                 , beamCommit :: m ()
+                 , beamRollback :: m () }
+
+newtype BeamT be e d m a = BeamT { runBeamT :: Beam be d m -> m (BeamResult e a) }
 
 data BeamResult e a = Success a
                     | Rollback (BeamRollbackReason e)
@@ -56,13 +75,12 @@ instance Error (BeamRollbackReason e) where
     strMsg = InternalError
 
 
-transBeam :: Functor m => (forall a. (s -> m (a, Maybe b)) -> n a) -> (forall a. n a -> s -> m (a, b)) -> Beam d m -> Beam d n
-transBeam lift lower beam = beam
-                          { closeBeam = lift (const ((,Nothing) <$> closeBeam beam))
-                          , getLastInsertedRow = \s -> lift (const ((, Nothing) <$> getLastInsertedRow beam s))
-                          , withHDBCConnection = \f -> lift (\s -> second Just <$> withHDBCConnection beam (flip lower s . f)) }
+-- transBeam :: Functor m => (forall a. (s -> m (a, Maybe b)) -> n a) -> (forall a. n a -> s -> m (a, b)) -> Beam be d m -> Beam be d n
+-- transBeam lift lower beam = beam
+--                           { closeBeam = lift (const ((,Nothing) <$> closeBeam beam))
+--                           , getLastInsertedRow = \s -> lift (const ((, Nothing) <$> getLastInsertedRow beam s)) }
 
-instance Monad m => Monad (BeamT e d m) where
+instance Monad m => Monad (BeamT be e d m) where
     a >>= mkB = BeamT $ \beam ->
                 do x <- runBeamT a beam
                    case x of
@@ -70,17 +88,17 @@ instance Monad m => Monad (BeamT e d m) where
                      Rollback e -> return (Rollback e)
     return = BeamT . const . return . Success
 
-instance Monad m => Functor (BeamT e d m) where
+instance Monad m => Functor (BeamT be e d m) where
     fmap  = liftM
 
-instance Monad m => Applicative (BeamT e d m) where
+instance Monad m => Applicative (BeamT be e d m) where
     pure  = return
     (<*>) = ap
 
-instance MonadIO m => MonadIO (BeamT e d m) where
+instance MonadIO m => MonadIO (BeamT be e d m) where
     liftIO = lift . liftIO
 
-instance MonadTrans (BeamT e d) where
+instance MonadTrans (BeamT be e d) where
     lift x = BeamT $ \_ ->
              do res <- x
                 return (Success res)

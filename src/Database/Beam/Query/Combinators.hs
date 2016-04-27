@@ -28,6 +28,7 @@ module Database.Beam.Query.Combinators
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Types
 
+import Database.Beam.Internal
 import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Fields
 import Database.Beam.SQL
@@ -41,14 +42,15 @@ import Data.Monoid
 import Data.String
 import Data.Maybe
 import Data.Proxy
-import Data.Convertible
 import Data.Text (Text)
 import Data.Coerce
 
-instance IsString (QExpr s Text) where
-    fromString = QExpr . SQLValE . SqlString
-instance (Num a, Convertible a SqlValue) => Num (QExpr s a) where
-    fromInteger x = let res :: QExpr s a
+import GHC.Generics
+
+instance BeamBackend be => IsString (QExpr be s Text) where
+    fromString = QExpr . SQLValE . sqlString
+instance (Num a, BeamBackend be, SqlValable (QExpr be s a)) => Num (QExpr be s a) where
+    fromInteger x = let res :: QExpr be s a
                         res = val_ (fromInteger x)
                     in res
     QExpr a + QExpr b = QExpr (SQLBinOpE "+" a b)
@@ -57,10 +59,10 @@ instance (Num a, Convertible a SqlValue) => Num (QExpr s a) where
     negate (QExpr a) = QExpr (SQLUnOpE "-" a)
     abs (QExpr x) = QExpr (SQLFuncE "ABS" [x])
     signum x = error "signum: not defined for QExpr. Use CASE...WHEN"
-instance IsString (Aggregation s Text) where
-    fromString = ProjectAgg . SQLValE . SqlString
-instance (Num a, Convertible a SqlValue) => Num (Aggregation s a) where
-    fromInteger x = ProjectAgg (SQLValE (convert (fromInteger x :: a)))
+instance BeamBackend be => IsString (Aggregation be s Text) where
+    fromString = ProjectAgg . SQLValE . sqlString
+instance (Num a, BeamBackend be ) => Num (Aggregation be s a) where
+    fromInteger x = ProjectAgg (SQLValE (sqlInteger x))
     ProjectAgg a + ProjectAgg b = ProjectAgg (SQLBinOpE "+" a b)
     ProjectAgg a - ProjectAgg b = ProjectAgg (SQLBinOpE "-" a b)
     ProjectAgg a * ProjectAgg b = ProjectAgg (SQLBinOpE "*" a b)
@@ -69,12 +71,13 @@ instance (Num a, Convertible a SqlValue) => Num (Aggregation s a) where
     signum x = error "signum: not defined for Aggregation. Use CASE...WHEN"
 
 -- | Introduce all entries of a table into the 'Q' monad
-all_ :: Database db => DatabaseTable db table -> Q db s (table (QExpr s))
-all_ tbl = join_ tbl (val_ True)
+all_ :: ( Database db, BeamBackend be, Table table )
+       => DatabaseTable be db table -> Q be db s (table (QExpr be s))
+all_ tbl = join_ tbl (QExpr (SQLValE (sqlBool True)))
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given SQLExpr
-join_ :: Database db => DatabaseTable db table -> QExpr s Bool -> Q db s (table (QExpr s))
-join_ (DatabaseTable table name :: DatabaseTable db table) (QExpr on) =
+join_ :: ( Database db, BeamBackend be, Table table ) => DatabaseTable be db table -> QExpr be s Bool -> Q be db s (table (QExpr be s))
+join_ (DatabaseTable table name tableSettings :: DatabaseTable be db table) (QExpr on) =
     do curTbl <- gets qbNextTblRef
        modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
                                  , qbFrom = from
@@ -88,18 +91,16 @@ join_ (DatabaseTable table name :: DatabaseTable db table) (QExpr on) =
                  , qbFrom = from'
                  , qbWhere = where' }
 
-       let tableSettings :: TableSettings table
-           tableSettings = tblFieldSettings
-
-           mkScopedField :: Columnar' (TableField table) a -> Columnar' (QExpr s) a
+       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (QExpr be s) a
            mkScopedField (Columnar' f) = Columnar' (QExpr (SQLFieldE (QField name (Just curTbl) (_fieldName f))))
-       pure (changeRep mkScopedField tableSettings)
+       pure (changeBeamRep mkScopedField tableSettings)
 
 -- | Introduce a table using a left join. Because this is not an inner join, the resulting table is
 -- made nullable. This means that each field that would normally have type 'QExpr x' will now have
 -- type 'QExpr (Maybe x)'.
-leftJoin_ :: Database db => DatabaseTable db table -> QExpr s Bool -> Q db s (table (Nullable (QExpr s)))
-leftJoin_ (DatabaseTable table name :: DatabaseTable db table) on =
+leftJoin_ :: ( BeamBackend be, Database db, Table table )
+            => DatabaseTable be db table -> QExpr be s Bool -> Q be db s (table (Nullable (QExpr be s)))
+leftJoin_ (DatabaseTable table name tableSettings :: DatabaseTable be db table) on =
     do curTbl <- gets qbNextTblRef
        modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
                                  , qbFrom = from } ->
@@ -110,52 +111,53 @@ leftJoin_ (DatabaseTable table name :: DatabaseTable db table) on =
                 in qb { qbNextTblRef = curTbl + 1
                       , qbFrom = Just from' }
 
-       let tableSettings :: TableSettings table
-           tableSettings = tblFieldSettings
-
-           mkScopedField :: Columnar' (TableField table) a -> Columnar' (Nullable (QExpr s)) a
+       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (Nullable (QExpr be s)) a
            mkScopedField (Columnar' f) = Columnar' (QExpr (SQLFieldE (QField name (Just curTbl) (_fieldName f))))
-       pure (changeRep mkScopedField tableSettings)
+       pure (changeBeamRep mkScopedField tableSettings)
 
 -- | Only allow results for which the 'QExpr' yields 'True'
-guard_ :: QExpr s Bool -> Q db s ()
+guard_ :: QExpr be s Bool -> Q be db s ()
 guard_ (QExpr guardE') = modify $ \qb@QueryBuilder { qbWhere = guardE } -> qb { qbWhere = SQLBinOpE "AND" guardE guardE' }
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
-related_ :: (Database db, Table rel) => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
-related_ (relTbl :: DatabaseTable db rel) pk =
+related_ :: ( BeamBackend be, Database db, Table rel )
+            => DatabaseTable be db rel -> PrimaryKey rel (QExpr be s) -> Q be db s (rel (QExpr be s))
+related_ (relTbl :: DatabaseTable be db rel) pk =
     mdo rel <- join_ relTbl (pk ==. primaryKey rel)
         pure rel
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
-relatedBy_ :: (Database db, Table rel) => DatabaseTable db rel -> (rel (QExpr s) -> QExpr s Bool) -> Q db s (rel (QExpr s))
-relatedBy_ (relTbl :: DatabaseTable db rel) mkOn =
+relatedBy_ :: ( Database db, Table rel, BeamBackend be )
+             => DatabaseTable be db rel -> (rel (QExpr be s) -> QExpr be s Bool) -> Q be db s (rel (QExpr be s))
+relatedBy_ (relTbl :: DatabaseTable be db rel) mkOn =
     mdo rel <- join_ relTbl (mkOn rel)
         pure rel
 
 -- | Introduce related entries of the given table, or if no related entries exist, introduce the null table
-perhapsAll_ :: (Database db, Table rel) => DatabaseTable db rel -> (rel (Nullable (QExpr s)) -> QExpr s Bool) -> Q db s (rel (Nullable (QExpr s)))
+perhapsAll_ :: ( Database db, Table rel, BeamBackend be )
+              => DatabaseTable be db rel -> (rel (Nullable (QExpr be s)) -> QExpr be s Bool) -> Q be db s (rel (Nullable (QExpr be s)))
 perhapsAll_ relTbl expr =
     mdo rel <- leftJoin_ relTbl (expr rel)
         pure rel
 
 -- | Synonym for 'related_'
-lookup_ :: (Database db, Table rel) => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
+lookup_ :: ( Database db, Table rel, BeamBackend be )
+           => DatabaseTable be db rel -> PrimaryKey rel (QExpr be s) -> Q be db s (rel (QExpr be s))
 lookup_ = related_
 
-class SqlReferences f s where
+class BeamBackend be => SqlReferences be f s | f -> be where
     -- | Check that the 'PrimaryKey' given matches the table. Polymorphic so it works over both
     -- regular tables and those that have been made nullable by 'leftJoin_'.
-    references_ :: Table tbl => PrimaryKey tbl f -> tbl f -> QExpr s Bool
-instance SqlReferences (QExpr s) s where
-    references_ pk (tbl :: tbl (QExpr s)) = pk ==. primaryKey tbl
-instance SqlReferences (Nullable (QExpr s)) s where
-    references_ pk (tbl :: tbl (Nullable (QExpr s))) = pk ==. primaryKey tbl
+    references_ :: Table tbl => PrimaryKey tbl f -> tbl f -> QExpr be s Bool
+instance BeamBackend be => SqlReferences be (QExpr be s) s where
+    references_ pk (tbl :: tbl (QExpr be s)) = pk ==. primaryKey tbl
+instance BeamBackend be => SqlReferences be (Nullable (QExpr be s)) s where
+    references_ pk (tbl :: tbl (Nullable (QExpr be s))) = pk ==. primaryKey tbl
 
 -- | Limit the number of results returned by a query.
 --
 --   The resulting query is a top-level one that must be passed to 'query', 'queryList', or 'subquery_'. See 'TopLevelQ' for details.
-limit_ :: IsQuery q => Integer -> q db s a -> TopLevelQ db s a
+limit_ :: IsQuery q => Integer -> q be db s a -> TopLevelQ be db s a
 limit_ limit' q =
     TopLevelQ $
     do res <- toQ q
@@ -169,7 +171,7 @@ limit_ limit' q =
 -- | Drop the first `offset'` results.
 --
 --   The resulting query is a top-level one that must be passed to 'query', 'queryList', or 'subquery_'. See 'TopLevelQ' for details.
-offset_ :: IsQuery q => Integer -> q db s a -> TopLevelQ db s a
+offset_ :: IsQuery q => Integer -> q be db s a -> TopLevelQ be db s a
 offset_ offset' q =
     TopLevelQ $
     do res <- toQ q
@@ -181,45 +183,46 @@ offset_ offset' q =
        pure res
 
 -- | Use the SQL exists operator to determine if the given query returns any results
-exists_ :: (IsQuery q, Projectible a) => q db s a -> QExpr s Bool
+exists_ :: (IsQuery q, Projectible be a) => q be db s a -> QExpr be s Bool
 exists_ q = let (_, _, selectCmd) = queryToSQL' (toQ q) 0
             in QExpr (SQLExistsE selectCmd)
 
 -- ** Combinators for boolean expressions
 
-class SqlOrd a s where
-    (==.), (/=.) :: a -> a -> QExpr s Bool
+class SqlOrd be a s | a -> be where
+    (==.), (/=.) :: a -> a -> QExpr be s Bool
     a /=. b = not_ (a ==. b)
 
-instance SqlOrd (QExpr s a) s where
+instance SqlOrd be (QExpr be s a) s where
     (==.) = binOpE "=="
     (/=.) = binOpE "<>"
 
-newtype QExprBool s a = QExprBool (QExpr s Bool)
+newtype QExprBool be s a = QExprBool (QExpr be s Bool)
 
-instance {-# OVERLAPPING #-} Table tbl => SqlOrd (PrimaryKey tbl (QExpr s)) s where
-    a ==. b = let pkCmp = runIdentity (zipPkM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: PrimaryKey tbl (QExprBool s)
-              in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool x)) -> x) pkCmp)
-instance {-# OVERLAPPING #-} Table tbl => SqlOrd (tbl (QExpr s)) s where
-    a ==. b = let tblCmp = runIdentity (zipTablesM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: tbl (QExprBool s)
-              in foldr (&&.) (val_ True) (fieldAllValues (\(Columnar' (QExprBool x)) -> x) tblCmp)
+-- instance {-# OVERLAPPING #-} (BeamBackend be, Table tbl) => SqlOrd be (PrimaryKey tbl (QExpr be s)) s where
+--     a ==. b = let pkCmp = runIdentity (zipPkM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: PrimaryKey tbl (QExprBool be s)
+--               in foldr (&&.)  (QExpr (SQLValE (sqlBool True))) (pkAllValues (\(Columnar' (QExprBool x)) -> x) pkCmp)
+instance ( BeamBackend be, Beamable tbl ) => SqlOrd be (tbl (QExpr be s)) s where
+    a ==. b = let tblCmp = runIdentity (zipBeamFieldsM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: tbl (QExprBool be s)
+              in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool x)) -> x) tblCmp)
 
-instance {-# OVERLAPPING #-} Table tbl => SqlOrd (PrimaryKey tbl (Nullable (QExpr s))) s where
-    a ==. b = let pkCmp = runIdentity (zipPkM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: PrimaryKey tbl (QExprBool s)
-              in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool x)) -> x) pkCmp)
-instance {-# OVERLAPPING #-} Table tbl => SqlOrd (tbl (Nullable (QExpr s))) s where
-    a ==. b = let tblCmp = runIdentity (zipTablesM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: tbl (QExprBool s)
-              in foldr (&&.) (val_ True) (fieldAllValues (\(Columnar' (QExprBool x)) -> x) tblCmp)
+-- instance {-# OVERLAPPING #-} (BeamBackend be, Table tbl) => SqlOrd be (PrimaryKey tbl (Nullable (QExpr be s))) s where
+--     a ==. b = let pkCmp = runIdentity (zipPkM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: PrimaryKey tbl (QExprBool be s)
+--               in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (pkAllValues (\(Columnar' (QExprBool x)) -> x) pkCmp)
+instance ( BeamBackend be, Beamable tbl)
+    => SqlOrd be (tbl (Nullable (QExpr be s))) s where
+    a ==. b = let tblCmp = runIdentity (zipBeamFieldsM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: tbl (QExprBool be s)
+              in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool x)) -> x) tblCmp)
 
 binOpE op (QExpr a) (QExpr b) = QExpr (SQLBinOpE op a b)
 
-(<.), (>.), (<=.), (>=.) :: QExpr s a -> QExpr s a -> QExpr s Bool
+(<.), (>.), (<=.), (>=.) :: QExpr be s a -> QExpr be s a -> QExpr be s Bool
 (<.) = binOpE "<"
 (>.) = binOpE ">"
 (<=.) = binOpE "<="
 (>=.) = binOpE ">="
 
-(&&.), (||.) :: QExpr s Bool -> QExpr s Bool -> QExpr s Bool
+(&&.), (||.) :: QExpr be s Bool -> QExpr be s Bool -> QExpr be s Bool
 (&&.) = binOpE "AND"
 (||.) = binOpE "OR"
 
@@ -227,74 +230,77 @@ infixr 3 &&.
 infixr 2 ||.
 infix 4 ==., /=.
 
-not_ :: QExpr s Bool -> QExpr s Bool
+not_ :: QExpr be s Bool -> QExpr be s Bool
 not_ (QExpr a) = QExpr (SQLUnOpE "NOT" a)
 
-mod_, div_ :: Integral a => QExpr s a -> QExpr s a -> QExpr s a
+mod_, div_ :: Integral a => QExpr be s a -> QExpr be s a -> QExpr be s a
 div_ = binOpE "/"
 mod_ = binOpE "%"
 
 -- * Marshalling between Haskell literals and QExprs
 
 type family HaskellLiteralForQExpr x
-type instance HaskellLiteralForQExpr (QExpr s a) = a
-type instance HaskellLiteralForQExpr (table (QExpr s)) = table Identity
+type instance HaskellLiteralForQExpr (QExpr be s a) = a
+type instance HaskellLiteralForQExpr (table (QExpr be s)) = table Identity
 
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
-instance Convertible a SqlValue => SqlValable (QExpr s a) where
-    val_ = QExpr . SQLValE . convert
 
--- NOTE: This shouldn't cause problems because both overlapping instances are in the same module.
---       GHC should prefer the PrimaryKey one for primary keys and the table one for everything else.
---       AFAICT, PrimaryKey tbl QExpr ~ tbl QExpr is impossible
-instance {-# OVERLAPPING #-} Table tbl => SqlValable (PrimaryKey tbl (QExpr s)) where
-    val_ = pkChangeRep valToQExpr . pkMakeSqlValues
-        where valToQExpr :: Columnar' SqlValue' a -> Columnar' (QExpr s) a
-              valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))
-instance {-# OVERLAPPING #-} Table tbl => SqlValable (tbl (QExpr s)) where
-    val_ = changeRep valToQExpr . makeSqlValues
-        where valToQExpr :: Columnar' SqlValue' a -> Columnar' (QExpr s) a
+-- -- NOTE: This shouldn't cause problems because both overlapping instances are in the same module.
+-- --       GHC should prefer the PrimaryKey one for primary keys and the table one for everything else.
+-- --       AFAICT, PrimaryKey tbl QExpr ~ tbl QExpr is impossible
+-- instance {-# INCOHERENT #-} ( Table tbl
+--                              , MakeSqlValues be (PrimaryKey tbl) )
+--     => SqlValable (PrimaryKey tbl (QExpr be s)) where
+
+--     val_ = changeBeamRep valToQExpr . makeSqlValues (Proxy :: Proxy be)
+--         where valToQExpr :: Columnar' (SqlValue' be) a -> Columnar' (QExpr be s) a
+--               valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))
+instance ( MakeSqlValues be tbl, Beamable tbl )
+    => SqlValable (tbl (QExpr be s)) where
+
+    val_ = changeBeamRep valToQExpr . makeSqlValues
+        where valToQExpr :: Columnar' (SqlValue' be) a -> Columnar' (QExpr be s) a
               valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))
 
 -- * Aggregators
 
-class Aggregating agg s | agg -> s where
+class BeamBackend be => Aggregating be agg s | agg -> s, agg -> be where
     type LiftAggregationsToQExpr agg s
 
-    aggToSql :: Proxy s -> agg -> SQLGrouping
+    aggToSql :: Proxy s -> agg -> SQLGrouping be
     liftAggToQExpr :: Proxy s -> agg -> LiftAggregationsToQExpr agg s
-instance Table t => Aggregating (t (Aggregation s)) s where
-    type LiftAggregationsToQExpr (t (Aggregation s)) s = t (QExpr s)
-    aggToSql s table = mconcat (fieldAllValues (\(Columnar' x) -> aggToSql s x) table)
-    liftAggToQExpr s = changeRep (\(Columnar' x) -> Columnar' (liftAggToQExpr s x))
-instance Aggregating (Aggregation s a) s where
-    type LiftAggregationsToQExpr (Aggregation s a) s = QExpr s a
+instance ( Table t, BeamBackend be ) => Aggregating be (t (Aggregation be s)) s where
+    type LiftAggregationsToQExpr (t (Aggregation be s)) s = t (QExpr be s)
+    aggToSql s table = mconcat (allBeamValues (\(Columnar' x) -> aggToSql s x) table)
+    liftAggToQExpr s = changeBeamRep (\(Columnar' x) -> Columnar' (liftAggToQExpr s x))
+instance BeamBackend be => Aggregating be (Aggregation be s a) s where
+    type LiftAggregationsToQExpr (Aggregation be s a) s = QExpr be s a
     aggToSql _ (GroupAgg e) = let eSql = optimizeExpr' e
                               in mempty { sqlGroupBy = [eSql] }
     aggToSql _ (ProjectAgg _) = mempty
 
     liftAggToQExpr _ (GroupAgg e) = QExpr e
     liftAggToQExpr _ (ProjectAgg e) = QExpr e
-instance (Aggregating a s, Aggregating b s) => Aggregating (a, b) s where
+instance (Aggregating be a s, Aggregating be b s) => Aggregating be (a, b) s where
     type LiftAggregationsToQExpr (a, b) s = ( LiftAggregationsToQExpr a s
                                             , LiftAggregationsToQExpr b s)
     aggToSql s (a, b) = aggToSql s a <> aggToSql s b
     liftAggToQExpr s (a, b) = (liftAggToQExpr s a, liftAggToQExpr s b)
-instance (Aggregating a s, Aggregating b s, Aggregating c s) => Aggregating (a, b, c) s where
+instance (Aggregating be a s, Aggregating be b s, Aggregating be c s) => Aggregating be (a, b, c) s where
     type LiftAggregationsToQExpr (a, b, c) s = ( LiftAggregationsToQExpr a s
                                                , LiftAggregationsToQExpr b s
                                                , LiftAggregationsToQExpr c s )
     aggToSql s (a, b, c) = aggToSql s a <> aggToSql s b <> aggToSql s c
     liftAggToQExpr s (a, b, c) = (liftAggToQExpr s a, liftAggToQExpr s b, liftAggToQExpr s c)
-instance (Aggregating a s, Aggregating b s, Aggregating c s, Aggregating d s) => Aggregating (a, b, c, d) s where
+instance (Aggregating be a s, Aggregating be b s, Aggregating be c s, Aggregating be d s) => Aggregating be (a, b, c, d) s where
     type LiftAggregationsToQExpr (a, b, c, d) s = ( LiftAggregationsToQExpr a s
                                                   , LiftAggregationsToQExpr b s
                                                   , LiftAggregationsToQExpr c s
                                                   , LiftAggregationsToQExpr d s)
     aggToSql s (a, b, c, d) = aggToSql s a <> aggToSql s b <> aggToSql s c <> aggToSql s d
     liftAggToQExpr s (a, b, c, d) = (liftAggToQExpr s a, liftAggToQExpr s b, liftAggToQExpr s c, liftAggToQExpr s d)
-instance (Aggregating a s, Aggregating b s, Aggregating c s, Aggregating d s, Aggregating e s) => Aggregating (a, b, c, d, e) s where
+instance (Aggregating be a s, Aggregating be b s, Aggregating be c s, Aggregating be d s, Aggregating be e s) => Aggregating be (a, b, c, d, e) s where
     type LiftAggregationsToQExpr (a, b, c, d, e) s = ( LiftAggregationsToQExpr a s
                                                      , LiftAggregationsToQExpr b s
                                                      , LiftAggregationsToQExpr c s
@@ -312,20 +318,20 @@ class SqlGroupable a where
     -- | When included in an 'Aggregating' expression, causes the results to be grouped by the
     -- given column.
     group_ :: a -> GroupResult a
-instance SqlGroupable (QExpr s a) where
-    type GroupResult (QExpr s a) = Aggregation s a
+instance SqlGroupable (QExpr be s a) where
+    type GroupResult (QExpr be s a) = Aggregation be s a
     group_ (QExpr a) = GroupAgg a
-instance {-# OVERLAPPING #-} Table t => SqlGroupable (PrimaryKey t (QExpr s)) where
-    type GroupResult (PrimaryKey t (QExpr s)) = PrimaryKey t (Aggregation s)
-    group_ = pkChangeRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
-instance {-# OVERLAPPING #-} Table t => SqlGroupable (t (QExpr s)) where
-    type GroupResult (t (QExpr s)) = t (Aggregation s)
-    group_ = changeRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
+-- instance {-# OVERLAPPING #-} Table t => SqlGroupable (PrimaryKey t (QExpr be s)) where
+--     type GroupResult (PrimaryKey t (QExpr be s)) = PrimaryKey t (Aggregation be s)
+--     group_ = pkChangeRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
+instance Table t => SqlGroupable (t (QExpr be s)) where
+    type GroupResult (t (QExpr be s)) = t (Aggregation be s)
+    group_ = changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
 
-sum_ :: Num a => QExpr s a -> Aggregation s a
+sum_ :: Num a => QExpr be s a -> Aggregation be s a
 sum_ (QExpr over) = ProjectAgg (SQLFuncE "SUM" [over])
 
-count_ :: QExpr s a -> Aggregation s Int
+count_ :: QExpr be s a -> Aggregation be s Int
 count_ (QExpr over) = ProjectAgg (SQLFuncE "COUNT" [over])
 
 -- | Return a 'TopLevelQ' that will aggregate over the results of the original query. The
@@ -339,8 +345,8 @@ count_ (QExpr over) = ProjectAgg (SQLFuncE "COUNT" [over])
 --
 -- will group the result of the `all_ employeesTable` query using the `_employeeRegion` record
 -- field, and then count up the number of employees for each region.
-aggregate :: (Projectible a, Aggregating agg s) => (a -> agg) -> Q db s a -> TopLevelQ db s (LiftAggregationsToQExpr agg s)
-aggregate (aggregator :: a -> agg) (q :: Q db s a) =
+aggregate :: (Projectible be a, Aggregating be agg s) => (a -> agg) -> Q be db s a -> TopLevelQ be db s (LiftAggregationsToQExpr agg s)
+aggregate (aggregator :: a -> agg) (q :: Q be db s a) =
     TopLevelQ $
     do res <- q
 
@@ -356,33 +362,33 @@ aggregate (aggregator :: a -> agg) (q :: Q db s a) =
 
 -- * Order bys
 
-class SqlOrderable a where
-    makeSQLOrdering :: a -> [SQLOrdering]
-instance SqlOrderable SQLOrdering where
+class SqlOrderable be a | a -> be where
+    makeSQLOrdering :: a -> [SQLOrdering be]
+instance SqlOrderable be (SQLOrdering be) where
     makeSQLOrdering x = [x]
-instance SqlOrderable a => SqlOrderable [a] where
+instance SqlOrderable be a => SqlOrderable be [a] where
     makeSQLOrdering = concatMap makeSQLOrdering
-instance ( SqlOrderable a
-         , SqlOrderable b ) => SqlOrderable (a, b) where
+instance ( SqlOrderable be a
+         , SqlOrderable be b ) => SqlOrderable be (a, b) where
     makeSQLOrdering (a, b) = makeSQLOrdering a <> makeSQLOrdering b
-instance ( SqlOrderable a
-         , SqlOrderable b
-         , SqlOrderable c ) => SqlOrderable (a, b, c) where
+instance ( SqlOrderable be a
+         , SqlOrderable be b
+         , SqlOrderable be c ) => SqlOrderable be (a, b, c) where
     makeSQLOrdering (a, b, c) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c
-instance ( SqlOrderable a
-         , SqlOrderable b
-         , SqlOrderable c
-         , SqlOrderable d ) => SqlOrderable (a, b, c, d) where
+instance ( SqlOrderable be a
+         , SqlOrderable be b
+         , SqlOrderable be c
+         , SqlOrderable be d ) => SqlOrderable be (a, b, c, d) where
     makeSQLOrdering (a, b, c, d) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d
-instance ( SqlOrderable a
-         , SqlOrderable b
-         , SqlOrderable c
-         , SqlOrderable d
-         , SqlOrderable e ) => SqlOrderable (a, b, c, d, e) where
+instance ( SqlOrderable be a
+         , SqlOrderable be b
+         , SqlOrderable be c
+         , SqlOrderable be d
+         , SqlOrderable be e ) => SqlOrderable be (a, b, c, d, e) where
     makeSQLOrdering (a, b, c, d, e) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <> makeSQLOrdering e
 
 -- | Order by certain expressions, either ascending ('asc_') or descending ('desc_')
-orderBy :: (SqlOrderable ordering, IsQuery q) => (a -> ordering) -> q db s a -> TopLevelQ db s a
+orderBy :: (SqlOrderable be ordering, IsQuery q) => (a -> ordering) -> q be db s a -> TopLevelQ be db s a
 orderBy orderer q =
     TopLevelQ $
     do res <- toQ q
@@ -390,56 +396,56 @@ orderBy orderer q =
        modify $ \qb -> qb { qbOrdering = qbOrdering qb <> ordering }
        pure res
 
-desc_, asc_ :: QExpr s a -> SQLOrdering
+desc_, asc_ :: BeamBackend be => QExpr be s a -> SQLOrdering be
 asc_ e = Asc (optimizeExpr e)
 desc_ e = Desc (optimizeExpr e)
 
 -- * Subqueries
 
-class Subqueryable a s | a -> s where
+class Subqueryable be a s | a -> s, a -> be where
     type Unnested a s
-    subqueryProjections :: Proxy s -> a -> RWS (Text, Int) [SQLAliased SQLExpr] Int (Unnested a s)
-instance Subqueryable (QExpr (QNested s) a) s where
-    type Unnested (QExpr (QNested s) a) s = QExpr s a
+    subqueryProjections :: Proxy s -> a -> RWS (Text, Int) [SQLAliased (SQLExpr be)] Int (Unnested a s)
+instance BeamBackend be => Subqueryable be (QExpr be (QNested s) a) s where
+    type Unnested (QExpr be (QNested s) a) s = QExpr be s a
     subqueryProjections s e =
         do i <- state (\i -> (i, i+1))
            (tblName, tblOrd) <- ask
            let fieldName = fromString ("e" <> show i)
            tell [SQLAliased (optimizeExpr e) (Just fieldName)]
            pure (QExpr (SQLFieldE (QField tblName (Just tblOrd) fieldName)))
-instance ( Subqueryable a s
-         , Subqueryable b s ) =>
-    Subqueryable (a, b) s where
+instance ( Subqueryable be a s
+         , Subqueryable be b s ) =>
+    Subqueryable be (a, b) s where
     type Unnested (a, b) s = (Unnested a s, Unnested b s)
     subqueryProjections s (a, b) =
         (,) <$> subqueryProjections s a
             <*> subqueryProjections s b
-instance ( Subqueryable a s
-         , Subqueryable b s
-         , Subqueryable c s ) =>
-    Subqueryable (a, b, c) s where
+instance ( Subqueryable be a s
+         , Subqueryable be b s
+         , Subqueryable be c s ) =>
+    Subqueryable be (a, b, c) s where
     type Unnested (a, b, c) s = (Unnested a s, Unnested b s, Unnested c s)
     subqueryProjections s (a, b, c) =
         (,,) <$> subqueryProjections s a
              <*> subqueryProjections s b
              <*> subqueryProjections s c
-instance ( Subqueryable a s
-         , Subqueryable b s
-         , Subqueryable c s
-         , Subqueryable d s ) =>
-    Subqueryable (a, b, c, d) s where
+instance ( Subqueryable be a s
+         , Subqueryable be b s
+         , Subqueryable be c s
+         , Subqueryable be d s ) =>
+    Subqueryable be (a, b, c, d) s where
     type Unnested (a, b, c, d) s = (Unnested a s, Unnested b s, Unnested c s, Unnested d s)
     subqueryProjections s (a, b, c, d) =
         (,,,) <$> subqueryProjections s a
               <*> subqueryProjections s b
               <*> subqueryProjections s c
               <*> subqueryProjections s d
-instance ( Subqueryable a s
-         , Subqueryable b s
-         , Subqueryable c s
-         , Subqueryable d s
-         , Subqueryable e s ) =>
-    Subqueryable (a, b, c, d, e) s where
+instance ( Subqueryable be a s
+         , Subqueryable be b s
+         , Subqueryable be c s
+         , Subqueryable be d s
+         , Subqueryable be e s ) =>
+    Subqueryable be (a, b, c, d, e) s where
     type Unnested (a, b, c, d, e) s = (Unnested a s, Unnested b s, Unnested c s, Unnested d s, Unnested e s)
     subqueryProjections s (a, b, c, d, e) =
         (,,,,) <$> subqueryProjections s a
@@ -450,8 +456,8 @@ instance ( Subqueryable a s
 
 -- | Run the given 'Q'-like object as a subquery, joining the results with the current result
 -- set. This allows embedding of 'TopLevelQ's inside 'Q's or other 'TopLevelQ's.
-subquery_ :: (IsQuery q, Projectible a, Subqueryable a s) => q db (QNested s) a -> Q db s (Unnested a s)
-subquery_ (q :: q db (QNested s) a) =
+subquery_ :: (IsQuery q, Projectible be a, Subqueryable be a s, BeamBackend be) => q be db (QNested s) a -> Q be db s (Unnested a s)
+subquery_ (q :: q be db (QNested s) a) =
     do curTbl <- gets qbNextTblRef
 
        let (res, curTbl', select') = queryToSQL' (toQ q) curTbl
@@ -464,7 +470,7 @@ subquery_ (q :: q db (QNested s) a) =
        modify $ \qb@QueryBuilder { qbFrom = from } ->
                  let from' = case from of
                                Nothing -> Just newSource
-                               Just from -> Just (SQLJoin SQLInnerJoin from newSource (SQLValE (SqlBool True)))
+                               Just from -> Just (SQLJoin SQLInnerJoin from newSource (SQLValE (sqlBool True)))
                      newSource = SQLFromSource (SQLAliased (SQLSourceSelect select'') (Just (fromString ("t" <> show curTbl'))))
                  in qb { qbNextTblRef = curTbl' + 1
                        , qbFrom = from' }
@@ -486,66 +492,70 @@ class SqlJustable a b | b -> a where
     -- 'PrimaryKey' filled with 'Nothing'.
     nothing_ :: b
 
-instance SqlJustable (QExpr s a) (QExpr s (Maybe a)) where
+instance BeamBackend be => SqlJustable (QExpr be s a) (QExpr be s (Maybe a)) where
     just_ (QExpr e) = QExpr e
-    nothing_ = QExpr (SQLValE SqlNull)
+    nothing_ = QExpr (SQLValE sqlNull)
 
-instance {-# OVERLAPPING #-} Table t => SqlJustable (PrimaryKey t (QExpr s)) (PrimaryKey t (Nullable (QExpr s))) where
-    just_ = pkChangeRep (\(Columnar' q) -> Columnar' (just_ q))
-    nothing_ = pkChangeRep (\(Columnar' q) -> Columnar' nothing_) (primaryKey (tblFieldSettings :: TableSettings t))
+instance {-# OVERLAPPING #-} ( Table t, BeamBackend be ) => SqlJustable (PrimaryKey t (QExpr be s)) (PrimaryKey t (Nullable (QExpr be s))) where
+    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
+    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' nothing_) (primaryKey (tblSkeleton :: TableSkeleton t))
 
-instance {-# OVERLAPPING #-} Table t => SqlJustable (t (QExpr s)) (t (Nullable (QExpr s))) where
-    just_ = changeRep (\(Columnar' q) -> Columnar' (just_ q))
-    nothing_ = changeRep (\(Columnar' q) -> Columnar' nothing_) (tblFieldSettings :: TableSettings t)
+instance {-# OVERLAPPING #-} ( Table t, BeamBackend be ) => SqlJustable (t (QExpr be s)) (t (Nullable (QExpr be s))) where
+    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
+    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' nothing_) (tblSkeleton :: TableSkeleton t)
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (PrimaryKey t Identity) (PrimaryKey t (Nullable Identity)) where
-    just_ = pkChangeRep (\(Columnar' q) -> Columnar' (Just q))
-    nothing_ = pkChangeRep (\(Columnar' q) -> Columnar' Nothing) (primaryKey (tblFieldSettings :: TableSettings t))
+    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (Just q))
+    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' Nothing) (primaryKey (tblSkeleton :: TableSkeleton t))
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Identity)) where
-    just_ = changeRep (\(Columnar' q) -> Columnar' (Just q))
-    nothing_ = changeRep (\(Columnar' q) -> Columnar' Nothing) (tblFieldSettings :: TableSettings t)
+    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (Just q))
+    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' Nothing) (tblSkeleton :: TableSkeleton t)
 
 -- * Nullable checking
 
 -- | Type class for anything which can be checked for null-ness. This includes 'QExpr (Maybe a)' as
 -- well as 'Table's or 'PrimaryKey's over 'Nullable QExpr'.
-class SqlDeconstructMaybe a nonNullA s | a -> nonNullA, a -> s, nonNullA -> s where
+class BeamBackend be => SqlDeconstructMaybe be a nonNullA s | a s -> be, a -> nonNullA, a -> s, nonNullA -> s where
     -- | Returns a 'QExpr' that evaluates to true when the first argument is not null
-    isJust_ :: a -> QExpr s Bool
+    isJust_ :: a -> QExpr be s Bool
 
     -- | Returns a 'QExpr' that evaluates to true when the first argument is null
-    isNothing_ :: a -> QExpr s Bool
+    isNothing_ :: a -> QExpr be s Bool
 
     -- | Given an object (third argument) which may or may not be null, return the default value if
     -- null (first argument), or transform the value that could be null to yield the result of the
     -- expression (second argument)
-    maybe_ :: QExpr s y -> (nonNullA -> QExpr s y) -> a -> QExpr s y
+    maybe_ :: QExpr be s y -> (nonNullA -> QExpr be s y) -> a -> QExpr be s y
 
-instance SqlDeconstructMaybe (QExpr s (Maybe x)) (QExpr s x) s where
+instance BeamBackend be => SqlDeconstructMaybe be (QExpr be s (Maybe x)) (QExpr be s x) s where
     isJust_ (QExpr x) = QExpr (SQLIsJustE x)
     isNothing_ (QExpr x) = QExpr (SQLIsNothingE x)
 
     maybe_ (QExpr onNothing) onJust (QExpr e) = let QExpr onJust' = onJust (QExpr e)
                                                 in QExpr (SQLCaseE [(SQLIsJustE e, onJust')] onNothing)
 
-instance {-# OVERLAPPING #-} Table t => SqlDeconstructMaybe (PrimaryKey t (Nullable (QExpr s))) (PrimaryKey t (QExpr s)) s where
-    isJust_ pk = let fieldsAreJust = pkChangeRep (\(Columnar' x) -> Columnar' (QExprBool (isJust_ x))) pk :: PrimaryKey t (QExprBool s)
-                 in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreJust)
-    isNothing_ pk = let fieldsAreNothing = pkChangeRep (\(Columnar' x) -> Columnar' (QExprBool (isNothing_ x))) pk :: PrimaryKey t (QExprBool s)
-                    in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreNothing)
-    maybe_ = undefined
+-- instance {-# OVERLAPPING #-} ( BeamBackend be, Table t
+--                              , AllBeamValues t (QExprBool be s)
+--                              , HasBeamFields t (Nullable (QExpr be s)) (Nullable (QExpr be s)) (QExprBool be s) )
+--     => SqlDeconstructMaybe be (PrimaryKey t (Nullable (QExpr be s))) (PrimaryKey t (QExpr be s)) s where
+--     isJust_ pk = let fieldsAreJust = changeBeamRep (\(Columnar' x) -> Columnar' (QExprBool (isJust_ x))) pk :: PrimaryKey t (QExprBool be s)
+--                  in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool e)) -> e) fieldsAreJust)
+--     isNothing_ pk = let fieldsAreNothing = changeBeamRep (\(Columnar' x) -> Columnar' (QExprBool (isNothing_ x))) pk :: PrimaryKey t (QExprBool be s)
+--                     in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool e)) -> e) fieldsAreNothing)
+--     maybe_ = undefined
 
-instance {-# OVERLAPPING #-} Table t  => SqlDeconstructMaybe (t (Nullable (QExpr s))) (t (QExpr s)) s where
-    isJust_ t = let fieldsAreJust = changeRep (\(Columnar' x) -> Columnar' (QExprBool (isJust_ x))) t :: t (QExprBool s)
-                in foldr (&&.) (val_ True) (fieldAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreJust)
-    isNothing_ t = let fieldsAreNothing = changeRep (\(Columnar' x) -> Columnar' (QExprBool (isNothing_ x))) t :: t (QExprBool s)
-                   in foldr (&&.) (val_ True) (fieldAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreNothing)
+instance ( BeamBackend be, Beamable t )
+    => SqlDeconstructMaybe be (t (Nullable (QExpr be s))) (t (QExpr be s)) s where
+    isJust_ t = let fieldsAreJust = changeBeamRep (\(Columnar' x) -> Columnar' (QExprBool (isJust_ x))) t :: t (QExprBool be s)
+                in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool e)) -> e) fieldsAreJust)
+    isNothing_ t = let fieldsAreNothing = changeBeamRep (\(Columnar' x) -> Columnar' (QExprBool (isNothing_ x))) t :: t (QExprBool be s)
+                   in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool e)) -> e) fieldsAreNothing)
     maybe_ = undefined
 
 class BeamUnwrapMaybe c where
     beamUnwrapMaybe :: Columnar' (Nullable c) x -> Columnar' c x
-instance BeamUnwrapMaybe (QExpr s) where
+instance BeamUnwrapMaybe (QExpr be s) where
     beamUnwrapMaybe (Columnar' (QExpr e)) = Columnar' (QExpr e)
 instance BeamUnwrapMaybe c => BeamUnwrapMaybe (Nullable c) where
     beamUnwrapMaybe (Columnar' x :: Columnar' (Nullable (Nullable c)) x) =
@@ -555,12 +565,13 @@ instance BeamUnwrapMaybe c => BeamUnwrapMaybe (Nullable c) where
             xCol = Columnar' x'
         in xCol
 
-instance {-# OVERLAPPING #-} ( SqlDeconstructMaybe (PrimaryKey t (Nullable c)) res s, Table t, BeamUnwrapMaybe (Nullable c)) => SqlDeconstructMaybe (PrimaryKey t (Nullable (Nullable c))) res s where
-    isJust_ t = isJust_ (pkChangeRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
-    isNothing_ t = isNothing_ (pkChangeRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
-    maybe_ = undefined
+-- instance {-# OVERLAPPING #-} ( SqlDeconstructMaybe be (PrimaryKey t (Nullable c)) res s, Table t, BeamUnwrapMaybe (Nullable c)) => SqlDeconstructMaybe be (PrimaryKey t (Nullable (Nullable c))) res s where
+--     isJust_ t = isJust_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
+--     isNothing_ t = isNothing_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
+--     maybe_ = undefined
 
-instance {-# OVERLAPPING #-} ( SqlDeconstructMaybe (t (Nullable c)) res s, Table t, BeamUnwrapMaybe (Nullable c)) => SqlDeconstructMaybe (t (Nullable (Nullable c))) res s where
-    isJust_ t = isJust_ (changeRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
-    isNothing_ t = isNothing_ (changeRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
+instance ( SqlDeconstructMaybe be (t (Nullable c)) res s, BeamUnwrapMaybe (Nullable c)
+         , Beamable t) => SqlDeconstructMaybe be (t (Nullable (Nullable c))) res s where
+    isJust_ t = isJust_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
+    isNothing_ t = isNothing_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
     maybe_ = undefined

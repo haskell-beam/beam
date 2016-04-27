@@ -92,6 +92,8 @@ Teaching Beam about our table
 We've defined a type that can represent our the data in our table. Now, let's inform beam that we'd like to
 use `UserT' as a table.
 
+> instance Beamable UserT
+> instance Beamable (PrimaryKey UserT)
 > instance Table UserT where
 
 All beam tables need to implement the `Table` type class. The `Table` type class contains functions
@@ -134,7 +136,7 @@ selectors using camel case, beam can automatically figure out what all the table
 you haven't, you would have to manually name your tables. Since we followed the convention, we can
 let beam do all the hard work.
 
-> shoppingCartDb :: DatabaseSettings ShoppingCartDb
+> shoppingCartDb :: DatabaseSettings Sqlite3Settings ShoppingCartDb
 > shoppingCartDb = autoDbSettings
 >
 

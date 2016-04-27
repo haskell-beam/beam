@@ -1,4 +1,4 @@
-{-# LANGUAGE StandaloneDeriving, TypeSynonymInstances, FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings, UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving, TypeSynonymInstances, FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings, UndecidableInstances, DeriveAnyClass #-}
 module Main where
 
 import Database.Beam
@@ -21,9 +21,11 @@ import System.Environment
 data Position = DepartmentLead
               | Analyst
                 deriving (Show, Read, Eq, Ord, Enum)
-instance HasDefaultFieldSchema Position where
-    defFieldSchema = enumSchema
-instance FromSqlValues Position
+instance BeamBackend be => HasDefaultFieldSchema be Position where
+    defFieldSchema _ = enumSchema
+instance BeamBackend be => FromSqlValues be Position where
+    fromSqlValues' _ = fromEnumValue
+    makeSqlValue _ = makeEnumValue
 
 data EmployeeT f = Employee
                  { _employeeId         :: Columnar f AutoId
@@ -32,23 +34,27 @@ data EmployeeT f = Employee
                  , _employeeGroup      :: PrimaryKey GroupT f
 
                  , _employeePosition   :: Columnar f Position }
-                 deriving (Generic)
+                 deriving Generic
+instance Beamable EmployeeT
 
 data DepartmentT f = Department
                    { _deptId       :: Columnar f Text }
-                   deriving (Generic)
+                   deriving Generic
+instance Beamable DepartmentT
 
 data GroupT f = Group
               { _groupId       :: Columnar f Text
               , _groupDeptId   :: PrimaryKey DepartmentT f
               , _groupLocation :: Columnar f Text }
-                deriving (Generic)
+                deriving Generic
+instance Beamable GroupT
 
 data OrderT f = Order
               { _orderId  :: Columnar f AutoId
               , _orderTakenBy :: PrimaryKey EmployeeT f
               , _orderAmount :: Columnar f Int }
               deriving Generic
+instance Beamable OrderT
 
 Employee (LensFor employeeIdC)
          (LensFor employeeFirstNameC)
@@ -77,26 +83,22 @@ instance Table EmployeeT where
     data PrimaryKey EmployeeT f = EmployeeId (Columnar f AutoId)
                                 deriving Generic
     primaryKey = EmployeeId . _employeeId
+instance Beamable (PrimaryKey EmployeeT)
 instance Table DepartmentT where
     data PrimaryKey DepartmentT f = DepartmentId (Columnar f Text)
                                   deriving Generic
     primaryKey = DepartmentId . _deptId
-
-    tblFieldSettings = defTblFieldSettings
-                        & deptIdC . fieldSchema .~ textSchema (Varchar (Just 32))
+instance Beamable (PrimaryKey DepartmentT)
 instance Table GroupT where
     data PrimaryKey GroupT f = GroupId (Columnar f Text) (Columnar f Text)
                              deriving Generic
     primaryKey (Group groupId (DepartmentId deptId) _ ) = GroupId groupId deptId
-
-    tblFieldSettings = defTblFieldSettings
-
+instance Beamable (PrimaryKey GroupT)
 instance Table OrderT where
     data PrimaryKey OrderT f = OrderId (Columnar f AutoId)
-                             deriving Generic
+                               deriving Generic
     primaryKey = OrderId . _orderId
-
-    tblFieldSettings = defTblFieldSettings
+instance Beamable (PrimaryKey OrderT)
 
 type Employee = EmployeeT Identity
 type EmployeeId = PrimaryKey EmployeeT Identity
@@ -117,8 +119,10 @@ deriving instance Show Order
 deriving instance Show OrderId
 
 instance Database EmployeeDatabase
-employeeDb :: DatabaseSettings EmployeeDatabase
-employeeDb = autoDbSettings
+
+EmployeeDatabase { _departments = TableLens departmentsC } = dbLenses
+employeeDb :: DatabaseSettings Sqlite3Settings EmployeeDatabase
+employeeDb = autoDbSettings & departmentsC . tableSettings . deptIdC . fieldSchema .~ textSchema (Varchar (Just 32))
 
 -- * main functions
 main = do [sqliteDbPath] <- getArgs

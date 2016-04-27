@@ -6,6 +6,7 @@ module Database.Beam.Schema.Tables
     -- * Database Types
       Database(..), GenDatabaseTable(..), DatabaseTable(..), DatabaseSettings(..)
     , ReifiedDatabaseSchema(..), ReifiedTableSchema(..)
+    , tableName, tableSettings
     , autoDbSettings
     , allTableSettings
 
@@ -17,21 +18,22 @@ module Database.Beam.Schema.Tables
     , Nullable(..), TableField(..)
     , fieldName, fieldConstraints, fieldSchema, maybeFieldSchema
 
-    , TableSettings(..)
+    , TableSettings(..), TableSkeleton(..), Ignored(..)
 
     -- * Tables
-    , Table(..), defTblFieldSettings
+    , Table(..), Beamable(..), MakeSqlValues(..)
+    , zipBeamFieldsM, defTblFieldSettings
     , reifyTableSchema, tableValuesNeeded
     , pk
-    , pkAllValues, fieldAllValues, pkChangeRep, changeRep
-    , pkMakeSqlValues, makeSqlValues
+    , allBeamValues, changeBeamRep, makeSqlValues
 
     -- * Fields
     , HasDefaultFieldSchema(..), FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
     , popSqlValue, peekSqlValue )
     where
 
-import Database.Beam.SQL.Types
+import {-# SOURCE #-} Database.Beam.SQL.Types
+import Database.Beam.Internal
 
 import Control.Arrow
 import Control.Applicative
@@ -49,6 +51,7 @@ import Data.Char
 import Data.String
 import Data.Void
 import Data.Monoid
+import Data.Maybe
 import qualified Data.Text as T
 
 import Database.HDBC ( SqlColDesc(..), SqlValue(..), SqlTypeId(..)
@@ -69,20 +72,25 @@ class Database db where
                         (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
     allTables f db = allTables' f (from' db)
 
-allTableSettings :: Database db => DatabaseSettings db -> [GenDatabaseTable db]
+allTableSettings :: Database db => DatabaseSettings be db -> [GenDatabaseTable be db]
 allTableSettings = allTables GenDatabaseTable
 
-autoDbSettings :: ( Generic (DatabaseSettings db)
-                  , GAutoDbSettings (Rep (DatabaseSettings db) ()) ) =>
-                   DatabaseSettings db
+autoDbSettings :: ( Generic (DatabaseSettings be db)
+                  , GAutoDbSettings (Rep (DatabaseSettings be db) ()) ) =>
+                   DatabaseSettings be db
 autoDbSettings = to' autoDbSettings'
 
-data GenDatabaseTable db where
-    GenDatabaseTable :: DatabaseTable db table -> GenDatabaseTable db
-data DatabaseTable (db :: ((((* -> *) -> *) -> *) -> *)) table where
-    DatabaseTable :: Table table => Proxy table -> Text -> DatabaseTable db table
+data GenDatabaseTable be db where
+    GenDatabaseTable :: DatabaseTable be db table -> GenDatabaseTable be db
+data DatabaseTable be (db :: ((((* -> *) -> *) -> *) -> *)) table where
+    DatabaseTable :: Table table => Proxy table -> Text -> TableSettings be table -> DatabaseTable be db table
 
-type DatabaseSettings db = db (DatabaseTable db)
+tableName :: Lens' (DatabaseTable be db table) Text
+tableName f (DatabaseTable proxy name settings) = (\name' -> DatabaseTable proxy name' settings) <$> f name
+tableSettings :: Lens' (DatabaseTable be db table) (TableSettings be table)
+tableSettings f (DatabaseTable proxy name settings) = (\settings' -> DatabaseTable proxy name settings') <$> f settings
+
+type DatabaseSettings be db = db (DatabaseTable be db)
 
 class GAutoDbSettings x where
     autoDbSettings' :: x
@@ -92,9 +100,10 @@ instance GAutoDbSettings (x p) => GAutoDbSettings (C1 f x p) where
     autoDbSettings' = M1 autoDbSettings'
 instance (GAutoDbSettings (x p), GAutoDbSettings (y p)) => GAutoDbSettings ((x :*: y) p) where
     autoDbSettings' = autoDbSettings' :*: autoDbSettings'
-instance (Table tbl, Selector f) => GAutoDbSettings (S1 f (K1 Generic.R (DatabaseTable db tbl)) p) where
-    autoDbSettings' = M1 (K1 (DatabaseTable (Proxy :: Proxy tbl) (fromString name)))
-        where name  = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (DatabaseTable db tbl)) p))
+instance ( GDefaultTableFieldSettings (Rep (TableSettings be tbl) ())
+         , Generic (TableSettings be tbl), Table tbl, Selector f) => GAutoDbSettings (S1 f (K1 Generic.R (DatabaseTable be db tbl)) p) where
+    autoDbSettings' = M1 (K1 (DatabaseTable (Proxy :: Proxy tbl) (fromString name) defTblFieldSettings))
+        where name  = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (DatabaseTable be db tbl)) p))
 
 class GAllTables f x where
     allTables' :: (forall tbl. Table tbl => f tbl -> b) -> x -> [b]
@@ -109,7 +118,7 @@ data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
 newtype Exposed x = Exposed x
-newtype SqlValue' x = SqlValue' SqlValue
+newtype SqlValue' be x = SqlValue' (BeamBackendValue be)
 
 -- | A type family that we use to "tag" columns in our table datatypes.
 --
@@ -200,27 +209,34 @@ data Nullable (c :: * -> *) x
 -- >                     & employeeFirstNameC . fieldName .~ "fname"
 -- >                     & employeeLastNameC  . fieldName .~ "lname"
 -- >                     & employeeLastNameC  . fieldSettings .~ Varchar (Just 128) -- Give it a 128 character limit
-data TableField (table :: (* -> *) -> *) ty = TableField
-                                            { _fieldName        :: Text             -- ^ The field name
-                                            , _fieldConstraints :: [SQLConstraint]  -- ^ Constraints for the field (such as AutoIncrement, PrimaryKey, etc)
-                                            , _fieldSchema      :: FieldSchema ty   -- ^ SQL storage informationa for the field
-                                            }
-deriving instance Show (TableField t ty)
+data TableField be (table :: (* -> *) -> *) ty = TableField
+                                               { _fieldName        :: Text             -- ^ The field name
+                                               , _fieldConstraints :: [SQLConstraint]  -- ^ Constraints for the field (such as AutoIncrement, PrimaryKey, etc)
+                                               , _fieldSchema      :: FieldSchema ty   -- ^ SQL storage informationa for the field
+                                               }
+deriving instance Show (TableField be t ty)
 
-fieldName :: Lens' (TableField table ty) Text
+fieldName :: Lens' (TableField be table ty) Text
 fieldName f (TableField name cs s) = (\name' -> TableField name' cs s) <$> f name
-fieldConstraints :: Lens' (TableField table ty) [SQLConstraint]
+fieldConstraints :: Lens' (TableField be table ty) [SQLConstraint]
 fieldConstraints f (TableField name cs s) = (\cs' -> TableField name cs' s) <$> f cs
-fieldSchema :: Lens (TableField table a) (TableField table b) (FieldSchema a) (FieldSchema b)
+fieldSchema :: Lens (TableField be table a) (TableField be table b) (FieldSchema a) (FieldSchema b)
 fieldSchema f (TableField name cs s) = (\s' -> TableField name cs s') <$> f s
 
-type TableSettings table = table (TableField table)
+type TableSettings be table = table (TableField be table)
+
+data Ignored x = Ignored
+type TableSkeleton table = table Ignored
 
 from' :: Generic x => x -> Rep x ()
 from' = from
 
 to' :: Generic x => Rep x () -> x
 to' = to
+
+type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed)) (Rep (table f)) (Rep (table g)) (Rep (table h))
+                                 , Generic (table f), Generic (table g), Generic (table h) )
+type AllBeamValues table f = HasBeamFields table f f f
 
 -- | The big Kahuna! All beam tables implement this class.
 --
@@ -257,7 +273,7 @@ to' = to
 --       `_blogPostTagline` is declared 'Maybe' so 'Nothing' will be stored as NULL in the database. `_blogPostImageGallery` will be allowed to be empty because it uses the 'Nullable' tag modifier.
 --     * `blogPostAuthor` references the `AuthorT` table (not given here) and is required.
 --     * `blogPostImageGallery` references the `ImageGalleryT` table (not given here), but this relation is not required (i.e., it may be 'Nothing'. See 'Nullable').
-class Typeable table  => Table (table :: (* -> *) -> *) where
+class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (table :: (* -> *) -> *) where
 
     -- | A data type representing the types of primary keys for this table.
     --   In order to play nicely with the default deriving mechanism, this type must be an instance of 'Generic'.
@@ -267,75 +283,127 @@ class Typeable table  => Table (table :: (* -> *) -> *) where
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
     primaryKey :: table column -> PrimaryKey table column
 
-    tblFieldSettings :: TableSettings table
-    default tblFieldSettings :: ( Generic (TableSettings table)
-                                , GDefaultTableFieldSettings (Rep (TableSettings table) ())) => TableSettings table
-    tblFieldSettings = defTblFieldSettings
+class Beamable table where
+    zipBeamFieldsM :: Monad m =>
+                      (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+    default zipBeamFieldsM :: ( HasBeamFields table f g h
+                              , Monad m ) =>
+                             (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+    zipBeamFieldsM combine (f :: table f) g =
+        do hRep <- gZipTables (Proxy :: Proxy (Rep (table Exposed))) combine (from' f) (from' g)
+           return (to' hRep)
 
-    zipTablesM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
-    default zipTablesM :: ( GZipTables f g h (Rep (table Exposed)) (Rep (table f)) (Rep (table g)) (Rep (table h))
-                         , Generic (table f), Generic (table g), Generic (table h) ) =>
-                        Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
-    zipTablesM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (table Exposed))) combine (from' f) (from' g)
-                                return (to' hRep)
+    tblSkeleton :: TableSkeleton table
+    default tblSkeleton :: ( Generic (TableSkeleton table)
+                           , GTableSkeleton (Rep (TableSkeleton table)) ) => TableSkeleton table
+    tblSkeleton = withProxy $ \proxy -> to' (gTblSkeleton proxy)
+        where withProxy :: (Proxy (Rep (TableSkeleton table)) -> TableSkeleton table) -> TableSkeleton table
+              withProxy f = f Proxy
+    -- zipTablesM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+    -- default zipTablesM ::  =>
+    --                     Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+    -- zipTablesM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (table Exposed))) combine (from' f) (from' g)
+    --                             return (to' hRep)
 
-    zipPkM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
-    default zipPkM :: ( GZipTables f g h (Rep (PrimaryKey table Exposed)) (Rep (PrimaryKey table f)) (Rep (PrimaryKey table g)) (Rep (PrimaryKey table h))
-                      , Generic (PrimaryKey table f), Generic (PrimaryKey table g), Generic (PrimaryKey table h)
-                      , Monad m) => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
-    zipPkM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (PrimaryKey table Exposed))) combine (from' f) (from' g)
-                            return (to' hRep)
+    -- zipPkM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
+    -- default zipPkM :: ( GZipTables f g h (Rep (PrimaryKey table Exposed)) (Rep (PrimaryKey table f)) (Rep (PrimaryKey table g)) (Rep (PrimaryKey table h))
+    --                   , Generic (PrimaryKey table f), Generic (PrimaryKey table g), Generic (PrimaryKey table h)
+    --                   , Monad m) => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
+    -- zipPkM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (PrimaryKey table Exposed))) combine (from' f) (from' g)
+    --                         return (to' hRep)
 
-reifyTableSchema :: Table table => Proxy table -> ReifiedTableSchema
-reifyTableSchema (Proxy :: Proxy table) = fieldAllValues (\(Columnar' (TableField name constraints settings)) ->
-                                                                  (name, fieldColDesc settings constraints)) (tblFieldSettings :: TableSettings table)
+reifyTableSchema :: Beamable table => TableSettings be table -> ReifiedTableSchema
+reifyTableSchema tblFieldSettings =
+    allBeamValues (\(Columnar' (TableField name constraints settings)) ->
+                       (name, fieldColDesc settings constraints)) tblFieldSettings
 
-tableValuesNeeded :: Table table => Proxy table -> Int
-tableValuesNeeded (Proxy :: Proxy table) = length (fieldAllValues (const ()) (tblFieldSettings :: TableSettings table))
+tableValuesNeeded :: Beamable table => Proxy table -> Int
+tableValuesNeeded (Proxy :: Proxy table) = length (allBeamValues (const ()) (tblSkeleton :: TableSkeleton table))
 
-pkAllValues :: Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
-pkAllValues (f :: forall a. Columnar' f a -> b) (pk :: PrimaryKey table f) = execWriter (zipPkM combine pk pk)
+allBeamValues :: Beamable table => (forall a. Columnar' f a -> b) -> table f -> [b]
+allBeamValues (f :: forall a. Columnar' f a -> b) (tbl :: table f) =
+    execWriter (zipBeamFieldsM combine tbl tbl)
     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
           combine x _ = do tell [f x]
                            return x
 
-fieldAllValues :: Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
-fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: table f) = execWriter (zipTablesM combine tbl tbl)
-    where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
-          combine x _ = do tell [f x]
-                           return x
+-- pkAllValues :: Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
+-- pkAllValues (f :: forall a. Columnar' f a -> b) (pk :: PrimaryKey table f) = execWriter (zipPkM combine pk pk)
+--     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
+--           combine x _ = do tell [f x]
+--                            return x
 
-pkChangeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
-pkChangeRep f pk = runIdentity (zipPkM (\x _ -> return (f x))  pk pk)
+-- fieldAllValues :: Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
+-- fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: table f) = execWriter (zipTablesM combine tbl tbl)
+--     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
+--           combine x _ = do tell [f x]
+--                            return x
 
-changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
-changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
+changeBeamRep :: Beamable table => (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
+changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl)
 
-pkMakeSqlValues :: Table t => PrimaryKey t Identity -> PrimaryKey t SqlValue'
-pkMakeSqlValues pk = runIdentity (zipPkM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) pk (primaryKey tblFieldSettings))
+-- pkChangeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
+-- pkChangeRep f pk = runIdentity (zipPkM (\x _ -> return (f x))  pk pk)
 
-makeSqlValues :: Table t => t Identity -> t SqlValue'
-makeSqlValues tbl = runIdentity (zipTablesM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) tbl tblFieldSettings)
+-- changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
+-- changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
+
+class GFieldsAreSerializable be values sqlvalue where
+    gMakeSqlValues :: Proxy be -> values () -> sqlvalue ()
+instance GFieldsAreSerializable be values sqlvalue =>
+    GFieldsAreSerializable be (M1 s m values) (M1 s m sqlvalue) where
+        gMakeSqlValues be (M1 x) = M1 (gMakeSqlValues be x)
+instance GFieldsAreSerializable be U1 U1 where
+    gMakeSqlValues _ _ = U1
+instance (GFieldsAreSerializable be a aSql, GFieldsAreSerializable be b bSql) =>
+    GFieldsAreSerializable be (a :*: b) (aSql :*: bSql) where
+        gMakeSqlValues be (a :*: b) = gMakeSqlValues be a :*: gMakeSqlValues be b
+instance FromSqlValues be x => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (SqlValue' be x)) where
+    gMakeSqlValues be (K1 x) = K1 (SqlValue' (head (makeSqlValues' x)))
+instance MakeSqlValues be t => GFieldsAreSerializable be (K1 Generic.R (t Identity)) (K1 Generic.R (t (SqlValue' be))) where
+    gMakeSqlValues be (K1 x) = K1 (makeSqlValues x)
+instance ( Generic (t (Nullable (SqlValue' be))), Generic (t (Nullable Identity))
+         , GFieldsAreSerializable be (Rep (t (Nullable Identity))) (Rep (t (Nullable (SqlValue' be)))) )
+    => GFieldsAreSerializable be (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (SqlValue' be)))) where
+
+    gMakeSqlValues be (K1 x) = K1 (to' (gMakeSqlValues (Proxy :: Proxy be) (from' x)))
+
+type MakeSqlValues be t = ( Generic (t (SqlValue' be)), Generic (t Identity)
+                          , GFieldsAreSerializable be (Rep (t Identity)) (Rep (t (SqlValue' be))) )
+
+makeSqlValues :: MakeSqlValues be t => t Identity -> t (SqlValue' be)
+makeSqlValues tbl =
+    fix $ \(_ :: t (SqlValue' be)) ->
+    to' (gMakeSqlValues (Proxy :: Proxy be) (from' tbl))
+
+class GTableFromSqlValues be x where
+    gTableFromSqlValues :: FromSqlValuesM be (x ())
+instance GTableFromSqlValues be x => GTableFromSqlValues be (M1 s m x) where
+    gTableFromSqlValues = M1 <$> gTableFromSqlValues
+instance GTableFromSqlValues be U1 where
+    gTableFromSqlValues = pure U1
+instance (GTableFromSqlValues be a, GTableFromSqlValues be b) =>
+    GTableFromSqlValues be (a :*: b) where
+        gTableFromSqlValues = do a <- gTableFromSqlValues
+                                 b <- gTableFromSqlValues
+                                 pure (a :*: b)
+instance FromSqlValues be x => GTableFromSqlValues be (K1 Generic.R x) where
+    gTableFromSqlValues = K1 <$> fromSqlValues'
+
+type TableFromSqlValues be t = ( Generic (t Identity)
+                               , GTableFromSqlValues be (Rep (t Identity)) )
+tableFromSqlValues :: TableFromSqlValues be t => FromSqlValuesM be (t Identity)
+tableFromSqlValues = to' <$> gTableFromSqlValues
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f
 pk = primaryKey
 
-instance FromSqlValues t => FromSqlValues (Maybe t) where
-    valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
-    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
-                     do values <- get
-                        let colCount = valuesNeeded (Proxy :: Proxy t)
-                            colValues = take colCount values
-                        if all (==SqlNull) colValues
-                        then put (drop colCount values) >> return Nothing
-                        else Just <$> fromSqlValues'
-
-defTblFieldSettings :: ( Generic (TableSettings table)
-                       ,  GDefaultTableFieldSettings (Rep (TableSettings table) ())) =>
-                       TableSettings table
+defTblFieldSettings :: ( Generic (TableSettings be table)
+                       , GDefaultTableFieldSettings (Rep (TableSettings be table) ())) =>
+                       TableSettings be table
 defTblFieldSettings = withProxy $ \proxy -> to' (gDefTblFieldSettings proxy)
-    where withProxy :: (Proxy (Rep (TableSettings table) ()) -> TableSettings table) -> TableSettings table
+    where withProxy :: (Proxy (Rep (TableSettings be table) ()) -> TableSettings be table) -> TableSettings be table
           withProxy f = f Proxy
 
 fieldColDesc :: FieldSchema fs -> [SQLConstraint] -> SQLColumnSchema
@@ -393,31 +461,33 @@ instance GDefaultTableFieldSettings (p x) => GDefaultTableFieldSettings (C1 f p 
 instance (GDefaultTableFieldSettings (a p), GDefaultTableFieldSettings (b p)) => GDefaultTableFieldSettings ((a :*: b) p) where
     gDefTblFieldSettings (_ :: Proxy ((a :*: b) p)) = gDefTblFieldSettings (Proxy :: Proxy (a p)) :*: gDefTblFieldSettings (Proxy :: Proxy (b p))
 
-instance (Table table, HasDefaultFieldSchema field, Selector f ) =>
-    GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField table field)) p) where
-    gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (TableField table field)) p)) = M1 (K1 s)
-        where s = TableField (T.pack name) [] defFieldSchema
-              name = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (TableField table field)) ()))
+instance (Table table, HasDefaultFieldSchema be field, Selector f ) =>
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField be table field)) p) where
+    gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (TableField be table field)) p)) = M1 (K1 s)
+        where s = TableField (T.pack name) [] (defFieldSchema (Proxy :: Proxy be))
+              name = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (TableField be table field)) ()))
 
 instance ( Table table, Table related
          , Selector f
 
-         , Generic (PrimaryKey related (TableField related))
-         , Generic (PrimaryKey related (TableField table))
-         , GZipTables (TableField related) (TableField related) (TableField table)
+         , Generic (PrimaryKey related (TableField be related))
+         , Generic (PrimaryKey related (TableField be table))
+         , Generic (TableSettings be related)
+         , GDefaultTableFieldSettings (Rep (TableSettings be related) ())
+         , GZipTables (TableField be related) (TableField be related) (TableField be table)
                       (Rep (PrimaryKey related Exposed))
-                      (Rep (PrimaryKey related (TableField related))) (Rep (PrimaryKey related (TableField related))) (Rep (PrimaryKey related (TableField table))) ) =>
-    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (TableField table))) p) where
+                      (Rep (PrimaryKey related (TableField be related))) (Rep (PrimaryKey related (TableField be related))) (Rep (PrimaryKey related (TableField be table))) ) =>
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) p) where
 
     gDefTblFieldSettings _ = M1 . K1 $ primaryKeySettings'
-        where tableSettings = tblFieldSettings :: TableSettings related
-              primaryKeySettings :: PrimaryKey related (TableField related)
+        where tableSettings = defTblFieldSettings :: TableSettings be related
+              primaryKeySettings :: PrimaryKey related (TableField be related)
               primaryKeySettings = primaryKey tableSettings
 
-              primaryKeySettings' :: PrimaryKey related (TableField table)
+              primaryKeySettings' :: PrimaryKey related (TableField be table)
               primaryKeySettings' = to' (runIdentity (gZipTables (Proxy :: Proxy (Rep (PrimaryKey related Exposed))) convertToForeignKeyField (from' primaryKeySettings) (from' primaryKeySettings)))
 
-              convertToForeignKeyField :: Columnar' (TableField related) c -> Columnar' (TableField related) c -> Identity (Columnar' (TableField table) c)
+              convertToForeignKeyField :: Columnar' (TableField be related) c -> Columnar' (TableField be related) c -> Identity (Columnar' (TableField be table) c)
               convertToForeignKeyField (Columnar' tf) _ =
                   pure . Columnar' $
                   tf { _fieldName = keyName <> "__" <> _fieldName tf
@@ -426,83 +496,126 @@ instance ( Table table, Table related
 
               removeConstraints = filter (\x -> x /= SQLPrimaryKey && x /= SQLAutoIncrement)
 
-              keyName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey related (TableField table))) ())))
+              keyName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) ())))
 
 instance ( Table table, Table related
          , Selector f
 
-         , Generic (PrimaryKey related (TableField related))
-         , Generic (PrimaryKey related (TableField table))
-         , Generic (PrimaryKey related (Nullable (TableField table)))
-         , GZipTables (TableField table) (TableField table) (Nullable (TableField table))
+         , Generic (PrimaryKey related (TableField be related))
+         , Generic (PrimaryKey related (TableField be table))
+         , Generic (PrimaryKey related (Nullable (TableField be table)))
+         , Generic (TableSettings be related)
+         , GDefaultTableFieldSettings (Rep (TableSettings be related) ())
+         , GZipTables (TableField be table) (TableField be table) (Nullable (TableField be table))
                       (Rep (PrimaryKey related Exposed))
-                      (Rep (PrimaryKey related (TableField table)))
-                      (Rep (PrimaryKey related (TableField table)))
-                      (Rep (PrimaryKey related (Nullable (TableField table))))
-         , GZipTables (TableField related) (TableField related) (TableField table)
+                      (Rep (PrimaryKey related (TableField be table)))
+                      (Rep (PrimaryKey related (TableField be table)))
+                      (Rep (PrimaryKey related (Nullable (TableField be table))))
+         , GZipTables (TableField be related) (TableField be related) (TableField be table)
                       (Rep (PrimaryKey related Exposed))
-                      (Rep (PrimaryKey related (TableField related)))
-                      (Rep (PrimaryKey related (TableField related)))
-                      (Rep (PrimaryKey related (TableField table)))) =>
-    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (Nullable (TableField table)))) p) where
+                      (Rep (PrimaryKey related (TableField be related)))
+                      (Rep (PrimaryKey related (TableField be related)))
+                      (Rep (PrimaryKey related (TableField be table)))) =>
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (Nullable (TableField be table)))) p) where
 
     gDefTblFieldSettings _ =
         M1 . K1 $ settings
-        where M1 (K1 nonNullSettings) = gDefTblFieldSettings (Proxy :: Proxy (S1 f (K1 Generic.R (PrimaryKey related (TableField table))) p))
-              nonNullSettingsRep = from' nonNullSettings :: Rep (PrimaryKey related (TableField table)) ()
+        where M1 (K1 nonNullSettings) = gDefTblFieldSettings (Proxy :: Proxy (S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) p))
+              nonNullSettingsRep = from' nonNullSettings :: Rep (PrimaryKey related (TableField be table)) ()
 
-              settings :: PrimaryKey related (Nullable (TableField table))
+              settings :: PrimaryKey related (Nullable (TableField be table))
               settings = to' (runIdentity (gZipTables (Proxy :: Proxy (Rep (PrimaryKey related Exposed))) removeNotNullConstraints nonNullSettingsRep nonNullSettingsRep))
 
-              removeNotNullConstraints :: Columnar' (TableField table) ty -> Columnar' (TableField table) ty -> Identity (Columnar' (Nullable (TableField table)) ty)
+              removeNotNullConstraints :: Columnar' (TableField be table) ty -> Columnar' (TableField be table) ty -> Identity (Columnar' (Nullable (TableField be table)) ty)
               removeNotNullConstraints (Columnar' tf) _ =
                   pure . Columnar' $
                   tf { _fieldSchema = maybeFieldSchema (_fieldSchema tf) }
 
+class GTableSkeleton x where
+    gTblSkeleton :: Proxy x -> x ()
+instance GTableSkeleton p => GTableSkeleton (M1 t f p) where
+    gTblSkeleton (_ :: Proxy (M1 t f p)) = M1 (gTblSkeleton (Proxy :: Proxy p))
+instance GTableSkeleton U1 where
+    gTblSkeleton _ = U1
+instance (GTableSkeleton a, GTableSkeleton b) =>
+    GTableSkeleton (a :*: b) where
+        gTblSkeleton _ = gTblSkeleton (Proxy :: Proxy a) :*: gTblSkeleton (Proxy :: Proxy b)
+instance GTableSkeleton (K1 Generic.R (Ignored field)) where
+    gTblSkeleton _ = K1 Ignored
+instance ( Generic (PrimaryKey related Ignored)
+         , GTableSkeleton (Rep (PrimaryKey related Ignored)) ) =>
+    GTableSkeleton (K1 Generic.R (PrimaryKey related Ignored)) where
+    gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (PrimaryKey related Ignored)))))
+instance ( Generic (PrimaryKey related (Nullable Ignored))
+         , GTableSkeleton (Rep (PrimaryKey related (Nullable Ignored))) ) =>
+    GTableSkeleton (K1 Generic.R (PrimaryKey related (Nullable Ignored))) where
+    gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (PrimaryKey related (Nullable Ignored))))))
+
 data FieldSchema ty = FieldSchema
                     { fsColDesc :: SQLColumnSchema
-                    , fsHumanReadable :: String
-                    , fsMakeSqlValue :: ty -> SqlValue
-                    , fsFromSqlValue :: FromSqlValuesM ty }
+                    , fsHumanReadable :: String }
 instance Show (FieldSchema ty) where
-    show (FieldSchema desc hr _ _) = concat ["FieldSchema (", show desc, ") (", show hr, ") _ _"]
+    show (FieldSchema desc hr) = concat ["FieldSchema (", show desc, ") (", show hr, ")"]
 
 -- | Type class for types which can construct a default 'TableField' given a column name.
-class HasDefaultFieldSchema fs where
-    defFieldSchema :: FieldSchema fs
+class HasDefaultFieldSchema be fs where
+    defFieldSchema :: Proxy be -> FieldSchema fs
 
-type FromSqlValuesM a = ErrorT String (State [SqlValue]) a
-popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
+type FromSqlValuesM be a = ErrorT String (State [BeamBackendValue be]) a
+popSqlValue, peekSqlValue :: FromSqlValuesM be (BeamBackendValue be)
 popSqlValue = do st <- get
                  put (tail st)
                  return (head st)
 peekSqlValue = head <$> get
-class FromSqlValues a where
-    fromSqlValues' :: FromSqlValuesM a
-    valuesNeeded :: Proxy a -> Int
-    valuesNeeded _ = 1
+class FromSqlValues be a where
+    fromSqlValues' :: FromSqlValuesM be a
+    makeSqlValues' :: a -> [BeamBackendValue be]
+    valuesNeeded :: Proxy be -> Proxy a -> Int
+    valuesNeeded _ _ = 1
 
-    default fromSqlValues' :: HasDefaultFieldSchema a => FromSqlValuesM a
-    fromSqlValues' = fsFromSqlValue defFieldSchema
-instance Table tbl => FromSqlValues (tbl Identity) where
-    fromSqlValues' = zipTablesM combine settings settings
-        where settings :: TableSettings tbl
-              settings = tblFieldSettings
-
-              combine (Columnar' tf) x = Columnar' <$> fsFromSqlValue (_fieldSchema tf)
-    valuesNeeded _ = tableValuesNeeded (Proxy :: Proxy tbl)
-instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
+    -- default fromSqlValues' :: CanSerialize be a => Proxy be -> FromSqlValuesM be a
+    -- fromSqlValues' = fromSqlValue
+instance (FromSqlValues be t, BeamBackend be) => FromSqlValues be (Maybe t) where
+    valuesNeeded be (_ :: Proxy (Maybe t)) = valuesNeeded be (Proxy :: Proxy t)
+    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
+                     do values <- get
+                        let colCount = valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)
+                            colValues = take colCount values
+                        if all (==sqlNull) colValues
+                        then put (drop colCount values) >> return Nothing
+                        else Just <$> fromSqlValues'
+    makeSqlValues' Nothing = replicate (valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)) sqlNull
+    makeSqlValues' (Just x) = makeSqlValues' x
+instance (TableFromSqlValues be tbl, Beamable tbl, MakeSqlValues be tbl) => FromSqlValues be (tbl Identity) where
+    fromSqlValues' = tableFromSqlValues
+    valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
+    makeSqlValues' = allBeamValues (\(Columnar' (SqlValue' b)) -> b) . makeSqlValues
+instance (BeamBackend be, TableFromSqlValues be tbl, Beamable tbl, MakeSqlValues be tbl, FromSqlValues be (tbl Identity)) => FromSqlValues be (tbl (Nullable Identity)) where
+    valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
+    fromSqlValues' = do tbl <- fromSqlValues'
+                        case tbl of
+                          Just tbl -> pure (changeBeamRep (\(Columnar' x) -> Columnar' (Just x)) (tbl :: tbl Identity))
+                          Nothing -> pure (changeBeamRep (\_ -> Columnar' Nothing) (tblSkeleton :: TableSkeleton tbl))
+    makeSqlValues' tbl = let values = allBeamValues (\(Columnar' b) -> isNothing b) tbl
+                         in if all id values
+                            then makeSqlValues' (Nothing :: Maybe (tbl Identity))
+                            else makeSqlValues' (Just (changeBeamRep (\(Columnar' (Just x)) -> Columnar' x) tbl :: tbl Identity))
+instance (FromSqlValues be a, FromSqlValues be b) => FromSqlValues be (a, b) where
     fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c) => FromSqlValues (a, b, c) where
+    makeSqlValues' (a, b) = makeSqlValues' a <> makeSqlValues' b
+    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b)
+instance (FromSqlValues be a, FromSqlValues be b, FromSqlValues be c) => FromSqlValues be (a, b, c) where
     fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d) => FromSqlValues (a, b, c, d) where
+    makeSqlValues' (a, b, c) = makeSqlValues' a <> makeSqlValues' b <> makeSqlValues' c
+    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c)
+instance (FromSqlValues be a, FromSqlValues be b, FromSqlValues be c, FromSqlValues be d) => FromSqlValues be (a, b, c, d) where
     fromSqlValues' = (,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d, FromSqlValues e) => FromSqlValues (a, b, c, d, e) where
+    makeSqlValues' (a, b, c, d) = makeSqlValues' a <> makeSqlValues' b <> makeSqlValues' c <> makeSqlValues' d
+    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c) + valuesNeeded be (Proxy :: Proxy d)
+instance (FromSqlValues be a, FromSqlValues be b, FromSqlValues be c, FromSqlValues be d, FromSqlValues be e) => FromSqlValues be (a, b, c, d, e) where
     fromSqlValues' = (,,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d) + valuesNeeded (Proxy :: Proxy e)
+    makeSqlValues' (a, b, c, d, e) = makeSqlValues' a <> makeSqlValues' b <> makeSqlValues' c <> makeSqlValues' d <> makeSqlValues' e
+    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c) + valuesNeeded be (Proxy :: Proxy d) + valuesNeeded be (Proxy :: Proxy e)
 
 -- Internal functions
 
@@ -531,12 +644,12 @@ maybeFieldSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
 maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
                             in FieldSchema
                                { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
-                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
-                               , fsMakeSqlValue = \x ->
-                                                  case x of
-                                                    Nothing -> SqlNull
-                                                    Just x -> fsMakeSqlValue base x
-                               , fsFromSqlValue = do val <- peekSqlValue
-                                                     case val of
-                                                       SqlNull -> Nothing <$ popSqlValue
-                                                       val -> Just <$> fsFromSqlValue base }
+                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")" }
+                               -- , fsMakeSqlValue = \x ->
+                               --                    case x of
+                               --                      Nothing -> SqlNull
+                               --                      Just x -> fsMakeSqlValue base x
+                               -- , fsFromSqlValue = do val <- peekSqlValue
+                               --                       case val of
+                               --                         SqlNull -> Nothing <$ popSqlValue
+                               --                         val -> Just <$> fsFromSqlValue base }

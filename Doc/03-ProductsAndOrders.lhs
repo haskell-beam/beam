@@ -40,6 +40,9 @@ I've duplicated all the schema work we've done up until this point below.
 >     data PrimaryKey UserT f = UserId (Columnar f Text) deriving Generic
 >     primaryKey = UserId . _userEmail
 >
+> instance Beamable UserT
+> instance Beamable (PrimaryKey UserT)
+>
 > type UserId = PrimaryKey UserT Identity
 > deriving instance Show UserId
 >
@@ -60,9 +63,8 @@ I've duplicated all the schema work we've done up until this point below.
 >     data PrimaryKey AddressT f = AddressId (Columnar f AutoId) deriving Generic
 >     primaryKey = AddressId . _addressId
 >
->     tblFieldSettings = defTblFieldSettings
->                        & addressStateC . fieldSchema .~ textSchema (Char (Just 2))
->                        & addressZipC . fieldSchema .~ textSchema (Varchar (Just 5))
+> instance Beamable AddressT
+> instance Beamable (PrimaryKey AddressT)
 >
 > Address (LensFor addressIdC)
 >         (LensFor addressLine1C)
@@ -91,6 +93,9 @@ pretty familiar, so I'm going to skip the explanation.
 >   data PrimaryKey ProductT f = ProductId (Columnar f AutoId)
 >                                deriving Generic
 >   primaryKey = ProductId . _productId
+>
+> instance Beamable ProductT
+> instance Beamable (PrimaryKey ProductT)
 
 For orders, we want to store an id, date created, and the user who made the order. We'd also like to
 create an optional link to a shipping information table. When the shipping information is created,
@@ -116,12 +121,17 @@ of relation exists in many existing databases.
 >                                deriving Generic
 >     primaryKey = OrderId . _orderId
 >
+> instance Beamable OrderT
+> instance Beamable (PrimaryKey OrderT)
+>
 > data ShippingCarrier = USPS | FedEx | UPS | DHL
 >                        deriving (Show, Read, Eq, Ord, Enum)
 >
-> instance HasDefaultFieldSchema ShippingCarrier where
->     defFieldSchema = enumSchema
-> instance FromSqlValues ShippingCarrier
+> instance BeamBackend be => HasDefaultFieldSchema be ShippingCarrier where
+>     defFieldSchema _ = enumSchema
+> instance BeamBackend be => FromSqlValues be ShippingCarrier where
+>     fromSqlValues' = fromEnumValue
+>     makeSqlValues' = makeEnumValue
 >
 > data ShippingInfoT f = ShippingInfo
 >                      { _shippingInfoId             :: Columnar f AutoId
@@ -135,6 +145,9 @@ of relation exists in many existing databases.
 >     data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f AutoId)
 >                                       deriving Generic
 >     primaryKey = ShippingInfoId . _shippingInfoId
+>
+> instance Beamable ShippingInfoT
+> instance Beamable (PrimaryKey ShippingInfoT)
 >
 
 The above example also shows how to use a custom data type as a beam column. In this case, we wanted
@@ -161,6 +174,9 @@ relationship between orders and products.
 >     data PrimaryKey LineItemT f = LineItemId (PrimaryKey OrderT f) (PrimaryKey ProductT f)
 >                                   deriving Generic
 >     primaryKey lineItem = LineItemId (_lineItemInOrder lineItem) (_lineItemForProduct lineItem)
+>
+> instance Beamable LineItemT
+> instance Beamable (PrimaryKey LineItemT)
 
 Finally, we'll need some more `Show` instances for GHC to be happy.
 
@@ -182,8 +198,12 @@ Now we'll add all these tables to our database.
 >
 > instance Database ShoppingCartDb
 >
-> shoppingCartDb :: DatabaseSettings ShoppingCartDb
+> ShoppingCartDb { _shoppingCartUserAddresses = TableLens addressT } = dbLenses
+>
+> shoppingCartDb :: DatabaseSettings Sqlite3Settings ShoppingCartDb
 > shoppingCartDb = autoDbSettings
+>                  & addressT . tableSettings . addressStateC . fieldSchema .~ textSchema (Char (Just 2))
+>                  & addressT . tableSettings . addressZipC . fieldSchema .~ textSchema (Varchar (Just 5))
 
 Fixtures
 =======
@@ -226,9 +246,11 @@ Let's put some sample data into our database.
 >           let orders = [ Order UnassignedId now (pk james) (pk jamesAddress1) nothing_
 >                        , Order UnassignedId now (pk betty) (pk bettyAddress1) (just_ (pk bettysShippingInfo))
 >                        , Order UnassignedId now (pk james) (pk jamesAddress1) nothing_ ]
->           Success [jamesOrder1, bettysOrder, jamesOrder2] <-
+>           (res :: BeamResult () [Order]) <-
 >               beamTxn beam $ \db ->
 >                   mapM (insertInto (_shoppingCartOrders db)) orders
+>           putStrLn ("Got " ++ show res)
+>           let Success [jamesOrder1, bettysOrder, jamesOrder2] = res
 >
 >
 >           let lineItems = [ LineItem (pk jamesOrder1) (pk redBall) 10
@@ -398,7 +420,7 @@ Let's count up all shipped and unshipped orders by user, including users who hav
 >                 aggregate (\(user, order) ->
 >                                let ShippingInfoId shippingInfoId = _orderShippingInfo order
 >                                in ( group_ user
->                                   , count_ (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId :: QExpr _ (Maybe Int))
+>                                   , count_ (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId :: QExpr _ _ (Maybe Int))
 >                                   , count_ shippingInfoId )) $
 >                 do user <- all_ (_shoppingCartUsers db)
 >

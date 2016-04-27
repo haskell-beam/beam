@@ -16,11 +16,15 @@ import Data.String
 import Data.Maybe
 import Data.List
 import Data.Proxy
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
 import Database.HDBC
+
+instance Show (MigrationAction be) where
+    show (MACreateTable name t) = concat ["MACreateTable ", unpack name , " ", show (allBeamValues (\(Columnar' tf) -> show tf) t)]
+deriving instance Show (DBSchemaComparison be)
 
 -- | Passed to 'openDatabase' or 'openDatabaseDebug' to specify
 --   whether you want beam to automatically attempt to make the database
@@ -29,29 +33,29 @@ data MigrationStrategy = DontMigrate
                        | AutoMigrate
                          deriving Show
 
-instance Monoid DBSchemaComparison where
+instance Monoid (DBSchemaComparison be) where
     mappend (Migration a) (Migration b) = Migration (a <> b)
     mappend _ Unknown = Unknown
     mappend Unknown _ = Unknown
 
     mempty = Migration []
 
-reifyDBSchema :: Database db => DatabaseSettings db -> ReifiedDatabaseSchema
+reifyDBSchema :: Database db => DatabaseSettings be db -> ReifiedDatabaseSchema
 reifyDBSchema dbSettings =
     let tables = allTableSettings dbSettings
-    in map (\(GenDatabaseTable (DatabaseTable table name)) -> (name, reifyTableSchema table)) tables
+    in map (\(GenDatabaseTable (DatabaseTable _ name table)) -> (name, reifyTableSchema table)) tables
 
-defaultBeamCompareSchemas :: Database db => ReifiedDatabaseSchema -> DatabaseSettings db -> DBSchemaComparison
+defaultBeamCompareSchemas :: Database db => ReifiedDatabaseSchema -> DatabaseSettings be db -> DBSchemaComparison be
 defaultBeamCompareSchemas actual db = execWriter compare
     where dbTables = allTableSettings db
 
-          expected = S.fromList (map (\(GenDatabaseTable (DatabaseTable _ name)) -> name) dbTables)
+          expected = S.fromList (map (\(GenDatabaseTable (DatabaseTable _ name _)) -> name) dbTables)
           actualTables = S.fromList (map fst actual)
 
           tablesToBeMadeNames = expected S.\\ actualTables
-          tablesToBeMade = mapMaybe (\(GenDatabaseTable (DatabaseTable table name)) ->
+          tablesToBeMade = mapMaybe (\(GenDatabaseTable (DatabaseTable _ name tbl)) ->
                                          if name `S.member` tablesToBeMadeNames
-                                         then Just (MACreateTable name table)
+                                         then Just (MACreateTable name tbl)
                                          else Nothing) dbTables
 
           compare = tell (Migration tablesToBeMade)
@@ -64,9 +68,9 @@ hdbcSchema conn =
            do descs <- describeTable conn tbl
               return (fromString tbl, map (fromString *** noConstraints) descs)
 
-createStmtFor :: Table t => Beam db m -> Text -> Proxy t -> SQLCreateTable
-createStmtFor beam name (table :: Proxy t) =
-    let tblSchema = reifyTableSchema table
+createStmtFor :: Table t => Beam be db m -> Text -> TableSettings be t -> SQLCreateTable
+createStmtFor beam name tblFieldSettings =
+    let tblSchema = reifyTableSchema tblFieldSettings
         tblSchema' = map addPrimaryKeyConstraint tblSchema
         tblSchemaInDb' = map (second (adjustColDescForBackend beam)) tblSchema'
 
@@ -74,27 +78,26 @@ createStmtFor beam name (table :: Proxy t) =
             | elem name primaryKeyFields = (name, sch { csConstraints = SQLPrimaryKey:csConstraints sch })
             | otherwise = (name, sch)
 
-        _fieldName' :: Columnar' (TableField t) x -> Text
+        _fieldName' :: Columnar' (TableField be t) x -> Text
         _fieldName' (Columnar' x) = _fieldName x
 
-        primaryKeyFields = pkAllValues _fieldName' (primaryKey (tblFieldSettings :: TableSettings t))
+        primaryKeyFields = allBeamValues _fieldName' (primaryKey tblFieldSettings)
     in SQLCreateTable name tblSchemaInDb'
 
-migrateDB :: MonadIO m => DatabaseSettings db -> Beam db m -> [MigrationAction] -> m ()
-migrateDB db beam actions =
+migrateDB :: (MonadIO m, BeamBackend be) => DatabaseSettings be db -> Beam be db m -> [MigrationAction be] -> m ()
+migrateDB db (beam :: Beam be db m) actions =
   forM_ actions $ \action ->
       do when (beamDebug beam) (liftIO (putStrLn ("Performing " ++ show action)))
 
          case action of
            MACreateTable name t -> do let stmt = createStmtFor beam name t
-                                          (sql, vals) = ppSQL (CreateTable stmt)
+                                          (sql, vals) = ppSQL (CreateTable stmt :: SQLCommand be)
                                       when (beamDebug beam) (liftIO (putStrLn ("Will run SQL:\n" ++sql)))
-                                      withHDBCConnection beam (\conn -> liftIO $ do runRaw conn sql
-                                                                                    commit conn)
+                                      beamExecute beam sql []
                                       when (beamDebug beam) (liftIO (putStrLn "Done..."))
 
 autoMigrateDB db beam =
-    do actDBSchema <- withHDBCConnection beam hdbcSchema
+    do actDBSchema <- beamDescribeDatabase beam
        let comparison = compareSchemas beam actDBSchema db
 
        case comparison of
@@ -102,11 +105,11 @@ autoMigrateDB db beam =
                                  migrateDB db beam actions
          Unknown -> when (beamDebug beam) (liftIO $ putStrLn "Unknown comparison")
 
-openDatabaseDebug, openDatabase :: (BeamBackend dbSettings, MonadIO m, Database db) => DatabaseSettings db -> MigrationStrategy -> dbSettings -> m (Beam db m)
+openDatabaseDebug, openDatabase :: (BeamBackend be, MonadIO m, Database db) => DatabaseSettings be db -> MigrationStrategy -> be -> m (Beam be db m)
 openDatabase = openDatabase' False
 openDatabaseDebug = openDatabase' True
 
-openDatabase' :: (BeamBackend dbSettings, MonadIO m, Database db) => Bool -> DatabaseSettings db -> MigrationStrategy -> dbSettings -> m (Beam db m)
+openDatabase' :: (BeamBackend be, MonadIO m, Database db) => Bool -> DatabaseSettings be db -> MigrationStrategy -> be -> m (Beam be db m)
 openDatabase' isDebug db strat dbSettings =
   do beam <- openBeam db dbSettings
      let beam' = beam { beamDebug = isDebug }
@@ -116,16 +119,20 @@ openDatabase' isDebug db strat dbSettings =
 
      return beam'
 
-dumpSchema :: Database db => DatabaseSettings db -> IO ()
-dumpSchema (db :: DatabaseSettings db) =
-    do let createTableStmts = allTables (\(DatabaseTable tbl name) -> createStmtFor debugBeam name tbl) db
+dumpSchema :: (Database db, BeamBackend be)  => DatabaseSettings be db -> IO ()
+dumpSchema (db :: DatabaseSettings be db) =
+    do let createTableStmts = allTables (\(DatabaseTable _ name tbl) -> createStmtFor debugBeam name tbl) db
        putStrLn "Dumping database schema ..."
-       mapM_ (putStrLn . fst . ppSQL . CreateTable) createTableStmts
-    where debugBeam ::Beam db Identity
+       mapM_ (putStrLn . fst . (ppSQL :: SQLCommand be -> (String, [BeamBackendValue be])) . CreateTable) createTableStmts
+    where debugBeam ::Beam be db Identity
           debugBeam = Beam { beamDbSettings = db
                            , beamDebug = False
                            , closeBeam = return ()
                            , compareSchemas = \_ _ -> Unknown
                            , adjustColDescForBackend = id
                            , getLastInsertedRow = \_ -> return []
-                           , withHDBCConnection = \_ -> error "trying to run in debug mode" }
+
+                           , beamDescribeDatabase = return []
+                           , beamCommit = return ()
+                           , beamRollback = return ()
+                           , beamExecute = \_ _ -> error "trying to run in debug mode" }
