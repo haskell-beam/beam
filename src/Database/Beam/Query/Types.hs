@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Database.Beam.Query.Types
-    ( Q, QExpr, QExprToIdentity(..), TopLevelQ, IsQuery
+    ( Q, QExpr, QExprToIdentity, TopLevelQ, IsQuery
 
     , Projectible(..)
 
@@ -13,25 +13,16 @@ module Database.Beam.Query.Types
 import Database.Beam.Query.Internal
 
 import Database.Beam.Schema.Tables
-import Database.Beam.Schema.Fields
 import Database.Beam.SQL
 import Database.HDBC
 
-import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Writer hiding (All)
 import Control.Monad.Identity
 
-import Data.Monoid hiding (All)
-import Data.Proxy
-import Data.Coerce
-import Data.Data
-import Data.Maybe
 import Data.String
 import qualified Data.Text as T
 import Data.Generics.Uniplate.Data
-
-import Unsafe.Coerce
 
 -- * Beam queries
 
@@ -43,11 +34,6 @@ type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
 type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
 type instance QExprToIdentity (a, b, c, d) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d)
 type instance QExprToIdentity (a, b, c, d, e) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e)
-
-instance IsQuery Q where
-    toQ = id
-instance IsQuery TopLevelQ where
-    toQ (TopLevelQ q) = q
 
 -- * Rewriting and optimization
 
@@ -61,11 +47,12 @@ booleanOpts (SQLBinOpE "OR" q (SQLValE (SqlBool False))) = Just q
 booleanOpts (SQLBinOpE "OR" (SQLValE (SqlBool False)) q) = Just q
 booleanOpts (SQLBinOpE "OR" (SQLValE (SqlBool True)) (SQLValE (SqlBool True))) = Just (SQLValE (SqlBool True))
 
-booleanOpts x = Nothing
+booleanOpts _ = Nothing
 
 -- | Rewrite function to optimize an expression, will return `Nothing`
 -- if the current expression cannot be rewritten any further. Suitable
 -- to be passed to `rewriteM`.
+allExprOpts :: Applicative f => SQLExpr -> f (Maybe SQLExpr)
 allExprOpts e = pure (booleanOpts e)
 
 -- | Given a `SQLExpr' QField` optimize the expression and turn it into a `SQLExpr`.

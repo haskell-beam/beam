@@ -4,8 +4,8 @@
 module Database.Beam.Schema.Tables
     (
     -- * Database Types
-      Database(..), GenDatabaseTable(..), DatabaseTable(..), DatabaseSettings(..)
-    , ReifiedDatabaseSchema(..), ReifiedTableSchema(..)
+      Database(..), GenDatabaseTable(..), DatabaseTable(..), DatabaseSettings
+    , ReifiedDatabaseSchema, ReifiedTableSchema
     , autoDbSettings
     , allTableSettings
 
@@ -13,11 +13,11 @@ module Database.Beam.Schema.Tables
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
-    , Columnar(..), Columnar'(..)
-    , Nullable(..), TableField(..)
+    , Columnar, Columnar'(..)
+    , Nullable, TableField(..)
     , fieldName, fieldConstraints, fieldSchema, maybeFieldSchema
 
-    , TableSettings(..)
+    , TableSettings
 
     -- * Tables
     , Table(..), defTblFieldSettings
@@ -33,26 +33,20 @@ module Database.Beam.Schema.Tables
 
 import Database.Beam.SQL.Types
 
-import Control.Arrow
-import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Writer
 import Control.Monad.Error
 import Control.Monad.Identity
 
 import Data.Proxy
-import Data.Coerce
 import Data.Typeable
 import Data.Text (Text)
 import Data.List
 import Data.Char
 import Data.String
-import Data.Void
-import Data.Monoid
 import qualified Data.Text as T
 
-import Database.HDBC ( SqlColDesc(..), SqlValue(..), SqlTypeId(..)
-                     , fromSql)
+import Database.HDBC (SqlValue(..))
 
 import GHC.Generics hiding (R)
 import qualified GHC.Generics as Generic

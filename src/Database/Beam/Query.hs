@@ -17,34 +17,23 @@ import Database.Beam.Query.Combinators
 import Database.Beam.Query.Internal
 
 import Database.Beam.Schema.Tables
-import Database.Beam.Schema.Fields
 import Database.Beam.Internal
 import Database.Beam.SQL
-import Database.Beam.SQL.Types
 
-import Control.Applicative
 import Control.Arrow
 import Control.Monad.Trans
-import Control.Monad.Writer (tell, execWriter, Writer)
 import Control.Monad.State
 import Control.Monad.Error
 import Control.Monad.Identity
 
-import Data.Monoid hiding (All)
 import Data.Proxy
-import Data.Data
 import Data.List (find)
 import Data.Maybe
-import Data.Convertible
-import Data.String (fromString)
 import Data.Conduit
 import qualified Data.Conduit.List as C
-import qualified Data.Set as S
 import qualified Data.Text as T
 
 import Database.HDBC
-
-import Unsafe.Coerce
 
 -- * Query
 
@@ -53,7 +42,7 @@ runSQL' debug conn cmd = do
   let (sql, vals) = ppSQL cmd
   when debug (putStrLn ("Will execute " ++ sql ++ " with " ++ show vals))
   stmt <- prepare conn sql
-  execute stmt vals
+  _ <- execute stmt vals
   return (Right (fetchRow stmt))
 
 -- * Data insertion, updating, and deletion
@@ -66,7 +55,7 @@ runInsert :: (MonadIO m, Table table, FromSqlValues (table Identity)) => T.Text 
 runInsert tableName (table :: table Identity) beam =
     do let insertCmd = Insert sqlInsert
            sqlInsert@(SQLInsert tblName sqlValues) = insertToSQL tableName table
-       withHDBCConnection beam (\conn -> liftIO (runSQL' (beamDebug beam) conn insertCmd))
+       _ <- withHDBCConnection beam (\conn -> liftIO (runSQL' (beamDebug beam) conn insertCmd))
 
        -- There are three possibilities here:
        --
@@ -90,7 +79,7 @@ runInsert tableName (table :: table Identity) beam =
        return (fromSqlValues insertedValues)
 
 -- | Insert the given row value into the table specified by the first argument.
-insertInto :: (MonadIO m, Functor m, Table table, FromSqlValues (table Identity)) =>
+insertInto :: (MonadIO m, Table table, FromSqlValues (table Identity)) =>
               DatabaseTable db table -> table Identity -> BeamT e db m (table Identity)
 insertInto (DatabaseTable _ name) data_ =
     BeamT (\beam -> toBeamResult <$> runInsert name data_ beam)
@@ -132,7 +121,7 @@ updateWhere tbl@(DatabaseTable _ name :: DatabaseTable db tbl) mkAssignments mkW
              let updateCmd = Update upd
              in BeamT $ \beam ->
                  withHDBCConnection beam $ \conn ->
-                     do liftIO (runSQL' (beamDebug beam) conn updateCmd)
+                     do _ <- liftIO (runSQL' (beamDebug beam) conn updateCmd)
                         pure (Success ())
 
 -- | Use the 'PrimaryKey' of the given table entry to update the corresponding table row in the
@@ -153,7 +142,7 @@ deleteWhere (DatabaseTable _ name :: DatabaseTable db tbl) mkWhere =
                            where_ -> Just where_ }
     in BeamT $ \beam ->
         withHDBCConnection beam $ \conn ->
-            do liftIO (runSQL' (beamDebug beam) conn cmd)
+            do _ <- liftIO (runSQL' (beamDebug beam) conn cmd)
                pure (Success ())
 
 -- | Delete the entry referenced by the given 'PrimaryKey' in the given table.
@@ -169,8 +158,8 @@ beamTxn :: MonadIO m => Beam db m -> (DatabaseSettings db -> BeamT e db m a) -> 
 beamTxn beam action = do res <- runBeamT (action (beamDbSettings beam)) beam
                          withHDBCConnection beam $
                              case res of
-                               Success  x -> liftIO . commit
-                               Rollback e -> liftIO . rollback
+                               Success  _ -> liftIO . commit
+                               Rollback _ -> liftIO . rollback
                          return res
 
 toBeamResult :: Either String a -> BeamResult e a
@@ -202,7 +191,7 @@ runQuery q beam =
 
 -- | Run the given query in the transaction and yield a 'Source' that can be used to read results
 -- incrementally. If your result set is small and you want to just get a list, use 'queryList'.
-query :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m (Source (BeamT e db m) (QExprToIdentity a))
+query :: (IsQuery q, MonadIO m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m (Source (BeamT e db m) (QExprToIdentity a))
 query q = BeamT $ \beam ->
           do res <- runQuery q beam
              case res of
@@ -211,13 +200,13 @@ query q = BeamT $ \beam ->
 
 -- | Execute 'query' and use the 'Data.Conduit.List.consume' function to return a list of
 -- results. Best used for small result sets.
-queryList :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m [QExprToIdentity a]
+queryList :: (IsQuery q, MonadIO m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m [QExprToIdentity a]
 queryList q = do src <- query q
                  src $$ C.consume
 
 -- | Execute the query using 'query' and return exactly one result. The return value will be
 -- 'Nothing' if either zero or more than one values were returned.
-getOne :: (IsQuery q, MonadIO m, Functor m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m (Maybe (QExprToIdentity a))
+getOne :: (IsQuery q, MonadIO m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m (Maybe (QExprToIdentity a))
 getOne q =
     do let justOneSink = await >>= \x ->
                          case x of

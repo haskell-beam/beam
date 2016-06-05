@@ -4,12 +4,10 @@ import Database.Beam.SQL.Types
 import Database.Beam.Schema
 
 import qualified Data.Text as T
-import Data.Typeable
-import Data.Coerce
+import Data.String
+import Data.Convertible
 
-import Control.Applicative
 import Control.Monad.State
-import Control.Monad.Writer hiding (All)
 import Control.Monad.Identity
 
 import Database.HDBC
@@ -28,6 +26,11 @@ newtype Q (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State QueryBuild
 --   without the use of 'subquery_'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
 --   directly to 'query' or 'queryList'
 newtype TopLevelQ db s a = TopLevelQ (Q db s a)
+
+instance IsQuery Q where
+    toQ = id
+instance IsQuery TopLevelQ where
+    toQ (TopLevelQ q) = q
 
 data QNested s
 
@@ -55,10 +58,32 @@ data QField = QField
 newtype QExpr s t = QExpr (SQLExpr' QField)
     deriving (Show, Eq)
 
+instance IsString (QExpr s T.Text) where
+    fromString = QExpr . SQLValE . SqlString
+instance (Num a, Convertible a SqlValue) => Num (QExpr s a) where
+    fromInteger = QExpr . SQLValE . convert
+    QExpr a + QExpr b = QExpr (SQLBinOpE "+" a b)
+    QExpr a - QExpr b = QExpr (SQLBinOpE "-" a b)
+    QExpr a * QExpr b = QExpr (SQLBinOpE "*" a b)
+    negate (QExpr a) = QExpr (SQLUnOpE "-" a)
+    abs (QExpr x) = QExpr (SQLFuncE "ABS" [x])
+    signum _ = error "signum: not defined for QExpr. Use CASE...WHEN"
+
 -- * Aggregations
 
 data Aggregation s a = GroupAgg (SQLExpr' QField)
                      | ProjectAgg (SQLExpr' QField)
+
+instance IsString (Aggregation s T.Text) where
+    fromString = ProjectAgg . SQLValE . SqlString
+instance (Num a, Convertible a SqlValue) => Num (Aggregation s a) where
+    fromInteger x = ProjectAgg (SQLValE (convert (fromInteger x :: a)))
+    ProjectAgg a + ProjectAgg b = ProjectAgg (SQLBinOpE "+" a b)
+    ProjectAgg a - ProjectAgg b = ProjectAgg (SQLBinOpE "-" a b)
+    ProjectAgg a * ProjectAgg b = ProjectAgg (SQLBinOpE "*" a b)
+    negate (ProjectAgg a) = ProjectAgg (SQLUnOpE "-" a)
+    abs (ProjectAgg x) = ProjectAgg (SQLFuncE "ABS" [x])
+    signum _ = error "signum: not defined for Aggregation. Use CASE...WHEN"
 
 -- * Sql Projections
 --
@@ -69,7 +94,7 @@ data Aggregation s a = GroupAgg (SQLExpr' QField)
 
 class Projectible a where
     project :: a -> [SQLExpr' QField]
-instance Typeable a => Projectible (QExpr s a) where
+instance Projectible (QExpr s a) where
     project (QExpr x) = [x]
 instance Projectible () where
     project () = [SQLValE (SqlInteger 1)]

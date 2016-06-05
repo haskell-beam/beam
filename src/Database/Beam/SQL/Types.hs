@@ -2,10 +2,8 @@
 module Database.Beam.SQL.Types where
 
 import Data.Text (Text)
-import Data.Time.Clock
 import Data.Monoid
 import Data.Data
-import Data.Functor
 
 import Database.HDBC
 
