@@ -52,7 +52,20 @@ library
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable
 
+executable beam-example
+  main-is:             Employees.hs
+  build-depends:       base         >=4.7  && <4.10
+                     , beam
+                     , mtl          >=2.2  && <2.3
+                     , text         >=1.2  && <1.3
+                     , time         >=1.5  && <1.7
+                     , microlens    >=0.1  && <0.5
+  hs-source-dirs:      example
+  default-language:    Haskell2010
+  default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
+                       GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
+                       DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable
+
 source-repository head
   type: git
   location: https://github.com/tathougies/beam.git
-

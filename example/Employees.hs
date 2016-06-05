@@ -1,4 +1,3 @@
-{-# LANGUAGE StandaloneDeriving, TypeSynonymInstances, FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings, UndecidableInstances #-}
 module Main where
 
 import Database.Beam
