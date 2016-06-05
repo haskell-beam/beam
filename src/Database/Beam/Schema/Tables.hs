@@ -35,7 +35,7 @@ import Database.Beam.SQL.Types
 
 import Control.Monad.State
 import Control.Monad.Writer
-import Control.Monad.Error
+import Control.Monad.Except
 import Control.Monad.Identity
 
 import Data.Proxy
@@ -465,7 +465,7 @@ instance Show (FieldSchema ty) where
 class HasDefaultFieldSchema fs where
     defFieldSchema :: FieldSchema fs
 
-type FromSqlValuesM a = ErrorT String (State [SqlValue]) a
+type FromSqlValuesM a = ExceptT String (State [SqlValue]) a
 popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
 popSqlValue = do st <- get
                  put (tail st)

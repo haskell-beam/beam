@@ -23,7 +23,7 @@ import Database.Beam.SQL
 import Control.Arrow
 import Control.Monad.Trans
 import Control.Monad.State
-import Control.Monad.Error
+import Control.Monad.Except
 import Control.Monad.Identity
 
 import Data.Proxy
@@ -152,7 +152,7 @@ deleteFrom tbl pkToDelete = deleteWhere tbl (\tbl -> primaryKey tbl ==. val_ pkT
 -- * BeamT actions
 
 -- | Run the 'BeamT' action in a database transaction. On successful
--- completion, the transaction will be committed. Use 'throwError' to
+-- completion, the transaction will be committed. Use 'throwE' to
 -- stop the transaction and report an error.
 beamTxn :: MonadIO m => Beam db m -> (DatabaseSettings db -> BeamT e db m a) -> m (BeamResult e a)
 beamTxn beam action = do res <- runBeamT (action (beamDbSettings beam)) beam
@@ -221,7 +221,7 @@ getOne q =
 
 fromSqlValues :: FromSqlValues a => [SqlValue] -> Either String a
 fromSqlValues vals =
-    case runState (runErrorT fromSqlValues') vals of
+    case runState (runExceptT fromSqlValues') vals of
       (Right a, []) -> Right a
       (Right _,  _) -> Left "fromSqlValues: Not all values were consumed"
       (Left err, _) -> Left err

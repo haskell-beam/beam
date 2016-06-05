@@ -7,7 +7,7 @@ import Database.Beam.SQL.Types
 import Control.Applicative
 import Control.Monad
 import Control.Arrow
-import Control.Monad.Error
+import Control.Monad.Except
 import Control.Monad.Reader
 
 import Data.Text (Text, unpack)
@@ -52,9 +52,6 @@ data BeamResult e a = Success a
 data BeamRollbackReason e = InternalError String
                           | UserError e
                             deriving Show
-instance Error (BeamRollbackReason e) where
-    strMsg = InternalError
-
 
 transBeam :: Functor m => (forall a. (s -> m (a, Maybe b)) -> n a) -> (forall a. n a -> s -> m (a, b)) -> Beam d m -> Beam d n
 transBeam lift lower beam = beam
