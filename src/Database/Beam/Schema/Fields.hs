@@ -3,27 +3,19 @@ module Database.Beam.Schema.Fields where
 import Database.Beam.Schema.Tables
 import Database.Beam.SQL.Types
 
-import Control.Applicative
-import Control.Arrow
-import Control.Monad.State
-import Control.Monad.Error
-
 import Data.Time.Clock
 import Data.Text (Text, unpack)
-import Data.Proxy
-import Data.String
 import Data.Typeable
 
 import Database.HDBC ( SqlColDesc(..), SqlTypeId(..), SqlValue(..)
                      , fromSql)
 
-import GHC.Generics hiding (R)
-import qualified GHC.Generics as Generic
+import GHC.Generics
 
 -- * Fields
 
-enumSchema :: (Enum a, Show a, Read a, Typeable a) => FieldSchema a
-enumSchema = let schema :: (Enum a, Typeable a) => FieldSchema a
+enumSchema :: Enum a => FieldSchema a
+enumSchema = let schema :: Enum a => FieldSchema a
                  schema = FieldSchema
                           { fsColDesc = fsColDesc intSchema
                           , fsHumanReadable = "enumField"
@@ -126,4 +118,3 @@ autoIdSchema = FieldSchema
 instance HasDefaultFieldSchema AutoId where
     defFieldSchema = autoIdSchema
 instance FromSqlValues AutoId
-

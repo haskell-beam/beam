@@ -6,19 +6,15 @@ import Database.Beam.SQL.Types
 import Database.Beam.SQL
 
 import Control.Arrow
-import Control.Applicative
 import Control.Monad.Trans
 import Control.Monad.Writer
 import Control.Monad.Identity
-import Control.Monad
 
 import Data.String
 import Data.Maybe
-import Data.List
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Set as S
-import qualified Data.Map as M
 
 import Database.HDBC
 
@@ -42,7 +38,7 @@ reifyDBSchema dbSettings =
     in map (\(GenDatabaseTable (DatabaseTable table name)) -> (name, reifyTableSchema table)) tables
 
 defaultBeamCompareSchemas :: Database db => ReifiedDatabaseSchema -> DatabaseSettings db -> DBSchemaComparison
-defaultBeamCompareSchemas actual db = execWriter compare
+defaultBeamCompareSchemas actual db = execWriter cmp
     where dbTables = allTableSettings db
 
           expected = S.fromList (map (\(GenDatabaseTable (DatabaseTable _ name)) -> name) dbTables)
@@ -54,7 +50,7 @@ defaultBeamCompareSchemas actual db = execWriter compare
                                          then Just (MACreateTable name table)
                                          else Nothing) dbTables
 
-          compare = tell (Migration tablesToBeMade)
+          cmp = tell (Migration tablesToBeMade)
 
 hdbcSchema :: (IConnection conn, MonadIO m) => conn -> m ReifiedDatabaseSchema
 hdbcSchema conn =
@@ -70,9 +66,9 @@ createStmtFor beam name (table :: Proxy t) =
         tblSchema' = map addPrimaryKeyConstraint tblSchema
         tblSchemaInDb' = map (second (adjustColDescForBackend beam)) tblSchema'
 
-        addPrimaryKeyConstraint (name, sch)
-            | elem name primaryKeyFields = (name, sch { csConstraints = SQLPrimaryKey:csConstraints sch })
-            | otherwise = (name, sch)
+        addPrimaryKeyConstraint (keyName, sch)
+            | elem keyName primaryKeyFields = (keyName, sch { csConstraints = SQLPrimaryKey:csConstraints sch })
+            | otherwise = (keyName, sch)
 
         _fieldName' :: Columnar' (TableField t) x -> Text
         _fieldName' (Columnar' x) = _fieldName x
@@ -80,26 +76,28 @@ createStmtFor beam name (table :: Proxy t) =
         primaryKeyFields = pkAllValues _fieldName' (primaryKey (tblFieldSettings :: TableSettings t))
     in SQLCreateTable name tblSchemaInDb'
 
-migrateDB :: MonadIO m => DatabaseSettings db -> Beam db m -> [MigrationAction] -> m ()
-migrateDB db beam actions =
+migrateDB :: MonadIO m => Beam db m -> [MigrationAction] -> m ()
+migrateDB beam actions =
   forM_ actions $ \action ->
       do when (beamDebug beam) (liftIO (putStrLn ("Performing " ++ show action)))
 
          case action of
            MACreateTable name t -> do let stmt = createStmtFor beam name t
-                                          (sql, vals) = ppSQL (CreateTable stmt)
-                                      when (beamDebug beam) (liftIO (putStrLn ("Will run SQL:\n" ++sql)))
+                                          (sql, _) = ppSQL (CreateTable stmt)
+                                      when (beamDebug beam) (liftIO (putStrLn ("Will run SQL:\n" ++ sql)))
                                       withHDBCConnection beam (\conn -> liftIO $ do runRaw conn sql
                                                                                     commit conn)
                                       when (beamDebug beam) (liftIO (putStrLn "Done..."))
 
+
+autoMigrateDB :: MonadIO m => DatabaseSettings d -> Beam d m -> m ()
 autoMigrateDB db beam =
     do actDBSchema <- withHDBCConnection beam hdbcSchema
        let comparison = compareSchemas beam actDBSchema db
 
        case comparison of
          Migration actions -> do when (beamDebug beam) (liftIO $ putStrLn ("Comparison result: " ++ show actions))
-                                 migrateDB db beam actions
+                                 migrateDB beam actions
          Unknown -> when (beamDebug beam) (liftIO $ putStrLn "Unknown comparison")
 
 openDatabaseDebug, openDatabase :: (BeamBackend dbSettings, MonadIO m, Database db) => DatabaseSettings db -> MigrationStrategy -> dbSettings -> m (Beam db m)

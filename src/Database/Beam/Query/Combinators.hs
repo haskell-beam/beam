@@ -12,7 +12,7 @@ module Database.Beam.Query.Combinators
     , exists_
 
     , (<.), (>.), (<=.), (>=.), (==.), (&&.), (||.), not_, div_, mod_
-    , HaskellLiteralForQExpr(..), SqlValable(..)
+    , HaskellLiteralForQExpr, SqlValable(..)
 
     -- * SQL GROUP BY and aggregation
     , aggregate, SqlGroupable(..)
@@ -29,7 +29,6 @@ import Database.Beam.Query.Internal
 import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
-import Database.Beam.Schema.Fields
 import Database.Beam.SQL
 import Database.HDBC
 
@@ -37,43 +36,18 @@ import Control.Monad.State
 import Control.Monad.RWS
 import Control.Monad.Identity
 
-import Data.Monoid
-import Data.String
-import Data.Maybe
+import Data.String (fromString)
 import Data.Proxy
 import Data.Convertible
 import Data.Text (Text)
-import Data.Coerce
 
-instance IsString (QExpr s Text) where
-    fromString = QExpr . SQLValE . SqlString
-instance (Num a, Convertible a SqlValue) => Num (QExpr s a) where
-    fromInteger x = let res :: QExpr s a
-                        res = val_ (fromInteger x)
-                    in res
-    QExpr a + QExpr b = QExpr (SQLBinOpE "+" a b)
-    QExpr a - QExpr b = QExpr (SQLBinOpE "-" a b)
-    QExpr a * QExpr b = QExpr (SQLBinOpE "*" a b)
-    negate (QExpr a) = QExpr (SQLUnOpE "-" a)
-    abs (QExpr x) = QExpr (SQLFuncE "ABS" [x])
-    signum x = error "signum: not defined for QExpr. Use CASE...WHEN"
-instance IsString (Aggregation s Text) where
-    fromString = ProjectAgg . SQLValE . SqlString
-instance (Num a, Convertible a SqlValue) => Num (Aggregation s a) where
-    fromInteger x = ProjectAgg (SQLValE (convert (fromInteger x :: a)))
-    ProjectAgg a + ProjectAgg b = ProjectAgg (SQLBinOpE "+" a b)
-    ProjectAgg a - ProjectAgg b = ProjectAgg (SQLBinOpE "-" a b)
-    ProjectAgg a * ProjectAgg b = ProjectAgg (SQLBinOpE "*" a b)
-    negate (ProjectAgg a) = ProjectAgg (SQLUnOpE "-" a)
-    abs (ProjectAgg x) = ProjectAgg (SQLFuncE "ABS" [x])
-    signum x = error "signum: not defined for Aggregation. Use CASE...WHEN"
 
 -- | Introduce all entries of a table into the 'Q' monad
-all_ :: Database db => DatabaseTable db table -> Q db s (table (QExpr s))
+all_ :: DatabaseTable db table -> Q db s (table (QExpr s))
 all_ tbl = join_ tbl (val_ True)
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given SQLExpr
-join_ :: Database db => DatabaseTable db table -> QExpr s Bool -> Q db s (table (QExpr s))
+join_ :: DatabaseTable db table -> QExpr s Bool -> Q db s (table (QExpr s))
 join_ (DatabaseTable table name :: DatabaseTable db table) (QExpr on) =
     do curTbl <- gets qbNextTblRef
        modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
@@ -122,25 +96,25 @@ guard_ :: QExpr s Bool -> Q db s ()
 guard_ (QExpr guardE') = modify $ \qb@QueryBuilder { qbWhere = guardE } -> qb { qbWhere = SQLBinOpE "AND" guardE guardE' }
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
-related_ :: (Database db, Table rel) => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
+related_ :: Table rel => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
 related_ (relTbl :: DatabaseTable db rel) pk =
     mdo rel <- join_ relTbl (pk ==. primaryKey rel)
         pure rel
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
-relatedBy_ :: (Database db, Table rel) => DatabaseTable db rel -> (rel (QExpr s) -> QExpr s Bool) -> Q db s (rel (QExpr s))
+relatedBy_ :: DatabaseTable db rel -> (rel (QExpr s) -> QExpr s Bool) -> Q db s (rel (QExpr s))
 relatedBy_ (relTbl :: DatabaseTable db rel) mkOn =
     mdo rel <- join_ relTbl (mkOn rel)
         pure rel
 
 -- | Introduce related entries of the given table, or if no related entries exist, introduce the null table
-perhapsAll_ :: (Database db, Table rel) => DatabaseTable db rel -> (rel (Nullable (QExpr s)) -> QExpr s Bool) -> Q db s (rel (Nullable (QExpr s)))
+perhapsAll_ :: Database db => DatabaseTable db rel -> (rel (Nullable (QExpr s)) -> QExpr s Bool) -> Q db s (rel (Nullable (QExpr s)))
 perhapsAll_ relTbl expr =
     mdo rel <- leftJoin_ relTbl (expr rel)
         pure rel
 
 -- | Synonym for 'related_'
-lookup_ :: (Database db, Table rel) => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
+lookup_ :: Table rel => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
 lookup_ = related_
 
 class SqlReferences f s where
@@ -190,6 +164,7 @@ exists_ q = let (_, _, selectCmd) = queryToSQL' (toQ q) 0
 class SqlOrd a s where
     (==.), (/=.) :: a -> a -> QExpr s Bool
     a /=. b = not_ (a ==. b)
+    a ==. b = not_ (a /=. b)
 
 instance SqlOrd (QExpr s a) s where
     (==.) = binOpE "=="
@@ -211,6 +186,7 @@ instance {-# OVERLAPPING #-} Table tbl => SqlOrd (tbl (Nullable (QExpr s))) s wh
     a ==. b = let tblCmp = runIdentity (zipTablesM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: tbl (QExprBool s)
               in foldr (&&.) (val_ True) (fieldAllValues (\(Columnar' (QExprBool x)) -> x) tblCmp)
 
+binOpE :: Text -> QExpr s a -> QExpr s a -> QExpr s b
 binOpE op (QExpr a) (QExpr b) = QExpr (SQLBinOpE op a b)
 
 (<.), (>.), (<=.), (>=.) :: QExpr s a -> QExpr s a -> QExpr s Bool
@@ -339,7 +315,7 @@ count_ (QExpr over) = ProjectAgg (SQLFuncE "COUNT" [over])
 --
 -- will group the result of the `all_ employeesTable` query using the `_employeeRegion` record
 -- field, and then count up the number of employees for each region.
-aggregate :: (Projectible a, Aggregating agg s) => (a -> agg) -> Q db s a -> TopLevelQ db s (LiftAggregationsToQExpr agg s)
+aggregate :: Aggregating agg s => (a -> agg) -> Q db s a -> TopLevelQ db s (LiftAggregationsToQExpr agg s)
 aggregate (aggregator :: a -> agg) (q :: Q db s a) =
     TopLevelQ $
     do res <- q

@@ -8,13 +8,10 @@ module Database.Beam.SQL
 
 import Database.Beam.SQL.Types
 
-import Control.Applicative hiding (empty)
 import Control.Arrow hiding ((<+>))
 import Control.Monad.Writer hiding ((<>))
 
-import Data.Maybe
 import Data.Text (Text, unpack)
-import Data.String
 
 import Database.HDBC
 
@@ -151,40 +148,48 @@ ppSource :: SQLSource -> DocAndVals
 ppSource (SQLSourceTable tbl) = return (text (unpack tbl))
 ppSource (SQLSourceSelect sel) = parens <$> ppSel sel
 
+ppWhere :: SQLExpr' SQLFieldName -> Writer [SqlValue] Doc
 ppWhere (SQLValE v)
     | safeFromSql v == Right True = return empty
 ppWhere expr = (text "WHERE" <+>) <$> ppExpr expr
 
-ppFieldName (SQLQualifiedFieldName t table) = return (text "`" <> text (unpack table) <> text "`.`" <>
-                                                      text (unpack t) <> text "`")
-ppFieldName (SQLFieldName t) = return (text (unpack t))
+ppFieldName :: Applicative f => SQLFieldName -> f Doc
+ppFieldName (SQLQualifiedFieldName t table) = pure (text "`" <> text (unpack table) <> text "`.`" <>
+                                                     text (unpack t) <> text "`")
+ppFieldName (SQLFieldName t) = pure (text (unpack t))
 
+ppGrouping :: SQLGrouping -> Writer [SqlValue] Doc
 ppGrouping grouping = do exprs <- mapM ppExpr (sqlGroupBy grouping)
                          having <-  ppHaving (sqlHaving grouping)
                          return (text "GROUP BY" <+> hsep (punctuate comma exprs) <+> having)
 
+ppHaving :: SQLExpr' SQLFieldName -> Writer [SqlValue] Doc
 ppHaving (SQLValE v)
          | safeFromSql v == Right True = return empty
 ppHaving expr = (text "HAVING" <+>) <$> ppExpr expr
 
+ppFrom :: SQLFrom -> Writer [SqlValue] Doc
 ppFrom x = fst <$> ppFrom' x
 
+ppFrom' :: SQLFrom -> Writer [SqlValue] (Doc, Bool)
 ppFrom' (SQLFromSource a) = (,False) <$> ppAliased ppSource a
 ppFrom' (SQLJoin jType x y on_) = do (xDoc, _) <- ppFrom' x
                                      jTypeDoc <- ppJType jType
                                      (yDoc, yIsJoin) <- ppFrom' y
                                      onDoc <- ppOn on_
                                      return (xDoc <+> jTypeDoc <+> if yIsJoin then yDoc else yDoc <+> onDoc, True)
+ppJType :: Applicative f => SQLJoinType -> f Doc
+ppJType SQLInnerJoin = pure (text "INNER JOIN")
+ppJType SQLLeftJoin =  pure (text "LEFT JOIN")
+ppJType SQLRightJoin = pure (text "RIGHT JOIN")
+ppJType SQLOuterJoin = pure (text "OUTER JOIN")
 
-ppJType SQLInnerJoin = return (text "INNER JOIN")
-ppJType SQLLeftJoin = return (text "LEFT JOIN")
-ppJType SQLRightJoin = return (text "RIGHT JOIN")
-ppJType SQLOuterJoin = return (text "OUTER JOIN")
-
+ppOn :: SQLExpr' SQLFieldName -> Writer [SqlValue] Doc
 ppOn (SQLValE v)
      | safeFromSql v == Right True = return empty
 ppOn expr = (text "ON" <+>) <$> ppExpr expr
 
+ppOrderBy :: [SQLOrdering] -> Writer [SqlValue] Doc
 ppOrderBy [] = return empty
 ppOrderBy xs = (text "ORDER BY" <+>) . hsep . punctuate comma <$> mapM ppOrdering xs
     where ppOrdering (Asc e) = do eDoc <- ppExpr e

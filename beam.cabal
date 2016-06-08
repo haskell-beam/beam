@@ -13,9 +13,10 @@ maintainer:          travis@athougies.net
 -- copyright:
 category:            Database
 build-type:          Simple
--- extra-source-files:
+extra-source-files:  README.md CHANGELOG.md
 cabal-version:       >=1.18
 bug-reports:         https://github.com/tathougies/beam/issues
+stability:           Moderately Stable
 
 
 library
@@ -31,8 +32,20 @@ library
                        Database.Beam.Schema.Lenses
                        Database.Beam.Schema.Tables
                        Database.Beam.Schema.Fields
-  build-depends:       base >=4.7 && <4.9, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers,
-                       conduit, convertible, microlens, uniplate
+  build-depends:       base         >=4.7  && <4.10
+                     , semigroups   >=0.13 && <0.19
+                     , mtl          >=2.2  && <2.3
+                     , containers   >=0.5  && <0.6
+                     , text         >=1.2  && <1.3
+                     , time         >=1.5  && <1.7
+                     , microlens    >=0.1  && <0.5
+                     , conduit      >=1.2  && <1.3
+                     , uniplate     >=1.6
+                     , tagged       >=0.7  && <0.9
+                     , convertible  >=1.1
+                     , pretty       >=1.1  && <1.2
+                     , HDBC         >=2.4
+                     , HDBC-sqlite3 >=2.3.3
   hs-source-dirs:      src
   default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,

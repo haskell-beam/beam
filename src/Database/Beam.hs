@@ -26,7 +26,6 @@ module Database.Beam
      , Beam, BeamBackend, BeamT, BeamResult(..), BeamRollbackReason(..) ) where
 
 import Database.Beam.Internal
-import Database.Beam.SQL
 import Database.Beam.Query
 import Database.Beam.Schema
 import Database.Beam.Backend
@@ -35,6 +34,5 @@ import Control.Monad.Trans
 import Control.Monad.Identity
 
 import Data.Typeable
-import Data.Conduit
 
 import GHC.Generics
