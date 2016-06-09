@@ -57,14 +57,14 @@ textSchema charOrVarchar = FieldSchema
                            , fsMakeSqlValue = SqlString . unpack
                            , fsFromSqlValue = fromSql <$> popSqlValue }
     where colDesc = case charOrVarchar of
-                      Char n -> notNull $
+                      Char n -> notNull
                                 SqlColDesc
                                 { colType = SqlCharT
                                 , colSize = n
                                 , colOctetLength = Nothing
                                 , colDecDigits = Nothing
                                 , colNullable = Nothing }
-                      Varchar n -> notNull $
+                      Varchar n -> notNull
                                    SqlColDesc
                                    { colType = SqlVarCharT
                                    , colSize = n
@@ -80,7 +80,7 @@ instance FromSqlValues Text
 
 dateTimeSchema :: FieldSchema UTCTime
 dateTimeSchema = FieldSchema
-                 { fsColDesc = notNull $
+                 { fsColDesc = notNull
                                SqlColDesc
                                { colType = SqlUTCDateTimeT
                                , colSize = Nothing
