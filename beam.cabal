@@ -51,6 +51,7 @@ library
 
 executable beam-example
   main-is:             Employees.hs
+  other-modules:       EmployeesData
   build-depends:       base         >=4.7  && <4.10
                      , beam
                      , mtl          >=2.2  && <2.3
