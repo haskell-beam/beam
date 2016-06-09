@@ -8,44 +8,50 @@ import System.Environment (getArgs)
 
 import EmployeesData
 
+departments :: [Department]
+departments =
+    [ Department "accounting"
+    , Department "operations"
+    , Department "product"
+    , Department "sales"
+    , Department "IT" ]
+
+employees :: [Employee]
+employees =
+    [ Employee UnassignedId "James" "Smith" (GroupId "ItGroup1" "IT") DepartmentLead
+    , Employee UnassignedId "Taylor" "Jones" (GroupId "ItGroup1" "IT") Analyst
+    , Employee UnassignedId "Samantha" "Nolen" (GroupId "ItGroup2" "IT") Analyst
+
+    , Employee UnassignedId "Maurice" "Davies" (GroupId "OpsGroup1" "operations") DepartmentLead
+    , Employee UnassignedId "Bob" "Lee" (GroupId "OpsGroup2" "operations") Analyst
+    , Employee UnassignedId "Constantine" "Nevos" (GroupId "OpsGroup3" "operations") Analyst
+
+    , Employee UnassignedId "Tom" "Jones" (GroupId "Alpha" "sales") DepartmentLead
+    , Employee UnassignedId "Toby" "Roberts" (GroupId "Alpha" "sales") Analyst
+    , Employee UnassignedId "Katy" "Barry" (GroupId "Beta" "sales") Analyst
+    , Employee UnassignedId "Amy" "Zely" (GroupId "Beta" "sales") Analyst
+    , Employee UnassignedId "Pierre" "Berger" (GroupId "Gamma" "sales") Analyst
+    , Employee UnassignedId "Blaise" "Solle" (GroupId "Gamma" "sales") Analyst ]
+
+groups :: [Group]
+groups =
+    [ Group "ItGroup1" (DepartmentId "IT") "New York"
+    , Group "ItGroup2" (DepartmentId "IT") "Los Angeles"
+    , Group "OpsGroup1" (DepartmentId "operations") "Boston"
+    , Group "OpsGroup2" (DepartmentId "operations") "Los Angeles"
+    , Group "OpsGroup3" (DepartmentId "operations") "New York"
+
+    , Group "Alpha" (DepartmentId "sales") "Los Angeles"
+    , Group "Beta" (DepartmentId "sales") "New York"
+    , Group "Gamma" (DepartmentId "sales") "Boston" ]
+
 -- * main functions
 main :: IO ()
 main = do [sqliteDbPath] <- getArgs
           beam <- openDatabaseDebug employeeDb AutoMigrate (Sqlite3Settings sqliteDbPath)
 
           _ <- beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->
-            do let departments = [ Department "accounting"
-                                 , Department "operations"
-                                 , Department "product"
-                                 , Department "sales"
-                                 , Department "IT" ]
-
-                   employees = [ Employee UnassignedId "James" "Smith" (GroupId "ItGroup1" "IT") DepartmentLead
-                               , Employee UnassignedId "Taylor" "Jones" (GroupId "ItGroup1" "IT") Analyst
-                               , Employee UnassignedId "Samantha" "Nolen" (GroupId "ItGroup2" "IT") Analyst
-
-                               , Employee UnassignedId "Maurice" "Davies" (GroupId "OpsGroup1" "operations") DepartmentLead
-                               , Employee UnassignedId "Bob" "Lee" (GroupId "OpsGroup2" "operations") Analyst
-                               , Employee UnassignedId "Constantine" "Nevos" (GroupId "OpsGroup3" "operations") Analyst
-
-                               , Employee UnassignedId "Tom" "Jones" (GroupId "Alpha" "sales") DepartmentLead
-                               , Employee UnassignedId "Toby" "Roberts" (GroupId "Alpha" "sales") Analyst
-                               , Employee UnassignedId "Katy" "Barry" (GroupId "Beta" "sales") Analyst
-                               , Employee UnassignedId "Amy" "Zely" (GroupId "Beta" "sales") Analyst
-                               , Employee UnassignedId "Pierre" "Berger" (GroupId "Gamma" "sales") Analyst
-                               , Employee UnassignedId "Blaise" "Solle" (GroupId "Gamma" "sales") Analyst  ]
-
-                   groups = [ Group "ItGroup1" (DepartmentId "IT") "New York"
-                            , Group "ItGroup2" (DepartmentId "IT") "Los Angeles"
-                            , Group "OpsGroup1" (DepartmentId "operations") "Boston"
-                            , Group "OpsGroup2" (DepartmentId "operations") "Los Angeles"
-                            , Group "OpsGroup3" (DepartmentId "operations") "New York"
-
-                            , Group "Alpha" (DepartmentId "sales") "Los Angeles"
-                            , Group "Beta" (DepartmentId "sales") "New York"
-                            , Group "Gamma" (DepartmentId "sales") "Boston"]
-
-               mapM_ (insertInto departmentsT) departments
+            do mapM_ (insertInto departmentsT) departments
                mapM_ (insertInto groupsT) groups
 
                employees'@[ _, _, _, _, _, _
@@ -55,28 +61,28 @@ main = do [sqliteDbPath] <- getArgs
                liftIO (putStrLn "Inserted employees")
                liftIO (mapM_ print employees')
 
-               let orders = [ Order UnassignedId (pk tomJones) 100
-                            , Order UnassignedId (pk tomJones) 500
-                            , Order UnassignedId (pk tomJones) 2500
+               let orders =
+                       [ Order UnassignedId (pk tomJones) 100
+                       , Order UnassignedId (pk tomJones) 500
+                       , Order UnassignedId (pk tomJones) 2500
 
-                            , Order UnassignedId (pk tobyRoberts) 400
-                            , Order UnassignedId (pk tobyRoberts) 550
+                       , Order UnassignedId (pk tobyRoberts) 400
+                       , Order UnassignedId (pk tobyRoberts) 550
 
-                            , Order UnassignedId (pk katyBarry) 50
-                            , Order UnassignedId (pk katyBarry) 430
-                            , Order UnassignedId (pk katyBarry) 80
-                            , Order UnassignedId (pk katyBarry) 210
+                       , Order UnassignedId (pk katyBarry) 50
+                       , Order UnassignedId (pk katyBarry) 430
+                       , Order UnassignedId (pk katyBarry) 80
+                       , Order UnassignedId (pk katyBarry) 210
 
-                            , Order UnassignedId (pk amyZely) 200
-                            , Order UnassignedId (pk amyZely) 50
+                       , Order UnassignedId (pk amyZely) 200
+                       , Order UnassignedId (pk amyZely) 50
 
-                            , Order UnassignedId (pk pierreBerger) 300
-                            , Order UnassignedId (pk pierreBerger) 140
-                            , Order UnassignedId (pk pierreBerger) 20
+                       , Order UnassignedId (pk pierreBerger) 300
+                       , Order UnassignedId (pk pierreBerger) 140
+                       , Order UnassignedId (pk pierreBerger) 20
 
-                            , Order UnassignedId (pk blaiseSolle) 350
-                            , Order UnassignedId (pk blaiseSolle) 1000 ]
-
+                       , Order UnassignedId (pk blaiseSolle) 350
+                       , Order UnassignedId (pk blaiseSolle) 1000 ]
                mapM_ (insertInto ordersT) orders
 
                liftIO (putStrLn "---- Query 1: All departments")
