@@ -3,14 +3,8 @@ module Main where
 import Database.Beam
 import Database.Beam.Backend.Sqlite3
 
-import Control.Monad
-import Control.Monad.Identity
-
-import Data.Typeable
+import Control.Arrow
 import Data.Text
-import Data.Time.Clock
-
-import GHC.Generics
 
 import Lens.Micro
 
@@ -120,10 +114,11 @@ employeeDb :: DatabaseSettings EmployeeDatabase
 employeeDb = autoDbSettings
 
 -- * main functions
+main :: IO ()
 main = do [sqliteDbPath] <- getArgs
           beam <- openDatabaseDebug employeeDb AutoMigrate (Sqlite3Settings sqliteDbPath)
 
-          beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->
+          _ <- beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->
             do let departments = [ Department "accounting"
                                  , Department "operations"
                                  , Department "product"
@@ -163,7 +158,7 @@ main = do [sqliteDbPath] <- getArgs
                           , amyZely, pierreBerger, blaiseSolle ] <-
                    mapM (insertInto employeesT) employees
                liftIO (putStrLn "Inserted employees")
-               liftIO (mapM_ (putStrLn . show) employees')
+               liftIO (mapM_ print employees')
 
                let orders = [ Order UnassignedId (pk tomJones) 100
                             , Order UnassignedId (pk tomJones) 500
@@ -191,7 +186,7 @@ main = do [sqliteDbPath] <- getArgs
 
                liftIO (putStrLn "---- Query 1: All departments")
                q1 <- queryList (all_ departmentsT)
-               liftIO (mapM_ (putStrLn . show) q1)
+               liftIO (mapM_ print q1)
 
                liftIO (putStrLn "\n---- Query 2: All employees in new york")
                q2 <- queryList $
@@ -201,7 +196,7 @@ main = do [sqliteDbPath] <- getArgs
                         guard_ (_groupLocation group ==. "New York")
 
                         pure (employee, group)
-               liftIO (mapM_ (putStrLn . show) q2)
+               liftIO (mapM_ print q2)
 
                liftIO (putStrLn "\n---- Query 3: All employees (and their associated departments) based in Los Angeles")
                q3 <- queryList $
@@ -211,11 +206,11 @@ main = do [sqliteDbPath] <- getArgs
 
                         dept <- related_ departmentsT (_groupDeptId group)
                         pure (employee, dept)
-               liftIO (mapM_ (putStrLn . show) q3)
+               liftIO (mapM_ print q3)
 
                liftIO (putStrLn "\n---- Query 4: Total orders by region")
                q4 <- queryList $
-                     aggregate (\(amount, location) -> (group_ location, sum_ amount)) $
+                     aggregate (sum_ *** group_) $
                                do order <- all_ ordersT
                                   employee <- related_ employeesT (_orderTakenBy order)
                                   group <- related_ groupsT (_employeeGroup employee)
@@ -223,14 +218,14 @@ main = do [sqliteDbPath] <- getArgs
 --                                  guard_ (_orderCreated order >=# val_ yearAgo)
 
                                   pure (_orderAmount order, _groupLocation group)
-               liftIO (mapM_ (putStrLn . show) q4)
+               liftIO (mapM_ print q4)
 
                liftIO (putStrLn "\n---- Query 5: All employees in the highest grossing region")
                q5 <- queryList $
                      do (_, highestGrossingRegion) <- subquery_ $
                                                       limit_ 1 $
-                                                      orderBy (\(amount, location) -> desc_ amount) $
-                                                      aggregate (\(amount, location) -> (sum_ amount, group_ location)) $
+                                                      orderBy (desc_ . fst) $
+                                                      aggregate (sum_ *** group_) $
                                                       do order <- all_ ordersT
                                                          employee <- related_ employeesT (_orderTakenBy order)
                                                          group <- related_ groupsT (_employeeGroup employee)
@@ -240,4 +235,5 @@ main = do [sqliteDbPath] <- getArgs
                         group <- related_ groupsT (_employeeGroup employee)
                         guard_ (_groupLocation group ==. highestGrossingRegion)
                         pure employee
-               liftIO (mapM_ (putStrLn . show) q5)
+               liftIO (mapM_ print q5)
+          return ()
