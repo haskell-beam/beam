@@ -50,8 +50,7 @@ all_ tbl = join_ tbl (val_ True)
 join_ :: forall db table s. DatabaseTable db table -> QExpr s Bool -> Q db s (table (QExpr s))
 join_ (DatabaseTable _ name :: DatabaseTable db table) (QExpr on) =
     do curTbl <- gets qbNextTblRef
-       modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
-                                 , qbFrom = from
+       modify $ \qb@QueryBuilder { qbFrom = from
                                  , qbWhere = where_ } ->
            let (from', where') = case from of
                                    Nothing -> (Just newSource,
@@ -76,11 +75,10 @@ join_ (DatabaseTable _ name :: DatabaseTable db table) (QExpr on) =
 leftJoin_ :: forall db table s. Database db => DatabaseTable db table -> QExpr s Bool -> Q db s (table (Nullable (QExpr s)))
 leftJoin_ (DatabaseTable _ name :: DatabaseTable db table) on =
     do curTbl <- gets qbNextTblRef
-       modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
-                                 , qbFrom = from } ->
+       modify $ \qb@QueryBuilder { qbFrom = from } ->
                 let from' = case from of
                               Nothing -> error "leftJoin_: empty select source"
-                              Just from -> SQLJoin SQLLeftJoin from newSource (optimizeExpr on)
+                              Just x -> SQLJoin SQLLeftJoin x newSource (optimizeExpr on)
                     newSource = SQLFromSource (SQLAliased (SQLSourceTable name) (Just (fromString ("t" <> show curTbl))))
                 in qb { qbNextTblRef = curTbl + 1
                       , qbFrom = Just from' }
