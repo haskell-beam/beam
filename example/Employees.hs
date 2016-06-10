@@ -4,7 +4,7 @@ import Database.Beam
 import Database.Beam.Backend.Sqlite3
 
 import Control.Arrow
-import System.Environment (getArgs)
+import System.Environment (getArgs, getProgName)
 
 import EmployeesData
 
@@ -47,7 +47,11 @@ groups =
 
 -- * main functions
 main :: IO ()
-main = do [sqliteDbPath] <- getArgs
+main = do args <- getArgs
+          progName <- getProgName
+          let sqliteDbPath = case args of
+                               [x] -> x
+                               otherwise -> error $ "Usage: " ++ progName ++ " [path to SQLite3 database]"
           beam <- openDatabaseDebug employeeDb AutoMigrate (Sqlite3Settings sqliteDbPath)
 
           _ <- beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->
