@@ -27,7 +27,7 @@ module Database.Beam.Schema.Tables
     , pkMakeSqlValues, makeSqlValues
 
     -- * Fields
-    , HasDefaultFieldSchema(..), FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
+    , HasDefaultFieldSchema(..), FieldSchema(..), FromSqlValuesM, FromSqlValues(..)
     , popSqlValue, peekSqlValue )
     where
 
@@ -287,32 +287,32 @@ reifyTableSchema (Proxy :: Proxy table) = fieldAllValues (\(Columnar' (TableFiel
 tableValuesNeeded :: Table table => Proxy table -> Int
 tableValuesNeeded (Proxy :: Proxy table) = length (fieldAllValues (const ()) (tblFieldSettings :: TableSettings table))
 
-pkAllValues :: Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
-pkAllValues (f :: forall a. Columnar' f a -> b) (pk :: PrimaryKey table f) = execWriter (zipPkM combine pk pk)
+pkAllValues :: forall f b t. Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
+pkAllValues (f :: forall a. Columnar' f a -> b) (k :: PrimaryKey t f) = execWriter (zipPkM combine k k)
     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
           combine x _ = do tell [f x]
                            return x
 
-fieldAllValues :: Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
-fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: table f) = execWriter (zipTablesM combine tbl tbl)
+fieldAllValues :: forall t f b. Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
+fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: t f) = execWriter (zipTablesM combine tbl tbl)
     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
           combine x _ = do tell [f x]
                            return x
 
-pkChangeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
-pkChangeRep f pk = runIdentity (zipPkM (\x _ -> return (f x))  pk pk)
+pkChangeRep :: forall t f g. Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
+pkChangeRep f k = runIdentity (zipPkM (\x _ -> return (f x)) k k)
 
-changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
+changeRep :: forall t f g. Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
 changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
 
-pkMakeSqlValues :: Table t => PrimaryKey t Identity -> PrimaryKey t SqlValue'
-pkMakeSqlValues pk = runIdentity (zipPkM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) pk (primaryKey tblFieldSettings))
+pkMakeSqlValues :: forall t. Table t => PrimaryKey t Identity -> PrimaryKey t SqlValue'
+pkMakeSqlValues k = runIdentity (zipPkM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) k (primaryKey tblFieldSettings))
 
-makeSqlValues :: Table t => t Identity -> t SqlValue'
+makeSqlValues :: forall t. Table t => t Identity -> t SqlValue'
 makeSqlValues tbl = runIdentity (zipTablesM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) tbl tblFieldSettings)
 
 -- | Synonym for 'primaryKey'
-pk :: Table t => t f -> PrimaryKey t f
+pk :: forall t f. Table t => t f -> PrimaryKey t f
 pk = primaryKey
 
 instance FromSqlValues t => FromSqlValues (Maybe t) where
@@ -483,7 +483,7 @@ instance Table tbl => FromSqlValues (tbl Identity) where
         where settings :: TableSettings tbl
               settings = tblFieldSettings
 
-              combine (Columnar' tf) x = Columnar' <$> fsFromSqlValue (_fieldSchema tf)
+              combine (Columnar' tf) _ = Columnar' <$> fsFromSqlValue (_fieldSchema tf)
     valuesNeeded _ = tableValuesNeeded (Proxy :: Proxy tbl)
 instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
     fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
@@ -517,7 +517,7 @@ unCamelCase s
 
 unCamelCaseSel :: String -> String
 unCamelCaseSel ('_':xs) = unCamelCaseSel xs
-unCamelCaseSel xs = case unCamelCase xs of
+unCamelCaseSel x = case unCamelCase x of
                       [xs] -> xs
                       _:xs -> intercalate "_" xs
 
@@ -526,11 +526,9 @@ maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
                             in FieldSchema
                                { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
                                , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
-                               , fsMakeSqlValue = \x ->
-                                                  case x of
+                               , fsMakeSqlValue = \case
                                                     Nothing -> SqlNull
                                                     Just x -> fsMakeSqlValue base x
-                               , fsFromSqlValue = do val <- peekSqlValue
-                                                     case val of
-                                                       SqlNull -> Nothing <$ popSqlValue
-                                                       val -> Just <$> fsFromSqlValue base }
+                               , fsFromSqlValue = peekSqlValue >>= \case
+                                                    SqlNull -> Nothing <$ popSqlValue
+                                                    _ -> Just <$> fsFromSqlValue base }

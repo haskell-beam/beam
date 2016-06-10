@@ -21,7 +21,7 @@ module Database.Beam
 
      , liftIO
 
-     , Beam, BeamBackend, BeamT, BeamResult(..), BeamRollbackReason(..) ) where
+     , BeamResult(..), BeamRollbackReason(..) ) where
 
 import Database.Beam.Internal as X
 import Database.Beam.Query as X

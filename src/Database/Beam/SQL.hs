@@ -42,8 +42,8 @@ ppCreateTable (SQLCreateTable tblName schema) =
            primaryKeyExpr = case primaryKeys of
                               [] -> []
                               keys ->
-                                  let primaryKeys = map (text . unpack . fst) keys
-                                  in [text "PRIMARY KEY(" <+> hsep (punctuate comma primaryKeys) <+> text ")" ]
+                                  let pks = map (text . unpack . fst) keys
+                                  in [text "PRIMARY KEY(" <+> hsep (punctuate comma pks) <+> text ")" ]
        return (text "CREATE TABLE" <+> text (unpack tblName) <+> parens (hsep (punctuate comma (fieldSchemas ++ primaryKeyExpr))))
 
 ppFieldSchema :: (Text, SQLColumnSchema) -> DocAndVals
@@ -52,8 +52,8 @@ ppFieldSchema (name, colSch) = (text (unpack name) <+>) <$> ppColSchema colSch
 ppColSchema :: SQLColumnSchema -> DocAndVals
 ppColSchema (SQLColumnSchema type_ constraints) =
     do typeDoc <- ppColType type_
-       constraints <- mapM ppConstraint constraints
-       return (typeDoc <+> hsep constraints)
+       constraints' <- mapM ppConstraint constraints
+       return (typeDoc <+> hsep constraints')
 
 ppConstraint :: SQLConstraint -> DocAndVals
 ppConstraint SQLPrimaryKey = return empty --(text "PRIMARY KEY")
@@ -100,7 +100,7 @@ ppUpdate (SQLUpdate tbls assignments where_) =
     do assignmentsDs <- mapM (uncurry ppAssignment) assignments
        whereClause_  <- case where_ of
                           Nothing -> return empty
-                          Just where_ -> ppWhere where_
+                          Just x -> ppWhere x
        return (text "UPDATE" <+> hsep (punctuate comma (map (text . unpack) tbls)) <+>
                text "SET"    <+> hsep (punctuate comma assignmentsDs) <+>
                whereClause_)
@@ -111,7 +111,7 @@ ppDelete :: SQLDelete -> DocAndVals
 ppDelete (SQLDelete tbl where_) =
     do whereClause_ <- case where_ of
                          Nothing -> return empty
-                         Just where_ -> ppWhere where_
+                         Just x -> ppWhere x
        return (text "DELETE FROM" <+> text (unpack tbl) <+> whereClause_)
 
 -- ** Select printing support
@@ -136,8 +136,8 @@ ppSel sel =
 ppProj :: SQLProjection -> DocAndVals
 ppProj SQLProjStar = return (text "*")
 ppProj (SQLProj es) =
-    do es <- mapM (ppAliased ppExpr) es
-       return (hsep (punctuate comma es))
+    do es' <- mapM (ppAliased ppExpr) es
+       return (hsep (punctuate comma es'))
 
 ppAliased :: (a -> DocAndVals) -> SQLAliased a -> DocAndVals
 ppAliased ppSub (SQLAliased x (Just as)) = do sub <- ppSub x

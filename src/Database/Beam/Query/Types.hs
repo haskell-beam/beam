@@ -21,7 +21,6 @@ import Control.Monad.Writer hiding (All)
 import Control.Monad.Identity
 
 import Data.String
-import qualified Data.Text as T
 import Data.Generics.Uniplate.Data
 
 -- * Beam queries
@@ -64,14 +63,14 @@ optimizeExpr :: QExpr s a -> SQLExpr
 optimizeExpr (QExpr e) = optimizeExpr' e
 
 mkSqlField :: QField -> SQLFieldName
-mkSqlField (QField tblName (Just tblOrd) fieldName) = SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd))
-mkSqlField (QField tblName Nothing fieldName) = SQLFieldName fieldName
+mkSqlField (QField _ (Just tblOrd) fieldNm) = SQLQualifiedFieldName fieldNm ("t" <> fromString (show tblOrd))
+mkSqlField (QField _ Nothing fieldNm) = SQLFieldName fieldNm
 
 -- | Turn a `Q` into a `SQLSelect` starting the table references at the given number
 queryToSQL' :: Projectible a => Q db s a -> Int -> (a, Int, SQLSelect)
 queryToSQL' q curTbl = let (res, qb) = runState (runQ q) emptyQb
                            emptyQb = QueryBuilder curTbl Nothing (SQLValE (SqlBool True)) Nothing Nothing [] Nothing
-                           projection = map (\q -> SQLAliased (optimizeExpr' q) Nothing) (project res)
+                           projection = map (\e -> SQLAliased (optimizeExpr' e) Nothing) (project res)
 
                            sel = SQLSelect
                                  { selProjection = SQLProj projection

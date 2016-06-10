@@ -4,22 +4,27 @@ module Database.Beam.Internal where
 import Database.Beam.Schema.Tables
 import Database.Beam.SQL.Types
 
-import Control.Applicative
 import Control.Monad
 import Control.Arrow
 import Control.Monad.Except
-import Control.Monad.Reader
 
 import Data.Text (Text, unpack)
 import Data.Proxy
-import Data.String
 import Data.Typeable
+import Data.Monoid ((<>))
 
 import Database.HDBC
 
 data DBSchemaComparison = Migration [MigrationAction]
                         | Unknown
                           deriving Show
+
+instance Monoid DBSchemaComparison where
+    mappend (Migration a) (Migration b) = Migration (a <> b)
+    mappend _ Unknown = Unknown
+    mappend Unknown _ = Unknown
+
+    mempty = Migration []
 
 data MigrationAction where
     MACreateTable :: Table table => Text -> Proxy table -> MigrationAction
@@ -54,15 +59,13 @@ data BeamRollbackReason e = InternalError String
                             deriving Show
 
 transBeam :: Functor m => (forall a. (s -> m (a, Maybe b)) -> n a) -> (forall a. n a -> s -> m (a, b)) -> Beam d m -> Beam d n
-transBeam lift lower beam = beam
-                          { closeBeam = lift (const ((,Nothing) <$> closeBeam beam))
-                          , getLastInsertedRow = \s -> lift (const ((, Nothing) <$> getLastInsertedRow beam s))
-                          , withHDBCConnection = \f -> lift (\s -> second Just <$> withHDBCConnection beam (flip lower s . f)) }
+transBeam liftB lower beam = beam
+                          { closeBeam = liftB (const ((,Nothing) <$> closeBeam beam))
+                          , getLastInsertedRow = \s -> liftB (const ((, Nothing) <$> getLastInsertedRow beam s))
+                          , withHDBCConnection = \f -> liftB (\s -> second Just <$> withHDBCConnection beam (flip lower s . f)) }
 
 instance Monad m => Monad (BeamT e d m) where
-    a >>= mkB = BeamT $ \beam ->
-                do x <- runBeamT a beam
-                   case x of
+    a >>= mkB = BeamT $ \beam -> runBeamT a beam >>= \case
                      Success x -> runBeamT (mkB x) beam
                      Rollback e -> return (Rollback e)
     return = BeamT . const . return . Success

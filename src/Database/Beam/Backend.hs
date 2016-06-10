@@ -25,13 +25,6 @@ data MigrationStrategy = DontMigrate
                        | AutoMigrate
                          deriving Show
 
-instance Monoid DBSchemaComparison where
-    mappend (Migration a) (Migration b) = Migration (a <> b)
-    mappend _ Unknown = Unknown
-    mappend Unknown _ = Unknown
-
-    mempty = Migration []
-
 reifyDBSchema :: Database db => DatabaseSettings db -> ReifiedDatabaseSchema
 reifyDBSchema dbSettings =
     let tables = allTableSettings dbSettings

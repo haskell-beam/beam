@@ -5,7 +5,6 @@ import Database.Beam.SQL.Types
 
 import Data.Time.Clock
 import Data.Text (Text, unpack)
-import Data.Typeable
 
 import Database.HDBC ( SqlColDesc(..), SqlTypeId(..), SqlValue(..)
                      , fromSql)
