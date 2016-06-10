@@ -51,7 +51,7 @@ main = do args <- getArgs
           progName <- getProgName
           let sqliteDbPath = case args of
                                [x] -> x
-                               otherwise -> error $ "Usage: " ++ progName ++ " [path to SQLite3 database]"
+                               _ -> error $ "Usage: " ++ progName ++ " [path to SQLite3 database]"
           beam <- openDatabaseDebug employeeDb AutoMigrate (Sqlite3Settings sqliteDbPath)
 
           _ <- beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->
