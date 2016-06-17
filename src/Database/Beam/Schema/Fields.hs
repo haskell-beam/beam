@@ -1,15 +1,83 @@
 module Database.Beam.Schema.Fields where
 
-import Database.Beam.Schema.Tables
 import Database.Beam.SQL.Types
 
 import Data.Time.Clock
 import Data.Text (Text, unpack)
+import Data.Proxy
+import Control.Monad.State
+import Control.Monad.Except
 
 import Database.HDBC ( SqlColDesc(..), SqlTypeId(..), SqlValue(..)
                      , fromSql)
 
 import GHC.Generics
+
+
+-- | Type class for types which can construct a default 'TableField' given a column name.
+class HasDefaultFieldSchema fs where
+    defFieldSchema :: FieldSchema fs
+
+data FieldSchema ty = FieldSchema
+                    { fsColDesc :: SQLColumnSchema
+                    , fsHumanReadable :: String
+                    , fsMakeSqlValue :: ty -> SqlValue
+                    , fsFromSqlValue :: FromSqlValuesM ty }
+instance Show (FieldSchema ty) where
+    show (FieldSchema desc hr _ _) = concat ["FieldSchema (", show desc, ") (", show hr, ") _ _"]
+
+
+type FromSqlValuesM a = ExceptT String (State [SqlValue]) a
+popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
+popSqlValue = do st <- get
+                 put (tail st)
+                 return (head st)
+peekSqlValue = head <$> get
+class FromSqlValues a where
+    fromSqlValues' :: FromSqlValuesM a
+    valuesNeeded :: Proxy a -> Int
+    valuesNeeded _ = 1
+
+    default fromSqlValues' :: HasDefaultFieldSchema a => FromSqlValuesM a
+    fromSqlValues' = fsFromSqlValue defFieldSchema
+
+instance FromSqlValues t => FromSqlValues (Maybe t) where
+    valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
+    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
+                     do values <- get
+                        let colCount = valuesNeeded (Proxy :: Proxy t)
+                            colValues = take colCount values
+                        if all (==SqlNull) colValues
+                        then put (drop colCount values) >> return Nothing
+                        else Just <$> fromSqlValues'
+
+instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
+    fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
+    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b)
+instance (FromSqlValues a, FromSqlValues b, FromSqlValues c) => FromSqlValues (a, b, c) where
+    fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
+    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
+instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d) => FromSqlValues (a, b, c, d) where
+    fromSqlValues' = (,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
+    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d)
+instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d, FromSqlValues e) => FromSqlValues (a, b, c, d, e) where
+    fromSqlValues' = (,,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
+    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d) + valuesNeeded (Proxy :: Proxy e)
+
+
+maybeFieldSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
+maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
+                            in FieldSchema
+                               { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
+                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
+                               , fsMakeSqlValue = \case
+                                                    Nothing -> SqlNull
+                                                    Just x -> fsMakeSqlValue base x
+                               , fsFromSqlValue = peekSqlValue >>= \case
+                                                       SqlNull -> Nothing <$ popSqlValue
+                                                       _ -> Just <$> fsFromSqlValue base }
+
+
 
 -- * Fields
 

@@ -16,7 +16,7 @@ import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.Internal
 
-import Database.Beam.Schema.Tables
+import Database.Beam.Schema
 import Database.Beam.Internal
 import Database.Beam.SQL
 

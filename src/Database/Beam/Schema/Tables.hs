@@ -15,7 +15,7 @@ module Database.Beam.Schema.Tables
     -- * Columnar and Column Tags
     , Columnar, Columnar'(..)
     , Nullable, TableField(..)
-    , fieldName, fieldConstraints, fieldSchema, maybeFieldSchema
+    , fieldName, fieldConstraints, fieldSchema
 
     , TableSettings
 
@@ -25,17 +25,13 @@ module Database.Beam.Schema.Tables
     , pk
     , pkAllValues, fieldAllValues, pkChangeRep, changeRep
     , pkMakeSqlValues, makeSqlValues
-
-    -- * Fields
-    , HasDefaultFieldSchema(..), FieldSchema(..), FromSqlValuesM, FromSqlValues(..)
-    , popSqlValue, peekSqlValue )
+    )
     where
 
+import Database.Beam.Schema.Fields
 import Database.Beam.SQL.Types
 
-import Control.Monad.State
 import Control.Monad.Writer
-import Control.Monad.Except
 import Control.Monad.Identity
 
 import Data.Proxy
@@ -315,16 +311,6 @@ makeSqlValues tbl = runIdentity (zipTablesM (\(Columnar' x) (Columnar' tf) -> re
 pk :: forall t f. Table t => t f -> PrimaryKey t f
 pk = primaryKey
 
-instance FromSqlValues t => FromSqlValues (Maybe t) where
-    valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
-    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
-                     do values <- get
-                        let colCount = valuesNeeded (Proxy :: Proxy t)
-                            colValues = take colCount values
-                        if all (==SqlNull) colValues
-                        then put (drop colCount values) >> return Nothing
-                        else Just <$> fromSqlValues'
-
 defTblFieldSettings :: ( Generic (TableSettings table)
                        ,  GDefaultTableFieldSettings (Rep (TableSettings table) ())) =>
                        TableSettings table
@@ -453,31 +439,6 @@ instance ( Table table, Table related
                   pure . Columnar' $
                   tf { _fieldSchema = maybeFieldSchema (_fieldSchema tf) }
 
-data FieldSchema ty = FieldSchema
-                    { fsColDesc :: SQLColumnSchema
-                    , fsHumanReadable :: String
-                    , fsMakeSqlValue :: ty -> SqlValue
-                    , fsFromSqlValue :: FromSqlValuesM ty }
-instance Show (FieldSchema ty) where
-    show (FieldSchema desc hr _ _) = concat ["FieldSchema (", show desc, ") (", show hr, ") _ _"]
-
--- | Type class for types which can construct a default 'TableField' given a column name.
-class HasDefaultFieldSchema fs where
-    defFieldSchema :: FieldSchema fs
-
-type FromSqlValuesM a = ExceptT String (State [SqlValue]) a
-popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
-popSqlValue = do st <- get
-                 put (tail st)
-                 return (head st)
-peekSqlValue = head <$> get
-class FromSqlValues a where
-    fromSqlValues' :: FromSqlValuesM a
-    valuesNeeded :: Proxy a -> Int
-    valuesNeeded _ = 1
-
-    default fromSqlValues' :: HasDefaultFieldSchema a => FromSqlValuesM a
-    fromSqlValues' = fsFromSqlValue defFieldSchema
 instance Table tbl => FromSqlValues (tbl Identity) where
     fromSqlValues' = zipTablesM combine settings settings
         where settings :: TableSettings tbl
@@ -485,18 +446,6 @@ instance Table tbl => FromSqlValues (tbl Identity) where
 
               combine (Columnar' tf) _ = Columnar' <$> fsFromSqlValue (_fieldSchema tf)
     valuesNeeded _ = tableValuesNeeded (Proxy :: Proxy tbl)
-instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
-    fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c) => FromSqlValues (a, b, c) where
-    fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d) => FromSqlValues (a, b, c, d) where
-    fromSqlValues' = (,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d, FromSqlValues e) => FromSqlValues (a, b, c, d, e) where
-    fromSqlValues' = (,,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d) + valuesNeeded (Proxy :: Proxy e)
 
 -- Internal functions
 
@@ -520,15 +469,3 @@ unCamelCaseSel ('_':xs) = unCamelCaseSel xs
 unCamelCaseSel x = case unCamelCase x of
                       [xs] -> xs
                       _:xs -> intercalate "_" xs
-
-maybeFieldSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
-maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
-                            in FieldSchema
-                               { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
-                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
-                               , fsMakeSqlValue = \case
-                                                    Nothing -> SqlNull
-                                                    Just x -> fsMakeSqlValue base x
-                               , fsFromSqlValue = peekSqlValue >>= \case
-                                                    SqlNull -> Nothing <$ popSqlValue
-                                                    _ -> Just <$> fsFromSqlValue base }
