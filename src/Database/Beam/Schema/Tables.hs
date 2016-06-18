@@ -469,3 +469,4 @@ unCamelCaseSel ('_':xs) = unCamelCaseSel xs
 unCamelCaseSel x = case unCamelCase x of
                       [xs] -> xs
                       _:xs -> intercalate "_" xs
+                      [] -> ""
