@@ -98,7 +98,7 @@ instance Table tbl => GAllTables f (K1 Generic.R (f tbl) p) where
 data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
-newtype Exposed x = Exposed x
+data Exposed x
 newtype SqlValue' x = SqlValue' SqlValue
 
 -- | A type family that we use to "tag" columns in our table datatypes.
