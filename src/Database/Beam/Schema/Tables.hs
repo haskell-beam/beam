@@ -437,7 +437,7 @@ instance ( Table table, Table related
               removeNotNullConstraints :: Columnar' (TableField table) ty -> Columnar' (TableField table) ty -> Identity (Columnar' (Nullable (TableField table)) ty)
               removeNotNullConstraints (Columnar' tf) _ =
                   pure . Columnar' $
-                  tf { _fieldSchema = maybeFieldSchema (_fieldSchema tf) }
+                  tf { _fieldSchema = maybeSchema (_fieldSchema tf) }
 
 instance Table tbl => FromSqlValues (tbl Identity) where
     fromSqlValues' = zipTablesM combine settings settings

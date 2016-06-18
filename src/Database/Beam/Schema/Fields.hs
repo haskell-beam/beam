@@ -1,4 +1,20 @@
-module Database.Beam.Schema.Fields where
+module Database.Beam.Schema.Fields
+  (
+    -- * Field schema definition
+    FieldSchema(..), HasDefaultFieldSchema(..),
+    FromSqlValues(..), FromSqlValuesM,
+
+    -- * Field schemas
+    -- ** Basic fields
+    intSchema, enumSchema, maybeSchema,
+    -- ** Character fields
+    CharOrVarchar(..), textSchema,
+    -- ** Date fields
+    dateTimeSchema,
+    -- ** Auto-increment fields
+    AutoId(..), autoIdSchema,
+  )
+where
 
 import Database.Beam.SQL.Types
 
@@ -11,27 +27,27 @@ import Control.Monad.Except
 import Database.HDBC ( SqlColDesc(..), SqlTypeId(..), SqlValue(..)
                      , fromSql)
 
-import GHC.Generics
+import GHC.Generics (Generic)
 
+
+data FieldSchema ty = FieldSchema {
+    fsColDesc :: SQLColumnSchema
+  , fsHumanReadable :: String
+  , fsMakeSqlValue :: ty -> SqlValue
+  , fsFromSqlValue :: FromSqlValuesM ty }
+instance Show (FieldSchema ty) where
+    show (FieldSchema desc hr _ _) = concat ["FieldSchema (", show desc, ") (", show hr, ") _ _"]
 
 -- | Type class for types which can construct a default 'TableField' given a column name.
 class HasDefaultFieldSchema fs where
     defFieldSchema :: FieldSchema fs
 
-data FieldSchema ty = FieldSchema
-                    { fsColDesc :: SQLColumnSchema
-                    , fsHumanReadable :: String
-                    , fsMakeSqlValue :: ty -> SqlValue
-                    , fsFromSqlValue :: FromSqlValuesM ty }
-instance Show (FieldSchema ty) where
-    show (FieldSchema desc hr _ _) = concat ["FieldSchema (", show desc, ") (", show hr, ") _ _"]
-
-
 type FromSqlValuesM a = ExceptT String (State [SqlValue]) a
 popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
-popSqlValue = do st <- get
-                 put (tail st)
-                 return (head st)
+popSqlValue = do
+  st <- get
+  put (tail st)
+  return (head st)
 peekSqlValue = head <$> get
 class FromSqlValues a where
     fromSqlValues' :: FromSqlValuesM a
@@ -43,20 +59,20 @@ class FromSqlValues a where
 
 instance FromSqlValues t => FromSqlValues (Maybe t) where
     valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
-    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
-                     do values <- get
-                        let colCount = valuesNeeded (Proxy :: Proxy t)
-                            colValues = take colCount values
-                        if all (==SqlNull) colValues
-                        then put (drop colCount values) >> return Nothing
-                        else Just <$> fromSqlValues'
+    fromSqlValues' = mfix $ \(_ :: Maybe t) -> do
+      values <- get
+      let colCount = valuesNeeded (Proxy :: Proxy t)
+          colValues = take colCount values
+      if all (== SqlNull) colValues
+      then put (drop colCount values) >> return Nothing
+      else Just <$> fromSqlValues'
 
 instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
     fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
     valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b)
 instance (FromSqlValues a, FromSqlValues b, FromSqlValues c) => FromSqlValues (a, b, c) where
     fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
+    valuesNeeded _ = valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
 instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d) => FromSqlValues (a, b, c, d) where
     fromSqlValues' = (,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
     valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d)
@@ -65,79 +81,71 @@ instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d, Fr
     valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d) + valuesNeeded (Proxy :: Proxy e)
 
 
-maybeFieldSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
-maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
-                            in FieldSchema
-                               { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
-                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
-                               , fsMakeSqlValue = \case
-                                                    Nothing -> SqlNull
-                                                    Just x -> fsMakeSqlValue base x
-                               , fsFromSqlValue = peekSqlValue >>= \case
-                                                       SqlNull -> Nothing <$ popSqlValue
-                                                       _ -> Just <$> fsFromSqlValue base }
-
-
-
--- * Fields
+maybeSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
+maybeSchema base = FieldSchema {
+    fsColDesc = SQLColumnSchema desc (filter (/= SQLNotNull) constraints)
+  , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
+  , fsMakeSqlValue = \case
+      Nothing -> SqlNull
+      Just x -> fsMakeSqlValue base x
+  , fsFromSqlValue = peekSqlValue >>= \case
+      SqlNull -> Nothing <$ popSqlValue
+      _ -> Just <$> fsFromSqlValue base }
+  where
+    SQLColumnSchema desc constraints = fsColDesc base
+instance HasDefaultFieldSchema a => HasDefaultFieldSchema (Maybe a) where
+    defFieldSchema = maybeSchema defFieldSchema
 
 enumSchema :: Enum a => FieldSchema a
-enumSchema = let schema :: Enum a => FieldSchema a
-                 schema = FieldSchema
-                          { fsColDesc = fsColDesc intSchema
-                          , fsHumanReadable = "enumField"
-                          , fsMakeSqlValue = SqlInteger . fromIntegral . fromEnum
-                          , fsFromSqlValue = do val <- fromSql <$> popSqlValue
-                                                pure (toEnum val) }
-             in schema
-instance HasDefaultFieldSchema a => HasDefaultFieldSchema (Maybe a) where
-    defFieldSchema = maybeFieldSchema defFieldSchema
+enumSchema = FieldSchema {
+    fsColDesc = fsColDesc intSchema
+  , fsHumanReadable = "enumField"
+  , fsMakeSqlValue = SqlInteger . fromIntegral . fromEnum
+  , fsFromSqlValue = fromSql <$> popSqlValue >>= pure . toEnum }
 
--- ** Int Field
+scd :: SqlTypeId -> SqlColDesc
+scd t = SqlColDesc {
+    colType = t
+  , colSize = Nothing
+  , colOctetLength = Nothing
+  , colDecDigits = Nothing
+  , colNullable = Nothing }
+nnscd :: SqlTypeId -> SQLColumnSchema
+nnscd = notNull . scd
 
 intSchema :: FieldSchema Int
-intSchema = FieldSchema
-          { fsColDesc = notNull
-                        SqlColDesc
-                        { colType = SqlNumericT
-                        , colSize = Nothing
-                        , colOctetLength = Nothing
-                        , colDecDigits = Nothing
-                        , colNullable = Nothing }
-          , fsHumanReadable = "intSchema"
-          , fsMakeSqlValue = SqlInteger . fromIntegral
-          , fsFromSqlValue = fromSql <$> popSqlValue }
+intSchema = FieldSchema {
+    fsColDesc = nnscd SqlNumericT
+  , fsHumanReadable = "intSchema"
+  , fsMakeSqlValue = SqlInteger . fromIntegral
+  , fsFromSqlValue = fromSql <$> popSqlValue }
 instance HasDefaultFieldSchema Int where
     defFieldSchema = intSchema
 instance FromSqlValues Int
-
--- ** Text field
 
 data CharOrVarchar = Char (Maybe Int)
                    | Varchar (Maybe Int)
                      deriving Show
 
 textSchema :: CharOrVarchar -> FieldSchema Text
-textSchema charOrVarchar = FieldSchema
-                           { fsColDesc = colDesc
-                           , fsHumanReadable = "textSchema (" ++ show charOrVarchar ++ ")"
-                           , fsMakeSqlValue = SqlString . unpack
-                           , fsFromSqlValue = fromSql <$> popSqlValue }
+textSchema charOrVarchar = FieldSchema {
+    fsColDesc = colDesc
+  , fsHumanReadable = "textSchema (" ++ show charOrVarchar ++ ")"
+  , fsMakeSqlValue = SqlString . unpack
+  , fsFromSqlValue = fromSql <$> popSqlValue }
     where colDesc = case charOrVarchar of
-                      Char n -> notNull
-                                SqlColDesc
-                                { colType = SqlCharT
-                                , colSize = n
-                                , colOctetLength = Nothing
-                                , colDecDigits = Nothing
-                                , colNullable = Nothing }
-                      Varchar n -> notNull
-                                   SqlColDesc
-                                   { colType = SqlVarCharT
-                                   , colSize = n
-                                   , colOctetLength = Nothing
-                                   , colDecDigits = Nothing
-                                   , colNullable = Nothing }
+                      Char n -> notNull SqlColDesc {
+                          colType = SqlCharT
+                        , colSize = n
+                        , colOctetLength = Nothing
+                        , colDecDigits = Nothing
+                        , colNullable = Nothing }
+                      Varchar n -> notNull SqlColDesc {
+                          colType = SqlVarCharT
+                        , colSize = n
+                        , colOctetLength = Nothing
+                        , colDecDigits = Nothing
+                        , colNullable = Nothing }
 defaultTextSchema :: FieldSchema Text
 defaultTextSchema = textSchema (Varchar Nothing)
 
@@ -146,42 +154,28 @@ instance HasDefaultFieldSchema Text where
 instance FromSqlValues Text
 
 dateTimeSchema :: FieldSchema UTCTime
-dateTimeSchema = FieldSchema
-                 { fsColDesc = notNull
-                               SqlColDesc
-                               { colType = SqlUTCDateTimeT
-                               , colSize = Nothing
-                               , colOctetLength = Nothing
-                               , colDecDigits = Nothing
-                              , colNullable = Nothing }
-                 , fsHumanReadable = "dateTimeField"
-                 , fsMakeSqlValue = SqlUTCTime
-                 , fsFromSqlValue = fromSql <$> popSqlValue }
+dateTimeSchema = FieldSchema {
+    fsColDesc = nnscd SqlUTCDateTimeT
+  , fsHumanReadable = "dateTimeField"
+  , fsMakeSqlValue = SqlUTCTime
+  , fsFromSqlValue = fromSql <$> popSqlValue }
 
 instance HasDefaultFieldSchema UTCTime where
     defFieldSchema = dateTimeSchema
 instance FromSqlValues UTCTime
-
--- ** Auto-increment fields
 
 data AutoId = UnassignedId
             | AssignedId !Int
               deriving (Show, Read, Eq, Ord, Generic)
 
 autoIdSchema :: FieldSchema AutoId
-autoIdSchema = FieldSchema
-               { fsColDesc = SQLColumnSchema desc [SQLNotNull, SQLAutoIncrement]
-               , fsHumanReadable = "autoIdSchema"
-               , fsMakeSqlValue = \x -> case x of
-                                          UnassignedId -> SqlNull
-                                          AssignedId i -> SqlInteger (fromIntegral i)
-               , fsFromSqlValue = maybe UnassignedId AssignedId . fromSql <$> popSqlValue }
-    where desc = SqlColDesc
-                 { colType = SqlNumericT
-                 , colSize = Nothing
-                 , colOctetLength = Nothing
-                 , colDecDigits = Nothing
-                 , colNullable = Nothing }
+autoIdSchema = FieldSchema {
+    fsColDesc = SQLColumnSchema (scd SqlNumericT) [SQLNotNull, SQLAutoIncrement]
+  , fsHumanReadable = "autoIdSchema"
+  , fsMakeSqlValue = \case
+      UnassignedId -> SqlNull
+      AssignedId i -> SqlInteger (fromIntegral i)
+  , fsFromSqlValue = maybe UnassignedId AssignedId . fromSql <$> popSqlValue }
 instance HasDefaultFieldSchema AutoId where
     defFieldSchema = autoIdSchema
 instance FromSqlValues AutoId
