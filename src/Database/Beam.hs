@@ -15,7 +15,10 @@
 --   * [Beam tutorial (part 2)](http://travis.athougies.net/posts/2016-01-22-beam-tutorial-part-2.html)
 --   * [Beam tutorial (part 3)](http://travis.athougies.net/posts/2016-01-25-beam-tutorial-part-3.html)
 module Database.Beam
-     ( module X
+     ( module Database.Beam.Internal
+     , module Database.Beam.Query
+     , module Database.Beam.Schema
+     , module Database.Beam.Backend
 
      , Typeable, Generic, Identity
 
@@ -23,10 +26,10 @@ module Database.Beam
 
      , BeamResult(..), BeamRollbackReason(..) ) where
 
-import Database.Beam.Internal as X
-import Database.Beam.Query as X
-import Database.Beam.Schema as X
-import Database.Beam.Backend as X
+import Database.Beam.Internal
+import Database.Beam.Query
+import Database.Beam.Schema
+import Database.Beam.Backend
 
 import Control.Monad.Trans
 import Control.Monad.Identity
