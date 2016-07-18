@@ -103,15 +103,19 @@ enumSchema = FieldSchema {
   , fsMakeSqlValue = SqlInteger . fromIntegral . fromEnum
   , fsFromSqlValue = fromSql <$> popSqlValue >>= pure . toEnum }
 
-scd :: SqlTypeId -> SqlColDesc
-scd t = SqlColDesc {
+scdn :: SqlTypeId -> Maybe Int -> SqlColDesc
+scdn t sz = SqlColDesc {
     colType = t
-  , colSize = Nothing
+  , colSize = sz
   , colOctetLength = Nothing
   , colDecDigits = Nothing
   , colNullable = Nothing }
+scd :: SqlTypeId -> SqlColDesc
+scd t = scdn t Nothing
 nnscd :: SqlTypeId -> SQLColumnSchema
 nnscd = notNull . scd
+nnscdn :: SqlTypeId -> Maybe Int -> SQLColumnSchema
+nnscdn t sz = notNull $ scdn t sz
 
 intSchema :: FieldSchema Int
 intSchema = FieldSchema {
@@ -134,18 +138,8 @@ textSchema charOrVarchar = FieldSchema {
   , fsMakeSqlValue = SqlString . unpack
   , fsFromSqlValue = fromSql <$> popSqlValue }
     where colDesc = case charOrVarchar of
-                      Char n -> notNull SqlColDesc {
-                          colType = SqlCharT
-                        , colSize = n
-                        , colOctetLength = Nothing
-                        , colDecDigits = Nothing
-                        , colNullable = Nothing }
-                      Varchar n -> notNull SqlColDesc {
-                          colType = SqlVarCharT
-                        , colSize = n
-                        , colOctetLength = Nothing
-                        , colDecDigits = Nothing
-                        , colNullable = Nothing }
+                      Char n -> nnscdn SqlCharT n
+                      Varchar n -> nnscdn SqlVarCharT n
 defaultTextSchema :: FieldSchema Text
 defaultTextSchema = textSchema (Varchar Nothing)
 
