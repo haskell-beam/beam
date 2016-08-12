@@ -15,7 +15,8 @@
 --   * [Beam tutorial (part 2)](http://travis.athougies.net/posts/2016-01-22-beam-tutorial-part-2.html)
 --   * [Beam tutorial (part 3)](http://travis.athougies.net/posts/2016-01-25-beam-tutorial-part-3.html)
 module Database.Beam
-     ( module Database.Beam.Query
+     ( module Database.Beam.Internal
+     , module Database.Beam.Query
      , module Database.Beam.Schema
      , module Database.Beam.Backend
 
@@ -23,7 +24,7 @@ module Database.Beam
 
      , liftIO
 
-     , Beam, BeamBackend, BeamT, BeamResult(..), BeamRollbackReason(..) ) where
+     , BeamResult(..), BeamRollbackReason(..) ) where
 
 import Database.Beam.Internal
 import Database.Beam.Query

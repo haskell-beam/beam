@@ -117,9 +117,9 @@ instance ( Projectible a
     project (a, b, c, d, e) = project a ++ project b ++ project c ++ project d ++ project e
 
 instance Table t => Projectible (t (QExpr s)) where
-    project t = fieldAllValues (\(Columnar' (QExpr e)) -> e) t
+    project = fieldAllValues (\(Columnar' (QExpr e)) -> e)
 instance Table t => Projectible (t (Nullable (QExpr s))) where
-    project t = fieldAllValues (\(Columnar' (QExpr e)) -> e) t
+    project = fieldAllValues (\(Columnar' (QExpr e)) -> e)
 
 tableVal :: Table tbl => tbl Identity -> tbl (QExpr s)
 tableVal = changeRep valToQExpr . makeSqlValues

@@ -16,7 +16,7 @@ import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.Internal
 
-import Database.Beam.Schema.Tables
+import Database.Beam.Schema
 import Database.Beam.Internal
 import Database.Beam.SQL
 
@@ -97,7 +97,7 @@ updateToSQL tblName (setTo :: table (QExpr s)) where_ =
 
         where_' = case optimizeExpr where_ of
                     SQLValE (SqlBool True) -> Nothing
-                    where_' -> Just where_'
+                    x -> Just x
 
     in case assignments of
          [] -> Nothing
@@ -109,7 +109,7 @@ updateToSQL tblName (setTo :: table (QExpr s)) where_ =
 -- | Update every entry in the given table where the third argument yields true, using the second
 -- argument to give the new values.
 updateWhere :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> (tbl (QExpr s) -> tbl (QExpr s)) -> (tbl (QExpr s) -> QExpr s Bool) -> BeamT e db m ()
-updateWhere tbl@(DatabaseTable _ name :: DatabaseTable db tbl) mkAssignments mkWhere =
+updateWhere (DatabaseTable _ name :: DatabaseTable db tbl) mkAssignments mkWhere =
     do let assignments = mkAssignments tblExprs
            where_ = mkWhere tblExprs
 
@@ -147,7 +147,7 @@ deleteWhere (DatabaseTable _ name :: DatabaseTable db tbl) mkWhere =
 
 -- | Delete the entry referenced by the given 'PrimaryKey' in the given table.
 deleteFrom :: (MonadIO m, Table tbl) => DatabaseTable db tbl -> PrimaryKey tbl Identity -> BeamT e db m ()
-deleteFrom tbl pkToDelete = deleteWhere tbl (\tbl -> primaryKey tbl ==. val_ pkToDelete)
+deleteFrom tbl pkToDelete = deleteWhere tbl (\t -> primaryKey t ==. val_ pkToDelete)
 
 -- * BeamT actions
 
@@ -179,15 +179,12 @@ runQuery q beam =
 
        case res of
          Left err -> return (Left err)
-         Right fetchRow -> do let source = do row <- liftIO fetchRow
-                                              case row of
-                                                Just row ->
-                                                    case fromSqlValues row of
-                                                      Left err -> fail err
-                                                      Right  q -> do yield q
-                                                                     source
-                                                Nothing -> return ()
-                              return (Right source)
+         Right fetch -> do let source = liftIO fetch >>= \case
+                                            Just row -> case fromSqlValues row of
+                                                          Left err -> fail err
+                                                          Right  x -> yield x >> source
+                                            Nothing -> return ()
+                           return (Right source)
 
 -- | Run the given query in the transaction and yield a 'Source' that can be used to read results
 -- incrementally. If your result set is small and you want to just get a list, use 'queryList'.
@@ -208,14 +205,12 @@ queryList q = do src <- query q
 -- 'Nothing' if either zero or more than one values were returned.
 getOne :: (IsQuery q, MonadIO m, FromSqlValues (QExprToIdentity a), Projectible a) => q db () a -> BeamT e db m (Maybe (QExprToIdentity a))
 getOne q =
-    do let justOneSink = await >>= \x ->
-                         case x of
+    do let justOneSink = await >>= \case
                            Nothing -> return Nothing
                            Just  x -> noMoreSink x
-           noMoreSink x = await >>= \nothing ->
-                          case nothing of
-                            Nothing -> return (Just x)
-                            Just  _ -> return Nothing
+           noMoreSink x = await >>= \case
+                           Nothing -> return (Just x)
+                           Just  _ -> return Nothing
        src <- query q
        src $$ justOneSink
 

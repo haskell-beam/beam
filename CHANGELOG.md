@@ -4,6 +4,8 @@
 * Compatibility with GHC 8.0/base-4.9
 * Remove usage of deprecated ErrorT
 * Fix a whole lot of GHC warnings
+* Rename maybeFieldSchema to maybeSchema for consistency
+* Move FieldSchema, HasDefaultFieldSchema et al. to Database.Beam.Schema.Fields
 
 0.3.2.0
 ------

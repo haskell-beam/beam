@@ -47,16 +47,16 @@ all_ :: DatabaseTable db table -> Q db s (table (QExpr s))
 all_ tbl = join_ tbl (val_ True)
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given SQLExpr
-join_ :: DatabaseTable db table -> QExpr s Bool -> Q db s (table (QExpr s))
-join_ (DatabaseTable table name :: DatabaseTable db table) (QExpr on) =
+join_ :: forall db table s. DatabaseTable db table -> QExpr s Bool -> Q db s (table (QExpr s))
+join_ (DatabaseTable _ name :: DatabaseTable db table) (QExpr on) =
     do curTbl <- gets qbNextTblRef
-       modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
-                                 , qbFrom = from
+       modify $ \qb@QueryBuilder { qbFrom = from
                                  , qbWhere = where_ } ->
            let (from', where') = case from of
-                                   Nothing -> (Just newSource, SQLBinOpE "AND" where_ on)
-                                   Just from -> ( Just (SQLJoin SQLInnerJoin from newSource (optimizeExpr' on)),
-                                                  where_ )
+                                   Nothing -> (Just newSource,
+                                               SQLBinOpE "AND" where_ on)
+                                   Just x ->  (Just (SQLJoin SQLInnerJoin x newSource (optimizeExpr' on)),
+                                               where_ )
                newSource = SQLFromSource (SQLAliased (SQLSourceTable name) (Just (fromString ("t" <> show curTbl))))
            in qb { qbNextTblRef = curTbl + 1
                  , qbFrom = from'
@@ -72,14 +72,13 @@ join_ (DatabaseTable table name :: DatabaseTable db table) (QExpr on) =
 -- | Introduce a table using a left join. Because this is not an inner join, the resulting table is
 -- made nullable. This means that each field that would normally have type 'QExpr x' will now have
 -- type 'QExpr (Maybe x)'.
-leftJoin_ :: Database db => DatabaseTable db table -> QExpr s Bool -> Q db s (table (Nullable (QExpr s)))
-leftJoin_ (DatabaseTable table name :: DatabaseTable db table) on =
+leftJoin_ :: forall db table s. Database db => DatabaseTable db table -> QExpr s Bool -> Q db s (table (Nullable (QExpr s)))
+leftJoin_ (DatabaseTable _ name :: DatabaseTable db table) on =
     do curTbl <- gets qbNextTblRef
-       modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
-                                 , qbFrom = from } ->
+       modify $ \qb@QueryBuilder { qbFrom = from } ->
                 let from' = case from of
                               Nothing -> error "leftJoin_: empty select source"
-                              Just from -> SQLJoin SQLLeftJoin from newSource (optimizeExpr on)
+                              Just x -> SQLJoin SQLLeftJoin x newSource (optimizeExpr on)
                     newSource = SQLFromSource (SQLAliased (SQLSourceTable name) (Just (fromString ("t" <> show curTbl))))
                 in qb { qbNextTblRef = curTbl + 1
                       , qbFrom = Just from' }
@@ -96,25 +95,25 @@ guard_ :: QExpr s Bool -> Q db s ()
 guard_ (QExpr guardE') = modify $ \qb@QueryBuilder { qbWhere = guardE } -> qb { qbWhere = SQLBinOpE "AND" guardE guardE' }
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
-related_ :: Table rel => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
-related_ (relTbl :: DatabaseTable db rel) pk =
-    mdo rel <- join_ relTbl (pk ==. primaryKey rel)
+related_ :: forall db rel s. Table rel => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
+related_ (relTbl :: DatabaseTable db rel) k =
+    mdo rel <- join_ relTbl (k ==. primaryKey rel)
         pure rel
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
-relatedBy_ :: DatabaseTable db rel -> (rel (QExpr s) -> QExpr s Bool) -> Q db s (rel (QExpr s))
+relatedBy_ :: forall db rel s. DatabaseTable db rel -> (rel (QExpr s) -> QExpr s Bool) -> Q db s (rel (QExpr s))
 relatedBy_ (relTbl :: DatabaseTable db rel) mkOn =
     mdo rel <- join_ relTbl (mkOn rel)
         pure rel
 
 -- | Introduce related entries of the given table, or if no related entries exist, introduce the null table
-perhapsAll_ :: Database db => DatabaseTable db rel -> (rel (Nullable (QExpr s)) -> QExpr s Bool) -> Q db s (rel (Nullable (QExpr s)))
+perhapsAll_ :: forall db rel s. Database db => DatabaseTable db rel -> (rel (Nullable (QExpr s)) -> QExpr s Bool) -> Q db s (rel (Nullable (QExpr s)))
 perhapsAll_ relTbl expr =
     mdo rel <- leftJoin_ relTbl (expr rel)
         pure rel
 
 -- | Synonym for 'related_'
-lookup_ :: Table rel => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
+lookup_ :: forall db rel s. Table rel => DatabaseTable db rel -> PrimaryKey rel (QExpr s) -> Q db s (rel (QExpr s))
 lookup_ = related_
 
 class SqlReferences f s where
@@ -122,9 +121,9 @@ class SqlReferences f s where
     -- regular tables and those that have been made nullable by 'leftJoin_'.
     references_ :: Table tbl => PrimaryKey tbl f -> tbl f -> QExpr s Bool
 instance SqlReferences (QExpr s) s where
-    references_ pk (tbl :: tbl (QExpr s)) = pk ==. primaryKey tbl
+    references_ k (tbl :: tbl (QExpr s)) = k ==. primaryKey tbl
 instance SqlReferences (Nullable (QExpr s)) s where
-    references_ pk (tbl :: tbl (Nullable (QExpr s))) = pk ==. primaryKey tbl
+    references_ k (tbl :: tbl (Nullable (QExpr s))) = k ==. primaryKey tbl
 
 -- | Limit the number of results returned by a query.
 --
@@ -320,7 +319,7 @@ aggregate (aggregator :: a -> agg) (q :: Q db s a) =
     TopLevelQ $
     do res <- q
 
-       curTbl <- gets qbNextTblRef
+       _ <- gets qbNextTblRef
        let aggregation = aggregator res
            grouping' = aggToSql (Proxy :: Proxy s) aggregation
        modify $ \qb -> case sqlGroupBy grouping' of
@@ -377,12 +376,12 @@ class Subqueryable a s | a -> s where
     subqueryProjections :: Proxy s -> a -> RWS (Text, Int) [SQLAliased SQLExpr] Int (Unnested a s)
 instance Subqueryable (QExpr (QNested s) a) s where
     type Unnested (QExpr (QNested s) a) s = QExpr s a
-    subqueryProjections s e =
+    subqueryProjections _ e =
         do i <- state (\i -> (i, i+1))
            (tblName, tblOrd) <- ask
-           let fieldName = fromString ("e" <> show i)
-           tell [SQLAliased (optimizeExpr e) (Just fieldName)]
-           pure (QExpr (SQLFieldE (QField tblName (Just tblOrd) fieldName)))
+           let fieldNm = fromString ("e" <> show i)
+           tell [SQLAliased (optimizeExpr e) (Just fieldNm)]
+           pure (QExpr (SQLFieldE (QField tblName (Just tblOrd) fieldNm)))
 instance ( Subqueryable a s
          , Subqueryable b s ) =>
     Subqueryable (a, b) s where
@@ -440,7 +439,7 @@ subquery_ (q :: q db (QNested s) a) =
        modify $ \qb@QueryBuilder { qbFrom = from } ->
                  let from' = case from of
                                Nothing -> Just newSource
-                               Just from -> Just (SQLJoin SQLInnerJoin from newSource (SQLValE (SqlBool True)))
+                               Just x -> Just (SQLJoin SQLInnerJoin x newSource (SQLValE (SqlBool True)))
                      newSource = SQLFromSource (SQLAliased (SQLSourceSelect select'') (Just (fromString ("t" <> show curTbl'))))
                  in qb { qbNextTblRef = curTbl' + 1
                        , qbFrom = from' }
@@ -468,19 +467,19 @@ instance SqlJustable (QExpr s a) (QExpr s (Maybe a)) where
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (PrimaryKey t (QExpr s)) (PrimaryKey t (Nullable (QExpr s))) where
     just_ = pkChangeRep (\(Columnar' q) -> Columnar' (just_ q))
-    nothing_ = pkChangeRep (\(Columnar' q) -> Columnar' nothing_) (primaryKey (tblFieldSettings :: TableSettings t))
+    nothing_ = pkChangeRep (\(Columnar' _) -> Columnar' nothing_) (primaryKey (tblFieldSettings :: TableSettings t))
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (t (QExpr s)) (t (Nullable (QExpr s))) where
     just_ = changeRep (\(Columnar' q) -> Columnar' (just_ q))
-    nothing_ = changeRep (\(Columnar' q) -> Columnar' nothing_) (tblFieldSettings :: TableSettings t)
+    nothing_ = changeRep (\(Columnar' _) -> Columnar' nothing_) (tblFieldSettings :: TableSettings t)
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (PrimaryKey t Identity) (PrimaryKey t (Nullable Identity)) where
     just_ = pkChangeRep (\(Columnar' q) -> Columnar' (Just q))
-    nothing_ = pkChangeRep (\(Columnar' q) -> Columnar' Nothing) (primaryKey (tblFieldSettings :: TableSettings t))
+    nothing_ = pkChangeRep (\(Columnar' _) -> Columnar' Nothing) (primaryKey (tblFieldSettings :: TableSettings t))
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Identity)) where
     just_ = changeRep (\(Columnar' q) -> Columnar' (Just q))
-    nothing_ = changeRep (\(Columnar' q) -> Columnar' Nothing) (tblFieldSettings :: TableSettings t)
+    nothing_ = changeRep (\(Columnar' _) -> Columnar' Nothing) (tblFieldSettings :: TableSettings t)
 
 -- * Nullable checking
 
@@ -506,10 +505,10 @@ instance SqlDeconstructMaybe (QExpr s (Maybe x)) (QExpr s x) s where
                                                 in QExpr (SQLCaseE [(SQLIsJustE e, onJust')] onNothing)
 
 instance {-# OVERLAPPING #-} Table t => SqlDeconstructMaybe (PrimaryKey t (Nullable (QExpr s))) (PrimaryKey t (QExpr s)) s where
-    isJust_ pk = let fieldsAreJust = pkChangeRep (\(Columnar' x) -> Columnar' (QExprBool (isJust_ x))) pk :: PrimaryKey t (QExprBool s)
-                 in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreJust)
-    isNothing_ pk = let fieldsAreNothing = pkChangeRep (\(Columnar' x) -> Columnar' (QExprBool (isNothing_ x))) pk :: PrimaryKey t (QExprBool s)
-                    in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreNothing)
+    isJust_ k = let fieldsAreJust = pkChangeRep (\(Columnar' x) -> Columnar' (QExprBool (isJust_ x))) k :: PrimaryKey t (QExprBool s)
+                in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreJust)
+    isNothing_ k = let fieldsAreNothing = pkChangeRep (\(Columnar' x) -> Columnar' (QExprBool (isNothing_ x))) k :: PrimaryKey t (QExprBool s)
+                   in foldr (&&.) (val_ True) (pkAllValues (\(Columnar' (QExprBool e)) -> e) fieldsAreNothing)
     maybe_ = undefined
 
 instance {-# OVERLAPPING #-} Table t  => SqlDeconstructMaybe (t (Nullable (QExpr s))) (t (QExpr s)) s where

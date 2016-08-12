@@ -15,7 +15,7 @@ module Database.Beam.Schema.Tables
     -- * Columnar and Column Tags
     , Columnar, Columnar'(..)
     , Nullable, TableField(..)
-    , fieldName, fieldConstraints, fieldSchema, maybeFieldSchema
+    , fieldName, fieldConstraints, fieldSchema
 
     , TableSettings
 
@@ -25,17 +25,13 @@ module Database.Beam.Schema.Tables
     , pk
     , pkAllValues, fieldAllValues, pkChangeRep, changeRep
     , pkMakeSqlValues, makeSqlValues
-
-    -- * Fields
-    , HasDefaultFieldSchema(..), FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
-    , popSqlValue, peekSqlValue )
+    )
     where
 
+import Database.Beam.Schema.Fields
 import Database.Beam.SQL.Types
 
-import Control.Monad.State
 import Control.Monad.Writer
-import Control.Monad.Except
 import Control.Monad.Identity
 
 import Data.Proxy
@@ -102,7 +98,7 @@ instance Table tbl => GAllTables f (K1 Generic.R (f tbl) p) where
 data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
-newtype Exposed x = Exposed x
+data Exposed x
 newtype SqlValue' x = SqlValue' SqlValue
 
 -- | A type family that we use to "tag" columns in our table datatypes.
@@ -287,43 +283,33 @@ reifyTableSchema (Proxy :: Proxy table) = fieldAllValues (\(Columnar' (TableFiel
 tableValuesNeeded :: Table table => Proxy table -> Int
 tableValuesNeeded (Proxy :: Proxy table) = length (fieldAllValues (const ()) (tblFieldSettings :: TableSettings table))
 
-pkAllValues :: Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
-pkAllValues (f :: forall a. Columnar' f a -> b) (pk :: PrimaryKey table f) = execWriter (zipPkM combine pk pk)
+pkAllValues :: forall f b t. Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
+pkAllValues (f :: forall a. Columnar' f a -> b) (k :: PrimaryKey t f) = execWriter (zipPkM combine k k)
     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
           combine x _ = do tell [f x]
                            return x
 
-fieldAllValues :: Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
-fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: table f) = execWriter (zipTablesM combine tbl tbl)
+fieldAllValues :: forall t f b. Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
+fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: t f) = execWriter (zipTablesM combine tbl tbl)
     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
           combine x _ = do tell [f x]
                            return x
 
-pkChangeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
-pkChangeRep f pk = runIdentity (zipPkM (\x _ -> return (f x))  pk pk)
+pkChangeRep :: forall t f g. Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
+pkChangeRep f k = runIdentity (zipPkM (\x _ -> return (f x)) k k)
 
-changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
+changeRep :: forall t f g. Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
 changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
 
-pkMakeSqlValues :: Table t => PrimaryKey t Identity -> PrimaryKey t SqlValue'
-pkMakeSqlValues pk = runIdentity (zipPkM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) pk (primaryKey tblFieldSettings))
+pkMakeSqlValues :: forall t. Table t => PrimaryKey t Identity -> PrimaryKey t SqlValue'
+pkMakeSqlValues k = runIdentity (zipPkM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) k (primaryKey tblFieldSettings))
 
-makeSqlValues :: Table t => t Identity -> t SqlValue'
+makeSqlValues :: forall t. Table t => t Identity -> t SqlValue'
 makeSqlValues tbl = runIdentity (zipTablesM (\(Columnar' x) (Columnar' tf) -> return (Columnar' (SqlValue' (fsMakeSqlValue (_fieldSchema tf) x)))) tbl tblFieldSettings)
 
 -- | Synonym for 'primaryKey'
-pk :: Table t => t f -> PrimaryKey t f
+pk :: forall t f. Table t => t f -> PrimaryKey t f
 pk = primaryKey
-
-instance FromSqlValues t => FromSqlValues (Maybe t) where
-    valuesNeeded (_ :: Proxy (Maybe t)) = valuesNeeded (Proxy :: Proxy t)
-    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
-                     do values <- get
-                        let colCount = valuesNeeded (Proxy :: Proxy t)
-                            colValues = take colCount values
-                        if all (==SqlNull) colValues
-                        then put (drop colCount values) >> return Nothing
-                        else Just <$> fromSqlValues'
 
 defTblFieldSettings :: ( Generic (TableSettings table)
                        ,  GDefaultTableFieldSettings (Rep (TableSettings table) ())) =>
@@ -451,52 +437,15 @@ instance ( Table table, Table related
               removeNotNullConstraints :: Columnar' (TableField table) ty -> Columnar' (TableField table) ty -> Identity (Columnar' (Nullable (TableField table)) ty)
               removeNotNullConstraints (Columnar' tf) _ =
                   pure . Columnar' $
-                  tf { _fieldSchema = maybeFieldSchema (_fieldSchema tf) }
+                  tf { _fieldSchema = maybeSchema (_fieldSchema tf) }
 
-data FieldSchema ty = FieldSchema
-                    { fsColDesc :: SQLColumnSchema
-                    , fsHumanReadable :: String
-                    , fsMakeSqlValue :: ty -> SqlValue
-                    , fsFromSqlValue :: FromSqlValuesM ty }
-instance Show (FieldSchema ty) where
-    show (FieldSchema desc hr _ _) = concat ["FieldSchema (", show desc, ") (", show hr, ") _ _"]
-
--- | Type class for types which can construct a default 'TableField' given a column name.
-class HasDefaultFieldSchema fs where
-    defFieldSchema :: FieldSchema fs
-
-type FromSqlValuesM a = ExceptT String (State [SqlValue]) a
-popSqlValue, peekSqlValue :: FromSqlValuesM SqlValue
-popSqlValue = do st <- get
-                 put (tail st)
-                 return (head st)
-peekSqlValue = head <$> get
-class FromSqlValues a where
-    fromSqlValues' :: FromSqlValuesM a
-    valuesNeeded :: Proxy a -> Int
-    valuesNeeded _ = 1
-
-    default fromSqlValues' :: HasDefaultFieldSchema a => FromSqlValuesM a
-    fromSqlValues' = fsFromSqlValue defFieldSchema
 instance Table tbl => FromSqlValues (tbl Identity) where
     fromSqlValues' = zipTablesM combine settings settings
         where settings :: TableSettings tbl
               settings = tblFieldSettings
 
-              combine (Columnar' tf) x = Columnar' <$> fsFromSqlValue (_fieldSchema tf)
+              combine (Columnar' tf) _ = Columnar' <$> fsFromSqlValue (_fieldSchema tf)
     valuesNeeded _ = tableValuesNeeded (Proxy :: Proxy tbl)
-instance (FromSqlValues a, FromSqlValues b) => FromSqlValues (a, b) where
-    fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c) => FromSqlValues (a, b, c) where
-    fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d) => FromSqlValues (a, b, c, d) where
-    fromSqlValues' = (,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d)
-instance (FromSqlValues a, FromSqlValues b, FromSqlValues c, FromSqlValues d, FromSqlValues e) => FromSqlValues (a, b, c, d, e) where
-    fromSqlValues' = (,,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    valuesNeeded _ = valuesNeeded (Proxy :: Proxy a) + valuesNeeded (Proxy :: Proxy b) + valuesNeeded (Proxy :: Proxy c) + valuesNeeded (Proxy :: Proxy d) + valuesNeeded (Proxy :: Proxy e)
 
 -- Internal functions
 
@@ -517,20 +466,7 @@ unCamelCase s
 
 unCamelCaseSel :: String -> String
 unCamelCaseSel ('_':xs) = unCamelCaseSel xs
-unCamelCaseSel xs = case unCamelCase xs of
+unCamelCaseSel x = case unCamelCase x of
                       [xs] -> xs
                       _:xs -> intercalate "_" xs
-
-maybeFieldSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
-maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
-                            in FieldSchema
-                               { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
-                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")"
-                               , fsMakeSqlValue = \x ->
-                                                  case x of
-                                                    Nothing -> SqlNull
-                                                    Just x -> fsMakeSqlValue base x
-                               , fsFromSqlValue = do val <- peekSqlValue
-                                                     case val of
-                                                       SqlNull -> Nothing <$ popSqlValue
-                                                       val -> Just <$> fsFromSqlValue base }
+                      [] -> ""
