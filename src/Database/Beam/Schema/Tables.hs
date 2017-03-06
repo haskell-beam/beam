@@ -236,7 +236,6 @@ to' = to
 
 type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed)) (Rep (table f)) (Rep (table g)) (Rep (table h))
                                  , Generic (table f), Generic (table g), Generic (table h) )
-type AllBeamValues table f = HasBeamFields table f f f
 
 -- | The big Kahuna! All beam tables implement this class.
 --
