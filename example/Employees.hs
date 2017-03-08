@@ -24,8 +24,8 @@ data Position = DepartmentLead
 instance BeamBackend be => HasDefaultFieldSchema be Position where
     defFieldSchema _ = enumSchema
 instance BeamBackend be => FromSqlValues be Position where
-    fromSqlValues' _ = fromEnumValue
-    makeSqlValue _ = makeEnumValue
+    fromSqlValues' = fromEnumValue
+    makeSqlValues' = makeEnumValue
 
 data EmployeeT f = Employee
                  { _employeeId         :: Columnar f AutoId

@@ -32,7 +32,7 @@ module Database.Beam.Schema.Tables
     , popSqlValue, peekSqlValue )
     where
 
-import {-# SOURCE #-} Database.Beam.SQL.Types
+import Database.Beam.SQL.Types
 import Database.Beam.Internal
 
 import Control.Arrow
@@ -62,8 +62,8 @@ import qualified GHC.Generics as Generic
 
 import Lens.Micro hiding (to)
 
-type ReifiedDatabaseSchema = [(Text, ReifiedTableSchema)]
-type ReifiedTableSchema = [(Text, SQLColumnSchema)]
+type ReifiedDatabaseSchema be = [(Text, ReifiedTableSchema be)]
+type ReifiedTableSchema be = [(Text, SQLColumnSchema be)]
 
 class Database db where
     allTables :: (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
@@ -210,17 +210,17 @@ data Nullable (c :: * -> *) x
 -- >                     & employeeLastNameC  . fieldName .~ "lname"
 -- >                     & employeeLastNameC  . fieldSettings .~ Varchar (Just 128) -- Give it a 128 character limit
 data TableField be (table :: (* -> *) -> *) ty = TableField
-                                               { _fieldName        :: Text             -- ^ The field name
-                                               , _fieldConstraints :: [SQLConstraint]  -- ^ Constraints for the field (such as AutoIncrement, PrimaryKey, etc)
-                                               , _fieldSchema      :: FieldSchema ty   -- ^ SQL storage informationa for the field
+                                               { _fieldName        :: Text              -- ^ The field name
+                                               , _fieldConstraints :: SQLConstraint be  -- ^ Constraints for the field (such as AutoIncrement, PrimaryKey, etc)
+                                               , _fieldSchema      :: FieldSchema be ty -- ^ SQL storage informationa for the field
                                                }
 deriving instance Show (TableField be t ty)
 
 fieldName :: Lens' (TableField be table ty) Text
 fieldName f (TableField name cs s) = (\name' -> TableField name' cs s) <$> f name
-fieldConstraints :: Lens' (TableField be table ty) [SQLConstraint]
+fieldConstraints :: Lens' (TableField be table ty) (SQLConstraint be)
 fieldConstraints f (TableField name cs s) = (\cs' -> TableField name cs' s) <$> f cs
-fieldSchema :: Lens (TableField be table a) (TableField be table b) (FieldSchema a) (FieldSchema b)
+fieldSchema :: Lens (TableField be table a) (TableField be table b) (FieldSchema be a) (FieldSchema be b)
 fieldSchema f (TableField name cs s) = (\s' -> TableField name cs s') <$> f s
 
 type TableSettings be table = table (TableField be table)
@@ -311,7 +311,7 @@ class Beamable table where
     -- zipPkM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (PrimaryKey table Exposed))) combine (from' f) (from' g)
     --                         return (to' hRep)
 
-reifyTableSchema :: Beamable table => TableSettings be table -> ReifiedTableSchema
+reifyTableSchema :: Beamable table => TableSettings be table -> ReifiedTableSchema be
 reifyTableSchema tblFieldSettings =
     allBeamValues (\(Columnar' (TableField name constraints settings)) ->
                        (name, fieldColDesc settings constraints)) tblFieldSettings
@@ -405,9 +405,9 @@ defTblFieldSettings = withProxy $ \proxy -> to' (gDefTblFieldSettings proxy)
     where withProxy :: (Proxy (Rep (TableSettings be table) ()) -> TableSettings be table) -> TableSettings be table
           withProxy f = f Proxy
 
-fieldColDesc :: FieldSchema fs -> [SQLConstraint] -> SQLColumnSchema
+fieldColDesc :: FieldSchema be fs -> SQLConstraint be -> SQLColumnSchema be
 fieldColDesc schema cs = let base = fsColDesc schema
-                         in base { csConstraints = csConstraints base ++ cs }
+                         in base { csConstraints = csConstraints base <> cs }
 
 class GZipTables f g h (exposedRep :: * -> *) fRep gRep hRep where
     gZipTables :: Monad m => Proxy exposedRep -> (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> fRep () -> gRep () -> m (hRep ())
@@ -463,7 +463,7 @@ instance (GDefaultTableFieldSettings (a p), GDefaultTableFieldSettings (b p)) =>
 instance (Table table, HasDefaultFieldSchema be field, Selector f ) =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField be table field)) p) where
     gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (TableField be table field)) p)) = M1 (K1 s)
-        where s = TableField (T.pack name) [] (defFieldSchema (Proxy :: Proxy be))
+        where s = TableField (T.pack name) mempty defFieldSchema
               name = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (TableField be table field)) ()))
 
 instance ( Table table, Table related
@@ -492,8 +492,7 @@ instance ( Table table, Table related
                   tf { _fieldName = keyName <> "__" <> _fieldName tf
                      , _fieldConstraints = removeConstraints (_fieldConstraints tf) }
 
-
-              removeConstraints = filter (\x -> x /= SQLPrimaryKey && x /= SQLAutoIncrement)
+              removeConstraints = constraintPropagatesAs
 
               keyName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) ())))
 
@@ -550,15 +549,15 @@ instance ( Generic (PrimaryKey related (Nullable Ignored))
     GTableSkeleton (K1 Generic.R (PrimaryKey related (Nullable Ignored))) where
     gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (PrimaryKey related (Nullable Ignored))))))
 
-data FieldSchema ty = FieldSchema
-                    { fsColDesc :: SQLColumnSchema
-                    , fsHumanReadable :: String }
-instance Show (FieldSchema ty) where
+data FieldSchema be ty = FieldSchema
+                       { fsColDesc :: SQLColumnSchema be
+                       , fsHumanReadable :: String }
+instance Show (FieldSchema be ty) where
     show (FieldSchema desc hr) = concat ["FieldSchema (", show desc, ") (", show hr, ")"]
 
 -- | Type class for types which can construct a default 'TableField' given a column name.
 class HasDefaultFieldSchema be fs where
-    defFieldSchema :: Proxy be -> FieldSchema fs
+    defFieldSchema :: FieldSchema be fs
 
 type FromSqlValuesM be a = ErrorT String (State [BeamBackendValue be]) a
 popSqlValue, peekSqlValue :: FromSqlValuesM be (BeamBackendValue be)
@@ -639,10 +638,10 @@ unCamelCaseSel xs = case unCamelCase xs of
                       [xs] -> xs
                       _:xs -> intercalate "_" xs
 
-maybeFieldSchema :: FieldSchema ty -> FieldSchema (Maybe ty)
-maybeFieldSchema base = let SQLColumnSchema desc constraints =  fsColDesc base
+maybeFieldSchema :: FieldSchema be ty -> FieldSchema be (Maybe ty)
+maybeFieldSchema base = let SQLColumnSchema desc isPrimaryKey isAuto constraints =  fsColDesc base
                             in FieldSchema
-                               { fsColDesc = SQLColumnSchema desc (filter (/=SQLNotNull) constraints)
+                               { fsColDesc = SQLColumnSchema desc isPrimaryKey isAuto (constraintNullifiesAs constraints)
                                , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")" }
                                -- , fsMakeSqlValue = \x ->
                                --                    case x of

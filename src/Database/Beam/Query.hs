@@ -81,12 +81,10 @@ runInsert tbl@(DatabaseTable _ tableName tblFieldSettings :: DatabaseTable be d 
        --     In this case, we need to ask the backend for the last inserted row.
        let tableSchema = reifyTableSchema tblFieldSettings
 
-           autoIncrementsAreNull = zipWith (\(_, columnSchema) value -> hasAutoIncrementConstraint columnSchema && value == sqlNull) tableSchema sqlValues
-           hasNullAutoIncrements = or autoIncrementsAreNull
+           autosAreNull = zipWith (\(_, columnSchema) value -> csIsAuto columnSchema && value == sqlNull) tableSchema sqlValues
+           hasNullAutos = or autosAreNull
 
-           hasAutoIncrementConstraint SQLColumnSchema { csConstraints = cs } = isJust (find (== SQLAutoIncrement) cs)
-
-       insertedValues <- if hasNullAutoIncrements
+       insertedValues <- if hasNullAutos
                          then getLastInsertedRow beam tblName
                          else return sqlValues
        return (fromSqlValues insertedValues)

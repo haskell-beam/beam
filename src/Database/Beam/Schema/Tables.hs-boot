@@ -44,8 +44,10 @@ type family Columnar (f :: * -> *) x where
     Columnar (Nullable c) x = Columnar c (Maybe x)
 
     Columnar f x = f x
-type ReifiedTableSchema = [(Text, SQLColumnSchema)]
-type ReifiedDatabaseSchema = [(Text, ReifiedTableSchema)]
+--type role SQLColumnSchema phantom
+type ReifiedTableSchema be = [(Text, SQLColumnSchema be)]
+type ReifiedDatabaseSchema be = [(Text, ReifiedTableSchema be)]
+--type role ReifiedDatabaseSchema phantom
 
 type TableSettings be table = table (TableField be table)
 type DatabaseSettings be db = db (DatabaseTable be db)

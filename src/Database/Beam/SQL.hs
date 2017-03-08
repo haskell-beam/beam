@@ -39,10 +39,10 @@ ppCmd (Delete d) = ppDelete d
 
 -- ** Create table printing support
 
-ppCreateTable :: SQLCreateTable -> DocAndVals be
+ppCreateTable :: SQLCreateTable be -> DocAndVals be
 ppCreateTable (SQLCreateTable tblName schema) =
     do fieldSchemas <- mapM ppFieldSchema schema
-       let primaryKeys = filter (elem SQLPrimaryKey . csConstraints . snd) schema
+       let primaryKeys = filter (csIsPrimaryKey . snd) schema
            primaryKeyExpr = case primaryKeys of
                               [] -> []
                               keys ->
@@ -50,20 +50,17 @@ ppCreateTable (SQLCreateTable tblName schema) =
                                   in [text "PRIMARY KEY(" <+> hsep (punctuate comma primaryKeys) <+> text ")" ]
        return (text "CREATE TABLE" <+> text (unpack tblName) <+> parens (hsep (punctuate comma (fieldSchemas ++ primaryKeyExpr))))
 
-ppFieldSchema :: (Text, SQLColumnSchema) -> DocAndVals be
+ppFieldSchema :: (Text, SQLColumnSchema be) -> DocAndVals be
 ppFieldSchema (name, colSch) = (text (unpack name) <+>) <$> ppColSchema colSch
 
-ppColSchema :: SQLColumnSchema -> DocAndVals be
-ppColSchema (SQLColumnSchema type_ constraints) =
+ppColSchema :: SQLColumnSchema be -> DocAndVals be
+ppColSchema (SQLColumnSchema type_ _ _ constraints) =
     do typeDoc <- ppColType type_
-       constraints <- mapM ppConstraint constraints
-       return (typeDoc <+> hsep constraints)
+       constraints <- ppConstraint constraints
+       return (typeDoc <+> constraints)
 
-ppConstraint :: SQLConstraint -> DocAndVals be
-ppConstraint SQLPrimaryKey = return empty --(text "PRIMARY KEY")
---ppConstraint SQLPrimaryKeyAutoIncrement = return (text "PRIMARY KEY")
-ppConstraint SQLAutoIncrement = return (text "AUTOINCREMENT") -- TODO this is different dependingon the backend
-ppConstraint SQLNotNull = return (text "NOT NULL")
+ppConstraint :: SQLConstraint be -> DocAndVals be
+ppConstraint (SQLConstraint _ _ cs) = return (hsep (map (text . unpack) cs))
 
 ppColType :: SqlColDesc -> DocAndVals be
 ppColType SqlColDesc { colType = SqlVarCharT

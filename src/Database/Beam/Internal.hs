@@ -52,13 +52,13 @@ data Beam be d m = Beam
 
                  , closeBeam :: m ()
 
-                 , compareSchemas :: ReifiedDatabaseSchema -> DatabaseSettings be d -> DBSchemaComparison be
-                 , adjustColDescForBackend :: SQLColumnSchema -> SQLColumnSchema
+                 , compareSchemas :: ReifiedDatabaseSchema be -> DatabaseSettings be d -> DBSchemaComparison be
+                 , adjustColDescForBackend :: SQLColumnSchema be -> SQLColumnSchema be
 
                  , getLastInsertedRow :: Text -> m [BeamBackendValue be]
 
                  , beamExecute :: String -> [BeamBackendValue be] -> m (Either String (IO (Maybe [BeamBackendValue be])))
-                 , beamDescribeDatabase :: m ReifiedDatabaseSchema
+                 , beamDescribeDatabase :: m (ReifiedDatabaseSchema be)
                  , beamCommit :: m ()
                  , beamRollback :: m () }
 

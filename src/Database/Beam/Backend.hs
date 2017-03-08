@@ -34,7 +34,7 @@ data MigrationStrategy = DontMigrate
                          deriving Show
 
 instance Monoid (DBSchemaComparison be) where
-    mappend (Migration a) (Migration b) = Migration (a <> b)
+    mappend (Migration a) (Migration b)1 = Migration (a <> b)
     mappend _ Unknown = Unknown
     mappend Unknown _ = Unknown
 
@@ -75,7 +75,7 @@ createStmtFor beam name tblFieldSettings =
         tblSchemaInDb' = map (second (adjustColDescForBackend beam)) tblSchema'
 
         addPrimaryKeyConstraint (name, sch)
-            | elem name primaryKeyFields = (name, sch { csConstraints = SQLPrimaryKey:csConstraints sch })
+            | elem name primaryKeyFields = (name, sch { csIsPrimaryKey = True })
             | otherwise = (name, sch)
 
         _fieldName' :: Columnar' (TableField be t) x -> Text

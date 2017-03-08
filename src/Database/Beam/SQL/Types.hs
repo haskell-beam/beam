@@ -12,10 +12,6 @@ import Data.Functor
 
 import Database.HDBC
 
-noConstraints, notNull :: SqlColDesc -> SQLColumnSchema
-noConstraints desc = SQLColumnSchema desc []
-notNull desc = SQLColumnSchema desc [SQLNotNull]
-
 -- * SQL queries
 --
 --   Types for most forms of SQL queries and data updates/inserts. This is the internal representation used by Beam.
@@ -28,23 +24,34 @@ data SQLCommand be = Select (SQLSelect be)
                    | Delete (SQLDelete be)
 
                    -- DDL
-                   | CreateTable SQLCreateTable
+                   | CreateTable (SQLCreateTable be)
 deriving instance Show (BeamBackendValue be) => Show (SQLCommand be)
 
-data SQLCreateTable = SQLCreateTable
-                    { ctTableName :: Text
-                    , ctFields    :: [(Text, SQLColumnSchema)] }
-                      deriving Show
+data SQLCreateTable be
+    = SQLCreateTable
+    { ctTableName :: Text
+    , ctFields    :: [(Text, SQLColumnSchema be)] }
+    deriving Show
 
-data SQLColumnSchema = SQLColumnSchema
-                     { csType :: SqlColDesc
-                     , csConstraints :: [SQLConstraint] }
-                       deriving Show
+data SQLColumnSchema be
+    = SQLColumnSchema
+    { csType :: SqlColDesc
+    , csIsPrimaryKey :: Bool
+    , csIsAuto :: Bool
+    , csConstraints :: SQLConstraint be }
+    deriving Show
 
-data SQLConstraint = SQLPrimaryKey
-                   | SQLAutoIncrement
-                   | SQLNotNull
-                     deriving (Show, Eq)
+data SQLConstraint be
+    = SQLConstraint
+    { constraintPropagatesAs :: SQLConstraint be
+    , constraintNullifiesAs :: SQLConstraint be
+    , constraint :: [ Text ] }
+    deriving Show
+
+instance Monoid (SQLConstraint be) where
+    mempty = SQLConstraint mempty mempty []
+    mappend (SQLConstraint propA nullA a) (SQLConstraint propB nullB b) =
+        SQLConstraint (mappend propA propB) (mappend nullA nullB) (mappend a b)
 
 data SQLInsert be = SQLInsert
                   { iTableName :: Text
