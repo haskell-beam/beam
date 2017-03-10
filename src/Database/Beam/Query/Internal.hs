@@ -1,9 +1,9 @@
 {-# LANGUAGE FunctionalDependencies, UndecidableInstances #-}
 module Database.Beam.Query.Internal where
 
+import Database.Beam.Backend.Types
 import Database.Beam.SQL.Types
 import Database.Beam.Schema
-import Database.Beam.Internal
 
 import qualified Data.Text as T
 import Data.Typeable
@@ -75,7 +75,7 @@ class BeamBackend be => Projectible be a where
 instance (Typeable a, BeamBackend be) => Projectible be (QExpr be s a) where
     project (QExpr x) = [x]
 instance BeamBackend be => Projectible be () where
-    project () = [SQLValE (sqlInteger 1)]
+    project () = [SQLValE backendNull]
 instance (Projectible be a, Projectible be b) => Projectible be (a, b) where
     project (a, b) = project a ++ project b
 instance ( Projectible be a

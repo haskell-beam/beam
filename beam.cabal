@@ -21,8 +21,8 @@ bug-reports:         https://github.com/tathougies/beam/issues
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
                        Database.Beam.SQL Database.Beam.Query
-                       Database.Beam.Schema Database.Beam.Backend.Sqlite3
-                       Database.Beam.Internal Database.Beam.Query.Internal
+                       Database.Beam.Schema
+                       Database.Beam.Query.Internal
   other-modules:       Database.Beam.SQL.Types
 
                        Database.Beam.Query.Types
@@ -30,7 +30,7 @@ library
 
                        Database.Beam.Schema.Lenses
                        Database.Beam.Schema.Tables
-                       Database.Beam.Schema.Fields
+                       Database.Beam.Schema.SQL98
   build-depends:       base >=4.7 && <4.9, text, time, tagged, pretty, HDBC, HDBC-sqlite3, mtl, semigroups, containers,
                        conduit, convertible, microlens, uniplate
   hs-source-dirs:      src

@@ -2,7 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.SQL.Types where
 
-import Database.Beam.Internal
+import Database.Beam.Backend.Types
 
 import Data.Text (Text)
 import Data.Time.Clock
@@ -25,7 +25,7 @@ data SQLCommand be = Select (SQLSelect be)
 
                    -- DDL
                    | CreateTable (SQLCreateTable be)
-deriving instance Show (BeamBackendValue be) => Show (SQLCommand be)
+                   deriving Show
 
 data SQLCreateTable be
     = SQLCreateTable
@@ -35,11 +35,15 @@ data SQLCreateTable be
 
 data SQLColumnSchema be
     = SQLColumnSchema
-    { csType :: SqlColDesc
+    { csType :: Text
+    , csIsNullable :: Bool
     , csIsPrimaryKey :: Bool
     , csIsAuto :: Bool
     , csConstraints :: SQLConstraint be }
     deriving Show
+
+columnSchemaWithType :: Text -> SQLColumnSchema be
+columnSchemaWithType t = SQLColumnSchema t False False False mempty
 
 data SQLConstraint be
     = SQLConstraint
@@ -55,19 +59,19 @@ instance Monoid (SQLConstraint be) where
 
 data SQLInsert be = SQLInsert
                   { iTableName :: Text
-                  , iValues    :: [BeamBackendValue be] }
-deriving instance Show (BeamBackendValue be) => Show (SQLInsert be)
+                  , iValues    :: [BackendLiteral be] }
+deriving instance BeamBackend be => Show (SQLInsert be)
 
 data SQLUpdate be = SQLUpdate
                   { uTableNames  :: [Text]
                   , uAssignments :: [(SQLFieldName, SQLExpr be)]
                   , uWhere       :: Maybe (SQLExpr be) }
-deriving instance Show (BeamBackendValue be) => Show (SQLUpdate be)
+deriving instance BeamBackend be => Show (SQLUpdate be)
 
 data SQLDelete be = SQLDelete
                   { dTableName   :: Text
                   , dWhere       :: Maybe (SQLExpr be) }
-deriving instance Show (BeamBackendValue be) => Show (SQLDelete be)
+deriving instance BeamBackend be => Show (SQLDelete be)
 
 data SQLSelect be = SQLSelect
                   { selProjection :: SQLProjection be
@@ -77,9 +81,9 @@ data SQLSelect be = SQLSelect
                   , selOrderBy    :: [SQLOrdering be]
                   , selLimit      :: Maybe Integer
                   , selOffset     :: Maybe Integer }
-deriving instance Show (BeamBackendValue be) => Show (SQLSelect be)
-deriving instance Eq (BeamBackendValue be) => Eq (SQLSelect be)
-deriving instance (Data (BeamBackendValue be), Data be, Typeable be) => Data (SQLSelect be)
+deriving instance BeamBackend be => Show (SQLSelect be)
+deriving instance BeamBackend be => Eq (SQLSelect be)
+deriving instance BeamBackend be => Data (SQLSelect be)
 
 data SQLFieldName = SQLFieldName Text
                   | SQLQualifiedFieldName Text Text
@@ -90,16 +94,14 @@ data SQLAliased a = SQLAliased a (Maybe Text)
 
 data SQLProjection be = SQLProjStar -- ^ The * from SELECT *
                       | SQLProj [SQLAliased (SQLExpr be)]
-
-deriving instance Show (BeamBackendValue be) => Show (SQLProjection be)
-deriving instance Eq (BeamBackendValue be) => Eq (SQLProjection be)
-deriving instance (Data (BeamBackendValue be), Data be) => Data (SQLProjection be)
+deriving instance BeamBackend be => Show (SQLProjection be)
+deriving instance BeamBackend be => Eq (SQLProjection be)
+deriving instance BeamBackend be => Data (SQLProjection be)
 
 data SQLSource be = SQLSourceTable Text
                   | SQLSourceSelect (SQLSelect be)
-deriving instance Show (BeamBackendValue be) => Show (SQLSource be)
-deriving instance Eq (BeamBackendValue be) => Eq (SQLSource be)
-deriving instance (Data (BeamBackendValue be), Data be) => Data (SQLSource be)
+                  deriving (Show, Eq)
+deriving instance BeamBackend be => Data (SQLSource be)
 
 data SQLJoinType = SQLInnerJoin
                  | SQLLeftJoin
@@ -109,33 +111,32 @@ data SQLJoinType = SQLInnerJoin
 
 data SQLFrom be = SQLFromSource (SQLAliased (SQLSource be))
                 | SQLJoin SQLJoinType (SQLFrom be) (SQLFrom be) (SQLExpr be)
-
-deriving instance Show (BeamBackendValue be) => Show (SQLFrom be)
-deriving instance Eq (BeamBackendValue be) => Eq (SQLFrom be)
-deriving instance (Data (BeamBackendValue be), Data be) => Data (SQLFrom be)
+deriving instance BeamBackend be => Show (SQLFrom be)
+deriving instance BeamBackend be => Eq (SQLFrom be)
+deriving instance BeamBackend be => Data (SQLFrom be)
 
 data SQLGrouping be = SQLGrouping
                     { sqlGroupBy :: [SQLExpr be]
                     , sqlHaving  :: SQLExpr be }
-deriving instance Show (BeamBackendValue be) => Show (SQLGrouping be)
-deriving instance Eq (BeamBackendValue be) => Eq (SQLGrouping be)
-deriving instance (Data (BeamBackendValue be), Data be) => Data (SQLGrouping be)
+deriving instance BeamBackend be => Show (SQLGrouping be)
+deriving instance BeamBackend be => Eq (SQLGrouping be)
+deriving instance BeamBackend be => Data (SQLGrouping be)
 
-instance BeamBackend be => Monoid (SQLGrouping be) where
+instance (BeamBackend be, FromBackendLiteral be Bool) => Monoid (SQLGrouping be) where
     mappend (SQLGrouping group1 having1) (SQLGrouping group2 having2) =
         SQLGrouping (group1 <> group2) (andE having1 having2)
-        where andE (SQLValE true) h | backendAsBool true = h
-              andE h (SQLValE true) | backendAsBool true = h
+        where andE (SQLValE true) h | Just True <- fromBackendLiteral true = h
+              andE h (SQLValE true) | Just True <- fromBackendLiteral true = h
               andE a b = SQLBinOpE "AND" a b
-    mempty = SQLGrouping mempty (SQLValE (sqlBool True))
+    mempty = SQLGrouping mempty (SQLValE (toBackendLiteral True))
 
 data SQLOrdering be = Asc (SQLExpr be)
                     | Desc (SQLExpr be)
-deriving instance Show (BeamBackendValue be) => Show (SQLOrdering be)
-deriving instance (Data (BeamBackendValue be), Data be) => Data (SQLOrdering be)
-deriving instance Eq (BeamBackendValue be) => Eq (SQLOrdering be)
+deriving instance BeamBackend be => Show (SQLOrdering be)
+deriving instance BeamBackend be => Eq (SQLOrdering be)
+deriving instance BeamBackend be => Data (SQLOrdering be)
 
-data SQLExpr' be f = SQLValE (BeamBackendValue be)
+data SQLExpr' be f = SQLValE (BackendLiteral be)
                    | SQLFieldE f
 
                    | SQLBinOpE Text (SQLExpr' be f) (SQLExpr' be f)
@@ -151,8 +152,9 @@ data SQLExpr' be f = SQLValE (BeamBackendValue be)
                    | SQLExistsE (SQLSelect be)
 
                    | SQLCaseE [(SQLExpr' be f, SQLExpr' be f)] (SQLExpr' be f)
-                     deriving Functor
-deriving instance (Data (BeamBackendValue be), Data be, Data f, Typeable f) => Data (SQLExpr' be f)
-deriving instance (Show (BeamBackendValue be), Show f) => Show (SQLExpr' be f)
-deriving instance (Eq (BeamBackendValue be), Eq f) => Eq (SQLExpr' be f)
+                   deriving Functor
+deriving instance (BeamBackend be, Eq f) => Eq (SQLExpr' be f)
+deriving instance (BeamBackend be, Show f) => Show (SQLExpr' be f)
+deriving instance (BeamBackend be, Data f) => Data (SQLExpr' be f)
+
 type SQLExpr be = SQLExpr' be SQLFieldName

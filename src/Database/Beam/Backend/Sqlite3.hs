@@ -1,6 +1,5 @@
 module Database.Beam.Backend.Sqlite3 where
 
-import Database.Beam.Internal
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Combinators
 import Database.Beam.Backend

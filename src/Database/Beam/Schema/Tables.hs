@@ -20,7 +20,7 @@ module Database.Beam.Schema.Tables
 
     , TableSettings(..), TableSkeleton(..), Ignored(..)
 
-    -- * Tables
+    -- * Tablesmg<
     , Table(..), Beamable(..), MakeSqlValues(..)
     , zipBeamFieldsM, defTblFieldSettings
     , reifyTableSchema, tableValuesNeeded
@@ -28,12 +28,11 @@ module Database.Beam.Schema.Tables
     , allBeamValues, changeBeamRep, makeSqlValues
 
     -- * Fields
-    , HasDefaultFieldSchema(..), FieldSchema(..), FromSqlValuesM(..), FromSqlValues(..)
-    , popSqlValue, peekSqlValue )
+    , HasDefaultFieldSchema(..), FieldSchema(..))
     where
 
 import Database.Beam.SQL.Types
-import Database.Beam.Internal
+import Database.Beam.Backend.Types
 
 import Control.Arrow
 import Control.Applicative
@@ -118,7 +117,7 @@ data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
 newtype Exposed x = Exposed x
-newtype SqlValue' be x = SqlValue' (BeamBackendValue be)
+newtype SqlValue' be x = SqlValue' (BackendLiteral be)
 
 -- | A type family that we use to "tag" columns in our table datatypes.
 --
@@ -357,8 +356,8 @@ instance GFieldsAreSerializable be U1 U1 where
 instance (GFieldsAreSerializable be a aSql, GFieldsAreSerializable be b bSql) =>
     GFieldsAreSerializable be (a :*: b) (aSql :*: bSql) where
         gMakeSqlValues be (a :*: b) = gMakeSqlValues be a :*: gMakeSqlValues be b
-instance FromSqlValues be x => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (SqlValue' be x)) where
-    gMakeSqlValues be (K1 x) = K1 (SqlValue' (head (makeSqlValues' x)))
+instance FromBackendLiteral be x => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (SqlValue' be x)) where
+    gMakeSqlValues be (K1 x) = K1 (SqlValue' (toBackendLiteral x))
 instance MakeSqlValues be t => GFieldsAreSerializable be (K1 Generic.R (t Identity)) (K1 Generic.R (t (SqlValue' be))) where
     gMakeSqlValues be (K1 x) = K1 (makeSqlValues x)
 instance ( Generic (t (Nullable (SqlValue' be))), Generic (t (Nullable Identity))
@@ -375,24 +374,25 @@ makeSqlValues tbl =
     fix $ \(_ :: t (SqlValue' be)) ->
     to' (gMakeSqlValues (Proxy :: Proxy be) (from' tbl))
 
-class GTableFromSqlValues be x where
-    gTableFromSqlValues :: FromSqlValuesM be (x ())
-instance GTableFromSqlValues be x => GTableFromSqlValues be (M1 s m x) where
-    gTableFromSqlValues = M1 <$> gTableFromSqlValues
-instance GTableFromSqlValues be U1 where
-    gTableFromSqlValues = pure U1
-instance (GTableFromSqlValues be a, GTableFromSqlValues be b) =>
-    GTableFromSqlValues be (a :*: b) where
-        gTableFromSqlValues = do a <- gTableFromSqlValues
-                                 b <- gTableFromSqlValues
-                                 pure (a :*: b)
-instance FromSqlValues be x => GTableFromSqlValues be (K1 Generic.R x) where
-    gTableFromSqlValues = K1 <$> fromSqlValues'
+class GTableFromBackendLiterals be x where
+    gTableFromBackendLiterals :: FromBackendLiteralsM be (x ())
+instance GTableFromBackendLiterals be x => GTableFromBackendLiterals be (M1 s m x) where
+    gTableFromBackendLiterals = M1 <$> gTableFromBackendLiterals
+instance GTableFromBackendLiterals be U1 where
+    gTableFromBackendLiterals = pure U1
+instance (GTableFromBackendLiterals be a, GTableFromBackendLiterals be b) =>
+    GTableFromBackendLiterals be (a :*: b) where
+        gTableFromBackendLiterals =
+          do a <- gTableFromBackendLiterals
+             b <- gTableFromBackendLiterals
+             pure (a :*: b)
+instance FromBackendLiterals be x => GTableFromBackendLiterals be (K1 Generic.R x) where
+    gTableFromBackendLiterals = K1 <$> fromBackendLiterals
 
-type TableFromSqlValues be t = ( Generic (t Identity)
-                               , GTableFromSqlValues be (Rep (t Identity)) )
-tableFromSqlValues :: TableFromSqlValues be t => FromSqlValuesM be (t Identity)
-tableFromSqlValues = to' <$> gTableFromSqlValues
+type TableFromBackendLiterals be t = ( Generic (t Identity)
+                                     , GTableFromBackendLiterals be (Rep (t Identity)) )
+tableFromBackendLiterals :: TableFromBackendLiterals be t => FromBackendLiteralsM be (t Identity)
+tableFromBackendLiterals = to' <$> gTableFromBackendLiterals
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f
@@ -559,61 +559,23 @@ instance Show (FieldSchema be ty) where
 class HasDefaultFieldSchema be fs where
     defFieldSchema :: FieldSchema be fs
 
-type FromSqlValuesM be a = ErrorT String (State [BeamBackendValue be]) a
-popSqlValue, peekSqlValue :: FromSqlValuesM be (BeamBackendValue be)
-popSqlValue = do st <- get
-                 put (tail st)
-                 return (head st)
-peekSqlValue = head <$> get
-class FromSqlValues be a where
-    fromSqlValues' :: FromSqlValuesM be a
-    makeSqlValues' :: a -> [BeamBackendValue be]
-    valuesNeeded :: Proxy be -> Proxy a -> Int
-    valuesNeeded _ _ = 1
+instance (TableFromBackendLiterals be tbl, Beamable tbl, MakeSqlValues be tbl) => FromBackendLiterals be (tbl Identity) where
+    fromBackendLiterals = tableFromBackendLiterals
+    valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
+    toBackendLiterals = allBeamValues (\(Columnar' (SqlValue' b)) -> b) . makeSqlValues
 
-    -- default fromSqlValues' :: CanSerialize be a => Proxy be -> FromSqlValuesM be a
-    -- fromSqlValues' = fromSqlValue
-instance (FromSqlValues be t, BeamBackend be) => FromSqlValues be (Maybe t) where
-    valuesNeeded be (_ :: Proxy (Maybe t)) = valuesNeeded be (Proxy :: Proxy t)
-    fromSqlValues' = mfix $ \(_ :: Maybe t) ->
-                     do values <- get
-                        let colCount = valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)
-                            colValues = take colCount values
-                        if all (==sqlNull) colValues
-                        then put (drop colCount values) >> return Nothing
-                        else Just <$> fromSqlValues'
-    makeSqlValues' Nothing = replicate (valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)) sqlNull
-    makeSqlValues' (Just x) = makeSqlValues' x
-instance (TableFromSqlValues be tbl, Beamable tbl, MakeSqlValues be tbl) => FromSqlValues be (tbl Identity) where
-    fromSqlValues' = tableFromSqlValues
+instance (BeamBackend be, TableFromBackendLiterals be tbl, Beamable tbl, MakeSqlValues be tbl, FromBackendLiterals be (tbl Identity)) => FromBackendLiterals be (tbl (Nullable Identity)) where
     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
-    makeSqlValues' = allBeamValues (\(Columnar' (SqlValue' b)) -> b) . makeSqlValues
-instance (BeamBackend be, TableFromSqlValues be tbl, Beamable tbl, MakeSqlValues be tbl, FromSqlValues be (tbl Identity)) => FromSqlValues be (tbl (Nullable Identity)) where
-    valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
-    fromSqlValues' = do tbl <- fromSqlValues'
-                        case tbl of
-                          Just tbl -> pure (changeBeamRep (\(Columnar' x) -> Columnar' (Just x)) (tbl :: tbl Identity))
-                          Nothing -> pure (changeBeamRep (\_ -> Columnar' Nothing) (tblSkeleton :: TableSkeleton tbl))
-    makeSqlValues' tbl = let values = allBeamValues (\(Columnar' b) -> isNothing b) tbl
-                         in if all id values
-                            then makeSqlValues' (Nothing :: Maybe (tbl Identity))
-                            else makeSqlValues' (Just (changeBeamRep (\(Columnar' (Just x)) -> Columnar' x) tbl :: tbl Identity))
-instance (FromSqlValues be a, FromSqlValues be b) => FromSqlValues be (a, b) where
-    fromSqlValues' = (,) <$> fromSqlValues' <*> fromSqlValues'
-    makeSqlValues' (a, b) = makeSqlValues' a <> makeSqlValues' b
-    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b)
-instance (FromSqlValues be a, FromSqlValues be b, FromSqlValues be c) => FromSqlValues be (a, b, c) where
-    fromSqlValues' = (,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    makeSqlValues' (a, b, c) = makeSqlValues' a <> makeSqlValues' b <> makeSqlValues' c
-    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c)
-instance (FromSqlValues be a, FromSqlValues be b, FromSqlValues be c, FromSqlValues be d) => FromSqlValues be (a, b, c, d) where
-    fromSqlValues' = (,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    makeSqlValues' (a, b, c, d) = makeSqlValues' a <> makeSqlValues' b <> makeSqlValues' c <> makeSqlValues' d
-    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c) + valuesNeeded be (Proxy :: Proxy d)
-instance (FromSqlValues be a, FromSqlValues be b, FromSqlValues be c, FromSqlValues be d, FromSqlValues be e) => FromSqlValues be (a, b, c, d, e) where
-    fromSqlValues' = (,,,,) <$> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues' <*> fromSqlValues'
-    makeSqlValues' (a, b, c, d, e) = makeSqlValues' a <> makeSqlValues' b <> makeSqlValues' c <> makeSqlValues' d <> makeSqlValues' e
-    valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c) + valuesNeeded be (Proxy :: Proxy d) + valuesNeeded be (Proxy :: Proxy e)
+    fromBackendLiterals =
+      do tbl <- fromBackendLiterals
+         case tbl of
+           Just tbl -> pure (changeBeamRep (\(Columnar' x) -> Columnar' (Just x)) (tbl :: tbl Identity))
+           Nothing -> pure (changeBeamRep (\_ -> Columnar' Nothing) (tblSkeleton :: TableSkeleton tbl))
+    toBackendLiterals tbl =
+      let values = allBeamValues (\(Columnar' b) -> isNothing b) tbl
+      in if all id values
+         then toBackendLiterals (Nothing :: Maybe (tbl Identity))
+         else toBackendLiterals (Just (changeBeamRep (\(Columnar' (Just x)) -> Columnar' x) tbl :: tbl Identity))
 
 -- Internal functions
 
@@ -639,15 +601,7 @@ unCamelCaseSel xs = case unCamelCase xs of
                       _:xs -> intercalate "_" xs
 
 maybeFieldSchema :: FieldSchema be ty -> FieldSchema be (Maybe ty)
-maybeFieldSchema base = let SQLColumnSchema desc isPrimaryKey isAuto constraints =  fsColDesc base
+maybeFieldSchema base = let SQLColumnSchema desc isPrimaryKey isAuto _ constraints =  fsColDesc base
                             in FieldSchema
-                               { fsColDesc = SQLColumnSchema desc isPrimaryKey isAuto (constraintNullifiesAs constraints)
+                               { fsColDesc = SQLColumnSchema desc isPrimaryKey isAuto True (constraintNullifiesAs constraints)
                                , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")" }
-                               -- , fsMakeSqlValue = \x ->
-                               --                    case x of
-                               --                      Nothing -> SqlNull
-                               --                      Just x -> fsMakeSqlValue base x
-                               -- , fsFromSqlValue = do val <- peekSqlValue
-                               --                       case val of
-                               --                         SqlNull -> Nothing <$ popSqlValue
-                               --                         val -> Just <$> fsFromSqlValue base }

@@ -6,8 +6,8 @@ module Database.Beam.SQL
       -- * Untyped SQL types
     , module Database.Beam.SQL.Types ) where
 
+import Database.Beam.Backend.Types
 import Database.Beam.SQL.Types
-import Database.Beam.Internal
 
 import Control.Applicative hiding (empty)
 import Control.Arrow hiding ((<+>))
@@ -25,12 +25,12 @@ import Text.PrettyPrint
 
 -- | Convert a 'SQLCommand' into a SQL expression (with placeholders) and literal values to be submitted to the SQL server.
 --   Splitting into a SQL expression and literals prevents SQL injection attacks.
-ppSQL :: BeamBackend be => SQLCommand be -> (String, [BeamBackendValue be])
+ppSQL :: (BeamBackend be, FromBackendLiteral be Bool) => SQLCommand be -> (String, [BackendLiteral be])
 ppSQL c = first render (runWriter (ppCmd c))
 
-type DocAndVals be = Writer [BeamBackendValue be] Doc
+type DocAndVals be = Writer [BackendLiteral be] Doc
 
-ppCmd :: BeamBackend be => SQLCommand be -> DocAndVals be
+ppCmd :: (BeamBackend be, FromBackendLiteral be Bool) => SQLCommand be -> DocAndVals be
 ppCmd (Select sel) = ppSel sel
 ppCmd (CreateTable ct) = ppCreateTable ct
 ppCmd (Insert i) = ppInsert i
@@ -54,35 +54,16 @@ ppFieldSchema :: (Text, SQLColumnSchema be) -> DocAndVals be
 ppFieldSchema (name, colSch) = (text (unpack name) <+>) <$> ppColSchema colSch
 
 ppColSchema :: SQLColumnSchema be -> DocAndVals be
-ppColSchema (SQLColumnSchema type_ _ _ constraints) =
-    do typeDoc <- ppColType type_
-       constraints <- ppConstraint constraints
-       return (typeDoc <+> constraints)
+ppColSchema (SQLColumnSchema type_ _ _ _ constraints) =
+    do constraints <- ppConstraint constraints
+       return (text (unpack type_) <+> constraints)
 
 ppConstraint :: SQLConstraint be -> DocAndVals be
 ppConstraint (SQLConstraint _ _ cs) = return (hsep (map (text . unpack) cs))
 
-ppColType :: SqlColDesc -> DocAndVals be
-ppColType SqlColDesc { colType = SqlVarCharT
-                     , colSize = size } =
-    return
-      (text "VARCHAR" <+>
-            case size of
-              Nothing -> empty
-              Just sz -> parens (text (show sz)))
-ppColType SqlColDesc { colType = SqlCharT
-                     , colSize = size } =
-    return
-      (text "CHAR" <+>
-            case size of
-              Nothing -> empty
-              Just sz -> parens (text (show sz)))
-ppColType SqlColDesc { colType = SqlNumericT } = return (text "INTEGER")
-ppColType SqlColDesc { colType = SqlUTCDateTimeT } = return (text "DATETIME")
-
 -- ** Insert printing support
 
-ppInsert :: BeamBackend be => SQLInsert be -> DocAndVals be
+ppInsert :: (BeamBackend be, FromBackendLiteral be Bool) => SQLInsert be -> DocAndVals be
 ppInsert (SQLInsert tblName values) =
     do vals <- mapM ppVal values
        return (text "INSERT INTO" <+> text (unpack tblName) <+> text "VALUES" <+>
@@ -90,13 +71,13 @@ ppInsert (SQLInsert tblName values) =
 
 -- ** Update printing support
 
-ppAssignment :: BeamBackend be => SQLFieldName -> SQLExpr be -> DocAndVals be
+ppAssignment :: (BeamBackend be, FromBackendLiteral be Bool) => SQLFieldName -> SQLExpr be -> DocAndVals be
 ppAssignment field expr =
     do fieldD <- ppFieldName field
        exprD  <- ppExpr expr
        return (fieldD <> text "=" <> exprD)
 
-ppUpdate :: BeamBackend be => SQLUpdate be -> DocAndVals be
+ppUpdate :: (BeamBackend be, FromBackendLiteral be Bool) => SQLUpdate be -> DocAndVals be
 ppUpdate (SQLUpdate tbls assignments where_) =
     do assignmentsDs <- mapM (uncurry ppAssignment) assignments
        whereClause_  <- case where_ of
@@ -108,7 +89,7 @@ ppUpdate (SQLUpdate tbls assignments where_) =
 
 -- ** Delete printing support
 
-ppDelete :: BeamBackend be => SQLDelete be -> DocAndVals be
+ppDelete :: (BeamBackend be, FromBackendLiteral be Bool) => SQLDelete be -> DocAndVals be
 ppDelete (SQLDelete tbl where_) =
     do whereClause_ <- case where_ of
                          Nothing -> return empty
@@ -117,7 +98,7 @@ ppDelete (SQLDelete tbl where_) =
 
 -- ** Select printing support
 
-ppSel :: BeamBackend be => SQLSelect be -> DocAndVals be
+ppSel :: (BeamBackend be, FromBackendLiteral be Bool) => SQLSelect be -> DocAndVals be
 ppSel sel =
     do proj   <- ppProj (selProjection sel)
        source <- case selFrom sel of
@@ -134,7 +115,7 @@ ppSel sel =
        return (text "SELECT" <+> proj <+> source <+>
                where_ <+> grouping <+> orderBy <+> limit <+> offset)
 
-ppProj :: BeamBackend be => SQLProjection be -> DocAndVals be
+ppProj :: (BeamBackend be, FromBackendLiteral be Bool) => SQLProjection be -> DocAndVals be
 ppProj SQLProjStar = return (text "*")
 ppProj (SQLProj es) =
     do es <- mapM (ppAliased ppExpr) es
@@ -145,33 +126,33 @@ ppAliased ppSub (SQLAliased x (Just as)) = do sub <- ppSub x
                                               return (sub <+> text "AS" <+> text (unpack as))
 ppAliased ppSub (SQLAliased x Nothing) = ppSub x
 
-ppSource :: BeamBackend be => SQLSource be -> DocAndVals be
+ppSource :: (BeamBackend be, FromBackendLiteral be Bool) => SQLSource be -> DocAndVals be
 ppSource (SQLSourceTable tbl) = return (text (unpack tbl))
 ppSource (SQLSourceSelect sel) = parens <$> ppSel sel
 
-ppWhere :: BeamBackend be => SQLExpr be -> DocAndVals be
+ppWhere :: (BeamBackend be, FromBackendLiteral be Bool) => SQLExpr be -> DocAndVals be
 ppWhere (SQLValE v)
-    | backendAsBool v = return empty
+    | Just True <- fromBackendLiteral v = return empty
 ppWhere expr = (text "WHERE" <+>) <$> ppExpr expr
 
 ppFieldName (SQLQualifiedFieldName t table) = return (text "`" <> text (unpack table) <> text "`.`" <>
                                                       text (unpack t) <> text "`")
 ppFieldName (SQLFieldName t) = return (text (unpack t))
 
-ppGrouping :: BeamBackend be => SQLGrouping be -> DocAndVals be
+ppGrouping :: (BeamBackend be, FromBackendLiteral be Bool) => SQLGrouping be -> DocAndVals be
 ppGrouping grouping = do exprs <- mapM ppExpr (sqlGroupBy grouping)
                          having <-  ppHaving (sqlHaving grouping)
                          return (text "GROUP BY" <+> hsep (punctuate comma exprs) <+> having)
 
-ppHaving :: BeamBackend be => SQLExpr be -> DocAndVals be
+ppHaving :: (BeamBackend be, FromBackendLiteral be Bool) => SQLExpr be -> DocAndVals be
 ppHaving (SQLValE v)
-         | backendAsBool v = return empty
+         | Just True <- fromBackendLiteral v = return empty
 ppHaving expr = (text "HAVING" <+>) <$> ppExpr expr
 
-ppFrom :: BeamBackend be => SQLFrom be -> DocAndVals be
+ppFrom :: (BeamBackend be, FromBackendLiteral be Bool) => SQLFrom be -> DocAndVals be
 ppFrom x = fst <$> ppFrom' x
 
-ppFrom' :: BeamBackend be => SQLFrom be -> Writer [BeamBackendValue be] (Doc, Bool)
+ppFrom' :: (BeamBackend be, FromBackendLiteral be Bool) => SQLFrom be -> Writer [BackendLiteral be] (Doc, Bool)
 ppFrom' (SQLFromSource a) = (,False) <$> ppAliased ppSource a
 ppFrom' (SQLJoin jType x y on_) = do (xDoc, _) <- ppFrom' x
                                      jTypeDoc <- ppJType jType
@@ -184,12 +165,12 @@ ppJType SQLLeftJoin = return (text "LEFT JOIN")
 ppJType SQLRightJoin = return (text "RIGHT JOIN")
 ppJType SQLOuterJoin = return (text "OUTER JOIN")
 
-ppOn :: BeamBackend be => SQLExpr be -> DocAndVals be
+ppOn :: (BeamBackend be, FromBackendLiteral be Bool) => SQLExpr be -> DocAndVals be
 ppOn (SQLValE v)
-     | backendAsBool v = return empty
+     | Just True <- fromBackendLiteral v = return empty
 ppOn expr = (text "ON" <+>) <$> ppExpr expr
 
-ppOrderBy :: BeamBackend be => [SQLOrdering be] -> DocAndVals be
+ppOrderBy :: (BeamBackend be, FromBackendLiteral be Bool) => [SQLOrdering be] -> DocAndVals be
 ppOrderBy [] = return empty
 ppOrderBy xs = (text "ORDER BY" <+>) . hsep . punctuate comma <$> mapM ppOrdering xs
     where ppOrdering (Asc e) = do eDoc <- ppExpr e
@@ -197,10 +178,10 @@ ppOrderBy xs = (text "ORDER BY" <+>) . hsep . punctuate comma <$> mapM ppOrderin
           ppOrdering (Desc e) = do eDoc <- ppExpr e
                                    return (eDoc <+> text "DESC")
 
-ppVal :: BeamBackend be => BeamBackendValue be -> DocAndVals be
+ppVal :: BeamBackend be => BackendLiteral be -> DocAndVals be
 ppVal val = tell [val] >> return (text "?")
 
-ppExpr :: BeamBackend be => SQLExpr be -> DocAndVals be
+ppExpr :: (BeamBackend be, FromBackendLiteral be Bool) => SQLExpr be -> DocAndVals be
 ppExpr (SQLValE v) = ppVal v
 ppExpr (SQLFieldE name) = ppFieldName name
 ppExpr (SQLBinOpE op a b) =

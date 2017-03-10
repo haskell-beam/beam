@@ -3,9 +3,7 @@ module Database.Beam.Schema.Lenses
     ( tableConfigLenses
     , TableLens(..), dbLenses ) where
 
-import Database.Beam.Internal
 import Database.Beam.Schema.Tables
-import Database.Beam.Schema.Fields
 
 import Control.Applicative
 import Control.Monad.Identity

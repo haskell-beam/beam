@@ -21,11 +21,8 @@ module Database.Beam
 
      , Typeable, Generic, Identity
 
-     , liftIO
+     , liftIO ) where
 
-     , Beam, BeamBackend, BeamT, BeamResult(..), BeamRollbackReason(..) ) where
-
-import Database.Beam.Internal
 import Database.Beam.SQL
 import Database.Beam.Query
 import Database.Beam.Schema
