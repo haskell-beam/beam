@@ -36,14 +36,11 @@ import Data.Proxy
 import Data.Data
 import Data.List (find)
 import Data.Maybe
-import Data.Convertible
 import Data.String (fromString)
 import Data.Conduit
 import qualified Data.Conduit.List as C
 import qualified Data.Set as S
 import qualified Data.Text as T
-
-import Database.HDBC
 
 import GHC.Generics
 
@@ -59,10 +56,11 @@ import Unsafe.Coerce
 
 -- * Data insertion, updating, and deletion
 
-insertToSQL :: (Table table, BeamBackend be, MakeSqlValues be table) => T.Text -> table Identity -> SQLInsert be
-insertToSQL name (table :: table Identity) = fix $ \(_ :: SQLInsert be ) ->
-                                             SQLInsert name
-                                                       (allBeamValues (\(Columnar' (SqlValue' x)) -> x) (makeSqlValues table))
+-- insertToSQL :: (Table table, BeamBackend be, MakeBackendLiterals be table) => T.Text -> table Identity -> SQLInsert be
+-- insertToSQL name (table :: table Identity) = fix $ \(_ :: SQLInsert be ) ->
+--                                              SQLInsert name
+--                                                        (allBeamValues (\(Columnar' (BackendLiteral' x :: BackendLiteral' be a)) -> SQLValue x)
+--                                                                       (makeBackendLiterals table))
 
 -- runInsert :: (MonadIO m, Table table, FromSqlValues be (table Identity), BeamBackend be, MakeSqlValues be table)
 --              => DatabaseTable be d table -> table Identity -> Beam be d m -> m (Either String (table Identity))
@@ -96,27 +94,27 @@ insertToSQL name (table :: table Identity) = fix $ \(_ :: SQLInsert be ) ->
 -- insertInto tbl data_ =
 --     BeamT (\beam -> toBeamResult <$> runInsert tbl data_ beam)
 
-updateToSQL :: (Table table, BeamSqlBackend be) => DatabaseTable be db tbl -> table (QExpr be s) -> QExpr be s Bool -> Maybe (SQLUpdate be)
-updateToSQL (DatabaseTable _ name tblFieldSettings) (setTo :: table (QExpr be s)) where_ =
-    let setExprs = allBeamValues (\(Columnar' x) -> optimizeExpr x) setTo
-        setColumns = allBeamValues (\(Columnar' fieldS) -> _fieldName fieldS) tblFieldSettings
+-- updateToSQL :: (Table table, BeamSqlBackend be) => DatabaseTable be db tbl -> table (QExpr be s) -> QExpr be s Bool -> Maybe (SQLUpdate be)
+-- updateToSQL (DatabaseTable _ name tblFieldSettings) (setTo :: table (QExpr be s)) where_ =
+--     let setExprs = allBeamValues (\(Columnar' x) -> optimizeExpr x) setTo
+--         setColumns = allBeamValues (\(Columnar' fieldS) -> _fieldName fieldS) tblFieldSettings
 
-        isInteresting columnName (SQLFieldE (SQLFieldName fName))
-            | fName == columnName = Nothing
-        isInteresting columnName newE = Just (SQLFieldName columnName, newE)
+--         isInteresting columnName (SQLFieldE (SQLFieldName fName))
+--             | fName == columnName = Nothing
+--         isInteresting columnName newE = Just (SQLFieldName columnName, newE)
 
-        assignments = catMaybes (zipWith isInteresting setColumns setExprs)
+--         assignments = catMaybes (zipWith isInteresting setColumns setExprs)
 
-        where_' = case optimizeExpr where_ of
-                    SQLValE v | Just True <- fromBackendLiteral v -> Nothing
-                    where_' -> Just where_'
+--         where_' = case optimizeExpr where_ of
+--                     SQLValE v | sqlValueIsTrue v -> Nothing
+--                     where_' -> Just where_'
 
-    in case assignments of
-         [] -> Nothing
-         _  -> Just SQLUpdate
-               { uTableNames = [name]
-               , uAssignments = assignments
-               , uWhere = where_' }
+--     in case assignments of
+--          [] -> Nothing
+--          _  -> Just SQLUpdate
+--                { uTableNames = [name]
+--                , uAssignments = assignments
+--                , uWhere = where_' }
 
 -- -- | Update every entry in the given table where the third argument yields true, using the second
 -- -- argument to give the new values.

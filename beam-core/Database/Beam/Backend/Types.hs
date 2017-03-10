@@ -5,15 +5,20 @@ import Control.Monad.State
 
 import Data.Proxy
 import Data.Monoid
-import Data.Data
 
-class ( Eq (BackendLiteral be), Show (BackendLiteral be)
-      , Data (BackendLiteral be), Data be) =>
-  BeamBackend be where
+class BeamColumnSchema schema where
+  maybeFieldSchema :: schema -> schema
+  nestedSchema     :: schema -> schema
+  setPrimaryKey    :: schema -> schema
+
+class BeamColumnSchema (BackendColumnSchema be) => BeamBackend be where
 
   data BackendLiteral be :: *
+  data BackendFieldConstraint be :: *
+  data BackendColumnSchema be :: *
 
   backendNull :: BackendLiteral be
+  backendIsNull :: BackendLiteral be -> Bool
 
 type FromBackendLiteralsM be a = ExceptT String (State [BackendLiteral be]) a
 
@@ -65,7 +70,7 @@ instance (FromBackendLiterals be t, BeamBackend be) => FromBackendLiterals be (M
       do values <- get
          let colCount = valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)
              colValues = take colCount values
-         if all (==backendNull) colValues
+         if all backendIsNull colValues
            then put (drop colCount values) >> return Nothing
            else Just <$> fromBackendLiterals
     toBackendLiterals Nothing = replicate (valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)) backendNull

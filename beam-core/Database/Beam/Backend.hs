@@ -19,8 +19,6 @@ import Data.Text (Text, unpack)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
-import Database.HDBC
-
 -- instance Show (MigrationAction be) where
 --     show (MACreateTable name t) = concat ["MACreateTable ", unpack name , " ", show (allBeamValues (\(Columnar' tf) -> show tf) t)]
 -- deriving instance Show (DBSchemaComparison be)

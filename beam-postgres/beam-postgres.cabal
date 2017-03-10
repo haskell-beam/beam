@@ -1,0 +1,23 @@
+name:                 beam-postgres
+version:              0.1.0.0
+synopsis:             Connection layer between beam and postgres
+description:          
+homepage:             http://travis.athougies.net/projects/beam.html
+license:              MIT
+license-file:         LICENSE
+author:               Travis Athougies
+maintainer:           travis@athougies.net
+category:             Database
+build-type:           Simple
+cabal-version:        >=1.18
+bug-reports:          https://github.com/tathougies/issues
+
+library
+  exposed-modules:    Database.Beam.Postgres
+  build-depends:      base >=4.7 && <5.0, beam-core, text, bytestring, postgresql-libpq,
+                      postgresql-simple, attoparsec
+  default-language:   Haskell2010
+  default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
+                      DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
+                      CPP                                                                             
+

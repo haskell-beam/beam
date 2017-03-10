@@ -10,25 +10,25 @@ module Database.Beam.Schema.Tables
     , autoDbSettings
     , allTableSettings
 
-    , SqlValue'(..)
+    , BackendLiteral'(..)
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
     , Columnar(..), Columnar'(..)
     , Nullable(..), TableField(..)
-    , fieldName, fieldConstraints, fieldSchema, maybeFieldSchema
+    , fieldName, fieldSchema, maybeFieldSchema
 
     , TableSettings(..), TableSkeleton(..), Ignored(..)
 
     -- * Tablesmg<
-    , Table(..), Beamable(..), MakeSqlValues(..)
+    , Table(..), Beamable(..), MakeBackendLiterals(..)
     , zipBeamFieldsM, defTblFieldSettings
     , reifyTableSchema, tableValuesNeeded
     , pk
-    , allBeamValues, changeBeamRep, makeSqlValues
+    , allBeamValues, changeBeamRep, makeBackendLiterals
 
     -- * Fields
-    , HasDefaultFieldSchema(..), FieldSchema(..))
+    , HasDefaultFieldSchema(..) )
     where
 
 import Database.Beam.SQL.Types
@@ -53,8 +53,8 @@ import Data.Monoid
 import Data.Maybe
 import qualified Data.Text as T
 
-import Database.HDBC ( SqlColDesc(..), SqlValue(..), SqlTypeId(..)
-                     , fromSql)
+--import Database.HDBC ( SqlColDesc(..), SqlValue(..), SqlTypeId(..)
+--                     , fromSql)
 
 import GHC.Generics hiding (R)
 import qualified GHC.Generics as Generic
@@ -62,7 +62,7 @@ import qualified GHC.Generics as Generic
 import Lens.Micro hiding (to)
 
 type ReifiedDatabaseSchema be = [(Text, ReifiedTableSchema be)]
-type ReifiedTableSchema be = [(Text, SQLColumnSchema be)]
+type ReifiedTableSchema be = [(Text, BackendColumnSchema be)]
 
 class Database db where
     allTables :: (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
@@ -117,7 +117,10 @@ data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
 newtype Exposed x = Exposed x
-newtype SqlValue' be x = SqlValue' (BackendLiteral be)
+data BackendLiteral' be x where
+  BackendLiteral' ::
+    (FromBackendLiteral be a, Eq a, Show a, Typeable a) =>
+    a -> BackendLiteral' be a
 
 -- | A type family that we use to "tag" columns in our table datatypes.
 --
@@ -209,18 +212,15 @@ data Nullable (c :: * -> *) x
 -- >                     & employeeLastNameC  . fieldName .~ "lname"
 -- >                     & employeeLastNameC  . fieldSettings .~ Varchar (Just 128) -- Give it a 128 character limit
 data TableField be (table :: (* -> *) -> *) ty = TableField
-                                               { _fieldName        :: Text              -- ^ The field name
-                                               , _fieldConstraints :: SQLConstraint be  -- ^ Constraints for the field (such as AutoIncrement, PrimaryKey, etc)
-                                               , _fieldSchema      :: FieldSchema be ty -- ^ SQL storage informationa for the field
+                                               { _fieldName        :: Text                   -- ^ The field name
+                                               , _fieldSchema      :: BackendColumnSchema be -- ^ SQL storage informationa for the field
                                                }
-deriving instance Show (TableField be t ty)
+deriving instance Show (BackendColumnSchema be) => Show (TableField be t ty)
 
 fieldName :: Lens' (TableField be table ty) Text
-fieldName f (TableField name cs s) = (\name' -> TableField name' cs s) <$> f name
-fieldConstraints :: Lens' (TableField be table ty) (SQLConstraint be)
-fieldConstraints f (TableField name cs s) = (\cs' -> TableField name cs' s) <$> f cs
-fieldSchema :: Lens (TableField be table a) (TableField be table b) (FieldSchema be a) (FieldSchema be b)
-fieldSchema f (TableField name cs s) = (\s' -> TableField name cs s') <$> f s
+fieldName f (TableField name s) = (\name' -> TableField name' s) <$> f name
+fieldSchema :: Lens (TableField be table a) (TableField be table b) (BackendColumnSchema be) (BackendColumnSchema be)
+fieldSchema f (TableField name s) = (\s' -> TableField name s') <$> f s
 
 type TableSettings be table = table (TableField be table)
 
@@ -312,8 +312,8 @@ class Beamable table where
 
 reifyTableSchema :: Beamable table => TableSettings be table -> ReifiedTableSchema be
 reifyTableSchema tblFieldSettings =
-    allBeamValues (\(Columnar' (TableField name constraints settings)) ->
-                       (name, fieldColDesc settings constraints)) tblFieldSettings
+    allBeamValues (\(Columnar' (TableField name settings)) ->
+                       (name, settings)) tblFieldSettings
 
 tableValuesNeeded :: Beamable table => Proxy table -> Int
 tableValuesNeeded (Proxy :: Proxy table) = length (allBeamValues (const ()) (tblSkeleton :: TableSkeleton table))
@@ -346,33 +346,33 @@ changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl
 -- changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
 -- changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
 
-class GFieldsAreSerializable be values sqlvalue where
-    gMakeSqlValues :: Proxy be -> values () -> sqlvalue ()
-instance GFieldsAreSerializable be values sqlvalue =>
-    GFieldsAreSerializable be (M1 s m values) (M1 s m sqlvalue) where
-        gMakeSqlValues be (M1 x) = M1 (gMakeSqlValues be x)
+class GFieldsAreSerializable be values backendvalue where
+    gMakeBackendLiterals :: Proxy be -> values () -> backendvalue ()
+instance GFieldsAreSerializable be values backendvalue =>
+    GFieldsAreSerializable be (M1 s m values) (M1 s m backendvalue) where
+        gMakeBackendLiterals be (M1 x) = M1 (gMakeBackendLiterals be x)
 instance GFieldsAreSerializable be U1 U1 where
-    gMakeSqlValues _ _ = U1
-instance (GFieldsAreSerializable be a aSql, GFieldsAreSerializable be b bSql) =>
-    GFieldsAreSerializable be (a :*: b) (aSql :*: bSql) where
-        gMakeSqlValues be (a :*: b) = gMakeSqlValues be a :*: gMakeSqlValues be b
-instance FromBackendLiteral be x => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (SqlValue' be x)) where
-    gMakeSqlValues be (K1 x) = K1 (SqlValue' (toBackendLiteral x))
-instance MakeSqlValues be t => GFieldsAreSerializable be (K1 Generic.R (t Identity)) (K1 Generic.R (t (SqlValue' be))) where
-    gMakeSqlValues be (K1 x) = K1 (makeSqlValues x)
-instance ( Generic (t (Nullable (SqlValue' be))), Generic (t (Nullable Identity))
-         , GFieldsAreSerializable be (Rep (t (Nullable Identity))) (Rep (t (Nullable (SqlValue' be)))) )
-    => GFieldsAreSerializable be (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (SqlValue' be)))) where
+    gMakeBackendLiterals _ _ = U1
+instance (GFieldsAreSerializable be a aBackend, GFieldsAreSerializable be b bBackend) =>
+    GFieldsAreSerializable be (a :*: b) (aBackend :*: bBackend) where
+        gMakeBackendLiterals be (a :*: b) = gMakeBackendLiterals be a :*: gMakeBackendLiterals be b
+instance (FromBackendLiteral be x, Show x, Eq x, Typeable x) => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (BackendLiteral' be x)) where
+    gMakeBackendLiterals be (K1 x) = K1 (BackendLiteral' x)
+instance MakeBackendLiterals be t => GFieldsAreSerializable be (K1 Generic.R (t Identity)) (K1 Generic.R (t (BackendLiteral' be))) where
+    gMakeBackendLiterals be (K1 x) = K1 (makeBackendLiterals x)
+instance ( Generic (t (Nullable (BackendLiteral' be))), Generic (t (Nullable Identity))
+         , GFieldsAreSerializable be (Rep (t (Nullable Identity))) (Rep (t (Nullable (BackendLiteral' be)))) )
+    => GFieldsAreSerializable be (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (BackendLiteral' be)))) where
 
-    gMakeSqlValues be (K1 x) = K1 (to' (gMakeSqlValues (Proxy :: Proxy be) (from' x)))
+    gMakeBackendLiterals be (K1 x) = K1 (to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' x)))
 
-type MakeSqlValues be t = ( Generic (t (SqlValue' be)), Generic (t Identity)
-                          , GFieldsAreSerializable be (Rep (t Identity)) (Rep (t (SqlValue' be))) )
+type MakeBackendLiterals be t = ( Generic (t (BackendLiteral' be)), Generic (t Identity)
+                                , GFieldsAreSerializable be (Rep (t Identity)) (Rep (t (BackendLiteral' be))) )
 
-makeSqlValues :: MakeSqlValues be t => t Identity -> t (SqlValue' be)
-makeSqlValues tbl =
-    fix $ \(_ :: t (SqlValue' be)) ->
-    to' (gMakeSqlValues (Proxy :: Proxy be) (from' tbl))
+makeBackendLiterals :: MakeBackendLiterals be t => t Identity -> t (BackendLiteral' be)
+makeBackendLiterals tbl =
+    fix $ \(_ :: t (BackendLiteral' be)) ->
+    to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' tbl))
 
 class GTableFromBackendLiterals be x where
     gTableFromBackendLiterals :: FromBackendLiteralsM be (x ())
@@ -404,10 +404,6 @@ defTblFieldSettings :: ( Generic (TableSettings be table)
 defTblFieldSettings = withProxy $ \proxy -> to' (gDefTblFieldSettings proxy)
     where withProxy :: (Proxy (Rep (TableSettings be table) ()) -> TableSettings be table) -> TableSettings be table
           withProxy f = f Proxy
-
-fieldColDesc :: FieldSchema be fs -> SQLConstraint be -> SQLColumnSchema be
-fieldColDesc schema cs = let base = fsColDesc schema
-                         in base { csConstraints = csConstraints base <> cs }
 
 class GZipTables f g h (exposedRep :: * -> *) fRep gRep hRep where
     gZipTables :: Monad m => Proxy exposedRep -> (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> fRep () -> gRep () -> m (hRep ())
@@ -463,10 +459,11 @@ instance (GDefaultTableFieldSettings (a p), GDefaultTableFieldSettings (b p)) =>
 instance (Table table, HasDefaultFieldSchema be field, Selector f ) =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField be table field)) p) where
     gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (TableField be table field)) p)) = M1 (K1 s)
-        where s = TableField (T.pack name) mempty defFieldSchema
+        where s = TableField (T.pack name) (defFieldSchema (Proxy :: Proxy field))
               name = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (TableField be table field)) ()))
 
 instance ( Table table, Table related
+         , BeamBackend be
          , Selector f
 
          , Generic (PrimaryKey related (TableField be related))
@@ -490,14 +487,13 @@ instance ( Table table, Table related
               convertToForeignKeyField (Columnar' tf) _ =
                   pure . Columnar' $
                   tf { _fieldName = keyName <> "__" <> _fieldName tf
-                     , _fieldConstraints = removeConstraints (_fieldConstraints tf) }
-
-              removeConstraints = constraintPropagatesAs
+                     , _fieldSchema = nestedSchema (_fieldSchema tf :: BackendColumnSchema be) }
 
               keyName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) ())))
 
 instance ( Table table, Table related
          , Selector f
+         , BeamBackend be
 
          , Generic (PrimaryKey related (TableField be related))
          , Generic (PrimaryKey related (TableField be table))
@@ -549,22 +545,16 @@ instance ( Generic (PrimaryKey related (Nullable Ignored))
     GTableSkeleton (K1 Generic.R (PrimaryKey related (Nullable Ignored))) where
     gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (PrimaryKey related (Nullable Ignored))))))
 
-data FieldSchema be ty = FieldSchema
-                       { fsColDesc :: SQLColumnSchema be
-                       , fsHumanReadable :: String }
-instance Show (FieldSchema be ty) where
-    show (FieldSchema desc hr) = concat ["FieldSchema (", show desc, ") (", show hr, ")"]
-
 -- | Type class for types which can construct a default 'TableField' given a column name.
 class HasDefaultFieldSchema be fs where
-    defFieldSchema :: FieldSchema be fs
+    defFieldSchema :: Proxy fs -> BackendColumnSchema be
 
-instance (TableFromBackendLiterals be tbl, Beamable tbl, MakeSqlValues be tbl) => FromBackendLiterals be (tbl Identity) where
+instance (TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl) => FromBackendLiterals be (tbl Identity) where
     fromBackendLiterals = tableFromBackendLiterals
     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
-    toBackendLiterals = allBeamValues (\(Columnar' (SqlValue' b)) -> b) . makeSqlValues
+    toBackendLiterals = allBeamValues (\(Columnar' (BackendLiteral' b :: BackendLiteral' be a)) -> toBackendLiteral b) . makeBackendLiterals
 
-instance (BeamBackend be, TableFromBackendLiterals be tbl, Beamable tbl, MakeSqlValues be tbl, FromBackendLiterals be (tbl Identity)) => FromBackendLiterals be (tbl (Nullable Identity)) where
+instance (BeamBackend be, TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl, FromBackendLiterals be (tbl Identity)) => FromBackendLiterals be (tbl (Nullable Identity)) where
     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
     fromBackendLiterals =
       do tbl <- fromBackendLiterals
@@ -600,8 +590,8 @@ unCamelCaseSel xs = case unCamelCase xs of
                       [xs] -> xs
                       _:xs -> intercalate "_" xs
 
-maybeFieldSchema :: FieldSchema be ty -> FieldSchema be (Maybe ty)
-maybeFieldSchema base = let SQLColumnSchema desc isPrimaryKey isAuto _ constraints =  fsColDesc base
-                            in FieldSchema
-                               { fsColDesc = SQLColumnSchema desc isPrimaryKey isAuto True (constraintNullifiesAs constraints)
-                               , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")" }
+-- maybeFieldSchema :: FieldSchema be ty -> FieldSchema be (Maybe ty)
+-- maybeFieldSchema base = let SQLColumnSchema desc isPrimaryKey isAuto _ constraints =  fsColDesc base
+--                             in FieldSchema
+--                                { fsColDesc = SQLColumnSchema desc isPrimaryKey isAuto True (constraintNullifiesAs constraints)
+--                                , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")" }

@@ -1,0 +1,7 @@
+resolver: lts-8.4
+packages:
+  - '.'
+  - '../beam-core'
+extra-deps: []
+flags: {}
+extra-package-dbs: []

@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
+{-# LANGUAGE TypeApplications #-}
 module Database.Beam.Query.Types
     ( Q, QExpr, QExprToIdentity(..), TopLevelQ, IsQuery
 
@@ -6,17 +7,15 @@ module Database.Beam.Query.Types
 
     , Aggregation
 
-    , queryToSQL'
-
-    , optimizeExpr, optimizeExpr' ) where
+    , buildSql92Query ) where
 
 import Database.Beam.Query.Internal
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.SQL92
 
 import Database.Beam.Backend.Types
 import Database.Beam.Schema.Tables
 import Database.Beam.SQL
-import Database.HDBC
 
 import Control.Applicative
 import Control.Monad.State
@@ -30,16 +29,16 @@ import Data.Data
 import Data.Maybe
 import Data.String
 import qualified Data.Text as T
-import Data.Generics.Uniplate.Data
+import Data.Generics.Uniplate.Direct
 
 import Unsafe.Coerce
 
 -- * Beam queries
 
 type family QExprToIdentity x
-type instance QExprToIdentity (table (QExpr be s)) = table Identity
+type instance QExprToIdentity (table (QExpr syntax be s)) = table Identity
 type instance QExprToIdentity (table (Nullable c)) = Maybe (QExprToIdentity (table c))
-type instance QExprToIdentity (QExpr be s a) = a
+type instance QExprToIdentity (QExpr syntax be s a) = a
 type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
 type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
 type instance QExprToIdentity (a, b, c, d) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d)
@@ -52,30 +51,46 @@ instance IsQuery TopLevelQ where
 
 -- * Rewriting and optimization
 
--- | Given a `SQLExpr' QField` optimize the expression and turn it into a `SQLExpr`.
-optimizeExpr' :: BeamSqlBackend be => SQLExpr' be QField -> SQLExpr be
-optimizeExpr' = runIdentity . rewriteM sqlExprOptimizations . fmap mkSqlField
--- | Optimize a `QExpr` and turn it in into a `SQLExpr`.
-optimizeExpr :: BeamSqlBackend be => QExpr be s a -> SQLExpr be
-optimizeExpr (QExpr e) = optimizeExpr' e
+-- -- | Given a `SQLExpr' QField` optimize the expression and turn it into a `SQLExpr`.
+-- optimizeExpr' :: BeamSqlBackend be => SQLExpr' be QField -> SQLExpr be
+-- optimizeExpr' = runIdentity . rewriteM sqlExprOptimizations . fmap mkSqlField
+-- -- | Optimize a `QExpr` and turn it in into a `SQLExpr`.
+-- optimizeExpr :: BeamSqlBackend be => QExpr be s a -> SQLExpr be
+-- optimizeExpr (QExpr e) = optimizeExpr' e
 
-mkSqlField :: QField -> SQLFieldName
-mkSqlField (QField tblName (Just tblOrd) fieldName) = SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd))
-mkSqlField (QField tblName Nothing fieldName) = SQLFieldName fieldName
+-- mkSqlField :: QField -> SQLFieldName
+-- mkSqlField (QField tblName (Just tblOrd) fieldName) = SQLQualifiedFieldName fieldName ("t" <> fromString (show tblOrd))
+-- mkSqlField (QField tblName Nothing fieldName) = SQLFieldName fieldName
 
--- | Turn a `Q` into a `SQLSelect` starting the table references at the given number
-queryToSQL' :: (BeamSqlBackend be, Projectible be a) =>
-  Q be db s a -> Int -> (a, Int, SQLSelect be)
-queryToSQL' q curTbl = let (res, qb) = runState (runQ q) emptyQb
-                           emptyQb = QueryBuilder curTbl Nothing (SQLValE (toBackendLiteral True)) Nothing Nothing [] Nothing
-                           projection = map (\q -> SQLAliased (optimizeExpr' q) Nothing) (project res)
+buildSql92Query ::
+  forall syntax be db s a.
+  (Sql92Syntax syntax, Projectible syntax a) =>
+  Proxy syntax -> Q syntax be db s a -> Int -> (a, Int, Sql92SelectSyntax syntax)
+buildSql92Query _ q curTbl =
+  let (res, qb) = runState (runQ q) emptyQb
+      emptyQb = QueryBuilder curTbl Nothing (valueE (Proxy @syntax) (trueV (Proxy @syntax)))
+                             Nothing Nothing [] Nothing
+      projection = map (\q -> aliasExpr (Proxy @syntax) q Nothing) (project (Proxy @syntax) res)
 
-                           sel = SQLSelect
-                                 { selProjection = SQLProj projection
-                                 , selFrom = qbFrom qb
-                                 , selWhere = optimizeExpr' (qbWhere qb)
-                                 , selGrouping = qbGrouping qb
-                                 , selOrderBy = qbOrdering qb
-                                 , selLimit = qbLimit qb
-                                 , selOffset = qbOffset qb }
-                       in (res, qbNextTblRef qb, sel)
+      sel = selectStmt (Proxy @syntax)
+                       (projExprs (Proxy @syntax) projection) (qbFrom qb)
+                       (qbWhere qb) (qbGrouping qb)
+                       (qbOrdering qb) (qbLimit qb) (qbOffset qb)
+  in (res, qbNextTblRef qb, sel)
+
+-- -- | Turn a `Q` into a `SQLSelect` starting the table references at the given number
+-- queryToSQL' :: (BeamSqlBackend be, Projectible be a) =>
+--   Q be db s a -> Int -> (a, Int, SQLSelect be)
+-- queryToSQL' q curTbl = let (res, qb) = runState (runQ q) emptyQb
+--                            emptyQb = QueryBuilder curTbl Nothing (SQLValE (SQLValue True)) Nothing Nothing [] Nothing
+--                            projection = map (\q -> SQLAliased (optimizeExpr' q) Nothing) (project res)
+
+--                            sel = SQLSelect
+--                                  { selProjection = SQLProj projection
+--                                  , selFrom = qbFrom qb
+--                                  , selWhere = optimizeExpr' (qbWhere qb)
+--                                  , selGrouping = qbGrouping qb
+--                                  , selOrderBy = qbOrdering qb
+--                                  , selLimit = qbLimit qb
+--                                  , selOffset = qbOffset qb }
+--                        in (res, qbNextTblRef qb, sel)
