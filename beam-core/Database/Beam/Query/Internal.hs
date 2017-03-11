@@ -1,39 +1,36 @@
 {-# LANGUAGE FunctionalDependencies, UndecidableInstances, TypeApplications #-}
 module Database.Beam.Query.Internal where
 
-import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL92
-import Database.Beam.SQL.Types
-import Database.Beam.Schema
+import           Database.Beam.Backend.Types
+import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.SQL92
+import           Database.Beam.Schema
 
 import qualified Data.Text as T
-import Data.Typeable
-import Data.Coerce
+import           Data.Typeable
 
-import Control.Applicative
-import Control.Monad.State
-import Control.Monad.Writer hiding (All)
-import Control.Monad.Identity
+import           Control.Applicative
+import           Control.Monad.Identity
+import           Control.Monad.State
 
 -- | Type class for any query like entity, currently `Q` and `TopLevelQ`
 class IsQuery q where
-    toQ :: q syntax be db s a -> Q syntax be db s a
+    toQ :: q syntax db s a -> Q syntax db s a
 
 -- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
 -- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
 -- implemented.
-newtype Q syntax be (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State (QueryBuilder syntax be) a}
-    deriving (Monad, Applicative, Functor, MonadFix, MonadState (QueryBuilder syntax be))
+newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State (QueryBuilder syntax) a}
+    deriving (Monad, Applicative, Functor, MonadFix, MonadState (QueryBuilder syntax))
 
 -- | Wrapper for 'Q's that have been modified in such a way that they can no longer be joined against
 --   without the use of 'subquery_'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
 --   directly to 'query' or 'queryList'
-newtype TopLevelQ syntax be db s a = TopLevelQ (Q syntax be db s a)
+newtype TopLevelQ syntax db s a = TopLevelQ (Q syntax db s a)
 
 data QNested s
 
-data QueryBuilder syntax be
+data QueryBuilder syntax
   = QueryBuilder
   { qbNextTblRef :: Int
   , qbFrom  :: Maybe (Sql92FromSyntax syntax)
@@ -55,13 +52,13 @@ data QField = QField
 -- | The type of lifted beam expressions that will yield the haskell type `t` when run with
 -- `queryList` or `query`. In the future, this will include a thread argument meant to prevent
 -- cross-usage of expressions, but this is unimplemented for technical reasons.
-newtype QExpr syntax be s t = QExpr (Sql92ExpressionSyntax syntax)
-deriving instance Show (Sql92ExpressionSyntax syntax) => Show (QExpr syntax be s t)
-deriving instance Eq (Sql92ExpressionSyntax syntax) => Eq (QExpr syntax be s t)
+newtype QExpr syntax s t = QExpr (Sql92ExpressionSyntax syntax)
+deriving instance Show (Sql92ExpressionSyntax syntax) => Show (QExpr syntax s t)
+deriving instance Eq (Sql92ExpressionSyntax syntax) => Eq (QExpr syntax s t)
 
 -- * Aggregations
 
-data Aggregation syntax be s a
+data Aggregation syntax s a
   = GroupAgg (Sql92ExpressionSyntax syntax)
   | ProjectAgg (Sql92ExpressionSyntax syntax)
 
@@ -74,7 +71,7 @@ data Aggregation syntax be s a
 
 class Sql92Syntax syntax => Projectible syntax a where
     project :: Proxy syntax -> a -> [Sql92ExpressionSyntax syntax]
-instance (Typeable a, Sql92Syntax syntax) => Projectible syntax (QExpr syntax be s a) where
+instance (Typeable a, Sql92Syntax syntax) => Projectible syntax (QExpr syntax s a) where
     project p (QExpr x) = [x]
 instance Sql92Syntax syntax => Projectible syntax () where
     project p () = [valueE (Proxy @syntax) (nullV (Proxy @syntax))]
@@ -97,9 +94,9 @@ instance ( Projectible syntax a
     project p (a, b, c, d, e) = project p a ++ project p b ++ project p c ++ project p d ++ project p e
 
 instance (Beamable t, Sql92Syntax syntax)
-    => Projectible syntax (t (QExpr syntax be s)) where
+    => Projectible syntax (t (QExpr syntax s)) where
     project p t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
-instance (Beamable t, Sql92Syntax syntax) => Projectible syntax (t (Nullable (QExpr syntax be s))) where
+instance (Beamable t, Sql92Syntax syntax) => Projectible syntax (t (Nullable (QExpr syntax s))) where
     project p t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
 
 -- tableVal :: Table tbl => tbl Identity -> tbl (QExpr s)

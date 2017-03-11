@@ -1,24 +1,5 @@
 module Database.Beam.Backend where
 
-import Database.Beam.Schema
-import Database.Beam.SQL.Types
-import Database.Beam.SQL
-
-import Control.Arrow
-import Control.Applicative
-import Control.Monad.Trans
-import Control.Monad.Writer
-import Control.Monad.Identity
-import Control.Monad
-
-import Data.String
-import Data.Maybe
-import Data.List
-import Data.Proxy
-import Data.Text (Text, unpack)
-import qualified Data.Set as S
-import qualified Data.Map as M
-
 -- instance Show (MigrationAction be) where
 --     show (MACreateTable name t) = concat ["MACreateTable ", unpack name , " ", show (allBeamValues (\(Columnar' tf) -> show tf) t)]
 -- deriving instance Show (DBSchemaComparison be)

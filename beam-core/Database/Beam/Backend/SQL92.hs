@@ -1,15 +1,23 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Database.Beam.Backend.SQL92 where
 
-import Database.Beam.Schema.Tables
-import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL
-import Data.Int
-import Data.Text (Text)
+import           Control.Monad.Identity hiding (join)
+
+import           Database.Beam.Schema.Tables
+import           Database.Beam.Backend.Types
+import           Database.Beam.Backend.SQL
+import           Data.Int
+import           Data.Text (Text)
 import qualified Data.Text as T
 
-import Data.ByteString.Builder
-import Data.Monoid
-import Data.Proxy
+import           Data.ByteString.Builder
+import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.Monoid
+import           Data.Proxy
+import           Data.Ratio
+
+import           GHC.Generics
 
 class ( BeamSqlBackend be
       , Sql92Syntax (Sql92BackendSyntaxBuilder be)
@@ -32,6 +40,8 @@ class Sql92Schema schema where
 
   float :: schema
   double :: schema
+
+  timestamp :: schema
 
 -- * Finally tagless style
 
@@ -131,6 +141,7 @@ class Sql92Syntax cmd where
   falseV :: Proxy cmd -> Sql92ValueSyntax cmd
   stringV :: Proxy cmd -> String -> Sql92ValueSyntax cmd
   numericV :: Proxy cmd -> Integer -> Sql92ValueSyntax cmd
+  rationalV :: Proxy cmd -> Rational -> Sql92ValueSyntax cmd
 
   aliasExpr :: Proxy cmd -> Sql92ExpressionSyntax cmd
             -> Maybe Text
@@ -195,6 +206,15 @@ instance Sql92Syntax Sql92SyntaxBuilder where
     Sql92SyntaxBuilder $
     byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`.`" <>
     stringUtf8 (T.unpack b) <> byteString "`"
+  unqualifiedFieldE _ a =
+    Sql92SyntaxBuilder $
+    byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`"
+
+  addE _ = sqlBinOp "+"
+  subE _ = sqlBinOp "-"
+  mulE _ = sqlBinOp "*"
+  divE _ = sqlBinOp "/"
+  modE _ = sqlBinOp "%"
   andE _ = sqlBinOp "AND"
   orE _ = sqlBinOp "OR"
   eqE _ = sqlBinOp "="
@@ -203,6 +223,15 @@ instance Sql92Syntax Sql92SyntaxBuilder where
   gtE _ = sqlBinOp ">"
   leE _ = sqlBinOp "<="
   geE _ = sqlBinOp ">="
+  negateE _ = sqlUnOp "-"
+  notE _ = sqlUnOp "NOT"
+  existsE _ = sqlUnOp "EXISTS"
+  isJustE _ a =
+    Sql92SyntaxBuilder $
+    byteString "(" <> buildSql92 a <> byteString ") IS NOT NULL"
+  isNothingE _ a =
+    Sql92SyntaxBuilder $
+    byteString "(" <> buildSql92 a <> byteString ") IS NULL"
   valueE _ a = a
 
   trueV _ = Sql92SyntaxBuilder (byteString "TRUE")
@@ -213,12 +242,18 @@ instance Sql92Syntax Sql92SyntaxBuilder where
     where escapeChar '\'' = "''"
           escapeChar x = [x]
   numericV _ x = Sql92SyntaxBuilder (stringUtf8 (show x))
+  rationalV p x = divE p (valueE p (numericV p (numerator x)))
+                         (valueE p (numericV p (denominator x)))
+  nullV _ = Sql92SyntaxBuilder (byteString "NULL")
 
   fromTable _ tableSrc Nothing = tableSrc
   fromTable _ tableSrc (Just nm) =
     Sql92SyntaxBuilder $
     buildSql92 tableSrc <> byteString " AS " <> stringUtf8 (T.unpack nm)
+
   innerJoin _ = join "INNER JOIN"
+  leftJoin _ = join "LEFT JOIN"
+  rightJoin _ = join "RIGHT JOIN"
 
   tableNamed _ nm = Sql92SyntaxBuilder (stringUtf8 (T.unpack nm))
 
@@ -238,15 +273,27 @@ join type_ a b on =
     case on of
       Nothing -> mempty
       Just on -> byteString " ON (" <> buildSql92 on <> byteString ")"
+sqlUnOp op a =
+  Sql92SyntaxBuilder (byteString op <> byteString " (" <> buildSql92 a <> byteString ")")
 sqlBinOp op a b =
   Sql92SyntaxBuilder (byteString "(" <> buildSql92 a <> byteString ") " <> byteString op <> byteString " (" <>
                        buildSql92 b <> byteString ")")
 
 renderSql92 :: Sql92SyntaxBuilder -> String
-renderSql92 (Sql92SyntaxBuilder b) = show (toLazyByteString b)
+renderSql92 (Sql92SyntaxBuilder b) = BL.unpack (toLazyByteString b)
 
 buildSepBy :: Builder -> [Builder] -> Builder
 buildSepBy sep [] = mempty
 buildSepBy sep [x] = x
 buildSepBy sep (x:xs) = x <> sep <> buildSepBy sep xs
 
+-- * Make SQL Literals
+
+type MakeSqlLiterals syntax t = FieldsFulfillConstraint (HasSqlValueSyntax syntax) t
+
+makeSqlLiterals ::
+  forall sql t.
+  MakeSqlLiterals sql t =>
+  t Identity -> t (WithConstraint (HasSqlValueSyntax sql))
+makeSqlLiterals tbl =
+  to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax sql)) (from tbl))

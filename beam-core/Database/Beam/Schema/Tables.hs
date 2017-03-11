@@ -1,4 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Defines a generic schema type that can be used to define schemas for Beam tables
 module Database.Beam.Schema.Tables
@@ -10,7 +12,6 @@ module Database.Beam.Schema.Tables
     , autoDbSettings
     , allTableSettings
 
-    , BackendLiteral'(..)
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
@@ -19,47 +20,40 @@ module Database.Beam.Schema.Tables
     , fieldName, fieldSchema, maybeFieldSchema
 
     , TableSettings(..), TableSkeleton(..), Ignored(..)
+    , GFieldsFulfillConstraint(..), FieldsFulfillConstraint, WithConstraint(..)
 
     -- * Tablesmg<
-    , Table(..), Beamable(..), MakeBackendLiterals(..)
-    , zipBeamFieldsM, defTblFieldSettings
+    , Table(..), Beamable(..)
+    , defTblFieldSettings
     , reifyTableSchema, tableValuesNeeded
     , pk
-    , allBeamValues, changeBeamRep, makeBackendLiterals
+    , allBeamValues, changeBeamRep
 
     -- * Fields
     , HasDefaultFieldSchema(..) )
     where
 
-import Database.Beam.SQL.Types
-import Database.Beam.Backend.Types
+import           Database.Beam.Backend.Types
 
-import Control.Arrow
-import Control.Applicative
-import Control.Monad.State
-import Control.Monad.Writer
-import Control.Monad.Error
-import Control.Monad.Identity
+import           Control.Applicative
+import           Control.Monad.Writer
+import           Control.Monad.Identity
 
-import Data.Proxy
-import Data.Coerce
-import Data.Typeable
-import Data.Text (Text)
-import Data.List
-import Data.Char
-import Data.String
-import Data.Void
-import Data.Monoid
-import Data.Maybe
+import           Data.Char (isUpper, toLower, toUpper)
+import           Data.List (intercalate)
+import           Data.Maybe
+import           Data.Monoid ((<>))
+import           Data.Proxy
+import           Data.String (IsString(..))
+import           Data.Text (Text)
 import qualified Data.Text as T
+import           Data.Typeable
 
---import Database.HDBC ( SqlColDesc(..), SqlValue(..), SqlTypeId(..)
---                     , fromSql)
-
-import GHC.Generics hiding (R)
 import qualified GHC.Generics as Generic
+import           GHC.Generics hiding (R)
+import           GHC.Types (Constraint)
 
-import Lens.Micro hiding (to)
+import           Lens.Micro hiding (to)
 
 type ReifiedDatabaseSchema be = [(Text, ReifiedTableSchema be)]
 type ReifiedTableSchema be = [(Text, BackendColumnSchema be)]
@@ -117,10 +111,6 @@ data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
 newtype Exposed x = Exposed x
-data BackendLiteral' be x where
-  BackendLiteral' ::
-    (FromBackendLiteral be a, Eq a, Show a, Typeable a) =>
-    a -> BackendLiteral' be a
 
 -- | A type family that we use to "tag" columns in our table datatypes.
 --
@@ -311,9 +301,9 @@ class Beamable table where
     --                         return (to' hRep)
 
 reifyTableSchema :: Beamable table => TableSettings be table -> ReifiedTableSchema be
-reifyTableSchema tblFieldSettings =
+reifyTableSchema =
     allBeamValues (\(Columnar' (TableField name settings)) ->
-                       (name, settings)) tblFieldSettings
+                       (name, settings))
 
 tableValuesNeeded :: Beamable table => Proxy table -> Int
 tableValuesNeeded (Proxy :: Proxy table) = length (allBeamValues (const ()) (tblSkeleton :: TableSkeleton table))
@@ -346,53 +336,73 @@ changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl
 -- changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
 -- changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
 
-class GFieldsAreSerializable be values backendvalue where
-    gMakeBackendLiterals :: Proxy be -> values () -> backendvalue ()
-instance GFieldsAreSerializable be values backendvalue =>
-    GFieldsAreSerializable be (M1 s m values) (M1 s m backendvalue) where
-        gMakeBackendLiterals be (M1 x) = M1 (gMakeBackendLiterals be x)
-instance GFieldsAreSerializable be U1 U1 where
-    gMakeBackendLiterals _ _ = U1
-instance (GFieldsAreSerializable be a aBackend, GFieldsAreSerializable be b bBackend) =>
-    GFieldsAreSerializable be (a :*: b) (aBackend :*: bBackend) where
-        gMakeBackendLiterals be (a :*: b) = gMakeBackendLiterals be a :*: gMakeBackendLiterals be b
-instance (FromBackendLiteral be x, Show x, Eq x, Typeable x) => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (BackendLiteral' be x)) where
-    gMakeBackendLiterals be (K1 x) = K1 (BackendLiteral' x)
-instance MakeBackendLiterals be t => GFieldsAreSerializable be (K1 Generic.R (t Identity)) (K1 Generic.R (t (BackendLiteral' be))) where
-    gMakeBackendLiterals be (K1 x) = K1 (makeBackendLiterals x)
-instance ( Generic (t (Nullable (BackendLiteral' be))), Generic (t (Nullable Identity))
-         , GFieldsAreSerializable be (Rep (t (Nullable Identity))) (Rep (t (Nullable (BackendLiteral' be)))) )
-    => GFieldsAreSerializable be (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (BackendLiteral' be)))) where
+data WithConstraint (c :: * -> Constraint) x where
+  WithConstraint :: c x => x -> WithConstraint c x
 
-    gMakeBackendLiterals be (K1 x) = K1 (to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' x)))
+class GFieldsFulfillConstraint (c :: * -> Constraint) values withconstraint where
+  gWithConstrainedFields :: Proxy c -> values () -> withconstraint ()
+instance GFieldsFulfillConstraint c values withconstraint =>
+    GFieldsFulfillConstraint c (M1 s m values) (M1 s m withconstraint) where
+  gWithConstrainedFields c (M1 x) = M1 (gWithConstrainedFields c x)
+instance GFieldsFulfillConstraint c U1 U1 where
+  gWithConstrainedFields _ _ = U1
+instance (GFieldsFulfillConstraint c a aC, GFieldsFulfillConstraint c b bC) =>
+  GFieldsFulfillConstraint c (a :*: b) (aC :*: bC) where
+  gWithConstrainedFields be (a :*: b) = gWithConstrainedFields be a :*: gWithConstrainedFields be b
+instance (c x) => GFieldsFulfillConstraint c (K1 Generic.R x) (K1 Generic.R (WithConstraint c x)) where
+  gWithConstrainedFields be (K1 x) = K1 (WithConstraint x)
 
-type MakeBackendLiterals be t = ( Generic (t (BackendLiteral' be)), Generic (t Identity)
-                                , GFieldsAreSerializable be (Rep (t Identity)) (Rep (t (BackendLiteral' be))) )
+type FieldsFulfillConstraint (c :: * -> Constraint) t =
+  ( Generic (t (WithConstraint c)), Generic (t Identity)
+  , GFieldsFulfillConstraint c (Rep (t Identity)) (Rep (t (WithConstraint c))))
 
-makeBackendLiterals :: MakeBackendLiterals be t => t Identity -> t (BackendLiteral' be)
-makeBackendLiterals tbl =
-    fix $ \(_ :: t (BackendLiteral' be)) ->
-    to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' tbl))
+-- class GFieldsAreSerializable be values backendvalue where
+--     gMakeBackendLiterals :: Proxy be -> values () -> backendvalue ()
+-- instance GFieldsAreSerializable be values backendvalue =>
+--     GFieldsAreSerializable be (M1 s m values) (M1 s m backendvalue) where
+--         gMakeBackendLiterals be (M1 x) = M1 (gMakeBackendLiterals be x)
+-- instance GFieldsAreSerializable be U1 U1 where
+--     gMakeBackendLiterals _ _ = U1
+-- instance (GFieldsAreSerializable be a aBackend, GFieldsAreSerializable be b bBackend) =>
+--     GFieldsAreSerializable be (a :*: b) (aBackend :*: bBackend) where
+--         gMakeBackendLiterals be (a :*: b) = gMakeBackendLiterals be a :*: gMakeBackendLiterals be b
+-- instance (FromBackendLiteral be x, Show x, Eq x, Typeable x) => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (BackendLiteral' be x)) where
+--     gMakeBackendLiterals be (K1 x) = K1 (BackendLiteral' x)
+-- instance MakeBackendLiterals be t => GFieldsAreSerializable be (K1 Generic.R (t Identity)) (K1 Generic.R (t (BackendLiteral' be))) where
+--     gMakeBackendLiterals be (K1 x) = K1 (makeBackendLiterals x)
+-- instance ( Generic (t (Nullable (BackendLiteral' be))), Generic (t (Nullable Identity))
+--          , GFieldsAreSerializable be (Rep (t (Nullable Identity))) (Rep (t (Nullable (BackendLiteral' be)))) )
+--     => GFieldsAreSerializable be (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (BackendLiteral' be)))) where
 
-class GTableFromBackendLiterals be x where
-    gTableFromBackendLiterals :: FromBackendLiteralsM be (x ())
-instance GTableFromBackendLiterals be x => GTableFromBackendLiterals be (M1 s m x) where
-    gTableFromBackendLiterals = M1 <$> gTableFromBackendLiterals
-instance GTableFromBackendLiterals be U1 where
-    gTableFromBackendLiterals = pure U1
-instance (GTableFromBackendLiterals be a, GTableFromBackendLiterals be b) =>
-    GTableFromBackendLiterals be (a :*: b) where
-        gTableFromBackendLiterals =
-          do a <- gTableFromBackendLiterals
-             b <- gTableFromBackendLiterals
-             pure (a :*: b)
-instance FromBackendLiterals be x => GTableFromBackendLiterals be (K1 Generic.R x) where
-    gTableFromBackendLiterals = K1 <$> fromBackendLiterals
+--     gMakeBackendLiterals be (K1 x) = K1 (to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' x)))
 
-type TableFromBackendLiterals be t = ( Generic (t Identity)
-                                     , GTableFromBackendLiterals be (Rep (t Identity)) )
-tableFromBackendLiterals :: TableFromBackendLiterals be t => FromBackendLiteralsM be (t Identity)
-tableFromBackendLiterals = to' <$> gTableFromBackendLiterals
+-- type MakeBackendLiterals be t = ( Generic (t (BackendLiteral' be)), Generic (t Identity)
+--                                 , GFieldsFulfillConstraint c be (Rep (t Identity)) (Rep (t (WithContraint  be))) )
+
+-- makeBackendLiterals :: MakeBackendLiterals be t => t Identity -> t (BackendLiteral' be)
+-- makeBackendLiterals tbl =
+--     fix $ \(_ :: t (BackendLiteral' be)) ->
+--             to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' tbl))
+
+-- class GTableFromBackendLiterals be x where
+--     gTableFromBackendLiterals :: FromBackendLiteralsM be (x ())
+-- instance GTableFromBackendLiterals be x => GTableFromBackendLiterals be (M1 s m x) where
+--     gTableFromBackendLiterals = M1 <$> gTableFromBackendLiterals
+-- instance GTableFromBackendLiterals be U1 where
+--     gTableFromBackendLiterals = pure U1
+-- instance (GTableFromBackendLiterals be a, GTableFromBackendLiterals be b) =>
+--     GTableFromBackendLiterals be (a :*: b) where
+--         gTableFromBackendLiterals =
+--           do a <- gTableFromBackendLiterals
+--              b <- gTableFromBackendLiterals
+--              pure (a :*: b)
+-- instance FromBackendLiterals be x => GTableFromBackendLiterals be (K1 Generic.R x) where
+--     gTableFromBackendLiterals = K1 <$> fromBackendLiterals
+
+-- type TableFromBackendLiterals be t = ( Generic (t Identity)
+--                                      , GTableFromBackendLiterals be (Rep (t Identity)) )
+-- tableFromBackendLiterals :: TableFromBackendLiterals be t => FromBackendLiteralsM be (t Identity)
+-- tableFromBackendLiterals = to' <$> gTableFromBackendLiterals
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f
@@ -549,23 +559,27 @@ instance ( Generic (PrimaryKey related (Nullable Ignored))
 class HasDefaultFieldSchema be fs where
     defFieldSchema :: Proxy fs -> BackendColumnSchema be
 
-instance (TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl) => FromBackendLiterals be (tbl Identity) where
-    fromBackendLiterals = tableFromBackendLiterals
-    valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
-    toBackendLiterals = allBeamValues (\(Columnar' (BackendLiteral' b :: BackendLiteral' be a)) -> toBackendLiteral b) . makeBackendLiterals
+instance (BeamColumnSchema (BackendColumnSchema be), HasDefaultFieldSchema be x) =>
+  HasDefaultFieldSchema be (Auto x) where
+  defFieldSchema _ = autoSchema (defFieldSchema (Proxy @x))
 
-instance (BeamBackend be, TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl, FromBackendLiterals be (tbl Identity)) => FromBackendLiterals be (tbl (Nullable Identity)) where
-    valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
-    fromBackendLiterals =
-      do tbl <- fromBackendLiterals
-         case tbl of
-           Just tbl -> pure (changeBeamRep (\(Columnar' x) -> Columnar' (Just x)) (tbl :: tbl Identity))
-           Nothing -> pure (changeBeamRep (\_ -> Columnar' Nothing) (tblSkeleton :: TableSkeleton tbl))
-    toBackendLiterals tbl =
-      let values = allBeamValues (\(Columnar' b) -> isNothing b) tbl
-      in if all id values
-         then toBackendLiterals (Nothing :: Maybe (tbl Identity))
-         else toBackendLiterals (Just (changeBeamRep (\(Columnar' (Just x)) -> Columnar' x) tbl :: tbl Identity))
+-- instance (TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl) => FromBackendLiterals be (tbl Identity) where
+--     fromBackendLiterals = tableFromBackendLiterals
+--     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
+--     toBackendLiterals = allBeamValues (\(Columnar' (BackendLiteral' b :: BackendLiteral' be a)) -> toBackendLiteral b) . makeBackendLiterals
+
+-- instance (BeamBackend be, TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl, FromBackendLiterals be (tbl Identity)) => FromBackendLiterals be (tbl (Nullable Identity)) where
+--     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
+--     fromBackendLiterals =
+--       do tbl <- fromBackendLiterals
+--          case tbl of
+--            Just tbl -> pure (changeBeamRep (\(Columnar' x) -> Columnar' (Just x)) (tbl :: tbl Identity))
+--            Nothing -> pure (changeBeamRep (\_ -> Columnar' Nothing) (tblSkeleton :: TableSkeleton tbl))
+--     toBackendLiterals tbl =
+--       let values = allBeamValues (\(Columnar' b) -> isNothing b) tbl
+--       in if all id values
+--          then toBackendLiterals (Nothing :: Maybe (tbl Identity))
+--          else toBackendLiterals (Just (changeBeamRep (\(Columnar' (Just x)) -> Columnar' x) tbl :: tbl Identity))
 
 -- Internal functions
 

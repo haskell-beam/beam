@@ -14,8 +14,10 @@ bug-reports:          https://github.com/tathougies/issues
 
 library
   exposed-modules:    Database.Beam.Postgres
+  other-modules:      Database.Beam.Postgres.Syntax
+                      Database.Beam.Postgres.Types
   build-depends:      base >=4.7 && <5.0, beam-core, text, bytestring, postgresql-libpq,
-                      postgresql-simple, attoparsec
+                      postgresql-simple, attoparsec, free, time
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,

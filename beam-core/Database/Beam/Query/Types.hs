@@ -15,30 +15,23 @@ import Database.Beam.Backend.SQL92
 
 import Database.Beam.Backend.Types
 import Database.Beam.Schema.Tables
-import Database.Beam.SQL
 
 import Control.Applicative
 import Control.Monad.State
-import Control.Monad.Writer hiding (All)
 import Control.Monad.Identity
 
 import Data.Monoid hiding (All)
 import Data.Proxy
-import Data.Coerce
-import Data.Data
 import Data.Maybe
 import Data.String
 import qualified Data.Text as T
-import Data.Generics.Uniplate.Direct
-
-import Unsafe.Coerce
 
 -- * Beam queries
 
 type family QExprToIdentity x
-type instance QExprToIdentity (table (QExpr syntax be s)) = table Identity
+type instance QExprToIdentity (table (QExpr syntax s)) = table Identity
 type instance QExprToIdentity (table (Nullable c)) = Maybe (QExprToIdentity (table c))
-type instance QExprToIdentity (QExpr syntax be s a) = a
+type instance QExprToIdentity (QExpr syntax s a) = a
 type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
 type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
 type instance QExprToIdentity (a, b, c, d) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d)
@@ -63,9 +56,9 @@ instance IsQuery TopLevelQ where
 -- mkSqlField (QField tblName Nothing fieldName) = SQLFieldName fieldName
 
 buildSql92Query ::
-  forall syntax be db s a.
+  forall syntax db s a.
   (Sql92Syntax syntax, Projectible syntax a) =>
-  Proxy syntax -> Q syntax be db s a -> Int -> (a, Int, Sql92SelectSyntax syntax)
+  Proxy syntax -> Q syntax db s a -> Int -> (a, Int, Sql92SelectSyntax syntax)
 buildSql92Query _ q curTbl =
   let (res, qb) = runState (runQ q) emptyQb
       emptyQb = QueryBuilder curTbl Nothing (valueE (Proxy @syntax) (trueV (Proxy @syntax)))

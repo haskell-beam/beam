@@ -13,7 +13,7 @@ import Control.Monad.Identity
 import Data.Typeable
 import Data.Text
 import Data.Int
-import Data.Time.Clock
+--import Data.Time.Clock
 
 import GHC.Generics
 

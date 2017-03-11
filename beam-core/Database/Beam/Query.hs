@@ -13,38 +13,28 @@ module Database.Beam.Query
     )
     where
 
-import Database.Beam.Query.Types
-import Database.Beam.Query.Combinators
-import Database.Beam.Query.Internal
+import           Database.Beam.Query.Types
+import           Database.Beam.Query.Combinators
+import           Database.Beam.Query.Internal
 
-import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL
-import Database.Beam.Schema.Tables
-import Database.Beam.SQL
-import Database.Beam.SQL.Types
+import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.Types
+import           Database.Beam.Schema.Tables
 
-import Control.Applicative
-import Control.Arrow
-import Control.Monad.Trans
-import Control.Monad.Writer (tell, execWriter, Writer)
-import Control.Monad.State
-import Control.Monad.Error
-import Control.Monad.Identity
+import           Control.Applicative
+import           Control.Arrow
+import           Control.Monad.Writer (tell, execWriter, Writer)
+import           Control.Monad.State
+import           Control.Monad.Identity
 
-import Data.Monoid hiding (All)
-import Data.Proxy
-import Data.Data
-import Data.List (find)
-import Data.Maybe
-import Data.String (fromString)
-import Data.Conduit
-import qualified Data.Conduit.List as C
-import qualified Data.Set as S
+import           Data.Monoid hiding (All)
+import           Data.Proxy
+import           Data.List (find)
+import           Data.Maybe
+import           Data.String (fromString)
 import qualified Data.Text as T
 
-import GHC.Generics
-
-import Unsafe.Coerce
+import           GHC.Generics
 
 -- * Query
 

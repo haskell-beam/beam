@@ -5,10 +5,8 @@ module Database.Beam.Schema.Lenses
 
 import Database.Beam.Schema.Tables
 
-import Control.Applicative
 import Control.Monad.Identity
 
-import Data.Functor
 import Data.Proxy
 
 import GHC.Generics
