@@ -7,6 +7,7 @@ import Database.Beam.Backend.SQL92
 
 import Database.PostgreSQL.LibPQ
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PgType
+import qualified Database.PostgreSQL.Simple.FromField as Pg
 
 import Control.Applicative
 
@@ -37,8 +38,12 @@ instance BeamBackend Postgres where
     , pgIsNullable :: Bool
     , pgIsPrimaryKey :: Bool }
     deriving (Show)
+  type BackendFromField Postgres = Pg.FromField
 
 instance SupportedSyntax Postgres Sql92SyntaxBuilder
+
+instance Pg.FromField x => Pg.FromField (Auto x) where
+  fromField field d = fmap (Auto . Just) (Pg.fromField field d)
 
 -- instance Eq (BackendLiteral Postgres) where
 --   a == b =

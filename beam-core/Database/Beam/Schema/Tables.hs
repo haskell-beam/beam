@@ -563,6 +563,8 @@ instance (BeamColumnSchema (BackendColumnSchema be), HasDefaultFieldSchema be x)
   HasDefaultFieldSchema be (Auto x) where
   defFieldSchema _ = autoSchema (defFieldSchema (Proxy @x))
 
+-- * Parsing tables from rows
+
 -- instance (TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl) => FromBackendLiterals be (tbl Identity) where
 --     fromBackendLiterals = tableFromBackendLiterals
 --     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
