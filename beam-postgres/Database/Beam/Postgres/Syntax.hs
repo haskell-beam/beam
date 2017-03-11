@@ -5,12 +5,13 @@ module Database.Beam.Postgres.Syntax where
 
 import           Database.Beam.Postgres.Types
 
+import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL92
 import           Database.Beam.Backend.Types
-import           Database.Beam.Query.Combinators
+--import           Database.Beam.Query.Combinators
 import           Database.Beam.Query.Internal
-import           Database.Beam.Schema.Tables
+--import           Database.Beam.Schema.Tables
 
 import           Control.Monad.Free
 import           Control.Monad.Free.Church

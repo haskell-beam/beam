@@ -17,9 +17,9 @@ library
   other-modules:      Database.Beam.Postgres.Syntax
                       Database.Beam.Postgres.Types
   build-depends:      base >=4.7 && <5.0, beam-core, text, bytestring, postgresql-libpq,
-                      postgresql-simple, attoparsec, free, time
+                      postgresql-simple, attoparsec, free, time, mtl
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
-                      CPP                                                                             
+                      CPP, FlexibleContexts
 
