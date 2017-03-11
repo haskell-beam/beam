@@ -1,10 +1,17 @@
+{-# LANGUAGE UndecidableInstances #-}
+
 module Database.Beam.Backend.Types where
 
 import Control.Monad.Except
 import Control.Monad.State
+import Control.Monad.Free.Church
+import Control.Monad.Identity
 
 import Data.Proxy
 import Data.Monoid
+
+import GHC.Generics
+import GHC.Types
 
 class BeamColumnSchema schema where
   maybeFieldSchema :: schema -> schema
@@ -14,6 +21,7 @@ class BeamColumnSchema schema where
 
 class BeamColumnSchema (BackendColumnSchema be) => BeamBackend be where
   data BackendColumnSchema be :: *
+  type BackendFromField be :: * -> Constraint
 
 --  backendNull :: BackendLiteral be
 --  backendIsNull :: BackendLiteral be -> Bool
@@ -22,6 +30,58 @@ class BeamBackend be => SupportedSyntax be syntax
 
 newtype Auto x = Auto { unAuto :: Maybe x }
   deriving (Show, Read, Eq, Ord)
+
+data FromBackendRowF be f where
+  ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
+  PeekField :: BackendFromField be a => (Maybe a -> f) -> FromBackendRowF be f
+deriving instance Functor (FromBackendRowF be)
+type FromBackendRowM be = F (FromBackendRowF be)
+
+parseOneField :: BackendFromField be a => FromBackendRowM be a
+parseOneField = liftF (ParseOneField id)
+
+peekField :: BackendFromField be a => FromBackendRowM be (Maybe a)
+peekField = liftF (PeekField id)
+
+class BeamBackend be => FromBackendRow be a where
+  fromBackendRow :: FromBackendRowM be a
+
+class GFromBackendRow be rep where
+  gFromBackendRow :: FromBackendRowM be (rep ())
+instance GFromBackendRow be p => GFromBackendRow be (M1 t f p) where
+  gFromBackendRow = M1 <$> gFromBackendRow
+instance GFromBackendRow be U1 where
+  gFromBackendRow = pure U1
+instance (GFromBackendRow be a, GFromBackendRow be b) => GFromBackendRow be (a :*: b) where
+  gFromBackendRow = (:*:) <$> gFromBackendRow <*> gFromBackendRow
+instance BackendFromField be x => GFromBackendRow be (K1 R x) where
+  gFromBackendRow = K1 <$> parseOneField
+
+instance ( BeamBackend be, BackendFromField be a, BackendFromField be b ) =>
+  FromBackendRow be (a, b) where
+  fromBackendRow = to <$> gFromBackendRow
+instance ( BeamBackend be, BackendFromField be a, BackendFromField be b, BackendFromField be c ) =>
+  FromBackendRow be (a, b, c) where
+  fromBackendRow = to <$> gFromBackendRow
+instance ( BeamBackend be
+         , BackendFromField be a, BackendFromField be b, BackendFromField be c
+         , BackendFromField be d ) =>
+  FromBackendRow be (a, b, c, d) where
+  fromBackendRow = to <$> gFromBackendRow
+instance ( BeamBackend be
+         , BackendFromField be a, BackendFromField be b, BackendFromField be c
+         , BackendFromField be d, BackendFromField be e ) =>
+  FromBackendRow be (a, b, c, d, e) where
+  fromBackendRow = to <$> gFromBackendRow
+instance ( BeamBackend be
+         , BackendFromField be a, BackendFromField be b, BackendFromField be c
+         , BackendFromField be d, BackendFromField be e, BackendFromField be f ) =>
+  FromBackendRow be (a, b, c, d, e, f) where
+  fromBackendRow = to <$> gFromBackendRow
+
+instance (BeamBackend be, Generic (tbl Identity), GFromBackendRow be (Rep (tbl Identity))) => FromBackendRow be (tbl Identity) where
+  fromBackendRow = to <$> gFromBackendRow
+
 -- type FromBackendLiteralsM be a = ExceptT String (State [BackendLiteral be]) a
 
 -- nextLiteral :: FromBackendLiteralsM be (BackendLiteral be)
