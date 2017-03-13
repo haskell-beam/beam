@@ -6,37 +6,89 @@ module Database.Beam.Query
     -- * General query combinators
     , module Database.Beam.Query.Combinators
 
-    -- -- * Run queries in MonadIO
-    -- , beamTxn, insertInto, query, queryList, getOne
-    -- , updateWhere, saveTo
-    -- , deleteWhere, deleteFrom
-    )
-    where
+    , SqlSelect(..)
+    , select
 
-import           Database.Beam.Query.Types
-import           Database.Beam.Query.Combinators
-import           Database.Beam.Query.Internal
+    , SqlInsert(..)
+    , insert
 
-import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.Types
-import           Database.Beam.Schema.Tables
+    , SqlInsertValues(..)
+    , insertValues
+    , insertFrom ) where
 
-import           Control.Applicative
-import           Control.Arrow
-import           Control.Monad.Writer (tell, execWriter, Writer)
-import           Control.Monad.State
-import           Control.Monad.Identity
+import Database.Beam.Query.Types
+import Database.Beam.Query.Combinators
+import Database.Beam.Query.Internal
 
-import           Data.Monoid hiding (All)
-import           Data.Proxy
-import           Data.List (find)
-import           Data.Maybe
-import           Data.String (fromString)
-import qualified Data.Text as T
+import Database.Beam.Backend.SQL92
+import Database.Beam.Backend.Types
+import Database.Beam.Schema.Tables
 
-import           GHC.Generics
+import Control.Monad.Identity
+
+import Data.Proxy
 
 -- * Query
+
+data QueryInaccessible
+
+-- * SELECT
+
+newtype SqlSelect select a
+    = SqlSelect select
+
+select :: ( IsQuery q
+          , IsSql92SelectSyntax select
+
+          , selectExpr ~ Sql92SelectExpressionSyntax select
+          , IsSql92ExpressionSyntax selectExpr
+          , HasSqlValueSyntax (Sql92ExpressionValueSyntax selectExpr) Bool
+
+          , selectProj ~ Sql92SelectProjectionSyntax select
+          , IsSql92ProjectionSyntax selectProj
+          , Projectible (Sql92ProjectionExpressionSyntax selectProj) a ) =>
+          q select db QueryInaccessible a
+       -> SqlSelect select (QExprToIdentity a)
+select q =
+    let (_, _, syntax) = buildSql92Query (toQ q) 0
+    in SqlSelect syntax
+
+-- * INSERT
+
+newtype SqlInsert syntax = SqlInsert syntax
+
+insert :: IsSql92InsertSyntax syntax =>
+          DatabaseTable be db table
+       -> Sql92InsertValuesSyntax syntax
+       -> SqlInsert syntax
+insert (DatabaseTable _ tblNm tblSettings) insertValues =
+    SqlInsert (insertStmt tblNm tblFields insertValues)
+  where
+    tblFields = allBeamValues (\(Columnar' f) -> _fieldName f) tblSettings
+
+newtype SqlInsertValues insertValues (tbl :: (* -> *) -> *)
+    = SqlInsertValues insertValues
+
+insertValues ::
+    ( Beamable table
+    , IsSql92InsertValuesSyntax syntax
+    , exprSyntax ~ Sql92InsertValuesExpressionSyntax syntax
+    , IsSql92ExpressionSyntax exprSyntax
+    , valueSyntax ~ Sql92ExpressionValueSyntax exprSyntax
+    , MakeSqlLiterals valueSyntax table ) =>
+    [ table Identity ] -> SqlInsertValues syntax table
+insertValues = SqlInsertValues . insertValuesGeneric
+
+insertFrom ::
+    IsSql92InsertValuesSyntax syntax =>
+    SqlSelect (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
+insertFrom (SqlSelect select) = SqlInsertValues . insertFromSql $ select
+
+--insert :: blah
+
+--update :: blah
+
+--delete :: blah
 
 -- runSQL' :: (BeamBackend be, MonadIO m) => Bool -> Beam be d m -> SQLCommand be -> m (Either String (IO (Maybe [BeamBackendValue be])))
 -- runSQL' debug beam cmd =

@@ -28,6 +28,9 @@ class ( BeamBackend be
       ) =>
       BeamSqlBackend be where
 
+data SQLNull = SQLNull
+               deriving (Show, Eq, Ord, Bounded, Enum)
+
 --  sqlExprOptimizations ::
 --    Monad m => SQLExpr be -> m (Maybe (SQLExpr be))
 --  sqlExprOptimizations e = pure (sqlBooleanOpts e)

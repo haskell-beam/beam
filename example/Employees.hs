@@ -32,7 +32,7 @@ import System.Environment
 --     toBackendLiteral = makeEnumValue
 
 data EmployeeT f = Employee
-                 { _employeeId         :: Columnar f Int32
+                 { _employeeId         :: Columnar f (Auto Int32)
                  , _employeeFirstName  :: Columnar f Text
                  , _employeeLastName   :: Columnar f Text
                  , _employeeGroup      :: PrimaryKey GroupT f }
@@ -45,7 +45,7 @@ data DepartmentT f = Department
 instance Beamable DepartmentT
 
 data GroupT f = Group
-              { _groupId       :: Columnar f Text
+              { _groupId       :: Columnar f (Auto Text)
               , _groupDeptId   :: PrimaryKey DepartmentT f
               , _groupLocation :: Columnar f Text }
                 deriving Generic
@@ -83,7 +83,7 @@ data EmployeeDatabase q = EmployeeDatabase
                         deriving Generic
 
 instance Table EmployeeT where
-    data PrimaryKey EmployeeT f = EmployeeId (Columnar f Int32)
+    data PrimaryKey EmployeeT f = EmployeeId (Columnar f (Auto Int32))
                                 deriving Generic
     primaryKey = EmployeeId . _employeeId
 instance Beamable (PrimaryKey EmployeeT)
@@ -93,7 +93,7 @@ instance Table DepartmentT where
     primaryKey = DepartmentId . _deptId
 instance Beamable (PrimaryKey DepartmentT)
 instance Table GroupT where
-    data PrimaryKey GroupT f = GroupId (Columnar f Text) (Columnar f Text)
+    data PrimaryKey GroupT f = GroupId (Columnar f (Auto Text)) (Columnar f Text)
                              deriving Generic
     primaryKey (Group groupId (DepartmentId deptId) _ ) = GroupId groupId deptId
 instance Beamable (PrimaryKey GroupT)

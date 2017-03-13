@@ -17,6 +17,7 @@ module Database.Beam.Schema.Tables
     -- * Columnar and Column Tags
     , Columnar(..), Columnar'(..)
     , Nullable(..), TableField(..)
+    , Exposed(..)
     , fieldName, fieldSchema, maybeFieldSchema
 
     , TableSettings(..), TableSkeleton(..), Ignored(..)
@@ -110,7 +111,6 @@ instance Table tbl => GAllTables f (K1 Generic.R (f tbl) p) where
 data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
-newtype Exposed x = Exposed x
 
 -- | A type family that we use to "tag" columns in our table datatypes.
 --
@@ -339,22 +339,25 @@ changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl
 data WithConstraint (c :: * -> Constraint) x where
   WithConstraint :: c x => x -> WithConstraint c x
 
-class GFieldsFulfillConstraint (c :: * -> Constraint) values withconstraint where
-  gWithConstrainedFields :: Proxy c -> values () -> withconstraint ()
-instance GFieldsFulfillConstraint c values withconstraint =>
-    GFieldsFulfillConstraint c (M1 s m values) (M1 s m withconstraint) where
-  gWithConstrainedFields c (M1 x) = M1 (gWithConstrainedFields c x)
-instance GFieldsFulfillConstraint c U1 U1 where
-  gWithConstrainedFields _ _ = U1
-instance (GFieldsFulfillConstraint c a aC, GFieldsFulfillConstraint c b bC) =>
-  GFieldsFulfillConstraint c (a :*: b) (aC :*: bC) where
-  gWithConstrainedFields be (a :*: b) = gWithConstrainedFields be a :*: gWithConstrainedFields be b
-instance (c x) => GFieldsFulfillConstraint c (K1 Generic.R x) (K1 Generic.R (WithConstraint c x)) where
-  gWithConstrainedFields be (K1 x) = K1 (WithConstraint x)
+class GFieldsFulfillConstraint (c :: * -> Constraint) (exposed :: * -> *) values withconstraint where
+  gWithConstrainedFields :: Proxy c -> Proxy exposed -> values () -> withconstraint ()
+instance GFieldsFulfillConstraint c exposed values withconstraint =>
+    GFieldsFulfillConstraint c (M1 s m exposed) (M1 s m values) (M1 s m withconstraint) where
+  gWithConstrainedFields c _ (M1 x) = M1 (gWithConstrainedFields c (Proxy @exposed) x)
+instance GFieldsFulfillConstraint c U1 U1 U1 where
+  gWithConstrainedFields _ _ _ = U1
+instance (GFieldsFulfillConstraint c aExp a aC, GFieldsFulfillConstraint c bExp b bC) =>
+  GFieldsFulfillConstraint c (aExp :*: bExp) (a :*: b) (aC :*: bC) where
+  gWithConstrainedFields be _ (a :*: b) = gWithConstrainedFields be (Proxy @aExp) a :*: gWithConstrainedFields be (Proxy @bExp) b
+instance (c x) => GFieldsFulfillConstraint c (K1 Generic.R (Exposed x)) (K1 Generic.R x) (K1 Generic.R (WithConstraint c x)) where
+  gWithConstrainedFields _ _ (K1 x) = K1 (WithConstraint x)
+instance FieldsFulfillConstraint c t =>
+    GFieldsFulfillConstraint c (K1 Generic.R (t Exposed)) (K1 Generic.R (t Identity)) (K1 Generic.R (t (WithConstraint c))) where
+  gWithConstrainedFields _ _ (K1 x) = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t Exposed))) (from x)))
 
 type FieldsFulfillConstraint (c :: * -> Constraint) t =
-  ( Generic (t (WithConstraint c)), Generic (t Identity)
-  , GFieldsFulfillConstraint c (Rep (t Identity)) (Rep (t (WithConstraint c))))
+  ( Generic (t (WithConstraint c)), Generic (t Identity), Generic (t Exposed)
+  , GFieldsFulfillConstraint c (Rep (t Exposed)) (Rep (t Identity)) (Rep (t (WithConstraint c))))
 
 -- class GFieldsAreSerializable be values backendvalue where
 --     gMakeBackendLiterals :: Proxy be -> values () -> backendvalue ()

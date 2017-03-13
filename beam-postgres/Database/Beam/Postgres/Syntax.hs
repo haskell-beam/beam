@@ -1,11 +1,46 @@
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Database.Beam.Postgres.Syntax where
+module Database.Beam.Postgres.Syntax
+    ( PgSyntaxF(..), PgSyntaxM
+    , PgSyntax(..)
+
+    , emit, emitBuilder, escapeString
+    , escapeBytea, escapeIdentifier
+
+    , nextSyntaxStep
+
+    , PgCommandSyntax(..)
+    , PgSelectSyntax(..)
+    , PgInsertSyntax(..)
+    , PgDeleteSyntax(..)
+    , PgUpdateSyntax(..)
+
+    , PgExpressionSyntax(..), PgFromSyntax(..)
+    , PgProjectionSyntax(..), PgGroupingSyntax(..)
+    , PgOrderingSyntax(..), PgValueSyntax(..)
+    , PgTableSourceSyntax(..), PgFieldNameSyntax(..)
+    , PgInsertValuesSyntax(..), PgInsertOnConflictSyntax(..)
+    , PgInsertOnConflictTargetSyntax(..)
+
+    , insertDefaults
+
+    , IsPgInsertOnConflictSyntax(..)
+    , PgInsertOnConflict(..)
+    , onConflictDefault, onConflictUpdate, onConflictDoNothing
+
+    , pgQuotedIdentifier, pgUnOp, pgSepBy, pgDebugRenderSyntax
+    , pgBuildAction
+
+    , insert
+
+    , PgInsertReturning(..)
+    , insertReturning ) where
 
 import           Database.Beam.Postgres.Types
 
-import           Database.Beam
+import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL92
 import           Database.Beam.Backend.Types
@@ -20,6 +55,7 @@ import           Control.Monad.State
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (Builder, toLazyByteString)
 import           Data.ByteString.Lazy (toStrict)
+import           Data.Coerce
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
@@ -29,6 +65,8 @@ import qualified Data.Text.Encoding as TE
 
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
+
+data PostgresInaccessible
 
 data PgSyntaxF f where
   EmitByteString :: ByteString -> f -> PgSyntaxF f
@@ -42,14 +80,10 @@ deriving instance Functor PgSyntaxF
 type PgSyntaxM = F PgSyntaxF
 newtype PgSyntax
   = PgSyntax { buildPgSyntax :: PgSyntaxM () }
-newtype PgSyntax1 a
-  = PgSyntax1 { buildPgSyntax1 :: PgSyntax }
 
 instance Monoid PgSyntax where
   mempty = PgSyntax (pure ())
   mappend a b = PgSyntax (buildPgSyntax a >> buildPgSyntax b)
-
-instance SupportedSyntax Postgres PgSyntax
 
 emit :: ByteString -> PgSyntax
 emit bs = PgSyntax (liftF (EmitByteString bs ()))
@@ -69,96 +103,308 @@ nextSyntaxStep (EscapeString _ next) = next
 nextSyntaxStep (EscapeBytea _ next) = next
 nextSyntaxStep (EscapeIdentifier _ next) = next
 
-instance Sql92Syntax PgSyntax where
-  type Sql92SelectSyntax PgSyntax = PgSyntax
-  type Sql92UpdateSyntax PgSyntax = PgSyntax
-  type Sql92InsertSyntax PgSyntax = PgSyntax
-  type Sql92DeleteSyntax PgSyntax = PgSyntax
+-- * Syntax types
 
-  type Sql92ExpressionSyntax PgSyntax = PgSyntax
-  type Sql92ExpressionSyntax PgSyntax = PgSyntax
-  type Sql92ValueSyntax PgSyntax = PgSyntax
-  type Sql92ValuesSyntax PgSyntax = PgSyntax
+newtype PgCommandSyntax = PgCommandSyntax { fromPgCommand :: PgSyntax }
+instance SupportedSyntax Postgres PgCommandSyntax
 
-  type Sql92FieldNameSyntax PgSyntax = PgSyntax
+newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
+instance SupportedSyntax Postgres PgSelectSyntax
 
-  type Sql92ProjectionSyntax PgSyntax = PgSyntax
-  type Sql92FromSyntax PgSyntax = PgSyntax
-  type Sql92GroupingSyntax PgSyntax = PgSyntax
-  type Sql92OrderingSyntax PgSyntax = PgSyntax
+newtype PgInsertSyntax = PgInsertSyntax { fromPgInsert :: PgSyntax }
+instance SupportedSyntax Postgres PgInsertSyntax
 
-  type Sql92TableSourceSyntax PgSyntax = PgSyntax
+newtype PgDeleteSyntax = PgDeleteSyntax { fromPgDelete :: PgSyntax }
+instance SupportedSyntax Postgres PgDeleteSyntax
 
-  type Sql92AliasingSyntax PgSyntax = PgSyntax1
+newtype PgUpdateSyntax = PgUpdateSyntax { fromPgUpdate :: PgSyntax }
+instance SupportedSyntax Postgres PgUpdateSyntax
 
-  selectCmd = id
+newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax }
+newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
+newtype PgProjectionSyntax = PgProjectionSyntax { fromPgProjection :: PgSyntax }
+newtype PgGroupingSyntax = PgGroupingSyntax { fromPgGrouping :: PgSyntax }
+newtype PgOrderingSyntax = PgOrderingSyntax { fromPgOrdering :: PgSyntax }
+newtype PgValueSyntax = PgValueSyntax { fromPgValue :: PgSyntax }
+newtype PgTableSourceSyntax = PgTableSourceSyntax { fromPgTableSource :: PgSyntax }
+newtype PgFieldNameSyntax = PgFieldNameSyntax { fromPgFieldName :: PgSyntax }
+newtype PgInsertValuesSyntax = PgInsertValuesSyntax { fromPgInsertValues :: PgSyntax }
+newtype PgInsertOnConflictSyntax = PgInsertOnConflictSyntax { fromPgInsertOnConflict :: PgSyntax }
+newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPgInsertOnConflictTarget :: PgSyntax }
+newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
 
-  selectStmt _ proj from where_ grouping ordering limit offset =
-    emit "SELECT " <> proj <>
-    (maybe mempty (emit " " <> ) from) <>
-    emit " WHERE " <> where_ <>
-    (maybe mempty (emit " GROUP BY" <>) grouping) <>
+instance IsSql92Syntax PgCommandSyntax where
+  type Sql92SelectSyntax PgCommandSyntax = PgSelectSyntax
+  type Sql92InsertSyntax PgCommandSyntax = PgInsertSyntax
+  type Sql92UpdateSyntax PgCommandSyntax = PgUpdateSyntax
+  type Sql92DeleteSyntax PgCommandSyntax = PgDeleteSyntax
+
+  selectCmd = coerce
+  insertCmd = coerce
+  deleteCmd = coerce
+  updateCmd = coerce
+
+instance IsSql92SelectSyntax PgSelectSyntax where
+  type Sql92SelectExpressionSyntax PgSelectSyntax = PgExpressionSyntax
+  type Sql92SelectProjectionSyntax PgSelectSyntax = PgProjectionSyntax
+  type Sql92SelectFromSyntax PgSelectSyntax = PgFromSyntax
+  type Sql92SelectGroupingSyntax PgSelectSyntax = PgGroupingSyntax
+  type Sql92SelectOrderingSyntax PgSelectSyntax = PgOrderingSyntax
+
+  selectStmt proj from where_ grouping ordering limit offset =
+    PgSelectSyntax $
+    emit "SELECT " <> fromPgProjection proj <>
+    (maybe mempty (emit " FROM " <> ) (coerce from)) <>
+    emit " WHERE " <> fromPgExpression where_ <>
+    (maybe mempty (emit " GROUP BY" <>) (coerce grouping)) <>
     (case ordering of
        [] -> mempty
-       ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") ordering) <>
+       ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (coerce ordering)) <>
     (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset)
 
-  qualifiedFieldE _ a b =
+instance IsSql92FromSyntax PgFromSyntax where
+  type Sql92FromExpressionSyntax PgFromSyntax = PgExpressionSyntax
+  type Sql92FromTableSourceSyntax PgFromSyntax = PgTableSourceSyntax
+
+  fromTable tableSrc Nothing = coerce tableSrc
+  fromTable tableSrc (Just nm) =
+      PgFromSyntax $
+      coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm
+
+  innerJoin = pgJoin "INNER JOIN"
+  leftJoin = pgJoin "LEFT JOIN"
+  rightJoin = pgJoin "RIGHT JOIN"
+
+instance IsSql92OrderingSyntax PgOrderingSyntax where
+  type Sql92OrderingExpressionSyntax PgOrderingSyntax = PgExpressionSyntax
+
+  ascOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " ASC")
+  descOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " DESC")
+
+instance IsSql92ExpressionSyntax PgExpressionSyntax where
+  type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
+  type Sql92ExpressionSelectSyntax PgExpressionSyntax = PgSelectSyntax
+  type Sql92ExpressionFieldNameSyntax PgExpressionSyntax = PgFieldNameSyntax
+
+  addE = pgBinOp "+"
+  subE = pgBinOp "-"
+  mulE = pgBinOp "*"
+  divE = pgBinOp "/"
+  modE = pgBinOp "%"
+  orE = pgBinOp "OR"
+  andE = pgBinOp "AND"
+  eqE = pgBinOp "="
+  neqE = pgBinOp "<>"
+  ltE = pgBinOp "<"
+  gtE = pgBinOp ">"
+  leE = pgBinOp "<="
+  geE = pgBinOp ">="
+  negateE = pgUnOp "-"
+  notE = pgUnOp "NOT"
+  existsE select = PgExpressionSyntax (emit "EXISTS (" <> fromPgSelect select <> emit ")")
+  isJustE a =
+    PgExpressionSyntax $
+    emit "(" <> fromPgExpression a <> emit ") IS NOT NULL"
+  isNothingE a =
+    PgExpressionSyntax $
+    emit "(" <> fromPgExpression a <> emit ") IS NULL"
+  valueE = coerce
+  valuesE vs = PgExpressionSyntax $
+               emit "VALUES (" <>
+               pgSepBy (emit ", ") (coerce vs) <>
+               emit ")"
+  fieldE = coerce
+  absE x = PgExpressionSyntax (emit "ABS(" <> fromPgExpression x <> emit ")")
+  caseE cases else_ =
+      PgExpressionSyntax $
+      emit "CASE " <>
+      foldMap (\(cond, res) -> emit "WHEN " <> fromPgExpression cond <> emit " THEN " <> fromPgExpression res <> emit " ") cases <>
+      emit "ELSE " <> fromPgExpression else_ <> emit " END"
+
+instance IsSql92FieldNameSyntax PgFieldNameSyntax where
+  qualifiedField a b =
+    PgFieldNameSyntax $
     pgQuotedIdentifier a <> emit "." <> pgQuotedIdentifier b
-  unqualifiedFieldE _ = pgQuotedIdentifier
+  unqualifiedField = PgFieldNameSyntax . pgQuotedIdentifier
 
-  addE _ = pgBinOp "+"
-  subE _ = pgBinOp "-"
-  mulE _ = pgBinOp "*"
-  divE _ = pgBinOp "/"
-  modE _ = pgBinOp "%"
-  orE _ = pgBinOp "OR"
-  andE _ = pgBinOp "AND"
-  eqE _ = pgBinOp "="
-  neqE _ = pgBinOp "<>"
-  ltE _ = pgBinOp "<"
-  gtE _ = pgBinOp ">"
-  leE _ = pgBinOp "<="
-  geE _ = pgBinOp ">="
-  negateE _ = pgUnOp "-"
-  notE _ = pgUnOp "NOT"
-  existsE _ = pgUnOp "EXISTS"
-  isJustE _ a =
-    emit "(" <> a <> emit ") IS NOT NULL"
-  isNothingE _ a =
-    emit "(" <> a <> emit ") IS NULL"
-  valueE _ = id
+instance IsSql92TableSourceSyntax PgTableSourceSyntax where
+  tableNamed = PgTableSourceSyntax . pgQuotedIdentifier
 
-  trueV _ = emit "TRUE"
-  falseV _ = emit "FALSE"
-  stringV _ = pgBuildAction . pure . Pg.toField
-  numericV _ = pgBuildAction . pure . Pg.toField
-  rationalV p x = divE p (valueE p (numericV p (  numerator x)))
-                         (valueE p (numericV p (denominator x)))
-  nullV _ = emit "NULL"
+instance IsSql92ProjectionSyntax PgProjectionSyntax where
+  type Sql92ProjectionExpressionSyntax PgProjectionSyntax = PgExpressionSyntax
 
-  fromTable _ tableSrc Nothing = tableSrc
-  fromTable _ tableSrc (Just nm) =
-    tableSrc <> emit " AS " <> pgQuotedIdentifier nm
+  projExprs exprs =
+    PgProjectionSyntax $
+    pgSepBy (emit ", ")
+            (map (\(expr, nm) -> fromPgExpression expr <>
+                                 maybe mempty (\nm -> emit " AS " <> pgQuotedIdentifier nm) nm) exprs)
 
-  innerJoin _ = pgJoin "INNER JOIN"
-  leftJoin _ = pgJoin "LEFT JOIN"
-  rightJoin _ = pgJoin "RIGHT JOIN"
+instance IsSql92InsertSyntax PgInsertSyntax where
+  type Sql92InsertValuesSyntax PgInsertSyntax = PgInsertValuesSyntax
 
-  tableNamed _ nm = pgQuotedIdentifier nm
+  insertStmt tblName fields values =
+      PgInsertSyntax $
+      emit "INSERT INTO " <> pgQuotedIdentifier tblName <> emit "(" <>
+      pgSepBy (emit ", ") (map pgQuotedIdentifier fields) <>
+      emit ") " <> fromPgInsertValues values
 
-  projExprs _ exprs =
-    pgSepBy (emit ", ") (map buildPgSyntax1 exprs)
+instance IsSql92InsertValuesSyntax PgInsertValuesSyntax where
+  type Sql92InsertValuesExpressionSyntax PgInsertValuesSyntax = PgExpressionSyntax
+  type Sql92InsertValuesSelectSyntax PgInsertValuesSyntax = PgSelectSyntax
 
-  aliasExpr _ expr Nothing = PgSyntax1 expr
-  aliasExpr _ expr (Just lbl) = PgSyntax1 (expr <> emit " AS " <> pgQuotedIdentifier lbl)
+  insertSqlExpressions es =
+      PgInsertValuesSyntax $
+      emit "VALUES " <>
+      pgSepBy (emit ", ")
+              (map (\es -> emit "(" <> pgSepBy (emit ", ") (coerce es) <> emit ")")
+                   es)
+  insertFromSql (PgSelectSyntax a) = PgInsertValuesSyntax a
 
-  values _ vs = emit "VALUES(" <> pgSepBy (emit ", ") vs <> emit ")"
+insertDefaults :: SqlInsertValues PgInsertValuesSyntax tbl
+insertDefaults = SqlInsertValues (PgInsertValuesSyntax (emit "DEFAULT VALUES"))
 
-instance Pg.ToField a => HasSqlValueSyntax PgSyntax a where
-  sqlValueSyntax _ =
-    pgBuildAction . pure . Pg.toField
+class IsPgInsertOnConflictSyntax insertOnConflict where
+  type PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict :: *
+  type PgInsertOnConflictInsertOnConflictUpdateSyntax insertOnConflict :: *
+
+  onConflictDefaultSyntax :: insertOnConflict
+  onConflictUpdateSyntax :: PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
+                         -> PgInsertOnConflictInsertOnConflictUpdateSyntax insertOnConflict
+                         -> insertOnConflict
+  onConflictDoNothingSyntax :: PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
+                            -> insertOnConflict
+
+instance IsPgInsertOnConflictSyntax PgInsertOnConflictSyntax where
+    type PgInsertOnConflictInsertOnConflictTargetSyntax PgInsertOnConflictSyntax = PgInsertOnConflictTargetSyntax
+    type PgInsertOnConflictInsertOnConflictUpdateSyntax PgInsertOnConflictSyntax = PgInsertOnConflictUpdateSyntax
+
+    onConflictDefaultSyntax = PgInsertOnConflictSyntax mempty
+
+    onConflictUpdateSyntax target update =
+        PgInsertOnConflictSyntax $
+        emit "ON CONFLICT " <> fromPgInsertOnConflictTarget target <> emit " DO UPDATE " <>
+        fromPgInsertOnConflictUpdate update
+
+    onConflictDoNothingSyntax target =
+        PgInsertOnConflictSyntax $
+        emit "ON CONFLICT " <> fromPgInsertOnConflictTarget target <> emit " DO NOTHING"
+
+newtype PgInsertOnConflict insertOnConflict (tbl :: (* -> *) -> *) =
+    PgInsertOnConflict insertOnConflict
+
+onConflictDefault :: IsPgInsertOnConflictSyntax insertOnConflict =>
+                     PgInsertOnConflict insertOnConflict tbl
+onConflictDefault = PgInsertOnConflict onConflictDefaultSyntax
+
+onConflictUpdate :: IsPgInsertOnConflictSyntax insertOnConflict =>
+                    PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
+                 -> PgInsertOnConflictInsertOnConflictUpdateSyntax insertOnConflict
+                 -> PgInsertOnConflict insertOnConflict tbl
+onConflictUpdate tgt update = PgInsertOnConflict $ onConflictUpdateSyntax tgt update
+
+onConflictDoNothing :: IsPgInsertOnConflictSyntax insertOnConflict =>
+                       PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
+                    -> PgInsertOnConflict insertOnConflict tbl
+onConflictDoNothing tgt = PgInsertOnConflict $ onConflictDoNothingSyntax tgt
+
+-- instance Sql92Syntax PgSyntax where
+--   type Sql92SelectSyntax PgSyntax
+--       = PgSyntax
+--   type Sql92UpdateSyntax PgSyntax = PgSyntax
+--   type Sql92InsertSyntax PgSyntax = PgSyntax
+--   type Sql92DeleteSyntax PgSyntax = PgSyntax
+
+--   type Sql92ExpressionSyntax PgSyntax = PgSyntax
+--   type Sql92ExpressionSyntax PgSyntax = PgSyntax
+--   type Sql92ValueSyntax PgSyntax = PgSyntax
+
+--   type Sql92FieldNameSyntax PgSyntax = PgSyntax
+
+--   type Sql92ProjectionSyntax PgSyntax = PgSyntax
+--   type Sql92FromSyntax PgSyntax = PgSyntax
+--   type Sql92GroupingSyntax PgSyntax = PgSyntax
+--   type Sql92OrderingSyntax PgSyntax = PgSyntax
+
+--   type Sql92TableSourceSyntax PgSyntax = PgSyntax
+
+--   type Sql92InsertValuesSyntax PgSyntax = PgSyntax
+
+--   type Sql92AliasingSyntax PgSyntax = PgSyntax1
+
+--   selectCmd = id
+
+--   selectStmt _ proj from where_ grouping ordering limit offset =
+--     emit "SELECT " <> proj <>
+--     (maybe mempty (emit " FROM " <> ) from) <>
+--     emit " WHERE " <> where_ <>
+--     (maybe mempty (emit " GROUP BY" <>) grouping) <>
+--     (case ordering of
+--        [] -> mempty
+--        ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") ordering) <>
+--     (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
+--     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset)
+
+--   qualifiedFieldE _ a b =
+--     pgQuotedIdentifier a <> emit "." <> pgQuotedIdentifier b
+--   unqualifiedFieldE _ = pgQuotedIdentifier
+
+--   addE _ = pgBinOp "+"
+--   subE _ = pgBinOp "-"
+--   mulE _ = pgBinOp "*"
+--   divE _ = pgBinOp "/"
+--   modE _ = pgBinOp "%"
+--   orE _ = pgBinOp "OR"
+--   andE _ = pgBinOp "AND"
+--   eqE _ = pgBinOp "="
+--   neqE _ = pgBinOp "<>"
+--   ltE _ = pgBinOp "<"
+--   gtE _ = pgBinOp ">"
+--   leE _ = pgBinOp "<="
+--   geE _ = pgBinOp ">="
+--   negateE _ = pgUnOp "-"
+--   notE _ = pgUnOp "NOT"
+--   existsE _ = pgUnOp "EXISTS"
+--   isJustE _ a =
+--     emit "(" <> a <> emit ") IS NOT NULL"
+--   isNothingE _ a =
+--     emit "(" <> a <> emit ") IS NULL"
+--   valueE _ = id
+--   valuesE _ vs = emit "VALUES(" <> pgSepBy (emit ", ") vs <> emit ")"
+
+--   trueV _ = emit "TRUE"
+--   falseV _ = emit "FALSE"
+--   stringV _ = pgBuildAction . pure . Pg.toField
+--   numericV _ = pgBuildAction . pure . Pg.toField
+--   rationalV p x = divE p (valueE p (numericV p (  numerator x)))
+--                          (valueE p (numericV p (denominator x)))
+--   nullV _ = emit "NULL"
+
+--   fromTable _ tableSrc Nothing = tableSrc
+--   fromTable _ tableSrc (Just nm) =
+--     tableSrc <> emit " AS " <> pgQuotedIdentifier nm
+
+--   innerJoin _ = pgJoin "INNER JOIN"
+--   leftJoin _ = pgJoin "LEFT JOIN"
+--   rightJoin _ = pgJoin "RIGHT JOIN"
+
+--   tableNamed _ nm = pgQuotedIdentifier nm
+
+--   projExprs _ exprs =
+--     pgSepBy (emit ", ") (map buildPgSyntax1 exprs)
+
+--   aliasExpr _ expr Nothing = PgSyntax1 expr
+--   aliasExpr _ expr (Just lbl) = PgSyntax1 (expr <> emit " AS " <> pgQuotedIdentifier lbl)
+
+--   insertSqlExpressions _ es =
+--       emit "VALUES " <>
+--       pgSepBy (emit ", ")
+--               (map (\es -> emit "(" <> pgSepBy (emit ", ") es <> emit ")") es)
+--   insertFrom _ = id
+
+instance Pg.ToField a => HasSqlValueSyntax PgValueSyntax a where
+  sqlValueSyntax =
+    PgValueSyntax . pgBuildAction . pure . Pg.toField
 
 pgQuotedIdentifier :: T.Text -> PgSyntax
 pgQuotedIdentifier t =
@@ -170,19 +416,23 @@ pgQuotedIdentifier t =
     quoteIdentifierChar '"' = "\"\""
     quoteIdentifierChar c = T.singleton c
 
-pgBinOp :: ByteString -> PgSyntax -> PgSyntax -> PgSyntax
+pgBinOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax -> PgExpressionSyntax
 pgBinOp op a b =
-  emit "(" <> a <> emit (") " <> op <> " (") <> b <> emit ")"
+  PgExpressionSyntax $
+  emit "(" <> fromPgExpression a <> emit (") " <> op <> " (") <> fromPgExpression b <> emit ")"
 
-pgUnOp :: ByteString -> PgSyntax -> PgSyntax
+pgUnOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax
 pgUnOp op a =
-  emit (op <> "(") <> a <> emit ")"
+  PgExpressionSyntax $
+  emit (op <> "(") <> fromPgExpression a <> emit ")"
 
-pgJoin :: ByteString -> PgSyntax -> PgSyntax -> Maybe PgSyntax -> PgSyntax
+pgJoin :: ByteString -> PgFromSyntax -> PgFromSyntax -> Maybe PgExpressionSyntax -> PgFromSyntax
 pgJoin joinType a b Nothing =
-  a <> emit (" " <> joinType <> " ") <> b
+  PgFromSyntax $
+  fromPgFrom a <> emit (" " <> joinType <> " ") <> fromPgFrom b
 pgJoin joinType a b (Just on) =
-  pgJoin joinType a b Nothing <> emit " ON " <> on
+  PgFromSyntax $
+  fromPgFrom (pgJoin joinType a b Nothing) <> emit " ON " <> fromPgExpression on
 
 pgSepBy :: PgSyntax -> [PgSyntax] -> PgSyntax
 pgSepBy _ [] = mempty
@@ -231,35 +481,69 @@ pgBuildAction =
 
 -- * Postrges-specific extensions
 
-class Sql92Syntax syntax => PgExtensionsSyntax syntax where
-  tableSampleSyntax ::
-       Proxy syntax -> T.Text -> Maybe T.Text -> PgTableSamplingMethod
-    -> [Sql92ExpressionSyntax syntax] {-^ Arguments to sampling method -}
-    -> Maybe (Sql92ExpressionSyntax syntax) {-^ Seed -}
-    -> Sql92FromSyntax syntax
+-- class Sql92Syntax syntax => PgExtensionsSyntax syntax where
+--   tableSampleSyntax ::
+--        Proxy syntax -> T.Text -> Maybe T.Text -> PgTableSamplingMethod
+--     -> [Sql92ExpressionSyntax syntax] {-^ Arguments to sampling method -}
+--     -> Maybe (Sql92ExpressionSyntax syntax) {-^ Seed -}
+--     -> Sql92FromSyntax syntax
 
-instance PgExtensionsSyntax PgSyntax where
-  tableSampleSyntax _ tblName tblAlias (PgTableSamplingMethod sampleMethod) sampleMethodParams seedExpr =
-    pgQuotedIdentifier tblName <>
-    maybe mempty (\x -> emit " AS " <> pgQuotedIdentifier x) tblAlias <>
-    emit " TABLESAMPLE " <> emit (TE.encodeUtf8 sampleMethod) <> emit "(" <> pgSepBy (emit ", ") sampleMethodParams <> emit ")" <>
-    maybe mempty (\x -> emit " REPEATABLE (" <> x <> emit ")") seedExpr
+-- instance PgExtensionsSyntax PgSyntax where
+--   tableSampleSyntax _ tblName tblAlias (PgTableSamplingMethod sampleMethod) sampleMethodParams seedExpr =
+--     pgQuotedIdentifier tblName <>
+--     maybe mempty (\x -> emit " AS " <> pgQuotedIdentifier x) tblAlias <>
+--     emit " TABLESAMPLE " <> emit (TE.encodeUtf8 sampleMethod) <> emit "(" <> pgSepBy (emit ", ") sampleMethodParams <> emit ")" <>
+--     maybe mempty (\x -> emit " REPEATABLE (" <> x <> emit ")") seedExpr
 
--- * Pg-specific Q monad
+-- * Postgres specific commands
 
-bernoulliSample ::
-  forall syntax db table s.
-  ( Database db, SupportedSyntax Postgres syntax, PgExtensionsSyntax syntax) =>
-  DatabaseTable Postgres db table -> QExpr syntax s Double ->
-  Q syntax db s (table (QExpr syntax s))
-bernoulliSample
-  tbl@(DatabaseTable table name tableSettings :: DatabaseTable Postgres db table)
-  (QExpr prob) =
+insert :: DatabaseTable Postgres db table
+       -> SqlInsertValues PgInsertValuesSyntax table
+       -> PgInsertOnConflict PgInsertOnConflictSyntax table
+       -> SqlInsert PgInsertSyntax
+insert tbl values onConflict =
+    let PgInsertReturning a = insertReturning tbl values onConflict (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> ()))
+    in SqlInsert (PgInsertSyntax a)
 
-  do curTbl <- gets qbNextTblRef
-     let newSource = tableSampleSyntax (Proxy @syntax) name
-                                       (Just (fromString ("t" <> show curTbl)))
-                                       pgBernoulliSamplingMethod
-                                       [ prob ]
-                                       Nothing
-     buildJoinFrom tbl newSource Nothing
+newtype PgInsertReturning a = PgInsertReturning PgSyntax
+
+insertReturning :: Projectible PgExpressionSyntax a
+                => DatabaseTable Postgres db table
+                -> SqlInsertValues PgInsertValuesSyntax table
+                -> PgInsertOnConflict PgInsertOnConflictSyntax table
+                -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+                -> PgInsertReturning (QExprToIdentity a)
+
+insertReturning (DatabaseTable _ tblNm tblSettings)
+                (SqlInsertValues (PgInsertValuesSyntax insertValues))
+                (PgInsertOnConflict (PgInsertOnConflictSyntax onConflict))
+                returning =
+  PgInsertReturning $
+  emit "INSERT INTO " <> pgQuotedIdentifier tblNm <>
+  emit "(" <> pgSepBy (emit ", ") (allBeamValues (\(Columnar' f) -> pgQuotedIdentifier (_fieldName f)) tblSettings) <> emit ") " <>
+  insertValues <> emit " " <> onConflict <>
+  (case returning of
+     Nothing -> mempty
+     Just mkProjection ->
+         let tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
+         in emit " RETURNING "<>
+            pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ))))
+
+-- -- * Pg-specific Q monad
+
+-- bernoulliSample ::
+--   forall syntax db table s.
+--   ( Database db, SupportedSyntax Postgres syntax, PgExtensionsSyntax syntax) =>
+--   DatabaseTable Postgres db table -> QExpr syntax s Double ->
+--   Q syntax db s (table (QExpr syntax s))
+-- bernoulliSample
+--   tbl@(DatabaseTable table name tableSettings :: DatabaseTable Postgres db table)
+--   (QExpr prob) =
+
+--   do curTbl <- gets qbNextTblRef
+--      let newSource = tableSampleSyntax (Proxy @syntax) name
+--                                        (Just (fromString ("t" <> show curTbl)))
+--                                        pgBernoulliSamplingMethod
+--                                        [ prob ]
+--                                        Nothing
+--      buildJoinFrom tbl newSource Nothing

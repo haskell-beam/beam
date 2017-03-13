@@ -33,13 +33,13 @@ data QNested s
 data QueryBuilder syntax
   = QueryBuilder
   { qbNextTblRef :: Int
-  , qbFrom  :: Maybe (Sql92FromSyntax syntax)
-  , qbWhere :: Sql92ExpressionSyntax syntax
+  , qbFrom  :: Maybe (Sql92SelectFromSyntax syntax)
+  , qbWhere :: Sql92SelectExpressionSyntax syntax
 
   , qbLimit  :: Maybe Integer
   , qbOffset :: Maybe Integer
-  , qbOrdering :: [Sql92OrderingSyntax syntax]
-  , qbGrouping :: Maybe (Sql92GroupingSyntax syntax) }
+  , qbOrdering :: [Sql92SelectOrderingSyntax syntax]
+  , qbGrouping :: Maybe (Sql92SelectGroupingSyntax syntax) }
 
 -- * QExpr type
 
@@ -52,15 +52,15 @@ data QField = QField
 -- | The type of lifted beam expressions that will yield the haskell type `t` when run with
 -- `queryList` or `query`. In the future, this will include a thread argument meant to prevent
 -- cross-usage of expressions, but this is unimplemented for technical reasons.
-newtype QExpr syntax s t = QExpr (Sql92ExpressionSyntax syntax)
-deriving instance Show (Sql92ExpressionSyntax syntax) => Show (QExpr syntax s t)
-deriving instance Eq (Sql92ExpressionSyntax syntax) => Eq (QExpr syntax s t)
+newtype QExpr syntax s t = QExpr syntax
+deriving instance Show syntax => Show (QExpr syntax s t)
+deriving instance Eq syntax => Eq (QExpr syntax s t)
 
 -- * Aggregations
 
 data Aggregation syntax s a
-  = GroupAgg (Sql92ExpressionSyntax syntax)
-  | ProjectAgg (Sql92ExpressionSyntax syntax)
+  = GroupAgg syntax --(Sql92ExpressionSyntax syntax)
+  | ProjectAgg syntax --(Sql92ExpressionSyntax syntax)
 
 -- * Sql Projections
 --
@@ -69,35 +69,38 @@ data Aggregation syntax s a
 -- statement. This includes all tables as well as all tuple classes. Projections are only defined on
 -- tuples up to size 5. If you need more, follow the implementations here.
 
-class Sql92Syntax syntax => Projectible syntax a where
-    project :: Proxy syntax -> a -> [Sql92ExpressionSyntax syntax]
-instance (Typeable a, Sql92Syntax syntax) => Projectible syntax (QExpr syntax s a) where
-    project p (QExpr x) = [x]
-instance Sql92Syntax syntax => Projectible syntax () where
-    project p () = [valueE (Proxy @syntax) (nullV (Proxy @syntax))]
+class IsSql92ExpressionSyntax syntax => Projectible syntax a where
+    project :: a -> [syntax]
+instance (Typeable a, IsSql92ExpressionSyntax syntax) => Projectible syntax (QExpr syntax s a) where
+    project (QExpr x) = [x]
+instance ( IsSql92ExpressionSyntax syntax
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SQLNull) =>
+    Projectible syntax () where
+
+    project () = [valueE (sqlValueSyntax SQLNull)]
 instance (Projectible syntax a, Projectible syntax b) => Projectible syntax (a, b) where
-    project p (a, b) = project p a ++ project p b
+    project (a, b) = project a ++ project b
 instance ( Projectible syntax a
          , Projectible syntax b
          , Projectible syntax c ) => Projectible syntax (a, b, c) where
-    project p (a, b, c) = project p a ++ project p b ++ project p c
+    project (a, b, c) = project a ++ project b ++ project c
 instance ( Projectible syntax a
          , Projectible syntax b
          , Projectible syntax c
          , Projectible syntax d ) => Projectible syntax (a, b, c, d) where
-    project p (a, b, c, d) = project p a ++ project p b ++ project p c ++ project p d
+    project (a, b, c, d) = project a ++ project b ++ project c ++ project d
 instance ( Projectible syntax a
          , Projectible syntax b
          , Projectible syntax c
          , Projectible syntax d
          , Projectible syntax e ) => Projectible syntax (a, b, c, d, e) where
-    project p (a, b, c, d, e) = project p a ++ project p b ++ project p c ++ project p d ++ project p e
+    project (a, b, c, d, e) = project a ++ project b ++ project c ++ project d ++ project e
 
-instance (Beamable t, Sql92Syntax syntax)
+instance (Beamable t, IsSql92ExpressionSyntax syntax)
     => Projectible syntax (t (QExpr syntax s)) where
-    project p t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
-instance (Beamable t, Sql92Syntax syntax) => Projectible syntax (t (Nullable (QExpr syntax s))) where
-    project p t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
+    project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
+instance (Beamable t, IsSql92ExpressionSyntax syntax) => Projectible syntax (t (Nullable (QExpr syntax s))) where
+    project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
 
 -- tableVal :: Table tbl => tbl Identity -> tbl (QExpr s)
 -- tableVal = changeRep valToQExpr . makeSqlValues

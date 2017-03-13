@@ -32,6 +32,7 @@ type family QExprToIdentity x
 type instance QExprToIdentity (table (QExpr syntax s)) = table Identity
 type instance QExprToIdentity (table (Nullable c)) = Maybe (QExprToIdentity (table c))
 type instance QExprToIdentity (QExpr syntax s a) = a
+type instance QExprToIdentity ()     = ()
 type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
 type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
 type instance QExprToIdentity (a, b, c, d) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d)
@@ -56,17 +57,27 @@ instance IsQuery TopLevelQ where
 -- mkSqlField (QField tblName Nothing fieldName) = SQLFieldName fieldName
 
 buildSql92Query ::
-  forall syntax db s a.
-  (Sql92Syntax syntax, Projectible syntax a) =>
-  Proxy syntax -> Q syntax db s a -> Int -> (a, Int, Sql92SelectSyntax syntax)
-buildSql92Query _ q curTbl =
-  let (res, qb) = runState (runQ q) emptyQb
-      emptyQb = QueryBuilder curTbl Nothing (valueE (Proxy @syntax) (trueV (Proxy @syntax)))
-                             Nothing Nothing [] Nothing
-      projection = map (\q -> aliasExpr (Proxy @syntax) q Nothing) (project (Proxy @syntax) res)
+  forall select exprSyntax valueSyntax projSyntax db s a.
+  ( IsSql92SelectSyntax select
 
-      sel = selectStmt (Proxy @syntax)
-                       (projExprs (Proxy @syntax) projection) (qbFrom qb)
+  , exprSyntax ~ Sql92SelectExpressionSyntax select
+  , IsSql92ExpressionSyntax exprSyntax
+
+  , valueSyntax ~ Sql92ExpressionValueSyntax exprSyntax
+  , HasSqlValueSyntax valueSyntax Bool
+
+  , projSyntax ~ Sql92SelectProjectionSyntax select
+  , IsSql92ProjectionSyntax projSyntax
+
+  , Projectible (Sql92ProjectionExpressionSyntax projSyntax) a ) =>
+  Q select db s a -> Int -> (a, Int, select)
+buildSql92Query q curTbl =
+  let (res, qb) = runState (runQ q) emptyQb
+      emptyQb = QueryBuilder curTbl Nothing (valueE (sqlValueSyntax True))
+                             Nothing Nothing [] Nothing
+      projection = map (\q -> (q, Nothing)) (project res)
+
+      sel = selectStmt (projExprs projection) (qbFrom qb)
                        (qbWhere qb) (qbGrouping qb)
                        (qbOrdering qb) (qbLimit qb) (qbOffset qb)
   in (res, qbNextTblRef qb, sel)

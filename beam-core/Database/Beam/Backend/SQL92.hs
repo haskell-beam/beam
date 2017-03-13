@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE PolyKinds #-}
 
 module Database.Beam.Backend.SQL92 where
 
@@ -13,6 +14,8 @@ import qualified Data.Text as T
 
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Text.Encoding as TE
+import           Data.Coerce
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
@@ -20,12 +23,12 @@ import           Data.Ratio
 import           GHC.Generics
 
 class ( BeamSqlBackend be
-      , Sql92Syntax (Sql92BackendSyntaxBuilder be)
+--      , IsSql92Syntax (Sql92BackendSyntaxBuilder be)
       , Sql92Schema (BackendColumnSchema be)) =>
       BeamSql92Backend be where
 
-  type Sql92BackendSyntaxBuilder be :: *
-  type Sql92BackendSyntaxBuilder be = Sql92SyntaxBuilder
+--  type Sql92BackendSyntaxBuilder be :: *
+--  type Sql92BackendSyntaxBuilder be = Sql92SyntaxBuilder
 
 -- * Schemas
 
@@ -46,10 +49,10 @@ class Sql92Schema schema where
 -- * Finally tagless style
 
 newtype Sql92Command
-  = Sql92Command (forall cmd. Sql92Syntax cmd => cmd)
+  = Sql92Command (forall cmd. IsSql92Syntax cmd => cmd)
 newtype Sql92SyntaxBuilder
   = Sql92SyntaxBuilder { buildSql92 :: Builder }
-newtype Sql92SyntaxBuilder1 x
+newtype Sql92SyntaxBuilder1 (x :: k)
   = Sql92SyntaxBuilder1 { buildSql92_1 :: Builder }
 
 instance Monoid Sql92SyntaxBuilder where
@@ -57,215 +60,336 @@ instance Monoid Sql92SyntaxBuilder where
   mappend (Sql92SyntaxBuilder a) (Sql92SyntaxBuilder b) =
     Sql92SyntaxBuilder (mappend a b)
 
-class HasSqlValueSyntax cmd ty where
-  sqlValueSyntax :: Proxy cmd -> ty -> Sql92ValueSyntax cmd
+class HasSqlValueSyntax expr ty where
+  sqlValueSyntax :: ty -> expr
 
-class Sql92Syntax cmd where
+class IsSql92Syntax cmd where
   type Sql92SelectSyntax cmd :: *
-  type Sql92UpdateSyntax cmd :: *
   type Sql92InsertSyntax cmd :: *
+  type Sql92UpdateSyntax cmd :: *
   type Sql92DeleteSyntax cmd :: *
 
-  type Sql92ExpressionSyntax cmd :: *
-  type Sql92ValueSyntax cmd :: *
-  type Sql92ValuesSyntax cmd :: *
-  type Sql92FieldNameSyntax cmd :: *
-
   selectCmd :: Sql92SelectSyntax cmd -> cmd
+  insertCmd :: Sql92InsertSyntax cmd -> cmd
+  updateCmd :: Sql92UpdateSyntax cmd -> cmd
+  deleteCmd :: Sql92DeleteSyntax cmd -> cmd
 
-  values :: Proxy cmd -> [ Sql92ValueSyntax cmd ] -> Sql92ValuesSyntax cmd
+class ( IsSql92ExpressionSyntax (Sql92SelectExpressionSyntax select)
+      , IsSql92ProjectionSyntax (Sql92SelectProjectionSyntax select)
+      , IsSql92FromSyntax (Sql92SelectFromSyntax select)
+      , IsSql92OrderingSyntax (Sql92SelectOrderingSyntax select)
 
-  type Sql92ProjectionSyntax cmd :: *
-  type Sql92FromSyntax cmd :: *
-  type Sql92GroupingSyntax cmd :: *
-  type Sql92OrderingSyntax cmd :: *
+      , Sql92FromExpressionSyntax (Sql92SelectFromSyntax select) ~ Sql92SelectExpressionSyntax select ) =>
+    IsSql92SelectSyntax select where
+  type Sql92SelectExpressionSyntax select :: *
+  type Sql92SelectProjectionSyntax select :: *
+  type Sql92SelectFromSyntax select :: *
+  type Sql92SelectGroupingSyntax select :: *
+  type Sql92SelectOrderingSyntax select :: *
 
-  type Sql92TableSourceSyntax cmd :: *
-
-  type Sql92AliasingSyntax cmd :: * -> *
-
-  selectStmt :: Proxy cmd
-             -> Sql92ProjectionSyntax cmd
-             -> Maybe (Sql92FromSyntax cmd)
-             -> Sql92ExpressionSyntax cmd   {-^ Where clause -}
-             -> Maybe (Sql92GroupingSyntax cmd)
-             -> [Sql92OrderingSyntax cmd]
+  selectStmt :: Sql92SelectProjectionSyntax select
+             -> Maybe (Sql92SelectFromSyntax select)
+             -> Sql92SelectExpressionSyntax select   {-^ Where clause -}
+             -> Maybe (Sql92SelectGroupingSyntax select)
+             -> [Sql92SelectOrderingSyntax select]
              -> Maybe Integer {-^ LIMIT -}
              -> Maybe Integer {-^ OFFSET -}
-             -> Sql92SelectSyntax cmd
+             -> select
 
-  insertStmt :: Proxy cmd
-             -> Text
-             -> Either (Sql92SelectSyntax cmd) (Sql92ValuesSyntax cmd)
-             -> Sql92InsertSyntax cmd
+class IsSql92InsertSyntax insert where
+  type Sql92InsertValuesSyntax insert :: *
+  insertStmt :: Text
+             -> [ Text ]
+             -> Sql92InsertValuesSyntax insert
+             -> insert
 
-  updateStmt :: Proxy cmd
-             -> Text
-             -> [(Sql92FieldNameSyntax cmd, Sql92ExpressionSyntax cmd)]
-             -> Sql92ExpressionSyntax cmd {-^ WHERE -}
-             -> Sql92UpdateSyntax cmd
+class IsSql92InsertValuesSyntax insertValues where
+  type Sql92InsertValuesExpressionSyntax insertValues :: *
+  type Sql92InsertValuesSelectSyntax insertValues :: *
 
-  deleteStmt :: Proxy cmd
-             -> Text
-             -> Sql92ExpressionSyntax cmd
-             -> Sql92DeleteSyntax cmd
+  insertSqlExpressions :: [ [ Sql92InsertValuesExpressionSyntax insertValues ] ]
+                       -> insertValues
+  insertFromSql :: Sql92InsertValuesSelectSyntax insertValues
+                -> insertValues
 
-  valueE :: Proxy cmd -> Sql92ValueSyntax cmd -> Sql92ExpressionSyntax cmd
-  isJustE :: Proxy cmd -> Sql92ExpressionSyntax cmd -> Sql92ExpressionSyntax cmd
-  isNothingE :: Proxy cmd -> Sql92ExpressionSyntax cmd -> Sql92ExpressionSyntax cmd
-  caseE :: Proxy cmd -> [(Sql92ExpressionSyntax cmd, Sql92ExpressionSyntax cmd)]
-    -> Sql92ExpressionSyntax cmd -> Sql92ExpressionSyntax cmd
-  qualifiedFieldE :: Proxy cmd -> Text -> Text
-                  -> Sql92ExpressionSyntax cmd
-  unqualifiedFieldE :: Proxy cmd -> Text
-                    -> Sql92ExpressionSyntax cmd
+class IsSql92UpdateSyntax update where
+  type Sql92UpdateFieldNameSyntax update :: *
+  type Sql92UpdateExpressionSyntax update :: *
+
+  updateStmt :: Text
+             -> [(Sql92UpdateFieldNameSyntax update, Sql92UpdateExpressionSyntax update)]
+             -> Sql92UpdateExpressionSyntax update {-^ WHERE -}
+             -> update
+
+class IsSql92DeleteSyntax delete where
+  type Sql92DeleteExpressionSyntax delete :: *
+
+  deleteStmt :: Text
+             -> Sql92DeleteExpressionSyntax delete
+             -> delete
+
+class IsSql92FieldNameSyntax fn where
+  qualifiedField :: Text -> Text -> fn
+  unqualifiedField :: Text -> fn
+
+class ( IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr) ) =>
+    IsSql92ExpressionSyntax expr where
+  type Sql92ExpressionValueSyntax expr :: *
+  type Sql92ExpressionSelectSyntax expr :: *
+  type Sql92ExpressionFieldNameSyntax expr :: *
+
+  valueE :: Sql92ExpressionValueSyntax expr -> expr
+  valuesE :: [ expr ] -> expr
+  isJustE :: expr -> expr
+  isNothingE :: expr -> expr
+  caseE :: [(expr, expr)]
+    -> expr -> expr
+  fieldE :: Sql92ExpressionFieldNameSyntax expr -> expr
 
   andE, orE, eqE, neqE, ltE, gtE, leE, geE,
     addE, subE, mulE, divE, modE
-    :: Proxy cmd
-    -> Sql92ExpressionSyntax cmd
-    -> Sql92ExpressionSyntax cmd
-    -> Sql92ExpressionSyntax cmd
+    :: expr
+    -> expr
+    -> expr
 
   notE, negateE, absE
-    :: Proxy cmd
-    -> Sql92ExpressionSyntax cmd
-    -> Sql92ExpressionSyntax cmd
+    :: expr
+    -> expr
 
-  existsE :: Proxy cmd
-          -> Sql92SelectSyntax cmd
-          -> Sql92ExpressionSyntax cmd
+  existsE :: Sql92ExpressionSelectSyntax expr
+          -> expr
 
-  nullV :: Proxy cmd -> Sql92ValueSyntax cmd
-  trueV :: Proxy cmd -> Sql92ValueSyntax cmd
-  falseV :: Proxy cmd -> Sql92ValueSyntax cmd
-  stringV :: Proxy cmd -> String -> Sql92ValueSyntax cmd
-  numericV :: Proxy cmd -> Integer -> Sql92ValueSyntax cmd
-  rationalV :: Proxy cmd -> Rational -> Sql92ValueSyntax cmd
+class IsSql92ProjectionSyntax proj where
+  type Sql92ProjectionExpressionSyntax proj :: *
 
-  aliasExpr :: Proxy cmd -> Sql92ExpressionSyntax cmd
-            -> Maybe Text
-            -> Sql92AliasingSyntax cmd (Sql92ExpressionSyntax cmd)
+  projExprs :: [ (Sql92ProjectionExpressionSyntax proj, Maybe Text) ]
+            -> proj
 
-  projExprs :: Proxy cmd -> [Sql92AliasingSyntax cmd (Sql92ExpressionSyntax cmd)]
-            -> Sql92ProjectionSyntax cmd
-
+class IsSql92OrderingSyntax ord where
+  type Sql92OrderingExpressionSyntax ord :: *
   ascOrdering, descOrdering
-    :: Proxy cmd -> Sql92ExpressionSyntax cmd -> Sql92OrderingSyntax cmd
+    :: Sql92OrderingExpressionSyntax ord -> ord
 
-  tableNamed :: Proxy cmd -> Text -> Sql92TableSourceSyntax cmd
+class IsSql92TableSourceSyntax tblSource where
+  tableNamed :: Text -> tblSource
 
-  fromTable :: Proxy cmd
-    -> Sql92TableSourceSyntax cmd
-    -> Maybe Text
-    -> Sql92FromSyntax cmd
+class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
+      , IsSql92ExpressionSyntax (Sql92FromExpressionSyntax from) ) =>
+    IsSql92FromSyntax from where
+  type Sql92FromTableSourceSyntax from :: *
+  type Sql92FromExpressionSyntax from :: *
 
-  innerJoin, leftJoin, rightJoin :: Proxy cmd
-    -> Sql92FromSyntax cmd
-    -> Sql92FromSyntax cmd
-    -> Maybe (Sql92ExpressionSyntax cmd)
-    -> Sql92FromSyntax cmd
+  fromTable :: Sql92FromTableSourceSyntax from
+            -> Maybe Text
+            -> from
 
-instance HasSqlValueSyntax Sql92SyntaxBuilder Int32 where
-  sqlValueSyntax p = numericV p . fromIntegral
+  innerJoin, leftJoin, rightJoin
+    :: from -> from
+      -> Maybe (Sql92FromExpressionSyntax from)
+      -> from
 
--- | Build a query using ANSI SQL92 syntax. This is likely to work out-of-the-box
---   in many databases, but its use is a security risk, as different databases have
---   different means of escaping values. It is best to customize this class per-backend
-instance Sql92Syntax Sql92SyntaxBuilder where
-  type Sql92SelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92UpdateSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92InsertSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92DeleteSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+-- class Sql92Syntax cmd where
 
-  type Sql92ExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ValueSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ValuesSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+--   -- data Sql92ValueSyntax cmd :: *
+--   -- data Sql92FieldNameSyntax cmd :: *
 
-  type Sql92FieldNameSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+--   selectCmd :: Sql92SelectSyntax cmd -> cmd
 
-  type Sql92ProjectionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92FromSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92GroupingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92OrderingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
 
-  type Sql92TableSourceSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+--   -- data Sql92TableSourceSyntax cmd :: *
 
-  type Sql92AliasingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder1
+--   -- data Sql92InsertValuesSyntax cmd ::  *
 
-  selectCmd = id
+--   -- data Sql92AliasingSyntax cmd :: * -> *
 
-  selectStmt _ proj from where_ grouping ordering limit offset =
+--   insertSqlExpressions :: [ [ Sql92ExpressionSyntax cmd ] ]
+--                        -> Sql92InsertValuesSyntax cmd
+--   insertFromSql :: Sql92SelectSyntax cmd
+--                 -> Sql92InsertValuesSyntax cmd
+
+--   -- nullV     :: Sql92ValueSyntax cmd
+--   -- trueV     :: Sql92ValueSyntax cmd
+--   -- falseV    :: Sql92ValueSyntax cmd
+--   -- stringV   :: String -> Sql92ValueSyntax cmd
+--   -- numericV  :: Integer -> Sql92ValueSyntax cmd
+--   -- rationalV :: Rational -> Sql92ValueSyntax cmd
+
+--   -- aliasExpr :: Sql92ExpressionSyntax cmd
+--   --           -> Maybe Text
+--   --           -> Sql92AliasingSyntax cmd (Sql92ExpressionSyntax cmd)
+
+--   -- projExprs :: [Sql92AliasingSyntax cmd (Sql92ExpressionSyntax cmd)]
+--   --           -> Sql92ProjectionSyntax cmd
+
+--   -- ascOrdering, descOrdering
+--   --   :: Sql92ExpressionSyntax cmd -> Sql92OrderingSyntax cmd
+
+--   tableNamed :: Text -> Sql92TableSourceSyntax cmd
+
+--   -- fromTable
+--   --   :: Sql92TableSourceSyntax cmd
+--   --   -> Maybe Text
+--   --   -> Sql92FromSyntax cmd
+
+--   innerJoin, leftJoin, rightJoin
+--     :: Sql92FromSyntax cmd
+--     -> Sql92FromSyntax cmd
+--     -> Maybe (Sql92ExpressionSyntax cmd)
+--     -> Sql92FromSyntax cmd
+
+-- instance HasSqlValueSyntax Sql92SyntaxBuilder Int32 where
+--   sqlValueSyntax = numericV . fromIntegral
+
+-- -- | Build a query using ANSI SQL92 syntax. This is likely to work out-of-the-box
+-- --   in many databases, but its use is a security risk, as different databases have
+-- --   different means of escaping values. It is best to customize this class per-backend
+-- instance Sql92Syntax Sql92SyntaxBuilder where
+
+--   trueV = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (byteString "TRUE"))
+--   falseV = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (byteString "FALSE"))
+--   stringV x = Sql92ValueSyntaxBuilder . Sql92SyntaxBuilder $
+--                 byteString "\'" <>
+--                 stringUtf8 (foldMap escapeChar x) <>
+--                 byteString "\'"
+--     where escapeChar '\'' = "''"
+--           escapeChar x = [x]
+--   numericV x = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (stringUtf8 (show x)))
+--   rationalV x = let Sql92ExpressionSyntaxBuilder e =
+--                         divE (valueE (numericV (numerator x)))
+--                              (valueE (numericV (denominator x)))
+--                 in Sql92ValueSyntaxBuilder e
+--   nullV = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (byteString "NULL"))
+
+--   fromTable tableSrc Nothing = coerce tableSrc
+--   fromTable tableSrc (Just nm) =
+--     Sql92FromSyntaxBuilder . Sql92SyntaxBuilder $
+--     buildSql92 (coerce tableSrc) <> byteString " AS " <> stringUtf8 (T.unpack nm)
+
+--   innerJoin = join "INNER JOIN"
+--   leftJoin = join "LEFT JOIN"
+--   rightJoin = join "RIGHT JOIN"
+
+--   tableNamed nm = Sql92TableSourceSyntaxBuilder (Sql92SyntaxBuilder (stringUtf8 (T.unpack nm)))
+
+instance IsSql92SelectSyntax Sql92SyntaxBuilder where
+  type Sql92SelectExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectProjectionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectFromSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectGroupingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectOrderingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+  selectStmt proj from where_ grouping ordering limit offset =
     Sql92SyntaxBuilder $
     byteString "SELECT " <> buildSql92 proj <>
     (maybe mempty ((byteString " " <>) . buildSql92) from) <>
     byteString " WHERE " <> buildSql92 where_
 
-  qualifiedFieldE _ a b =
+instance IsSql92InsertSyntax Sql92SyntaxBuilder where
+  type Sql92InsertValuesSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+  insertStmt table fields values =
+    Sql92SyntaxBuilder $
+    byteString "INSERT INTO " <> quoteSql table <>
+    byteString "(" <> buildSepBy (byteString ", ") (map quoteSql fields) <> byteString ") " <>
+    buildSql92 values
+
+instance IsSql92UpdateSyntax Sql92SyntaxBuilder where
+  type Sql92UpdateFieldNameSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92UpdateExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+  updateStmt table set where_ =
+    Sql92SyntaxBuilder undefined
+
+instance IsSql92DeleteSyntax Sql92SyntaxBuilder where
+  type Sql92DeleteExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+  deleteStmt tbl where_ =
+    Sql92SyntaxBuilder $
+    byteString "DELETE FROM " <> quoteSql tbl <>
+    byteString " WHERE " <> buildSql92 where_
+
+instance IsSql92FieldNameSyntax Sql92SyntaxBuilder where
+  qualifiedField a b =
     Sql92SyntaxBuilder $
     byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`.`" <>
     stringUtf8 (T.unpack b) <> byteString "`"
-  unqualifiedFieldE _ a =
+  unqualifiedField a =
     Sql92SyntaxBuilder $
     byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`"
 
-  addE _ = sqlBinOp "+"
-  subE _ = sqlBinOp "-"
-  mulE _ = sqlBinOp "*"
-  divE _ = sqlBinOp "/"
-  modE _ = sqlBinOp "%"
-  andE _ = sqlBinOp "AND"
-  orE _ = sqlBinOp "OR"
-  eqE _ = sqlBinOp "="
-  neqE _ = sqlBinOp "<>"
-  ltE _ = sqlBinOp "<"
-  gtE _ = sqlBinOp ">"
-  leE _ = sqlBinOp "<="
-  geE _ = sqlBinOp ">="
-  negateE _ = sqlUnOp "-"
-  notE _ = sqlUnOp "NOT"
-  existsE _ = sqlUnOp "EXISTS"
-  isJustE _ a =
+instance IsSql92ExpressionSyntax Sql92SyntaxBuilder where
+  type Sql92ExpressionValueSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92ExpressionSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92ExpressionFieldNameSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+  valuesE vs = Sql92SyntaxBuilder $
+               byteString "VALUES(" <>
+               buildSepBy (byteString ", ") (map buildSql92 (coerce vs)) <>
+               byteString ")"
+  isJustE a =
     Sql92SyntaxBuilder $
-    byteString "(" <> buildSql92 a <> byteString ") IS NOT NULL"
-  isNothingE _ a =
+    byteString "(" <> buildSql92 (coerce a) <> byteString ") IS NOT NULL"
+  isNothingE a =
     Sql92SyntaxBuilder $
-    byteString "(" <> buildSql92 a <> byteString ") IS NULL"
-  valueE _ a = a
-
-  trueV _ = Sql92SyntaxBuilder (byteString "TRUE")
-  falseV _ = Sql92SyntaxBuilder (byteString "FALSE")
-  stringV _ x = Sql92SyntaxBuilder (byteString "\'" <>
-                                    stringUtf8 (foldMap escapeChar x) <>
-                                    byteString "\'")
-    where escapeChar '\'' = "''"
-          escapeChar x = [x]
-  numericV _ x = Sql92SyntaxBuilder (stringUtf8 (show x))
-  rationalV p x = divE p (valueE p (numericV p (numerator x)))
-                         (valueE p (numericV p (denominator x)))
-  nullV _ = Sql92SyntaxBuilder (byteString "NULL")
-
-  fromTable _ tableSrc Nothing = tableSrc
-  fromTable _ tableSrc (Just nm) =
+    byteString "(" <> buildSql92 (coerce a) <> byteString ") IS NULL"
+  caseE cases else_ =
     Sql92SyntaxBuilder $
-    buildSql92 tableSrc <> byteString " AS " <> stringUtf8 (T.unpack nm)
+    byteString "CASE " <>
+    foldMap (\(cond, res) -> byteString "WHEN " <> buildSql92 cond <>
+                             byteString " THEN " <> buildSql92 res <> byteString " ") cases <>
+    byteString "ELSE " <> buildSql92 else_ <> byteString " END"
+  fieldE = id
 
-  innerJoin _ = join "INNER JOIN"
-  leftJoin _ = join "LEFT JOIN"
-  rightJoin _ = join "RIGHT JOIN"
+  addE = sqlBinOp "+"
+  subE = sqlBinOp "-"
+  mulE = sqlBinOp "*"
+  divE = sqlBinOp "/"
+  modE = sqlBinOp "%"
+  andE = sqlBinOp "AND"
+  orE  = sqlBinOp "OR"
+  eqE  = sqlBinOp "="
+  neqE = sqlBinOp "<>"
+  ltE  = sqlBinOp "<"
+  gtE  = sqlBinOp ">"
+  leE  = sqlBinOp "<="
+  geE  = sqlBinOp ">="
+  negateE = sqlUnOp "-"
+  notE = sqlUnOp "NOT"
+  existsE = sqlUnOp "EXISTS"
+  valueE = id
 
-  tableNamed _ nm = Sql92SyntaxBuilder (stringUtf8 (T.unpack nm))
+instance IsSql92ProjectionSyntax Sql92SyntaxBuilder where
+  type Sql92ProjectionExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
 
-  projExprs _ exprs =
-    Sql92SyntaxBuilder $ buildSepBy (byteString ", ") (map buildSql92_1 exprs)
-  aliasExpr _ expr Nothing = Sql92SyntaxBuilder1 (buildSql92 expr)
-  aliasExpr _ expr (Just lbl) = Sql92SyntaxBuilder1 (buildSql92 expr <> byteString " AS " <> stringUtf8 (T.unpack lbl))
+  projExprs exprs =
+      Sql92SyntaxBuilder $
+      buildSepBy (byteString ", ")
+                 (map (\(expr, nm) -> buildSql92 expr <>
+                                      maybe mempty (\nm -> byteString " AS " <> quoteSql nm) nm) exprs)
 
-  values _ vs = Sql92SyntaxBuilder $
-                byteString "VALUES(" <>
-                buildSepBy (byteString ", ") (map buildSql92 vs) <>
-                byteString ")"
+instance IsSql92OrderingSyntax Sql92SyntaxBuilder where
+  type Sql92OrderingExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+  ascOrdering expr = Sql92SyntaxBuilder (buildSql92 expr <> byteString " ASC")
+  descOrdering expr = Sql92SyntaxBuilder (buildSql92 expr <> byteString " DESC")
+
+instance IsSql92TableSourceSyntax Sql92SyntaxBuilder where
+    tableNamed t = Sql92SyntaxBuilder (quoteSql t)
+
+instance IsSql92FromSyntax Sql92SyntaxBuilder where
+    type Sql92FromTableSourceSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+    type Sql92FromExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+    fromTable t Nothing = t
+    fromTable t (Just nm) = Sql92SyntaxBuilder (buildSql92 t <> byteString " AS " <> quoteSql nm)
+
+    innerJoin = join "INNER JOIN"
+    leftJoin = join "LEFT JOIN"
+    rightJoin = join "RIGHT JOIN"
+
+-- TODO actual quoting
+quoteSql table =
+    byteString "\"" <> byteString (TE.encodeUtf8 table) <> byteString "\""
 
 join type_ a b on =
     Sql92SyntaxBuilder $
@@ -274,10 +398,13 @@ join type_ a b on =
       Nothing -> mempty
       Just on -> byteString " ON (" <> buildSql92 on <> byteString ")"
 sqlUnOp op a =
-  Sql92SyntaxBuilder (byteString op <> byteString " (" <> buildSql92 a <> byteString ")")
+  Sql92SyntaxBuilder $
+  byteString op <> byteString " (" <> buildSql92 a <> byteString ")"
 sqlBinOp op a b =
-  Sql92SyntaxBuilder (byteString "(" <> buildSql92 a <> byteString ") " <> byteString op <> byteString " (" <>
-                       buildSql92 b <> byteString ")")
+    Sql92SyntaxBuilder $
+    byteString "(" <> buildSql92 a <> byteString ") " <>
+    byteString op <>
+    byteString " (" <> buildSql92 b <> byteString ")"
 
 renderSql92 :: Sql92SyntaxBuilder -> String
 renderSql92 (Sql92SyntaxBuilder b) = BL.unpack (toLazyByteString b)
@@ -296,4 +423,20 @@ makeSqlLiterals ::
   MakeSqlLiterals sql t =>
   t Identity -> t (WithConstraint (HasSqlValueSyntax sql))
 makeSqlLiterals tbl =
-  to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax sql)) (from tbl))
+  to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax sql)) (Proxy @(Rep (t Exposed))) (from tbl))
+
+insertValuesGeneric ::
+    forall syntax table exprValues.
+    ( Beamable table
+    , IsSql92InsertValuesSyntax syntax
+    , IsSql92ExpressionSyntax (Sql92InsertValuesExpressionSyntax syntax)
+    , exprValues ~ Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax syntax)
+    , MakeSqlLiterals exprValues table ) =>
+    [ table Identity ] -> syntax
+insertValuesGeneric tbls =
+    insertSqlExpressions (map mkSqlExprs tbls)
+  where
+    mkSqlExprs = allBeamValues
+                   (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax exprValues) x)) ->
+                        valueE (sqlValueSyntax x)) .
+                 makeSqlLiterals

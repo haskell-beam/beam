@@ -13,6 +13,8 @@ import Data.Monoid
 import GHC.Generics
 import GHC.Types
 
+newtype Exposed x = Exposed x
+
 class BeamColumnSchema schema where
   maybeFieldSchema :: schema -> schema
   nestedSchema     :: schema -> schema
@@ -46,42 +48,51 @@ peekField = liftF (PeekField id)
 class BeamBackend be => FromBackendRow be a where
   fromBackendRow :: FromBackendRowM be a
 
-class GFromBackendRow be rep where
-  gFromBackendRow :: FromBackendRowM be (rep ())
-instance GFromBackendRow be p => GFromBackendRow be (M1 t f p) where
-  gFromBackendRow = M1 <$> gFromBackendRow
-instance GFromBackendRow be U1 where
-  gFromBackendRow = pure U1
-instance (GFromBackendRow be a, GFromBackendRow be b) => GFromBackendRow be (a :*: b) where
-  gFromBackendRow = (:*:) <$> gFromBackendRow <*> gFromBackendRow
-instance BackendFromField be x => GFromBackendRow be (K1 R x) where
-  gFromBackendRow = K1 <$> parseOneField
+class GFromBackendRow be (exposed :: * -> *) rep where
+  gFromBackendRow :: Proxy exposed -> FromBackendRowM be (rep ())
+instance GFromBackendRow be e p => GFromBackendRow be (M1 t f e) (M1 t f p) where
+  gFromBackendRow _ = M1 <$> gFromBackendRow (Proxy @e)
+instance GFromBackendRow be e U1 where
+  gFromBackendRow _ = pure U1
+instance (GFromBackendRow be aExp a, GFromBackendRow be bExp b) => GFromBackendRow be (aExp :*: bExp) (a :*: b) where
+  gFromBackendRow _ = (:*:) <$> gFromBackendRow (Proxy @aExp) <*> gFromBackendRow (Proxy @bExp)
+
+instance BackendFromField be x => GFromBackendRow be (K1 R (Exposed x)) (K1 R x) where
+  gFromBackendRow _ = K1 <$> parseOneField
+
+instance FromBackendRow be (t Identity) => GFromBackendRow be (K1 R (t Exposed)) (K1 R (t Identity)) where
+    gFromBackendRow _ = K1 <$> fromBackendRow
+
+instance BeamBackend be => FromBackendRow be () where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ()))
 
 instance ( BeamBackend be, BackendFromField be a, BackendFromField be b ) =>
   FromBackendRow be (a, b) where
-  fromBackendRow = to <$> gFromBackendRow
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b)))
 instance ( BeamBackend be, BackendFromField be a, BackendFromField be b, BackendFromField be c ) =>
   FromBackendRow be (a, b, c) where
-  fromBackendRow = to <$> gFromBackendRow
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c)))
 instance ( BeamBackend be
          , BackendFromField be a, BackendFromField be b, BackendFromField be c
          , BackendFromField be d ) =>
   FromBackendRow be (a, b, c, d) where
-  fromBackendRow = to <$> gFromBackendRow
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d)))
 instance ( BeamBackend be
          , BackendFromField be a, BackendFromField be b, BackendFromField be c
          , BackendFromField be d, BackendFromField be e ) =>
   FromBackendRow be (a, b, c, d, e) where
-  fromBackendRow = to <$> gFromBackendRow
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e)))
 instance ( BeamBackend be
          , BackendFromField be a, BackendFromField be b, BackendFromField be c
          , BackendFromField be d, BackendFromField be e, BackendFromField be f ) =>
   FromBackendRow be (a, b, c, d, e, f) where
-  fromBackendRow = to <$> gFromBackendRow
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f)))
 
-instance (BeamBackend be, Generic (tbl Identity), GFromBackendRow be (Rep (tbl Identity))) => FromBackendRow be (tbl Identity) where
-  fromBackendRow = to <$> gFromBackendRow
+instance ( BeamBackend be, Generic (tbl Identity), Generic (tbl Exposed)
+         , GFromBackendRow be (Rep (tbl Exposed)) (Rep (tbl Identity))) =>
 
+    FromBackendRow be (tbl Identity) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (tbl Exposed)))
 -- type FromBackendLiteralsM be a = ExceptT String (State [BackendLiteral be]) a
 
 -- nextLiteral :: FromBackendLiteralsM be (BackendLiteral be)
@@ -153,4 +164,3 @@ instance (BeamBackend be, Generic (tbl Identity), GFromBackendRow be (Rep (tbl I
 --     fromBackendLiterals = (,,,,) <$> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals
 --     toBackendLiterals (a, b, c, d, e) = toBackendLiterals a <> toBackendLiterals b <> toBackendLiterals c <> toBackendLiterals d <> toBackendLiterals e
 --     valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c) + valuesNeeded be (Proxy :: Proxy d) + valuesNeeded be (Proxy :: Proxy e)
-

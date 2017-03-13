@@ -8,6 +8,7 @@ import Database.Beam.Backend.SQL92
 import Database.PostgreSQL.LibPQ
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PgType
 import qualified Database.PostgreSQL.Simple.FromField as Pg
+import qualified Database.PostgreSQL.Simple.ToField as Pg
 
 import Control.Applicative
 
@@ -44,6 +45,11 @@ instance SupportedSyntax Postgres Sql92SyntaxBuilder
 
 instance Pg.FromField x => Pg.FromField (Auto x) where
   fromField field d = fmap (Auto . Just) (Pg.fromField field d)
+instance Pg.ToField x => Pg.ToField (Auto x) where
+  toField (Auto x) = Pg.toField x
+
+instance Pg.ToField SQLNull where
+  toField _ = Pg.toField (Nothing :: Maybe Int)
 
 -- instance Eq (BackendLiteral Postgres) where
 --   a == b =
