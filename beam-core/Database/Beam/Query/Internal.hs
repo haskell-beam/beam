@@ -33,13 +33,9 @@ data QNested s
 data QueryBuilder syntax
   = QueryBuilder
   { qbNextTblRef :: Int
-  , qbFrom  :: Maybe (Sql92SelectFromSyntax syntax)
-  , qbWhere :: Sql92SelectExpressionSyntax syntax
-
-  , qbLimit  :: Maybe Integer
-  , qbOffset :: Maybe Integer
-  , qbOrdering :: [Sql92SelectOrderingSyntax syntax]
-  , qbGrouping :: Maybe (Sql92SelectGroupingSyntax syntax) }
+  , qbFrom  :: Maybe (Sql92SelectTableFromSyntax syntax)
+  , qbWhere :: Sql92SelectTableExpressionSyntax syntax
+  , qbGrouping :: Maybe (Sql92SelectTableGroupingSyntax syntax) }
 
 -- * QExpr type
 

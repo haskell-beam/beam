@@ -38,13 +38,13 @@ newtype SqlSelect select a
     = SqlSelect select
 
 select :: ( IsQuery q
-          , IsSql92SelectSyntax select
+          , IsSql92SelectTableSyntax select
 
-          , selectExpr ~ Sql92SelectExpressionSyntax select
+          , selectExpr ~ Sql92SelectTableExpressionSyntax select
           , IsSql92ExpressionSyntax selectExpr
           , HasSqlValueSyntax (Sql92ExpressionValueSyntax selectExpr) Bool
 
-          , selectProj ~ Sql92SelectProjectionSyntax select
+          , selectProj ~ Sql92SelectTableProjectionSyntax select
           , IsSql92ProjectionSyntax selectProj
           , Projectible (Sql92ProjectionExpressionSyntax selectProj) a ) =>
           q select db QueryInaccessible a

@@ -14,11 +14,12 @@ import qualified Data.Text as T
 
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
-import qualified Data.Text.Encoding as TE
 import           Data.Coerce
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Ratio
+import           Data.String
+import qualified Data.Text.Encoding as TE
 
 import           GHC.Generics
 
@@ -70,27 +71,35 @@ class IsSql92Syntax cmd where
   updateCmd :: Sql92UpdateSyntax cmd -> cmd
   deleteCmd :: Sql92DeleteSyntax cmd -> cmd
 
-class ( IsSql92ExpressionSyntax (Sql92SelectExpressionSyntax select)
-      , IsSql92ProjectionSyntax (Sql92SelectProjectionSyntax select)
-      , IsSql92FromSyntax (Sql92SelectFromSyntax select)
-      , IsSql92OrderingSyntax (Sql92SelectOrderingSyntax select)
-
-      , Sql92FromExpressionSyntax (Sql92SelectFromSyntax select) ~ Sql92SelectExpressionSyntax select ) =>
+class ( IsSql92SelectTableSyntax (Sql92SelectSelectTableSyntax select)
+      , IsSql92OrderingSyntax (Sql92SelectOrderingSyntax select) ) =>
     IsSql92SelectSyntax select where
-  type Sql92SelectExpressionSyntax select :: *
-  type Sql92SelectProjectionSyntax select :: *
-  type Sql92SelectFromSyntax select :: *
-  type Sql92SelectGroupingSyntax select :: *
-  type Sql92SelectOrderingSyntax select :: *
+    type Sql92SelectSelectTableSyntax select :: *
+    type Sql92SelectOrderingSyntax select :: *
 
-  selectStmt :: Sql92SelectProjectionSyntax select
-             -> Maybe (Sql92SelectFromSyntax select)
-             -> Sql92SelectExpressionSyntax select   {-^ Where clause -}
-             -> Maybe (Sql92SelectGroupingSyntax select)
-             -> [Sql92SelectOrderingSyntax select]
-             -> Maybe Integer {-^ LIMIT -}
-             -> Maybe Integer {-^ OFFSET -}
-             -> select
+    selectStmt :: Sql92SelectSelectTableSyntax select
+               -> [Sql92SelectOrderingSyntax select]
+               -> Maybe Integer {-^ LIMIT -}
+               -> Maybe Integer {-^ OFFSET -}
+               -> select
+
+class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
+      , IsSql92ProjectionSyntax (Sql92SelectTableProjectionSyntax select)
+      , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
+
+      , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select ) =>
+    IsSql92SelectTableSyntax select where
+  type Sql92SelectTableExpressionSyntax select :: *
+  type Sql92SelectTableProjectionSyntax select :: *
+  type Sql92SelectTableFromSyntax select :: *
+  type Sql92SelectTableGroupingSyntax select :: *
+
+  selectTableStmt :: Sql92SelectTableProjectionSyntax select
+                  -> Maybe (Sql92SelectTableFromSyntax select)
+                  -> Maybe (Sql92SelectTableExpressionSyntax select)   {-^ Where clause -}
+                  -> Maybe (Sql92SelectTableGroupingSyntax select)
+                  -> Maybe (Sql92SelectTableExpressionSyntax select) {-^ having clause -}
+                  -> select
 
 class IsSql92InsertSyntax insert where
   type Sql92InsertValuesSyntax insert :: *
@@ -268,17 +277,29 @@ class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
 --   tableNamed nm = Sql92TableSourceSyntaxBuilder (Sql92SyntaxBuilder (stringUtf8 (T.unpack nm)))
 
 instance IsSql92SelectSyntax Sql92SyntaxBuilder where
-  type Sql92SelectExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectProjectionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectFromSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectGroupingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectSelectTableSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
   type Sql92SelectOrderingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
 
-  selectStmt proj from where_ grouping ordering limit offset =
+  selectStmt tableSrc ordering limit offset =
+      Sql92SyntaxBuilder $
+      buildSql92 tableSrc <> byteString " ORDER BY " <>
+      buildSepBy (byteString ", ") (map buildSql92 ordering) <>
+      maybe mempty (\l -> byteString " LIMIT " <> byteString (fromString (show l))) limit <>
+      maybe mempty (\o -> byteString " OFFSET " <> byteString (fromString (show o))) offset
+
+instance IsSql92SelectTableSyntax Sql92SyntaxBuilder where
+  type Sql92SelectTableExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectTableProjectionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectTableFromSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92SelectTableGroupingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+
+  selectTableStmt proj from where_ grouping having =
     Sql92SyntaxBuilder $
     byteString "SELECT " <> buildSql92 proj <>
     (maybe mempty ((byteString " " <>) . buildSql92) from) <>
-    byteString " WHERE " <> buildSql92 where_
+    (maybe mempty (\w -> byteString " WHERE " <> buildSql92 w) where_) <>
+    (maybe mempty (\g -> byteString " GROUP BY " <> buildSql92 g) grouping) <>
+    (maybe mempty (\e -> byteString " HAVING " <> buildSql92 e) having)
 
 instance IsSql92InsertSyntax Sql92SyntaxBuilder where
   type Sql92InsertValuesSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder

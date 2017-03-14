@@ -58,28 +58,24 @@ instance IsQuery TopLevelQ where
 
 buildSql92Query ::
   forall select exprSyntax valueSyntax projSyntax db s a.
-  ( IsSql92SelectSyntax select
+  ( IsSql92SelectTableSyntax select
 
-  , exprSyntax ~ Sql92SelectExpressionSyntax select
-  , IsSql92ExpressionSyntax exprSyntax
+  , exprSyntax ~ Sql92SelectTableExpressionSyntax select
 
   , valueSyntax ~ Sql92ExpressionValueSyntax exprSyntax
   , HasSqlValueSyntax valueSyntax Bool
 
-  , projSyntax ~ Sql92SelectProjectionSyntax select
-  , IsSql92ProjectionSyntax projSyntax
+  , projSyntax ~ Sql92SelectTableProjectionSyntax select
 
   , Projectible (Sql92ProjectionExpressionSyntax projSyntax) a ) =>
   Q select db s a -> Int -> (a, Int, select)
 buildSql92Query q curTbl =
   let (res, qb) = runState (runQ q) emptyQb
-      emptyQb = QueryBuilder curTbl Nothing (valueE (sqlValueSyntax True))
-                             Nothing Nothing [] Nothing
+      emptyQb = QueryBuilder curTbl Nothing (valueE (sqlValueSyntax True)) Nothing
       projection = map (\q -> (q, Nothing)) (project res)
 
-      sel = selectStmt (projExprs projection) (qbFrom qb)
-                       (qbWhere qb) (qbGrouping qb)
-                       (qbOrdering qb) (qbLimit qb) (qbOffset qb)
+      sel = selectTableStmt (projExprs projection) (qbFrom qb)
+                            (Just (qbWhere qb)) (qbGrouping qb) Nothing
   in (res, qbNextTblRef qb, sel)
 
 -- -- | Turn a `Q` into a `SQLSelect` starting the table references at the given number

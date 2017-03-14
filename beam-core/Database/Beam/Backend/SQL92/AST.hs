@@ -28,23 +28,34 @@ instance IsSql92Syntax Command where
   deleteCmd = DeleteCommand
 
 data Select
-  = Select
-  { selectProjection :: Projection
-  , selectFrom       :: Maybe From
-  , selectWhere      :: Expression
-  , selectGrouping   :: Maybe Grouping
-  , selectOrdering   :: [ Ordering ]
-  , selectLimit, selectOffset :: Maybe Integer }
-  deriving (Show, Eq)
+    = Select
+    { selectTable :: SelectTable
+    , selectOrdering   :: [ Ordering ]
+    , selectLimit, selectOffset :: Maybe Integer }
+    deriving (Show, Eq)
 
 instance IsSql92SelectSyntax Select where
-  type Sql92SelectExpressionSyntax Select = Expression
-  type Sql92SelectProjectionSyntax Select = Projection
-  type Sql92SelectFromSyntax Select = From
-  type Sql92SelectGroupingSyntax Select = Grouping
+  type Sql92SelectSelectTableSyntax Select = SelectTable
   type Sql92SelectOrderingSyntax Select = Ordering
 
   selectStmt = Select
+
+data SelectTable
+  = SelectTable
+  { selectProjection :: Projection
+  , selectFrom       :: Maybe From
+  , selectWhere      :: Maybe Expression
+  , selectGrouping   :: Maybe Grouping
+  , selectHaving     :: Maybe Expression }
+  deriving (Show, Eq)
+
+instance IsSql92SelectTableSyntax SelectTable where
+  type Sql92SelectTableExpressionSyntax SelectTable = Expression
+  type Sql92SelectTableProjectionSyntax SelectTable = Projection
+  type Sql92SelectTableFromSyntax SelectTable = From
+  type Sql92SelectTableGroupingSyntax SelectTable = Grouping
+
+  selectTableStmt = SelectTable
 
 data Insert
   = Insert

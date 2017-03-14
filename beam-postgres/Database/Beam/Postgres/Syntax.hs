@@ -111,6 +111,9 @@ instance SupportedSyntax Postgres PgCommandSyntax
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
 instance SupportedSyntax Postgres PgSelectSyntax
 
+newtype PgSelectTableSyntax = PgSelectTableSyntax { fromPgSelectTable :: PgSyntax }
+instance SupportedSyntax Postgres PgSelectTableSyntax
+
 newtype PgInsertSyntax = PgInsertSyntax { fromPgInsert :: PgSyntax }
 instance SupportedSyntax Postgres PgInsertSyntax
 
@@ -145,23 +148,31 @@ instance IsSql92Syntax PgCommandSyntax where
   updateCmd = coerce
 
 instance IsSql92SelectSyntax PgSelectSyntax where
-  type Sql92SelectExpressionSyntax PgSelectSyntax = PgExpressionSyntax
-  type Sql92SelectProjectionSyntax PgSelectSyntax = PgProjectionSyntax
-  type Sql92SelectFromSyntax PgSelectSyntax = PgFromSyntax
-  type Sql92SelectGroupingSyntax PgSelectSyntax = PgGroupingSyntax
+  type Sql92SelectSelectTableSyntax PgSelectSyntax = PgSelectTableSyntax
   type Sql92SelectOrderingSyntax PgSelectSyntax = PgOrderingSyntax
 
-  selectStmt proj from where_ grouping ordering limit offset =
+  selectStmt tbl ordering limit offset =
     PgSelectSyntax $
-    emit "SELECT " <> fromPgProjection proj <>
-    (maybe mempty (emit " FROM " <> ) (coerce from)) <>
-    emit " WHERE " <> fromPgExpression where_ <>
-    (maybe mempty (emit " GROUP BY" <>) (coerce grouping)) <>
+    coerce tbl <>
     (case ordering of
        [] -> mempty
        ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (coerce ordering)) <>
     (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset)
+
+instance IsSql92SelectTableSyntax PgSelectTableSyntax where
+  type Sql92SelectTableExpressionSyntax PgSelectTableSyntax = PgExpressionSyntax
+  type Sql92SelectTableProjectionSyntax PgSelectTableSyntax = PgProjectionSyntax
+  type Sql92SelectTableFromSyntax PgSelectTableSyntax = PgFromSyntax
+  type Sql92SelectTableGroupingSyntax PgSelectTableSyntax = PgGroupingSyntax
+
+  selectTableStmt proj from where_ grouping having =
+    PgSelectTableSyntax $
+    emit "SELECT " <> fromPgProjection proj <>
+    (maybe mempty (emit " FROM " <> ) (coerce from)) <>
+    (maybe mempty (emit " WHERE " <>) (coerce where_)) <>
+    (maybe mempty (emit " GROUP BY " <>) (coerce grouping)) <>
+    (maybe mempty (emit " HAVING " <>) (coerce having))
 
 instance IsSql92FromSyntax PgFromSyntax where
   type Sql92FromExpressionSyntax PgFromSyntax = PgExpressionSyntax
