@@ -27,6 +27,7 @@ library
                        Database.Beam.Backend.Types
                        Database.Beam.Backend.SQL
                        Database.Beam.Backend.SQL92
+                       Database.Beam.Backend.SQL92.AST
   other-modules:       Database.Beam.Query.Types
                        Database.Beam.Query.Combinators
 
@@ -39,7 +40,19 @@ library
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications
 
+test-suite beam-core-tests
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  other-modules: Database.Beam.Test.Schema Database.Beam.Test.SQL
+  build-depends: base, beam-core, text, bytestring, time, tasty, tasty-hunit
+  default-language: Haskell2010
+  default-extensions: OverloadedStrings, FlexibleInstances, FlexibleContexts, GADTs, TypeFamilies,
+                      DeriveGeneric, DefaultSignatures, RankNTypes, StandaloneDeriving, KindSignatures,
+                      TypeApplications, ScopedTypeVariables, MultiParamTypeClasses
+
 source-repository head
   type: git
   location: https://github.com/tathougies/beam.git
+  subdir: beam-core
 

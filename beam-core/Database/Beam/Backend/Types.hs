@@ -19,7 +19,6 @@ class BeamColumnSchema schema where
   maybeFieldSchema :: schema -> schema
   nestedSchema     :: schema -> schema
   autoSchema       :: schema -> schema
-  setPrimaryKey    :: schema -> schema
 
 class BeamColumnSchema (BackendColumnSchema be) => BeamBackend be where
   data BackendColumnSchema be :: *

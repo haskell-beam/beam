@@ -159,7 +159,6 @@ instance BeamColumnSchema (BackendColumnSchema Postgres) where
   maybeFieldSchema schema = schema { pgIsNullable = True }
   nestedSchema schema = schema { pgIsPrimaryKey = False }
   autoSchema schema = schema
-  setPrimaryKey schema = schema { pgIsPrimaryKey = False }
 
 instance Sql92Schema (BackendColumnSchema Postgres) where
   int = PgColumnSchema "INT" False False

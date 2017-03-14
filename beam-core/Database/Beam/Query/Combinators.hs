@@ -1,7 +1,7 @@
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications #-}
 module Database.Beam.Query.Combinators
     ( all_, join_, guard_, related_, relatedBy_, lookup_
-    , leftJoin_, perhapsAll_
+    , leftJoin_
     , buildJoinFrom
     , SqlReferences(..)
     , SqlJustable(..)
@@ -55,10 +55,10 @@ instance ( IsSql92ExpressionSyntax syntax
     fromString = QExpr . valueE . sqlValueSyntax
 instance (Num a
          , IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Integer) =>
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a) =>
     Num (QExpr syntax s a) where
     fromInteger x = let res :: QExpr syntax s a
-                        res = QExpr (valueE (sqlValueSyntax x))
+                        res = QExpr (valueE (sqlValueSyntax (fromIntegral x :: a)))
                     in res
     QExpr a + QExpr b = QExpr (addE a b)
     QExpr a - QExpr b = QExpr (subE a b)
@@ -69,14 +69,13 @@ instance (Num a
 
 instance ( Fractional a
          , IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Rational
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Integer ) =>
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a ) =>
   Fractional (QExpr syntax s a) where
 
   (/) = qBinOpE divE
   recip = (1.0 /)
 
-  fromRational = QExpr . valueE . sqlValueSyntax
+  fromRational = QExpr . valueE . sqlValueSyntax . (id :: a -> a) . fromRational
 
 -- instance (BeamBackend be, FromBackendLiteral be String) => IsString (Aggregation be s Text) where
 --     fromString = ProjectAgg . SQLValE . SQLValue
@@ -163,10 +162,20 @@ leftJoin_ ::
   forall be db table select s.
   ( Database db, Table table
   , IsSql92SelectSyntax select, SupportedSyntax be select ) =>
-  DatabaseTable be db table -> QExpr (Sql92SelectExpressionSyntax select) s Bool ->
+  DatabaseTable be db table ->
+  (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectExpressionSyntax select) s Bool) ->
   Q select db s (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)))
-leftJoin_ (DatabaseTable table name tableSettings :: DatabaseTable be db table) (QExpr on) =
+leftJoin_ (DatabaseTable table name tableSettings :: DatabaseTable be db table) mkOn =
     do curTbl <- gets qbNextTblRef
+       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a
+           mkScopedField (Columnar' f) = Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show curTbl)) (_fieldName f))))
+
+           scopedTbl = changeBeamRep mkScopedField tableSettings
+
+           mkNonNullableField :: Columnar' (TableField be table) a -> Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a
+           mkNonNullableField (Columnar' f) = Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show curTbl)) (_fieldName f))))
+           QExpr on = mkOn (changeBeamRep mkNonNullableField tableSettings)
+
        modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
                                  , qbFrom = from } ->
                 let from' = case from of
@@ -178,9 +187,7 @@ leftJoin_ (DatabaseTable table name tableSettings :: DatabaseTable be db table) 
                 in qb { qbNextTblRef = curTbl + 1
                       , qbFrom = Just from' }
 
-       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a
-           mkScopedField (Columnar' f) = Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show curTbl)) (_fieldName f))))
-       pure (changeBeamRep mkScopedField tableSettings)
+       pure scopedTbl
 
 -- | Only allow results for which the 'QExpr' yields 'True'
 guard_ :: forall select db s.
@@ -207,16 +214,6 @@ relatedBy_ :: ( Database db, Table rel
            -> Q select db s (rel (QExpr (Sql92SelectExpressionSyntax select) s))
 relatedBy_ (relTbl :: DatabaseTable be db rel) mkOn =
     mdo rel <- join_ relTbl (mkOn rel)
-        pure rel
-
--- | Introduce related entries of the given table, or if no related entries exist, introduce the null table
-perhapsAll_ :: ( Database db, Table rel
-               , IsSql92SelectSyntax select, SupportedSyntax be select
-               , syntax ~ Sql92SelectExpressionSyntax select )
-            => DatabaseTable be db rel -> (rel (Nullable (QExpr syntax s)) -> QExpr syntax s Bool)
-            -> Q select db s (rel (Nullable (QExpr syntax s)))
-perhapsAll_ relTbl expr =
-    mdo rel <- leftJoin_ relTbl (expr rel)
         pure rel
 
 -- | Synonym for 'related_'
@@ -369,6 +366,16 @@ instance (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a, IsSql92Expres
   SqlValable (QExpr syntax s a) where
 
   val_ = QExpr . valueE . sqlValueSyntax
+instance ( Beamable table
+         , IsSql92ExpressionSyntax syntax
+         , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
+  SqlValable (table (QExpr syntax s)) where
+  val_ tbl =
+    let fields :: table (WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
+        fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
+                                            (Proxy @(Rep (table Exposed))) (from tbl))
+    in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) x)) ->
+                         Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
 
 -- -- NOTE: This shouldn't cause problems because both overlapping instances are in the same module.
 -- --       GHC should prefer the PrimaryKey one for primary keys and the table one for everything else.

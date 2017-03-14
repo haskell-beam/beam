@@ -23,12 +23,8 @@ import           Data.Ratio
 import           GHC.Generics
 
 class ( BeamSqlBackend be
---      , IsSql92Syntax (Sql92BackendSyntaxBuilder be)
       , Sql92Schema (BackendColumnSchema be)) =>
       BeamSql92Backend be where
-
---  type Sql92BackendSyntaxBuilder be :: *
---  type Sql92BackendSyntaxBuilder be = Sql92SyntaxBuilder
 
 -- * Schemas
 
