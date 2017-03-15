@@ -46,22 +46,7 @@ select :: forall q syntax db s res.
           , IsSql92SelectSyntax syntax ) =>
           q syntax db s res -> SqlSelect syntax (QExprToIdentity res)
 select q =
-  SqlSelect (finish (toSelectBuilder q :: SelectBuilder syntax db s res))
-  where
-    finish :: SelectBuilder syntax db s res -> syntax
-    finish (SelectBuilderSelectSyntax _ select) =
-      selectStmt select [] Nothing Nothing
-    finish (SelectBuilderQ q) =
-      let (res, _, select) = buildSql92Query q 0
-      in finish (SelectBuilderSelectSyntax res select)
-    finish (SelectBuilderTopLevel Nothing Nothing [] x) = finish x
-    finish (SelectBuilderTopLevel limit offset ordering (SelectBuilderTopLevel limit' offset' _ x)) =
-      finish (SelectBuilderTopLevel (min limit limit') ((+) <$> offset <*> offset' <|> offset <|> offset') ordering x)
-    finish (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ select)) =
-      selectStmt select ordering limit offset
-    finish (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ q)) =
-      let (res, _, select) = buildSql92Query q 0
-      in finish (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax res select))
+  SqlSelect (buildSelect (toSelectBuilder q :: SelectBuilder syntax db s res))
 -- * INSERT
 
 newtype SqlInsert syntax = SqlInsert syntax

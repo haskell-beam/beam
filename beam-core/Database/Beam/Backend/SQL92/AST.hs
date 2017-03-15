@@ -123,60 +123,144 @@ instance IsSql92FieldNameSyntax FieldName where
   qualifiedField = QualifiedField
   unqualifiedField = UnqualifiedField
 
+data ComparatorQuantifier
+  = ComparatorQuantifierAny
+  | ComparatorQuantifierAll
+  deriving (Show, Eq)
+
+instance IsSql92QuantifierSyntax ComparatorQuantifier where
+  quantifyOverAll = ComparatorQuantifierAll
+  quantifyOverAny = ComparatorQuantifierAny
+
+data ExtractField
+  = ExtractFieldTimeZoneHour
+  | ExtractFieldTimeZoneMinute
+
+  | ExtractFieldDateTimeYear
+  | ExtractFieldDateTimeMonth
+  | ExtractFieldDateTimeDay
+  | ExtractFieldDateTimeHour
+  | ExtractFieldDateTimeMinute
+  | ExtractFieldDateTimeSecond
+  deriving (Show, Eq)
+
+data CastTarget
+  = CastTargetDataType DataType
+  | CastTargetDomainName Text
+  deriving (Show, Eq)
+
+data DataType
+  = DataTypeChar Bool {-^ Varying -} (Maybe Int)
+  | DataTypeNationalChar Bool (Maybe Int)
+  | DataTypeBit Bool (Maybe Int)
+  | DataTypeNumeric Int (Maybe Int)
+  | DataTypeInteger
+  | DataTypeSmallInt
+  | DataTypeFloat (Maybe Int)
+  | DataTypeReal
+  | DataTypeDoublePrecision
+  | DataTypeDate
+  | DataTypeTime (Maybe Word) {-^ time fractional seconds precision -} Bool {-^ With time zone -}
+  | DataTypeTimeStamp (Maybe Word) Bool
+  | DataTypeInterval ExtractField
+  | DataTypeIntervalFromTo ExtractField ExtractField
+  deriving (Show, Eq)
+
 data Expression
   = ExpressionValue Value
-  | ExpressionValues [ Expression ]
+  | ExpressionRow [ Expression ]
 
-  | ExpressionIsJust Expression
-  | ExpressionIsNothing Expression
+  | ExpressionIsNull Expression
+  | ExpressionIsNotNull Expression
+  | ExpressionIsTrue Expression
+  | ExpressionIsNotTrue Expression
+  | ExpressionIsFalse Expression
+  | ExpressionIsNotFalse Expression
+  | ExpressionIsUnknown Expression
+  | ExpressionIsNotUnknown Expression
 
   | ExpressionCase [(Expression, Expression)] Expression
+  | ExpressionCoalesce [Expression]
+  | ExpressionNullIf Expression Expression
 
   | ExpressionFieldName FieldName
 
+  | ExpressionBetween Expression Expression Expression
   | ExpressionBinOp Text Expression Expression
+  | ExpressionCompOp Text (Maybe ComparatorQuantifier) Expression Expression
   | ExpressionUnOp Text Expression
 
-  | ExpressionFunction Text [Expression]
+  | ExpressionPosition Expression Expression
+  | ExpressionCast Expression CastTarget
+  | ExpressionExtract ExtractField Expression
+  | ExpressionCharLength Expression
+  | ExpressionOctetLength Expression
+  | ExpressionBitLength Expression
+  | ExpressionAbs Expression
 
+  | ExpressionSubquery Select
+  | ExpressionUnique Select
+  | ExpressionDistinct Select
   | ExpressionExists Select
   deriving (Show, Eq)
 
 instance IsSql92ExpressionSyntax Expression where
+  type Sql92ExpressionQuantifierSyntax Expression = ComparatorQuantifier
   type Sql92ExpressionValueSyntax Expression = Value
   type Sql92ExpressionSelectSyntax Expression = Select
   type Sql92ExpressionFieldNameSyntax Expression = FieldName
+  type Sql92ExpressionCastTargetSyntax Expression = CastTarget
+  type Sql92ExpressionExtractFieldSyntax Expression = ExtractField
 
   valueE = ExpressionValue
-  valuesE = ExpressionValues
+  rowE = ExpressionRow
 
-  isJustE = ExpressionIsJust
-  isNothingE = ExpressionIsNothing
+  isNullE = ExpressionIsNull
+  isNotNullE = ExpressionIsNotNull
+  isTrueE = ExpressionIsTrue
+  isNotTrueE = ExpressionIsNotTrue
+  isFalseE = ExpressionIsFalse
+  isNotFalseE = ExpressionIsNotFalse
+  isUnknownE = ExpressionIsUnknown
+  isNotUnknownE = ExpressionIsNotUnknown
 
   caseE = ExpressionCase
+  coalesceE = ExpressionCoalesce
+  nullIfE = ExpressionNullIf
+  positionE = ExpressionPosition
+  extractE = ExpressionExtract
+  castE = ExpressionCast
 
   fieldE = ExpressionFieldName
 
+  betweenE = ExpressionBetween
   andE = ExpressionBinOp "AND"
   orE = ExpressionBinOp "OR"
 
-  eqE = ExpressionBinOp "=="
-  neqE = ExpressionBinOp "<>"
-  ltE = ExpressionBinOp "<"
-  gtE = ExpressionBinOp ">"
-  leE = ExpressionBinOp "<="
-  geE = ExpressionBinOp ">="
+  eqE = ExpressionCompOp "=="
+  neqE = ExpressionCompOp "<>"
+  ltE = ExpressionCompOp "<"
+  gtE = ExpressionCompOp ">"
+  leE = ExpressionCompOp "<="
+  geE = ExpressionCompOp ">="
   addE = ExpressionBinOp "+"
   subE = ExpressionBinOp "-"
   mulE = ExpressionBinOp "*"
   divE = ExpressionBinOp "/"
   modE = ExpressionBinOp "%"
+  overlapsE = ExpressionBinOp "OVERLAPS"
 
   notE = ExpressionUnOp "NOT"
   negateE = ExpressionUnOp "-"
 
-  absE x = ExpressionFunction "ABS" [x]
+  charLengthE = ExpressionCharLength
+  octetLengthE = ExpressionOctetLength
+  bitLengthE = ExpressionBitLength
+  absE = ExpressionAbs
 
+  subqueryE = ExpressionSubquery
+  uniqueE = ExpressionUnique
+  distinctE = ExpressionDistinct
   existsE = ExpressionExists
 
 data Projection
@@ -203,14 +287,14 @@ data Grouping = Grouping deriving (Show, Eq)
 
 data TableSource
   = TableNamed Text
-  | TableFromSubquery Select
+  | TableFromSubSelect Select
   deriving (Show, Eq)
 
 instance IsSql92TableSourceSyntax TableSource where
   type Sql92TableSourceSelectSyntax TableSource = Select
 
   tableNamed = TableNamed
-  tableFromSubquery = TableFromSubquery
+  tableFromSubSelect = TableFromSubSelect
 
 data From
   = FromTable TableSource (Maybe Text)

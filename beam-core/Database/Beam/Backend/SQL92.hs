@@ -143,32 +143,54 @@ class IsSql92FieldNameSyntax fn where
   qualifiedField :: Text -> Text -> fn
   unqualifiedField :: Text -> fn
 
-class ( IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr) ) =>
+class IsSql92QuantifierSyntax quantifier where
+  quantifyOverAll, quantifyOverAny :: quantifier
+
+class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
+      , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr) ) =>
     IsSql92ExpressionSyntax expr where
+  type Sql92ExpressionQuantifierSyntax expr :: *
   type Sql92ExpressionValueSyntax expr :: *
   type Sql92ExpressionSelectSyntax expr :: *
   type Sql92ExpressionFieldNameSyntax expr :: *
+  type Sql92ExpressionCastTargetSyntax expr :: *
+  type Sql92ExpressionExtractFieldSyntax expr :: *
 
   valueE :: Sql92ExpressionValueSyntax expr -> expr
-  valuesE :: [ expr ] -> expr
-  isJustE :: expr -> expr
-  isNothingE :: expr -> expr
+  rowE, coalesceE :: [ expr ] -> expr
   caseE :: [(expr, expr)]
-    -> expr -> expr
+        -> expr -> expr
   fieldE :: Sql92ExpressionFieldNameSyntax expr -> expr
 
-  andE, orE, eqE, neqE, ltE, gtE, leE, geE,
-    addE, subE, mulE, divE, modE
+  betweenE :: expr -> expr -> expr -> expr
+
+  andE, orE, addE, subE, mulE, divE,
+    modE, overlapsE, nullIfE, positionE
     :: expr
     -> expr
     -> expr
 
-  notE, negateE, absE
+  eqE, neqE, ltE, gtE, leE, geE
+    :: Maybe (Sql92ExpressionQuantifierSyntax expr)
+    -> expr -> expr -> expr
+
+  castE :: expr -> Sql92ExpressionCastTargetSyntax expr -> expr
+
+  notE, negateE, isNullE, isNotNullE,
+    isTrueE, isNotTrueE, isFalseE, isNotFalseE,
+    isUnknownE, isNotUnknownE, charLengthE,
+    octetLengthE, bitLengthE
     :: expr
     -> expr
 
-  existsE :: Sql92ExpressionSelectSyntax expr
-          -> expr
+  -- | Included so that we can easily write a Num instance, but not defined in SQL92.
+  --   Implementations that do not support this, should use CASE .. WHEN ..
+  absE :: expr -> expr
+
+  extractE :: Sql92ExpressionExtractFieldSyntax expr -> expr -> expr
+
+  existsE, uniqueE, subqueryE, distinctE
+    :: Sql92ExpressionSelectSyntax expr -> expr
 
 class IsSql92ExpressionSyntax (Sql92ProjectionExpressionSyntax proj) => IsSql92ProjectionSyntax proj where
   type Sql92ProjectionExpressionSyntax proj :: *
@@ -184,7 +206,7 @@ class IsSql92OrderingSyntax ord where
 class IsSql92TableSourceSyntax tblSource where
   type Sql92TableSourceSelectSyntax tblSource :: *
   tableNamed :: Text -> tblSource
-  tableFromSubquery :: Sql92TableSourceSelectSyntax tblSource -> tblSource
+  tableFromSubSelect :: Sql92TableSourceSelectSyntax tblSource -> tblSource
 
 class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
       , IsSql92ExpressionSyntax (Sql92FromExpressionSyntax from) ) =>
@@ -361,17 +383,22 @@ instance IsSql92ExpressionSyntax Sql92SyntaxBuilder where
   type Sql92ExpressionValueSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
   type Sql92ExpressionSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
   type Sql92ExpressionFieldNameSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92ExpressionQuantifierSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92ExpressionCastTargetSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  type Sql92ExpressionExtractFieldSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
 
-  valuesE vs = Sql92SyntaxBuilder $
-               byteString "VALUES(" <>
-               buildSepBy (byteString ", ") (map buildSql92 (coerce vs)) <>
-               byteString ")"
-  isJustE a =
-    Sql92SyntaxBuilder $
-    byteString "(" <> buildSql92 (coerce a) <> byteString ") IS NOT NULL"
-  isNothingE a =
-    Sql92SyntaxBuilder $
-    byteString "(" <> buildSql92 (coerce a) <> byteString ") IS NULL"
+  rowE vs = Sql92SyntaxBuilder $
+            byteString "(" <>
+            buildSepBy (byteString ", ") (map buildSql92 (coerce vs)) <>
+            byteString ")"
+  isNotNullE = sqlPostFixOp "IS NOT NULL"
+  isNullE = sqlPostFixOp "IS NULL"
+  isTrueE = sqlPostFixOp "IS TRUE"
+  isFalseE = sqlPostFixOp "IS FALSE"
+  isUnknownE = sqlPostFixOp "IS UNKNOWN"
+  isNotTrueE = sqlPostFixOp "IS NOT TRUE"
+  isNotFalseE = sqlPostFixOp "IS NOT FALSE"
+  isNotUnknownE = sqlPostFixOp "IS NOT UNKNOWN"
   caseE cases else_ =
     Sql92SyntaxBuilder $
     byteString "CASE " <>
@@ -380,22 +407,47 @@ instance IsSql92ExpressionSyntax Sql92SyntaxBuilder where
     byteString "ELSE " <> buildSql92 else_ <> byteString " END"
   fieldE = id
 
+  nullIfE a b = sqlFuncOp "NULLIF" $
+                Sql92SyntaxBuilder $
+                byteString "(" <> buildSql92 a <> byteString "), (" <>
+                buildSql92 b <> byteString ")"
+  positionE needle haystack =
+    Sql92SyntaxBuilder $ byteString "(" <> buildSql92 needle <> byteString ") IN (" <> buildSql92 haystack <> byteString ")"
+  extractE what from =
+    Sql92SyntaxBuilder $ buildSql92 what <> byteString " FROM (" <> buildSql92 from <> byteString ")"
+  absE = sqlFuncOp "ABS"
+  charLengthE = sqlFuncOp "CHAR_LENGTH"
+  bitLengthE = sqlFuncOp "BIT_LENGTH"
+  octetLengthE = sqlFuncOp "OCTET_LENGTH"
+
   addE = sqlBinOp "+"
   subE = sqlBinOp "-"
   mulE = sqlBinOp "*"
   divE = sqlBinOp "/"
   modE = sqlBinOp "%"
+  overlapsE = sqlBinOp "OVERLAPS"
   andE = sqlBinOp "AND"
   orE  = sqlBinOp "OR"
-  eqE  = sqlBinOp "="
-  neqE = sqlBinOp "<>"
-  ltE  = sqlBinOp "<"
-  gtE  = sqlBinOp ">"
-  leE  = sqlBinOp "<="
-  geE  = sqlBinOp ">="
+  castE a ty = Sql92SyntaxBuilder $
+    byteString "CAST((" <> buildSql92 a <> byteString ") AS " <> buildSql92 ty <> byteString ")"
+  coalesceE es = Sql92SyntaxBuilder $
+    byteString "COALESCE(" <>
+    buildSepBy (byteString ", ") (map (\e -> byteString"(" <> buildSql92 e <> byteString ")") es) <>
+    byteString ")"
+  betweenE a b c = Sql92SyntaxBuilder $
+    byteString "(" <> buildSql92 a <> byteString ") BETWEEN (" <> buildSql92 b <> byteString ") AND (" <> buildSql92 c <> byteString ")"
+  eqE  = sqlCompOp "="
+  neqE = sqlCompOp "<>"
+  ltE  = sqlCompOp "<"
+  gtE  = sqlCompOp ">"
+  leE  = sqlCompOp "<="
+  geE  = sqlCompOp ">="
   negateE = sqlUnOp "-"
   notE = sqlUnOp "NOT"
   existsE = sqlUnOp "EXISTS"
+  uniqueE = sqlUnOp "UNIQUE"
+  distinctE = sqlUnOp "DISTINCT"
+  subqueryE a = Sql92SyntaxBuilder $ byteString "(" <> buildSql92 a <> byteString ")"
   valueE = id
 
 instance IsSql92ProjectionSyntax Sql92SyntaxBuilder where
@@ -416,7 +468,7 @@ instance IsSql92OrderingSyntax Sql92SyntaxBuilder where
 instance IsSql92TableSourceSyntax Sql92SyntaxBuilder where
   type Sql92TableSourceSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
   tableNamed t = Sql92SyntaxBuilder (quoteSql t)
-  tableFromSubquery query = Sql92SyntaxBuilder (byteString "(" <> buildSql92 query <> byteString ")")
+  tableFromSubSelect query = Sql92SyntaxBuilder (byteString "(" <> buildSql92 query <> byteString ")")
 
 instance IsSql92FromSyntax Sql92SyntaxBuilder where
     type Sql92FromTableSourceSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
@@ -452,11 +504,23 @@ join type_ a b on =
 sqlUnOp op a =
   Sql92SyntaxBuilder $
   byteString op <> byteString " (" <> buildSql92 a <> byteString ")"
+sqlPostFixOp op a =
+  Sql92SyntaxBuilder $
+  byteString "(" <> buildSql92 a <> byteString ") " <> byteString op
+sqlCompOp op quant a b =
+    Sql92SyntaxBuilder $
+    byteString "(" <> buildSql92 a <> byteString ") " <>
+    byteString op <>
+    maybe mempty (\quant -> byteString " " <> buildSql92 quant) quant <>
+    byteString " (" <> buildSql92 b <> byteString ")"
 sqlBinOp op a b =
     Sql92SyntaxBuilder $
     byteString "(" <> buildSql92 a <> byteString ") " <>
     byteString op <>
     byteString " (" <> buildSql92 b <> byteString ")"
+sqlFuncOp fun a =
+  Sql92SyntaxBuilder $
+  byteString fun <> byteString "(" <> buildSql92 a <> byteString")"
 
 renderSql92 :: Sql92SyntaxBuilder -> String
 renderSql92 (Sql92SyntaxBuilder b) = BL.unpack (toLazyByteString b)

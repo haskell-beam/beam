@@ -80,9 +80,9 @@ simpleWhere =
 
      Just (FromTable (TableNamed "employees") (Just employees)) <- pure selectFrom
 
-     let salaryCond = ExpressionBinOp ">" (ExpressionFieldName (QualifiedField employees "salary")) (ExpressionValue (Value (120202 :: Double)))
-         ageCond = ExpressionBinOp "<" (ExpressionFieldName (QualifiedField employees "age")) (ExpressionValue (Value (30 :: Int)))
-         nameCond = ExpressionBinOp "==" (ExpressionFieldName (QualifiedField employees "first_name")) (ExpressionFieldName (QualifiedField employees "last_name"))
+     let salaryCond = ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField employees "salary")) (ExpressionValue (Value (120202 :: Double)))
+         ageCond = ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField employees "age")) (ExpressionValue (Value (30 :: Int)))
+         nameCond = ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField employees "first_name")) (ExpressionFieldName (QualifiedField employees "last_name"))
 
      selectWhere @?= Just (ExpressionBinOp "AND" salaryCond (ExpressionBinOp "AND" ageCond nameCond))
 
@@ -139,11 +139,11 @@ selfJoin =
                      (Just joinCondition123)) <- pure selectFrom
 
      assertBool "Table names are not unique" (e1 /= e2 && e1 /= e3 && e2 /= e3)
-     joinCondition12 @?= ExpressionBinOp "==" (ExpressionFieldName (QualifiedField e1 "first_name"))
-                                              (ExpressionFieldName (QualifiedField e2 "last_name"))
-     joinCondition123 @?= ExpressionBinOp "AND" (ExpressionBinOp "==" (ExpressionFieldName (QualifiedField e1 "phone_number"))
+     joinCondition12 @?= ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField e1 "first_name"))
+                                                       (ExpressionFieldName (QualifiedField e2 "last_name"))
+     joinCondition123 @?= ExpressionBinOp "AND" (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField e1 "phone_number"))
                                                   (ExpressionFieldName (QualifiedField e3 "last_name")))
-                            (ExpressionBinOp "==" (ExpressionFieldName (QualifiedField e3 "phone_number")) (ExpressionFieldName (QualifiedField e2 "first_name")))
+                            (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField e3 "phone_number")) (ExpressionFieldName (QualifiedField e2 "first_name")))
 
 -- * Ensure that right joins are properly generated
 
@@ -161,7 +161,7 @@ rightJoin =
                     (Just cond)) <- pure selectFrom
 
      let andE = ExpressionBinOp "AND"
-         eqE = ExpressionBinOp "=="
+         eqE = ExpressionCompOp "==" Nothing
 
          firstNameCond = eqE (ExpressionFieldName (QualifiedField employees "first_name"))
                              (ExpressionFieldName (QualifiedField roles "for_employee__first_name"))
@@ -185,7 +185,7 @@ maybeFieldTypes =
        pure e
 
      Just (FromTable (TableNamed "employees") (Just employees)) <- pure selectFrom
-     selectWhere @?= ExpressionIsNothing (ExpressionFieldName (QualifiedField employees "leave_date"))
+     selectWhere @?= ExpressionIsNull (ExpressionFieldName (QualifiedField employees "leave_date"))
 
 -- * Ensure isJustE and isNothingE work correctly for table and composite types
 
@@ -208,7 +208,7 @@ tableEquality =
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
         let andE = ExpressionBinOp "AND"
-            eqE = ExpressionBinOp "=="
+            eqE = ExpressionCompOp "==" Nothing
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionFieldName (QualifiedField depts "name"))
             firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
@@ -232,7 +232,7 @@ tableEquality =
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
         let andE = ExpressionBinOp "AND"
-            eqE = ExpressionBinOp "=="
+            eqE = ExpressionCompOp "==" Nothing
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionValue (Value ("Sales" :: Text)))
             firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
@@ -281,7 +281,7 @@ selectCombinators =
          b @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res1") ])
                            (Just (FromTable (TableNamed "employees") (Just "t0")))
-                           (Just (ExpressionIsJust (ExpressionFieldName (QualifiedField "t0" "leave_date"))))
+                           (Just (ExpressionIsNotNull (ExpressionFieldName (QualifiedField "t0" "leave_date"))))
                            Nothing Nothing
          pure ()
 
@@ -294,23 +294,23 @@ selectCombinators =
                              pure (val_ "leave" (As @Text), _employeeAge e, _employeeLeaveDate e)
          SqlSelect Select { selectTable = SelectTable { .. }, selectLimit = Nothing, selectOffset = Nothing, selectOrdering = [] } <-
            pure (select $ do
-                    (type_, age, date) <- subquery_ (limit_ 10 (union_ hireDates leaveDates))
+                    (type_, age, date) <- sourceSelect_ (limit_ 10 (union_ hireDates leaveDates))
                     guard_ (age <. 22)
                     pure (type_, age + 23, date))
 
-         Just (FromTable (TableFromSubquery subquery) (Just subqueryTbl)) <- pure selectFrom
-         selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField subqueryTbl "res0"), Just "res0")
-                                        , (ExpressionBinOp "+" (ExpressionFieldName (QualifiedField subqueryTbl "res1"))
+         Just (FromTable (TableFromSubSelect subselect) (Just subselectTbl)) <- pure selectFrom
+         selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField subselectTbl "res0"), Just "res0")
+                                        , (ExpressionBinOp "+" (ExpressionFieldName (QualifiedField subselectTbl "res1"))
                                                                (ExpressionValue (Value (23 :: Int))), Just "res1")
-                                        , (ExpressionFieldName (QualifiedField subqueryTbl "res2"), Just "res2") ]
+                                        , (ExpressionFieldName (QualifiedField subselectTbl "res2"), Just "res2") ]
          selectHaving @?= Nothing
          selectGrouping @?= Nothing
-         selectWhere @?= Just (ExpressionBinOp "<" (ExpressionFieldName (QualifiedField subqueryTbl "res1")) (ExpressionValue (Value (22 :: Int))))
+         selectWhere @?= Just (ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField subselectTbl "res1")) (ExpressionValue (Value (22 :: Int))))
 
          Select { selectTable = UnionTables False hireDatesQuery leaveDatesQuery
                 , selectLimit = Just 10, selectOffset = Nothing
                 , selectOrdering = []  } <-
-           pure subquery
+           pure subselect
 
          hireDatesQuery @?= SelectTable (ProjExprs [ ( ExpressionValue (Value ("hire" :: Text)), Just "res0" )
                                                    , ( ExpressionFieldName (QualifiedField "t0" "age"), Just "res1" )
@@ -320,7 +320,7 @@ selectCombinators =
                                                     , ( ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
                                                     , ( ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res2") ])
                                          (Just (FromTable (TableNamed "employees") (Just "t0")))
-                                         (Just (ExpressionIsJust (ExpressionFieldName (QualifiedField "t0" "leave_date"))))
+                                         (Just (ExpressionIsNotNull (ExpressionFieldName (QualifiedField "t0" "leave_date"))))
                                          Nothing Nothing
 
          pure ()

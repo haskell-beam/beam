@@ -10,7 +10,7 @@ module Database.Beam.Query.Combinators
 
     , limit_, offset_
 
---    , exists_
+    , exists_, unique_, distinct_, subquery_
 
     , union_, unionAll_
     , intersect_, intersectAll_
@@ -27,8 +27,8 @@ module Database.Beam.Query.Combinators
     -- * SQL ORDER BY
 --    , orderBy, asc_, desc_
 
-    -- * SQL subqueries
-    , subquery_
+    -- * SQL nested select
+    , sourceSelect_
     ) where
 
 import Database.Beam.Backend.Types
@@ -52,34 +52,6 @@ import Data.Text (Text, unpack)
 import Data.Coerce
 
 import GHC.Generics
-
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) [Char] ) =>
-    IsString (QExpr syntax s Text) where
-    fromString = QExpr . valueE . sqlValueSyntax
-instance (Num a
-         , IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a) =>
-    Num (QExpr syntax s a) where
-    fromInteger x = let res :: QExpr syntax s a
-                        res = QExpr (valueE (sqlValueSyntax (fromIntegral x :: a)))
-                    in res
-    QExpr a + QExpr b = QExpr (addE a b)
-    QExpr a - QExpr b = QExpr (subE a b)
-    QExpr a * QExpr b = QExpr (mulE a b)
-    negate (QExpr a) = QExpr (negateE a)
-    abs (QExpr x) = QExpr (absE x)
-    signum x = error "signum: not defined for QExpr. Use CASE...WHEN"
-
-instance ( Fractional a
-         , IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a ) =>
-  Fractional (QExpr syntax s a) where
-
-  (/) = qBinOpE divE
-  recip = (1.0 /)
-
-  fromRational = QExpr . valueE . sqlValueSyntax . (id :: a -> a) . fromRational
 
 -- instance (BeamBackend be, FromBackendLiteral be String) => IsString (Aggregation be s Text) where
 --     fromString = ProjectAgg . SQLValE . SQLValue
@@ -258,22 +230,24 @@ offset_ offset' q =
     sel -> SelectBuilderTopLevel Nothing (Just offset') [] sel
 
 -- | Use the SQL exists operator to determine if the given query returns any results
--- exists_ ::
---   (IsQuery q, IsSql92ExpressionSyntax syntax
+exists_, unique_, distinct_ ::
+  ( IsQuery q, IsSql92SelectSyntax select
+  , ProjectibleInSelectSyntax select a
+  , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
+  q select (db :: (((* -> *) -> *) -> *) -> *) s a
+  -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
+exists_ = QExpr . existsE . buildSelect . toSelectBuilder
+unique_ = QExpr . uniqueE . buildSelect . toSelectBuilder
+distinct_ = QExpr . distinctE . buildSelect . toSelectBuilder
 
---   , select ~ Sql92ExpressionSelectSyntax syntax
---   , IsSql92SelectTableSyntax select
-
---   , selectExpr ~ Sql92SelectTableExpressionSyntax select
---   , IsSql92ExpressionSyntax selectExpr
---   , HasSqlValueSyntax (Sql92ExpressionValueSyntax selectExpr) Bool
-
---   , selectProj ~ Sql92SelectTableProjectionSyntax select
---   , IsSql92ProjectionSyntax selectProj
---   , Projectible (Sql92ProjectionExpressionSyntax selectProj) a ) =>
---   q select db s a -> QExpr syntax s Bool
--- exists_ q = let (_, _, selectCmd) = buildSql92Query (toQ q) 0
---             in QExpr (existsE selectCmd)
+subquery_ ::
+  ( IsQuery q, IsSql92SelectSyntax select
+  , ProjectibleInSelectSyntax select (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
+  , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
+  q select (db :: (((* -> *) -> *) -> *) -> *) s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
+  -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+subquery_ =
+  QExpr . subqueryE . buildSelect . toSelectBuilder
 
 -- ** Combinators for boolean expressions
 
@@ -282,8 +256,8 @@ class IsSql92ExpressionSyntax syntax => SqlOrd syntax a s | a -> syntax where
     a /=. b = not_ (a ==. b)
 
 instance IsSql92ExpressionSyntax syntax => SqlOrd syntax (QExpr syntax s a) s where
-    (==.) = qBinOpE eqE
-    (/=.) = qBinOpE neqE
+    (==.) = qBinOpE (eqE Nothing)
+    (/=.) = qBinOpE (neqE Nothing)
 
 newtype QExprBool syntax s a = QExprBool (QExpr syntax s Bool)
 
@@ -325,10 +299,10 @@ qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE a b)
 
 (<.), (>.), (<=.), (>=.) ::
   IsSql92ExpressionSyntax syntax => QExpr syntax s a -> QExpr syntax s a -> QExpr syntax s Bool
-(<.) = qBinOpE ltE
-(>.) = qBinOpE gtE
-(<=.) = qBinOpE leE
-(>=.) = qBinOpE geE
+(<.) = qBinOpE (ltE Nothing)
+(>.) = qBinOpE (gtE Nothing)
+(<=.) = qBinOpE (leE Nothing)
+(>=.) = qBinOpE (geE Nothing)
 
 allE :: ( IsSql92ExpressionSyntax syntax, HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool) =>
         [ QExpr syntax s Bool ] -> QExpr syntax s Bool
@@ -468,23 +442,6 @@ instance ( Beamable table
                                             (Proxy @(Rep (table Exposed))) (from tbl))
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) x)) ->
                          Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
-
--- -- NOTE: This shouldn't cause problems because both overlapping instances are in the same module.
--- --       GHC should prefer the PrimaryKey one for primary keys and the table one for everything else.
--- --       AFAICT, PrimaryKey tbl QExpr ~ tbl QExpr is impossible
--- instance {-# INCOHERENT #-} ( Table tbl
---                              , MakeSqlValues be (PrimaryKey tbl) )
---     => SqlValable (PrimaryKey tbl (QExpr be s)) where
-
---     val_ = changeBeamRep valToQExpr . makeSqlValues (Proxy :: Proxy be)
---         where valToQExpr :: Columnar' (SqlValue' be) a -> Columnar' (QExpr be s) a
---               valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))
--- instance ( MakeBackendLiterals be tbl, Beamable tbl )
---     => SqlValable (tbl (QExpr syntax be s)) where
-
---     val_ = changeBeamRep valToQExpr . makeBackendLiterals
---         where valToQExpr :: Columnar' (BackendLiteral' be) a -> Columnar' (QExpr be s) a
---               valToQExpr (Columnar' (BackendLiteral' v)) = Columnar' (QExpr (SQLValE (SQLValue v)))
 
 -- * Aggregators
 
@@ -702,22 +659,22 @@ type instance Unnest (a, b, c, d) = (Unnest a, Unnest b, Unnest c, Unnest d)
 type instance Unnest (a, b, c, d, e) = (Unnest a, Unnest b, Unnest c, Unnest d, Unnest e)
 type instance Unnest (a, b, c, d, e, f) = (Unnest a, Unnest b, Unnest c, Unnest d, Unnest e, Unnest f)
 
-subquery_ :: forall q select db s a.
-             ( IsQuery q
-             , Coercible a (Unnest a)
-             , IsSql92SelectSyntax select
-             , ProjectibleInSelectSyntax select a
-             , Reprojectable (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select))) s (Unnest a)
-             , Sql92TableSourceSelectSyntax
-               (Sql92FromTableSourceSyntax
-                 (Sql92SelectTableFromSyntax
-                   (Sql92SelectSelectTableSyntax select))) ~ select ) =>
-             q select db (QNested s) a -> Q select db s (Unnest a)
-subquery_ q =
+sourceSelect_ :: forall q select db s a.
+                 ( IsQuery q
+                 , Coercible a (Unnest a)
+                 , IsSql92SelectSyntax select
+                 , ProjectibleInSelectSyntax select a
+                 , Reprojectable (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select))) s (Unnest a)
+                 , Sql92TableSourceSelectSyntax
+                   (Sql92FromTableSourceSyntax
+                    (Sql92SelectTableFromSyntax
+                     (Sql92SelectSelectTableSyntax select))) ~ select ) =>
+                 q select db (QNested s) a -> Q select db s (Unnest a)
+sourceSelect_ q =
   -- Some SelectBuilders can be easily turned back to selects. See if this is one
   case coerce (toSelectBuilder q) :: SelectBuilder select db s a of
     SelectBuilderQ mkTbl -> coerce mkTbl :: Q select db s (Unnest a)
-    sel@SelectBuilderSelectSyntax {} ->  subquery_ (SelectBuilderTopLevel Nothing Nothing [] (coerce sel :: SelectBuilder select db (QNested s) a))
+    sel@SelectBuilderSelectSyntax {} ->  sourceSelect_ (SelectBuilderTopLevel Nothing Nothing [] (coerce sel :: SelectBuilder select db (QNested s) a))
     SelectBuilderTopLevel { sbLimit = limit, sbOffset = offset
                           , sbOrdering = ordering, sbTable = lowerTbl } ->
       do curTbl <- state (\qb@QueryBuilder { qbNextTblRef } -> (qbNextTblRef, qb { qbNextTblRef = qbNextTblRef + 1 }) )
@@ -728,7 +685,7 @@ subquery_ q =
                    let from' = case from of
                                  Nothing -> Just newSource
                                  Just from -> Just (innerJoin from newSource Nothing)
-                       newSource = fromTable (tableFromSubquery (selectStmt (coerce selectTbl) ordering limit offset)) (Just subTblNm)
+                       newSource = fromTable (tableFromSubSelect (selectStmt (coerce selectTbl) ordering limit offset)) (Just subTblNm)
                    in qb { qbFrom = from' }
          pure (evalState (reproject (\i -> fieldE (qualifiedField subTblNm (fromString ("res" <> show i))))
                                     (coerce res :: Unnest a)) 0)
@@ -817,11 +774,11 @@ class IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax a nonNullA s 
     maybe_ :: QExpr syntax s y -> (nonNullA -> QExpr syntax s y) -> a -> QExpr syntax s y
 
 instance IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax (QExpr syntax s (Maybe x)) (QExpr syntax s x) s where
-    isJust_ (QExpr x) = QExpr (isJustE x)
-    isNothing_ (QExpr x) = QExpr (isNothingE x)
+    isJust_ (QExpr x) = QExpr (isNotNullE x)
+    isNothing_ (QExpr x) = QExpr (isNullE x)
 
     maybe_ (QExpr onNothing) onJust (QExpr e) = let QExpr onJust' = onJust (QExpr e)
-                                                in QExpr (caseE [(isJustE e, onJust')] onNothing)
+                                                in QExpr (caseE [(isNotNullE e, onJust')] onNothing)
 
 -- instance {-# OVERLAPPING #-} ( BeamBackend be, Table t
 --                              , AllBeamValues t (QExprBool be s)
@@ -841,25 +798,25 @@ instance ( IsSql92ExpressionSyntax syntax
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
     maybe_ = undefined
 
-class BeamUnwrapMaybe c where
-    beamUnwrapMaybe :: Columnar' (Nullable c) x -> Columnar' c x
-instance BeamUnwrapMaybe (QExpr syntax s) where
-    beamUnwrapMaybe (Columnar' (QExpr e)) = Columnar' (QExpr e)
-instance BeamUnwrapMaybe c => BeamUnwrapMaybe (Nullable c) where
-    beamUnwrapMaybe (Columnar' x :: Columnar' (Nullable (Nullable c)) x) =
-        let Columnar' x' = beamUnwrapMaybe (Columnar' x :: Columnar' (Nullable c) (Maybe x)) :: Columnar' c (Maybe x)
+-- class BeamUnwrapMaybe c where
+--     beamUnwrapMaybe :: Columnar' (Nullable c) x -> Columnar' c x
+-- instance BeamUnwrapMaybe (QExpr syntax s) where
+--     beamUnwrapMaybe (Columnar' (QExpr e)) = Columnar' (QExpr e)
+-- instance BeamUnwrapMaybe c => BeamUnwrapMaybe (Nullable c) where
+--     beamUnwrapMaybe (Columnar' x :: Columnar' (Nullable (Nullable c)) x) =
+--         let Columnar' x' = beamUnwrapMaybe (Columnar' x :: Columnar' (Nullable c) (Maybe x)) :: Columnar' c (Maybe x)
 
-            xCol :: Columnar' (Nullable c) x
-            xCol = Columnar' x'
-        in xCol
+--             xCol :: Columnar' (Nullable c) x
+--             xCol = Columnar' x'
+--         in xCol
 
 -- instance {-# OVERLAPPING #-} ( SqlDeconstructMaybe be (PrimaryKey t (Nullable c)) res s, Table t, BeamUnwrapMaybe (Nullable c)) => SqlDeconstructMaybe be (PrimaryKey t (Nullable (Nullable c))) res s where
 --     isJust_ t = isJust_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
 --     isNothing_ t = isNothing_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
 --     maybe_ = undefined
 
-instance ( SqlDeconstructMaybe syntax (t (Nullable c)) res s, BeamUnwrapMaybe (Nullable c)
-         , Beamable t) => SqlDeconstructMaybe syntax (t (Nullable (Nullable c))) res s where
-    isJust_ t = isJust_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
-    isNothing_ t = isNothing_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
-    maybe_ = undefined
+-- instance ( SqlDeconstructMaybe syntax (t (Nullable c)) res s, BeamUnwrapMaybe (Nullable c)
+--          , Beamable t) => SqlDeconstructMaybe syntax (t (Nullable (Nullable c))) res s where
+--     isJust_ t = isJust_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
+--     isNothing_ t = isNothing_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
+--     maybe_ = undefined

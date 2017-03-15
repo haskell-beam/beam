@@ -8,6 +8,7 @@ import           Database.Beam.Schema
 
 import           Data.Monoid
 import           Data.String
+import           Data.Text (Text, unpack)
 import qualified Data.Text as T
 import           Data.Typeable
 
@@ -72,6 +73,34 @@ data QField = QField
 newtype QExpr syntax s t = QExpr syntax
 deriving instance Show syntax => Show (QExpr syntax s t)
 deriving instance Eq syntax => Eq (QExpr syntax s t)
+
+instance ( IsSql92ExpressionSyntax syntax
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) [Char] ) =>
+    IsString (QExpr syntax s Text) where
+    fromString = QExpr . valueE . sqlValueSyntax
+instance (Num a
+         , IsSql92ExpressionSyntax syntax
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a) =>
+    Num (QExpr syntax s a) where
+    fromInteger x = let res :: QExpr syntax s a
+                        res = QExpr (valueE (sqlValueSyntax (fromIntegral x :: a)))
+                    in res
+    QExpr a + QExpr b = QExpr (addE a b)
+    QExpr a - QExpr b = QExpr (subE a b)
+    QExpr a * QExpr b = QExpr (mulE a b)
+    negate (QExpr a) = QExpr (negateE a)
+    abs (QExpr x) = QExpr (absE x)
+    signum _ = error "signum: not defined for QExpr. Use CASE...WHEN"
+
+instance ( Fractional a
+         , IsSql92ExpressionSyntax syntax
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a ) =>
+  Fractional (QExpr syntax s a) where
+
+  QExpr a / QExpr b = QExpr (divE a b)
+  recip = (1.0 /)
+
+  fromRational = QExpr . valueE . sqlValueSyntax . (id :: a -> a) . fromRational
 
 -- * Aggregations
 

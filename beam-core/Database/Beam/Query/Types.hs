@@ -7,7 +7,7 @@ module Database.Beam.Query.Types
 
     , Aggregation
 
-    , buildSql92Query ) where
+    , buildSql92Query, buildSelect ) where
 
 import Database.Beam.Query.Internal
 import Database.Beam.Backend.SQL
@@ -69,6 +69,22 @@ buildSql92Query q curTbl =
       sel = selectTableStmt (projExprs projection) (qbFrom qb)
                             (qbWhere qb) (qbGrouping qb) Nothing
   in (res, qbNextTblRef qb, sel)
+
+buildSelect :: IsSql92SelectSyntax syntax =>
+               SelectBuilder syntax db s res -> syntax
+buildSelect (SelectBuilderSelectSyntax _ select) =
+  selectStmt select [] Nothing Nothing
+buildSelect (SelectBuilderQ q) =
+  let (res, _, select) = buildSql92Query q 0
+  in buildSelect (SelectBuilderSelectSyntax res select)
+buildSelect (SelectBuilderTopLevel Nothing Nothing [] x) = buildSelect x
+buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderTopLevel limit' offset' _ x)) =
+  buildSelect (SelectBuilderTopLevel (min limit limit') ((+) <$> offset <*> offset' <|> offset <|> offset') ordering x)
+buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ select)) =
+  selectStmt select ordering limit offset
+buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ q)) =
+  let (res, _, select) = buildSql92Query q 0
+  in buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax res select))
 
 -- -- | Turn a `Q` into a `SQLSelect` starting the table references at the given number
 -- queryToSQL' :: (BeamSqlBackend be, Projectible be a) =>
