@@ -38,7 +38,7 @@ library
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
-                       TypeApplications
+                       TypeApplications, TypeFamilyDependencies
 
 test-suite beam-core-tests
   type: exitcode-stdio-1.0

@@ -6,6 +6,8 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL92
 import           Database.Beam.Schema
 
+import           Data.Monoid
+import           Data.String
 import qualified Data.Text as T
 import           Data.Typeable
 
@@ -13,15 +15,34 @@ import           Control.Applicative
 import           Control.Monad.Identity
 import           Control.Monad.State
 
+type ProjectibleInSelectSyntax syntax a =
+  ( IsSql92SelectSyntax syntax, Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
 -- | Type class for any query like entity, currently `Q` and `TopLevelQ`
 class IsQuery q where
-    toQ :: q syntax db s a -> Q syntax db s a
+  toSelectBuilder :: (ProjectibleInSelectSyntax syntax a, IsSql92SelectSyntax syntax) => q syntax db s a -> SelectBuilder syntax db s a
 
 -- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
 -- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
 -- implemented.
 newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State (QueryBuilder syntax) a}
     deriving (Monad, Applicative, Functor, MonadFix, MonadState (QueryBuilder syntax))
+
+instance IsQuery Q where
+  toSelectBuilder = SelectBuilderQ
+instance IsQuery SelectBuilder where
+  toSelectBuilder q = q
+
+data QInternal
+data SelectBuilder syntax (db :: (((* -> *) -> *) -> *) -> *) s a where
+  SelectBuilderQ :: ( IsSql92SelectSyntax syntax
+                    , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
+                    Q syntax db s a -> SelectBuilder syntax db s a
+  SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db s a
+  SelectBuilderTopLevel ::
+    { sbLimit, sbOffset :: Maybe Integer
+    , sbOrdering        :: [ Sql92SelectOrderingSyntax syntax ]
+    , sbTable           :: SelectBuilder syntax db s a } ->
+    SelectBuilder syntax db s a
 
 -- | Wrapper for 'Q's that have been modified in such a way that they can no longer be joined against
 --   without the use of 'subquery_'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
@@ -30,12 +51,12 @@ newtype TopLevelQ syntax db s a = TopLevelQ (Q syntax db s a)
 
 data QNested s
 
-data QueryBuilder syntax
+data QueryBuilder select
   = QueryBuilder
   { qbNextTblRef :: Int
-  , qbFrom  :: Maybe (Sql92SelectTableFromSyntax syntax)
-  , qbWhere :: Sql92SelectTableExpressionSyntax syntax
-  , qbGrouping :: Maybe (Sql92SelectTableGroupingSyntax syntax) }
+  , qbFrom  :: Maybe (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
+  , qbWhere :: Maybe (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))
+  , qbGrouping :: Maybe (Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)) }
 
 -- * QExpr type
 

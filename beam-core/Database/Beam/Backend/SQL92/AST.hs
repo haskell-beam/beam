@@ -47,15 +47,22 @@ data SelectTable
   , selectWhere      :: Maybe Expression
   , selectGrouping   :: Maybe Grouping
   , selectHaving     :: Maybe Expression }
+  | UnionTables Bool SelectTable SelectTable
+  | IntersectTables Bool SelectTable SelectTable
+  | ExceptTable Bool SelectTable SelectTable
   deriving (Show, Eq)
 
 instance IsSql92SelectTableSyntax SelectTable where
+  type Sql92SelectTableSelectSyntax SelectTable = Select
   type Sql92SelectTableExpressionSyntax SelectTable = Expression
   type Sql92SelectTableProjectionSyntax SelectTable = Projection
   type Sql92SelectTableFromSyntax SelectTable = From
   type Sql92SelectTableGroupingSyntax SelectTable = Grouping
 
   selectTableStmt = SelectTable
+  unionTables = UnionTables
+  intersectTables = IntersectTables
+  exceptTable = ExceptTable
 
 data Insert
   = Insert
@@ -196,10 +203,14 @@ data Grouping = Grouping deriving (Show, Eq)
 
 data TableSource
   = TableNamed Text
+  | TableFromSubquery Select
   deriving (Show, Eq)
 
 instance IsSql92TableSourceSyntax TableSource where
+  type Sql92TableSourceSelectSyntax TableSource = Select
+
   tableNamed = TableNamed
+  tableFromSubquery = TableFromSubquery
 
 data From
   = FromTable TableSource (Maybe Text)

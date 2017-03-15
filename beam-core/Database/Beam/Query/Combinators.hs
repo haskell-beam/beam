@@ -1,6 +1,6 @@
-{-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications #-}
+{-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications, NamedFieldPuns #-}
 module Database.Beam.Query.Combinators
-    ( all_, join_, guard_, related_, relatedBy_, lookup_
+    ( all_, join_, guard_, related_, relatedBy_
     , leftJoin_
     , buildJoinFrom
     , SqlReferences(..)
@@ -8,13 +8,17 @@ module Database.Beam.Query.Combinators
     , SqlDeconstructMaybe(..)
     , SqlOrderable
 
---    , limit_, offset_
+    , limit_, offset_
 
-    , exists_
+--    , exists_
+
+    , union_, unionAll_
+    , intersect_, intersectAll_
+    , except_, exceptAll_
 
     , (<.), (>.), (<=.), (>=.), (==.), (&&.), (||.), not_, div_, mod_
     , HaskellLiteralForQExpr
-    , SqlValable(..)
+    , SqlValable(..), As(..)
 
     -- * SQL GROUP BY and aggregation
 --    , aggregate, SqlGroupable(..)
@@ -24,7 +28,7 @@ module Database.Beam.Query.Combinators
 --    , orderBy, asc_, desc_
 
     -- * SQL subqueries
---    , subquery_
+    , subquery_
     ) where
 
 import Database.Beam.Backend.Types
@@ -91,34 +95,32 @@ instance ( Fractional a
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: forall db be table select s.
         ( Database db
-        , IsSql92SelectTableSyntax select
+        , IsSql92SelectSyntax select
 
-        , SupportedSyntax be select
-
-        , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
-        , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax select))
-        , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select
+        , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
+        , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)))
+        , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
 
         , Table table )
-       => DatabaseTable be db table -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax select) s))
+       => DatabaseTable be db table -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 all_ tbl = buildJoin tbl Nothing
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given SQLExprbuildJoin :: forall db syntax table be s.
 join_ :: ( Database db, Table table
-         , IsSql92SelectTableSyntax select, SupportedSyntax be select
-         , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
-         , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select
-         , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax select)) ) =>
-         DatabaseTable be db table -> QExpr (Sql92SelectTableExpressionSyntax select) s Bool
-      -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax select) s))
+         , IsSql92SelectSyntax select
+         , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
+         , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+         , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ) =>
+         DatabaseTable be db table -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
+      -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 join_ tbl on = buildJoin tbl (Just on)
 
 buildJoin :: forall db select table be s.
              ( Database db, Table table
-             , IsSql92SelectTableSyntax select, SupportedSyntax be select ) =>
+             , IsSql92SelectSyntax select ) =>
              DatabaseTable be db table
-          -> Maybe (QExpr (Sql92SelectTableExpressionSyntax select) s Bool)
-          -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax select) s))
+          -> Maybe (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
+          -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 buildJoin tbl@(DatabaseTable _ name _) on = do
   curTbl <- gets qbNextTblRef
   let newSource = fromTable (tableNamed name)
@@ -127,11 +129,11 @@ buildJoin tbl@(DatabaseTable _ name _) on = do
 
 buildJoinFrom :: forall db select table be s.
                  ( Database db, Table table
-                 , IsSql92SelectTableSyntax select, SupportedSyntax be select ) =>
+                 , IsSql92SelectSyntax select ) =>
                  DatabaseTable be db table
-              -> Sql92SelectTableFromSyntax select
-              -> Maybe (QExpr (Sql92SelectTableExpressionSyntax select) s Bool)
-              -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax select) s))
+              -> Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
+              -> Maybe (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
+              -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 buildJoinFrom (DatabaseTable _ name tableSettings :: DatabaseTable be db table) newSource on =
     do curTbl <- gets qbNextTblRef
        modify $ \qb@QueryBuilder { qbNextTblRef = curTbl
@@ -141,7 +143,11 @@ buildJoinFrom (DatabaseTable _ name tableSettings :: DatabaseTable be db table) 
                                    Nothing -> ( Just newSource
                                               , case on of
                                                   Nothing -> where_
-                                                  Just (QExpr on') -> andE where_ on')
+                                                  Just (QExpr on') ->
+                                                    case where_ of
+                                                      Nothing -> Just $ on'
+                                                      Just where_ ->
+                                                        Just $ andE where_ on')
                                    Just from -> ( Just (innerJoin from newSource $
                                                         case on of
                                                           Nothing -> Nothing
@@ -151,7 +157,7 @@ buildJoinFrom (DatabaseTable _ name tableSettings :: DatabaseTable be db table) 
                  , qbFrom = from'
                  , qbWhere = where' }
 
-       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (QExpr (Sql92SelectTableExpressionSyntax select) s) a
+       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) a
            mkScopedField (Columnar' f) = Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show curTbl)) (_fieldName f))))
        pure (changeBeamRep mkScopedField tableSettings)
 
@@ -161,18 +167,18 @@ buildJoinFrom (DatabaseTable _ name tableSettings :: DatabaseTable be db table) 
 leftJoin_ ::
   forall be db table select s.
   ( Database db, Table table
-  , IsSql92SelectTableSyntax select, SupportedSyntax be select ) =>
+  , IsSql92SelectSyntax select ) =>
   DatabaseTable be db table ->
-  (table (QExpr (Sql92SelectTableExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax select) s Bool) ->
-  Q select db s (table (Nullable (QExpr (Sql92SelectTableExpressionSyntax select) s)))
+  (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool) ->
+  Q select db s (table (Nullable (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)))
 leftJoin_ (DatabaseTable table name tableSettings :: DatabaseTable be db table) mkOn =
     do curTbl <- gets qbNextTblRef
-       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (Nullable (QExpr (Sql92SelectTableExpressionSyntax select) s)) a
+       let mkScopedField :: Columnar' (TableField be table) a -> Columnar' (Nullable (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)) a
            mkScopedField (Columnar' f) = Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show curTbl)) (_fieldName f))))
 
            scopedTbl = changeBeamRep mkScopedField tableSettings
 
-           mkNonNullableField :: Columnar' (TableField be table) a -> Columnar' (QExpr (Sql92SelectTableExpressionSyntax select) s) a
+           mkNonNullableField :: Columnar' (TableField be table) a -> Columnar' (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) a
            mkNonNullableField (Columnar' f) = Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show curTbl)) (_fieldName f))))
            QExpr on = mkOn (changeBeamRep mkNonNullableField tableSettings)
 
@@ -191,38 +197,33 @@ leftJoin_ (DatabaseTable table name tableSettings :: DatabaseTable be db table) 
 
 -- | Only allow results for which the 'QExpr' yields 'True'
 guard_ :: forall select db s.
-          ( IsSql92SelectTableSyntax select ) =>
-          QExpr (Sql92SelectTableExpressionSyntax select) s Bool -> Q select db s ()
+          ( IsSql92SelectSyntax select ) =>
+          QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool -> Q select db s ()
 guard_ (QExpr guardE') = modify $ \qb@QueryBuilder { qbWhere = guardE } ->
-  qb { qbWhere = andE guardE guardE' }
+  qb { qbWhere = case guardE of
+                   Nothing -> Just guardE'
+                   Just guardE -> Just $ andE guardE guardE' }
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
-related_ :: ( IsSql92SelectTableSyntax select, SupportedSyntax be select
-            , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax select)) Bool
+related_ :: ( IsSql92SelectSyntax select
+            , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
             , Database db, Table rel ) =>
             DatabaseTable be db rel
-         -> PrimaryKey rel (QExpr (Sql92SelectTableExpressionSyntax select) s)
-         -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax select) s))
+         -> PrimaryKey rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)
+         -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 related_ (relTbl :: DatabaseTable be db rel) pk =
     mdo rel <- join_ relTbl (pk ==. primaryKey rel)
         pure rel
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
 relatedBy_ :: ( Database db, Table rel
-              , IsSql92SelectTableSyntax select, SupportedSyntax be select )
-           => DatabaseTable be db rel -> (rel (QExpr (Sql92SelectTableExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax select) s Bool)
-           -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax select) s))
+              , IsSql92SelectSyntax select )
+           => DatabaseTable be db rel -> (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) ->
+                                          QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
+           -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 relatedBy_ (relTbl :: DatabaseTable be db rel) mkOn =
     mdo rel <- join_ relTbl (mkOn rel)
         pure rel
-
--- | Synonym for 'related_'
-lookup_ :: ( Database db, Table rel
-           , IsSql92SelectTableSyntax select, SupportedSyntax be select
-           , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
-           , syntax ~ Sql92SelectTableExpressionSyntax select )
-           => DatabaseTable be db rel -> PrimaryKey rel (QExpr syntax s) -> Q select db s (rel (QExpr syntax s))
-lookup_ = related_
 
 class IsSql92ExpressionSyntax syntax => SqlReferences syntax f s | f -> syntax where
     -- | Check that the 'PrimaryKey' given matches the table. Polymorphic so it works over both
@@ -237,51 +238,42 @@ instance ( IsSql92ExpressionSyntax syntax
     SqlReferences syntax (Nullable (QExpr syntax s)) s where
     references_ pk (tbl :: tbl (Nullable (QExpr syntax s))) = pk ==. primaryKey tbl
 
--- -- | Limit the number of results returned by a query.
--- --
--- --   The resulting query is a top-level one that must be passed to 'query', 'queryList', or 'subquery_'. See 'TopLevelQ' for details.
--- limit_ :: IsQuery q => Integer -> q syntax db s a -> TopLevelQ syntax db s a
--- limit_ limit' q =
---     TopLevelQ $
---     do res <- toQ q
---        modify $ \qb ->
---            let qbLimit' = case qbLimit qb of
---                             Nothing -> Just limit'
---                             Just limit -> Just (min limit limit')
---            in qb { qbLimit = qbLimit' }
---        pure res
+-- | Limit the number of results returned by a query.
+--
+limit_ :: (IsQuery q, ProjectibleInSelectSyntax select a) =>
+          Integer -> q select db s a -> SelectBuilder select db s a
+limit_ limit' q =
+  case toSelectBuilder q of
+    sel@SelectBuilderTopLevel { } ->
+      sel { sbLimit = Just $ maybe limit' (min limit') (sbLimit sel) }
+    sel -> SelectBuilderTopLevel (Just limit') Nothing [] sel
 
--- -- | Drop the first `offset'` results.
--- --
--- --   The resulting query is a top-level one that must be passed to 'query', 'queryList', or 'subquery_'. See 'TopLevelQ' for details.
--- offset_ :: IsQuery q => Integer -> q syntax db s a -> TopLevelQ syntax db s a
--- offset_ offset' q =
---     TopLevelQ $
---     do res <- toQ q
---        modify $ \qb ->
---            let qbOffset' = case qbOffset qb of
---                              Nothing -> Just offset'
---                              Just offset -> Just (offset + offset')
---            in qb { qbOffset = qbOffset' }
---        pure res
+-- | Drop the first `offset'` results.
+offset_ :: ( IsQuery q, ProjectibleInSelectSyntax select a ) =>
+           Integer -> q select db s a -> SelectBuilder select db s a
+offset_ offset' q =
+  case toSelectBuilder q of
+    sel@SelectBuilderTopLevel { } ->
+      sel { sbOffset = Just $ maybe offset' (offset'+) (sbOffset sel) }
+    sel -> SelectBuilderTopLevel Nothing (Just offset') [] sel
 
 -- | Use the SQL exists operator to determine if the given query returns any results
-exists_ ::
-  (IsQuery q, IsSql92ExpressionSyntax syntax
+-- exists_ ::
+--   (IsQuery q, IsSql92ExpressionSyntax syntax
 
-  , select ~ Sql92ExpressionSelectSyntax syntax
-  , IsSql92SelectTableSyntax select
+--   , select ~ Sql92ExpressionSelectSyntax syntax
+--   , IsSql92SelectTableSyntax select
 
-  , selectExpr ~ Sql92SelectTableExpressionSyntax select
-  , IsSql92ExpressionSyntax selectExpr
-  , HasSqlValueSyntax (Sql92ExpressionValueSyntax selectExpr) Bool
+--   , selectExpr ~ Sql92SelectTableExpressionSyntax select
+--   , IsSql92ExpressionSyntax selectExpr
+--   , HasSqlValueSyntax (Sql92ExpressionValueSyntax selectExpr) Bool
 
-  , selectProj ~ Sql92SelectTableProjectionSyntax select
-  , IsSql92ProjectionSyntax selectProj
-  , Projectible (Sql92ProjectionExpressionSyntax selectProj) a ) =>
-  q select db s a -> QExpr syntax s Bool
-exists_ q = let (_, _, selectCmd) = buildSql92Query (toQ q) 0
-            in QExpr (existsE selectCmd)
+--   , selectProj ~ Sql92SelectTableProjectionSyntax select
+--   , IsSql92ProjectionSyntax selectProj
+--   , Projectible (Sql92ProjectionExpressionSyntax selectProj) a ) =>
+--   q select db s a -> QExpr syntax s Bool
+-- exists_ q = let (_, _, selectCmd) = buildSql92Query (toQ q) 0
+--             in QExpr (existsE selectCmd)
 
 -- ** Combinators for boolean expressions
 
@@ -301,12 +293,14 @@ newtype QExprBool syntax s a = QExprBool (QExpr syntax s Bool)
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
          , Beamable tbl ) => SqlOrd syntax (tbl (QExpr syntax s)) s where
-    a ==. b = let baseE = QExpr (valueE (sqlValueSyntax True))
-                  (_, e) = runState (zipBeamFieldsM
+    a ==. b = let (_, e) = runState (zipBeamFieldsM
                                      (\x'@(Columnar' x) (Columnar' y) -> do
-                                         modify (\expr -> expr &&. x ==. y)
-                                         return x') a b) baseE
-              in e
+                                         modify (\expr ->
+                                                   case expr of
+                                                     Nothing -> Just $ x ==. y
+                                                     Just expr -> Just $ expr &&. x ==. y)
+                                         return x') a b) Nothing
+              in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
 
 -- instance {-# OVERLAPPING #-} (BeamBackend be, Table tbl) => SqlOrd be (PrimaryKey tbl (Nullable (QExpr be s))) s where
 --     a ==. b = let pkCmp = runIdentity (zipPkM (\(Columnar' x) (Columnar' y) -> return (Columnar' (QExprBool (x ==. y))) ) a b) :: PrimaryKey tbl (QExprBool be s)
@@ -315,12 +309,14 @@ instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
          , Beamable tbl)
     => SqlOrd syntax (tbl (Nullable (QExpr syntax s))) s where
-    a ==. b = let baseE = QExpr (valueE (sqlValueSyntax True))
-                  (_, e) = runState (zipBeamFieldsM
+    a ==. b = let (_, e) = runState (zipBeamFieldsM
                                       (\x'@(Columnar' x) (Columnar' y) -> do
-                                          modify (\expr -> expr &&. x ==. y)
-                                          return x') a b) baseE
-              in e
+                                          modify (\expr ->
+                                                    case expr of
+                                                      Nothing -> Just $ x ==. y
+                                                      Just expr -> Just $ expr &&. x ==. y)
+                                          return x') a b) Nothing
+              in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
 
 qBinOpE :: forall syntax s a b c. IsSql92ExpressionSyntax syntax =>
            (syntax -> syntax -> syntax)
@@ -333,6 +329,13 @@ qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE a b)
 (>.) = qBinOpE gtE
 (<=.) = qBinOpE leE
 (>=.) = qBinOpE geE
+
+allE :: ( IsSql92ExpressionSyntax syntax, HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool) =>
+        [ QExpr syntax s Bool ] -> QExpr syntax s Bool
+allE es = fromMaybe (QExpr (valueE (sqlValueSyntax True))) $
+          foldl (\expr x ->
+                   Just $ maybe x (\e -> e &&. x) expr)
+                Nothing es
 
 (&&.), (||.) ::
   IsSql92ExpressionSyntax syntax => QExpr syntax s Bool -> QExpr syntax s Bool -> QExpr syntax s Bool
@@ -353,11 +356,95 @@ mod_, div_ ::
 div_ = qBinOpE divE
 mod_ = qBinOpE modE
 
+-- * Combine table sources via UNION, INTERSECT, and EXCEPT
+
+class Reprojectable syntax s a | a -> syntax s where
+  reproject :: (Int -> syntax) -> a -> State Int a
+instance (IsSql92ExpressionSyntax syntax, Beamable t) => Reprojectable syntax s (t (QExpr syntax s)) where
+  reproject mkE a =
+    zipBeamFieldsM (\(Columnar' (QExpr e)) _ -> do
+                       i <- state (\i -> (i, i + 1))
+                       let fieldName = fromString ("res" <> show i)
+                       pure (Columnar' (QExpr (mkE i)))) a a
+instance IsSql92ExpressionSyntax syntax => Reprojectable syntax s (QExpr syntax s a) where
+  reproject mkE a = do
+    i <- state (\i -> (i, i+1))
+    pure (QExpr (mkE i))
+instance ( Reprojectable syntax s a, Reprojectable syntax s b ) =>
+  Reprojectable syntax s (a, b) where
+
+  reproject mkE (a, b) = (,) <$> reproject mkE a <*> reproject mkE b
+instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c ) =>
+  Reprojectable syntax s (a, b, c) where
+
+  reproject mkE (a, b, c) = (,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
+instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c
+         , Reprojectable syntax s d ) =>
+  Reprojectable syntax s (a, b, c, d) where
+
+  reproject mkE (a, b, c, d) = (,,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
+                                     <*> reproject mkE d
+instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c
+         , Reprojectable syntax s d, Reprojectable syntax s e ) =>
+  Reprojectable syntax s (a, b, c, d, e) where
+
+  reproject mkE (a, b, c, d, e) = (,,,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
+                                         <*> reproject mkE d <*> reproject mkE e
+instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c
+         , Reprojectable syntax s d, Reprojectable syntax s e, Reprojectable syntax s f ) =>
+  Reprojectable syntax s (a, b, c, d, e, f) where
+
+  reproject mkE  (a, b, c, d, e, f) = (,,,,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
+                                              <*> reproject mkE d <*> reproject mkE e <*> reproject mkE f
+
+selectBuilderToSelectTable :: SelectBuilder syntax db s a -> (a, Sql92SelectSelectTableSyntax syntax)
+selectBuilderToSelectTable (SelectBuilderQ q) =
+  let (res, _, select) = buildSql92Query q 0
+  in (res, select)
+selectBuilderToSelectTable (SelectBuilderSelectSyntax a tableSyntax) = (a, tableSyntax)
+selectBuilderToSelectTable (SelectBuilderTopLevel Nothing Nothing [] x) = selectBuilderToSelectTable x
+selectBuilderToSelectTable (SelectBuilderTopLevel limit offset ordering x) = error "TODO"
+
+union_, unionAll_, intersect_, intersectAll_, except_, exceptAll_ ::
+  forall q select db s a.
+  ( IsQuery q
+  , IsSql92SelectSyntax select
+  , Reprojectable (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+  , ProjectibleInSelectSyntax select a ) =>
+  q select db s a -> q select db s a -> SelectBuilder select db s a
+union_ = combineTable_ (unionTables False)
+unionAll_ = combineTable_ (unionTables True)
+intersect_ = combineTable_ (intersectTables False)
+intersectAll_ = combineTable_ (intersectTables True)
+except_ = combineTable_ (exceptTable False)
+exceptAll_ = combineTable_ (exceptTable True)
+
+combineTable_ :: forall q select db s a.
+                 ( IsQuery q
+                 , IsSql92SelectSyntax select
+                 , Reprojectable (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+                 , ProjectibleInSelectSyntax select a ) =>
+                 (Sql92SelectSelectTableSyntax select -> Sql92SelectSelectTableSyntax select -> Sql92SelectSelectTableSyntax select)
+              -> q select db s a -> q select db s a -> SelectBuilder select db s a
+combineTable_ combine a b =
+  let (aRes, aSelTbl) = selectBuilderToSelectTable (toSelectBuilder a :: SelectBuilder select db s a)
+      (_, bSelTbl) = selectBuilderToSelectTable (toSelectBuilder b :: SelectBuilder select db s a)
+
+      projection = evalState (reproject (\i -> fieldE (unqualifiedField (fromString ("res" <> show i)))) aRes) 0
+
+  in SelectBuilderSelectSyntax projection (combine aSelTbl bSelTbl)
+
 -- * Marshalling between Haskell literals and QExprs
 
-type family HaskellLiteralForQExpr x
+type family HaskellLiteralForQExpr x = a
 type instance HaskellLiteralForQExpr (QExpr syntax s a) = a
 type instance HaskellLiteralForQExpr (table (QExpr syntax s)) = table Identity
+type instance HaskellLiteralForQExpr (As x -> QExpr syntax s x) = x
+
+type family QExprSyntax x where
+  QExprSyntax (QExpr syntax s a) = syntax
+
+data As x = As
 
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
@@ -366,6 +453,11 @@ instance (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a, IsSql92Expres
   SqlValable (QExpr syntax s a) where
 
   val_ = QExpr . valueE . sqlValueSyntax
+instance ( x ~ QExpr syntax s a
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax (QExprSyntax x)) a
+         , IsSql92ExpressionSyntax (QExprSyntax x) ) =>
+  SqlValable (As a -> x) where
+  val_ x _ = val_ x
 instance ( Beamable table
          , IsSql92ExpressionSyntax syntax
          , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
@@ -538,8 +630,19 @@ instance ( SqlOrderable syntax a
 class Subqueryable syntax a s | a -> s, a -> syntax where
     type Unnested a s
     subqueryProjections :: Proxy s -> a
-                        -> RWS (Text, Int) [ (syntax, Maybe Text ) ] Int
+                        -> RWS (Text, Int) [ (syntax, Maybe Text) ] Int
                                (Unnested a s)
+instance (IsSql92ExpressionSyntax syntax, Beamable t) => Subqueryable syntax (t (QExpr syntax (QNested s))) s where
+  type Unnested (t (QExpr syntax (QNested s))) s = t (QExpr syntax s)
+
+  subqueryProjections s a =
+    zipBeamFieldsM (\(Columnar' (QExpr e)) _ -> do
+                       i <- state (\i -> (i, i + 1))
+                       let fieldName = fromString ("e" <> show i)
+                       (tblName, tblOrd) <- ask
+                       tell [(e, Just fieldName)]
+                       pure (Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show tblOrd)) fieldName)))))
+                       a a
 instance IsSql92ExpressionSyntax syntax => Subqueryable syntax (QExpr syntax (QNested s) a) s where
     type Unnested (QExpr syntax (QNested s) a) s = QExpr syntax s a
     subqueryProjections s (QExpr e) =
@@ -548,6 +651,7 @@ instance IsSql92ExpressionSyntax syntax => Subqueryable syntax (QExpr syntax (QN
            let fieldName = fromString ("e" <> show i)
            tell [(e, Just fieldName)]
            pure (QExpr (fieldE (qualifiedField (fromString ("t" <> show tblOrd)) fieldName)))
+
 instance ( Subqueryable syntax a s
          , Subqueryable syntax b s ) =>
     Subqueryable syntax (a, b) s where
@@ -588,6 +692,46 @@ instance ( Subqueryable syntax a s
                <*> subqueryProjections s c
                <*> subqueryProjections s d
                <*> subqueryProjections s e
+
+type family Unnest expr :: *
+type instance Unnest (QExpr be (QNested s) a) = QExpr be s a
+type instance Unnest (t (QExpr be (QNested s))) = t (QExpr be s)
+type instance Unnest (a, b) = (Unnest a, Unnest b)
+type instance Unnest (a, b, c) = (Unnest a, Unnest b, Unnest c)
+type instance Unnest (a, b, c, d) = (Unnest a, Unnest b, Unnest c, Unnest d)
+type instance Unnest (a, b, c, d, e) = (Unnest a, Unnest b, Unnest c, Unnest d, Unnest e)
+type instance Unnest (a, b, c, d, e, f) = (Unnest a, Unnest b, Unnest c, Unnest d, Unnest e, Unnest f)
+
+subquery_ :: forall q select db s a.
+             ( IsQuery q
+             , Coercible a (Unnest a)
+             , IsSql92SelectSyntax select
+             , ProjectibleInSelectSyntax select a
+             , Reprojectable (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select))) s (Unnest a)
+             , Sql92TableSourceSelectSyntax
+               (Sql92FromTableSourceSyntax
+                 (Sql92SelectTableFromSyntax
+                   (Sql92SelectSelectTableSyntax select))) ~ select ) =>
+             q select db (QNested s) a -> Q select db s (Unnest a)
+subquery_ q =
+  -- Some SelectBuilders can be easily turned back to selects. See if this is one
+  case coerce (toSelectBuilder q) :: SelectBuilder select db s a of
+    SelectBuilderQ mkTbl -> coerce mkTbl :: Q select db s (Unnest a)
+    sel@SelectBuilderSelectSyntax {} ->  subquery_ (SelectBuilderTopLevel Nothing Nothing [] (coerce sel :: SelectBuilder select db (QNested s) a))
+    SelectBuilderTopLevel { sbLimit = limit, sbOffset = offset
+                          , sbOrdering = ordering, sbTable = lowerTbl } ->
+      do curTbl <- state (\qb@QueryBuilder { qbNextTblRef } -> (qbNextTblRef, qb { qbNextTblRef = qbNextTblRef + 1 }) )
+         let res :: a
+             (res, selectTbl) = selectBuilderToSelectTable lowerTbl -- (coerce lowerTbl :: SelectBuilder (QuerySelectSyntax q) (QueryDb q) s (Unnest (QueryResult q)))
+             subTblNm = fromString ("t" <> show curTbl)
+         modify $ \qb@QueryBuilder { qbFrom = from } ->
+                   let from' = case from of
+                                 Nothing -> Just newSource
+                                 Just from -> Just (innerJoin from newSource Nothing)
+                       newSource = fromTable (tableFromSubquery (selectStmt (coerce selectTbl) ordering limit offset)) (Just subTblNm)
+                   in qb { qbFrom = from' }
+         pure (evalState (reproject (\i -> fieldE (qualifiedField subTblNm (fromString ("res" <> show i))))
+                                    (coerce res :: Unnest a)) 0)
 
 -- -- | Run the given 'Q'-like object as a subquery, joining the results with the current result
 -- -- set. This allows embedding of 'TopLevelQ's inside 'Q's or other 'TopLevelQ's.
@@ -693,8 +837,8 @@ instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
          , Beamable t )
     => SqlDeconstructMaybe syntax (t (Nullable (QExpr syntax s))) (t (QExpr syntax s)) s where
-    isJust_ t = foldr (&&.) (QExpr (valueE (sqlValueSyntax True))) (allBeamValues (\(Columnar' e) -> isJust_ e) t)
-    isNothing_ t = foldr (&&.) (QExpr (valueE (sqlValueSyntax True))) (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
+    isJust_ t = allE (allBeamValues (\(Columnar' e) -> isJust_ e) t)
+    isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
     maybe_ = undefined
 
 class BeamUnwrapMaybe c where

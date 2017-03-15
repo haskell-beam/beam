@@ -38,10 +38,8 @@ type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b,
 type instance QExprToIdentity (a, b, c, d) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d)
 type instance QExprToIdentity (a, b, c, d, e) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e)
 
-instance IsQuery Q where
-    toQ = id
-instance IsQuery TopLevelQ where
-    toQ (TopLevelQ q) = q
+-- instance IsQuery TopLevelQ where
+--     toQ (TopLevelQ q) = q
 
 -- * Rewriting and optimization
 
@@ -57,25 +55,19 @@ instance IsQuery TopLevelQ where
 -- mkSqlField (QField tblName Nothing fieldName) = SQLFieldName fieldName
 
 buildSql92Query ::
-  forall select exprSyntax valueSyntax projSyntax db s a.
-  ( IsSql92SelectTableSyntax select
-
-  , exprSyntax ~ Sql92SelectTableExpressionSyntax select
-
-  , valueSyntax ~ Sql92ExpressionValueSyntax exprSyntax
-  , HasSqlValueSyntax valueSyntax Bool
-
-  , projSyntax ~ Sql92SelectTableProjectionSyntax select
+  forall select projSyntax db s a.
+  ( IsSql92SelectSyntax select
+  , projSyntax ~ Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
 
   , Projectible (Sql92ProjectionExpressionSyntax projSyntax) a ) =>
-  Q select db s a -> Int -> (a, Int, select)
+  Q select db s a -> Int -> (a, Int, Sql92SelectSelectTableSyntax select)
 buildSql92Query q curTbl =
   let (res, qb) = runState (runQ q) emptyQb
-      emptyQb = QueryBuilder curTbl Nothing (valueE (sqlValueSyntax True)) Nothing
-      projection = map (\q -> (q, Nothing)) (project res)
+      emptyQb = QueryBuilder curTbl Nothing Nothing Nothing
+      projection = zipWith (\i q -> (q, Just (fromString ("res" <> fromString (show i))))) [0..] (project res)
 
       sel = selectTableStmt (projExprs projection) (qbFrom qb)
-                            (Just (qbWhere qb)) (qbGrouping qb) Nothing
+                            (qbWhere qb) (qbGrouping qb) Nothing
   in (res, qbNextTblRef qb, sel)
 
 -- -- | Turn a `Q` into a `SQLSelect` starting the table references at the given number

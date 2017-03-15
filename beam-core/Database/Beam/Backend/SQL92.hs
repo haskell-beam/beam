@@ -12,6 +12,7 @@ import           Data.Int
 import           Data.Text (Text)
 import qualified Data.Text as T
 
+import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Coerce
@@ -87,8 +88,10 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
       , IsSql92ProjectionSyntax (Sql92SelectTableProjectionSyntax select)
       , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
 
-      , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select ) =>
+      , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select
+      , Sql92SelectSelectTableSyntax (Sql92SelectTableSelectSyntax select) ~ select ) =>
     IsSql92SelectTableSyntax select where
+  type Sql92SelectTableSelectSyntax select :: *
   type Sql92SelectTableExpressionSyntax select :: *
   type Sql92SelectTableProjectionSyntax select :: *
   type Sql92SelectTableFromSyntax select :: *
@@ -100,6 +103,9 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
                   -> Maybe (Sql92SelectTableGroupingSyntax select)
                   -> Maybe (Sql92SelectTableExpressionSyntax select) {-^ having clause -}
                   -> select
+
+  unionTables, intersectTables, exceptTable ::
+    Bool -> select -> select -> select
 
 class IsSql92InsertSyntax insert where
   type Sql92InsertValuesSyntax insert :: *
@@ -164,7 +170,7 @@ class ( IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr) ) =>
   existsE :: Sql92ExpressionSelectSyntax expr
           -> expr
 
-class IsSql92ProjectionSyntax proj where
+class IsSql92ExpressionSyntax (Sql92ProjectionExpressionSyntax proj) => IsSql92ProjectionSyntax proj where
   type Sql92ProjectionExpressionSyntax proj :: *
 
   projExprs :: [ (Sql92ProjectionExpressionSyntax proj, Maybe Text) ]
@@ -176,7 +182,9 @@ class IsSql92OrderingSyntax ord where
     :: Sql92OrderingExpressionSyntax ord -> ord
 
 class IsSql92TableSourceSyntax tblSource where
+  type Sql92TableSourceSelectSyntax tblSource :: *
   tableNamed :: Text -> tblSource
+  tableFromSubquery :: Sql92TableSourceSelectSyntax tblSource -> tblSource
 
 class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
       , IsSql92ExpressionSyntax (Sql92FromExpressionSyntax from) ) =>
@@ -282,12 +290,16 @@ instance IsSql92SelectSyntax Sql92SyntaxBuilder where
 
   selectStmt tableSrc ordering limit offset =
       Sql92SyntaxBuilder $
-      buildSql92 tableSrc <> byteString " ORDER BY " <>
-      buildSepBy (byteString ", ") (map buildSql92 ordering) <>
+      buildSql92 tableSrc <>
+      ( case ordering of
+          [] -> mempty
+          _ -> byteString " ORDER BY " <>
+               buildSepBy (byteString ", ") (map buildSql92 ordering) ) <>
       maybe mempty (\l -> byteString " LIMIT " <> byteString (fromString (show l))) limit <>
       maybe mempty (\o -> byteString " OFFSET " <> byteString (fromString (show o))) offset
 
 instance IsSql92SelectTableSyntax Sql92SyntaxBuilder where
+  type Sql92SelectTableSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
   type Sql92SelectTableExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
   type Sql92SelectTableProjectionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
   type Sql92SelectTableFromSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
@@ -300,6 +312,17 @@ instance IsSql92SelectTableSyntax Sql92SyntaxBuilder where
     (maybe mempty (\w -> byteString " WHERE " <> buildSql92 w) where_) <>
     (maybe mempty (\g -> byteString " GROUP BY " <> buildSql92 g) grouping) <>
     (maybe mempty (\e -> byteString " HAVING " <> buildSql92 e) having)
+
+  unionTables = tableOp "UNION"
+  intersectTables  = tableOp "INTERSECT"
+  exceptTable = tableOp "EXCEPT"
+
+tableOp :: ByteString -> Bool -> Sql92SyntaxBuilder -> Sql92SyntaxBuilder -> Sql92SyntaxBuilder
+tableOp op all a b =
+  Sql92SyntaxBuilder $
+  byteString "(" <> buildSql92 a <> byteString ") " <>
+  byteString op <> if all then byteString " ALL " else mempty <>
+  byteString " (" <> buildSql92 b <> byteString ")"
 
 instance IsSql92InsertSyntax Sql92SyntaxBuilder where
   type Sql92InsertValuesSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
@@ -391,7 +414,9 @@ instance IsSql92OrderingSyntax Sql92SyntaxBuilder where
   descOrdering expr = Sql92SyntaxBuilder (buildSql92 expr <> byteString " DESC")
 
 instance IsSql92TableSourceSyntax Sql92SyntaxBuilder where
-    tableNamed t = Sql92SyntaxBuilder (quoteSql t)
+  type Sql92TableSourceSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
+  tableNamed t = Sql92SyntaxBuilder (quoteSql t)
+  tableFromSubquery query = Sql92SyntaxBuilder (byteString "(" <> buildSql92 query <> byteString ")")
 
 instance IsSql92FromSyntax Sql92SyntaxBuilder where
     type Sql92FromTableSourceSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
@@ -403,6 +428,16 @@ instance IsSql92FromSyntax Sql92SyntaxBuilder where
     innerJoin = join "INNER JOIN"
     leftJoin = join "LEFT JOIN"
     rightJoin = join "RIGHT JOIN"
+
+-- TODO These instances are wrong (Text doesn't handle quoting for example)
+instance HasSqlValueSyntax Sql92SyntaxBuilder Int where
+  sqlValueSyntax x = Sql92SyntaxBuilder $
+    byteString (fromString (show x))
+instance HasSqlValueSyntax Sql92SyntaxBuilder Text where
+  sqlValueSyntax x = Sql92SyntaxBuilder $
+    byteString (fromString (show x))
+instance HasSqlValueSyntax Sql92SyntaxBuilder SQLNull where
+  sqlValueSyntax x = Sql92SyntaxBuilder (byteString "NULL")
 
 -- TODO actual quoting
 quoteSql table =
