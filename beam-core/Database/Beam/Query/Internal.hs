@@ -19,18 +19,18 @@ import           Control.Monad.Identity
 import           Control.Monad.State
 import           Control.Monad.Writer
 
-type ProjectibleInSelectSyntax syntax s a =
-  ( IsSql92SelectSyntax syntax, Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s a )
+type ProjectibleInSelectSyntax syntax a =
+  ( IsSql92SelectSyntax syntax, Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
 -- | Type class for any query like entity, currently `Q` and `TopLevelQ`
-class IsQuery q where
-  toSelectBuilder :: (ProjectibleInSelectSyntax syntax s a, IsSql92SelectSyntax syntax) => q syntax db s a -> SelectBuilder syntax db s a
+--class IsQuery q where
+--  toSelectBuilder :: (ProjectibleInSelectSyntax syntax s a, IsSql92SelectSyntax syntax) => q syntax db s a -> SelectBuilder syntax db s a
 
 -- newtype Q select db s a = Q { runQ :: F (QueryBuilderF select) a }
 
 -- class (IsSql92SelectSyntax select, Functor (QueryBuilderF select)) => HasQueryBuilder select where
 --   type QueryBuilderF select :: * -> *
 
---   tableQ :: Text -> QueryBuilderF select ()
+--   introduceQ :: Beamable tbl => Proxy select -> Text -> QueryBuilderF select (tbl (QExpr expr s))
 --   introduceQ :: Proxy select
 --              -> F (QueryBuilderF select) a
 --              -> Maybe (Sql92SelectExpressionSyntax select)
@@ -39,33 +39,46 @@ class IsQuery q where
 --            -> F ( QueryBuilderF select) a -> F (QueryBuilderF select) a
 --            -> QueryBuilderF select a
 
+data QF select next where
+  QAll :: Text -> Maybe (Sql92SelectExpressionSyntax select) -> (Text -> next) -> QF select next
+  QLeftJoin :: Text -> Maybe (Sql92SelectExpressionSyntax select) -> (Text -> next) -> QF select next
+  QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select next
+  QUnion :: Bool -> QM select r -> QM select r -> (r -> next) -> QF select next
+  QIntersect :: Bool -> QM select r -> QM select r -> (r -> next) -> QF select next
+  QExcept :: Bool -> QM select r -> QM select r -> (r -> next) -> QF select next
+  QOrderBy :: [ Sql92SelectOrderingSyntax select ] -> QM select a -> (a -> next) -> QF select next
+  QAggregate :: Sql92SelectGroupingSyntax select -> QM select a -> (a -> next) -> QF select next
+
+type QM select = F (QF select)
+
 -- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
 -- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
 -- implemented.
-newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a = Q { runQ :: State (QueryBuilder syntax) a}
-    deriving (Monad, Applicative, Functor, MonadFix, MonadState (QueryBuilder syntax))
-
-instance IsQuery Q where
-  toSelectBuilder = SelectBuilderQ
-instance IsQuery SelectBuilder where
-  toSelectBuilder q = q
+newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a
+  = Q { runQ :: QM syntax a } -- State (QueryBuilder syntax) a}
+    deriving (Monad, Applicative, Functor)
 
 data QInternal
-data SelectBuilder syntax (db :: (((* -> *) -> *) -> *) -> *) s a where
-  SelectBuilderQ :: ( IsSql92SelectSyntax syntax
-                    , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s a ) =>
-                    Q syntax db s a -> SelectBuilder syntax db s a
-  SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db s a
-  SelectBuilderTopLevel ::
-    { sbLimit, sbOffset :: Maybe Integer
-    , sbOrdering        :: [ Sql92SelectOrderingSyntax syntax ]
-    , sbTable           :: SelectBuilder syntax db s a } ->
-    SelectBuilder syntax db s a
 
--- | Wrapper for 'Q's that have been modified in such a way that they can no longer be joined against
---   without the use of 'subquery_'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
---   directly to 'query' or 'queryList'
-newtype TopLevelQ syntax db s a = TopLevelQ (Q syntax db s a)
+-- instance IsQuery Q where
+--   toSelectBuilder = SelectBuilderQ
+-- instance IsQuery SelectBuilder where
+--   toSelectBuilder q = q
+-- data SelectBuilder syntax (db :: (((* -> *) -> *) -> *) -> *) s a where
+--   SelectBuilderQ :: ( IsSql92SelectSyntax syntax
+--                     , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s a ) =>
+--                     Q syntax db s a -> SelectBuilder syntax db s a
+--   SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db s a
+--   SelectBuilderTopLevel ::
+--     { sbLimit, sbOffset :: Maybe Integer
+--     , sbOrdering        :: [ Sql92SelectOrderingSyntax syntax ]
+--     , sbTable           :: SelectBuilder syntax db s a } ->
+--     SelectBuilder syntax db s a
+
+-- -- | Wrapper for 'Q's that have been modified in such a way that they can no longer be joined against
+-- --   without the use of 'subquery_'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
+-- --   directly to 'query' or 'queryList'
+-- newtype TopLevelQ syntax db s a = TopLevelQ (Q syntax db s a)
 
 data QNested s
 
@@ -73,8 +86,13 @@ data QueryBuilder select
   = QueryBuilder
   { qbNextTblRef :: Int
   , qbFrom  :: Maybe (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
-  , qbWhere :: Maybe (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))
-  , qbGrouping :: Maybe (Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)) }
+  , qbWhere :: Maybe (Sql92SelectExpressionSyntax select) }
+
+data GroupingBuilder select
+  = GroupingBuilder
+  { gbGrouping :: Maybe (Sql92SelectGroupingSyntax select)
+  , gbHaving :: Maybe (Sql92SelectExpressionSyntax select)
+  , gbTableSource :: Sql92SelectTableSyntax select }
 
 -- * QExpr type
 
@@ -132,48 +150,48 @@ data Aggregation syntax s a
 -- statement. This includes all tables as well as all tuple classes. Projections are only defined on
 -- tuples up to size 5. If you need more, follow the implementations here.
 
-class Projectible syntax s a | a -> syntax, a -> s where
+class Projectible syntax a | a -> syntax where
   project' :: Monad m => (syntax -> m syntax) -> a -> m a
-instance Beamable t => Projectible syntax s (t (QExpr syntax s)) where
+instance Beamable t => Projectible syntax (t (QExpr syntax s)) where
   project' mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
                       Columnar' . QExpr <$> mutateM e) a a
-instance Beamable t => Projectible syntax s (t (Nullable (QExpr syntax s))) where
+instance Beamable t => Projectible syntax (t (Nullable (QExpr syntax s))) where
   project' mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
                       Columnar' . QExpr <$> mutateM e) a a
-instance Projectible syntax s (QExpr syntax s a) where
+instance Projectible syntax (QExpr syntax s a) where
   project' mkE (QExpr a) = QExpr <$> mkE a
-instance ( Projectible syntax s a, Projectible syntax s b ) =>
-  Projectible syntax s (a, b) where
+instance ( Projectible syntax a, Projectible syntax b ) =>
+  Projectible syntax (a, b) where
 
   project' mkE (a, b) = (,) <$> project' mkE a <*> project' mkE b
-instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c ) =>
-  Projectible syntax s (a, b, c) where
+instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c ) =>
+  Projectible syntax (a, b, c) where
 
   project' mkE (a, b, c) = (,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
-instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c
-         , Projectible syntax s d ) =>
-  Projectible syntax s (a, b, c, d) where
+instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c
+         , Projectible syntax d ) =>
+  Projectible syntax (a, b, c, d) where
 
   project' mkE (a, b, c, d) = (,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
                                     <*> project' mkE d
-instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c
-         , Projectible syntax s d, Projectible syntax s e ) =>
-  Projectible syntax s (a, b, c, d, e) where
+instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c
+         , Projectible syntax d, Projectible syntax e ) =>
+  Projectible syntax (a, b, c, d, e) where
 
   project' mkE (a, b, c, d, e) = (,,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
                                         <*> project' mkE d <*> project' mkE e
-instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c
-         , Projectible syntax s d, Projectible syntax s e, Projectible syntax s f ) =>
-  Projectible syntax s (a, b, c, d, e, f) where
+instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c
+         , Projectible syntax d, Projectible syntax e, Projectible syntax f ) =>
+  Projectible syntax (a, b, c, d, e, f) where
 
   project' mkE  (a, b, c, d, e, f) = (,,,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
                                              <*> project' mkE d <*> project' mkE e <*> project' mkE f
 
-project :: Projectible syntax s a => a -> [ syntax ]
+project :: Projectible syntax a => a -> [ syntax ]
 project = DList.toList . execWriter . project' (\e -> tell (DList.singleton e) >> pure e)
-reproject :: (IsSql92ExpressionSyntax syntax, Projectible syntax s a) =>
+reproject :: (IsSql92ExpressionSyntax syntax, Projectible syntax a) =>
              (Int -> syntax) -> a -> a
 reproject mkField a =
   evalState (project' (\_ -> state (\i -> (i, i + 1)) >>= pure . mkField) a) 0

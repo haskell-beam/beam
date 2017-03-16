@@ -62,6 +62,7 @@ class HasSqlValueSyntax expr ty where
   sqlValueSyntax :: ty -> expr
 
 type Sql92SelectExpressionSyntax select = Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
 
 class IsSql92Syntax cmd where
   type Sql92SelectSyntax cmd :: *
