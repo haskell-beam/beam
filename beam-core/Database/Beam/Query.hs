@@ -42,7 +42,7 @@ newtype SqlSelect select a
 
 select :: forall q syntax db s res.
           ( IsQuery q
-          , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) res
+          , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s res
           , IsSql92SelectSyntax syntax ) =>
           q syntax db s res -> SqlSelect syntax (QExprToIdentity res)
 select q =

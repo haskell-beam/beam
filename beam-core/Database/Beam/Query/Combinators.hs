@@ -48,7 +48,6 @@ import Data.Monoid
 import Data.String
 import Data.Maybe
 import Data.Proxy
-import Data.Text (Text, unpack)
 import Data.Coerce
 
 import GHC.Generics
@@ -212,7 +211,7 @@ instance ( IsSql92ExpressionSyntax syntax
 
 -- | Limit the number of results returned by a query.
 --
-limit_ :: (IsQuery q, ProjectibleInSelectSyntax select a) =>
+limit_ :: (IsQuery q, ProjectibleInSelectSyntax select s a) =>
           Integer -> q select db s a -> SelectBuilder select db s a
 limit_ limit' q =
   case toSelectBuilder q of
@@ -221,7 +220,7 @@ limit_ limit' q =
     sel -> SelectBuilderTopLevel (Just limit') Nothing [] sel
 
 -- | Drop the first `offset'` results.
-offset_ :: ( IsQuery q, ProjectibleInSelectSyntax select a ) =>
+offset_ :: ( IsQuery q, ProjectibleInSelectSyntax select s a ) =>
            Integer -> q select db s a -> SelectBuilder select db s a
 offset_ offset' q =
   case toSelectBuilder q of
@@ -232,7 +231,7 @@ offset_ offset' q =
 -- | Use the SQL exists operator to determine if the given query returns any results
 exists_, unique_, distinct_ ::
   ( IsQuery q, IsSql92SelectSyntax select
-  , ProjectibleInSelectSyntax select a
+  , ProjectibleInSelectSyntax select s a
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   q select (db :: (((* -> *) -> *) -> *) -> *) s a
   -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
@@ -242,7 +241,7 @@ distinct_ = QExpr . distinctE . buildSelect . toSelectBuilder
 
 subquery_ ::
   ( IsQuery q, IsSql92SelectSyntax select
-  , ProjectibleInSelectSyntax select (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
+  , ProjectibleInSelectSyntax select s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   q select (db :: (((* -> *) -> *) -> *) -> *) s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
   -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
@@ -332,45 +331,6 @@ mod_ = qBinOpE modE
 
 -- * Combine table sources via UNION, INTERSECT, and EXCEPT
 
-class Reprojectable syntax s a | a -> syntax s where
-  reproject :: (Int -> syntax) -> a -> State Int a
-instance (IsSql92ExpressionSyntax syntax, Beamable t) => Reprojectable syntax s (t (QExpr syntax s)) where
-  reproject mkE a =
-    zipBeamFieldsM (\(Columnar' (QExpr e)) _ -> do
-                       i <- state (\i -> (i, i + 1))
-                       let fieldName = fromString ("res" <> show i)
-                       pure (Columnar' (QExpr (mkE i)))) a a
-instance IsSql92ExpressionSyntax syntax => Reprojectable syntax s (QExpr syntax s a) where
-  reproject mkE a = do
-    i <- state (\i -> (i, i+1))
-    pure (QExpr (mkE i))
-instance ( Reprojectable syntax s a, Reprojectable syntax s b ) =>
-  Reprojectable syntax s (a, b) where
-
-  reproject mkE (a, b) = (,) <$> reproject mkE a <*> reproject mkE b
-instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c ) =>
-  Reprojectable syntax s (a, b, c) where
-
-  reproject mkE (a, b, c) = (,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
-instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c
-         , Reprojectable syntax s d ) =>
-  Reprojectable syntax s (a, b, c, d) where
-
-  reproject mkE (a, b, c, d) = (,,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
-                                     <*> reproject mkE d
-instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c
-         , Reprojectable syntax s d, Reprojectable syntax s e ) =>
-  Reprojectable syntax s (a, b, c, d, e) where
-
-  reproject mkE (a, b, c, d, e) = (,,,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
-                                         <*> reproject mkE d <*> reproject mkE e
-instance ( Reprojectable syntax s a, Reprojectable syntax s b, Reprojectable syntax s c
-         , Reprojectable syntax s d, Reprojectable syntax s e, Reprojectable syntax s f ) =>
-  Reprojectable syntax s (a, b, c, d, e, f) where
-
-  reproject mkE  (a, b, c, d, e, f) = (,,,,,) <$> reproject mkE a <*> reproject mkE b <*> reproject mkE c
-                                              <*> reproject mkE d <*> reproject mkE e <*> reproject mkE f
-
 selectBuilderToSelectTable :: SelectBuilder syntax db s a -> (a, Sql92SelectSelectTableSyntax syntax)
 selectBuilderToSelectTable (SelectBuilderQ q) =
   let (res, _, select) = buildSql92Query q 0
@@ -383,8 +343,8 @@ union_, unionAll_, intersect_, intersectAll_, except_, exceptAll_ ::
   forall q select db s a.
   ( IsQuery q
   , IsSql92SelectSyntax select
-  , Reprojectable (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
-  , ProjectibleInSelectSyntax select a ) =>
+  , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+  , ProjectibleInSelectSyntax select s a ) =>
   q select db s a -> q select db s a -> SelectBuilder select db s a
 union_ = combineTable_ (unionTables False)
 unionAll_ = combineTable_ (unionTables True)
@@ -396,15 +356,15 @@ exceptAll_ = combineTable_ (exceptTable True)
 combineTable_ :: forall q select db s a.
                  ( IsQuery q
                  , IsSql92SelectSyntax select
-                 , Reprojectable (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
-                 , ProjectibleInSelectSyntax select a ) =>
+                 , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+                 , ProjectibleInSelectSyntax select s a ) =>
                  (Sql92SelectSelectTableSyntax select -> Sql92SelectSelectTableSyntax select -> Sql92SelectSelectTableSyntax select)
               -> q select db s a -> q select db s a -> SelectBuilder select db s a
 combineTable_ combine a b =
   let (aRes, aSelTbl) = selectBuilderToSelectTable (toSelectBuilder a :: SelectBuilder select db s a)
       (_, bSelTbl) = selectBuilderToSelectTable (toSelectBuilder b :: SelectBuilder select db s a)
 
-      projection = evalState (reproject (\i -> fieldE (unqualifiedField (fromString ("res" <> show i)))) aRes) 0
+      projection = reproject (\i -> fieldE (unqualifiedField (fromString ("res" <> show i)))) aRes
 
   in SelectBuilderSelectSyntax projection (combine aSelTbl bSelTbl)
 
@@ -584,72 +544,6 @@ instance ( SqlOrderable syntax a
 
 -- * Subqueries
 
-class Subqueryable syntax a s | a -> s, a -> syntax where
-    type Unnested a s
-    subqueryProjections :: Proxy s -> a
-                        -> RWS (Text, Int) [ (syntax, Maybe Text) ] Int
-                               (Unnested a s)
-instance (IsSql92ExpressionSyntax syntax, Beamable t) => Subqueryable syntax (t (QExpr syntax (QNested s))) s where
-  type Unnested (t (QExpr syntax (QNested s))) s = t (QExpr syntax s)
-
-  subqueryProjections s a =
-    zipBeamFieldsM (\(Columnar' (QExpr e)) _ -> do
-                       i <- state (\i -> (i, i + 1))
-                       let fieldName = fromString ("e" <> show i)
-                       (tblName, tblOrd) <- ask
-                       tell [(e, Just fieldName)]
-                       pure (Columnar' (QExpr (fieldE (qualifiedField (fromString ("t" <> show tblOrd)) fieldName)))))
-                       a a
-instance IsSql92ExpressionSyntax syntax => Subqueryable syntax (QExpr syntax (QNested s) a) s where
-    type Unnested (QExpr syntax (QNested s) a) s = QExpr syntax s a
-    subqueryProjections s (QExpr e) =
-        do i <- state (\i -> (i, i+1))
-           (tblName, tblOrd) <- ask
-           let fieldName = fromString ("e" <> show i)
-           tell [(e, Just fieldName)]
-           pure (QExpr (fieldE (qualifiedField (fromString ("t" <> show tblOrd)) fieldName)))
-
-instance ( Subqueryable syntax a s
-         , Subqueryable syntax b s ) =>
-    Subqueryable syntax (a, b) s where
-    type Unnested (a, b) s = (Unnested a s, Unnested b s)
-    subqueryProjections s (a, b) =
-        (,) <$> subqueryProjections s a
-            <*> subqueryProjections s b
-instance ( Subqueryable syntax a s
-         , Subqueryable syntax b s
-         , Subqueryable syntax c s ) =>
-    Subqueryable syntax (a, b, c) s where
-    type Unnested (a, b, c) s = (Unnested a s, Unnested b s, Unnested c s)
-    subqueryProjections s (a, b, c) =
-        (,,) <$> subqueryProjections s a
-             <*> subqueryProjections s b
-             <*> subqueryProjections s c
-instance ( Subqueryable syntax a s
-         , Subqueryable syntax b s
-         , Subqueryable syntax c s
-         , Subqueryable syntax d s ) =>
-    Subqueryable syntax (a, b, c, d) s where
-    type Unnested (a, b, c, d) s = (Unnested a s, Unnested b s, Unnested c s, Unnested d s)
-    subqueryProjections s (a, b, c, d) =
-        (,,,) <$> subqueryProjections s a
-              <*> subqueryProjections s b
-              <*> subqueryProjections s c
-              <*> subqueryProjections s d
-instance ( Subqueryable syntax a s
-         , Subqueryable syntax b s
-         , Subqueryable syntax c s
-         , Subqueryable syntax d s
-         , Subqueryable syntax e s ) =>
-    Subqueryable syntax (a, b, c, d, e) s where
-    type Unnested (a, b, c, d, e) s = (Unnested a s, Unnested b s, Unnested c s, Unnested d s, Unnested e s)
-    subqueryProjections s (a, b, c, d, e) =
-        (,,,,) <$> subqueryProjections s a
-               <*> subqueryProjections s b
-               <*> subqueryProjections s c
-               <*> subqueryProjections s d
-               <*> subqueryProjections s e
-
 type family Unnest expr :: *
 type instance Unnest (QExpr be (QNested s) a) = QExpr be s a
 type instance Unnest (t (QExpr be (QNested s))) = t (QExpr be s)
@@ -659,36 +553,35 @@ type instance Unnest (a, b, c, d) = (Unnest a, Unnest b, Unnest c, Unnest d)
 type instance Unnest (a, b, c, d, e) = (Unnest a, Unnest b, Unnest c, Unnest d, Unnest e)
 type instance Unnest (a, b, c, d, e, f) = (Unnest a, Unnest b, Unnest c, Unnest d, Unnest e, Unnest f)
 
+-- TODO this allows subselects to refer to one another...
 sourceSelect_ :: forall q select db s a.
                  ( IsQuery q
-                 , Coercible a (Unnest a)
+--                 , Coercible a (Unnest a)
                  , IsSql92SelectSyntax select
-                 , ProjectibleInSelectSyntax select a
-                 , Reprojectable (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select))) s (Unnest a)
+--                 , ProjectibleInSelectSyntax select s (Unnest a)
+                 , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select))) s a --(Unnest a)
                  , Sql92TableSourceSelectSyntax
                    (Sql92FromTableSourceSyntax
                     (Sql92SelectTableFromSyntax
                      (Sql92SelectSelectTableSyntax select))) ~ select ) =>
-                 q select db (QNested s) a -> Q select db s (Unnest a)
-sourceSelect_ q =
-  -- Some SelectBuilders can be easily turned back to selects. See if this is one
-  case coerce (toSelectBuilder q) :: SelectBuilder select db s a of
-    SelectBuilderQ mkTbl -> coerce mkTbl :: Q select db s (Unnest a)
-    sel@SelectBuilderSelectSyntax {} ->  sourceSelect_ (SelectBuilderTopLevel Nothing Nothing [] (coerce sel :: SelectBuilder select db (QNested s) a))
-    SelectBuilderTopLevel { sbLimit = limit, sbOffset = offset
-                          , sbOrdering = ordering, sbTable = lowerTbl } ->
-      do curTbl <- state (\qb@QueryBuilder { qbNextTblRef } -> (qbNextTblRef, qb { qbNextTblRef = qbNextTblRef + 1 }) )
+                 q select db s a -> Q select db s a
+sourceSelect_ q = finish (toSelectBuilder q)
+  where
+    finish (SelectBuilderQ mkTbl) = mkTbl
+    finish (sel@SelectBuilderSelectSyntax {}) = finish (SelectBuilderTopLevel Nothing Nothing [] sel)
+    finish SelectBuilderTopLevel { sbLimit = limit, sbOffset = offset
+                                 , sbOrdering = ordering, sbTable = lowerTbl } =
+      do curTbl <- gets qbNextTblRef
          let res :: a
              (res, selectTbl) = selectBuilderToSelectTable lowerTbl -- (coerce lowerTbl :: SelectBuilder (QuerySelectSyntax q) (QueryDb q) s (Unnest (QueryResult q)))
              subTblNm = fromString ("t" <> show curTbl)
-         modify $ \qb@QueryBuilder { qbFrom = from } ->
-                   let from' = case from of
+         modify $ \qb ->
+                   let from' = case qbFrom qb of
                                  Nothing -> Just newSource
                                  Just from -> Just (innerJoin from newSource Nothing)
-                       newSource = fromTable (tableFromSubSelect (selectStmt (coerce selectTbl) ordering limit offset)) (Just subTblNm)
-                   in qb { qbFrom = from' }
-         pure (evalState (reproject (\i -> fieldE (qualifiedField subTblNm (fromString ("res" <> show i))))
-                                    (coerce res :: Unnest a)) 0)
+                       newSource = fromTable (tableFromSubSelect (selectStmt selectTbl ordering limit offset)) (Just subTblNm)
+                   in qb { qbFrom = from', qbNextTblRef = qbNextTblRef qb + 1 }
+         pure (reproject (\i -> fieldE (qualifiedField subTblNm (fromString ("res" <> show i)))) res)
 
 -- -- | Run the given 'Q'-like object as a subquery, joining the results with the current result
 -- -- set. This allows embedding of 'TopLevelQ's inside 'Q's or other 'TopLevelQ's.

@@ -59,7 +59,7 @@ buildSql92Query ::
   ( IsSql92SelectSyntax select
   , projSyntax ~ Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
 
-  , Projectible (Sql92ProjectionExpressionSyntax projSyntax) a ) =>
+  , Projectible (Sql92ProjectionExpressionSyntax projSyntax) s a ) =>
   Q select db s a -> Int -> (a, Int, Sql92SelectSelectTableSyntax select)
 buildSql92Query q curTbl =
   let (res, qb) = runState (runQ q) emptyQb

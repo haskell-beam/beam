@@ -10,17 +10,34 @@ import           Data.Monoid
 import           Data.String
 import           Data.Text (Text, unpack)
 import qualified Data.Text as T
+import qualified Data.DList as DList
 import           Data.Typeable
 
 import           Control.Applicative
+import           Control.Monad.Free.Church
 import           Control.Monad.Identity
 import           Control.Monad.State
+import           Control.Monad.Writer
 
-type ProjectibleInSelectSyntax syntax a =
-  ( IsSql92SelectSyntax syntax, Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
+type ProjectibleInSelectSyntax syntax s a =
+  ( IsSql92SelectSyntax syntax, Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s a )
 -- | Type class for any query like entity, currently `Q` and `TopLevelQ`
 class IsQuery q where
-  toSelectBuilder :: (ProjectibleInSelectSyntax syntax a, IsSql92SelectSyntax syntax) => q syntax db s a -> SelectBuilder syntax db s a
+  toSelectBuilder :: (ProjectibleInSelectSyntax syntax s a, IsSql92SelectSyntax syntax) => q syntax db s a -> SelectBuilder syntax db s a
+
+-- newtype Q select db s a = Q { runQ :: F (QueryBuilderF select) a }
+
+-- class (IsSql92SelectSyntax select, Functor (QueryBuilderF select)) => HasQueryBuilder select where
+--   type QueryBuilderF select :: * -> *
+
+--   tableQ :: Text -> QueryBuilderF select ()
+--   introduceQ :: Proxy select
+--              -> F (QueryBuilderF select) a
+--              -> Maybe (Sql92SelectExpressionSyntax select)
+--              -> QueryBuilderF select a
+--   unionQ,  :: Proxy select
+--            -> F ( QueryBuilderF select) a -> F (QueryBuilderF select) a
+--            -> QueryBuilderF select a
 
 -- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
 -- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
@@ -36,7 +53,7 @@ instance IsQuery SelectBuilder where
 data QInternal
 data SelectBuilder syntax (db :: (((* -> *) -> *) -> *) -> *) s a where
   SelectBuilderQ :: ( IsSql92SelectSyntax syntax
-                    , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
+                    , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s a ) =>
                     Q syntax db s a -> SelectBuilder syntax db s a
   SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db s a
   SelectBuilderTopLevel ::
@@ -115,38 +132,84 @@ data Aggregation syntax s a
 -- statement. This includes all tables as well as all tuple classes. Projections are only defined on
 -- tuples up to size 5. If you need more, follow the implementations here.
 
-class IsSql92ExpressionSyntax syntax => Projectible syntax a where
-    project :: a -> [syntax]
-instance (Typeable a, IsSql92ExpressionSyntax syntax) => Projectible syntax (QExpr syntax s a) where
-    project (QExpr x) = [x]
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SQLNull) =>
-    Projectible syntax () where
+class Projectible syntax s a | a -> syntax, a -> s where
+  project' :: Monad m => (syntax -> m syntax) -> a -> m a
+instance Beamable t => Projectible syntax s (t (QExpr syntax s)) where
+  project' mutateM a =
+    zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
+                      Columnar' . QExpr <$> mutateM e) a a
+instance Beamable t => Projectible syntax s (t (Nullable (QExpr syntax s))) where
+  project' mutateM a =
+    zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
+                      Columnar' . QExpr <$> mutateM e) a a
+instance Projectible syntax s (QExpr syntax s a) where
+  project' mkE (QExpr a) = QExpr <$> mkE a
+instance ( Projectible syntax s a, Projectible syntax s b ) =>
+  Projectible syntax s (a, b) where
 
-    project () = [valueE (sqlValueSyntax SQLNull)]
-instance (Projectible syntax a, Projectible syntax b) => Projectible syntax (a, b) where
-    project (a, b) = project a ++ project b
-instance ( Projectible syntax a
-         , Projectible syntax b
-         , Projectible syntax c ) => Projectible syntax (a, b, c) where
-    project (a, b, c) = project a ++ project b ++ project c
-instance ( Projectible syntax a
-         , Projectible syntax b
-         , Projectible syntax c
-         , Projectible syntax d ) => Projectible syntax (a, b, c, d) where
-    project (a, b, c, d) = project a ++ project b ++ project c ++ project d
-instance ( Projectible syntax a
-         , Projectible syntax b
-         , Projectible syntax c
-         , Projectible syntax d
-         , Projectible syntax e ) => Projectible syntax (a, b, c, d, e) where
-    project (a, b, c, d, e) = project a ++ project b ++ project c ++ project d ++ project e
+  project' mkE (a, b) = (,) <$> project' mkE a <*> project' mkE b
+instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c ) =>
+  Projectible syntax s (a, b, c) where
 
-instance (Beamable t, IsSql92ExpressionSyntax syntax)
-    => Projectible syntax (t (QExpr syntax s)) where
-    project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
-instance (Beamable t, IsSql92ExpressionSyntax syntax) => Projectible syntax (t (Nullable (QExpr syntax s))) where
-    project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
+  project' mkE (a, b, c) = (,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
+instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c
+         , Projectible syntax s d ) =>
+  Projectible syntax s (a, b, c, d) where
+
+  project' mkE (a, b, c, d) = (,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
+                                    <*> project' mkE d
+instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c
+         , Projectible syntax s d, Projectible syntax s e ) =>
+  Projectible syntax s (a, b, c, d, e) where
+
+  project' mkE (a, b, c, d, e) = (,,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
+                                        <*> project' mkE d <*> project' mkE e
+instance ( Projectible syntax s a, Projectible syntax s b, Projectible syntax s c
+         , Projectible syntax s d, Projectible syntax s e, Projectible syntax s f ) =>
+  Projectible syntax s (a, b, c, d, e, f) where
+
+  project' mkE  (a, b, c, d, e, f) = (,,,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
+                                             <*> project' mkE d <*> project' mkE e <*> project' mkE f
+
+project :: Projectible syntax s a => a -> [ syntax ]
+project = DList.toList . execWriter . project' (\e -> tell (DList.singleton e) >> pure e)
+reproject :: (IsSql92ExpressionSyntax syntax, Projectible syntax s a) =>
+             (Int -> syntax) -> a -> a
+reproject mkField a =
+  evalState (project' (\_ -> state (\i -> (i, i + 1)) >>= pure . mkField) a) 0
+
+-- class IsSql92ExpressionSyntax syntax => Projectible syntax a where
+--     project :: a -> [syntax]
+-- instance (Typeable a, IsSql92ExpressionSyntax syntax) => Projectible syntax (QExpr syntax s a) where
+--     project (QExpr x) = [x]
+-- instance ( IsSql92ExpressionSyntax syntax
+--          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SQLNull) =>
+--     Projectible syntax () where
+
+--     project () = [valueE (sqlValueSyntax SQLNull)]
+-- instance (Projectible syntax a, Projectible syntax b) => Projectible syntax (a, b) where
+--     project (a, b) = project a ++ project b
+-- instance ( Projectible syntax a
+--          , Projectible syntax b
+--          , Projectible syntax c ) => Projectible syntax (a, b, c) where
+--     project (a, b, c) = project a ++ project b ++ project c
+-- instance ( Projectible syntax a
+--          , Projectible syntax b
+--          , Projectible syntax c
+--          , Projectible syntax d ) => Projectible syntax (a, b, c, d) where
+--     project (a, b, c, d) = project a ++ project b ++ project c ++ project d
+-- instance ( Projectible syntax a
+--          , Projectible syntax b
+--          , Projectible syntax c
+--          , Projectible syntax d
+--          , Projectible syntax e ) => Projectible syntax (a, b, c, d, e) where
+--     project (a, b, c, d, e) = project a ++ project b ++ project c ++ project d ++ project e
+
+-- instance (Beamable t, IsSql92ExpressionSyntax syntax)
+--     => Projectible syntax (t (QExpr syntax s)) where
+--     project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
+-- instance (Beamable t, IsSql92ExpressionSyntax syntax) => Projectible syntax (t (Nullable (QExpr syntax s))) where
+--     project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
 
 -- tableVal :: Table tbl => tbl Identity -> tbl (QExpr s)
 -- tableVal = changeRep valToQExpr . makeSqlValues
