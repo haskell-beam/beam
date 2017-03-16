@@ -20,6 +20,7 @@ import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Identity
 import Control.Monad.Free.Church
+import Control.Monad.Free
 
 import Data.Monoid hiding (All)
 import Data.Proxy
@@ -60,60 +61,150 @@ buildSql92Query ::
   ( IsSql92SelectSyntax select
   , projSyntax ~ Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
 
-  , Projectible (Sql92ProjectionExpressionSyntax projSyntax) s a ) =>
+  , Sql92ProjectionExpressionSyntax projSyntax ~ Sql92SelectExpressionSyntax select
+  , Projectible (Sql92ProjectionExpressionSyntax projSyntax) a ) =>
   Q select db s a -> select
 buildSql92Query (Q q) =
-  runF q finish run emptyQb
+    buildQuery (fromF q) emptyQb
   where
-    emptyQb = QueryBuilder 0 Nothing Nothing Nothing Nothing
+    emptyQb = QueryBuilder 0 Nothing Nothing
 
-    finish :: a -> QueryBuilder select -> select
-    finish a qb =
-      let projection = zipWith (\i e -> (e, Just (fromString "res" <> fromString (show (i :: Integer))))) [0..] (project a)
-      in selectStmt (selectTableStmt (projExprs projection) (qbFrom qb) (qbWhere qb) (qbGrouping qb) (qbHaving qb))
-                    [] Nothing Nothing
-
+    andE' :: Maybe (Sql92SelectExpressionSyntax select) -> Maybe (Sql92SelectExpressionSyntax select)
+          -> Maybe (Sql92SelectExpressionSyntax select)
     andE' Nothing Nothing = Nothing
     andE' (Just x) Nothing = Just x
     andE' Nothing (Just y) = Just y
-    andE' (Just x) (Just y) = andE x y
+    andE' (Just x) (Just y) = Just (andE x y)
 
-    fieldNameFunc mkField i = fieldNameE (mkField ("res" <> fromString (show i)))
+    fieldNameFunc mkField i = fieldE (mkField ("res" <> fromString (show i)))
 
-    evalUnderlying underlying = runF underlying finish run emptyQb
+    defaultProjection :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+                         x -> [ ( Sql92ProjectionExpressionSyntax projSyntax, Maybe T.Text ) ]
+    defaultProjection =
+        zipWith (\i e -> (e, Just (fromString "res" <> fromString (show (i :: Integer)))))
+                [0..] . project
 
-    run (QAll tbl on next) qb =
+    finishSelectTable' :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+                          x -> Maybe (Sql92SelectGroupingSyntax select)
+                       -> Maybe (Sql92SelectExpressionSyntax select)
+                       -> QueryBuilder select -> (x, Sql92SelectSelectTableSyntax select)
+    finishSelectTable' a grouping having qb =
+        (a, selectTableStmt (projExprs (defaultProjection a)) (qbFrom qb) (qbWhere qb) grouping having)
+
+    finishSelectTable :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x => x -> QueryBuilder select -> Sql92SelectSelectTableSyntax select
+    finishSelectTable a qb = snd (finishSelectTable' a Nothing Nothing qb)
+
+    finishSelect ::  Projectible (Sql92ProjectionExpressionSyntax projSyntax) x => x -> QueryBuilder select -> select
+    finishSelect a qb =
+        selectStmt (finishSelectTable a qb) [] Nothing Nothing
+
+    buildInnerJoinQuery
+        :: forall s be table.
+           DatabaseTable be db table
+        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
+        -> QueryBuilder select -> (table (QExpr (Sql92SelectExpressionSyntax select) s), QueryBuilder select)
+    buildInnerJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
       let qb' = QueryBuilder (tblRef + 1) from' where'
           tblRef = qbNextTblRef qb
           newTblNm = "t" <> fromString (show tblRef)
           newSource = fromTable (tableNamed tbl) (Just newTblNm)
           (from', where') =
             case qbFrom qb of
-              Nothing -> Just (newSource, andE' (qbWhere qb) on)
-              Just oldFrom -> Just (innerJoin oldFrom newSource on, qbWhere qb)
+              Nothing -> (Just newSource, andE' (qbWhere qb) (mkOn newTbl))
+              Just oldFrom -> (Just (innerJoin oldFrom newSource (mkOn newTbl)), qbWhere qb)
 
-      in next newTblNm qb'
-    run (QLeftJoin tbl on next) qb =
+          newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
+      in (newTbl, qb')
+    buildLeftJoinQuery
+        :: forall s be table.
+           DatabaseTable be db table
+        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
+        -> QueryBuilder select -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)), QueryBuilder select)
+    buildLeftJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
       let qb' = QueryBuilder (tblRef + 1) from' where'
           tblRef = qbNextTblRef qb
           newTblNm  = "t" <> fromString (show tblRef)
+          newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
+          newTblNullable = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
           newSource = fromTable (tableNamed tbl) (Just newTblNm)
           (from', where') =
             case qbFrom qb of
-              Nothing -> Just (newSource, andE' (qbWhere qb) on)
-              Just oldFrom -> Just (leftJoin oldFrom newSource on, qbWhere qb)
-      in next newTblNm qb'
-    run (QGuard cond next) qb =
-      next (qb { qbWhere = andE' (qbWhere qb) cond })
-    run (QAggregate grouping underlying next) =
-      runAggregate next 
-      joinSubquery (evalUnderlying underlying) next
-    run (QUnion all left right) =
-      joinSubquery (selectFromSource (unionTables all (evalUnderlying left) (evalUnderlying right))) next
-    run (QIntersect all left right) =
-      joinSubquery (selectFromSource (intersectTables all (evalUnderlying left) (evalUnderlying right)))
-    run (QExcept all left right) =
-      joinSubquery (selectFromSource (intersectTables all (evalUnderlying left) (evalUnderlying right)))
+              Nothing -> (Just newSource, andE' (qbWhere qb) (mkOn newTbl))
+              Just oldFrom -> (Just (leftJoin oldFrom newSource (mkOn newTbl)), qbWhere qb)
+      in (newTblNullable, qb')
+
+    buildQuery :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+                  Free (QF select db s) x -> QueryBuilder select -> select
+    buildQuery (Pure a) qb = finishSelect a qb
+    buildQuery (Free (QAll tbl on next)) qb =
+      let (newTblNm, qb') = buildInnerJoinQuery tbl on qb
+      in buildQuery (next newTblNm) qb'
+    buildQuery (Free (QLeftJoin tbl on next)) qb =
+      let (newTblNm, qb') = buildLeftJoinQuery tbl on qb
+      in buildQuery (next newTblNm) qb'
+    buildQuery (Free (QGuard cond next)) qb =
+      buildQuery next (qb { qbWhere = andE' (qbWhere qb) (Just cond) })
+
+    -- If the next steps are guard expressions, then we can use HAVING
+    buildQuery (Free (QAggregate grouping underlying next)) qb =
+        let (a, qb') = buildQueryInQ (fromF underlying) emptyQb
+        in case buildAggregateSimple grouping Nothing qb' (next a) of
+             Nothing -> error "buildQuery: aggregate too complicated"
+             Just select -> select
+
+    -- TODO we should examine underlying to see if we can simplify
+    buildQuery (Free (QLimit limit underlying next)) qb =
+        let (a, qb') = buildQueryInQ (fromF underlying) emptyQb
+        in case buildLimitOffsetSimple (Just limit) Nothing qb' (next a) of
+             Nothing -> error "buildQuery: limit too complicated"
+             Just select -> select
+    buildQuery (Free (QOffset offset underlying next)) qb =
+        case fromF underlying of
+          Free (QOffset offset' underlying' next) -> 
+        let (a, qb') = buildQueryInQ (fromF underlying) emptyQb
+        in case buildLimitOffsetSimple Nothing (Just offset) qb' (next a) of
+             Nothing -> error "buildQuery: limit too complicated"
+             Just select -> select
+
+    buildLimitOffsetSimple :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+                              Maybe Integer -> Maybe Integer -> QueryBuilder select
+                           -> Free (QF select db s) x -> Maybe select
+    buildLimitOffsetSimple limit offset qb (Pure x) =
+        let selectTable = finishSelectTable x qb
+        in Just (selectStmt selectTable [] limit offset)
+    buildLimitOffsetSimple limit offset qb _ = error "buildLimitOffsetSimple: unhandled"
+
+    buildQueryInQ :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+                     Free (QF select db s) x -> QueryBuilder select
+                  -> (x, QueryBuilder select)
+    buildQueryInQ (Pure x) qb = (x, qb)
+    buildQueryInQ (Free (QAll tbl on next)) qb =
+      let (newTblNm, qb') = buildInnerJoinQuery tbl on qb
+      in buildQueryInQ (next newTblNm) qb'
+    buildQueryInQ (Free (QLeftJoin tbl on next)) qb =
+      let (newTblNm, qb') = buildLeftJoinQuery tbl on qb
+      in buildQueryInQ (next newTblNm) qb'
+    buildQueryInQ _ qb = error "buildQueryInQ: unhandled"
+
+    buildAggregateSimple :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+                            Sql92SelectGroupingSyntax select -> Maybe (Sql92SelectExpressionSyntax select)
+                         -> QueryBuilder select -> Free (QF select db s) x -> Maybe select
+    buildAggregateSimple grouping having qb (Pure x) =
+      let (_, selectTable) = finishSelectTable' x (Just grouping) having qb
+      in Just (selectStmt selectTable [] Nothing Nothing)
+    buildAggregateSimple grouping having qb (Free (QGuard cond' next)) =
+      buildAggregateSimple grouping (andE' having (Just cond')) qb next
+    buildAggregateSimple grouping having qb _ = Nothing
+
+    -- buildQuery (QAggregate grouping underlying next) =5
+    --   buildAggregate next
+    --   joinSubquery (evalUnderlying underlying) next
+    -- buildQuery (QUnion all left right) =
+    --   joinSubquery (selectFromSource (unionTables all (evalUnderlying left) (evalUnderlying right))) next
+    -- buildQuery (QIntersect all left right) =
+    --   joinSubquery (selectFromSource (intersectTables all (evalUnderlying left) (evalUnderlying right)))
+    -- buildQuery (QExcept all left right) =
+    --   joinSubquery (selectFromSource (intersectTables all (evalUnderlying left) (evalUnderlying right)))
 
 
   -- let (res, qb) = runState (runQ q) emptyQb

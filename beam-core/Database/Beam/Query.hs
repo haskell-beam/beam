@@ -41,12 +41,11 @@ newtype SqlSelect select a
     = SqlSelect select
 
 select :: forall q syntax db s res.
-          ( IsQuery q
-          , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s res
+          ( ProjectibleInSelectSyntax syntax res
           , IsSql92SelectSyntax syntax ) =>
-          q syntax db s res -> SqlSelect syntax (QExprToIdentity res)
+          Q syntax db s res -> SqlSelect syntax (QExprToIdentity res)
 select q =
-  SqlSelect (buildSelect (toSelectBuilder q :: SelectBuilder syntax db s res))
+  SqlSelect (buildSql92Query q)
 -- * INSERT
 
 newtype SqlInsert syntax = SqlInsert syntax

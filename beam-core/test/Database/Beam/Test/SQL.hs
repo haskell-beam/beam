@@ -294,7 +294,7 @@ selectCombinators =
                              pure (val_ "leave" (As @Text), _employeeAge e, _employeeLeaveDate e)
          SqlSelect Select { selectTable = SelectTable { .. }, selectLimit = Nothing, selectOffset = Nothing, selectOrdering = [] } <-
            pure (select $ do
-                    (type_, age, date) <- sourceSelect_ (limit_ 10 (union_ hireDates leaveDates))
+                    (type_, age, date) <- limit_ 10 (union_ hireDates leaveDates)
                     guard_ (age <. 22)
                     pure (type_, age + 23, date))
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE FunctionalDependencies, UndecidableInstances, TypeApplications #-}
+{-# LANGUAGE FunctionalDependencies, UndecidableInstances, TypeApplications, DeriveFunctor #-}
 module Database.Beam.Query.Internal where
 
 import           Database.Beam.Backend.Types
@@ -20,7 +20,9 @@ import           Control.Monad.State
 import           Control.Monad.Writer
 
 type ProjectibleInSelectSyntax syntax a =
-  ( IsSql92SelectSyntax syntax, Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
+  ( IsSql92SelectSyntax syntax
+  , Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax) ~ Sql92SelectExpressionSyntax syntax
+  , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
 -- | Type class for any query like entity, currently `Q` and `TopLevelQ`
 --class IsQuery q where
 --  toSelectBuilder :: (ProjectibleInSelectSyntax syntax s a, IsSql92SelectSyntax syntax) => q syntax db s a -> SelectBuilder syntax db s a
@@ -39,23 +41,32 @@ type ProjectibleInSelectSyntax syntax a =
 --            -> F ( QueryBuilderF select) a -> F (QueryBuilderF select) a
 --            -> QueryBuilderF select a
 
-data QF select next where
-  QAll :: Text -> Maybe (Sql92SelectExpressionSyntax select) -> (Text -> next) -> QF select next
-  QLeftJoin :: Text -> Maybe (Sql92SelectExpressionSyntax select) -> (Text -> next) -> QF select next
-  QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select next
-  QUnion :: Bool -> QM select r -> QM select r -> (r -> next) -> QF select next
-  QIntersect :: Bool -> QM select r -> QM select r -> (r -> next) -> QF select next
-  QExcept :: Bool -> QM select r -> QM select r -> (r -> next) -> QF select next
-  QOrderBy :: [ Sql92SelectOrderingSyntax select ] -> QM select a -> (a -> next) -> QF select next
-  QAggregate :: Sql92SelectGroupingSyntax select -> QM select a -> (a -> next) -> QF select next
+data QF select db s next where
+  QAll :: DatabaseTable be db table
+       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
+       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
+  QLeftJoin :: DatabaseTable be db table
+            -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
+            -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
+  QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next
 
-type QM select = F (QF select)
+  QLimit :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
+  QOffset :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
+
+  QUnion :: Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QIntersect :: Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QExcept :: Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QOrderBy :: [ Sql92SelectOrderingSyntax select ] -> QM select db s a -> (a -> next) -> QF select db s next
+  QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a => Sql92SelectGroupingSyntax select -> QM select db s a -> (a -> next) -> QF select db s next
+deriving instance Functor (QF select db s)
+
+type QM select db s = F (QF select db s)
 
 -- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
 -- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
 -- implemented.
 newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a
-  = Q { runQ :: QM syntax a } -- State (QueryBuilder syntax) a}
+  = Q { runQ :: QM syntax db s a } -- State (QueryBuilder syntax) a}
     deriving (Monad, Applicative, Functor)
 
 data QInternal
@@ -92,7 +103,7 @@ data GroupingBuilder select
   = GroupingBuilder
   { gbGrouping :: Maybe (Sql92SelectGroupingSyntax select)
   , gbHaving :: Maybe (Sql92SelectExpressionSyntax select)
-  , gbTableSource :: Sql92SelectTableSyntax select }
+  , gbTableSource :: QueryBuilder select }
 
 -- * QExpr type
 
