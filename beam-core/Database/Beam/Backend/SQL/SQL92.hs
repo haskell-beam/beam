@@ -1,28 +1,18 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE PolyKinds #-}
 
-module Database.Beam.Backend.SQL92 where
+module Database.Beam.Backend.SQL.SQL92 where
 
-import           Control.Monad.Identity hiding (join)
+import Control.Monad.Identity hiding (join)
 
-import           Database.Beam.Schema.Tables
-import           Database.Beam.Backend.Types
-import           Database.Beam.Backend.SQL
-import           Data.Int
-import           Data.Text (Text)
-import qualified Data.Text as T
+import Database.Beam.Schema.Tables
+import Database.Beam.Backend.Types
+import Database.Beam.Backend.SQL.Types
 
-import           Data.ByteString (ByteString)
-import           Data.ByteString.Builder
-import qualified Data.ByteString.Lazy.Char8 as BL
-import           Data.Coerce
-import           Data.Monoid
-import           Data.Proxy
-import           Data.Ratio
-import           Data.String
-import qualified Data.Text.Encoding as TE
+import Data.Proxy
+import Data.Text (Text)
 
-import           GHC.Generics
+import GHC.Generics
 
 class ( BeamSqlBackend be
       , Sql92Schema (BackendColumnSchema be)) =>
@@ -46,23 +36,9 @@ class Sql92Schema schema where
 
 -- * Finally tagless style
 
-newtype Sql92Command
-  = Sql92Command (forall cmd. IsSql92Syntax cmd => cmd)
-newtype Sql92SyntaxBuilder
-  = Sql92SyntaxBuilder { buildSql92 :: Builder }
-newtype Sql92SyntaxBuilder1 (x :: k)
-  = Sql92SyntaxBuilder1 { buildSql92_1 :: Builder }
-
-instance Eq Sql92SyntaxBuilder where
-  a == b = toLazyByteString (buildSql92 a) == toLazyByteString (buildSql92 b)
-
-instance Monoid Sql92SyntaxBuilder where
-  mempty = Sql92SyntaxBuilder mempty
-  mappend (Sql92SyntaxBuilder a) (Sql92SyntaxBuilder b) =
-    Sql92SyntaxBuilder (mappend a b)
-
 class HasSqlValueSyntax expr ty where
   sqlValueSyntax :: ty -> expr
+class IsSqlExpressionSyntaxStringType expr ty
 
 type Sql92SelectExpressionSyntax select = Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
@@ -172,7 +148,7 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
 
   betweenE :: expr -> expr -> expr -> expr
 
-  andE, orE, addE, subE, mulE, divE,
+  andE, orE, addE, subE, mulE, divE, likeE,
     modE, overlapsE, nullIfE, positionE
     :: expr
     -> expr
@@ -197,7 +173,7 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
 
   extractE :: Sql92ExpressionExtractFieldSyntax expr -> expr -> expr
 
-  existsE, uniqueE, subqueryE, distinctE
+  existsE, uniqueE, subqueryE
     :: Sql92ExpressionSelectSyntax expr -> expr
 
 class IsSql92ExpressionSyntax (Sql92ProjectionExpressionSyntax proj) => IsSql92ProjectionSyntax proj where
@@ -313,230 +289,6 @@ class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
 --   rightJoin = join "RIGHT JOIN"
 
 --   tableNamed nm = Sql92TableSourceSyntaxBuilder (Sql92SyntaxBuilder (stringUtf8 (T.unpack nm)))
-
-instance IsSql92SelectSyntax Sql92SyntaxBuilder where
-  type Sql92SelectSelectTableSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectOrderingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  selectStmt tableSrc ordering limit offset =
-      Sql92SyntaxBuilder $
-      buildSql92 tableSrc <>
-      ( case ordering of
-          [] -> mempty
-          _ -> byteString " ORDER BY " <>
-               buildSepBy (byteString ", ") (map buildSql92 ordering) ) <>
-      maybe mempty (\l -> byteString " LIMIT " <> byteString (fromString (show l))) limit <>
-      maybe mempty (\o -> byteString " OFFSET " <> byteString (fromString (show o))) offset
-
-instance IsSql92SelectTableSyntax Sql92SyntaxBuilder where
-  type Sql92SelectTableSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectTableExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectTableProjectionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectTableFromSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92SelectTableGroupingSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  selectTableStmt proj from where_ grouping having =
-    Sql92SyntaxBuilder $
-    byteString "SELECT " <> buildSql92 proj <>
-    (maybe mempty ((byteString " FROM " <>) . buildSql92) from) <>
-    (maybe mempty (\w -> byteString " WHERE " <> buildSql92 w) where_) <>
-    (maybe mempty (\g -> byteString " GROUP BY " <> buildSql92 g) grouping) <>
-    (maybe mempty (\e -> byteString " HAVING " <> buildSql92 e) having)
-
-  unionTables = tableOp "UNION"
-  intersectTables  = tableOp "INTERSECT"
-  exceptTable = tableOp "EXCEPT"
-
-tableOp :: ByteString -> Bool -> Sql92SyntaxBuilder -> Sql92SyntaxBuilder -> Sql92SyntaxBuilder
-tableOp op all a b =
-  Sql92SyntaxBuilder $
-  byteString "(" <> buildSql92 a <> byteString ") " <>
-  byteString op <> if all then byteString " ALL " else mempty <>
-  byteString " (" <> buildSql92 b <> byteString ")"
-
-instance IsSql92InsertSyntax Sql92SyntaxBuilder where
-  type Sql92InsertValuesSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  insertStmt table fields values =
-    Sql92SyntaxBuilder $
-    byteString "INSERT INTO " <> quoteSql table <>
-    byteString "(" <> buildSepBy (byteString ", ") (map quoteSql fields) <> byteString ") " <>
-    buildSql92 values
-
-instance IsSql92UpdateSyntax Sql92SyntaxBuilder where
-  type Sql92UpdateFieldNameSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92UpdateExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  updateStmt table set where_ =
-    Sql92SyntaxBuilder undefined
-
-instance IsSql92DeleteSyntax Sql92SyntaxBuilder where
-  type Sql92DeleteExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  deleteStmt tbl where_ =
-    Sql92SyntaxBuilder $
-    byteString "DELETE FROM " <> quoteSql tbl <>
-    byteString " WHERE " <> buildSql92 where_
-
-instance IsSql92FieldNameSyntax Sql92SyntaxBuilder where
-  qualifiedField a b =
-    Sql92SyntaxBuilder $
-    byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`.`" <>
-    stringUtf8 (T.unpack b) <> byteString "`"
-  unqualifiedField a =
-    Sql92SyntaxBuilder $
-    byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`"
-
-instance IsSql92ExpressionSyntax Sql92SyntaxBuilder where
-  type Sql92ExpressionValueSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ExpressionSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ExpressionFieldNameSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ExpressionQuantifierSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ExpressionCastTargetSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  type Sql92ExpressionExtractFieldSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  rowE vs = Sql92SyntaxBuilder $
-            byteString "(" <>
-            buildSepBy (byteString ", ") (map buildSql92 (coerce vs)) <>
-            byteString ")"
-  isNotNullE = sqlPostFixOp "IS NOT NULL"
-  isNullE = sqlPostFixOp "IS NULL"
-  isTrueE = sqlPostFixOp "IS TRUE"
-  isFalseE = sqlPostFixOp "IS FALSE"
-  isUnknownE = sqlPostFixOp "IS UNKNOWN"
-  isNotTrueE = sqlPostFixOp "IS NOT TRUE"
-  isNotFalseE = sqlPostFixOp "IS NOT FALSE"
-  isNotUnknownE = sqlPostFixOp "IS NOT UNKNOWN"
-  caseE cases else_ =
-    Sql92SyntaxBuilder $
-    byteString "CASE " <>
-    foldMap (\(cond, res) -> byteString "WHEN " <> buildSql92 cond <>
-                             byteString " THEN " <> buildSql92 res <> byteString " ") cases <>
-    byteString "ELSE " <> buildSql92 else_ <> byteString " END"
-  fieldE = id
-
-  nullIfE a b = sqlFuncOp "NULLIF" $
-                Sql92SyntaxBuilder $
-                byteString "(" <> buildSql92 a <> byteString "), (" <>
-                buildSql92 b <> byteString ")"
-  positionE needle haystack =
-    Sql92SyntaxBuilder $ byteString "POSITION(" <> buildSql92 needle <> byteString ") IN (" <> buildSql92 haystack <> byteString ")"
-  extractE what from =
-    Sql92SyntaxBuilder $ buildSql92 what <> byteString " FROM (" <> buildSql92 from <> byteString ")"
-  absE = sqlFuncOp "ABS"
-  charLengthE = sqlFuncOp "CHAR_LENGTH"
-  bitLengthE = sqlFuncOp "BIT_LENGTH"
-  octetLengthE = sqlFuncOp "OCTET_LENGTH"
-
-  addE = sqlBinOp "+"
-  subE = sqlBinOp "-"
-  mulE = sqlBinOp "*"
-  divE = sqlBinOp "/"
-  modE = sqlBinOp "%"
-  overlapsE = sqlBinOp "OVERLAPS"
-  andE = sqlBinOp "AND"
-  orE  = sqlBinOp "OR"
-  castE a ty = Sql92SyntaxBuilder $
-    byteString "CAST((" <> buildSql92 a <> byteString ") AS " <> buildSql92 ty <> byteString ")"
-  coalesceE es = Sql92SyntaxBuilder $
-    byteString "COALESCE(" <>
-    buildSepBy (byteString ", ") (map (\e -> byteString"(" <> buildSql92 e <> byteString ")") es) <>
-    byteString ")"
-  betweenE a b c = Sql92SyntaxBuilder $
-    byteString "(" <> buildSql92 a <> byteString ") BETWEEN (" <> buildSql92 b <> byteString ") AND (" <> buildSql92 c <> byteString ")"
-  eqE  = sqlCompOp "="
-  neqE = sqlCompOp "<>"
-  ltE  = sqlCompOp "<"
-  gtE  = sqlCompOp ">"
-  leE  = sqlCompOp "<="
-  geE  = sqlCompOp ">="
-  negateE = sqlUnOp "-"
-  notE = sqlUnOp "NOT"
-  existsE = sqlUnOp "EXISTS"
-  uniqueE = sqlUnOp "UNIQUE"
-  distinctE = sqlUnOp "DISTINCT"
-  subqueryE a = Sql92SyntaxBuilder $ byteString "(" <> buildSql92 a <> byteString ")"
-  valueE = id
-
-instance IsSql92ProjectionSyntax Sql92SyntaxBuilder where
-  type Sql92ProjectionExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  projExprs exprs =
-      Sql92SyntaxBuilder $
-      buildSepBy (byteString ", ")
-                 (map (\(expr, nm) -> buildSql92 expr <>
-                                      maybe mempty (\nm -> byteString " AS " <> quoteSql nm) nm) exprs)
-
-instance IsSql92OrderingSyntax Sql92SyntaxBuilder where
-  type Sql92OrderingExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-  ascOrdering expr = Sql92SyntaxBuilder (buildSql92 expr <> byteString " ASC")
-  descOrdering expr = Sql92SyntaxBuilder (buildSql92 expr <> byteString " DESC")
-
-instance IsSql92TableSourceSyntax Sql92SyntaxBuilder where
-  type Sql92TableSourceSelectSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-  tableNamed t = Sql92SyntaxBuilder (quoteSql t)
-  tableFromSubSelect query = Sql92SyntaxBuilder (byteString "(" <> buildSql92 query <> byteString ")")
-
-instance IsSql92FromSyntax Sql92SyntaxBuilder where
-    type Sql92FromTableSourceSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-    type Sql92FromExpressionSyntax Sql92SyntaxBuilder = Sql92SyntaxBuilder
-
-    fromTable t Nothing = t
-    fromTable t (Just nm) = Sql92SyntaxBuilder (buildSql92 t <> byteString " AS " <> quoteSql nm)
-
-    innerJoin = join "INNER JOIN"
-    leftJoin = join "LEFT JOIN"
-    rightJoin = join "RIGHT JOIN"
-
--- TODO These instances are wrong (Text doesn't handle quoting for example)
-instance HasSqlValueSyntax Sql92SyntaxBuilder Int where
-  sqlValueSyntax x = Sql92SyntaxBuilder $
-    byteString (fromString (show x))
-instance HasSqlValueSyntax Sql92SyntaxBuilder Text where
-  sqlValueSyntax x = Sql92SyntaxBuilder $
-    byteString (fromString (show x))
-instance HasSqlValueSyntax Sql92SyntaxBuilder SQLNull where
-  sqlValueSyntax x = Sql92SyntaxBuilder (byteString "NULL")
-
--- TODO actual quoting
-quoteSql table =
-    byteString "\"" <> byteString (TE.encodeUtf8 table) <> byteString "\""
-
-join type_ a b on =
-    Sql92SyntaxBuilder $
-    buildSql92 a <> byteString " " <>  byteString type_ <> byteString " " <> buildSql92 b <>
-    case on of
-      Nothing -> mempty
-      Just on -> byteString " ON (" <> buildSql92 on <> byteString ")"
-sqlUnOp op a =
-  Sql92SyntaxBuilder $
-  byteString op <> byteString " (" <> buildSql92 a <> byteString ")"
-sqlPostFixOp op a =
-  Sql92SyntaxBuilder $
-  byteString "(" <> buildSql92 a <> byteString ") " <> byteString op
-sqlCompOp op quant a b =
-    Sql92SyntaxBuilder $
-    byteString "(" <> buildSql92 a <> byteString ") " <>
-    byteString op <>
-    maybe mempty (\quant -> byteString " " <> buildSql92 quant) quant <>
-    byteString " (" <> buildSql92 b <> byteString ")"
-sqlBinOp op a b =
-    Sql92SyntaxBuilder $
-    byteString "(" <> buildSql92 a <> byteString ") " <>
-    byteString op <>
-    byteString " (" <> buildSql92 b <> byteString ")"
-sqlFuncOp fun a =
-  Sql92SyntaxBuilder $
-  byteString fun <> byteString "(" <> buildSql92 a <> byteString")"
-
-renderSql92 :: Sql92SyntaxBuilder -> String
-renderSql92 (Sql92SyntaxBuilder b) = BL.unpack (toLazyByteString b)
-
-buildSepBy :: Builder -> [Builder] -> Builder
-buildSepBy sep [] = mempty
-buildSepBy sep [x] = x
-buildSepBy sep (x:xs) = x <> sep <> buildSepBy sep xs
 
 -- * Make SQL Literals
 

@@ -10,8 +10,8 @@ import Database.Beam.Test.Schema hiding (tests)
 import Database.Beam
 import Database.Beam.Query
 import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL92 hiding (leftJoin)
-import Database.Beam.Backend.SQL92.AST
+import Database.Beam.Backend.SQL hiding (leftJoin)
+import Database.Beam.Backend.SQL.AST
 
 import Data.Time.Clock
 import Data.Text (Text)

@@ -1,10 +1,11 @@
 -- | This module implements an AST type for SQL92. It allows us to realize
 --   the call structure of the builders defined in 'Database.Beam.Backend.SQL92'
-module Database.Beam.Backend.SQL92.AST where
+module Database.Beam.Backend.SQL.AST where
 
 import Prelude hiding (Ordering)
 
-import Database.Beam.Backend.SQL92
+import Database.Beam.Backend.SQL.SQL92
+import Database.Beam.Backend.SQL.SQL99
 
 import Data.Text (Text)
 import Data.Typeable
@@ -198,11 +199,17 @@ data Expression
   | ExpressionBitLength Expression
   | ExpressionAbs Expression
 
+  | ExpressionFunctionCall Expression [ Expression ]
+  | ExpressionInstanceField Expression Text
+  | ExpressionRefField Expression Text
+
   | ExpressionSubquery Select
   | ExpressionUnique Select
   | ExpressionDistinct Select
   | ExpressionExists Select
   deriving (Show, Eq)
+
+instance IsSqlExpressionSyntaxStringType Expression Text
 
 instance IsSql92ExpressionSyntax Expression where
   type Sql92ExpressionQuantifierSyntax Expression = ComparatorQuantifier
@@ -248,6 +255,7 @@ instance IsSql92ExpressionSyntax Expression where
   mulE = ExpressionBinOp "*"
   divE = ExpressionBinOp "/"
   modE = ExpressionBinOp "%"
+  likeE = ExpressionBinOp "LIKE"
   overlapsE = ExpressionBinOp "OVERLAPS"
 
   notE = ExpressionUnOp "NOT"
@@ -260,8 +268,14 @@ instance IsSql92ExpressionSyntax Expression where
 
   subqueryE = ExpressionSubquery
   uniqueE = ExpressionUnique
-  distinctE = ExpressionDistinct
   existsE = ExpressionExists
+
+instance IsSql99ExpressionSyntax Expression where
+  distinctE = ExpressionDistinct
+  similarToE = ExpressionBinOp "SIMILAR TO"
+  functionCallE = ExpressionFunctionCall
+  instanceFieldE = ExpressionInstanceField
+  refFieldE = ExpressionRefField
 
 data Projection
   = ProjExprs [ (Expression, Maybe Text ) ]

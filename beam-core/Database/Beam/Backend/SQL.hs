@@ -1,5 +1,10 @@
-module Database.Beam.Backend.SQL where
+module Database.Beam.Backend.SQL
+  ( module Database.Beam.Backend.SQL.SQL99
+  , module Database.Beam.Backend.SQL.Types
+  , module Database.Beam.Backend.Types ) where
 
+import Database.Beam.Backend.SQL.SQL99
+import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
 import Data.Proxy
@@ -22,14 +27,6 @@ import Data.Proxy
 --   | sqlValueIsTrue true1, sqlValueIsTrue true2 = Just (SQLValE (SQLValue True))
 
 -- sqlBooleanOpts _ = Nothing
-
-class ( BeamBackend be
---      , FromBackendLiterals be SQLNull, FromBackendLiteral be SQLNull
-      ) =>
-      BeamSqlBackend be where
-
-data SQLNull = SQLNull
-               deriving (Show, Eq, Ord, Bounded, Enum)
 
 --  sqlExprOptimizations ::
 --    Monad m => SQLExpr be -> m (Maybe (SQLExpr be))

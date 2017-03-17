@@ -3,7 +3,6 @@ module Database.Beam.Query.Internal where
 
 import           Database.Beam.Backend.Types
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.SQL92
 import           Database.Beam.Schema
 
 import           Data.Monoid
@@ -55,10 +54,12 @@ data QF select db s next where
   QLimit :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
   QOffset :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
 
-  QUnion :: Projectible (Sql92SelectExpressionSyntax select) r =>  Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
-  QIntersect ::  Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
-  QExcept ::  Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
-  QOrderBy :: [ Sql92SelectOrderingSyntax select ] -> QM select db s a -> (a -> next) -> QF select db s next
+  QUnion ::Projectible (Sql92SelectExpressionSyntax select) r =>  Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QIntersect :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QExcept :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QOrderBy :: Projectible (Sql92SelectExpressionSyntax select) r =>
+              (r -> [ Sql92SelectOrderingSyntax select ])
+           -> QM select db s r -> (r -> next) -> QF select db s next
   QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a => Sql92SelectGroupingSyntax select -> QM select db s a -> (a -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
 

@@ -20,16 +20,10 @@ import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.Internal
 
-import Database.Beam.Backend.SQL92
-import Database.Beam.Backend.Types
+import Database.Beam.Backend.SQL
 import Database.Beam.Schema.Tables
 
-import Control.Applicative
-import Control.Monad
 import Control.Monad.Identity
-
-import Data.Maybe (fromMaybe)
-import Data.Proxy
 
 -- * Query
 

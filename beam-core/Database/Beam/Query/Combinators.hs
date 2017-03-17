@@ -7,6 +7,7 @@ module Database.Beam.Query.Combinators
     , SqlJustable(..)
     , SqlDeconstructMaybe(..)
     , SqlOrderable
+    , QIfCond, QIfElse
 
     , limit_, offset_
 
@@ -16,7 +17,15 @@ module Database.Beam.Query.Combinators
     , intersect_, intersectAll_
     , except_, exceptAll_
 
-    , (<.), (>.), (<=.), (>=.), (==.), (&&.), (||.), not_, div_, mod_
+    , coalesce_, if_, then_, else_
+    , between_, like_, position_
+    , charLength_, octetLength_
+    , isTrue_, isNotTrue_
+    , isFalse_, isNotFalse_
+    , isUnknown_, isNotUnknown_
+--  , overlaps_, nullIf_, cast_, bitLength_
+    , (<.), (>.), (<=.), (>=.), (==.), (/=.)
+    , (&&.), (||.), not_, div_, mod_
     , HaskellLiteralForQExpr
     , SqlValable(..), As(..)
 
@@ -25,12 +34,11 @@ module Database.Beam.Query.Combinators
 --    , sum_, count_
 
     -- * SQL ORDER BY
---    , orderBy, asc_, desc_
+    , orderBy_, asc_, desc_
     ) where
 
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL92
 
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Types
@@ -46,7 +54,6 @@ import Data.Monoid
 import Data.String
 import Data.Maybe
 import Data.Proxy
-import Data.Coerce
 
 import GHC.Generics
 
@@ -158,14 +165,20 @@ offset_ offset' (Q q) =
   Q (liftF (QOffset offset' q id))
 
 -- | Use the SQL exists operator to determine if the given query returns any results
-exists_, unique_, distinct_ ::
+exists_, unique_ ::
   ( IsSql92SelectSyntax select
   , ProjectibleInSelectSyntax select a
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
-  Q select (db :: (((* -> *) -> *) -> *) -> *) s a
+  Q select db s a
   -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
 exists_ = QExpr . existsE . buildSql92Query
 unique_ = QExpr . uniqueE . buildSql92Query
+distinct_ ::
+  ( IsSql99ExpressionSyntax (Sql92SelectExpressionSyntax select)
+  , ProjectibleInSelectSyntax select a
+  , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
+  Q select db s a
+  -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
 distinct_ = QExpr . distinctE . buildSql92Query
 
 subquery_ ::
@@ -215,6 +228,40 @@ qBinOpE :: forall syntax s a b c. IsSql92ExpressionSyntax syntax =>
            (syntax -> syntax -> syntax)
         -> QExpr syntax s a -> QExpr syntax s b -> QExpr syntax s c
 qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE a b)
+
+between_ :: IsSql92ExpressionSyntax syntax =>
+            QExpr syntax s a -> QExpr syntax s a -> QExpr syntax s a
+         -> QExpr syntax s Bool
+between_ (QExpr a) (QExpr min_) (QExpr max_) =
+  QExpr (betweenE a min_ max_)
+
+charLength_, octetLength_ ::
+  ( IsSqlExpressionSyntaxStringType syntax text
+  , IsSql92ExpressionSyntax syntax ) =>
+  QExpr syntax s text -> QExpr syntax s Int
+charLength_ (QExpr s) = QExpr (charLengthE s)
+octetLength_ (QExpr s) = QExpr (octetLengthE s)
+
+isTrue_, isNotTrue_,
+  isFalse_, isNotFalse_,
+  isUnknown_, isNotUnknown_
+    :: IsSql92ExpressionSyntax syntax =>
+       QExpr syntax s a -> QExpr syntax s Bool
+isTrue_ (QExpr s) = QExpr (isTrueE s)
+isNotTrue_ (QExpr s) = QExpr (isNotTrueE s)
+isFalse_ (QExpr s) = QExpr (isFalseE s)
+isNotFalse_ (QExpr s) = QExpr (isNotFalseE s)
+isUnknown_ (QExpr s) = QExpr (isUnknownE s)
+isNotUnknown_ (QExpr s) = QExpr (isNotUnknownE s)
+
+like_, position_ ::
+  ( IsSqlExpressionSyntaxStringType syntax text
+  , IsSql92ExpressionSyntax syntax ) =>
+  QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s text
+like_ (QExpr scrutinee) (QExpr search) =
+  QExpr (likeE scrutinee search)
+position_ (QExpr needle) (QExpr haystack) =
+  QExpr (likeE needle haystack)
 
 (<.), (>.), (<=.), (>=.) ::
   IsSql92ExpressionSyntax syntax => QExpr syntax s a -> QExpr syntax s a -> QExpr syntax s Bool
@@ -424,15 +471,11 @@ instance ( SqlOrderable syntax a
     makeSQLOrdering (a, b, c, d, e) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <> makeSQLOrdering e
 
 -- | Order by certain expressions, either ascending ('asc_') or descending ('desc_')
-orderBy :: (SqlOrderable (Sql92SelectOrderingSyntax syntax) ordering) =>
-           (a -> ordering) -> Q syntax db s a -> Q syntax db s a
-orderBy orderer q =
+orderBy_ :: ( Projectible (Sql92SelectExpressionSyntax syntax) a
+            , SqlOrderable (Sql92SelectOrderingSyntax syntax) ordering ) =>
+            (a -> ordering) -> Q syntax db s a -> Q syntax db s a
+orderBy_ orderer (Q q) =
     Q (liftF (QOrderBy (makeSQLOrdering . orderer) q id))
-    -- TopLevelQ $
-    -- do res <- toQ q
-    --    let ordering = makeSQLOrdering (orderer res)
-    --    modify $ \qb -> qb { qbOrdering = qbOrdering qb <> ordering }
-    --    pure res+
 
 desc_, asc_ :: forall syntax s a.
   IsSql92OrderingSyntax syntax => QExpr (Sql92OrderingExpressionSyntax syntax) s a -> syntax
@@ -486,6 +529,27 @@ instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Id
     nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' Nothing) (tblSkeleton :: TableSkeleton t)
 
 -- * Nullable checking
+
+data QIfCond expr s a = QIfCond (QExpr expr s Bool) (QExpr expr s a)
+newtype QIfElse expr s a = QIfElse (QExpr expr s a)
+
+then_ :: QExpr expr s Bool -> QExpr expr s a -> QIfCond expr s a
+then_ cond res = QIfCond cond res
+
+else_ :: QExpr expr s a -> QIfElse expr s a
+else_ = QIfElse
+
+if_ :: IsSql92ExpressionSyntax expr =>
+       [ QIfCond expr s a ]
+    -> QIfElse expr s a
+    -> QExpr expr s a
+if_ conds (QIfElse (QExpr else_)) =
+  QExpr (caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond, res)) conds) else_)
+
+coalesce_ :: IsSql92ExpressionSyntax expr =>
+             [ QExpr expr s (Maybe a) ] -> QExpr expr s a -> QExpr expr s a
+coalesce_ qs (QExpr onNull) =
+  QExpr (coalesceE (map (\(QExpr q) -> q) qs <> [ onNull ]))
 
 -- | Type class for anything which can be checked for null-ness. This includes 'QExpr (Maybe a)' as
 -- well as 'Table's or 'PrimaryKey's over 'Nullable QExpr'.

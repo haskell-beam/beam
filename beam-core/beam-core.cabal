@@ -26,8 +26,11 @@ library
 
                        Database.Beam.Backend.Types
                        Database.Beam.Backend.SQL
-                       Database.Beam.Backend.SQL92
-                       Database.Beam.Backend.SQL92.AST
+                       Database.Beam.Backend.SQL.Types
+                       Database.Beam.Backend.SQL.SQL92
+                       Database.Beam.Backend.SQL.SQL99
+                       Database.Beam.Backend.SQL.Builder
+                       Database.Beam.Backend.SQL.AST
   other-modules:       Database.Beam.Query.Types
                        Database.Beam.Query.Combinators
 

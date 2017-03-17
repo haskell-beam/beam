@@ -15,7 +15,7 @@ module Database.Beam.Test.Schema
 
 import Database.Beam
 import Database.Beam.Backend
-import Database.Beam.Backend.SQL92.AST (Select)
+import Database.Beam.Backend.SQL.AST
 
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
