@@ -18,6 +18,8 @@ module Database.Beam.Postgres.Syntax
     , PgUpdateSyntax(..)
 
     , PgExpressionSyntax(..), PgFromSyntax(..)
+    , PgComparisonQuantifierSyntax(..)
+    , PgCastTargetSyntax(..), PgExtractFieldSyntax(..)
     , PgProjectionSyntax(..), PgGroupingSyntax(..)
     , PgOrderingSyntax(..), PgValueSyntax(..)
     , PgTableSourceSyntax(..), PgFieldNameSyntax(..)
@@ -77,6 +79,19 @@ data PgSyntaxF f where
   EscapeIdentifier :: ByteString -> f -> PgSyntaxF f
 deriving instance Functor PgSyntaxF
 
+instance Eq f => Eq (PgSyntaxF f) where
+  EmitByteString b1 next1 == EmitByteString b2 next2 =
+      b1 == b2 && next1 == next2
+  EmitBuilder b1 next1 == EmitBuilder b2 next2 =
+      toLazyByteString b1 == toLazyByteString b2 && next1 == next2
+  EscapeString b1 next1 == EscapeString b2 next2 =
+      b1 == b2 && next1 == next2
+  EscapeBytea b1 next1 == EscapeBytea b2 next2 =
+      b1 == b2 && next1 == next2
+  EscapeIdentifier b1 next1 == EscapeIdentifier b2 next2 =
+      b1 == b2 && next1 == next2
+  _ == _ = False
+
 type PgSyntaxM = F PgSyntaxF
 newtype PgSyntax
   = PgSyntax { buildPgSyntax :: PgSyntaxM () }
@@ -125,6 +140,9 @@ instance SupportedSyntax Postgres PgUpdateSyntax
 
 newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax }
 newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
+newtype PgComparisonQuantifierSyntax = PgComparisonQuantifierSyntax { fromPgComparisonQuantifier :: PgSyntax }
+newtype PgCastTargetSyntax = PgCastTargetSyntax { fromPgCastTarget :: PgSyntax }
+newtype PgExtractFieldSyntax = PgExtractFieldSyntax { fromPgExtractField :: PgSyntax }
 newtype PgProjectionSyntax = PgProjectionSyntax { fromPgProjection :: PgSyntax }
 newtype PgGroupingSyntax = PgGroupingSyntax { fromPgGrouping :: PgSyntax }
 newtype PgOrderingSyntax = PgOrderingSyntax { fromPgOrdering :: PgSyntax }
@@ -161,6 +179,7 @@ instance IsSql92SelectSyntax PgSelectSyntax where
     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset)
 
 instance IsSql92SelectTableSyntax PgSelectTableSyntax where
+  type Sql92SelectTableSelectSyntax PgSelectTableSyntax = PgSelectSyntax
   type Sql92SelectTableExpressionSyntax PgSelectTableSyntax = PgExpressionSyntax
   type Sql92SelectTableProjectionSyntax PgSelectTableSyntax = PgProjectionSyntax
   type Sql92SelectTableFromSyntax PgSelectTableSyntax = PgFromSyntax
@@ -173,6 +192,10 @@ instance IsSql92SelectTableSyntax PgSelectTableSyntax where
     (maybe mempty (emit " WHERE " <>) (coerce where_)) <>
     (maybe mempty (emit " GROUP BY " <>) (coerce grouping)) <>
     (maybe mempty (emit " HAVING " <>) (coerce having))
+
+  unionTables all = pgTableOp (if all then "UNION ALL" else "UNION")
+  intersectTables all = pgTableOp (if all then "INTERSECT ALL" else "INTERSECT")
+  exceptTable all = pgTableOp (if all then "EXCEPT ALL" else "EXCEPT")
 
 instance IsSql92FromSyntax PgFromSyntax where
   type Sql92FromExpressionSyntax PgFromSyntax = PgExpressionSyntax
@@ -197,6 +220,9 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
   type Sql92ExpressionSelectSyntax PgExpressionSyntax = PgSelectSyntax
   type Sql92ExpressionFieldNameSyntax PgExpressionSyntax = PgFieldNameSyntax
+  type Sql92ExpressionQuantifierSyntax PgExpressionSyntax = PgComparisonQuantifierSyntax
+  type Sql92ExpressionCastTargetSyntax PgExpressionSyntax = PgCastTargetSyntax
+  type Sql92ExpressionExtractFieldSyntax PgExpressionSyntax = PgExtractFieldSyntax
 
   addE = pgBinOp "+"
   subE = pgBinOp "-"
@@ -205,28 +231,46 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   modE = pgBinOp "%"
   orE = pgBinOp "OR"
   andE = pgBinOp "AND"
-  eqE = pgBinOp "="
-  neqE = pgBinOp "<>"
-  ltE = pgBinOp "<"
-  gtE = pgBinOp ">"
-  leE = pgBinOp "<="
-  geE = pgBinOp ">="
+  overlapsE = pgBinOp "OVERLAPS"
+  eqE = pgCompOp "="
+  neqE = pgCompOp "<>"
+  ltE = pgCompOp "<"
+  gtE = pgCompOp ">"
+  leE = pgCompOp "<="
+  geE = pgCompOp ">="
   negateE = pgUnOp "-"
   notE = pgUnOp "NOT"
   existsE select = PgExpressionSyntax (emit "EXISTS (" <> fromPgSelect select <> emit ")")
-  isJustE a =
-    PgExpressionSyntax $
-    emit "(" <> fromPgExpression a <> emit ") IS NOT NULL"
-  isNothingE a =
-    PgExpressionSyntax $
-    emit "(" <> fromPgExpression a <> emit ") IS NULL"
+  uniqueE select = PgExpressionSyntax (emit "UNIQUE (" <> fromPgSelect select <> emit ")")
+  distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
+  isNotNullE = pgPostFix "IS NOT NULL"
+  isNullE = pgPostFix "IS NULL"
+  isTrueE = pgPostFix "IS TRUE"
+  isFalseE = pgPostFix "IS FALSE"
+  isNotTrueE = pgPostFix "IS NOT TRUE"
+  isNotFalseE = pgPostFix "IS NOT FALSE"
+  isUnknownE = pgPostFix "IS UNKNOWN"
+  isNotUnknownE = pgPostFix "IS NOT UNKNOWN"
+  betweenE a b c = PgExpressionSyntax (emit "(" <> fromPgExpression a <> emit ") BETWEEN (" <>
+                                       fromPgExpression b <> emit ") AND (" <> fromPgExpression c <> emit ")")
   valueE = coerce
-  valuesE vs = PgExpressionSyntax $
-               emit "VALUES (" <>
-               pgSepBy (emit ", ") (coerce vs) <>
-               emit ")"
+  rowE vs = PgExpressionSyntax $
+            emit "(" <>
+            pgSepBy (emit ", ") (coerce vs) <>
+            emit ")"
   fieldE = coerce
+  subqueryE s = PgExpressionSyntax (emit "(" <> fromPgSelect s <> emit ")")
+  positionE needle haystack =
+      PgExpressionSyntax $
+      emit "POSITION((" <> fromPgExpression needle <> emit ") IN (" <> fromPgExpression haystack <> emit "))"
+  nullIfE a b = PgExpressionSyntax (emit "NULLIF(" <> fromPgExpression a <> emit ", " <> fromPgExpression b <> emit ")")
   absE x = PgExpressionSyntax (emit "ABS(" <> fromPgExpression x <> emit ")")
+  bitLengthE x = PgExpressionSyntax (emit "BIT_LENGTH(" <> fromPgExpression x <> emit ")")
+  charLengthE x = PgExpressionSyntax (emit "CHAR_LENGTH(" <> fromPgExpression x <> emit ")")
+  octetLengthE x = PgExpressionSyntax (emit "OCTET_LENGTH(" <> fromPgExpression x <> emit ")")
+  coalesceE es = PgExpressionSyntax (emit "COALESCE(" <> pgSepBy (emit ", ") (map fromPgExpression es) <> emit ")")
+  extractE field from = PgExpressionSyntax (emit "EXTRACT(" <> fromPgExtractField field <> emit " FROM (" <> fromPgExpression from <> emit "))")
+  castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") TO " <> fromPgCastTarget to <> emit ")")
   caseE cases else_ =
       PgExpressionSyntax $
       emit "CASE " <>
@@ -240,7 +284,9 @@ instance IsSql92FieldNameSyntax PgFieldNameSyntax where
   unqualifiedField = PgFieldNameSyntax . pgQuotedIdentifier
 
 instance IsSql92TableSourceSyntax PgTableSourceSyntax where
+  type Sql92TableSourceSelectSyntax PgTableSourceSyntax = PgSelectSyntax
   tableNamed = PgTableSourceSyntax . pgQuotedIdentifier
+  tableFromSubSelect s = PgTableSourceSyntax $ emit "(" <> fromPgSelect s <> emit ")"
 
 instance IsSql92ProjectionSyntax PgProjectionSyntax where
   type Sql92ProjectionExpressionSyntax PgProjectionSyntax = PgExpressionSyntax
@@ -427,12 +473,31 @@ pgQuotedIdentifier t =
     quoteIdentifierChar '"' = "\"\""
     quoteIdentifierChar c = T.singleton c
 
+pgTableOp :: ByteString -> PgSelectTableSyntax -> PgSelectTableSyntax
+          -> PgSelectTableSyntax
+pgTableOp op tbl1 tbl2 =
+    PgSelectTableSyntax $
+    emit "(" <> fromPgSelectTable tbl1 <> emit ") " <> emit op <>
+    emit " (" <> fromPgSelectTable tbl2 <> emit ")"
+
+pgCompOp :: ByteString -> Maybe PgComparisonQuantifierSyntax
+         -> PgExpressionSyntax -> PgExpressionSyntax -> PgExpressionSyntax
+pgCompOp op quantifier a b =
+  PgExpressionSyntax $
+  emit "(" <> fromPgExpression a <>
+  emit (") " <> op <> " (") <>
+  maybe mempty (\q -> emit " " <> fromPgComparisonQuantifier q <> emit " ") quantifier <>
+  fromPgExpression b <> emit ")"
+
 pgBinOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax -> PgExpressionSyntax
 pgBinOp op a b =
   PgExpressionSyntax $
   emit "(" <> fromPgExpression a <> emit (") " <> op <> " (") <> fromPgExpression b <> emit ")"
 
-pgUnOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax
+pgPostFix, pgUnOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax
+pgPostFix op a =
+  PgExpressionSyntax $
+  emit "(" <> fromPgExpression a <> emit ") " <> emit op
 pgUnOp op a =
   PgExpressionSyntax $
   emit (op <> "(") <> fromPgExpression a <> emit ")"
@@ -513,7 +578,7 @@ insert :: DatabaseTable Postgres db table
        -> PgInsertOnConflict PgInsertOnConflictSyntax table
        -> SqlInsert PgInsertSyntax
 insert tbl values onConflict =
-    let PgInsertReturning a = insertReturning tbl values onConflict (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> ()))
+    let PgInsertReturning a = insertReturning tbl values onConflict (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int))
     in SqlInsert (PgInsertSyntax a)
 
 newtype PgInsertReturning a = PgInsertReturning PgSyntax

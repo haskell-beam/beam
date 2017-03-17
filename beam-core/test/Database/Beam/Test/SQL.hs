@@ -10,7 +10,7 @@ import Database.Beam.Test.Schema hiding (tests)
 import Database.Beam
 import Database.Beam.Query
 import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL92 hiding (rightJoin)
+import Database.Beam.Backend.SQL92 hiding (leftJoin)
 import Database.Beam.Backend.SQL92.AST
 
 import Data.Time.Clock
@@ -25,7 +25,7 @@ tests = testGroup "SQL generation tests"
                   , simpleWhere
                   , simpleJoin
                   , selfJoin
-                  , rightJoin
+                  , leftJoin
 
                   , maybeFieldTypes
 
@@ -147,9 +147,9 @@ selfJoin =
 
 -- * Ensure that right joins are properly generated
 
-rightJoin :: TestTree
-rightJoin =
-  testCase "rightJoin_ generates the right join" $
+leftJoin :: TestTree
+leftJoin =
+  testCase "leftJoin_ generates the right join" $
   do SqlSelect Select { selectTable = SelectTable { selectWhere = Nothing, selectFrom } } <-
        pure $ select $
        do r <- all_ (_roles employeeDbSettings)
@@ -264,7 +264,8 @@ selectCombinators =
     [ basicUnion
     , fieldNamesCapturedCorrectly
     , basicIntersect
-    , basicExcept ]
+    , basicExcept
+    , equalProjectionsDontHaveSubSelects ]
   where
     basicUnion =
       testCase "Basic UNION support" $
@@ -345,6 +346,19 @@ selectCombinators =
          SqlSelect Select { selectTable = ExceptTable False _ _ } <- pure $ select $ except_ hireDates leaveDates
          pure ()
 
+    equalProjectionsDontHaveSubSelects =
+      testCase "Equal projections dont have sub-selects" $
+      do let hireDates = do e <- all_ (_employees employeeDbSettings)
+                            pure (_employeeFirstName e, _employeeLastName e, _employeeAge e)
+             leaveDates = do e <- all_ (_employees employeeDbSettings)
+                             guard_ (isJust_ (_employeeLeaveDate e))
+                             pure (_employeeFirstName e, _employeeLastName e, _employeeAge e)
+         SqlSelect Select { selectTable = ExceptTable False _ _ } <-
+             pure $ select $ do
+               (firstName, lastName, age) <- except_ hireDates leaveDates
+               pure (firstName, (lastName, age))
+         pure ()
+
 -- * Ensure simple selects can be used with limit_ and offset_
 
 limitOffset :: TestTree
@@ -373,7 +387,7 @@ limitOffset =
       do SqlSelect Select { selectLimit, selectOffset } <-
            pure $ select $ offset_ 2 $ limit_ 100 (all_ (_roles employeeDbSettings))
 
-         selectLimit @?= Just 100
+         selectLimit @?= Just 98
          selectOffset @?= Just 2
 
 -- * Ensure exists_ generates the correct sub-select

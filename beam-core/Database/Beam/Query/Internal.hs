@@ -21,7 +21,9 @@ import           Control.Monad.Writer
 
 type ProjectibleInSelectSyntax syntax a =
   ( IsSql92SelectSyntax syntax
+  , Eq (Sql92SelectExpressionSyntax syntax)
   , Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax) ~ Sql92SelectExpressionSyntax syntax
+  , Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
   , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
 -- | Type class for any query like entity, currently `Q` and `TopLevelQ`
 --class IsQuery q where
@@ -53,9 +55,9 @@ data QF select db s next where
   QLimit :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
   QOffset :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
 
-  QUnion :: Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
-  QIntersect :: Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
-  QExcept :: Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QUnion :: Projectible (Sql92SelectExpressionSyntax select) r =>  Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QIntersect ::  Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QExcept ::  Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
   QOrderBy :: [ Sql92SelectOrderingSyntax select ] -> QM select db s a -> (a -> next) -> QF select db s next
   QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a => Sql92SelectGroupingSyntax select -> QM select db s a -> (a -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
@@ -93,17 +95,11 @@ data QInternal
 
 data QNested s
 
-data QueryBuilder select
-  = QueryBuilder
-  { qbNextTblRef :: Int
-  , qbFrom  :: Maybe (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
-  , qbWhere :: Maybe (Sql92SelectExpressionSyntax select) }
-
-data GroupingBuilder select
-  = GroupingBuilder
-  { gbGrouping :: Maybe (Sql92SelectGroupingSyntax select)
-  , gbHaving :: Maybe (Sql92SelectExpressionSyntax select)
-  , gbTableSource :: QueryBuilder select }
+--data GroupingBuilder select
+--  = GroupingBuilder
+--  { gbGrouping :: Maybe (Sql92SelectGroupingSyntax select)
+--  , gbHaving :: Maybe (Sql92SelectExpressionSyntax select)
+--  , gbTableSource :: QueryBuilder select }
 
 -- * QExpr type
 

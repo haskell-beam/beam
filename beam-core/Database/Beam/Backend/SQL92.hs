@@ -53,6 +53,9 @@ newtype Sql92SyntaxBuilder
 newtype Sql92SyntaxBuilder1 (x :: k)
   = Sql92SyntaxBuilder1 { buildSql92_1 :: Builder }
 
+instance Eq Sql92SyntaxBuilder where
+  a == b = toLazyByteString (buildSql92 a) == toLazyByteString (buildSql92 b)
+
 instance Monoid Sql92SyntaxBuilder where
   mempty = Sql92SyntaxBuilder mempty
   mappend (Sql92SyntaxBuilder a) (Sql92SyntaxBuilder b) =
@@ -64,6 +67,7 @@ class HasSqlValueSyntax expr ty where
 type Sql92SelectExpressionSyntax select = Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
+type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
 
 class IsSql92Syntax cmd where
   type Sql92SelectSyntax cmd :: *
@@ -334,7 +338,7 @@ instance IsSql92SelectTableSyntax Sql92SyntaxBuilder where
   selectTableStmt proj from where_ grouping having =
     Sql92SyntaxBuilder $
     byteString "SELECT " <> buildSql92 proj <>
-    (maybe mempty ((byteString " " <>) . buildSql92) from) <>
+    (maybe mempty ((byteString " FROM " <>) . buildSql92) from) <>
     (maybe mempty (\w -> byteString " WHERE " <> buildSql92 w) where_) <>
     (maybe mempty (\g -> byteString " GROUP BY " <> buildSql92 g) grouping) <>
     (maybe mempty (\e -> byteString " HAVING " <> buildSql92 e) having)
@@ -416,7 +420,7 @@ instance IsSql92ExpressionSyntax Sql92SyntaxBuilder where
                 byteString "(" <> buildSql92 a <> byteString "), (" <>
                 buildSql92 b <> byteString ")"
   positionE needle haystack =
-    Sql92SyntaxBuilder $ byteString "(" <> buildSql92 needle <> byteString ") IN (" <> buildSql92 haystack <> byteString ")"
+    Sql92SyntaxBuilder $ byteString "POSITION(" <> buildSql92 needle <> byteString ") IN (" <> buildSql92 haystack <> byteString ")"
   extractE what from =
     Sql92SyntaxBuilder $ buildSql92 what <> byteString " FROM (" <> buildSql92 from <> byteString ")"
   absE = sqlFuncOp "ABS"
