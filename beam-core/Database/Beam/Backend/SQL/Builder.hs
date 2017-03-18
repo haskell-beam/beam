@@ -176,6 +176,20 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   subqueryE a = SqlSyntaxBuilder $ byteString "(" <> buildSql a <> byteString ")"
   valueE = id
 
+instance IsSql92AggregationExpressionSyntax SqlSyntaxBuilder where
+  type Sql92AggregationSetQuantifierSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  countAllE = SqlSyntaxBuilder (byteString "COUNT(*)")
+  countE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+  avgE q x = SqlSyntaxBuilder (byteString "AVG(" <>  maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+  minE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+  maxE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+  sumE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+
+instance IsSql92AggregationSetQuantifierSyntax SqlSyntaxBuilder where
+  setQuantifierAll = SqlSyntaxBuilder (byteString "ALL")
+  setQuantifierDistinct = SqlSyntaxBuilder (byteString "DISTINCT")
+
 instance IsSql92ProjectionSyntax SqlSyntaxBuilder where
   type Sql92ProjectionExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
@@ -214,7 +228,7 @@ instance HasSqlValueSyntax SqlSyntaxBuilder Int where
 instance HasSqlValueSyntax SqlSyntaxBuilder Text where
   sqlValueSyntax x = SqlSyntaxBuilder $
     byteString (fromString (show x))
-instance HasSqlValueSyntax SqlSyntaxBuilder SQLNull where
+instance HasSqlValueSyntax SqlSyntaxBuilder SqlNull where
   sqlValueSyntax x = SqlSyntaxBuilder (byteString "NULL")
 
 

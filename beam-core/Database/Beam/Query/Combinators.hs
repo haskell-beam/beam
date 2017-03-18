@@ -18,12 +18,12 @@ module Database.Beam.Query.Combinators
     , except_, exceptAll_
 
     , coalesce_, if_, then_, else_
-    , between_, like_, position_
-    , charLength_, octetLength_
+    , between_, like_, similarTo_, position_
+    , charLength_, octetLength_, bitLength_
     , isTrue_, isNotTrue_
     , isFalse_, isNotFalse_
     , isUnknown_, isNotUnknown_
---  , overlaps_, nullIf_, cast_, bitLength_
+--  , overlaps_, nullIf_, cast_
     , (<.), (>.), (<=.), (>=.), (==.), (/=.)
     , (&&.), (||.), not_, div_, mod_
     , HaskellLiteralForQExpr
@@ -241,6 +241,10 @@ charLength_, octetLength_ ::
   QExpr syntax s text -> QExpr syntax s Int
 charLength_ (QExpr s) = QExpr (charLengthE s)
 octetLength_ (QExpr s) = QExpr (octetLengthE s)
+bitLength_ ::
+  IsSql92ExpressionSyntax syntax =>
+  QExpr syntax s SqlBitString -> QExpr syntax s Int
+bitLength_ (QExpr x) = QExpr (bitLengthE x)
 
 isTrue_, isNotTrue_,
   isFalse_, isNotFalse_,
@@ -262,6 +266,14 @@ like_ (QExpr scrutinee) (QExpr search) =
   QExpr (likeE scrutinee search)
 position_ (QExpr needle) (QExpr haystack) =
   QExpr (likeE needle haystack)
+
+similarTo_ ::
+  ( IsSqlExpressionSyntaxStringType syntax text
+  , IsSql99ExpressionSyntax syntax ) =>
+  QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s text
+similarTo_ (QExpr scrutinee) (QExpr search) =
+  QExpr (similarToE scrutinee search)
+
 
 (<.), (>.), (<=.), (>=.) ::
   IsSql92ExpressionSyntax syntax => QExpr syntax s a -> QExpr syntax s a -> QExpr syntax s Bool
@@ -500,22 +512,22 @@ class SqlJustable a b | b -> a where
     nothing_ :: b
 
 instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SQLNull) =>
+         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull) =>
     SqlJustable (QExpr syntax s a) (QExpr syntax s (Maybe a)) where
 
     just_ (QExpr e) = QExpr e
-    nothing_ = QExpr (valueE (sqlValueSyntax SQLNull))
+    nothing_ = QExpr (valueE (sqlValueSyntax SqlNull))
 
 instance {-# OVERLAPPING #-} ( Table t
                              , IsSql92ExpressionSyntax syntax
-                             , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SQLNull ) =>
+                             , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull ) =>
     SqlJustable (PrimaryKey t (QExpr syntax s)) (PrimaryKey t (Nullable (QExpr syntax s))) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
     nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' nothing_) (primaryKey (tblSkeleton :: TableSkeleton t))
 
 instance {-# OVERLAPPING #-} ( Table t
                              , IsSql92ExpressionSyntax syntax
-                             , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SQLNull ) =>
+                             , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull ) =>
     SqlJustable (t (QExpr syntax s)) (t (Nullable (QExpr syntax s))) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
     nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' nothing_) (tblSkeleton :: TableSkeleton t)

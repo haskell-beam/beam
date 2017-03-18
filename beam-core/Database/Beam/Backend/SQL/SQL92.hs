@@ -176,6 +176,16 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
   existsE, uniqueE, subqueryE
     :: Sql92ExpressionSelectSyntax expr -> expr
 
+class IsSql92AggregationExpressionSyntax expr where
+  type Sql92AggregationSetQuantifierSyntax expr :: *
+
+  countAllE :: expr
+  countE, avgE, maxE, minE, sumE
+    :: Maybe (Sql92AggregationSetQuantifierSyntax expr) -> expr -> expr
+
+class IsSql92AggregationSetQuantifierSyntax q where
+  setQuantifierDistinct, setQuantifierAll :: q
+
 class IsSql92ExpressionSyntax (Sql92ProjectionExpressionSyntax proj) => IsSql92ProjectionSyntax proj where
   type Sql92ProjectionExpressionSyntax proj :: *
 

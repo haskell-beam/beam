@@ -167,6 +167,14 @@ data DataType
   | DataTypeIntervalFromTo ExtractField ExtractField
   deriving (Show, Eq)
 
+data SetQuantifier
+  = SetQuantifierAll | SetQuantifierDistinct
+  deriving (Show, Eq)
+
+instance IsSql92AggregationSetQuantifierSyntax SetQuantifier where
+  setQuantifierDistinct = SetQuantifierDistinct
+  setQuantifierAll = SetQuantifierAll
+
 data Expression
   = ExpressionValue Value
   | ExpressionRow [ Expression ]
@@ -202,6 +210,9 @@ data Expression
   | ExpressionFunctionCall Expression [ Expression ]
   | ExpressionInstanceField Expression Text
   | ExpressionRefField Expression Text
+
+  | ExpressionCountAll
+  | ExpressionAgg Text (Maybe SetQuantifier) [ Expression ]
 
   | ExpressionSubquery Select
   | ExpressionUnique Select
@@ -276,6 +287,16 @@ instance IsSql99ExpressionSyntax Expression where
   functionCallE = ExpressionFunctionCall
   instanceFieldE = ExpressionInstanceField
   refFieldE = ExpressionRefField
+
+instance IsSql92AggregationExpressionSyntax Expression where
+  type Sql92AggregationSetQuantifierSyntax Expression = SetQuantifier
+
+  countAllE = ExpressionCountAll
+  countE q = ExpressionAgg "COUNT" q . pure
+  sumE q = ExpressionAgg "SUM" q . pure
+  minE q = ExpressionAgg "MIN" q . pure
+  maxE q = ExpressionAgg "MAX" q . pure
+  avgE q = ExpressionAgg "AVG" q . pure
 
 data Projection
   = ProjExprs [ (Expression, Maybe Text ) ]
