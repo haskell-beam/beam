@@ -44,6 +44,13 @@ instance IsSql92SelectSyntax SqlSyntaxBuilder where
       maybe mempty (\l -> byteString " LIMIT " <> byteString (fromString (show l))) limit <>
       maybe mempty (\o -> byteString " OFFSET " <> byteString (fromString (show o))) offset
 
+instance IsSql92GroupingSyntax SqlSyntaxBuilder where
+  type Sql92GroupingExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  groupByExpressions es =
+    SqlSyntaxBuilder $
+    buildSepBy (byteString ", ") (map buildSql es)
+
 instance IsSql92SelectTableSyntax SqlSyntaxBuilder where
   type Sql92SelectTableSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

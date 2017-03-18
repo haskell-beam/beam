@@ -12,6 +12,7 @@ import Database.Beam.Query
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL hiding (leftJoin)
 import Database.Beam.Backend.SQL.AST
+import Database.Beam.Backend.SQL.Builder
 
 import Data.Time.Clock
 import Data.Text (Text)
@@ -26,7 +27,7 @@ tests = testGroup "SQL generation tests"
                   , simpleJoin
                   , selfJoin
                   , leftJoin
-
+                  , aggregates
                   , maybeFieldTypes
 
                   , tableEquality
@@ -173,6 +174,48 @@ leftJoin =
      cond @?= andE (andE firstNameCond lastNameCond) createdCond
 
 -- * Ensure that aggregations cause the correct GROUP BY clause to be generated
+
+aggregates :: TestTree
+aggregates =
+  testGroup "Aggregate support"
+    [ basicAggregate
+    , basicHaving ]
+  where
+    basicAggregate =
+      testCase "Basic aggregate support" $
+      do SqlSelect Select { selectTable = SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+           do e <- all_ (_employees employeeDbSettings)
+              pure e
+
+         Just (FromTable (TableNamed "employees") (Just t0)) <- pure selectFrom
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0 "age"), Just "res0" )
+                                        , ( ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ], Just "res1") ]
+         selectWhere @?= Nothing
+         selectGrouping @?= Just (Grouping [ ExpressionFieldName (QualifiedField t0 "age") ])
+         selectHaving @?= Nothing
+
+    basicHaving =
+      testCase "Basic HAVING support" $
+      do SqlSelect Select { selectTable = SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           do (age, maxNameLength) <- aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+                                      all_ (_employees employeeDbSettings)
+              guard_ (maxNameLength >. 42)
+              pure (age, maxNameLength)
+
+         Just (FromTable (TableNamed "employees") (Just t0)) <- pure selectFrom
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0 "age"), Just "res0" )
+                                        , ( ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ], Just "res1") ]
+         selectWhere @?= Nothing
+         selectGrouping @?= Just (Grouping [ ExpressionFieldName (QualifiedField t0 "age") ])
+         selectHaving @?= Just (ExpressionCompOp ">" Nothing (ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ])
+                                                             (ExpressionValue (Value (42 :: Int))))
 
 -- * Ensure that isJustE and isNothingE work correctly for simple types
 

@@ -71,7 +71,9 @@ class ( IsSql92SelectTableSyntax (Sql92SelectSelectTableSyntax select)
 class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
       , IsSql92ProjectionSyntax (Sql92SelectTableProjectionSyntax select)
       , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
+      , IsSql92GroupingSyntax (Sql92SelectTableGroupingSyntax select)
 
+      , Sql92GroupingExpressionSyntax (Sql92SelectTableGroupingSyntax select) ~ Sql92SelectTableExpressionSyntax select
       , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select
       , Sql92SelectSelectTableSyntax (Sql92SelectTableSelectSyntax select) ~ select ) =>
     IsSql92SelectTableSyntax select where
@@ -201,6 +203,11 @@ class IsSql92TableSourceSyntax tblSource where
   type Sql92TableSourceSelectSyntax tblSource :: *
   tableNamed :: Text -> tblSource
   tableFromSubSelect :: Sql92TableSourceSelectSyntax tblSource -> tblSource
+
+class IsSql92GroupingSyntax grouping where
+  type Sql92GroupingExpressionSyntax grouping :: *
+
+  groupByExpressions :: [ Sql92GroupingExpressionSyntax grouping ] -> grouping
 
 class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
       , IsSql92ExpressionSyntax (Sql92FromExpressionSyntax from) ) =>

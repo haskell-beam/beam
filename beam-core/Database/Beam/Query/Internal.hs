@@ -77,14 +77,6 @@ newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a
 
 data QInternal
 
-type family QExprRewriteContext context x
-type instance QExprRewriteContext context (table (QGenExpr old syntax s)) = table (QGenExpr context syntax s)
-type instance QExprRewriteContext context (table (Nullable (QGenExpr old syntax s))) = table (Nullable (QGenExpr context syntax s))
-type instance QExprRewriteContext context (QGenExpr old syntax s a) = QGenExpr context syntax s a
-type instance QExprRewriteContext context (QGenExpr old1 syntax1 s1 a, QGenExpr old2 syntax2 s2 b) =
-  (QGenExpr context syntax1 s1 a, QGenExpr context syntax2 s2 b)
-
-
 -- instance IsQuery Q where
 --   toSelectBuilder = SelectBuilderQ
 -- instance IsQuery SelectBuilder where
@@ -178,6 +170,58 @@ data Aggregation syntax s a
 class Typeable context => AggregateContext context
 instance AggregateContext QAggregateContext
 instance AggregateContext QGroupingContext
+
+class ContextRewritable a where
+  type WithRewrittenContext a ctxt :: *
+
+  rewriteContext :: Proxy ctxt -> a -> WithRewrittenContext a ctxt
+instance Beamable tbl => ContextRewritable (tbl (QGenExpr old syntax s)) where
+  type WithRewrittenContext (tbl (QGenExpr old syntax s)) ctxt = tbl (QGenExpr ctxt syntax s)
+
+  rewriteContext _ = changeBeamRep (\(Columnar' (QExpr a)) -> Columnar' (QExpr a))
+instance Beamable tbl => ContextRewritable (tbl (Nullable (QGenExpr old syntax s))) where
+  type WithRewrittenContext (tbl (Nullable (QGenExpr old syntax s))) ctxt = tbl (Nullable (QGenExpr ctxt syntax s))
+
+  rewriteContext _ = changeBeamRep (\(Columnar' (QExpr a)) -> Columnar' (QExpr a))
+instance ContextRewritable (QGenExpr old syntax s a) where
+  type WithRewrittenContext (QGenExpr old syntax s a) ctxt = QGenExpr ctxt syntax s a
+  rewriteContext _ (QExpr a) = QExpr a
+instance (ContextRewritable a, ContextRewritable b) => ContextRewritable (a, b) where
+  type WithRewrittenContext (a, b) ctxt = (WithRewrittenContext a ctxt, WithRewrittenContext b ctxt)
+  rewriteContext p (a, b) = (rewriteContext p a, rewriteContext p b)
+instance (ContextRewritable a, ContextRewritable b, ContextRewritable c) => ContextRewritable (a, b, c) where
+  type WithRewrittenContext (a, b, c) ctxt = (WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt)
+  rewriteContext p (a, b, c) = (rewriteContext p a, rewriteContext p b, rewriteContext p c)
+instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
+         , ContextRewritable d ) => ContextRewritable (a, b, c, d) where
+  type WithRewrittenContext (a, b, c, d) ctxt =
+      ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
+      , WithRewrittenContext d ctxt )
+  rewriteContext p (a, b, c, d) = ( rewriteContext p a, rewriteContext p b, rewriteContext p c
+                                  , rewriteContext p d )
+instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
+         , ContextRewritable d, ContextRewritable e ) =>
+    ContextRewritable (a, b, c, d, e) where
+  type WithRewrittenContext (a, b, c, d, e) ctxt =
+      ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
+      , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt )
+  rewriteContext p (a, b, c, d, e) = ( rewriteContext p a, rewriteContext p b, rewriteContext p c
+                                     , rewriteContext p d, rewriteContext p e )
+instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
+         , ContextRewritable d, ContextRewritable e, ContextRewritable f ) =>
+    ContextRewritable (a, b, c, d, e, f) where
+  type WithRewrittenContext (a, b, c, d, e, f) ctxt =
+      ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
+      , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt, WithRewrittenContext f ctxt )
+  rewriteContext p (a, b, c, d, e, f) = ( rewriteContext p a, rewriteContext p b, rewriteContext p c
+                                        , rewriteContext p d, rewriteContext p e, rewriteContext p f )
+
+-- type family QExprRewriteContext context x
+-- type instance QExprRewriteContext context (table (QGenExpr old syntax s)) = table (QGenExpr context syntax s)
+-- type instance QExprRewriteContext context (table (Nullable (QGenExpr old syntax s))) = table (Nullable (QGenExpr context syntax s))
+-- type instance QExprRewriteContext context (QGenExpr old syntax s a) = QGenExpr context syntax s a
+-- type instance QExprRewriteContext context (QGenExpr old1 syntax1 s1 a, QGenExpr old2 syntax2 s2 b) =
+--   (QGenExpr context syntax1 s1 a, QGenExpr context syntax2 s2 b)
 
 class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) syntax a | a -> syntax where
   project' :: Monad m => Proxy contextPredicate -> (forall context. contextPredicate context => Proxy context -> syntax -> m syntax) -> a -> m a

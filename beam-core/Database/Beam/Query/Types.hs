@@ -53,6 +53,10 @@ data SelectBuilder syntax (db :: (((* -> *) -> *) -> *) -> *) a where
   SelectBuilderQ :: ( IsSql92SelectSyntax syntax
                     , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
                     a -> QueryBuilder syntax -> SelectBuilder syntax db a
+  SelectBuilderGrouping ::
+      ( IsSql92SelectSyntax syntax
+      , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
+      a -> QueryBuilder syntax -> Sql92SelectGroupingSyntax syntax -> Maybe (Sql92SelectExpressionSyntax syntax) -> SelectBuilder syntax db a
   SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db a
   SelectBuilderTopLevel ::
     { sbLimit, sbOffset :: Maybe Integer
@@ -75,6 +79,8 @@ buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyn
     selectStmt table ordering limit offset
 buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_))) =
     selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ Nothing Nothing) ordering limit offset
+buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ from where_) grouping having)) =
+    selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ (Just grouping) having) ordering limit offset
 buildSelect x = buildSelect (SelectBuilderTopLevel Nothing Nothing [] x)
 
 selectBuilderToTableSource :: ( Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
@@ -84,6 +90,8 @@ selectBuilderToTableSource :: ( Sql92TableSourceSelectSyntax (Sql92FromTableSour
 selectBuilderToTableSource (SelectBuilderSelectSyntax _ x) = x
 selectBuilderToTableSource (SelectBuilderQ x (QueryBuilder _ from where_)) =
   selectTableStmt (projExprs (defaultProjection x)) from where_ Nothing Nothing
+selectBuilderToTableSource (SelectBuilderGrouping x (QueryBuilder _ from where_) grouping having) =
+  selectTableStmt (projExprs (defaultProjection x)) from where_ (Just grouping) having
 selectBuilderToTableSource sb =
     let (x, QueryBuilder _ from where_) = selectBuilderToQueryBuilder sb
     in selectTableStmt (projExprs (defaultProjection x)) from where_ Nothing Nothing
@@ -102,12 +110,14 @@ emptyQb = QueryBuilder 0 Nothing Nothing
 
 sbProj :: SelectBuilder syntax db a -> a
 sbProj (SelectBuilderQ proj _) = proj
+sbProj (SelectBuilderGrouping proj _ _ _) = proj
 sbProj (SelectBuilderSelectSyntax proj _) = proj
 sbProj (SelectBuilderTopLevel _ _ _ sb) = sbProj sb
 
 setSelectBuilderProjection :: Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax)) b =>
                               SelectBuilder syntax db a -> b -> SelectBuilder syntax db b
 setSelectBuilderProjection (SelectBuilderQ _ q) proj = SelectBuilderQ proj q
+setSelectBuilderProjection (SelectBuilderGrouping _ q grouping having) proj = SelectBuilderGrouping proj q grouping having
 setSelectBuilderProjection (SelectBuilderSelectSyntax _ q) proj = SelectBuilderSelectSyntax proj q
 setSelectBuilderProjection (SelectBuilderTopLevel limit offset ord sb) proj =
     SelectBuilderTopLevel limit offset ord (setSelectBuilderProjection sb proj)
@@ -184,6 +194,16 @@ buildSql92Query (Q q) =
     buildQuery (Free (QGuard _ next)) = buildQuery next
     buildQuery f@(Free (QAll {})) = buildJoinedQuery f emptyQb
     buildQuery f@(Free (QLeftJoin {})) = buildJoinedQuery f emptyQb
+    buildQuery f@(Free (QAggregate mkAgg q next)) =
+        let sb = buildQuery (fromF q)
+            aggProj = sbProj sb
+        in case tryBuildHaving (next aggProj) Nothing of
+            Just (proj, having) ->
+                case sb of
+                  SelectBuilderQ _ q -> SelectBuilderGrouping proj q (mkAgg aggProj) having
+                  _ -> let (proj', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb proj)
+                       in SelectBuilderQ proj' qb
+            Nothing -> error "Can't join aggregates yet"
 
     buildQuery (Free (QLimit limit q next)) =
         let sb = limitSelectBuilder limit (buildQuery (fromF q))
@@ -212,6 +232,13 @@ buildSql92Query (Q q) =
       buildTableCombination (intersectTables all) left right next
     buildQuery (Free (QExcept all left right next)) =
       buildTableCombination (exceptTable all) left right next
+
+    tryBuildHaving :: Free (QF select db s) x
+                   -> Maybe (Sql92SelectExpressionSyntax select)
+                   -> Maybe (x, Maybe (Sql92SelectExpressionSyntax select))
+    tryBuildHaving (Pure x) having = Just (x, having)
+    tryBuildHaving (Free (QGuard cond next)) having = tryBuildHaving next (andE' having (Just cond))
+    tryBuildHaving _ _ = Nothing
 
     buildTableCombination ::
         ( Projectible (Sql92ProjectionExpressionSyntax projSyntax) r

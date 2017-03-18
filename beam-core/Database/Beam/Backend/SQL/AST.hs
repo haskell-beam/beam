@@ -318,7 +318,12 @@ instance IsSql92OrderingSyntax Ordering where
   ascOrdering = OrderingAsc
   descOrdering = OrderingDesc
 
-data Grouping = Grouping deriving (Show, Eq)
+data Grouping = Grouping [ Expression ] deriving (Show, Eq)
+
+instance IsSql92GroupingSyntax Grouping where
+  type Sql92GroupingExpressionSyntax Grouping = Expression
+
+  groupByExpressions = Grouping
 
 data TableSource
   = TableNamed Text

@@ -30,6 +30,7 @@ module Database.Beam.Query.Combinators
     , SqlValable(..), As(..)
 
     -- * SQL GROUP BY and aggregation
+    , aggregate_
     , group_
     , sum_, avg_, min_, max_, count_, countAll_
 --    , aggregate, SqlGroupable(..)
@@ -57,6 +58,7 @@ import Data.Monoid
 import Data.String
 import Data.Maybe
 import Data.Proxy
+import Data.Typeable
 
 import GHC.Generics
 
@@ -426,12 +428,17 @@ instance ( Beamable table
 --     type GroupResult (t (QExpr be s)) = t (Aggregation be s)
 --     group_ = changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
 
-aggregate_ :: ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
+aggregate_ :: forall select a r db s.
+              ( ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
+              , Projectible (Sql92SelectExpressionSyntax select) r
+
+              , ContextRewritable a
+              , IsSql92SelectSyntax select )
            => (r -> a)
            -> Q select db s r
-           -> Q select db s (QExprRewriteContext QValueContext a)
+           -> Q select db s (WithRewrittenContext a QValueContext)
 aggregate_ mkAggregation (Q aggregating) =
-  Q (liftF (QAggregate mkAggregation' aggregating id))
+  Q (liftF (QAggregate mkAggregation' aggregating (rewriteContext (Proxy @QValueContext) . mkAggregation)))
   where
     mkAggregation' x =
       let agg = mkAggregation x
@@ -448,7 +455,7 @@ aggregate_ mkAggregation (Q aggregating) =
                   Nothing -> error "aggregate_: impossible"
 
           groupingExprs = execWriter (project' (Proxy @AggregateContext) doProject agg)
-      in groupBySyntax groupingExprs
+      in groupByExpressions groupingExprs
 
 group_ :: QExpr expr s a -> QGroupExpr expr s a
 group_ (QExpr a) = QExpr a
