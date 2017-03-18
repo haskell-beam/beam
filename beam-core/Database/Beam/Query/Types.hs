@@ -9,26 +9,27 @@ module Database.Beam.Query.Types
 
     , buildSql92Query ) where
 
-import Database.Beam.Query.Internal
-import Database.Beam.Backend.SQL
+import           Database.Beam.Query.Internal
+import           Database.Beam.Backend.SQL
 
-import Database.Beam.Schema.Tables
+import           Database.Beam.Schema.Tables
 
-import Control.Monad.Identity
-import Control.Monad.Free.Church
-import Control.Monad.Free
-import Control.Monad.Writer
+import           Control.Monad.Identity
+import           Control.Monad.Free.Church
+import           Control.Monad.Free
+import           Control.Monad.Writer
 
-import Data.Maybe
-import Data.String
+import           Data.Maybe
+import           Data.Proxy
+import           Data.String
 import qualified Data.Text as T
 
 -- * Beam queries
 
 type family QExprToIdentity x
-type instance QExprToIdentity (table (QExpr syntax s)) = table Identity
+type instance QExprToIdentity (table (QGenExpr context syntax s)) = table Identity
 type instance QExprToIdentity (table (Nullable c)) = Maybe (QExprToIdentity (table c))
-type instance QExprToIdentity (QExpr syntax s a) = a
+type instance QExprToIdentity (QGenExpr context syntax s a) = a
 type instance QExprToIdentity ()     = ()
 type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
 type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
@@ -161,7 +162,7 @@ buildLeftJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
 
 projOrder :: Projectible expr x =>
              x -> [ expr ]
-projOrder = execWriter . project' (\x -> tell [x] >> pure x)
+projOrder = execWriter . project' (Proxy @AnyType) (\_ x -> tell [x] >> pure x)
 
 buildSql92Query ::
     forall select projSyntax db s a.

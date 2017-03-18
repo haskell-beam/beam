@@ -30,6 +30,8 @@ module Database.Beam.Query.Combinators
     , SqlValable(..), As(..)
 
     -- * SQL GROUP BY and aggregation
+    , group_
+    , sum_, avg_, min_, max_, count_, countAll_
 --    , aggregate, SqlGroupable(..)
 --    , sum_, count_
 
@@ -47,6 +49,7 @@ import Database.Beam.Schema.Tables
 
 import Control.Monad.State
 import Control.Monad.RWS
+import Control.Monad.Writer
 import Control.Monad.Identity
 import Control.Monad.Free
 
@@ -422,6 +425,48 @@ instance ( Beamable table
 -- instance Table t => SqlGroupable (t (QExpr be s)) where
 --     type GroupResult (t (QExpr be s)) = t (Aggregation be s)
 --     group_ = changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
+
+aggregate_ :: ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
+           => (r -> a)
+           -> Q select db s r
+           -> Q select db s (QExprRewriteContext QValueContext a)
+aggregate_ mkAggregation (Q aggregating) =
+  Q (liftF (QAggregate mkAggregation' aggregating id))
+  where
+    mkAggregation' x =
+      let agg = mkAggregation x
+          doProject :: AggregateContext c => Proxy c -> Sql92SelectExpressionSyntax select
+                    -> Writer [Sql92SelectExpressionSyntax select] (Sql92SelectExpressionSyntax select)
+          doProject p expr =
+            case cast p of
+              Just (Proxy :: Proxy QGroupingContext) ->
+                tell [ expr ] >> pure expr
+              Nothing ->
+                case cast p of
+                  Just (Proxy :: Proxy QAggregateContext) ->
+                    pure expr
+                  Nothing -> error "aggregate_: impossible"
+
+          groupingExprs = execWriter (project' (Proxy @AggregateContext) doProject agg)
+      in groupBySyntax groupingExprs
+
+group_ :: QExpr expr s a -> QGroupExpr expr s a
+group_ (QExpr a) = QExpr a
+
+min_, max_, avg_, sum_
+  :: ( IsSql92AggregationExpressionSyntax expr
+     , Num a ) => QExpr expr s a -> QAgg expr s a
+sum_ (QExpr over) = QExpr (sumE Nothing over)
+avg_ (QExpr over) = QExpr (avgE Nothing over)
+min_ (QExpr over) = QExpr (minE Nothing over)
+max_ (QExpr over) = QExpr (maxE Nothing over)
+
+countAll_ :: IsSql92AggregationExpressionSyntax expr => QAgg expr s a
+countAll_ = QExpr countAllE
+
+count_ :: ( IsSql92AggregationExpressionSyntax expr
+          , Integral b ) => QExpr expr s a -> QAgg expr s b
+count_ (QExpr over) = QExpr (countE Nothing over)
 
 -- sum_ :: Num a => QExpr be s a -> Aggregation be s a
 -- sum_ (QExpr over) = ProjectAgg (SQLFuncE "SUM" [over])

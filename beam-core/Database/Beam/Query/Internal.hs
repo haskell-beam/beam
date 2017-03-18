@@ -18,6 +18,8 @@ import           Control.Monad.Identity
 import           Control.Monad.State
 import           Control.Monad.Writer
 
+import           GHC.Types
+
 type ProjectibleInSelectSyntax syntax a =
   ( IsSql92SelectSyntax syntax
   , Eq (Sql92SelectExpressionSyntax syntax)
@@ -60,7 +62,8 @@ data QF select db s next where
   QOrderBy :: Projectible (Sql92SelectExpressionSyntax select) r =>
               (r -> [ Sql92SelectOrderingSyntax select ])
            -> QM select db s r -> (r -> next) -> QF select db s next
-  QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a => Sql92SelectGroupingSyntax select -> QM select db s a -> (a -> next) -> QF select db s next
+  QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a =>
+                (a -> Sql92SelectGroupingSyntax select) -> QM select db s a -> (a -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
 
 type QM select db s = F (QF select db s)
@@ -73,6 +76,14 @@ newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a
     deriving (Monad, Applicative, Functor)
 
 data QInternal
+
+type family QExprRewriteContext context x
+type instance QExprRewriteContext context (table (QGenExpr old syntax s)) = table (QGenExpr context syntax s)
+type instance QExprRewriteContext context (table (Nullable (QGenExpr old syntax s))) = table (Nullable (QGenExpr context syntax s))
+type instance QExprRewriteContext context (QGenExpr old syntax s a) = QGenExpr context syntax s a
+type instance QExprRewriteContext context (QGenExpr old1 syntax1 s1 a, QGenExpr old2 syntax2 s2 b) =
+  (QGenExpr context syntax1 s1 a, QGenExpr context syntax2 s2 b)
+
 
 -- instance IsQuery Q where
 --   toSelectBuilder = SelectBuilderQ
@@ -113,19 +124,25 @@ data QField = QField
 -- | The type of lifted beam expressions that will yield the haskell type `t` when run with
 -- `queryList` or `query`. In the future, this will include a thread argument meant to prevent
 -- cross-usage of expressions, but this is unimplemented for technical reasons.
-newtype QExpr syntax s t = QExpr syntax
-deriving instance Show syntax => Show (QExpr syntax s t)
-deriving instance Eq syntax => Eq (QExpr syntax s t)
+data QAggregateContext
+data QGroupingContext
+data QValueContext
+newtype QGenExpr context syntax s t = QExpr syntax
+type QExpr = QGenExpr QValueContext
+type QAgg = QGenExpr QAggregateContext
+type QGroupExpr = QGenExpr QGroupingContext
+deriving instance Show syntax => Show (QGenExpr context syntax s t)
+deriving instance Eq syntax => Eq (QGenExpr context syntax s t)
 
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) [Char] ) =>
-    IsString (QExpr syntax s Text) where
+    IsString (QGenExpr context syntax s Text) where
     fromString = QExpr . valueE . sqlValueSyntax
 instance (Num a
          , IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a) =>
-    Num (QExpr syntax s a) where
-    fromInteger x = let res :: QExpr syntax s a
+    Num (QGenExpr context syntax s a) where
+    fromInteger x = let res :: QGenExpr context syntax s a
                         res = QExpr (valueE (sqlValueSyntax (fromIntegral x :: a)))
                     in res
     QExpr a + QExpr b = QExpr (addE a b)
@@ -138,7 +155,7 @@ instance (Num a
 instance ( Fractional a
          , IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a ) =>
-  Fractional (QExpr syntax s a) where
+  Fractional (QGenExpr context syntax s a) where
 
   QExpr a / QExpr b = QExpr (divE a b)
   recip = (1.0 /)
@@ -158,51 +175,59 @@ data Aggregation syntax s a
 -- statement. This includes all tables as well as all tuple classes. Projections are only defined on
 -- tuples up to size 5. If you need more, follow the implementations here.
 
-class Projectible syntax a | a -> syntax where
-  project' :: Monad m => (syntax -> m syntax) -> a -> m a
-instance Beamable t => Projectible syntax (t (QExpr syntax s)) where
-  project' mutateM a =
+class Typeable context => AggregateContext context
+instance AggregateContext QAggregateContext
+instance AggregateContext QGroupingContext
+
+class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) syntax a | a -> syntax where
+  project' :: Monad m => Proxy contextPredicate -> (forall context. contextPredicate context => Proxy context -> syntax -> m syntax) -> a -> m a
+instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate syntax (t (QGenExpr context syntax s)) where
+  project' _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
-                      Columnar' . QExpr <$> mutateM e) a a
-instance Beamable t => Projectible syntax (t (Nullable (QExpr syntax s))) where
-  project' mutateM a =
+                      Columnar' . QExpr <$> mutateM (Proxy @context) e) a a
+instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate syntax (t (Nullable (QGenExpr context syntax s))) where
+  project' _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
-                      Columnar' . QExpr <$> mutateM e) a a
-instance Projectible syntax (QExpr syntax s a) where
-  project' mkE (QExpr a) = QExpr <$> mkE a
-instance ( Projectible syntax a, Projectible syntax b ) =>
-  Projectible syntax (a, b) where
+                      Columnar' . QExpr <$> mutateM (Proxy @context) e) a a
+instance contextPredicate context => ProjectibleWithPredicate contextPredicate syntax (QGenExpr context syntax s a) where
+  project' _ mkE (QExpr a) = QExpr <$> mkE (Proxy @context) a
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b) where
 
-  project' mkE (a, b) = (,) <$> project' mkE a <*> project' mkE b
-instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c ) =>
-  Projectible syntax (a, b, c) where
+  project' p mkE (a, b) = (,) <$> project' p mkE a <*> project' p mkE b
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c) where
 
-  project' mkE (a, b, c) = (,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
-instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c
-         , Projectible syntax d ) =>
-  Projectible syntax (a, b, c, d) where
+  project' p mkE (a, b, c) = (,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d) where
 
-  project' mkE (a, b, c, d) = (,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
-                                    <*> project' mkE d
-instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c
-         , Projectible syntax d, Projectible syntax e ) =>
-  Projectible syntax (a, b, c, d, e) where
+  project' p mkE (a, b, c, d) = (,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+                                      <*> project' p mkE d
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e) where
 
-  project' mkE (a, b, c, d, e) = (,,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
-                                        <*> project' mkE d <*> project' mkE e
-instance ( Projectible syntax a, Projectible syntax b, Projectible syntax c
-         , Projectible syntax d, Projectible syntax e, Projectible syntax f ) =>
-  Projectible syntax (a, b, c, d, e, f) where
+  project' p mkE (a, b, c, d, e) = (,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+                                          <*> project' p mkE d <*> project' p mkE e
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e, ProjectibleWithPredicate contextPredicate syntax f ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e, f) where
 
-  project' mkE  (a, b, c, d, e, f) = (,,,,,) <$> project' mkE a <*> project' mkE b <*> project' mkE c
-                                             <*> project' mkE d <*> project' mkE e <*> project' mkE f
+  project' p mkE (a, b, c, d, e, f) = (,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+                                              <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+
+class AnyType a
+instance AnyType a
+type Projectible = ProjectibleWithPredicate AnyType
 
 project :: Projectible syntax a => a -> [ syntax ]
-project = DList.toList . execWriter . project' (\e -> tell (DList.singleton e) >> pure e)
+project = DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)
 reproject :: (IsSql92ExpressionSyntax syntax, Projectible syntax a) =>
              (Int -> syntax) -> a -> a
 reproject mkField a =
-  evalState (project' (\_ -> state (\i -> (i, i + 1)) >>= pure . mkField) a) 0
+  evalState (project' (Proxy @AnyType) (\_ _ -> state (\i -> (i, i + 1)) >>= pure . mkField) a) 0
 
 -- class IsSql92ExpressionSyntax syntax => Projectible syntax a where
 --     project :: a -> [syntax]
@@ -216,7 +241,7 @@ reproject mkField a =
 -- instance (Projectible syntax a, Projectible syntax b) => Projectible syntax (a, b) where
 --     project (a, b) = project a ++ project b
 -- instance ( Projectible syntax a
---          , Projectible syntax b
+--          , Projectible syntax b<
 --          , Projectible syntax c ) => Projectible syntax (a, b, c) where
 --     project (a, b, c) = project a ++ project b ++ project c
 -- instance ( Projectible syntax a
