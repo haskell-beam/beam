@@ -30,7 +30,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 
 import           Database.Beam
-import           Database.Beam.Backend.SQL92
+import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.Types
 import           Database.Beam.Query.Internal
 import qualified Database.Beam.Query as Q

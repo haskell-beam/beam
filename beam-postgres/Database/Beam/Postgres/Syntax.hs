@@ -44,7 +44,6 @@ import           Database.Beam.Postgres.Types
 
 import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.SQL92
 import           Database.Beam.Backend.Types
 --import           Database.Beam.Query.Combinators
 import           Database.Beam.Query.Internal
@@ -139,6 +138,7 @@ newtype PgUpdateSyntax = PgUpdateSyntax { fromPgUpdate :: PgSyntax }
 instance SupportedSyntax Postgres PgUpdateSyntax
 
 newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax }
+newtype PgAggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fromPgAggregationSetQuantifier :: PgSyntax }
 newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
 newtype PgComparisonQuantifierSyntax = PgComparisonQuantifierSyntax { fromPgComparisonQuantifier :: PgSyntax }
 newtype PgCastTargetSyntax = PgCastTargetSyntax { fromPgCastTarget :: PgSyntax }
@@ -197,6 +197,13 @@ instance IsSql92SelectTableSyntax PgSelectTableSyntax where
   intersectTables all = pgTableOp (if all then "INTERSECT ALL" else "INTERSECT")
   exceptTable all = pgTableOp (if all then "EXCEPT ALL" else "EXCEPT")
 
+instance IsSql92GroupingSyntax PgGroupingSyntax where
+  type Sql92GroupingExpressionSyntax PgGroupingSyntax = PgExpressionSyntax
+
+  groupByExpressions es =
+      PgGroupingSyntax $
+      pgSepBy (emit ", ") (map fromPgExpression es)
+
 instance IsSql92FromSyntax PgFromSyntax where
   type Sql92FromExpressionSyntax PgFromSyntax = PgExpressionSyntax
   type Sql92FromTableSourceSyntax PgFromSyntax = PgTableSourceSyntax
@@ -231,6 +238,7 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   modE = pgBinOp "%"
   orE = pgBinOp "OR"
   andE = pgBinOp "AND"
+  likeE = pgBinOp "LIKE"
   overlapsE = pgBinOp "OVERLAPS"
   eqE = pgCompOp "="
   neqE = pgCompOp "<>"
@@ -242,7 +250,6 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   notE = pgUnOp "NOT"
   existsE select = PgExpressionSyntax (emit "EXISTS (" <> fromPgSelect select <> emit ")")
   uniqueE select = PgExpressionSyntax (emit "UNIQUE (" <> fromPgSelect select <> emit ")")
-  distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
   isNotNullE = pgPostFix "IS NOT NULL"
   isNullE = pgPostFix "IS NULL"
   isTrueE = pgPostFix "IS TRUE"
@@ -276,6 +283,29 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
       emit "CASE " <>
       foldMap (\(cond, res) -> emit "WHEN " <> fromPgExpression cond <> emit " THEN " <> fromPgExpression res <> emit " ") cases <>
       emit "ELSE " <> fromPgExpression else_ <> emit " END"
+
+instance IsSql99ExpressionSyntax PgExpressionSyntax where
+  distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
+  similarToE = pgBinOp "SIMILAR TO"
+
+instance IsSql92AggregationExpressionSyntax PgExpressionSyntax where
+  type Sql92AggregationSetQuantifierSyntax PgExpressionSyntax = PgAggregationSetQuantifierSyntax
+
+  countAllE = PgExpressionSyntax (emit "COUNT(*)")
+  countE = pgUnAgg "COUNT"
+  avgE = pgUnAgg "AVG"
+  sumE = pgUnAgg "SUM"
+  minE = pgUnAgg "MIN"
+  maxE = pgUnAgg "MAX"
+
+instance IsSql92AggregationSetQuantifierSyntax PgAggregationSetQuantifierSyntax where
+  setQuantifierDistinct = PgAggregationSetQuantifierSyntax $ emit "DISTINCT"
+  setQuantifierAll = PgAggregationSetQuantifierSyntax $ emit "ALL"
+
+pgUnAgg :: ByteString -> Maybe PgAggregationSetQuantifierSyntax -> PgExpressionSyntax -> PgExpressionSyntax
+pgUnAgg fn q e =
+  PgExpressionSyntax $
+  emit fn <> emit "(" <> maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") q <> fromPgExpression e <> emit ")"
 
 instance IsSql92FieldNameSyntax PgFieldNameSyntax where
   qualifiedField a b =
