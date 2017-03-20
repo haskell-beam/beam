@@ -74,7 +74,7 @@ import GHC.Generics
 --     signum x = error "signum: not defined for Aggregation. Use CASE...WHEN"
 
 -- | Introduce all entries of a table into the 'Q' monad
-all_ :: forall db be table select s.
+all_ :: forall db table select s.
         ( Database db
         , IsSql92SelectSyntax select
 
@@ -83,7 +83,7 @@ all_ :: forall db be table select s.
         , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
 
         , Table table )
-       => DatabaseTable be db table -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+       => DatabaseTable db table -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 all_ tbl =
     Q $ liftF (QAll tbl (\_ -> Nothing) id)
 
@@ -93,7 +93,7 @@ join_ :: ( Database db, Table table
          , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
          , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
          , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ) =>
-         DatabaseTable be db table -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
+         DatabaseTable db table -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
       -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 join_ tbl (QExpr on) =
     Q $ liftF (QAll tbl (\_ -> Just on) id)
@@ -102,10 +102,10 @@ join_ tbl (QExpr on) =
 -- made nullable. This means that each field that would normally have type 'QExpr x' will now have
 -- type 'QExpr (Maybe x)'.
 leftJoin_ ::
-  forall be db table select s.
+  forall db table select s.
   ( Database db, Table table
   , IsSql92SelectSyntax select ) =>
-  DatabaseTable be db table ->
+  DatabaseTable db table ->
   (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool) ->
   Q select db s (table (Nullable (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)))
 leftJoin_ tbl mkOn =
@@ -123,24 +123,25 @@ guard_ (QExpr guardE') =
   --                  Just guardE -> Just $ andE guardE guardE' }
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
-related_ :: forall be db rel select s.
+related_ :: forall db rel select s.
             ( IsSql92SelectSyntax select
             , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
             , Database db, Table rel ) =>
-            DatabaseTable be db rel
+            DatabaseTable db rel
          -> PrimaryKey rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)
          -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-related_ (relTbl :: DatabaseTable be db rel) pk =
+related_ (relTbl :: DatabaseTable db rel) pk =
     Q $ liftF (QAll relTbl (\rel -> let QExpr on = pk ==. primaryKey rel :: QExpr (Sql92SelectExpressionSyntax select) s Bool in Just on) id)
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
-relatedBy_ :: forall be db rel select s.
+relatedBy_ :: forall db rel select s.
               ( Database db, Table rel
+              , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
               , IsSql92SelectSyntax select )
-           => DatabaseTable be db rel -> (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) ->
-                                          QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
+           => DatabaseTable db rel -> (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) ->
+                                       QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-relatedBy_ (relTbl :: DatabaseTable be db rel) mkOn =
+relatedBy_ (relTbl :: DatabaseTable db rel) mkOn =
     Q $ liftF (QAll relTbl (\rel -> let QExpr on = mkOn rel  :: QExpr (Sql92SelectExpressionSyntax select) s Bool in Just on) id)
 
 class IsSql92ExpressionSyntax syntax => SqlReferences syntax f s | f -> syntax where
@@ -510,9 +511,9 @@ count_ (QExpr over) = QExpr (countE Nothing over)
 -- * Order bys
 
 class SqlOrderable syntax a | a -> syntax where
-    makeSQLOrdering :: a -> [ syntax]
---instance SqlOrderable syntax (Sql92OrderingSyntax syntax) where
---    makeSQLOrdering x = [x]
+    makeSQLOrdering :: a -> [ syntax ]
+instance SqlOrderable syntax syntax where
+    makeSQLOrdering x = [x]
 instance SqlOrderable syntax a => SqlOrderable syntax [a] where
     makeSQLOrdering = concatMap makeSQLOrdering
 instance ( SqlOrderable syntax a

@@ -87,11 +87,11 @@ simpleTableLenses = tableLenses
 -- >          (LensFor blogPostDate)
 -- >          (AuthorId (LensFor blogPostAuthorEmail))
 -- >          (LensFor blogPostTagLine) = tableConfigLenses
-tableConfigLenses :: ( lensType ~ Lenses t (TableField be t)
+tableConfigLenses :: ( lensType ~ Lenses t (TableField t)
                      , Generic (t lensType)
-                     , Generic (t (TableField be t))
-                     , GTableLenses t (TableField be t) (Rep (t (TableField be t))) (Rep (t lensType)) ) =>
-                     t (Lenses t (TableField be t))
+                     , Generic (t (TableField t))
+                     , GTableLenses t (TableField t) (Rep (t (TableField t))) (Rep (t lensType)) ) =>
+                     t (Lenses t (TableField t))
 tableConfigLenses = tableLenses
 
 -- dbLenses :: ( Generic (db (LensForT db))
@@ -115,7 +115,7 @@ tableConfigLenses = tableLenses
 
 -- Database lenses
 -- type GenericLensesFor m a = GenericLenses a m (Rep (a m))
-newtype TableLens f be db (x :: k) = TableLens (Lens' (db f) (f x))
+newtype TableLens f db (x :: k) = TableLens (Lens' (db f) (f x))
 
 class GDatabaseLenses outer structure lensType where
     gDatabaseLenses :: Lens' outer (structure p) -> lensType ()
@@ -126,15 +126,15 @@ instance (GDatabaseLenses db a al, GDatabaseLenses db b bl) => GDatabaseLenses d
         where leftLenses = gDatabaseLenses (\f -> lensToHere (\(a :*: b) -> (:*: b) <$> f a))
               rightLenses = gDatabaseLenses (\f -> lensToHere (\(a :*: b) -> (a :*:) <$> f b))
 instance GDatabaseLenses (db f) (K1 R (f x))
-                                (K1 R (TableLens f be db x)) where
+                                (K1 R (TableLens f db x)) where
     gDatabaseLenses lensToHere = K1 (TableLens (\f -> lensToHere (\(K1 x) -> K1 <$> f x)))
 
-dbLenses :: ( Generic (db (TableLens f be db))
+dbLenses :: ( Generic (db (TableLens f db))
             , Generic (db f)
-            , GDatabaseLenses (db f) (Rep (db f)) (Rep (db (TableLens f be db))) )
-           => db (TableLens f be db)
-dbLenses = fix $ \(_ :: db (TableLens f be db)) ->
-           to (gDatabaseLenses (\f (x :: db f) -> to <$> f (from x)) :: Rep (db (TableLens f be db)) ())
+            , GDatabaseLenses (db f) (Rep (db f)) (Rep (db (TableLens f db))) )
+           => db (TableLens f db)
+dbLenses = fix $ \(_ :: db (TableLens f db)) ->
+           to (gDatabaseLenses (\f (x :: db f) -> to <$> f (from x)) :: Rep (db (TableLens f db)) ())
 
 -- type family GenericLenses c m a where
 --     GenericLenses c m (D1 d a) = D1 d (GenericLenses c m a)

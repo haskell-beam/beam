@@ -7,7 +7,7 @@ module Database.Beam.Query
     , module Database.Beam.Query.Combinators
 
     , SqlSelect(..)
-    , select
+    , select, dumpSqlSelect
 
     , SqlInsert(..)
     , insert
@@ -21,6 +21,7 @@ import Database.Beam.Query.Combinators
 import Database.Beam.Query.Internal
 
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.SQL.Builder
 import Database.Beam.Schema.Tables
 
 import Control.Monad.Identity
@@ -40,12 +41,19 @@ select :: forall q syntax db s res.
           Q syntax db s res -> SqlSelect syntax (QExprToIdentity res)
 select q =
   SqlSelect (buildSql92Query q)
+
+dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
+                 Q SqlSyntaxBuilder db s res -> IO ()
+dumpSqlSelect q =
+    let SqlSelect s = select q
+    in putStrLn (renderSql s)
+
 -- * INSERT
 
 newtype SqlInsert syntax = SqlInsert syntax
 
 insert :: IsSql92InsertSyntax syntax =>
-          DatabaseTable be db table
+          DatabaseTable db table
        -> Sql92InsertValuesSyntax syntax
        -> SqlInsert syntax
 insert (DatabaseTable _ tblNm tblSettings) insertValues =

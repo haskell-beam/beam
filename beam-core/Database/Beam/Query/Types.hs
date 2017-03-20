@@ -24,6 +24,8 @@ import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 
+import Debug.Trace
+
 -- * Beam queries
 
 type family QExprToIdentity x
@@ -136,7 +138,7 @@ offsetSelectBuilder offset x = SelectBuilderTopLevel Nothing (Just offset) [] x
 buildInnerJoinQuery
     :: forall select db s be table.
        (IsSql92SelectSyntax select) =>
-       DatabaseTable be db table
+       DatabaseTable db table
     -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
     -> QueryBuilder select -> (table (QExpr (Sql92SelectExpressionSyntax select) s), QueryBuilder select)
 buildInnerJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
@@ -154,7 +156,7 @@ buildInnerJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
 buildLeftJoinQuery
     :: forall select db s be table.
        (IsSql92SelectSyntax select) =>
-       DatabaseTable be db table
+       DatabaseTable db table
     -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
     -> QueryBuilder select -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)), QueryBuilder select)
 buildLeftJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
@@ -197,13 +199,42 @@ buildSql92Query (Q q) =
     buildQuery f@(Free (QAggregate mkAgg q next)) =
         let sb = buildQuery (fromF q)
             aggProj = sbProj sb
-        in case tryBuildHaving (next aggProj) Nothing of
+
+            havingProj = reproject (fieldNameFunc unqualifiedField) aggProj
+        in case tryBuildGuardsOnly (next aggProj) Nothing of
             Just (proj, having) ->
                 case sb of
                   SelectBuilderQ _ q -> SelectBuilderGrouping proj q (mkAgg aggProj) having
                   _ -> let (proj', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb proj)
                        in SelectBuilderQ proj' qb
             Nothing -> error "Can't join aggregates yet"
+
+    buildQuery f@(Free (QOrderBy mkOrdering q next)) =
+        let sb = buildQuery (fromF q)
+            proj = sbProj sb
+            ordering = mkOrdering proj
+
+            doJoined = error "TODO: QOrderBy: doJoined"
+        in case next proj of
+             Pure proj' ->
+               case ordering of
+                 [] -> setSelectBuilderProjection sb proj'
+                 ordering ->
+                     case sb of
+                       SelectBuilderQ {} ->
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj')
+                       SelectBuilderGrouping {} ->
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj')
+                       SelectBuilderSelectSyntax {} ->
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj')
+                       SelectBuilderTopLevel limit offset [] sb ->
+                           SelectBuilderTopLevel limit offset ordering (setSelectBuilderProjection sb proj')
+                       SelectBuilderTopLevel {}
+                           | (proj'', qb) <- selectBuilderToQueryBuilder sb,
+                             Pure proj''' <- next proj'' ->
+                               SelectBuilderTopLevel Nothing Nothing (mkOrdering proj'') (SelectBuilderQ proj''' qb)
+                           | otherwise -> doJoined
+             _ -> doJoined
 
     buildQuery (Free (QLimit limit q next)) =
         let sb = limitSelectBuilder limit (buildQuery (fromF q))
@@ -233,12 +264,12 @@ buildSql92Query (Q q) =
     buildQuery (Free (QExcept all left right next)) =
       buildTableCombination (exceptTable all) left right next
 
-    tryBuildHaving :: Free (QF select db s) x
-                   -> Maybe (Sql92SelectExpressionSyntax select)
-                   -> Maybe (x, Maybe (Sql92SelectExpressionSyntax select))
-    tryBuildHaving (Pure x) having = Just (x, having)
-    tryBuildHaving (Free (QGuard cond next)) having = tryBuildHaving next (andE' having (Just cond))
-    tryBuildHaving _ _ = Nothing
+    tryBuildGuardsOnly :: Free (QF select db s) x
+                       -> Maybe (Sql92SelectExpressionSyntax select)
+                       -> Maybe (x, Maybe (Sql92SelectExpressionSyntax select))
+    tryBuildGuardsOnly (Pure x) having = Just (x, having)
+    tryBuildGuardsOnly (Free (QGuard cond next)) having = tryBuildGuardsOnly next (andE' having (Just cond))
+    tryBuildGuardsOnly _ _ = Nothing
 
     buildTableCombination ::
         ( Projectible (Sql92ProjectionExpressionSyntax projSyntax) r

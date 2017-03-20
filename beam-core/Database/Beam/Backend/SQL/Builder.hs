@@ -5,6 +5,7 @@ module Database.Beam.Backend.SQL.Builder
 
 import           Database.Beam.Backend.SQL.Types
 import           Database.Beam.Backend.SQL.SQL92
+import           Database.Beam.Backend.SQL.SQL99
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
@@ -183,6 +184,10 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   subqueryE a = SqlSyntaxBuilder $ byteString "(" <> buildSql a <> byteString ")"
   valueE = id
 
+instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
+  distinctE = sqlUnOp "DISTINCT"
+  similarToE = sqlBinOp "SIMILAR TO"
+
 instance IsSql92AggregationExpressionSyntax SqlSyntaxBuilder where
   type Sql92AggregationSetQuantifierSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
@@ -232,6 +237,9 @@ instance IsSql92FromSyntax SqlSyntaxBuilder where
 instance HasSqlValueSyntax SqlSyntaxBuilder Int where
   sqlValueSyntax x = SqlSyntaxBuilder $
     byteString (fromString (show x))
+instance HasSqlValueSyntax SqlSyntaxBuilder Bool where
+  sqlValueSyntax True = SqlSyntaxBuilder (byteString "TRUE")
+  sqlValueSyntax False = SqlSyntaxBuilder (byteString "FALSE")
 instance HasSqlValueSyntax SqlSyntaxBuilder Text where
   sqlValueSyntax x = SqlSyntaxBuilder $
     byteString (fromString (show x))

@@ -45,10 +45,10 @@ type ProjectibleInSelectSyntax syntax a =
 --            -> QueryBuilderF select a
 
 data QF select db s next where
-  QAll :: DatabaseTable be db table
+  QAll :: DatabaseTable db table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
-  QLeftJoin :: DatabaseTable be db table
+  QLeftJoin :: DatabaseTable db table
             -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
             -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
   QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next
