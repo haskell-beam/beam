@@ -172,7 +172,7 @@ data StaffT f
   , staffUsername  :: Columnar f Text
   , staffPassword  :: Columnar f ByteString
   , staffLastUpdate :: Columnar f LocalTime
-  , staffPicture   :: Columnar f ByteString
+  , staffPicture   :: Columnar f (Maybe ByteString)
   } deriving Generic
 type Staff = StaffT Identity
 deriving instance Eq Staff; deriving instance Show Staff
@@ -210,7 +210,7 @@ pagilaDb = defaultDbSettings `withDbModification`
                          (CountryT (fieldNamed "country_id") (fieldNamed "country") (fieldNamed "last_updated"))
            , categories = modifyTable (const "category") (tableModification { categoryId = fieldNamed "category_id" })
            , stores = modifyTable (const "store")
-                      (StoreT (fieldNamed "store_id") (StaffId (fieldNamed "store_manager_id")) (AddressId (fieldNamed "address_id")) (fieldNamed "last_update"))
+                      (StoreT (fieldNamed "store_id") (StaffId (fieldNamed "manager_staff_id")) (AddressId (fieldNamed "address_id")) (fieldNamed "last_update"))
            , staff = modifyTable (const "staff")
                      (tableModification { staffId = fieldNamed "staff_id"
                                         , staffAddress = AddressId (fieldNamed "address_id")

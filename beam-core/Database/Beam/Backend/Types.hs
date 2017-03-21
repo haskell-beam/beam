@@ -46,6 +46,8 @@ peekField = liftF (PeekField id)
 
 class BeamBackend be => FromBackendRow be a where
   fromBackendRow :: FromBackendRowM be a
+  default fromBackendRow :: BackendFromField be a => FromBackendRowM be a
+  fromBackendRow = parseOneField
 
 class GFromBackendRow be (exposed :: * -> *) rep where
   gFromBackendRow :: Proxy exposed -> FromBackendRowM be (rep ())
@@ -56,8 +58,8 @@ instance GFromBackendRow be e U1 where
 instance (GFromBackendRow be aExp a, GFromBackendRow be bExp b) => GFromBackendRow be (aExp :*: bExp) (a :*: b) where
   gFromBackendRow _ = (:*:) <$> gFromBackendRow (Proxy @aExp) <*> gFromBackendRow (Proxy @bExp)
 
-instance BackendFromField be x => GFromBackendRow be (K1 R (Exposed x)) (K1 R x) where
-  gFromBackendRow _ = K1 <$> parseOneField
+instance FromBackendRow be x => GFromBackendRow be (K1 R (Exposed x)) (K1 R x) where
+  gFromBackendRow _ = K1 <$> fromBackendRow
 
 instance FromBackendRow be (t Identity) => GFromBackendRow be (K1 R (t Exposed)) (K1 R (t Identity)) where
     gFromBackendRow _ = K1 <$> fromBackendRow
@@ -65,38 +67,38 @@ instance FromBackendRow be (t Identity) => GFromBackendRow be (K1 R (t Exposed))
 instance BeamBackend be => FromBackendRow be () where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ()))
 
-instance ( BeamBackend be, BackendFromField be a, BackendFromField be b ) =>
+instance ( BeamBackend be, FromBackendRow be a, FromBackendRow be b ) =>
   FromBackendRow be (a, b) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b)))
-instance ( BeamBackend be, BackendFromField be a, BackendFromField be b, BackendFromField be c ) =>
+instance ( BeamBackend be, FromBackendRow be a, FromBackendRow be b, FromBackendRow be c ) =>
   FromBackendRow be (a, b, c) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c)))
 instance ( BeamBackend be
-         , BackendFromField be a, BackendFromField be b, BackendFromField be c
-         , BackendFromField be d ) =>
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d ) =>
   FromBackendRow be (a, b, c, d) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d)))
 instance ( BeamBackend be
-         , BackendFromField be a, BackendFromField be b, BackendFromField be c
-         , BackendFromField be d, BackendFromField be e ) =>
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e ) =>
   FromBackendRow be (a, b, c, d, e) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e)))
 instance ( BeamBackend be
-         , BackendFromField be a, BackendFromField be b, BackendFromField be c
-         , BackendFromField be d, BackendFromField be e, BackendFromField be f ) =>
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f ) =>
   FromBackendRow be (a, b, c, d, e, f) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f)))
 instance ( BeamBackend be
-         , BackendFromField be a, BackendFromField be b, BackendFromField be c
-         , BackendFromField be d, BackendFromField be e, BackendFromField be f
-         , BackendFromField be g ) =>
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
+         , FromBackendRow be g ) =>
   FromBackendRow be (a, b, c, d, e, f, g) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g)))
 deriving instance Generic (a, b, c, d, e, f, g, h)
 instance ( BeamBackend be
-         , BackendFromField be a, BackendFromField be b, BackendFromField be c
-         , BackendFromField be d, BackendFromField be e, BackendFromField be f
-         , BackendFromField be g, BackendFromField be h ) =>
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
+         , FromBackendRow be g, FromBackendRow be h ) =>
   FromBackendRow be (a, b, c, d, e, f, g, h) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g, Exposed h)))
 

@@ -518,17 +518,17 @@ instance ( GZipTables f g h exp1 f1 g1 h1
          , GZipTables f g h exp2 f2 g2 h2) =>
     GZipTables f g h (exp1 :*: exp2) (f1 :*: f2) (g1 :*: g2) (h1 :*: h2) where
 
-        gZipTables _ combine (f1 :*: f2) (g1 :*: g2) =
+        gZipTables _ combine ~(f1 :*: f2) ~(g1 :*: g2) =
             (:*:) <$> gZipTables (Proxy :: Proxy exp1) combine f1 g1
                   <*> gZipTables (Proxy :: Proxy exp2) combine f2 g2
 instance GZipTables f g h exp fRep gRep hRep =>
     GZipTables f g h (M1 x y exp) (M1 x y fRep) (M1 x y gRep) (M1 x y hRep) where
-        gZipTables _ combine (M1 f) (M1 g) = M1 <$> gZipTables (Proxy :: Proxy exp) combine f g
+        gZipTables _ combine ~(M1 f) ~(M1 g) = M1 <$> gZipTables (Proxy :: Proxy exp) combine f g
 instance ( fa ~ Columnar f a
          , ga ~ Columnar g a
          , ha ~ Columnar h a) =>
     GZipTables f g h (K1 Generic.R (Exposed a)) (K1 Generic.R fa) (K1 Generic.R ga) (K1 Generic.R ha) where
-        gZipTables _ combine (K1 f) (K1 g) = (\(Columnar' h) -> K1 h) <$> combine (Columnar' f :: Columnar' f a) (Columnar' g :: Columnar' g a)
+        gZipTables _ combine ~(K1 f) ~(K1 g) = (\(Columnar' h) -> K1 h) <$> combine (Columnar' f :: Columnar' f a) (Columnar' g :: Columnar' g a)
 --                                                return (K1 (h :: Columnar h a))
 instance ( Generic (PrimaryKey rel f)
          , Generic (PrimaryKey rel g)
@@ -536,7 +536,7 @@ instance ( Generic (PrimaryKey rel f)
 
          , GZipTables f g h (Rep (PrimaryKey rel Exposed)) (Rep (PrimaryKey rel f)) (Rep (PrimaryKey rel g)) (Rep (PrimaryKey rel h))) =>
     GZipTables f g h (K1 Generic.R (PrimaryKey rel Exposed)) (K1 Generic.R (PrimaryKey rel f)) (K1 Generic.R (PrimaryKey rel g)) (K1 Generic.R (PrimaryKey rel h)) where
-    gZipTables _ combine (K1 f) (K1 g) = K1 . to' <$> gZipTables (Proxy :: Proxy (Rep (PrimaryKey rel Exposed))) combine (from' f) (from' g)
+    gZipTables _ combine ~(K1 f) ~(K1 g) = K1 . to' <$> gZipTables (Proxy :: Proxy (Rep (PrimaryKey rel Exposed))) combine (from' f) (from' g)
 
 instance  ( Generic (PrimaryKey rel (Nullable f))
           , Generic (PrimaryKey rel (Nullable g))
@@ -548,7 +548,7 @@ instance  ( Generic (PrimaryKey rel (Nullable f))
                     (K1 Generic.R (PrimaryKey rel (Nullable f)))
                     (K1 Generic.R (PrimaryKey rel (Nullable g)))
                     (K1 Generic.R (PrimaryKey rel (Nullable h))) where
-    gZipTables _ combine (K1 f) (K1 g) = K1 . to' <$> gZipTables (Proxy :: Proxy (Rep (PrimaryKey rel (Nullable Exposed)))) combine (from' f) (from' g)
+    gZipTables _ combine ~(K1 f) ~(K1 g) = K1 . to' <$> gZipTables (Proxy :: Proxy (Rep (PrimaryKey rel (Nullable Exposed)))) combine (from' f) (from' g)
 
 class GDefaultTableFieldSettings x where
     gDefTblFieldSettings :: Proxy x -> x
