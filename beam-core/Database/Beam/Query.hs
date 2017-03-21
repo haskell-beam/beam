@@ -14,7 +14,13 @@ module Database.Beam.Query
 
     , SqlInsertValues(..)
     , insertValues
-    , insertFrom ) where
+    , insertFrom
+
+    , SqlUpdate(..)
+    , update
+
+    , SqlDelete(..)
+    , delete ) where
 
 import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
@@ -38,12 +44,12 @@ newtype SqlSelect select a
 select :: forall q syntax db s res.
           ( ProjectibleInSelectSyntax syntax res
           , IsSql92SelectSyntax syntax ) =>
-          Q syntax db s res -> SqlSelect syntax (QExprToIdentity res)
+          Q syntax db QueryInaccessible res -> SqlSelect syntax (QExprToIdentity res)
 select q =
   SqlSelect (buildSql92Query q)
 
 dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
-                 Q SqlSyntaxBuilder db s res -> IO ()
+                 Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()
 dumpSqlSelect q =
     let SqlSelect s = select q
     in putStrLn (renderSql s)
@@ -79,9 +85,37 @@ insertFrom ::
     SqlSelect (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
 insertFrom (SqlSelect select) = SqlInsertValues . insertFromSql $ select
 
---insert :: blah
+-- * UPDATE
 
---update :: blah
+newtype SqlUpdate syntax (table :: (* -> *) -> *) = SqlUpdate syntax
+
+update :: ( Beamable table
+          , IsSql92UpdateSyntax syntax) =>
+          DatabaseTable db table
+       -> (forall s. table (QField s) -> [ QAssignment (Sql92UpdateFieldNameSyntax syntax) (Sql92UpdateExpressionSyntax syntax) s ])
+       -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax syntax) s) -> QExpr (Sql92UpdateExpressionSyntax syntax) s Bool)
+       -> SqlUpdate syntax table
+update (DatabaseTable _ tblNm tblSettings) mkAssignments mkWhere =
+  SqlUpdate (updateStmt tblNm assignments (Just where_))
+  where
+    assignments = map (\(QAssignment fieldName expr) -> (fieldName, expr)) (mkAssignments tblFields)
+    QExpr where_ = mkWhere tblFieldExprs
+
+    tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField tblNm name)) tblSettings
+    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (unqualifiedField nm)))) tblFields
+
+-- * DELETE
+
+newtype SqlDelete syntax (table :: (* -> *) -> *) = SqlDelete syntax
+
+delete :: IsSql92DeleteSyntax delete
+       => DatabaseTable db table
+       -> (forall s. table (QExpr (Sql92DeleteExpressionSyntax delete) s) -> QExpr (Sql92DeleteExpressionSyntax delete) s Bool)
+       -> SqlDelete delete table
+delete (DatabaseTable _ tblNm tblSettings) mkWhere =
+  SqlDelete (deleteStmt tblNm (Just where_))
+  where
+    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (fieldE (unqualifiedField name)))) tblSettings)
 
 --delete :: blah
 

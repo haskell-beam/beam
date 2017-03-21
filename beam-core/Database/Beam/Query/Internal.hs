@@ -107,11 +107,15 @@ data QNested s
 
 -- * QExpr type
 
-data QField = QField
-            { qFieldTblName :: T.Text
-            , qFieldTblOrd  :: Maybe Int
-            , qFieldName    :: T.Text }
-              deriving (Show, Eq, Ord)
+data QField s as
+  = QField
+  { qFieldTblName :: T.Text
+  , qFieldName    :: T.Text }
+  deriving (Show, Eq, Ord)
+
+data QAssignment fieldName expr s
+  = QAssignment fieldName expr
+  deriving (Show, Eq, Ord)
 
 -- | The type of lifted beam expressions that will yield the haskell type `t` when run with
 -- `queryList` or `query`. In the future, this will include a thread argument meant to prevent
@@ -215,6 +219,30 @@ instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
       , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt, WithRewrittenContext f ctxt )
   rewriteContext p (a, b, c, d, e, f) = ( rewriteContext p a, rewriteContext p b, rewriteContext p c
                                         , rewriteContext p d, rewriteContext p e, rewriteContext p f )
+instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
+         , ContextRewritable d, ContextRewritable e, ContextRewritable f
+         , ContextRewritable g ) =>
+    ContextRewritable (a, b, c, d, e, f, g) where
+  type WithRewrittenContext (a, b, c, d, e, f, g) ctxt =
+      ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
+      , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt, WithRewrittenContext f ctxt
+      , WithRewrittenContext g ctxt )
+  rewriteContext p (a, b, c, d, e, f, g) =
+    ( rewriteContext p a, rewriteContext p b, rewriteContext p c
+    , rewriteContext p d, rewriteContext p e, rewriteContext p f
+    , rewriteContext p g )
+instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
+         , ContextRewritable d, ContextRewritable e, ContextRewritable f
+         , ContextRewritable g, ContextRewritable h ) =>
+    ContextRewritable (a, b, c, d, e, f, g, h) where
+  type WithRewrittenContext (a, b, c, d, e, f, g, h) ctxt =
+      ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
+      , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt, WithRewrittenContext f ctxt
+      , WithRewrittenContext g ctxt, WithRewrittenContext h ctxt )
+  rewriteContext p (a, b, c, d, e, f, g, h) =
+    ( rewriteContext p a, rewriteContext p b, rewriteContext p c
+    , rewriteContext p d, rewriteContext p e, rewriteContext p f
+    , rewriteContext p g, rewriteContext p h )
 
 -- type family QExprRewriteContext context x
 -- type instance QExprRewriteContext context (table (QGenExpr old syntax s)) = table (QGenExpr context syntax s)
@@ -261,6 +289,24 @@ instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPr
 
   project' p mkE (a, b, c, d, e, f) = (,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
                                               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e, ProjectibleWithPredicate contextPredicate syntax f
+         , ProjectibleWithPredicate contextPredicate syntax g ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e, f, g) where
+
+  project' p mkE (a, b, c, d, e, f, g) =
+    (,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+             <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+             <*> project' p mkE g
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e, ProjectibleWithPredicate contextPredicate syntax f
+         , ProjectibleWithPredicate contextPredicate syntax g, ProjectibleWithPredicate contextPredicate syntax h ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e, f, g, h) where
+
+  project' p mkE (a, b, c, d, e, f, g, h) =
+    (,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+              <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+              <*> project' p mkE g <*> project' p mkE h
 
 class AnyType a
 instance AnyType a

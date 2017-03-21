@@ -86,6 +86,20 @@ instance ( BeamBackend be
          , BackendFromField be d, BackendFromField be e, BackendFromField be f ) =>
   FromBackendRow be (a, b, c, d, e, f) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f)))
+instance ( BeamBackend be
+         , BackendFromField be a, BackendFromField be b, BackendFromField be c
+         , BackendFromField be d, BackendFromField be e, BackendFromField be f
+         , BackendFromField be g ) =>
+  FromBackendRow be (a, b, c, d, e, f, g) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g)))
+deriving instance Generic (a, b, c, d, e, f, g, h)
+instance ( BeamBackend be
+         , BackendFromField be a, BackendFromField be b, BackendFromField be c
+         , BackendFromField be d, BackendFromField be e, BackendFromField be f
+         , BackendFromField be g, BackendFromField be h ) =>
+  FromBackendRow be (a, b, c, d, e, f, g, h) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g, Exposed h)))
+
 
 instance ( BeamBackend be, Generic (tbl Identity), Generic (tbl Exposed)
          , GFromBackendRow be (Rep (tbl Exposed)) (Rep (tbl Identity))) =>

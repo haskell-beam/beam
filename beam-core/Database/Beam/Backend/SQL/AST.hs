@@ -95,7 +95,7 @@ data Update
   = Update
   { updateTable :: Text
   , updateFields :: [ (FieldName, Expression) ]
-  , updateWhere :: Expression }
+  , updateWhere :: Maybe Expression }
   deriving (Show, Eq)
 
 instance IsSql92UpdateSyntax Update where
@@ -107,7 +107,7 @@ instance IsSql92UpdateSyntax Update where
 data Delete
   = Delete
   { deleteTable :: Text
-  , deleteWhere :: Expression }
+  , deleteWhere :: Maybe Expression }
   deriving (Show, Eq)
 
 instance IsSql92DeleteSyntax Delete where

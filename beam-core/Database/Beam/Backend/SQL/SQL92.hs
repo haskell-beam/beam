@@ -109,20 +109,23 @@ class IsSql92InsertValuesSyntax insertValues where
   insertFromSql :: Sql92InsertValuesSelectSyntax insertValues
                 -> insertValues
 
-class IsSql92UpdateSyntax update where
+class ( IsSql92ExpressionSyntax (Sql92UpdateExpressionSyntax update)
+      , IsSql92FieldNameSyntax (Sql92UpdateFieldNameSyntax update)) =>
+      IsSql92UpdateSyntax update where
   type Sql92UpdateFieldNameSyntax update :: *
   type Sql92UpdateExpressionSyntax update :: *
 
   updateStmt :: Text
              -> [(Sql92UpdateFieldNameSyntax update, Sql92UpdateExpressionSyntax update)]
-             -> Sql92UpdateExpressionSyntax update {-^ WHERE -}
+             -> Maybe (Sql92UpdateExpressionSyntax update) {-^ WHERE -}
              -> update
 
-class IsSql92DeleteSyntax delete where
+class IsSql92ExpressionSyntax (Sql92DeleteExpressionSyntax delete) =>
+  IsSql92DeleteSyntax delete where
   type Sql92DeleteExpressionSyntax delete :: *
 
   deleteStmt :: Text
-             -> Sql92DeleteExpressionSyntax delete
+             -> Maybe (Sql92DeleteExpressionSyntax delete)
              -> delete
 
 class IsSql92FieldNameSyntax fn where

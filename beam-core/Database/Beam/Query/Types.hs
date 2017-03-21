@@ -37,6 +37,13 @@ type instance QExprToIdentity (a, b) = (QExprToIdentity a, QExprToIdentity b)
 type instance QExprToIdentity (a, b, c) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c)
 type instance QExprToIdentity (a, b, c, d) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d)
 type instance QExprToIdentity (a, b, c, d, e) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e)
+type instance QExprToIdentity (a, b, c, d, e, f) = (QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f)
+type instance QExprToIdentity (a, b, c, d, e, f, g) =
+  ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
+  , QExprToIdentity g)
+type instance QExprToIdentity (a, b, c, d, e, f, g, h) =
+  ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
+  , QExprToIdentity g, QExprToIdentity h )
 
 andE' :: IsSql92ExpressionSyntax expr =>
          Maybe expr -> Maybe expr -> Maybe expr

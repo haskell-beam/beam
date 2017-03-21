@@ -7,8 +7,10 @@ module Database.Beam.Schema.Tables
     (
     -- * Database Types
       Database(..), DatabaseTable(..), DatabaseSettings
---    , ReifiedDatabaseSchema, ReifiedTableSchema
-  --  , DatabaseModifications, TableSchemaModifications(..), FieldSchemaModification(..)
+    , GenericDatabaseModification, GenericTableModification(..)
+    , FieldModification(..)
+    , dbModification, tableModification, withDbModification
+    , withTableModification, modifyTable, fieldNamed
     , tableName, tableSettings
     , defaultDbSettings
     -- , withDbModifications
@@ -45,6 +47,7 @@ import           Control.Monad.Writer
 import           Control.Monad.Identity
 
 import           Data.Char (isUpper, toLower)
+import           Data.Functor.Compose
 import           Data.List (intercalate)
 import           Data.Monoid ((<>))
 import           Data.Proxy
@@ -58,9 +61,6 @@ import           GHC.Generics hiding (R)
 import           GHC.Types (Constraint)
 
 import           Lens.Micro hiding (to)
-
-type ReifiedDatabaseSchema be = [(Text, ReifiedTableSchema be)]
-type ReifiedTableSchema be = [(Text, BackendColumnSchema be)]
 
 class Database db where
     allTables :: (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
@@ -87,6 +87,39 @@ defaultDbSettings = to' autoDbSettings'
 -- modifyingDb = runIdentity (zipTables (\_ _ -> pure (tableModification id tableFieldsModification)) undefined undefined)
 
 -- type DatabaseModifications be db = db (TableSchemaModifications be)
+type GenericDatabaseModification f db = db (GenericTableModification f)
+newtype GenericTableModification f (tbl :: (* -> *) -> *) = GenericTableModification (f tbl -> f tbl)
+
+newtype FieldModification f a
+  = FieldModification (Columnar f a -> Columnar f a)
+
+dbModification :: forall f db. Database db => GenericDatabaseModification f db
+dbModification = runIdentity $
+                 zipTables (\_ _ -> pure (GenericTableModification id)) (undefined :: GenericDatabaseModification f db) (undefined :: GenericDatabaseModification f db)
+tableModification :: forall f tbl. Beamable tbl => tbl (FieldModification f)
+tableModification = runIdentity $
+                    zipBeamFieldsM (\(Columnar' _ :: Columnar' Ignored x) (Columnar' _ :: Columnar' Ignored x) ->
+                                      pure (Columnar' (FieldModification id :: FieldModification f x))) (undefined :: TableSkeleton tbl) (undefined :: TableSkeleton tbl)
+
+withDbModification :: Database db => db f -> GenericDatabaseModification f db -> db f
+withDbModification db mods =
+  runIdentity $ zipTables (\tbl (GenericTableModification mod) -> pure (mod tbl)) db mods
+
+withTableModification :: Beamable tbl => tbl (FieldModification f) -> tbl f -> tbl f
+withTableModification mods tbl =
+  runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification mod :: FieldModification f a)) ->
+                                  pure (Columnar' (mod field))) tbl mods
+
+modifyTable :: (Text -> Text)
+            -> tbl (FieldModification (TableField tbl))
+            -> GenericTableModification (DatabaseTable db) tbl
+modifyTable modTblNm modFields =
+  GenericTableModification (\(DatabaseTable p nm fields) ->
+                              DatabaseTable p (modTblNm nm) (withTableModification modFields fields))
+
+fieldNamed :: Text -> FieldModification (TableField tbl) a
+fieldNamed newName = FieldModification (\_ -> TableField newName)
+
 -- data TableSchemaModifications be tbl
 --   = TableSchemaModifications
 --   { modTableName :: Text -> Text
@@ -534,18 +567,51 @@ instance (Table table, Selector f ) =>
 
 instance ( Selector f
          , Table rel
-         , Generic (rel field)
-         , GFieldsFulfillConstraint (TableField tbl ~) (Rep (PrimaryKey rel Exposed)) (Rep (PrimaryKey rel field)) (Rep (PrimaryKey rel (WithConstraint (TableField tbl ~))))
-         , GDefaultTableFieldSettings (Rep (rel field) ())
+         , Generic (rel (TableField tbl))
+         , Generic (PrimaryKey rel (TableField tbl))
+
+         , GDefaultTableFieldSettings (Rep (rel (TableField tbl)) ())
          , Beamable rel ) =>
-    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey rel field)) p) where
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey rel (TableField tbl))) p) where
 
     gDefTblFieldSettings _ = M1 . K1 $ pkSettings'
-        where tbl = to' $ gDefTblFieldSettings (Proxy @(Rep (rel field) ()))
+        where tbl :: rel (TableField tbl)
+              tbl = to' $ gDefTblFieldSettings (Proxy @(Rep (rel (TableField tbl)) ()))
               pkSettings = primaryKey tbl
 
-              relName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey rel field)) p)))
-              pkSettings' = _ (gWithConstrainedFields (Proxy @(~ TableField tbl)) (Proxy @(Rep (PrimaryKey rel Exposed))) pkSettings)  -- changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (TableField (relName <> "__" <> name))) pkSettings
+              relName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey rel (TableField tbl))) p)))
+
+              pkSettings' :: PrimaryKey rel (TableField tbl)
+              pkSettings' = changeBeamRep (\(Columnar' (TableField nm)) -> Columnar' $ TableField (relName <> "__" <> nm)) pkSettings
+
+instance ( Selector f
+         , Table rel
+         , Generic (rel (Nullable (TableField tbl)))
+         , Generic (PrimaryKey rel (Nullable (TableField tbl)))
+
+         , GDefaultTableFieldSettings (Rep (rel (Nullable (TableField tbl))) ())
+         , Beamable rel ) =>
+    GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey rel (Nullable (TableField tbl)))) p) where
+
+    gDefTblFieldSettings _ = M1 . K1 $ pkSettings'
+        where tbl :: rel (Nullable (TableField tbl))
+              tbl = to' $ gDefTblFieldSettings (Proxy @(Rep (rel (Nullable (TableField tbl))) ()))
+              pkSettings = primaryKey tbl
+
+              relName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey rel (Nullable (TableField tbl)))) p)))
+
+              pkSettings' :: PrimaryKey rel (Nullable (TableField tbl))
+              pkSettings' = changeBeamRep (\(Columnar' (TableField nm)) -> Columnar' $ TableField (relName <> "__" <> nm)) pkSettings
+
+-- instance (GDefaultTableFieldSettings (S1 f (K1 Generic.R (rel q)) p)) =>
+--   GDefaultTableFieldSettings (S1 f (K1 Generic.R (rel (Nullable q))) p) where
+
+--   gDefTblFieldSettings _ = M1 . K1 . magic (\(TableField x) -> TableField x) $ q
+--     where q :: rel q
+--           M1 (K1 q) = gDefTblFieldSettings (Proxy @(S1 f (K1 Generic.R (rel q)) p))
+
+magic :: (forall a. q a -> q (Maybe a)) -> rel q -> rel (Nullable q)
+magic _ = undefined
 
 -- instance ( Table table, Table related
 --          , BeamBackend be

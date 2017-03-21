@@ -99,6 +99,9 @@ instance Monoid PgSyntax where
   mempty = PgSyntax (pure ())
   mappend a b = PgSyntax (buildPgSyntax a >> buildPgSyntax b)
 
+instance Eq PgSyntax where
+  PgSyntax x == PgSyntax y = (fromF x :: Free PgSyntaxF ()) == fromF y
+
 emit :: ByteString -> PgSyntax
 emit bs = PgSyntax (liftF (EmitByteString bs ()))
 
@@ -137,7 +140,7 @@ instance SupportedSyntax Postgres PgDeleteSyntax
 newtype PgUpdateSyntax = PgUpdateSyntax { fromPgUpdate :: PgSyntax }
 instance SupportedSyntax Postgres PgUpdateSyntax
 
-newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax }
+newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax } deriving Eq
 newtype PgAggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fromPgAggregationSetQuantifier :: PgSyntax }
 newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
 newtype PgComparisonQuantifierSyntax = PgComparisonQuantifierSyntax { fromPgComparisonQuantifier :: PgSyntax }
@@ -603,7 +606,7 @@ pgBuildAction =
 
 -- * Postgres specific commands
 
-insert :: DatabaseTable Postgres db table
+insert :: DatabaseTable db table
        -> SqlInsertValues PgInsertValuesSyntax table
        -> PgInsertOnConflict PgInsertOnConflictSyntax table
        -> SqlInsert PgInsertSyntax
@@ -614,7 +617,7 @@ insert tbl values onConflict =
 newtype PgInsertReturning a = PgInsertReturning PgSyntax
 
 insertReturning :: Projectible PgExpressionSyntax a
-                => DatabaseTable Postgres db table
+                => DatabaseTable db table
                 -> SqlInsertValues PgInsertValuesSyntax table
                 -> PgInsertOnConflict PgInsertOnConflictSyntax table
                 -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)

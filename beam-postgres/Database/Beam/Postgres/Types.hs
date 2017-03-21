@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Postgres.Types where
 
 import Database.Beam
@@ -40,7 +41,10 @@ instance BeamBackend Postgres where
     , pgIsNullable :: Bool
     , pgIsPrimaryKey :: Bool }
     deriving (Show)
-  type BackendFromField Postgres = Pg.FromField
+  type BackendFromField Postgres = PostgresFromField
+class PostgresFromField a
+instance Pg.FromField a => PostgresFromField a
+instance Beamable tbl => PostgresFromField (tbl Identity)
 
 instance SupportedSyntax Postgres SqlSyntaxBuilder
 

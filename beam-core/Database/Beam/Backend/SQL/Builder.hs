@@ -92,7 +92,12 @@ instance IsSql92UpdateSyntax SqlSyntaxBuilder where
   type Sql92UpdateExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
   updateStmt table set where_ =
-    SqlSyntaxBuilder undefined
+    SqlSyntaxBuilder $
+    byteString "UPDATE " <> quoteSql table <>
+    (case set of
+       [] -> mempty
+       es -> byteString " SET " <> buildSepBy (byteString ", ") (map (\(field, expr) -> buildSql field <> byteString "=" <> buildSql expr) es)) <>
+    maybe mempty (\where_ -> byteString " WHERE " <> buildSql where_) where_
 
 instance IsSql92DeleteSyntax SqlSyntaxBuilder where
   type Sql92DeleteExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
@@ -100,7 +105,7 @@ instance IsSql92DeleteSyntax SqlSyntaxBuilder where
   deleteStmt tbl where_ =
     SqlSyntaxBuilder $
     byteString "DELETE FROM " <> quoteSql tbl <>
-    byteString " WHERE " <> buildSql where_
+    maybe mempty (\where_ -> byteString " WHERE " <> buildSql where_) where_
 
 instance IsSql92FieldNameSyntax SqlSyntaxBuilder where
   qualifiedField a b =

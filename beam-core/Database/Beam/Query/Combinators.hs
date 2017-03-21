@@ -26,6 +26,7 @@ module Database.Beam.Query.Combinators
 --  , overlaps_, nullIf_, cast_
     , (<.), (>.), (<=.), (>=.), (==.), (/=.)
     , (&&.), (||.), not_, div_, mod_
+    , (<-.)
     , HaskellLiteralForQExpr
     , SqlValable(..), As(..)
 
@@ -313,6 +314,13 @@ mod_, div_ ::
   QExpr syntax s a -> QExpr syntax s a -> QExpr syntax s a
 div_ = qBinOpE divE
 mod_ = qBinOpE modE
+
+(<-.) :: IsSql92FieldNameSyntax fieldName
+      => QField s a
+      -> QExpr expr s a
+      -> QAssignment fieldName expr s
+QField _ fieldName <-. QExpr expr =
+  QAssignment (unqualifiedField fieldName) expr
 
 -- * Combine table sources via UNION, INTERSECT, and EXCEPT
 
