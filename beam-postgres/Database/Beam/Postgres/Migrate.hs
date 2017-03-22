@@ -2,6 +2,7 @@ module Database.Beam.Postgres.Migrate where
 
 import qualified Database.Beam.Migrate.Types as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
+import qualified Database.Beam.Migrate.Tool as Tool
 import           Database.Beam.Postgres.Syntax
 
 import           Control.Monad.Free.Church
@@ -13,7 +14,30 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Char
 import           Data.List (intersperse)
 import           Data.Monoid
+import           Data.Proxy
 import qualified Data.Text.Encoding as TE
+
+import           Options.Applicative
+
+data PgMigrateOpts
+  = PgMigrateOpts
+  { pgMigrateHost :: String
+  , pgMigrateDatabase :: String
+  , pgMigratePort :: Int
+  , pgMigrateUser :: String
+  , pgMigratePromptPassword :: Bool
+  } deriving Show
+
+parsePgMigrateOpts :: Parser PgMigrateOpts
+parsePgMigrateOpts =
+  PgMigrateOpts <$> strOption (long "host" <> metavar "HOST" <> help "Postgres host to connect to" <> value "localhost")
+                <*> strOption (long "database" <> metavar "DATABASE" <> help "Name of postgres database")
+                <*> option auto (long "port" <> metavar "PORT" <> help "Port number to connect to " <> value 5432)
+                <*> strOption (long "user" <> metavar "USER" <> help "Name of postgres user")
+                <*> pure True
+
+migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax
+migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts (BL.concat . migrateScript)
 
 pgRenderSyntaxScript :: PgSyntax -> BL.ByteString
 pgRenderSyntaxScript (PgSyntax mkQuery) =

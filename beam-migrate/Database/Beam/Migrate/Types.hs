@@ -40,3 +40,15 @@ migrateScript renderMigrationHeader renderSyntax steps =
     renderMigration steps =
       runF steps (,)
            (\(MigrationRunCommand a _ next) x -> next (x <> renderSyntax a))
+
+evaluateDatabase :: forall syntax a. MigrationSteps syntax a -> a
+evaluateDatabase f = runF f id (\(MigrationStep _ migration next) -> next (runMigration migration))
+  where
+    runMigration :: forall a. Migration syntax a -> a
+    runMigration f = runF f id (\(MigrationRunCommand _ _ next) -> next)
+
+stepNames :: forall syntax a. MigrationSteps syntax a -> [Text]
+stepNames f = runF f (\_ x -> x) (\(MigrationStep nm migration next) x -> next (runMigration migration) (x ++ [nm])) []
+  where
+    runMigration :: forall a. Migration syntax a -> a
+    runMigration f = runF f id (\(MigrationRunCommand _ _ next) -> next)
