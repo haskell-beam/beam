@@ -14,25 +14,8 @@ import Data.Text (Text)
 
 import GHC.Generics
 
-class ( BeamSqlBackend be
-      , Sql92Schema (BackendColumnSchema be)) =>
+class ( BeamSqlBackend be ) =>
       BeamSql92Backend be where
-
--- * Schemas
-
-class Sql92Schema schema where
-  int :: schema
-  smallint :: schema
-  tinyint :: schema
-  bigint :: schema
-
-  char :: Word -> schema
-  varchar :: Maybe Word -> schema
-
-  float :: schema
-  double :: schema
-
-  timestamp :: schema
 
 -- * Finally tagless style
 
@@ -134,6 +117,27 @@ class IsSql92FieldNameSyntax fn where
 
 class IsSql92QuantifierSyntax quantifier where
   quantifyOverAll, quantifyOverAny :: quantifier
+
+class IsSql92DataTypeSyntax dataType where
+  domainType :: Text -> dataType
+  charType :: Maybe Word -> Maybe Text -> dataType
+  varCharType :: Maybe Word -> Maybe Text -> dataType
+  nationalCharType :: Maybe Word -> dataType
+  nationalVarCharType :: Maybe Word -> dataType
+  bitType :: Maybe Word -> dataType
+  varBitType :: Maybe Word -> dataType
+  numericType :: Maybe (Word, Maybe Word) -> dataType
+  decimalType :: Maybe (Word, Maybe Word) -> dataType
+  intType :: dataType
+  smallIntType :: dataType
+  floatType :: Maybe Word -> dataType
+  doubleType :: dataType
+  realType :: dataType
+
+  dateType :: dataType
+  timeType :: Maybe Word -> Bool {-^ With time zone -} -> dataType
+  timestampType :: Maybe Word -> Bool {-^ With time zone -} -> dataType
+  -- TODO interval type
 
 class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr) ) =>

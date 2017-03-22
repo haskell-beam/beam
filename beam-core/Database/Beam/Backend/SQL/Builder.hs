@@ -1,6 +1,7 @@
 {-# LANGUAGE PolyKinds #-}
 module Database.Beam.Backend.SQL.Builder
-  ( SqlSyntaxBuilder, buildSql
+  ( SqlSyntaxBuilder(..), buildSepBy
+  , buildSql, quoteSql
   , renderSql ) where
 
 import           Database.Beam.Backend.SQL.Types

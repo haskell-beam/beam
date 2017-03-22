@@ -7,6 +7,10 @@ module Main where
 
 import Database.Beam
 import Database.Beam.Postgres
+import Database.Beam.Postgres.Migrate
+import Database.Beam.Migrate.Types hiding (migrateScript)
+import Database.Beam.Migrate.SQL.Tables
+import Database.Beam.Migrate.SQL.Types
 
 import qualified Database.PostgreSQL.Simple as Pg
 
@@ -14,6 +18,7 @@ import qualified Control.Exception as E
 
 import Data.Text (Text)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as BL
 import Data.Time.LocalTime (LocalTime)
 
 import Data.Conduit ((=$=), runConduit)
@@ -172,7 +177,7 @@ data StaffT f
   , staffUsername  :: Columnar f Text
   , staffPassword  :: Columnar f ByteString
   , staffLastUpdate :: Columnar f LocalTime
-  , staffPicture   :: Columnar f (Maybe ByteString)
+  , staffPicture   :: Columnar f ByteString
   } deriving Generic
 type Staff = StaffT Identity
 deriving instance Eq Staff; deriving instance Show Staff
@@ -236,17 +241,54 @@ instance Beamable StoreT
 instance Beamable (PrimaryKey StaffT)
 instance Beamable StaffT
 
+lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
+lastUpdateField = field "last_update" timestamp (default_ now_) notNull
+
+migration :: MigrationSteps PgCommandSyntax (DatabaseSettings PagilaDb)
+migration =
+  migrationStep "Create all tables"
+   (PagilaDb <$> createTable "actor"
+                   (ActorT (field "actor_id" smallserial) (field "first_name" (varchar (Just 45)))
+                           (field "last_name" (varchar (Just 45)))
+                           lastUpdateField)
+             <*> createTable "address"
+                   (AddressT (field "address_id" smallserial) (field "address" (varchar (Just 50)) notNull)
+                             (field "address2" (varchar (Just 50))) (field "district" (varchar (Just 20)))
+                             (CityId (field "city_id" smallint notNull)) (field "postal_code" (varchar (Just 10)))
+                             (field "phone" (varchar (Just 20)) notNull) lastUpdateField)
+             <*> createTable "city"
+                   (CityT (field "city_id" smallserial) (field "city" (varchar (Just 50)) notNull)
+                          (CountryId (field "country_id" smallint notNull)) lastUpdateField)
+             <*> createTable "country"
+                   (CountryT (field "country_id" smallserial) (field "country" (varchar (Just 50)) notNull)
+                             lastUpdateField)
+             <*> createTable "category"
+                   (CategoryT (field "category_id" smallserial) (field "name" (varchar (Just 25)) notNull)
+                              lastUpdateField)
+             <*> createTable "store"
+                   (StoreT (field "store_id" smallserial) (StaffId (field "manager_staff_id" smallint notNull))
+                           (AddressId (field "address_id" smallint notNull)) lastUpdateField)
+             <*> createTable "staff"
+                   (StaffT (field "staff_id" smallserial) (field "first_name" (varchar (Just 45)) notNull)
+                           (field "last_name" (varchar (Just 45)) notNull)
+                           (AddressId (field "address_id" smallint notNull)) (field "email" (varchar (Just 50)))
+                           (StoreId (field "store_id" smallint notNull)) (field "active" boolean (default_ (val_ True)) notNull)
+                           (field "username" (varchar (Just 16)) notNull) (field "password" (varchar (Just 40)))
+                           lastUpdateField (field "picture" bytea)))
+
 main :: IO ()
 main =
-  E.bracket (Pg.connectPostgreSQL "dbname=pagila") Pg.close $ \conn ->
-  do let q = do AddressT { .. } <- all_ (addresses pagilaDb)
-                CityT { .. } <- related_ (cities pagilaDb) addressCity
-                CountryT { .. } <- related_ (countries pagilaDb) cityCountryId
-                guard_ (isJust_ addressAddress2)
-                pure (addressAddress1, addressDistrict, cityName, addressPostalCode, countryName, addressPhone, addressLastUpdate)
-     runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
+  -- E.bracket (Pg.connectPostgreSQL "dbname=pagila") Pg.close $ \conn ->
+  -- do let q = do AddressT { .. } <- all_ (addresses pagilaDb)
+  --               CityT { .. } <- related_ (cities pagilaDb) addressCity
+  --               CountryT { .. } <- related_ (countries pagilaDb) cityCountryId
+  --               guard_ (isJust_ addressAddress2)
+  --               pure (addressAddress1, addressDistrict, cityName, addressPostalCode, countryName, addressPhone, addressLastUpdate)
+  --    runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
 
-     let q = do store@StoreT { .. } <- all_ (stores pagilaDb)
-                manager <- related_ (staff pagilaDb) storeManager
-                pure (store, manager)
-     runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
+  --    let q = do store@StoreT { .. } <- all_ (stores pagilaDb)
+  --               manager <- related_ (staff pagilaDb) storeManager
+  --               pure (store, manager)
+  --    runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
+
+     BL.putStrLn . BL.concat . migrateScript $ migration

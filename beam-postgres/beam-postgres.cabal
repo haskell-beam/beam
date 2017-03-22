@@ -17,7 +17,9 @@ library
   other-modules:      Database.Beam.Postgres.Syntax
                       Database.Beam.Postgres.Types
                       Database.Beam.Postgres.Connection
-  build-depends:      base >=4.7 && <5.0, beam-core, text, bytestring, postgresql-libpq,
+                      Database.Beam.Postgres.Migrate
+  build-depends:      base >=4.7 && <5.0, beam-core, beam-migrate,
+                      text, bytestring, postgresql-libpq,
                       postgresql-simple, attoparsec, free, time, mtl, conduit, aeson, uuid,
                       case-insensitive, scientific, vector
   default-language:   Haskell2010

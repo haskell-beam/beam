@@ -159,7 +159,7 @@ instance BeamSql92Backend Postgres
 --     Right x -> Just x
 
 -- rdInt :: Integral a => ByteString -> Maybe a
--- rdInt = rdAtto (signed decimal)
+  -- rdInt = rdAtto (signed decimal)
 
 -- instance FromBackendLiteral Postgres Int16 where
 --   fromBackendLiteral =
@@ -216,40 +216,40 @@ instance BeamColumnSchema (BackendColumnSchema Postgres) where
   nestedSchema schema = schema { pgIsPrimaryKey = False }
   autoSchema schema = schema
 
-instance Sql92Schema (BackendColumnSchema Postgres) where
-  int = PgColumnSchema "INT" False False
-  smallint = PgColumnSchema "SMALLINT" False False
-  tinyint = PgColumnSchema "TINYINT" False False
-  bigint = PgColumnSchema "BIGINT" False False
+-- instance Sql92Schema (BackendColumnSchema Postgres) where
+--   int = PgColumnSchema "INT" False False
+--   smallint = PgColumnSchema "SMALLINT" False False
+--   tinyint = PgColumnSchema "TINYINT" False False
+--   bigint = PgColumnSchema "BIGINT" False False
 
-  char x = PgColumnSchema ("CHAR(" <> fromString (show x) <> ")") False False
-  varchar Nothing = PgColumnSchema "VARCHAR" False False
-  varchar (Just x) = PgColumnSchema ("VARCHAR(" <> fromString (show x) <> ")") False False
+--   char x = PgColumnSchema ("CHAR(" <> fromString (show x) <> ")") False False
+--   varchar Nothing = PgColumnSchema "VARCHAR" False False
+--   varchar (Just x) = PgColumnSchema ("VARCHAR(" <> fromString (show x) <> ")") False False
 
-  float = PgColumnSchema "FLOAT" False False
-  double = PgColumnSchema "DOUBLE" False False
+--   float = PgColumnSchema "FLOAT" False False
+--   double = PgColumnSchema "DOUBLE" False False
 
-  timestamp = PgColumnSchema "TIMESTAMP" False False
+--   timestamp = PgColumnSchema "TIMESTAMP" False False
 
-instance HasDefaultFieldSchema Postgres Int16 where
-  defFieldSchema _ = smallint
-instance HasDefaultFieldSchema Postgres Int32 where
-  defFieldSchema _ = int
-instance HasDefaultFieldSchema Postgres Int64 where
-  defFieldSchema _ = bigint
-instance HasDefaultFieldSchema Postgres Text where
-  defFieldSchema _ = varchar Nothing
-instance HasDefaultFieldSchema Postgres String where
-  defFieldSchema _ = varchar Nothing
-instance HasDefaultFieldSchema Postgres Float where
-  defFieldSchema _ = float
-instance HasDefaultFieldSchema Postgres Double where
-  defFieldSchema _ = double
-instance HasDefaultFieldSchema Postgres UTCTime where
-  defFieldSchema _ = timestamp
-instance HasDefaultFieldSchema Postgres x =>
-  HasDefaultFieldSchema Postgres (Maybe x) where
-  defFieldSchema p = maybeFieldSchema (defFieldSchema p)
+-- instance HasDefaultFieldSchema Postgres Int16 where
+--   defFieldSchema _ = smallint
+-- instance HasDefaultFieldSchema Postgres Int32 where
+--   defFieldSchema _ = int
+-- instance HasDefaultFieldSchema Postgres Int64 where
+--   defFieldSchema _ = bigint
+-- instance HasDefaultFieldSchema Postgres Text where
+--   defFieldSchema _ = varchar Nothing
+-- instance HasDefaultFieldSchema Postgres String where
+--   defFieldSchema _ = varchar Nothing
+-- instance HasDefaultFieldSchema Postgres Float where
+--   defFieldSchema _ = float
+-- instance HasDefaultFieldSchema Postgres Double where
+--   defFieldSchema _ = double
+-- instance HasDefaultFieldSchema Postgres UTCTime where
+--   defFieldSchema _ = timestamp
+-- instance HasDefaultFieldSchema Postgres x =>
+--   HasDefaultFieldSchema Postgres (Maybe x) where
+--   defFieldSchema p = maybeFieldSchema (defFieldSchema p)
 
 -- * Build commands
 

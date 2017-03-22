@@ -24,9 +24,14 @@ module Database.Beam.Postgres.Syntax
     , PgOrderingSyntax(..), PgValueSyntax(..)
     , PgTableSourceSyntax(..), PgFieldNameSyntax(..)
     , PgInsertValuesSyntax(..), PgInsertOnConflictSyntax(..)
-    , PgInsertOnConflictTargetSyntax(..)
+    , PgInsertOnConflictTargetSyntax(..), PgInsertOnConflictUpdateSyntax(..)
+    , PgCreateTableSyntax(..), PgTableOptionsSyntax(..), PgColumnSchemaSyntax(..)
+    , PgDataTypeSyntax(..), PgColumnConstraintDefinitionSyntax(..), PgColumnConstraintSyntax(..)
+    , PgTableConstraintSyntax(..), PgMatchTypeSyntax(..), PgReferentialActionSyntax(..)
 
     , insertDefaults
+    , pgSimpleMatchSyntax
+    , pgBooleanType, pgByteaType
 
     , IsPgInsertOnConflictSyntax(..)
     , PgInsertOnConflict(..)
@@ -38,13 +43,17 @@ module Database.Beam.Postgres.Syntax
     , insert
 
     , PgInsertReturning(..)
-    , insertReturning ) where
+    , insertReturning
+
+    , now_ ) where
 
 import           Database.Beam.Postgres.Types
 
 import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.Types
+import           Database.Beam.Migrate.SQL
+import           Database.Beam.Migrate.SQL.Builder
 --import           Database.Beam.Query.Combinators
 import           Database.Beam.Query.Internal
 --import           Database.Beam.Schema.Tables
@@ -63,6 +72,7 @@ import           Data.Ratio
 import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import           Data.Time (LocalTime)
 
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
@@ -157,6 +167,16 @@ newtype PgInsertOnConflictSyntax = PgInsertOnConflictSyntax { fromPgInsertOnConf
 newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPgInsertOnConflictTarget :: PgSyntax }
 newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
 
+newtype PgCreateTableSyntax = PgCreateTableSyntax { fromPgCreateTable :: PgSyntax }
+data PgTableOptionsSyntax = PgTableOptionsSyntax PgSyntax PgSyntax
+newtype PgColumnSchemaSyntax = PgColumnSchemaSyntax { fromPgColumnSchema :: PgSyntax }
+newtype PgDataTypeSyntax = PgDataTypeSyntax { fromPgDataType :: PgSyntax }
+newtype PgColumnConstraintDefinitionSyntax = PgColumnConstraintDefinitionSyntax { fromPgColumnConstraintDefinition :: PgSyntax }
+newtype PgColumnConstraintSyntax = PgColumnConstraintSyntax { fromPgColumnConstraint :: PgSyntax }
+newtype PgTableConstraintSyntax = PgTableConstraintSyntax { fromPgTableConstraint :: PgSyntax }
+newtype PgMatchTypeSyntax = PgMatchTypeSyntax { fromPgMatchType :: PgSyntax }
+newtype PgReferentialActionSyntax = PgReferentialActionSyntax { fromPgReferentialAction :: PgSyntax }
+
 instance IsSql92Syntax PgCommandSyntax where
   type Sql92SelectSyntax PgCommandSyntax = PgSelectSyntax
   type Sql92InsertSyntax PgCommandSyntax = PgInsertSyntax
@@ -167,6 +187,11 @@ instance IsSql92Syntax PgCommandSyntax where
   insertCmd = coerce
   deleteCmd = coerce
   updateCmd = coerce
+
+instance IsSql92DdlCommandSyntax PgCommandSyntax where
+  type Sql92DdlCommandCreateTableSyntax PgCommandSyntax = PgCreateTableSyntax
+
+  createTableCmd = coerce
 
 instance IsSql92SelectSyntax PgSelectSyntax where
   type Sql92SelectSelectTableSyntax PgSelectSyntax = PgSelectTableSyntax
@@ -225,6 +250,49 @@ instance IsSql92OrderingSyntax PgOrderingSyntax where
 
   ascOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " ASC")
   descOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " DESC")
+
+instance IsSql92DataTypeSyntax PgDataTypeSyntax where
+  domainType nm = PgDataTypeSyntax (pgQuotedIdentifier nm)
+
+  charType prec charSet = PgDataTypeSyntax (emit "CHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
+  varCharType prec charSet = PgDataTypeSyntax (emit "VARCHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
+  nationalCharType prec = PgDataTypeSyntax (emit "NATIONAL CHAR" <> pgOptPrec prec)
+  nationalVarCharType prec = PgDataTypeSyntax (emit "NATIONAAL CHARACTER VARYING" <> pgOptPrec prec)
+
+  bitType prec = PgDataTypeSyntax (emit "BIT" <> pgOptPrec prec)
+  varBitType prec = PgDataTypeSyntax (emit "BIT VARYING" <> pgOptPrec prec)
+
+  numericType prec = PgDataTypeSyntax (emit "NUMERIC" <> pgOptNumericPrec prec)
+  decimalType prec = PgDataTypeSyntax (emit "DOUBLE" <> pgOptNumericPrec prec)
+
+  intType = PgDataTypeSyntax (emit "INT")
+  smallIntType = PgDataTypeSyntax (emit "SMALLINT")
+
+  floatType prec = PgDataTypeSyntax (emit "FLOAT" <> pgOptPrec prec)
+  doubleType = PgDataTypeSyntax (emit "DOUBLE PRECISION")
+  realType = PgDataTypeSyntax (emit "REAL")
+  dateType = PgDataTypeSyntax (emit "DATE")
+  timeType prec withTz = PgDataTypeSyntax (emit "TIME" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
+  timestampType prec withTz = PgDataTypeSyntax (emit "TIMESTAMP" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
+
+pgOptPrec :: Maybe Word -> PgSyntax
+pgOptPrec Nothing = mempty
+pgOptPrec (Just x) = emit "(" <> emit (fromString (show x)) <> emit ")"
+
+pgOptCharSet :: Maybe T.Text -> PgSyntax
+pgOptCharSet Nothing = mempty
+pgOptCharSet (Just cs) = emit " CHARACTER SET " <> emit (TE.encodeUtf8 cs)
+
+pgOptNumericPrec :: Maybe (Word, Maybe Word) -> PgSyntax
+pgOptNumericPrec Nothing = mempty
+pgOptNumericPrec (Just (prec, Nothing)) = pgOptPrec (Just prec)
+pgOptNumericPrec (Just (prec, Just dec)) = emit "(" <> emit (fromString (show prec)) <> emit ", " <> emit (fromString (show dec)) <> emit ")"
+
+pgBooleanType :: PgDataTypeSyntax
+pgBooleanType = PgDataTypeSyntax (emit "BOOLEAN")
+
+pgByteaType :: PgDataTypeSyntax
+pgByteaType = PgDataTypeSyntax (emit "BYTEA")
 
 instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
@@ -353,6 +421,93 @@ instance IsSql92InsertValuesSyntax PgInsertValuesSyntax where
 
 insertDefaults :: SqlInsertValues PgInsertValuesSyntax tbl
 insertDefaults = SqlInsertValues (PgInsertValuesSyntax (emit "DEFAULT VALUES"))
+
+instance IsSql92CreateTableSyntax PgCreateTableSyntax where
+  type Sql92CreateTableColumnSchemaSyntax PgCreateTableSyntax = PgColumnSchemaSyntax
+  type Sql92CreateTableTableConstraintSyntax PgCreateTableSyntax = PgTableConstraintSyntax
+  type Sql92CreateTableOptionsSyntax PgCreateTableSyntax = PgTableOptionsSyntax
+
+  createTableSyntax options tblNm fieldTypes constraints =
+    let (beforeOptions, afterOptions) =
+          case options of
+            Nothing -> (emit " ", emit " ")
+            Just (PgTableOptionsSyntax before after) ->
+              ( emit " " <> before <> emit " "
+              , emit " " <> after <> emit " " )
+    in PgCreateTableSyntax $
+       emit "CREATE" <> beforeOptions <> emit "TABLE " <> pgQuotedIdentifier tblNm <>
+       emit " (" <>
+       pgSepBy (emit ", ")
+               (map (\(nm, type_) -> pgQuotedIdentifier nm <> emit " " <> fromPgColumnSchema type_)  fieldTypes <>
+                map fromPgTableConstraint constraints)
+       <> emit ")" <> afterOptions
+
+instance IsSql92TableConstraintSyntax PgTableConstraintSyntax where
+  primaryKeyConstraintSyntax fieldNames =
+    PgTableConstraintSyntax $
+    emit "PRIMARY KEY(" <> pgSepBy (emit ", ") (map pgQuotedIdentifier fieldNames) <> emit ")"
+
+instance IsSql92ColumnSchemaSyntax PgColumnSchemaSyntax where
+  type Sql92ColumnSchemaColumnTypeSyntax PgColumnSchemaSyntax = PgDataTypeSyntax
+  type Sql92ColumnSchemaExpressionSyntax PgColumnSchemaSyntax = PgExpressionSyntax
+  type Sql92ColumnSchemaColumnConstraintDefinitionSyntax PgColumnSchemaSyntax = PgColumnConstraintDefinitionSyntax
+
+  columnSchemaSyntax colType defaultClause constraints collation =
+    PgColumnSchemaSyntax $
+    fromPgDataType colType <>
+    maybe mempty (\d -> emit " DEFAULT " <> fromPgExpression d) defaultClause <>
+    (case constraints of
+       [] -> mempty
+       _ -> foldMap (\c -> emit " " <> fromPgColumnConstraintDefinition c) constraints) <>
+    maybe mempty (\nm -> emit " COLLATE " <> pgQuotedIdentifier nm) collation
+
+instance IsSql92MatchTypeSyntax PgMatchTypeSyntax where
+  fullMatchSyntax = PgMatchTypeSyntax (emit "FULL")
+  partialMatchSyntax = PgMatchTypeSyntax (emit "PARTIAL")
+
+pgSimpleMatchSyntax :: PgMatchTypeSyntax
+pgSimpleMatchSyntax = PgMatchTypeSyntax (emit "SIMPLE")
+
+instance IsSql92ReferentialActionSyntax PgReferentialActionSyntax where
+  referentialActionCascadeSyntax = PgReferentialActionSyntax (emit "CASCADE")
+  referentialActionNoActionSyntax = PgReferentialActionSyntax (emit "NO ACTION")
+  referentialActionSetDefaultSyntax = PgReferentialActionSyntax (emit "SET DEFAULT")
+  referentialActionSetNullSyntax = PgReferentialActionSyntax (emit "SET NULL")
+
+fromSqlConstraintAttributes :: SqlConstraintAttributesBuilder -> PgSyntax
+fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
+  maybe mempty timingBuilder timing <> maybe mempty deferrableBuilder deferrable
+  where timingBuilder InitiallyDeferred = emit "INITIALLY DEFERRED"
+        timingBuilder InitiallyImmediate = emit "INITIALLY IMMEDIATE"
+        deferrableBuilder False = emit "NOT DEFERRABLE"
+        deferrableBuilder True = emit "DEFERRABLE"
+
+instance IsSql92ColumnConstraintDefinitionSyntax PgColumnConstraintDefinitionSyntax where
+  type Sql92ColumnConstraintDefinitionConstraintSyntax PgColumnConstraintDefinitionSyntax = PgColumnConstraintSyntax
+  type Sql92ColumnConstraintDefinitionAttributesSyntax PgColumnConstraintDefinitionSyntax = SqlConstraintAttributesBuilder
+
+  constraintDefinitionSyntax nm constraint attrs =
+    PgColumnConstraintDefinitionSyntax $
+    maybe mempty (\nm -> emit "CONSTRAINT " <> pgQuotedIdentifier nm <> emit " " ) nm <>
+    fromPgColumnConstraint constraint <>
+    maybe mempty (\a -> emit " " <> fromSqlConstraintAttributes a) attrs
+
+instance IsSql92ColumnConstraintSyntax PgColumnConstraintSyntax where
+  type Sql92ColumnConstraintMatchTypeSyntax PgColumnConstraintSyntax = PgMatchTypeSyntax
+  type Sql92ColumnConstraintReferentialActionSyntax PgColumnConstraintSyntax = PgReferentialActionSyntax
+  type Sql92ColumnConstraintExpressionSyntax PgColumnConstraintSyntax = PgExpressionSyntax
+
+  notNullConstraintSyntax = PgColumnConstraintSyntax (emit "NOT NULL")
+  uniqueColumnConstraintSyntax = PgColumnConstraintSyntax (emit "UNIQUE")
+  primaryKeyColumnConstraintSyntax = PgColumnConstraintSyntax (emit "PRIMARY KEY")
+  checkColumnConstraintSyntax expr = PgColumnConstraintSyntax (emit "CHECK(" <> fromPgExpression expr <> emit ")")
+  referencesConstraintSyntax tbl fields matchType onUpdate onDelete =
+    PgColumnConstraintSyntax $
+    emit "REFERENCES " <> pgQuotedIdentifier tbl <> emit "("
+    <> pgSepBy (emit ", ") (map pgQuotedIdentifier fields) <> emit ")" <>
+    maybe mempty (\m -> emit " " <> fromPgMatchType m) matchType <>
+    maybe mempty (\a -> emit " ON UPDATE " <> fromPgReferentialAction a) onUpdate <>
+    maybe mempty (\a -> emit " ON DELETE " <> fromPgReferentialAction a) onDelete
 
 class IsPgInsertOnConflictSyntax insertOnConflict where
   type PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict :: *
@@ -656,3 +811,6 @@ insertReturning (DatabaseTable _ tblNm tblSettings)
 --                                        [ prob ]
 --                                        Nothing
 --      buildJoinFrom tbl newSource Nothing
+
+now_ :: QExpr PgExpressionSyntax s LocalTime
+now_ = QExpr (PgExpressionSyntax (emit "NOW()"))
