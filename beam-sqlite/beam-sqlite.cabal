@@ -1,0 +1,28 @@
+name:                beam-sqlite
+version:             0.1.0.0
+synopsis:            Connection layer between beam and sqlite
+description:
+homepage:            https://github.com/githubuser/beam-sqlite#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2017 Author name here
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  exposed-modules:    Database.Beam.Sqlite.Types
+  build-depends:      base >= 4.7 && < 5, beam-core >=0.5.0.0, beam-migrate, sqlite-simple >=0.4.0.0,
+                      text, bytestring, time
+  default-language:   Haskell2010
+  default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
+                      DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
+                      CPP, TypeApplications, FlexibleContexts
+
+source-repository head
+  type: git
+  location: https://github.com/tathougies/beam.git
+  subdir: beam-sqlite

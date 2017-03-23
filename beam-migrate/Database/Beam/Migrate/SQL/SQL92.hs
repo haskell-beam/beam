@@ -1,6 +1,6 @@
 module Database.Beam.Migrate.SQL.SQL92 where
 
-import Database.Beam
+import Database.Beam.Backend.SQL.SQL92
 
 import Data.Text (Text)
 
@@ -10,7 +10,8 @@ class (IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)) =>
 
   createTableCmd :: Sql92DdlCommandCreateTableSyntax syntax -> syntax
 
-class IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax syntax) =>
+class ( IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax syntax)
+      , IsSql92ColumnSchemaSyntax (Sql92CreateTableColumnSchemaSyntax syntax) ) =>
     IsSql92CreateTableSyntax syntax where
   type Sql92CreateTableColumnSchemaSyntax syntax :: *
   type Sql92CreateTableTableConstraintSyntax syntax :: *
@@ -22,7 +23,8 @@ class IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax syntax
                     -> [ Sql92CreateTableTableConstraintSyntax syntax ]
                     -> syntax
 
-class IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema) =>
+class ( IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
+      , IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax columnSchema) ) =>
   IsSql92ColumnSchemaSyntax columnSchema where
   type Sql92ColumnSchemaColumnTypeSyntax columnSchema :: *
   type Sql92ColumnSchemaExpressionSyntax columnSchema :: *

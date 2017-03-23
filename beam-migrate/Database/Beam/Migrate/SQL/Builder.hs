@@ -5,7 +5,7 @@ import Database.Beam.Migrate.SQL
 
 import Control.Applicative
 
-import Data.ByteString.Builder (byteString)
+import Data.ByteString.Builder (Builder, byteString)
 import Data.Monoid
 
 data SqlSyntaxBuilderCreateTableOptions
@@ -62,8 +62,67 @@ instance Monoid SqlConstraintAttributesBuilder where
       (_sqlConstraintAttributeTiming b <|> _sqlConstraintAttributeTiming a)
       (_sqlConstraintAttributeDeferrable b <|> _sqlConstraintAttributeDeferrable a)
 
+fromSqlConstraintAttributes :: SqlConstraintAttributesBuilder -> Builder
+fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
+  maybe mempty timingBuilder timing <> maybe mempty deferrableBuilder deferrable
+  where timingBuilder InitiallyDeferred = byteString "INITIALLY DEFERRED"
+        timingBuilder InitiallyImmediate = byteString "INITIALLY IMMEDIATE"
+        deferrableBuilder False = byteString "NOT DEFERRABLE"
+        deferrableBuilder True = byteString "DEFERRABLE"
+
 instance IsSql92ConstraintAttributesSyntax SqlConstraintAttributesBuilder where
   initiallyDeferredAttributeSyntax = SqlConstraintAttributesBuilder (Just InitiallyDeferred) Nothing
   initiallyImmediateAttributeSyntax = SqlConstraintAttributesBuilder (Just InitiallyImmediate) Nothing
   deferrableAttributeSyntax = SqlConstraintAttributesBuilder Nothing (Just True)
   notDeferrableAttributeSyntax = SqlConstraintAttributesBuilder Nothing (Just False)
+
+instance IsSql92ColumnSchemaSyntax SqlSyntaxBuilder where
+  type Sql92ColumnSchemaColumnConstraintDefinitionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92ColumnSchemaColumnTypeSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92ColumnSchemaExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  columnSchemaSyntax type_ default_ constraints collation =
+    SqlSyntaxBuilder $
+    buildSql type_ <>
+    maybe mempty (\d -> byteString " DEFAULT " <> buildSql d) default_ <>
+    (case constraints of
+       [] -> mempty
+       _ -> foldMap (\c -> byteString " " <> buildSql c) constraints) <>
+    maybe mempty (\nm -> byteString " COLLATE " <> quoteSql nm) collation
+
+instance IsSql92ColumnConstraintDefinitionSyntax SqlSyntaxBuilder where
+  type Sql92ColumnConstraintDefinitionConstraintSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92ColumnConstraintDefinitionAttributesSyntax SqlSyntaxBuilder = SqlConstraintAttributesBuilder
+
+  constraintDefinitionSyntax nm c attrs =
+    SqlSyntaxBuilder $
+    maybe mempty (\nm -> byteString "CONSTRAINT " <> quoteSql nm <> byteString " ") nm <>
+    buildSql c <>
+    maybe mempty fromSqlConstraintAttributes attrs
+
+instance IsSql92ColumnConstraintSyntax SqlSyntaxBuilder where
+  type Sql92ColumnConstraintMatchTypeSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92ColumnConstraintReferentialActionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92ColumnConstraintExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  notNullConstraintSyntax = SqlSyntaxBuilder (byteString "NOT NULL")
+  uniqueColumnConstraintSyntax = SqlSyntaxBuilder (byteString "UNIQUE")
+  primaryKeyColumnConstraintSyntax = SqlSyntaxBuilder (byteString "PRIMARY KEY")
+  checkColumnConstraintSyntax e = SqlSyntaxBuilder ("CHECK (" <> buildSql e <> ")")
+  referencesConstraintSyntax tbl fields match onUpdate onDelete =
+    SqlSyntaxBuilder $
+    "REFERENCES " <> quoteSql tbl <> "(" <>
+    buildSepBy ", " (map quoteSql fields) <> ")" <>
+    maybe mempty (\m -> " " <> buildSql m) match <>
+    maybe mempty (\a -> " ON UPDATE " <> buildSql a) onUpdate <>
+    maybe mempty (\a -> " ON DELETE " <> buildSql a) onDelete
+
+instance IsSql92MatchTypeSyntax SqlSyntaxBuilder where
+  fullMatchSyntax = SqlSyntaxBuilder "FULL"
+  partialMatchSyntax = SqlSyntaxBuilder "PARTIAL"
+
+instance IsSql92ReferentialActionSyntax SqlSyntaxBuilder where
+  referentialActionCascadeSyntax = SqlSyntaxBuilder "CASCADE"
+  referentialActionNoActionSyntax = SqlSyntaxBuilder "NO ACTION"
+  referentialActionSetDefaultSyntax = SqlSyntaxBuilder "SET DEFAULT"
+  referentialActionSetNullSyntax = SqlSyntaxBuilder "SET NULL"

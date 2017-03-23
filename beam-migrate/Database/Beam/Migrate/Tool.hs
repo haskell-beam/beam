@@ -5,6 +5,7 @@
 module Database.Beam.Migrate.Tool where
 
 import           Database.Beam
+import           Database.Beam.Migrate.Tool.Schema
 import           Database.Beam.Migrate.Types (MigrationSteps, stepNames)
 
 import           Control.Monad
@@ -18,7 +19,6 @@ import           Data.Ord
 import           Data.Proxy
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Data.Time (LocalTime)
 
 import           Options.Applicative
 
@@ -28,23 +28,6 @@ import           System.Directory
 import           System.FilePath
 
 --import Options.Applicative
-
--- * Migration table
-
-data MigrationT f
-  = MigrationT
-  { migrationNumber :: Columnar f Int
-  , migrationName   :: Columnar f Text
-  , migrationRanAt  :: Columnar f LocalTime
-  } deriving Generic
-instance Beamable MigrationT
-type MigrationTable = MigrationT Identity
-deriving instance Show MigrationTable; deriving instance Eq MigrationTable
-
-instance Table MigrationT where
-  data PrimaryKey MigrationT f = MigrationId (Columnar f Int) deriving Generic
-  primaryKey = MigrationId . migrationNumber
-instance Beamable (PrimaryKey MigrationT)
 
 -- * Options type
 
@@ -56,8 +39,10 @@ data BeamMigrationCommand beOptions
   deriving Show
 
 data BeamMigrationSubcommand
-  = BeamMigrationWriteScript
-  | BeamMigrationListMigrations
+  = WriteScript
+  | ListMigrations
+  | Init
+  | Up
   deriving Show
 
 data DdlResult
@@ -66,12 +51,11 @@ data DdlResult
   deriving Show
 
 data BeamMigrationBackend commandSyntax where
-  BeamMigrationBackend :: Show beOptions =>
-                          Parser beOptions
-                       -> (forall a. MigrationSteps commandSyntax a -> BL.ByteString)
---                       -> (forall a. beOptions -> (beConnection -> IO a) -> IO a)
---                       -> (beConnection -> commandSyntax -> IO DdlResult)
-                       -> BeamMigrationBackend commandSyntax
+  BeamMigrationBackend :: (Show beOptions, MonadBeamDdl commandSyntax m) =>
+                       { backendOptsParser :: Parser beOptions
+                       , backendRenderSteps :: forall a. MigrationSteps commandSyntax a -> BL.ByteString
+                       , backendTransact :: forall a. beOptions -> m a -> IO (Either DdlResult a)
+                       } -> BeamMigrationBackend commandSyntax
 data SomeBeamMigrationBackend where
   SomeBeamMigrationBackend :: Typeable commandSyntax => BeamMigrationBackend commandSyntax
                            -> SomeBeamMigrationBackend
@@ -91,8 +75,8 @@ subcommandParser = subparser (command "write-script" writeScriptCommand <> help 
     listMigrationsCommand =
       info (listMigrationsArgParser <**> helper) (fullDesc <> progDesc "List all discovered migrations")
 
-    writeScriptArgParser = pure BeamMigrationWriteScript
-    listMigrationsArgParser = pure BeamMigrationListMigrations
+    writeScriptArgParser    = pure WriteScript
+    listMigrationsArgParser = pure ListMigrations
 
 migrationCommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions)
 migrationCommandOptions beOptions =
@@ -104,14 +88,23 @@ migrationCommandAndSubcommandOptions beOptions =
   info (((,) <$> migrationCommandArgParser beOptions <*> subcommandParser) <**> helper)
        (fullDesc <> progDesc "Beam schema migration tool" <> header "beam-migrate -- migrate database schemas for various beam backends")
 
+-- * Migration table creation script
+
+writeMigrationTables :: IO ()
+writeMigrationTables = pure ()
+
 -- * Tool entry point
 
 invokeMigrationTool :: BeamMigrationBackend cmdSyntax -> BeamMigrationCommand beOptions
                     -> BeamMigrationSubcommand -> MigrationSteps cmdSyntax () -> IO ()
 invokeMigrationTool be@(BeamMigrationBackend _ renderSteps) BeamMigrationCommand {..}  subcommand steps =
   case subcommand of
-    BeamMigrationListMigrations ->
+    ListMigrations ->
       do putStrLn "Registered migrations:"
          mapM_ (putStrLn . ("  - " ++) . T.unpack) (stepNames steps)
-    BeamMigrationWriteScript ->
+    WriteScript ->
       do BL.putStrLn (renderSteps steps)
+    Init ->
+      do writeMigrationsTable
+--    Up ->
+--      do ensureMigrationsTable

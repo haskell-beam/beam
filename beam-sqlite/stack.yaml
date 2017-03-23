@@ -1,0 +1,8 @@
+resolver: lts-8.5
+packages:
+  - '.'
+  - '../beam-migrate'
+  - '../beam-core'
+extra-deps: []
+flags: {}
+extra-package-dbs: []
