@@ -176,7 +176,7 @@ data StaffT f
   , staffUsername  :: Columnar f Text
   , staffPassword  :: Columnar f ByteString
   , staffLastUpdate :: Columnar f LocalTime
-  , staffPicture   :: Columnar f ByteString
+  , staffPicture   :: Columnar f (Maybe ByteString)
   } deriving Generic
 type Staff = StaffT Identity
 deriving instance Eq Staff; deriving instance Show Staff

@@ -7,7 +7,7 @@ module Database.Beam.Test.Schema
   , EmployeeDb(..)
   , PrimaryKey(..)
 
-  , DummyBackend, DummyFieldType(..)
+  , DummyBackend
 
   , employeeDbSettings
 
@@ -35,36 +35,7 @@ tests = testGroup "Schema Tests"
 
 data DummyBackend
 instance SupportedSyntax DummyBackend Select
-instance BeamBackend DummyBackend where
-  data BackendColumnSchema DummyBackend
-    = DummyField
-    { dummyNested, dummyAuto :: Bool
-    , dummyType :: DummyFieldType }
-    deriving (Show, Eq)
-
-data DummyFieldType
-  = DummyFieldText
-  | DummyFieldInt
-  | DummyFieldDouble
-  | DummyFieldUTCTime
-
-  | DummyFieldMaybe DummyFieldType
-    deriving (Show, Eq)
-
-instance BeamColumnSchema (BackendColumnSchema DummyBackend) where
-  maybeFieldSchema field = field { dummyType = DummyFieldMaybe (dummyType field) }
-  autoSchema field = field { dummyAuto = True }
-  nestedSchema field = field { dummyNested = True, dummyAuto = False }
-instance HasDefaultFieldSchema DummyBackend a => HasDefaultFieldSchema DummyBackend (Maybe a) where
-  defFieldSchema _ = maybeFieldSchema (defFieldSchema (Proxy @a))
-instance HasDefaultFieldSchema DummyBackend Text where
-  defFieldSchema _ = DummyField False False DummyFieldText
-instance HasDefaultFieldSchema DummyBackend Int where
-  defFieldSchema _ = DummyField False False DummyFieldInt
-instance HasDefaultFieldSchema DummyBackend Double where
-  defFieldSchema _ = DummyField False False DummyFieldDouble
-instance HasDefaultFieldSchema DummyBackend UTCTime where
-  defFieldSchema _ = DummyField False False DummyFieldUTCTime
+instance BeamBackend DummyBackend
 
 data EmployeeT f
   = EmployeeT

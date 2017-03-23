@@ -24,7 +24,6 @@ module Database.Beam.Schema.Tables
     , Nullable, TableField(..)
     , Exposed(..)
     , fieldName --, fieldSchema
-    , maybeFieldSchema
 
     , TableSettings, TableSkeleton, Ignored(..)
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint, WithConstraint(..)
@@ -35,10 +34,7 @@ module Database.Beam.Schema.Tables
     --, reifyTableSchema
     , tableValuesNeeded
     , pk
-    , allBeamValues, changeBeamRep
-
-    -- * Fields
-    , HasDefaultFieldSchema(..) )
+    , allBeamValues, changeBeamRep )
     where
 
 import           Database.Beam.Backend.Types
@@ -695,14 +691,6 @@ instance ( Generic (PrimaryKey related (Nullable Ignored))
          , GTableSkeleton (Rep (PrimaryKey related (Nullable Ignored))) ) =>
     GTableSkeleton (K1 Generic.R (PrimaryKey related (Nullable Ignored))) where
     gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (PrimaryKey related (Nullable Ignored))))))
-
--- | Type class for types which can construct a default 'TableField' given a column name.
-class HasDefaultFieldSchema be fs where
-    defFieldSchema :: Proxy fs -> BackendColumnSchema be
-
-instance (BeamColumnSchema (BackendColumnSchema be), HasDefaultFieldSchema be x) =>
-  HasDefaultFieldSchema be (Auto x) where
-  defFieldSchema _ = autoSchema (defFieldSchema (Proxy @x))
 
 -- * Parsing tables from rows
 

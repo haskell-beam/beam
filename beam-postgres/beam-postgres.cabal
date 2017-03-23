@@ -27,3 +27,7 @@ library
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
                       CPP, TypeApplications, FlexibleContexts
 
+source-repository head
+  type: git
+  location: https://github.com/tathougies/beam.git
+  subdir: beam-postgres

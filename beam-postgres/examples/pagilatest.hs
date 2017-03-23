@@ -292,7 +292,7 @@ main =
                 pure (addressAddress1, addressDistrict, cityName, addressPostalCode, countryName, addressPhone, addressLastUpdate)
      runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
 
-     let q = do store@StoreT { .. } <- all_ (stores )
+     let q = do store@StoreT { .. } <- all_ (stores db)
                 manager <- related_ (staff db) storeManager
                 pure (store, manager)
      runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))

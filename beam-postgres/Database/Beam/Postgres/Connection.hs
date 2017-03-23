@@ -47,6 +47,7 @@ import qualified Database.PostgreSQL.Simple.Internal as Pg
   ( Field(..)
   , withConnection, escapeStringConn, escapeIdentifier, escapeByteaConn)
 import qualified Database.PostgreSQL.Simple.Ok as Pg
+import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..))
 
 import           Data.ByteString.Builder (toLazyByteString, byteString)
 import qualified Data.ByteString.Lazy as BL
@@ -269,8 +270,27 @@ runPgRowReader conn res fields readRow =
       do fieldValue <- Pg.getvalue res (Pg.Row 0) (Pg.Col curCol)
          res <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res of
-           Pg.Errors xs -> do putStrLn ("GOt errors " <> show xs)
+           Pg.Errors xs -> do putStrLn ("Got errors " <> show xs)
                               next Nothing curCol colCount fields
            Pg.Ok x -> next (Just x) curCol colCount fields
+
+    step (CheckNextNNull n next) curCol colCount fields =
+      doCheckNextN (fromIntegral n) (curCol :: CInt) (colCount :: CInt) fields >>= \yes ->
+      next yes curCol colCount fields
+
+    doCheckNextN 0 _ _ _ = pure False
+    doCheckNextN n curCol colCount fields
+      | curCol + n > colCount = pure False
+      | otherwise =
+        let fieldsInQuestion = zip [curCol..] (take (fromIntegral n) fields)
+        in readAndCheck fieldsInQuestion
+
+    readAndCheck [] = pure True
+    readAndCheck ((i, field):xs) =
+      do fieldValue <- Pg.getvalue res (Pg.Row 0) (Pg.Col i)
+         res <- Pg.runConversion (Pg.fromField field fieldValue) conn
+         case res of
+           Pg.Errors xs -> pure False
+           Pg.Ok Pg.Null -> readAndCheck xs
 
     finish x _ _ _ = pure (Right x)

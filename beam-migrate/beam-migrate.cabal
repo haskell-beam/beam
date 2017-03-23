@@ -44,3 +44,8 @@ executable beam-migrate
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,
                        StandaloneDeriving, GADTs, DeriveFunctor, RankNTypes, ScopedTypeVariables,
                        FlexibleInstances
+
+source-repository head
+  type: git
+  location: https://github.com/tathougies/beam.git
+  subdir: beam-migrate            
