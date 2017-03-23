@@ -5,6 +5,7 @@
 module Database.Beam.Migrate.Tool where
 
 import           Database.Beam
+import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate.Tool.Schema
 import           Database.Beam.Migrate.Types (MigrationSteps, stepNames)
 
@@ -45,19 +46,20 @@ data BeamMigrationSubcommand
   | Up
   deriving Show
 
-data DdlResult
-  = DdlResultOk
-  | DdlResultError String
+data DdlError
+  = DdlError String
   deriving Show
 
-data BeamMigrationBackend commandSyntax where
-  BeamMigrationBackend :: (Show beOptions, MonadBeamDdl commandSyntax m) =>
+data BeamMigrationBackend commandSyntax beOptions where
+  BeamMigrationBackend :: (Show beOptions, MonadBeam commandSyntax be m) =>
                        { backendOptsParser :: Parser beOptions
+                       , backendProxy :: Proxy be
                        , backendRenderSteps :: forall a. MigrationSteps commandSyntax a -> BL.ByteString
-                       , backendTransact :: forall a. beOptions -> m a -> IO (Either DdlResult a)
-                       } -> BeamMigrationBackend commandSyntax
+                       , backendTransact :: forall a. beOptions -> m a -> IO (Either DdlError a)
+                       } -> BeamMigrationBackend commandSyntax beOptions
 data SomeBeamMigrationBackend where
-  SomeBeamMigrationBackend :: Typeable commandSyntax => BeamMigrationBackend commandSyntax
+  SomeBeamMigrationBackend :: (Typeable commandSyntax, Typeable beOptions) =>
+                              BeamMigrationBackend commandSyntax beOptions
                            -> SomeBeamMigrationBackend
 
 migrationCommandArgParser :: Parser beOptions -> Parser (BeamMigrationCommand beOptions)
@@ -90,21 +92,24 @@ migrationCommandAndSubcommandOptions beOptions =
 
 -- * Migration table creation script
 
-writeMigrationTables :: IO ()
-writeMigrationTables = pure ()
+writeMigrationsTable :: BeamMigrationBackend cmdSyntax beOptions -> beOptions -> IO ()
+writeMigrationsTable BeamMigrationBackend {..} opts =
+    do err <- backendTransact opts $ pure ()
+       putStrLn (show err)
+       pure ()
 
 -- * Tool entry point
 
-invokeMigrationTool :: BeamMigrationBackend cmdSyntax -> BeamMigrationCommand beOptions
+invokeMigrationTool :: BeamMigrationBackend cmdSyntax beOptions -> BeamMigrationCommand beOptions
                     -> BeamMigrationSubcommand -> MigrationSteps cmdSyntax () -> IO ()
-invokeMigrationTool be@(BeamMigrationBackend _ renderSteps) BeamMigrationCommand {..}  subcommand steps =
+invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  subcommand steps =
   case subcommand of
     ListMigrations ->
       do putStrLn "Registered migrations:"
          mapM_ (putStrLn . ("  - " ++) . T.unpack) (stepNames steps)
     WriteScript ->
-      do BL.putStrLn (renderSteps steps)
+      do BL.putStrLn (backendRenderSteps steps)
     Init ->
-      do writeMigrationsTable
+      do writeMigrationsTable be migrationCommandBackendOptions
 --    Up ->
 --      do ensureMigrationsTable

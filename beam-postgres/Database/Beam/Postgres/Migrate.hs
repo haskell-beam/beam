@@ -1,8 +1,10 @@
 module Database.Beam.Postgres.Migrate where
 
-import qualified Database.Beam.Migrate.Types as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
 import qualified Database.Beam.Migrate.Tool as Tool
+import qualified Database.Beam.Migrate.Types as Db
+import           Database.Beam.Postgres.Connection
+import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.Syntax
 
 import           Control.Monad.Free.Church
@@ -36,8 +38,9 @@ parsePgMigrateOpts =
                 <*> strOption (long "user" <> metavar "USER" <> help "Name of postgres user")
                 <*> pure True
 
-migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax
-migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts (BL.concat . migrateScript)
+migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax PgMigrateOpts
+migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts Proxy (BL.concat . migrateScript)
+                        (\_ (Pg _) -> pure (Left (Tool.DdlError "TODO")))
 
 pgRenderSyntaxScript :: PgSyntax -> BL.ByteString
 pgRenderSyntaxScript (PgSyntax mkQuery) =

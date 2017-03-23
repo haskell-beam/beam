@@ -53,7 +53,7 @@ import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate.SQL
-import           Database.Beam.Migrate.SQL.Builder
+import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 --import           Database.Beam.Query.Combinators
 import           Database.Beam.Query.Internal
 --import           Database.Beam.Schema.Tables
@@ -257,7 +257,7 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   charType prec charSet = PgDataTypeSyntax (emit "CHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
   varCharType prec charSet = PgDataTypeSyntax (emit "VARCHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
   nationalCharType prec = PgDataTypeSyntax (emit "NATIONAL CHAR" <> pgOptPrec prec)
-  nationalVarCharType prec = PgDataTypeSyntax (emit "NATIONAAL CHARACTER VARYING" <> pgOptPrec prec)
+  nationalVarCharType prec = PgDataTypeSyntax (emit "NATIONAL CHARACTER VARYING" <> pgOptPrec prec)
 
   bitType prec = PgDataTypeSyntax (emit "BIT" <> pgOptPrec prec)
   varBitType prec = PgDataTypeSyntax (emit "BIT VARYING" <> pgOptPrec prec)

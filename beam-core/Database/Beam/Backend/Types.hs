@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Database.Beam.Backend.Types where
 
@@ -127,74 +128,34 @@ instance FromBackendRow be x => FromBackendRow be (Maybe x) where
        if isNull then pure Nothing else Just <$> fromBackendRow
   valuesNeeded be _ = valuesNeeded be (Proxy @x)
 
--- type FromBackendLiteralsM be a = ExceptT String (State [BackendLiteral be]) a
+-- * MonadBeam class
 
--- nextLiteral :: FromBackendLiteralsM be (BackendLiteral be)
--- nextLiteral =
---   do st <- get
---      case st of
---        [] -> throwError "No more values left"
---        x:xs -> put xs >> pure x
+class (BeamBackend be, Monad m) => MonadBeam syntax be m | m -> syntax be where
 
--- peekNextLiteral :: FromBackendLiteralsM be (BackendLiteral be)
--- peekNextLiteral =
---   do st <- get
---      l <- nextLiteral
---      put st
---      pure l
+  runNoReturn :: syntax -> m ()
+  runNoReturn cmd =
+      runReturningMany cmd $ \(_ :: m (Maybe ())) -> pure ()
 
--- | Type class for things that can be converted to/from a stream of backend literals
--- class FromBackendLiterals be a where
---   fromBackendLiterals :: FromBackendLiteralsM be a
---   toBackendLiterals :: a -> [BackendLiteral be]
---   valuesNeeded :: Proxy be -> Proxy a -> Int
+  runReturningOne :: FromBackendRow be x => syntax -> m (Maybe x)
+  runReturningOne cmd =
+      runReturningMany cmd $ \next ->
+        do a <- next
+           case a of
+             Nothing -> pure Nothing
+             Just x -> do
+               a' <- next
+               case a' of
+                 Nothing -> pure (Just x)
+                 Just _ -> pure Nothing
 
---   -- We supply a default implementation for types that can be converted to one backend literal
---   default fromBackendLiterals :: FromBackendLiteral be a => FromBackendLiteralsM be a
---   fromBackendLiterals =
---     do l <- nextLiteral
---        case fromBackendLiteral l of
---          Nothing -> throwError "No parse"
---          Just l' -> pure l'
+  runReturningMany :: FromBackendRow be x => syntax -> (m (Maybe x) -> m a) -> m a
 
---   default toBackendLiterals :: FromBackendLiteral be a => a -> [BackendLiteral be]
---   toBackendLiterals a = [ toBackendLiteral a ]
-
---   default valuesNeeded :: FromBackendLiteral be a => Proxy be -> Proxy a -> Int
---   valuesNeeded _ _ = 1
-
---  -- | Type class for things that can be converted to/from one backend literal
--- class FromBackendLiteral be a where
---   fromBackendLiteral :: BackendLiteral be -> Maybe a
---   toBackendLiteral :: a -> BackendLiteral be
-
--- * Instances for common types
-
--- instance (FromBackendLiterals be t, BeamBackend be) => FromBackendLiterals be (Maybe t) where
---     valuesNeeded be (_ :: Proxy (Maybe t)) = valuesNeeded be (Proxy :: Proxy t)
---     fromBackendLiterals =
---       mfix $ \(_ :: Maybe t) ->
---       do values <- get
---          let colCount = valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)
---              colValues = take colCount values
---          if all backendIsNull colValues
---            then put (drop colCount values) >> return Nothing
---            else Just <$> fromBackendLiterals
---     toBackendLiterals Nothing = replicate (valuesNeeded (Proxy :: Proxy be) (Proxy :: Proxy t)) backendNull
---     toBackendLiterals (Just x) = toBackendLiterals x
--- instance (FromBackendLiterals be a, FromBackendLiterals be b) => FromBackendLiterals be (a, b) where
---     fromBackendLiterals = (,) <$> fromBackendLiterals <*> fromBackendLiterals
---     toBackendLiterals (a, b) = toBackendLiterals a <> toBackendLiterals b
---     valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b)
--- instance (FromBackendLiterals be a, FromBackendLiterals be b, FromBackendLiterals be c) => FromBackendLiterals be (a, b, c) where
---     fromBackendLiterals = (,,) <$> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals
---     toBackendLiterals (a, b, c) = toBackendLiterals a <> toBackendLiterals b <> toBackendLiterals c
---     valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c)
--- instance (FromBackendLiterals be a, FromBackendLiterals be b, FromBackendLiterals be c, FromBackendLiterals be d) => FromBackendLiterals be (a, b, c, d) where
---     fromBackendLiterals = (,,,) <$> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals
---     toBackendLiterals (a, b, c, d) = toBackendLiterals a <> toBackendLiterals b <> toBackendLiterals c <> toBackendLiterals d
---     valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c) + valuesNeeded be (Proxy :: Proxy d)
--- instance (FromBackendLiterals be a, FromBackendLiterals be b, FromBackendLiterals be c, FromBackendLiterals be d, FromBackendLiterals be e) => FromBackendLiterals be (a, b, c, d, e) where
---     fromBackendLiterals = (,,,,) <$> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals <*> fromBackendLiterals
---     toBackendLiterals (a, b, c, d, e) = toBackendLiterals a <> toBackendLiterals b <> toBackendLiterals c <> toBackendLiterals d <> toBackendLiterals e
---     valuesNeeded be _ = valuesNeeded be (Proxy :: Proxy a) + valuesNeeded be (Proxy :: Proxy b) + valuesNeeded be (Proxy :: Proxy c) + valuesNeeded be (Proxy :: Proxy d) + valuesNeeded be (Proxy :: Proxy e)
+runReturningList :: (FromBackendRow be x, MonadBeam syntax be m) => syntax -> m [x]
+runReturningList cmd =
+  runReturningMany cmd $ \next ->
+    let collectM acc = do
+          a <- next
+          case a of
+            Nothing -> pure (acc [])
+            Just x -> collectM (acc . (x:))
+    in collectM id

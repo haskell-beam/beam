@@ -1,11 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Database.Beam.Postgres.Connection
   ( Pg.Connection
   , Pg.ResultError(..), Pg.SqlError(..)
   , Pg.ExecStatus(..)
-
+  , Pg(..), PgF(..)
 
   , Pg.ConnectInfo(..), Pg.defaultConnectInfo
 
@@ -48,6 +50,8 @@ import qualified Database.PostgreSQL.Simple.Internal as Pg
   , withConnection, escapeStringConn, escapeIdentifier, escapeByteaConn)
 import qualified Database.PostgreSQL.Simple.Ok as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..))
+
+import           Control.Monad.Reader
 
 import           Data.ByteString.Builder (toLazyByteString, byteString)
 import qualified Data.ByteString.Lazy as BL
@@ -294,3 +298,25 @@ runPgRowReader conn res fields readRow =
            Pg.Ok Pg.Null -> readAndCheck xs
 
     finish x _ _ _ = pure (Right x)
+
+-- * Beam Monad class
+
+data PgF next where
+    PgLiftIO :: IO a -> (a -> next) -> PgF next
+    PgRunReturning ::
+        FromBackendRow Postgres x =>
+        PgCommandSyntax -> (Pg (Maybe x) -> Pg a) -> (a -> next) -> PgF next
+    PgFetchNext ::
+        FromBackendRow Postgres x =>
+        (Maybe x -> next) -> PgF next
+deriving instance Functor PgF
+
+newtype Pg a = Pg { runPg :: F PgF a }
+    deriving (Monad, Applicative, Functor, MonadFree PgF)
+
+instance MonadIO Pg where
+    liftIO x = liftF (PgLiftIO x id)
+
+instance MonadBeam PgCommandSyntax Postgres Pg where
+    runReturningMany cmd consume =
+        liftF (PgRunReturning cmd consume id)

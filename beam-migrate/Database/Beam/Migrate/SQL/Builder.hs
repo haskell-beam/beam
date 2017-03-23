@@ -14,6 +14,10 @@ data SqlSyntaxBuilderCreateTableOptions
         SqlSyntaxBuilder
     deriving Eq
 
+instance IsSql92DdlCommandSyntax SqlSyntaxBuilder where
+  type Sql92DdlCommandCreateTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  createTableCmd = id
+
 instance IsSql92CreateTableSyntax SqlSyntaxBuilder where
   type Sql92CreateTableColumnSchemaSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92CreateTableTableConstraintSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

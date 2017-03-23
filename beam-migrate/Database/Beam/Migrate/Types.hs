@@ -52,3 +52,4 @@ stepNames f = runF f (\_ x -> x) (\(MigrationStep nm migration next) x -> next (
   where
     runMigration :: forall a. Migration syntax a -> a
     runMigration f = runF f id (\(MigrationRunCommand _ _ next) -> next)
+

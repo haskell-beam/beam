@@ -24,6 +24,7 @@ class ( IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax synt
                     -> syntax
 
 class ( IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
+      , IsSql92DataTypeSyntax (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
       , IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax columnSchema) ) =>
   IsSql92ColumnSchemaSyntax columnSchema where
   type Sql92ColumnSchemaColumnTypeSyntax columnSchema :: *

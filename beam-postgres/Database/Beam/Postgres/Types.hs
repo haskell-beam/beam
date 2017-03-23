@@ -1,10 +1,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Postgres.Types where
 
-import Database.Beam
-import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL.Builder
+import           Database.Beam
+import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.SQL.Builder
+import           Database.Beam.Backend.Types
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
@@ -13,21 +13,25 @@ import qualified Database.PostgreSQL.Simple.Types as Pg
 import qualified Database.PostgreSQL.Simple.Range as Pg (PGRange)
 import qualified Database.PostgreSQL.Simple.Time as Pg (Date, UTCTimestamp, ZonedTimestamp, LocalTimestamp)
 
-import Control.Applicative
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Free.Church
+import           Control.Monad.Trans
 
-import Data.ByteString (ByteString)
-import Data.Text (Text)
+
+import           Data.ByteString (ByteString)
+import           Data.Text (Text)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text.Lazy as TL
-import Data.Int
-import Data.Aeson (Value)
-import Data.UUID (UUID)
-import Data.CaseInsensitive (CI)
-import Data.Data
-import Data.Ratio (Ratio)
-import Data.Scientific (Scientific)
-import Data.Vector (Vector)
-import Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime)
+import           Data.Int
+import           Data.Aeson (Value)
+import           Data.UUID (UUID)
+import           Data.CaseInsensitive (CI)
+import           Data.Data
+import           Data.Ratio (Ratio)
+import           Data.Scientific (Scientific)
+import           Data.Vector (Vector)
+import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime)
 
 data Postgres
   = Postgres

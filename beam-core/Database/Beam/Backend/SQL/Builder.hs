@@ -239,6 +239,44 @@ instance IsSql92FromSyntax SqlSyntaxBuilder where
     leftJoin = join "LEFT JOIN"
     rightJoin = join "RIGHT JOIN"
 
+instance IsSql92DataTypeSyntax SqlSyntaxBuilder where
+    domainType nm = SqlSyntaxBuilder (quoteSql nm)
+    charType prec charSet = SqlSyntaxBuilder ("CHAR" <> sqlOptPrec prec <> sqlOptCharSet charSet)
+    varCharType prec charSet = SqlSyntaxBuilder ("VARCHAR" <> sqlOptPrec prec <> sqlOptCharSet charSet)
+    nationalCharType prec = SqlSyntaxBuilder ("NATIONAL CHAR" <> sqlOptPrec prec)
+    nationalVarCharType prec = SqlSyntaxBuilder ("NATIONAL CHARACTER VARYING" <> sqlOptPrec prec)
+
+    bitType prec = SqlSyntaxBuilder ("BIT" <> sqlOptPrec prec)
+    varBitType prec = SqlSyntaxBuilder ("BIT VARYING" <> sqlOptPrec prec)
+
+    numericType prec = SqlSyntaxBuilder ("NUMERIC" <> sqlOptNumericPrec prec)
+    decimalType prec = SqlSyntaxBuilder ("DOUBLE" <> sqlOptNumericPrec prec)
+
+    intType = SqlSyntaxBuilder "INT"
+    smallIntType = SqlSyntaxBuilder "SMALLINT"
+
+    floatType prec = SqlSyntaxBuilder ("FLOAT" <> sqlOptPrec prec)
+    doubleType = SqlSyntaxBuilder "DOUBLE PRECISION"
+    realType = SqlSyntaxBuilder "REAL"
+    dateType = SqlSyntaxBuilder "DATE"
+    timeType prec withTz =
+        SqlSyntaxBuilder ("TIME" <> sqlOptPrec prec <> if withTz then " WITH TIME ZONE" else mempty)
+    timestampType prec withTz =
+        SqlSyntaxBuilder ("TIMESTAMP" <> sqlOptPrec prec <> if withTz then " WITH TIME ZONE" else mempty)
+
+sqlOptPrec :: Maybe Word -> Builder
+sqlOptPrec Nothing = mempty
+sqlOptPrec (Just x) = "(" <> byteString (fromString (show x)) <> ")"
+
+sqlOptCharSet :: Maybe T.Text -> Builder
+sqlOptCharSet Nothing = mempty
+sqlOptCharSet (Just cs) = " CHARACTER SET " <> byteString (TE.encodeUtf8 cs)
+
+sqlOptNumericPrec :: Maybe (Word, Maybe Word) -> Builder
+sqlOptNumericPrec Nothing = mempty
+sqlOptNumericPrec (Just (prec, Nothing)) = sqlOptPrec (Just prec)
+sqlOptNumericPrec (Just (prec, Just dec)) = "(" <> fromString (show prec) <> ", " <> fromString (show dec) <> ")"
+
 -- TODO These instances are wrong (Text doesn't handle quoting for example)
 instance HasSqlValueSyntax SqlSyntaxBuilder Int where
   sqlValueSyntax x = SqlSyntaxBuilder $
@@ -251,7 +289,6 @@ instance HasSqlValueSyntax SqlSyntaxBuilder Text where
     byteString (fromString (show x))
 instance HasSqlValueSyntax SqlSyntaxBuilder SqlNull where
   sqlValueSyntax x = SqlSyntaxBuilder (byteString "NULL")
-
 
 renderSql :: SqlSyntaxBuilder -> String
 renderSql (SqlSyntaxBuilder b) = BL.unpack (toLazyByteString b)
