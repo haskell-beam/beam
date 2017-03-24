@@ -49,8 +49,11 @@ instance Pg.FromField x => Pg.FromField (Auto x) where
   fromField field d = fmap (Auto . Just) (Pg.fromField field d)
 instance Pg.ToField x => Pg.ToField (Auto x) where
   toField (Auto x) = Pg.toField x
+instance Pg.FromField SqlNull where
+  fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
+instance FromBackendRow Postgres SqlNull
 instance FromBackendRow Postgres Bool
 instance FromBackendRow Postgres Char
 instance FromBackendRow Postgres Double

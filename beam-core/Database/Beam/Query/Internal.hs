@@ -45,10 +45,10 @@ type ProjectibleInSelectSyntax syntax a =
 --            -> QueryBuilderF select a
 
 data QF select db s next where
-  QAll :: DatabaseTable db table
+  QAll :: DatabaseEntity be db (TableEntity table)
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
-  QLeftJoin :: DatabaseTable db table
+  QLeftJoin :: DatabaseEntity be db (TableEntity table)
             -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
             -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
   QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next
@@ -71,7 +71,7 @@ type QM select db s = F (QF select db s)
 -- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
 -- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
 -- implemented.
-newtype Q syntax (db :: (((* -> *) -> *) -> *) -> *) s a
+newtype Q syntax (db :: (* -> *) -> *) s a
   = Q { runQ :: QM syntax db s a } -- State (QueryBuilder syntax) a}
     deriving (Monad, Applicative, Functor)
 
@@ -123,9 +123,11 @@ data QAssignment fieldName expr s
 data QAggregateContext
 data QGroupingContext
 data QValueContext
+data QOrderingContext
 newtype QGenExpr context syntax s t = QExpr syntax
 type QExpr = QGenExpr QValueContext
 type QAgg = QGenExpr QAggregateContext
+type QOrd = QGenExpr QOrderingContext
 type QGroupExpr = QGenExpr QGroupingContext
 deriving instance Show syntax => Show (QGenExpr context syntax s t)
 deriving instance Eq syntax => Eq (QGenExpr context syntax s t)

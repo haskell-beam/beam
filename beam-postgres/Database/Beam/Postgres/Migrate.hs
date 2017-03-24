@@ -1,23 +1,35 @@
 module Database.Beam.Postgres.Migrate where
 
+import           Database.Beam.Backend.Types
 import qualified Database.Beam.Migrate.SQL.Types as Db
 import qualified Database.Beam.Migrate.Tool as Tool
 import qualified Database.Beam.Migrate.Types as Db
 import           Database.Beam.Postgres.Connection
-import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Postgres.Types
 
+import qualified Database.PostgreSQL.Simple as Pg
+import qualified Database.PostgreSQL.Simple.Internal as PgI
+
+import           Control.Exception (bracket)
 import           Control.Monad.Free.Church
+import           Control.Monad.Reader (ask)
+import           Control.Monad.State (put)
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import           Data.ByteString.Builder
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BCL
 import           Data.Char
+import           Data.Coerce
 import           Data.List (intersperse)
 import           Data.Monoid
 import           Data.Proxy
+import           Data.String
 import qualified Data.Text.Encoding as TE
+import           Data.Word (Word16)
 
 import           Options.Applicative
 
@@ -25,7 +37,7 @@ data PgMigrateOpts
   = PgMigrateOpts
   { pgMigrateHost :: String
   , pgMigrateDatabase :: String
-  , pgMigratePort :: Int
+  , pgMigratePort :: Word16
   , pgMigrateUser :: String
   , pgMigratePromptPassword :: Bool
   } deriving Show
@@ -38,9 +50,71 @@ parsePgMigrateOpts =
                 <*> strOption (long "user" <> metavar "USER" <> help "Name of postgres user")
                 <*> pure True
 
+data PgStream a = PgStreamDone     (Either Tool.DdlError a)
+                | PgStreamContinue (Maybe PgI.Row -> IO (PgStream a))
+
+beConnectInfo :: PgMigrateOpts -> Pg.ConnectInfo
+beConnectInfo opts = Pg.defaultConnectInfo { connectHost = pgMigrateHost opts
+                                           , connectPort = pgMigratePort opts
+                                           , connectUser = pgMigrateUser opts
+                                           , connectDatabase = pgMigrateDatabase opts }
+
 migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax PgMigrateOpts
-migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts Proxy (BL.concat . migrateScript)
-                        (\_ (Pg _) -> pure (Left (Tool.DdlError "TODO")))
+migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts Proxy
+                        (BL.concat . migrateScript)
+                        (BCL.unpack . pgRenderSyntaxScript . fromPgCommand)
+                        (\beOptions (Pg action) -> do
+                            bracket (Pg.connect (beConnectInfo beOptions)) Pg.close (runPg action))
+  where
+    runPg :: forall a. F PgF a -> Pg.Connection -> IO (Either Tool.DdlError a)
+    runPg action conn =
+      let finish x = pure (Right x)
+          step (PgLiftIO action next) = action >>= next
+          step (PgFetchNext next) = next Nothing
+          step (PgRunReturning (PgCommandSyntax syntax)
+                               (mkProcess :: Pg (Maybe x) -> Pg a')
+                               next) =
+            do query <- pgRenderSyntax conn syntax
+               let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
+               action <- runF process finishProcess stepProcess Nothing
+               case action of
+                 PgStreamDone (Right x) -> Pg.execute_ conn (fromString (BS.unpack query)) >> next x
+                 PgStreamDone (Left err) -> pure (Left err)
+                 PgStreamContinue nextStream ->
+                   let finishUp (PgStreamDone (Right x)) = next x
+                       finishUp (PgStreamDone (Left err)) = pure (Left err)
+                       finishUp (PgStreamContinue next) = next Nothing >>= finishUp
+
+                       columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
+                   in Pg.foldWith_ (PgI.RP (put columnCount >> ask)) conn (fromString (BS.unpack query)) (PgStreamContinue nextStream) runConsumer >>= finishUp
+
+          finishProcess :: forall row a. a -> Maybe PgI.Row -> IO (PgStream a)
+          finishProcess x _ = pure (PgStreamDone (Right x))
+
+          stepProcess :: forall a. PgF (Maybe PgI.Row -> IO (PgStream a)) -> Maybe PgI.Row -> IO (PgStream a)
+          stepProcess (PgLiftIO action next) row = action >>= flip next row
+          stepProcess (PgFetchNext next) Nothing =
+            pure . PgStreamContinue $ \res ->
+            case res of
+              Nothing -> next Nothing Nothing
+              Just (PgI.Row rowIdx res) ->
+                getFields res >>= \fields ->
+                runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
+                case res of
+                  Left err -> pure (PgStreamDone (Left (Tool.DdlError ("Row read error: " ++ show err))))
+                  Right r -> next r Nothing
+          stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
+            getFields res >>= \fields ->
+            runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
+            case res of
+              Left err -> pure (PgStreamDone (Left (Tool.DdlError ("Row read error: " ++ show err))))
+              Right r -> pure (PgStreamContinue (next (Just r)))
+          stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (Tool.DdlError "Nested queries not allowed")))
+
+          runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
+          runConsumer s@(PgStreamDone x) _ = pure s
+          runConsumer (PgStreamContinue next) row = next (Just row)
+      in runF action finish step
 
 pgRenderSyntaxScript :: PgSyntax -> BL.ByteString
 pgRenderSyntaxScript (PgSyntax mkQuery) =

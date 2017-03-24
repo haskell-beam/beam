@@ -58,7 +58,7 @@ data QueryBuilder select
   , qbFrom  :: Maybe (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
   , qbWhere :: Maybe (Sql92SelectExpressionSyntax select) }
 
-data SelectBuilder syntax (db :: (((* -> *) -> *) -> *) -> *) a where
+data SelectBuilder syntax (db :: (* -> *) -> *) a where
   SelectBuilderQ :: ( IsSql92SelectSyntax syntax
                     , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
                     a -> QueryBuilder syntax -> SelectBuilder syntax db a
@@ -145,10 +145,10 @@ offsetSelectBuilder offset x = SelectBuilderTopLevel Nothing (Just offset) [] x
 buildInnerJoinQuery
     :: forall select db s be table.
        (IsSql92SelectSyntax select) =>
-       DatabaseTable db table
+       DatabaseEntity be db (TableEntity table)
     -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
     -> QueryBuilder select -> (table (QExpr (Sql92SelectExpressionSyntax select) s), QueryBuilder select)
-buildInnerJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
+buildInnerJoinQuery (DatabaseEntity (DatabaseTable tbl tblSettings)) mkOn qb =
   let qb' = QueryBuilder (tblRef + 1) from' where'
       tblRef = qbNextTblRef qb
       newTblNm = "t" <> fromString (show tblRef)
@@ -163,10 +163,10 @@ buildInnerJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
 buildLeftJoinQuery
     :: forall select db s be table.
        (IsSql92SelectSyntax select) =>
-       DatabaseTable db table
+       DatabaseEntity be db (TableEntity table)
     -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
     -> QueryBuilder select -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)), QueryBuilder select)
-buildLeftJoinQuery (DatabaseTable _ tbl tblSettings) mkOn qb =
+buildLeftJoinQuery (DatabaseEntity (DatabaseTable tbl tblSettings)) mkOn qb =
   let qb' = QueryBuilder (tblRef + 1) from' where'
       tblRef = qbNextTblRef qb
       newTblNm  = "t" <> fromString (show tblRef)

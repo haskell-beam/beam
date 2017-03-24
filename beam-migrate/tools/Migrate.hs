@@ -69,7 +69,10 @@ main = do
                   setTopLevelModules [ migrationCommandMigrationModule ]
                   interpret "toDyn (migration >> return ())" (undefined :: Dynamic)
                 case migration of
-                  Left err -> hPutStrLn stderr ("Plugin error: could not load migrations: " ++ show err)
+                  Left err -> do hPutStrLn stderr "Plugin error: could not load migrations: "
+                                 case err of
+                                   WontCompile errs -> mapM_ (hPutStrLn stderr . errMsg) errs
+                                   _ -> hPutStrLn stderr (show err)
                   Right migration ->
                     case fromDynamic migration of
                       Nothing -> hPutStrLn stderr "Migration did not have correct type"

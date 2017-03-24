@@ -11,6 +11,8 @@ import Database.Beam.Backend.SQL.Types
 
 import Data.Proxy
 import Data.Text (Text)
+import Data.Int
+import Data.Time (LocalTime)
 
 import GHC.Generics
 
@@ -28,7 +30,31 @@ type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql9
 type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
 
-class IsSql92Syntax cmd where
+-- Putting these in the head constraint can cause infinite recursion that would
+-- need UndecidableSuperclasses. If we define them here, we can easily use them
+-- in functions that need them and avoid unnecessary extensions.
+type Sql92SelectSanityCheck select =
+  ( Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~
+    Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+  , Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ~ select
+  , Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)) ~
+    Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+  , Sql92OrderingExpressionSyntax (Sql92SelectOrderingSyntax select) ~
+    Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select) )
+type Sql92SanityCheck cmd = ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd) )
+
+type Sql92ReasonableMarshaller be =
+   ( FromBackendRow be Int, FromBackendRow be SqlNull
+   , FromBackendRow be Text, FromBackendRow be Bool
+   , FromBackendRow be Char
+   , FromBackendRow be Int16, FromBackendRow be Int32, FromBackendRow be Int64
+   , FromBackendRow be LocalTime )
+
+class ( IsSql92SelectSyntax (Sql92SelectSyntax cmd)
+      , IsSql92InsertSyntax (Sql92InsertSyntax cmd)
+      , IsSql92UpdateSyntax (Sql92UpdateSyntax cmd)
+      , IsSql92DeleteSyntax (Sql92DeleteSyntax cmd) ) =>
+  IsSql92Syntax cmd where
   type Sql92SelectSyntax cmd :: *
   type Sql92InsertSyntax cmd :: *
   type Sql92UpdateSyntax cmd :: *
@@ -58,7 +84,9 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
 
       , Sql92GroupingExpressionSyntax (Sql92SelectTableGroupingSyntax select) ~ Sql92SelectTableExpressionSyntax select
       , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select
-      , Sql92SelectSelectTableSyntax (Sql92SelectTableSelectSyntax select) ~ select ) =>
+      , Sql92SelectSelectTableSyntax (Sql92SelectTableSelectSyntax select) ~ select
+
+      , Eq (Sql92SelectTableExpressionSyntax select) ) =>
     IsSql92SelectTableSyntax select where
   type Sql92SelectTableSelectSyntax select :: *
   type Sql92SelectTableExpressionSyntax select :: *

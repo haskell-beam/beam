@@ -178,16 +178,16 @@ underscoresAreHandledGracefully =
 
 -- * Database schema is derived correctly
 
-data EmployeeDb tbl
+data EmployeeDb f
   = EmployeeDb
-    { _employees   :: tbl EmployeeT
-    , _departments :: tbl DepartmentT
-    , _roles       :: tbl RoleT
-    , _funny       :: tbl FunnyT }
+    { _employees   :: f (TableEntity EmployeeT)
+    , _departments :: f (TableEntity DepartmentT)
+    , _roles       :: f (TableEntity RoleT)
+    , _funny       :: f (TableEntity FunnyT) }
     deriving Generic
 instance Database EmployeeDb
 
-employeeDbSettings :: DatabaseSettings EmployeeDb
+employeeDbSettings :: DatabaseSettings be EmployeeDb
 employeeDbSettings = defaultDbSettings
 
 -- employeeDbSettingsModified :: DatabaseSettings EmployeeDb

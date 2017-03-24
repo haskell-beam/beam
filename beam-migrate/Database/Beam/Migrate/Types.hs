@@ -1,12 +1,19 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Database.Beam.Migrate.Types where
 
 import Database.Beam
 
 import Control.Monad.Free.Church
+import Control.Monad.Identity
 
 import Data.Functor
 import Data.Monoid
 import Data.Text (Text)
+import Data.Proxy
+
+-- * Migration types
 
 data MigrationStep syntax next where
     MigrationStep :: Text -> Migration syntax a -> (a -> next) -> MigrationStep syntax next
@@ -53,3 +60,31 @@ stepNames f = runF f (\_ x -> x) (\(MigrationStep nm migration next) x -> next (
     runMigration :: forall a. Migration syntax a -> a
     runMigration f = runF f id (\(MigrationRunCommand _ _ next) -> next)
 
+-- * Checked database entities
+
+data DatabaseCheck
+data TableCheck = TableFieldCheck Text FieldCheck deriving (Show, Eq)
+data FieldCheck = FieldCheck deriving (Show, Eq)
+
+class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
+  data CheckedDatabaseEntityDescriptor be entity :: *
+
+  unCheck :: CheckedDatabaseEntityDescriptor be entity -> DatabaseEntityDescriptor be entity
+
+instance IsCheckedDatabaseEntity be (TableEntity tbl) where
+  data CheckedDatabaseEntityDescriptor be (TableEntity tbl) where
+    CheckedDatabaseTable :: Table tbl => DatabaseEntityDescriptor be (TableEntity tbl)
+                         -> [ TableCheck ] -> CheckedDatabaseEntityDescriptor be (TableEntity tbl)
+
+  unCheck (CheckedDatabaseTable x _) = x
+
+data CheckedDatabaseEntity be (db :: (* -> *) -> *) entityType where
+  CheckedDatabaseEntity :: IsCheckedDatabaseEntity be entityType
+                        => CheckedDatabaseEntityDescriptor be entityType
+                        -> [ DatabaseCheck ]
+                        -> CheckedDatabaseEntity be db entityType
+
+type CheckedDatabaseSettings be db = db (CheckedDatabaseEntity be db)
+
+unCheckDatabase :: forall be db. Database db => CheckedDatabaseSettings be db -> DatabaseSettings be db
+unCheckDatabase db = runIdentity $ zipTables (Proxy @be) (\(CheckedDatabaseEntity x _) _ -> pure $ DatabaseEntity (unCheck x)) db db

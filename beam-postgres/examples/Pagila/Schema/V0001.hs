@@ -191,13 +191,13 @@ deriving instance Eq StaffId; deriving instance Show StaffId
 
 data PagilaDb f
   = PagilaDb
-  { actors     :: f ActorT
-  , addresses  :: f AddressT
-  , cities     :: f CityT
-  , countries  :: f CountryT
-  , categories :: f CategoryT
-  , stores     :: f StoreT
-  , staff      :: f StaffT
+  { actors     :: f (TableEntity ActorT)
+  , addresses  :: f (TableEntity AddressT)
+  , cities     :: f (TableEntity CityT)
+  , countries  :: f (TableEntity CountryT)
+  , categories :: f (TableEntity CategoryT)
+  , stores     :: f (TableEntity StoreT)
+  , staff      :: f (TableEntity StaffT)
   } deriving Generic
 instance Database PagilaDb
 
@@ -223,7 +223,7 @@ instance Beamable StaffT
 lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
 lastUpdateField = field "last_update" timestamp (default_ now_) notNull
 
-migration :: Migration PgCommandSyntax (DatabaseSettings PagilaDb)
+migration :: Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
 migration =
   PagilaDb <$> createTable "actor"
                  (ActorT (field "actor_id" smallserial) (field "first_name" (varchar (Just 45)))

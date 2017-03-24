@@ -130,7 +130,8 @@ instance FromBackendRow be x => FromBackendRow be (Maybe x) where
 
 -- * MonadBeam class
 
-class (BeamBackend be, Monad m) => MonadBeam syntax be m | m -> syntax be where
+class (BeamBackend be, Monad m, MonadIO m) =>
+  MonadBeam syntax be m | m -> syntax be where
 
   runNoReturn :: syntax -> m ()
   runNoReturn cmd =

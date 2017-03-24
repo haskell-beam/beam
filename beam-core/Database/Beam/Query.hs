@@ -7,7 +7,7 @@ module Database.Beam.Query
     , module Database.Beam.Query.Combinators
 
     , SqlSelect(..)
-    , select, dumpSqlSelect
+    , select, runSelectReturningList, dumpSqlSelect
 
     , SqlInsert(..)
     , insert
@@ -26,6 +26,7 @@ import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.Internal
 
+import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
 import Database.Beam.Backend.SQL.Builder
 import Database.Beam.Schema.Tables
@@ -48,6 +49,12 @@ select :: forall q syntax db s res.
 select q =
   SqlSelect (buildSql92Query q)
 
+runSelectReturningList ::
+  (IsSql92Syntax cmd, MonadBeam cmd be m, FromBackendRow be a) =>
+  SqlSelect (Sql92SelectSyntax cmd) a -> m [ a ]
+runSelectReturningList (SqlSelect select) =
+  runReturningList (selectCmd select)
+
 dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
                  Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()
 dumpSqlSelect q =
@@ -59,10 +66,10 @@ dumpSqlSelect q =
 newtype SqlInsert syntax = SqlInsert syntax
 
 insert :: IsSql92InsertSyntax syntax =>
-          DatabaseTable db table
+          DatabaseEntity be db (TableEntity table)
        -> Sql92InsertValuesSyntax syntax
        -> SqlInsert syntax
-insert (DatabaseTable _ tblNm tblSettings) insertValues =
+insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) insertValues =
     SqlInsert (insertStmt tblNm tblFields insertValues)
   where
     tblFields = allBeamValues (\(Columnar' f) -> _fieldName f) tblSettings
@@ -91,11 +98,11 @@ newtype SqlUpdate syntax (table :: (* -> *) -> *) = SqlUpdate syntax
 
 update :: ( Beamable table
           , IsSql92UpdateSyntax syntax) =>
-          DatabaseTable db table
+          DatabaseEntity be db (TableEntity table)
        -> (forall s. table (QField s) -> [ QAssignment (Sql92UpdateFieldNameSyntax syntax) (Sql92UpdateExpressionSyntax syntax) s ])
        -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax syntax) s) -> QExpr (Sql92UpdateExpressionSyntax syntax) s Bool)
        -> SqlUpdate syntax table
-update (DatabaseTable _ tblNm tblSettings) mkAssignments mkWhere =
+update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere =
   SqlUpdate (updateStmt tblNm assignments (Just where_))
   where
     assignments = map (\(QAssignment fieldName expr) -> (fieldName, expr)) (mkAssignments tblFields)
@@ -109,10 +116,10 @@ update (DatabaseTable _ tblNm tblSettings) mkAssignments mkWhere =
 newtype SqlDelete syntax (table :: (* -> *) -> *) = SqlDelete syntax
 
 delete :: IsSql92DeleteSyntax delete
-       => DatabaseTable db table
+       => DatabaseEntity be db (TableEntity table)
        -> (forall s. table (QExpr (Sql92DeleteExpressionSyntax delete) s) -> QExpr (Sql92DeleteExpressionSyntax delete) s Bool)
        -> SqlDelete delete table
-delete (DatabaseTable _ tblNm tblSettings) mkWhere =
+delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
   SqlDelete (deleteStmt tblNm (Just where_))
   where
     QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (fieldE (unqualifiedField name)))) tblSettings)

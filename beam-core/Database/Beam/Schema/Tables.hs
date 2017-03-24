@@ -1,17 +1,22 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE KindSignatures #-}
 
 -- | Defines a generic schema type that can be used to define schemas for Beam tables
 module Database.Beam.Schema.Tables
     (
     -- * Database Types
-      Database(..), DatabaseTable(..), DatabaseSettings
-    , GenericDatabaseModification, GenericTableModification(..)
-    , FieldModification(..)
-    , dbModification, tableModification, withDbModification
-    , withTableModification, modifyTable, fieldNamed
-    , tableName, tableSettings
+      Database(..) --, DatabaseTable(..)
+    , DatabaseSettings
+    , IsDatabaseEntity(..)
+    , DatabaseEntityDescriptor(..)
+    , DatabaseEntity(..), TableEntity
+    -- , GenericDatabaseModification, GenericTableModification(..)
+    -- , FieldModification(..)
+    -- , dbModification, tableModification, withDbModification
+    -- , withTableModification, modifyTable, fieldNamed
+    -- , tableName, tableSettings
     , defaultDbSettings
     -- , withDbModifications
     -- , modifyingDb, fieldModification, tableModification, tableFieldsModification
@@ -39,11 +44,11 @@ module Database.Beam.Schema.Tables
 
 import           Database.Beam.Backend.Types
 
-import           Control.Monad.Writer
+import           Control.Arrow (first)
 import           Control.Monad.Identity
+import           Control.Monad.Writer
 
 import           Data.Char (isUpper, toLower)
-import           Data.Functor.Compose
 import           Data.List (intercalate)
 import           Data.Monoid ((<>))
 import           Data.Proxy
@@ -54,67 +59,73 @@ import           Data.Typeable
 
 import qualified GHC.Generics as Generic
 import           GHC.Generics hiding (R)
-import           GHC.Types (Constraint)
+import           GHC.Types
 
 import           Lens.Micro hiding (to)
 
 class Database db where
-    allTables :: (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
-    default allTables :: ( Generic (db f)
-                         , GAllTables f (Rep (db f) ()) ) =>
-                        (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
-    allTables f db = allTables' f (from' db)
+    -- allTables :: (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
+    -- default allTables :: ( Generic (db f)
+    --                      , GAllTables f (Rep (db f) ()) ) =>
+    --                     (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
+    -- allTables f db = allTables' f (from' db)
 
-    zipTables :: Monad m => (forall tbl. (Beamable tbl, Table tbl) => f tbl -> g tbl -> m (h tbl)) -> db f -> db g -> m (db h)
-    default zipTables :: ( Generic (db f), Generic (db g), Generic (db h)
+    zipTables :: Monad m
+              => Proxy be
+              -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
+                  f tbl -> g tbl -> m (h tbl))
+              -> db f -> db g -> m (db h)
+    default zipTables :: forall be m f g h.
+                         ( Generic (db f), Generic (db g), Generic (db h)
                          , Monad m
-                         , GZipDatabase f g h
+                         , GZipDatabase be f g h
                                         (Rep (db f)) (Rep (db g)) (Rep (db h)) ) =>
-                         (forall tbl. (Table tbl, Beamable tbl) => f tbl -> g tbl -> m (h tbl)) ->
-                         db f -> db g ->m (db h)
-    zipTables combine f g = to <$> gZipDatabase combine (from f) (from g)
+                         Proxy be ->
+                         (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl)) ->
+                         db f -> db g -> m (db h)
+    zipTables _ combine f g = to <$> gZipDatabase (Proxy @f, Proxy @g, Proxy @h, Proxy @be) combine (from f) (from g)
 
-defaultDbSettings :: ( Generic (DatabaseSettings db)
-                     , GAutoDbSettings (Rep (DatabaseSettings db) ()) ) =>
-                     DatabaseSettings db
+defaultDbSettings :: ( Generic (DatabaseSettings be db)
+                     , GAutoDbSettings (Rep (DatabaseSettings be db) ()) ) =>
+                     DatabaseSettings be db
 defaultDbSettings = to' autoDbSettings'
 
 -- modifyingDb :: Database db => DatabaseModifications be db
 -- modifyingDb = runIdentity (zipTables (\_ _ -> pure (tableModification id tableFieldsModification)) undefined undefined)
 
 -- type DatabaseModifications be db = db (TableSchemaModifications be)
-type GenericDatabaseModification f db = db (GenericTableModification f)
-newtype GenericTableModification f (tbl :: (* -> *) -> *) = GenericTableModification (f tbl -> f tbl)
+-- type GenericDatabaseModification f db = db (GenericTableModification f)
+-- newtype GenericTableModification f (tbl :: (* -> *) -> *) = GenericTableModification (f tbl -> f tbl)
 
-newtype FieldModification f a
-  = FieldModification (Columnar f a -> Columnar f a)
+-- newtype FieldModification f a
+--   = FieldModification (Columnar f a -> Columnar f a)
 
-dbModification :: forall f db. Database db => GenericDatabaseModification f db
-dbModification = runIdentity $
-                 zipTables (\_ _ -> pure (GenericTableModification id)) (undefined :: GenericDatabaseModification f db) (undefined :: GenericDatabaseModification f db)
-tableModification :: forall f tbl. Beamable tbl => tbl (FieldModification f)
-tableModification = runIdentity $
-                    zipBeamFieldsM (\(Columnar' _ :: Columnar' Ignored x) (Columnar' _ :: Columnar' Ignored x) ->
-                                      pure (Columnar' (FieldModification id :: FieldModification f x))) (undefined :: TableSkeleton tbl) (undefined :: TableSkeleton tbl)
+-- dbModification :: forall f db. Database db => GenericDatabaseModification f db
+-- dbModification = runIdentity $
+--                  zipTables (\_ _ -> pure (GenericTableModification id)) (undefined :: GenericDatabaseModification f db) (undefined :: GenericDatabaseModification f db)
+-- tableModification :: forall f tbl. Beamable tbl => tbl (FieldModification f)
+-- tableModification = runIdentity $
+--                     zipBeamFieldsM (\(Columnar' _ :: Columnar' Ignored x) (Columnar' _ :: Columnar' Ignored x) ->
+--                                       pure (Columnar' (FieldModification id :: FieldModification f x))) (undefined :: TableSkeleton tbl) (undefined :: TableSkeleton tbl)
 
-withDbModification :: Database db => db f -> GenericDatabaseModification f db -> db f
-withDbModification db mods =
-  runIdentity $ zipTables (\tbl (GenericTableModification mod) -> pure (mod tbl)) db mods
+-- withDbModification :: Database db => db f -> GenericDatabaseModification f db -> db f
+-- withDbModification db mods =
+--   runIdentity $ zipTables (\tbl (GenericTableModification mod) -> pure (mod tbl)) db mods
 
-withTableModification :: Beamable tbl => tbl (FieldModification f) -> tbl f -> tbl f
-withTableModification mods tbl =
-  runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification mod :: FieldModification f a)) ->
-                                  pure (Columnar' (mod field))) tbl mods
+-- withTableModification :: Beamable tbl => tbl (FieldModification f) -> tbl f -> tbl f
+-- withTableModification mods tbl =
+--   runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification mod :: FieldModification f a)) ->
+--                                   pure (Columnar' (mod field))) tbl mods
 
-modifyTable :: (Text -> Text)
-            -> tbl (FieldModification (TableField tbl))
-            -> GenericTableModification (DatabaseTable db) tbl
-modifyTable modTblNm modFields =
-  GenericTableModification (\(DatabaseTable p nm fields) ->
-                              DatabaseTable p (modTblNm nm) (withTableModification modFields fields))
+-- modifyTable :: (Text -> Text)
+--             -> tbl (FieldModification (TableField tbl))
+--             -> GenericTableModification (DatabaseTable db) tbl
+-- modifyTable modTblNm modFields =
+--   GenericTableModification (\(DatabaseTable p nm fields) ->
+--                               DatabaseTable p (modTblNm nm) (withTableModification modFields fields))
 
-fieldNamed :: Text -> FieldModification (TableField tbl) a
-fieldNamed newName = FieldModification (\_ -> TableField newName)
+-- fieldNamed :: Text -> FieldModification (TableField tbl) a
+-- fieldNamed newName = FieldModification (\_ -> TableField newName)
 
 -- data TableSchemaModifications be tbl
 --   = TableSchemaModifications
@@ -145,15 +156,49 @@ fieldNamed newName = FieldModification (\_ -> TableField newName)
 -- tableFieldsModification :: Beamable tbl => tbl (FieldSchemaModification be tbl)
 -- tableFieldsModification = changeBeamRep (\_ -> Columnar' (FieldSchemaModification id)) tblSkeleton
 
-data DatabaseTable (db :: ((((* -> *) -> *) -> *) -> *)) table where
-    DatabaseTable :: Table table => Proxy table -> Text -> TableSettings table -> DatabaseTable db table
+-- * Database entity types
+data TableEntity (tbl :: (* -> *) -> *)
+data ViewEntity (view :: (* -> *) -> *)
+data UniqueConstraint (tbl :: (* -> *) -> *) (c :: (* -> *) -> *)
+data DomainType (ty :: *)
+data CharacterSetEntity
+data CollationEntity
+data TranslationEntity
+data AssertionEntity
 
-tableName :: Lens' (DatabaseTable db table) Text
-tableName f (DatabaseTable proxy name settings) = (\name' -> DatabaseTable proxy name' settings) <$> f name
-tableSettings :: Lens' (DatabaseTable db table) (TableSettings table)
-tableSettings f (DatabaseTable proxy name settings) = (\settings' -> DatabaseTable proxy name settings') <$> f settings
+class IsDatabaseEntity be entityType where
+  data DatabaseEntityDescriptor be entityType :: *
+  type DatabaseEntityDefaultRequirements be entityType :: Constraint
+  type DatabaseEntityRegularRequirements be entityType :: Constraint
 
-type DatabaseSettings db = db (DatabaseTable  db)
+  dbEntityName :: Lens' (DatabaseEntityDescriptor be entityType) Text
+  dbEntityAuto :: DatabaseEntityDefaultRequirements be entityType =>
+                  Text -> DatabaseEntityDescriptor be entityType
+
+instance IsDatabaseEntity be (TableEntity tbl) where
+  data DatabaseEntityDescriptor be (TableEntity tbl) where
+    DatabaseTable :: Table tbl => Text -> TableSettings tbl -> DatabaseEntityDescriptor be (TableEntity tbl)
+  type DatabaseEntityDefaultRequirements be (TableEntity tbl) =
+    ( GDefaultTableFieldSettings (Rep (TableSettings tbl) ())
+    , Generic (TableSettings tbl), Table tbl, Beamable tbl )
+  type DatabaseEntityRegularRequirements be (TableEntity tbl) =
+    ( Table tbl, Beamable tbl )
+
+  dbEntityName f (DatabaseTable t s) = fmap (\t' -> DatabaseTable t' s) (f t)
+  dbEntityAuto nm =
+    DatabaseTable (unCamelCaseSel nm) defTblFieldSettings
+
+data DatabaseEntity be (db :: (* -> *) -> *) entityType  where
+    DatabaseEntity ::
+      IsDatabaseEntity be entityType =>
+      DatabaseEntityDescriptor be entityType ->  DatabaseEntity be db entityType
+
+-- tableName :: Lens' (DatabaseTable db entity table) Text
+-- tableName f (DatabaseTable proxy name settings) = (\name' -> DatabaseTable proxy name' settings) <$> f name
+-- tableSettings :: Lens' (DatabaseTable db entity table) (TableSettings table)
+-- tableSettings f (DatabaseTable proxy name settings) = (\settings' -> DatabaseTable proxy name settings') <$> f settings
+
+type DatabaseSettings be db = db (DatabaseEntity be db)
 
 class GAutoDbSettings x where
     autoDbSettings' :: x
@@ -163,10 +208,10 @@ instance GAutoDbSettings (x p) => GAutoDbSettings (C1 f x p) where
     autoDbSettings' = M1 autoDbSettings'
 instance (GAutoDbSettings (x p), GAutoDbSettings (y p)) => GAutoDbSettings ((x :*: y) p) where
     autoDbSettings' = autoDbSettings' :*: autoDbSettings'
-instance ( GDefaultTableFieldSettings (Rep (TableSettings tbl) ())
-         , Generic (TableSettings tbl), Table tbl, Selector f) => GAutoDbSettings (S1 f (K1 Generic.R (DatabaseTable db tbl)) p) where
-    autoDbSettings' = M1 (K1 (DatabaseTable (Proxy :: Proxy tbl) (fromString name) defTblFieldSettings))
-        where name  = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (DatabaseTable db tbl)) p))
+instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements be x ) =>
+  GAutoDbSettings (S1 f (K1 Generic.R (DatabaseEntity be db x)) p) where
+  autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto name)))
+    where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
 
 class GAllTables f x where
     allTables' :: (forall tbl. Table tbl => f tbl -> b) -> x -> [b]
@@ -177,21 +222,25 @@ instance (GAllTables f (x p), GAllTables f (y p)) => GAllTables f ((x :*: y) p) 
 instance Table tbl => GAllTables f (K1 Generic.R (f tbl) p) where
     allTables' f (K1 x) = [f x]
 
-class GZipDatabase f g h x y z where
-  gZipDatabase :: Monad m => (forall tbl. (Table tbl, Beamable tbl) => f tbl -> g tbl -> m (h tbl))
+class GZipDatabase be f g h x y z where
+  gZipDatabase :: Monad m =>
+                  (Proxy f, Proxy g, Proxy h, Proxy be)
+               -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl))
                -> x () -> y () -> m (z ())
-instance GZipDatabase f g h x y z =>
-  GZipDatabase f g h (M1 a b x) (M1 a b y) (M1 a b z) where
-  gZipDatabase combine ~(M1 f) ~(M1 g) = M1 <$> gZipDatabase combine f g
-instance ( GZipDatabase f g h ax ay az
-         , GZipDatabase f g h bx by bz ) =>
-  GZipDatabase f g h (ax :*: bx) (ay :*: by) (az :*: bz) where
-  gZipDatabase combine ~(ax :*: bx) ~(ay :*: by) =
-    do a <- gZipDatabase combine ax ay
-       b <- gZipDatabase combine bx by
+instance GZipDatabase be f g h x y z =>
+  GZipDatabase be f g h (M1 a b x) (M1 a b y) (M1 a b z) where
+  gZipDatabase p combine ~(M1 f) ~(M1 g) = M1 <$> gZipDatabase p combine f g
+instance ( GZipDatabase be f g h ax ay az
+         , GZipDatabase be f g h bx by bz ) =>
+  GZipDatabase be f g h (ax :*: bx) (ay :*: by) (az :*: bz) where
+  gZipDatabase p combine ~(ax :*: bx) ~(ay :*: by) =
+    do a <- gZipDatabase p combine ax ay
+       b <- gZipDatabase p combine bx by
        pure (a :*: b)
-instance (Table tbl, Beamable tbl) => GZipDatabase f g h (K1 Generic.R (f tbl)) (K1 Generic.R (g tbl)) (K1 Generic.R (h tbl)) where
-  gZipDatabase combine ~(K1 x) ~(K1 y) =
+instance (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
+  GZipDatabase be f g h (K1 Generic.R (f tbl)) (K1 Generic.R (g tbl)) (K1 Generic.R (h tbl)) where
+
+  gZipDatabase _ combine ~(K1 x) ~(K1 y) =
     K1 <$> combine x y
 
 data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
@@ -555,11 +604,11 @@ instance GDefaultTableFieldSettings (p x) => GDefaultTableFieldSettings (C1 f p 
 instance (GDefaultTableFieldSettings (a p), GDefaultTableFieldSettings (b p)) => GDefaultTableFieldSettings ((a :*: b) p) where
     gDefTblFieldSettings (_ :: Proxy ((a :*: b) p)) = gDefTblFieldSettings (Proxy :: Proxy (a p)) :*: gDefTblFieldSettings (Proxy :: Proxy (b p))
 
-instance (Table table, Selector f ) =>
+instance Selector f  =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField table field)) p) where
     gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (TableField table field)) p)) = M1 (K1 s)
-        where s = TableField (T.pack name)
-              name = unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (TableField table field)) ()))
+        where s = TableField name
+              name = unCamelCaseSel (T.pack (selName (undefined :: S1 f (K1 Generic.R (TableField table field)) ())))
 
 instance ( Selector f
          , Table rel
@@ -575,7 +624,7 @@ instance ( Selector f
               tbl = to' $ gDefTblFieldSettings (Proxy @(Rep (rel (TableField tbl)) ()))
               pkSettings = primaryKey tbl
 
-              relName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey rel (TableField tbl))) p)))
+              relName = unCamelCaseSel (T.pack (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey rel (TableField tbl))) p)))
 
               pkSettings' :: PrimaryKey rel (TableField tbl)
               pkSettings' = changeBeamRep (\(Columnar' (TableField nm)) -> Columnar' $ TableField (relName <> "__" <> nm)) pkSettings
@@ -594,7 +643,7 @@ instance ( Selector f
               tbl = to' $ gDefTblFieldSettings (Proxy @(Rep (rel (Nullable (TableField tbl))) ()))
               pkSettings = primaryKey tbl
 
-              relName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey rel (Nullable (TableField tbl)))) p)))
+              relName = unCamelCaseSel (T.pack (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey rel (Nullable (TableField tbl)))) p)))
 
               pkSettings' :: PrimaryKey rel (Nullable (TableField tbl))
               pkSettings' = changeBeamRep (\(Columnar' (TableField nm)) -> Columnar' $ TableField (relName <> "__" <> nm)) pkSettings
@@ -714,20 +763,16 @@ instance ( Generic (PrimaryKey related (Nullable Ignored))
 
 -- Internal functions
 
-unCamelCase :: String -> [String]
+unCamelCase :: T.Text -> [T.Text]
 unCamelCase "" = []
 unCamelCase s
-    | (comp@(_:_), next) <- break isUpper s =
-          let next' = case next of
-                        [] -> []
-                        x:xs -> toLower x:xs
-          in map toLower comp:unCamelCase next'
+    | (comp, next) <- T.break isUpper s, not (T.null comp) =
+          let next' = maybe mempty (uncurry T.cons . first toLower) (T.uncons next)
+          in T.toLower comp:unCamelCase next'
     | otherwise =
-        let (comp@(_:_), next) = span isUpper s
-            next' = case next of
-                      [] -> []
-                      x:xs -> toLower x:xs
-        in map toLower comp:unCamelCase next'
+          let (comp, next) = T.span isUpper s
+              next' = maybe mempty (uncurry T.cons . first toLower) (T.uncons next)
+          in T.toLower comp:unCamelCase next'
 
 -- | Camel casing magic for standard beam record field names.
 --
@@ -736,17 +781,17 @@ unCamelCase s
 --   what remains, then the entire name (minus the leading underscares). If the
 --   field name is solely underscores, beam will assume you know what you're
 --   doing and include the full original name as the field name
-unCamelCaseSel :: String -> String
+unCamelCaseSel :: Text -> Text
 unCamelCaseSel original =
-  let symbolLeft = dropWhile (=='_') original
-  in if null symbolLeft
+  let symbolLeft = T.dropWhile (=='_') original
+  in if T.null symbolLeft
      then original
-     else if '_' `elem` symbolLeft
+     else if T.any (=='_') symbolLeft
           then symbolLeft
           else case unCamelCase symbolLeft of
                  [] -> symbolLeft
                  [xs] -> xs
-                 _:xs -> intercalate "_" xs
+                 _:xs -> T.intercalate "_" xs
 
 -- maybeFieldSchema :: FieldSchema be ty -> FieldSchema be (Maybe ty)
 -- maybeFieldSchema base = let SQLColumnSchema desc isPrimaryKey isAuto _ constraints =  fsColDesc base

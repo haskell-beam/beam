@@ -30,7 +30,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.9 && <4.10, beam-core >=0.5.0.0, text, bytestring, free, time,
-                       optparse-applicative >=0.12.0.0, directory, filepath
+                       optparse-applicative >=0.12.0.0, directory, filepath, mtl
   -- hs-source-dirs:      
   default-language:    Haskell2010
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,

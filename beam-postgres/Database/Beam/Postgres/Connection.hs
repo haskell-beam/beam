@@ -22,7 +22,9 @@ module Database.Beam.Postgres.Connection
   , runSelect, runInsert, runInsertReturning
   , Q.select
 
-  , Q.insertValues, Q.insertFrom ) where
+  , Q.insertValues, Q.insertFrom
+
+  , pgRenderSyntax, runPgRowReader, getFields ) where
 
 import           Control.Exception (Exception)
 import           Control.Monad.Free.Church
@@ -169,7 +171,7 @@ runQueryReturning conn x = do
           \case
             Pg.SingleTuple ->
               do fields' <- liftIO (maybe (getFields row) pure fields)
-                 parsedRow <- liftIO (runPgRowReader conn row fields' fromBackendRow)
+                 parsedRow <- liftIO (runPgRowReader conn 0 row fields' fromBackendRow)
                  case parsedRow of
                    Left err -> liftIO (bailEarly row ("Could not read row: " <> show err))
                    Right parsedRow ->
@@ -253,8 +255,8 @@ getFields res = do
   mapM getField [0..colCount - 1]
 
 runPgRowReader ::
-  Pg.Connection -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either RowReadError a)
-runPgRowReader conn res fields readRow =
+  Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either RowReadError a)
+runPgRowReader conn rowIdx res fields readRow =
   Pg.nfields res >>= \(Pg.Col colCount) ->
   runF readRow finish step 0 colCount fields
   where
@@ -271,7 +273,7 @@ runPgRowReader conn res fields readRow =
     step (PeekField next) curCol colCount fields
       | curCol >= colCount = next Nothing curCol colCount fields
     step (PeekField next) curCol colCount fields@(field:_) =
-      do fieldValue <- Pg.getvalue res (Pg.Row 0) (Pg.Col curCol)
+      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
          res <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res of
            Pg.Errors xs -> do putStrLn ("Got errors " <> show xs)
@@ -291,7 +293,7 @@ runPgRowReader conn res fields readRow =
 
     readAndCheck [] = pure True
     readAndCheck ((i, field):xs) =
-      do fieldValue <- Pg.getvalue res (Pg.Row 0) (Pg.Col i)
+      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col i)
          res <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res of
            Pg.Errors xs -> pure False

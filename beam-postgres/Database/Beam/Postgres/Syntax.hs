@@ -193,6 +193,28 @@ instance IsSql92DdlCommandSyntax PgCommandSyntax where
 
   createTableCmd = coerce
 
+instance IsSql92UpdateSyntax PgUpdateSyntax where
+  type Sql92UpdateFieldNameSyntax PgUpdateSyntax = PgFieldNameSyntax
+  type Sql92UpdateExpressionSyntax PgUpdateSyntax = PgExpressionSyntax
+
+  updateStmt tbl fields where_ =
+    PgUpdateSyntax $
+    emit "UPDATE " <> pgQuotedIdentifier tbl <>
+    (case fields of
+       [] -> mempty
+       fields ->
+         emit " SET " <>
+         pgSepBy (emit ", ") (map (\(field, val) -> fromPgFieldName field <> emit "=" <> fromPgExpression val) fields)) <>
+    maybe mempty (\where_ -> emit " WHERE " <> fromPgExpression where_) where_
+
+instance IsSql92DeleteSyntax PgDeleteSyntax where
+  type Sql92DeleteExpressionSyntax PgDeleteSyntax = PgExpressionSyntax
+
+  deleteStmt tbl where_ =
+    PgDeleteSyntax $
+    emit "DELETE FROM " <> pgQuotedIdentifier tbl <>
+    maybe mempty (\where_ -> emit " WHERE " <> fromPgExpression where_) where_
+
 instance IsSql92SelectSyntax PgSelectSyntax where
   type Sql92SelectSelectTableSyntax PgSelectSyntax = PgSelectTableSyntax
   type Sql92SelectOrderingSyntax PgSelectSyntax = PgOrderingSyntax
@@ -761,7 +783,7 @@ pgBuildAction =
 
 -- * Postgres specific commands
 
-insert :: DatabaseTable db table
+insert :: DatabaseEntity Postgres be (TableEntity table)
        -> SqlInsertValues PgInsertValuesSyntax table
        -> PgInsertOnConflict PgInsertOnConflictSyntax table
        -> SqlInsert PgInsertSyntax
@@ -772,13 +794,13 @@ insert tbl values onConflict =
 newtype PgInsertReturning a = PgInsertReturning PgSyntax
 
 insertReturning :: Projectible PgExpressionSyntax a
-                => DatabaseTable db table
+                => DatabaseEntity Postgres be (TableEntity table)
                 -> SqlInsertValues PgInsertValuesSyntax table
                 -> PgInsertOnConflict PgInsertOnConflictSyntax table
                 -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
                 -> PgInsertReturning (QExprToIdentity a)
 
-insertReturning (DatabaseTable _ tblNm tblSettings)
+insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
                 (SqlInsertValues (PgInsertValuesSyntax insertValues))
                 (PgInsertOnConflict (PgInsertOnConflictSyntax onConflict))
                 returning =

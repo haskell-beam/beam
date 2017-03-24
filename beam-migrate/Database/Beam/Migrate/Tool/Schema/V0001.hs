@@ -43,15 +43,15 @@ instance Beamable (PrimaryKey MigrationT)
 
 data MigrationDb f
   = MigrationDb
-  { migrationDbVersions :: f MigrationSchemaVersionT
-  , migrationDbMigratiosn :: f MigrationT
+  { migrationDbVersions   :: f (TableEntity MigrationSchemaVersionT)
+  , migrationDbMigrations :: f (TableEntity MigrationT)
   } deriving Generic
 instance Database MigrationDb
 
 migration :: IsSql92DdlCommandSyntax syntax =>
-             Migration syntax (DatabaseSettings MigrationDb)
+             Migration syntax (CheckedDatabaseSettings be MigrationDb)
 migration = MigrationDb
   <$> createTable "beam_migration_version"
         (MigrationSchemaVersionT (field "version" int))
   <*> createTable "beam_migration"
-        (MigrationT (field "number" int) (field "name" (varchar Nothing)) (field "ran_at" timestamptz))
+        (MigrationT (field "number" int) (field "name" (varchar Nothing)) (field "ran_at" timestamp))
