@@ -15,8 +15,9 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:    Database.Beam.Sqlite.Types
+                      Database.Beam.Sqlite.Syntax
   build-depends:      base >= 4.7 && < 5, beam-core >=0.5.0.0, beam-migrate, sqlite-simple >=0.4.0.0,
-                      text, bytestring, time
+                      text, bytestring, time, dlist
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,

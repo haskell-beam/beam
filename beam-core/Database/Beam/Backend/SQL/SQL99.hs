@@ -1,7 +1,8 @@
 module Database.Beam.Backend.SQL.SQL99
   ( module Database.Beam.Backend.SQL.SQL92
   , IsSql99ExpressionSyntax(..)
-  , IsSql99SelectSyntax(..) ) where
+  , IsSql99SelectSyntax(..)
+  , IsSql99DataTypeSyntax(..) ) where
 
 import Database.Beam.Backend.SQL.SQL92
 
@@ -21,3 +22,9 @@ class IsSql92ExpressionSyntax expr =>
   instanceFieldE :: expr -> Text -> expr
   refFieldE :: expr -> Text -> expr
 
+class IsSql99DataTypeSyntax dataType where
+  characterLargeObjectType :: dataType
+  binaryLargeObjectType :: dataType
+  booleanType :: dataType
+  arrayType :: dataType -> Int -> dataType
+  rowType :: [ (Text, dataType) ] -> dataType

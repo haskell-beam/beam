@@ -26,23 +26,6 @@ type ProjectibleInSelectSyntax syntax a =
   , Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax) ~ Sql92SelectExpressionSyntax syntax
   , Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
   , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
--- | Type class for any query like entity, currently `Q` and `TopLevelQ`
---class IsQuery q where
---  toSelectBuilder :: (ProjectibleInSelectSyntax syntax s a, IsSql92SelectSyntax syntax) => q syntax db s a -> SelectBuilder syntax db s a
-
--- newtype Q select db s a = Q { runQ :: F (QueryBuilderF select) a }
-
--- class (IsSql92SelectSyntax select, Functor (QueryBuilderF select)) => HasQueryBuilder select where
---   type QueryBuilderF select :: * -> *
-
---   introduceQ :: Beamable tbl => Proxy select -> Text -> QueryBuilderF select (tbl (QExpr expr s))
---   introduceQ :: Proxy select
---              -> F (QueryBuilderF select) a
---              -> Maybe (Sql92SelectExpressionSyntax select)
---              -> QueryBuilderF select a
---   unionQ,  :: Proxy select
---            -> F ( QueryBuilderF select) a -> F (QueryBuilderF select) a
---            -> QueryBuilderF select a
 
 data QF select db s next where
   QAll :: DatabaseEntity be db (TableEntity table)
@@ -62,6 +45,8 @@ data QF select db s next where
   QOrderBy :: Projectible (Sql92SelectExpressionSyntax select) r =>
               (r -> [ Sql92SelectOrderingSyntax select ])
            -> QM select db s r -> (r -> next) -> QF select db s next
+
+
   QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a =>
                 (a -> Sql92SelectGroupingSyntax select) -> QM select db s a -> (a -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
@@ -76,34 +61,7 @@ newtype Q syntax (db :: (* -> *) -> *) s a
     deriving (Monad, Applicative, Functor)
 
 data QInternal
-
--- instance IsQuery Q where
---   toSelectBuilder = SelectBuilderQ
--- instance IsQuery SelectBuilder where
---   toSelectBuilder q = q
--- data SelectBuilder syntax (db :: (((* -> *) -> *) -> *) -> *) s a where
---   SelectBuilderQ :: ( IsSql92SelectSyntax syntax
---                     , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) s a ) =>
---                     Q syntax db s a -> SelectBuilder syntax db s a
---   SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db s a
---   SelectBuilderTopLevel ::
---     { sbLimit, sbOffset :: Maybe Integer
---     , sbOrdering        :: [ Sql92SelectOrderingSyntax syntax ]
---     , sbTable           :: SelectBuilder syntax db s a } ->
---     SelectBuilder syntax db s a
-
--- -- | Wrapper for 'Q's that have been modified in such a way that they can no longer be joined against
--- --   without the use of 'subquery_'. 'TopLevelQ' is also an instance of 'IsQuery', and so can be passed
--- --   directly to 'query' or 'queryList'
--- newtype TopLevelQ syntax db s a = TopLevelQ (Q syntax db s a)
-
 data QNested s
-
---data GroupingBuilder select
---  = GroupingBuilder
---  { gbGrouping :: Maybe (Sql92SelectGroupingSyntax select)
---  , gbHaving :: Maybe (Sql92SelectExpressionSyntax select)
---  , gbTableSource :: QueryBuilder select }
 
 -- * QExpr type
 
