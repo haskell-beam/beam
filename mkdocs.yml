@@ -1,0 +1,15 @@
+site_name: Beam Documentation
+theme: readthedocs
+pages:
+  - Home: 'index.md'
+  - Frequently Asked Questions: 'about/faq.md'
+  - User Guide:
+      - 'Getting Started': 'user-guide/getting-started.md'
+      - 'Models': 'user-guide/models.md'
+  - Backends:
+      - 'beam-postgres': 'user-guide/backends/beam-postgres.md'
+      - 'beam-sqlite': 'user-guide/backends/beam-sqlite.md'
+  - About:
+      - 'Compatibility Matrix': 'about/compatibility.md'
+      - 'License': 'about/license.md'
+      - 'Release Notes': 'about/release-notes.md'
