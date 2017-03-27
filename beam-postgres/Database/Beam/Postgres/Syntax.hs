@@ -29,6 +29,8 @@ module Database.Beam.Postgres.Syntax
     , PgDataTypeSyntax(..), PgColumnConstraintDefinitionSyntax(..), PgColumnConstraintSyntax(..)
     , PgTableConstraintSyntax(..), PgMatchTypeSyntax(..), PgReferentialActionSyntax(..)
 
+    , PgWindowFrameSyntax(..), PgWindowFrameBoundsSyntax(..), PgWindowFrameBoundSyntax(..)
+
     , insertDefaults
     , pgSimpleMatchSyntax
     , pgBooleanType, pgByteaType
@@ -176,6 +178,9 @@ newtype PgColumnConstraintSyntax = PgColumnConstraintSyntax { fromPgColumnConstr
 newtype PgTableConstraintSyntax = PgTableConstraintSyntax { fromPgTableConstraint :: PgSyntax }
 newtype PgMatchTypeSyntax = PgMatchTypeSyntax { fromPgMatchType :: PgSyntax }
 newtype PgReferentialActionSyntax = PgReferentialActionSyntax { fromPgReferentialAction :: PgSyntax }
+newtype PgWindowFrameSyntax = PgWindowFrameSyntax { fromPgWindowFrame :: PgSyntax }
+newtype PgWindowFrameBoundsSyntax = PgWindowFrameBoundsSyntax { fromPgWindowFrameBounds :: PgSyntax }
+newtype PgWindowFrameBoundSyntax = PgWindowFrameBoundSyntax { fromPgWindowFrameBound :: ByteString -> PgSyntax }
 
 instance IsSql92Syntax PgCommandSyntax where
   type Sql92SelectSyntax PgCommandSyntax = PgSelectSyntax
@@ -380,6 +385,44 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
 instance IsSql99ExpressionSyntax PgExpressionSyntax where
   distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
   similarToE = pgBinOp "SIMILAR TO"
+
+instance IsSql2003ExpressionSyntax PgExpressionSyntax where
+  type Sql2003ExpressionWindowFrameSyntax PgExpressionSyntax =
+    PgWindowFrameSyntax
+
+  overE expr frame =
+    PgExpressionSyntax $
+    fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
+
+instance IsSql2003WindowFrameSyntax PgWindowFrameSyntax where
+  type Sql2003WindowFrameExpressionSyntax PgWindowFrameSyntax = PgExpressionSyntax
+  type Sql2003WindowFrameOrderingSyntax PgWindowFrameSyntax = PgOrderingSyntax
+  type Sql2003WindowFrameBoundsSyntax PgWindowFrameSyntax = PgWindowFrameBoundsSyntax
+
+  frameSyntax filter_ partition_ ordering_ bounds_ =
+    PgWindowFrameSyntax $
+    maybe mempty (\e -> emit "FILTER (WHERE" <> fromPgExpression e <> emit ")") filter_ <>
+    emit "OVER " <>
+    pgParens
+    (
+      maybe mempty (\p -> emit "PARTITION BY " <> pgSepBy (emit ", ") (map fromPgExpression p)) partition_ <>
+      maybe mempty (\o -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering o)) ordering_ <>
+      maybe mempty (\b -> emit " RANGE " <> fromPgWindowFrameBounds b) bounds_
+    )
+
+instance IsSql2003WindowFrameBoundsSyntax PgWindowFrameBoundsSyntax where
+  type Sql2003WindowFrameBoundsBoundSyntax PgWindowFrameBoundsSyntax = PgWindowFrameBoundSyntax
+
+  fromToBoundSyntax from Nothing =
+    PgWindowFrameBoundsSyntax (fromPgWindowFrameBound from "PRECEDING")
+  fromToBoundSyntax from (Just to) =
+    PgWindowFrameBoundsSyntax $
+    emit "BETWEEN " <> fromPgWindowFrameBound from "PRECEDING" <> emit " AND " <> fromPgWindowFrameBound to "FOLLOWING"
+
+instance IsSql2003WindowFrameBoundSyntax PgWindowFrameBoundSyntax where
+  unboundedSyntax = PgWindowFrameBoundSyntax $ \where_ -> emit "UNBOUNDED " <> emit where_
+  nrowsBoundSyntax 0 = PgWindowFrameBoundSyntax $ \_ -> emit "CURRENT ROW"
+  nrowsBoundSyntax n = PgWindowFrameBoundSyntax $ \where_ -> emit (fromString (show n)) <> emit " " <> emit where_
 
 instance IsSql92AggregationExpressionSyntax PgExpressionSyntax where
   type Sql92AggregationSetQuantifierSyntax PgExpressionSyntax = PgAggregationSetQuantifierSyntax
@@ -682,6 +725,9 @@ pgQuotedIdentifier t =
   where
     quoteIdentifierChar '"' = "\"\""
     quoteIdentifierChar c = T.singleton c
+
+pgParens :: PgSyntax -> PgSyntax
+pgParens a = emit "(" <> a <> emit ")"
 
 pgTableOp :: ByteString -> PgSelectTableSyntax -> PgSelectTableSyntax
           -> PgSelectTableSyntax

@@ -51,8 +51,11 @@ data QF select db s next where
   -- -- | Equivalent to 'pure', but with extra context information which allows window functions ('pure' doesn't)
   -- QProject :: ProjectibleWithPredicate ScalarContext (Sql2003SelectExpressionSyntax select) a =>
   --             a -> (a -> next) -> QF select db s next
-  QWindow :: Projectible (Sql92SelectExpressionSyntax select) a =>
-             QM select db s a -> (a -> next) -> QF select db s next
+  QWindowOver :: ( ProjectibleWithPredicate WindowFrameContext (Sql2003ExpressionWindowFrameSyntax (Sql92SelectExpressionSyntax select)) window
+                 , Projectible (Sql92SelectExpressionSyntax select) r
+                 , Projectible (Sql92SelectExpressionSyntax select) a )
+              => (r -> window) -> (r -> window -> a)
+              -> QM select db s r -> (a -> next) -> QF select db s next
   QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a =>
                 (a -> Maybe (Sql92SelectGroupingSyntax select)) ->
                 QM select db s a -> (a -> next) -> QF select db s next
@@ -90,16 +93,18 @@ data QGroupingContext
 data QValueContext
 data QOrderingContext
 data QWindowingContext
+data QWindowFrameContext
 newtype QGenExpr context syntax s t = QExpr syntax
 type QExpr = QGenExpr QValueContext
 type QAgg = QGenExpr QAggregateContext
 type QOrd = QGenExpr QOrderingContext
 type QWindowExpr = QGenExpr QWindowingContext
+type QWindowFrame = QGenExpr QWindowFrameContext
 type QGroupExpr = QGenExpr QGroupingContext
 deriving instance Show syntax => Show (QGenExpr context syntax s t)
 deriving instance Eq syntax => Eq (QGenExpr context syntax s t)
 
-newtype QWindow syntax s = QWindow (Sql2003ExpressionWindowFrameSyntax syntax)
+newtype QWindow syntax s = QWindow syntax
 newtype QFrameBounds syntax = QFrameBounds (Maybe syntax)
 newtype QFrameBound syntax = QFrameBound syntax
 
@@ -150,6 +155,7 @@ instance (IsAggregateContext a, Typeable a) => AggregateContext a
 type family ContextName a :: Symbol
 type instance ContextName QValueContext = "a value"
 type instance ContextName QWindowingContext = "a window expression"
+type instance ContextName QWindowFrameContext = "a window frame"
 type instance ContextName QOrderingContext = "an ordering expression"
 type instance ContextName QAggregateContext = "an aggregate"
 type instance ContextName QGroupingContext = "an aggregate grouping"
@@ -169,6 +175,15 @@ type family AggregateContextSuggestion a :: ErrorMessage where
 
 class Typeable context => ValueContext context
 instance (IsValueContext a, Typeable a, a ~ QValueContext) => ValueContext a
+
+class Typeable context => WindowFrameContext context
+instance (Typeable context, IsWindowFrameContext context, context ~ QWindowFrameContext) =>
+  WindowFrameContext context
+
+type family IsWindowFrameContext a :: Constraint where
+  IsWindowFrameContext QWindowFrameContext = ()
+  IsWindowFrameContext a = TypeError ('Text "Expected window frame." :$$:
+                                      ('Text "Got " :<>: 'Text (ContextName a) :<>: 'Text ". Expected a window frame"))
 
 class AnyType a
 instance AnyType a
@@ -276,6 +291,9 @@ instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate cont
   project' _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
                       Columnar' . QExpr <$> mutateM (Proxy @context) e) a a
+instance ProjectibleWithPredicate WindowFrameContext syntax (QWindow syntax s) where
+  project' _ mutateM (QWindow a) =
+    QWindow <$> mutateM (Proxy @QWindowFrameContext) a
 instance contextPredicate context => ProjectibleWithPredicate contextPredicate syntax (QGenExpr context syntax s a) where
   project' _ mkE (QExpr a) = QExpr <$> mkE (Proxy @context) a
 instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b ) =>

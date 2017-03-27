@@ -11,6 +11,8 @@ module Database.Beam.Query.Combinators
 
     , limit_, offset_
 
+    , as_
+
     , exists_, unique_, distinct_, subquery_
 
     , union_, unionAll_
@@ -31,7 +33,7 @@ module Database.Beam.Query.Combinators
     , SqlValable(..), As(..)
 
     , over_, frame_, bounds_, fromBound_, noBounds_, noOrder_
-    , partitionBy_
+    , partitionBy_, withWindow_
 
     -- * SQL GROUP BY and aggregation
     , aggregate_
@@ -343,6 +345,9 @@ intersectAll_ (Q a) (Q b) = Q (liftF (QIntersect True a b id))
 except_ (Q a) (Q b) = Q (liftF (QExcept False a b id))
 exceptAll_ (Q a) (Q b) = Q (liftF (QExcept True a b id))
 
+as_ :: forall a ctxt syntax s. QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a
+as_ = id
+
 -- * Marshalling between Haskell literals and QExprs
 
 type family HaskellLiteralForQExpr x = a
@@ -401,12 +406,12 @@ noOrder_ :: Maybe (QOrd syntax s Int)
 noOrder_ = Nothing
 
 partitionBy_ :: forall syntax partition s.
-                ( Projectible syntax partition
-                , SqlOrderable (Sql2003WindowFrameOrderingSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) (QOrd syntax s Int)
-                , IsSql2003ExpressionSyntax syntax
-                , Sql2003ExpressionSanityCheck syntax ) =>
+                ( Projectible (Sql2003WindowFrameExpressionSyntax syntax) partition
+                , IsSql2003WindowFrameSyntax syntax ) =>
                 partition -> QWindow syntax s
-partitionBy_ p = frame_ Nothing p (noOrder_ :: Maybe (QOrd syntax s Int)) noBounds_
+partitionBy_ p =
+  QWindow $
+  frameSyntax Nothing (case project p of { [] -> Nothing; xs -> Just xs }) Nothing Nothing --frame_ Nothing p (noOrder_ :: Maybe (QOrd syntax s Int)) noBounds_
 
 frame_ :: ( IsSql2003ExpressionSyntax syntax
           , SqlOrderable (Sql2003WindowFrameOrderingSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) ordering
@@ -416,7 +421,7 @@ frame_ :: ( IsSql2003ExpressionSyntax syntax
        -> partition                   {-^ PARTITION BY -}
        -> Maybe ordering              {-^ ORDER BY -}
        -> QFrameBounds (Sql2003WindowFrameBoundsSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) {-^ RANGE / ROWS -}
-       -> QWindow syntax s
+       -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s
 frame_ filter_ partition_ ordering_ (QFrameBounds bounds) =
     QWindow $
     frameSyntax (fmap (\(QExpr e) -> e) filter_)
@@ -430,27 +435,19 @@ frame_ filter_ partition_ ordering_ (QFrameBounds bounds) =
                 bounds
 
 over_ :: IsSql2003ExpressionSyntax syntax =>
-         QAgg syntax s a -> QWindow syntax s -> QWindowExpr syntax s a
+         QAgg syntax s a -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s -> QWindowExpr syntax s a
 over_ (QExpr a) (QWindow frame) = QExpr (overE a frame)
 
-withWindow_ :: ( ProjectibleWithPredicate WindowContext (Sql92SelectExpressionSyntax select) window
+withWindow_ :: ( ProjectibleWithPredicate WindowFrameContext (Sql2003ExpressionWindowFrameSyntax (Sql92SelectExpressionSyntax select)) window
+               , Projectible (Sql92SelectExpressionSyntax select) r
                , Projectible (Sql92SelectExpressionSyntax select) a
                , ContextRewritable a
                , IsSql92SelectSyntax select)
-            => (r -> window) -> (window -> a)
+            => (r -> window) -> (r -> window -> a)
             -> Q select db s r
             -> Q select db s (WithRewrittenContext a QValueContext)
-withWindow_ 
-
-window_ :: ( ProjectibleWithPredicate WindowContext (Sql92SelectExpressionSyntax select) a
-           , Projectible (Sql92SelectExpressionSyntax select) r
-           , ContextRewritable a
-           , IsSql92SelectSyntax select )
-        => (r -> a)
-        -> Q select db s r
-        -> Q select db s (WithRewrittenContext a QValueContext)
-window_ mkWindow (Q windowing) =
-  Q (liftF (QWindow mkWindow windowing id))
+withWindow_ mkWindow mkProjection (Q windowOver)=
+  Q (liftF (QWindowOver mkWindow mkProjection windowOver (rewriteContext (Proxy @QValueContext))))
 
 -- * Aggregators
 
@@ -496,7 +493,7 @@ avg_ (QExpr over) = QExpr (avgE Nothing over)
 min_ (QExpr over) = QExpr (minE Nothing over)
 max_ (QExpr over) = QExpr (maxE Nothing over)
 
-countAll_ :: IsSql92AggregationExpressionSyntax expr => QAgg expr s a
+countAll_ :: IsSql92AggregationExpressionSyntax expr => QAgg expr s Int
 countAll_ = QExpr countAllE
 
 count_ :: ( IsSql92AggregationExpressionSyntax expr

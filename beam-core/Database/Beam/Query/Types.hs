@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 {-# LANGUAGE TypeApplications #-}
 module Database.Beam.Query.Types
-    ( Q, QExpr, QExprToIdentity
+    ( Q, QExpr, QExprToIdentity, QWindow, QWindowFrame
 
     , Projectible(..)
 
@@ -242,6 +242,18 @@ buildSql92Query (Q q) =
                                SelectBuilderTopLevel Nothing Nothing (mkOrdering proj'') (SelectBuilderQ proj''' qb)
                            | otherwise -> doJoined
              _ -> doJoined
+
+    buildQuery (Free (QWindowOver mkWindows mkProjection q next)) =
+        let sb = buildQuery (fromF q)
+
+            x = sbProj sb
+            windows = mkWindows x
+            projection = mkProjection x windows
+        in case next projection of
+             Pure x -> setSelectBuilderProjection sb x
+             _      ->
+               let (x', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb projection)
+               in buildJoinedQuery (next x') qb
 
     buildQuery (Free (QLimit limit q next)) =
         let sb = limitSelectBuilder limit (buildQuery (fromF q))

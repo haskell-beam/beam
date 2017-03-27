@@ -8,14 +8,14 @@ module Main where
 import Pagila.Schema
 
 import Database.Beam
---import Database.Beam.Postgres
---import Database.Beam.Postgres (PgSyntax(..))
---import Database.Beam.Postgres.Migrate
+import Database.Beam.Postgres
+import Database.Beam.Postgres (PgSyntax(..))
+import Database.Beam.Postgres.Migrate
 import Database.Beam.Migrate.Types hiding (migrateScript)
 import Database.Beam.Migrate.SQL.Tables
 import Database.Beam.Migrate.SQL.Types
 
---import qualified Database.PostgreSQL.Simple as Pg
+import qualified Database.PostgreSQL.Simple as Pg
 
 import qualified Control.Exception as E
 
