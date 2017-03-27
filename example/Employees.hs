@@ -2,10 +2,9 @@
 module Main where
 
 import Database.Beam
-import Database.Beam.Postgres
+--import Database.Beam.Postgres
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL92
 
 import Control.Monad
 import Control.Monad.Identity
@@ -76,10 +75,10 @@ Order (LensFor orderIdC)
       (LensFor orderAmountC) = tableConfigLenses
 
 data EmployeeDatabase q = EmployeeDatabase
-                        { _employees   :: q EmployeeT
-                        , _departments :: q DepartmentT
-                        , _groups      :: q GroupT
-                        , _orders      :: q OrderT }
+                        { _employees   :: q (TableEntity EmployeeT)
+                        , _departments :: q (TableEntity DepartmentT)
+                        , _groups      :: q (TableEntity GroupT)
+                        , _orders      :: q (TableEntity OrderT) }
                         deriving Generic
 
 instance Table EmployeeT where
@@ -124,8 +123,8 @@ deriving instance Show OrderId
 instance Database EmployeeDatabase
 
 EmployeeDatabase { _departments = TableLens departmentsC } = dbLenses
-employeeDb :: DatabaseSettings Postgres EmployeeDatabase
-employeeDb = autoDbSettings & departmentsC . tableSettings . deptIdC . fieldSchema .~ varchar (Just 32)
+employeeDb :: DatabaseSettings be EmployeeDatabase
+employeeDb = defaultDbSettings --autoDbSettings & departmentsC . tableSettings . deptIdC . fieldSchema .~ varchar (Just 32)
 -- * main functions
 main = putStrLn "Hello" -- do [sqliteDbPath] <- getArgs
 --           beam <- openDatabaseDebug employeeDb AutoMigrate (Sqlite3Settings sqliteDbPath)

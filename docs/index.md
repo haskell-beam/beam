@@ -87,8 +87,8 @@ Group. The following is a quick step-by-step guide of contributing a new feature
 * For general questions, feedback on patches, support, or other concerns, please
   write to the mailing list
 * For bugs or feature requests,
-  please [open an issue](https://github.com/tathougies/beam/isues)
-  
+  please [open an issue](https://github.com/tathougies/beam/issues)
+
 ## Why Beam?
 
 Beam is the most feature-complete, turnkey Haskell database solution out there.

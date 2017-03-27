@@ -1,5 +1,7 @@
 module Database.Beam.Sqlite.Syntax
-  ( SqliteSyntax(..) ) where
+  ( SqliteSyntax(..)
+
+  , SqliteCommandSyntax(..) ) where
 
 import           Database.Beam.Backend.SQL
 
@@ -36,7 +38,7 @@ quotedIdentifier txt = emit "\"" <> SqliteSyntax (stringUtf8 (T.unpack (escape t
   where escape = T.concatMap (\c -> if c == '"' then "\"\"" else T.singleton c)
 
 emitValue :: SQLData -> SqliteSyntax
-emitValue v = SqliteSyntax mempty (DL.singleton v)
+emitValue v = SqliteSyntax (byteString "?") (DL.singleton v)
 
 -- * Syntax types
 

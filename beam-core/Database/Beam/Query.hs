@@ -7,7 +7,9 @@ module Database.Beam.Query
     , module Database.Beam.Query.Combinators
 
     , SqlSelect(..)
-    , select, runSelectReturningList, dumpSqlSelect
+    , select
+    , runSelectReturningList
+    , dumpSqlSelect
 
     , SqlInsert(..)
     , insert

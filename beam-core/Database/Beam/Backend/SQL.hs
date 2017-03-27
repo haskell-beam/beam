@@ -1,9 +1,9 @@
 module Database.Beam.Backend.SQL
-  ( module Database.Beam.Backend.SQL.SQL99
+  ( module Database.Beam.Backend.SQL.SQL2003
   , module Database.Beam.Backend.SQL.Types
   , module Database.Beam.Backend.Types ) where
 
-import Database.Beam.Backend.SQL.SQL99
+import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 

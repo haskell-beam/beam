@@ -10,7 +10,7 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Int (Int8, Int16, Int32, Int64)
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as TL
-import           Data.Time (UTCTime, LocalTime, Day)
+import           Data.Time (UTCTime, LocalTime, Day, utcToLocalTime, utc)
 import           Data.Word (Word8, Word16, Word32, Word64)
 
 import qualified Database.SQLite.Simple.FromField as Sql
@@ -42,6 +42,8 @@ instance FromBackendRow Sqlite TL.Text
 instance FromBackendRow Sqlite UTCTime
 instance FromBackendRow Sqlite Day
 instance FromBackendRow Sqlite Sql.Null
+instance FromBackendRow Sqlite LocalTime where
+  fromBackendRow = utcToLocalTime utc <$> fromBackendRow
 
 instance Sql.FromField x => Sql.FromField (Auto x) where
   fromField field = fmap (Auto . Just) (Sql.fromField field)

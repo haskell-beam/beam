@@ -30,6 +30,9 @@ module Database.Beam.Query.Combinators
     , HaskellLiteralForQExpr
     , SqlValable(..), As(..)
 
+    , over_, frame_, bounds_, fromBound_, noBounds_, noOrder_
+    , partitionBy_
+
     -- * SQL GROUP BY and aggregation
     , aggregate_
     , group_
@@ -343,12 +346,12 @@ exceptAll_ (Q a) (Q b) = Q (liftF (QExcept True a b id))
 -- * Marshalling between Haskell literals and QExprs
 
 type family HaskellLiteralForQExpr x = a
-type instance HaskellLiteralForQExpr (QExpr syntax s a) = a
-type instance HaskellLiteralForQExpr (table (QExpr syntax s)) = table Identity
-type instance HaskellLiteralForQExpr (As x -> QExpr syntax s x) = x
+type instance HaskellLiteralForQExpr (QGenExpr context syntax s a) = a
+type instance HaskellLiteralForQExpr (table (QGenExpr context syntax s)) = table Identity
+type instance HaskellLiteralForQExpr (As x -> QGenExpr context syntax s x) = x
 
 type family QExprSyntax x where
-  QExprSyntax (QExpr syntax s a) = syntax
+  QExprSyntax (QGenExpr ctxt syntax s a) = syntax
 
 data As x = As
 
@@ -356,10 +359,10 @@ class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
 
 instance (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a, IsSql92ExpressionSyntax syntax) =>
-  SqlValable (QExpr syntax s a) where
+  SqlValable (QGenExpr ctxt syntax s a) where
 
   val_ = QExpr . valueE . sqlValueSyntax
-instance ( x ~ QExpr syntax s a
+instance ( x ~ QGenExpr context syntax s a
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax (QExprSyntax x)) a
          , IsSql92ExpressionSyntax (QExprSyntax x) ) =>
   SqlValable (As a -> x) where
@@ -367,7 +370,7 @@ instance ( x ~ QExpr syntax s a
 instance ( Beamable table
          , IsSql92ExpressionSyntax syntax
          , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
-  SqlValable (table (QExpr syntax s)) where
+  SqlValable (table (QGenExpr ctxt syntax s)) where
   val_ tbl =
     let fields :: table (WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
         fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
@@ -375,70 +378,81 @@ instance ( Beamable table
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) x)) ->
                          Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
 
+-- * Window functions
+
+noBounds_ :: QFrameBounds syntax
+noBounds_ = QFrameBounds Nothing
+
+fromBound_ :: IsSql2003WindowFrameBoundsSyntax syntax
+           => QFrameBound (Sql2003WindowFrameBoundsBoundSyntax syntax)
+           -> QFrameBounds syntax
+fromBound_ start = bounds_ start Nothing
+
+bounds_ :: IsSql2003WindowFrameBoundsSyntax syntax
+        => QFrameBound (Sql2003WindowFrameBoundsBoundSyntax syntax)
+        -> Maybe (QFrameBound (Sql2003WindowFrameBoundsBoundSyntax syntax))
+        -> QFrameBounds syntax
+bounds_ (QFrameBound start) end =
+    QFrameBounds . Just $
+    fromToBoundSyntax start
+      (fmap (\(QFrameBound end) -> end) end)
+
+noOrder_ :: Maybe (QOrd syntax s Int)
+noOrder_ = Nothing
+
+partitionBy_ :: forall syntax partition s.
+                ( Projectible syntax partition
+                , SqlOrderable (Sql2003WindowFrameOrderingSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) (QOrd syntax s Int)
+                , IsSql2003ExpressionSyntax syntax
+                , Sql2003ExpressionSanityCheck syntax ) =>
+                partition -> QWindow syntax s
+partitionBy_ p = frame_ Nothing p (noOrder_ :: Maybe (QOrd syntax s Int)) noBounds_
+
+frame_ :: ( IsSql2003ExpressionSyntax syntax
+          , SqlOrderable (Sql2003WindowFrameOrderingSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) ordering
+          , Projectible syntax partition
+          , Sql2003ExpressionSanityCheck syntax ) =>
+          Maybe (QExpr syntax s Bool) {-^ FILTER -}
+       -> partition                   {-^ PARTITION BY -}
+       -> Maybe ordering              {-^ ORDER BY -}
+       -> QFrameBounds (Sql2003WindowFrameBoundsSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) {-^ RANGE / ROWS -}
+       -> QWindow syntax s
+frame_ filter_ partition_ ordering_ (QFrameBounds bounds) =
+    QWindow $
+    frameSyntax (fmap (\(QExpr e) -> e) filter_)
+                (case project partition_ of
+                   [] -> Nothing
+                   xs -> Just xs)
+                (case fmap makeSQLOrdering ordering_ of
+                   Nothing -> Nothing
+                   Just [] -> Nothing
+                   Just xs -> Just xs)
+                bounds
+
+over_ :: IsSql2003ExpressionSyntax syntax =>
+         QAgg syntax s a -> QWindow syntax s -> QWindowExpr syntax s a
+over_ (QExpr a) (QWindow frame) = QExpr (overE a frame)
+
+withWindow_ :: ( ProjectibleWithPredicate WindowContext (Sql92SelectExpressionSyntax select) window
+               , Projectible (Sql92SelectExpressionSyntax select) a
+               , ContextRewritable a
+               , IsSql92SelectSyntax select)
+            => (r -> window) -> (window -> a)
+            -> Q select db s r
+            -> Q select db s (WithRewrittenContext a QValueContext)
+withWindow_ 
+
+window_ :: ( ProjectibleWithPredicate WindowContext (Sql92SelectExpressionSyntax select) a
+           , Projectible (Sql92SelectExpressionSyntax select) r
+           , ContextRewritable a
+           , IsSql92SelectSyntax select )
+        => (r -> a)
+        -> Q select db s r
+        -> Q select db s (WithRewrittenContext a QValueContext)
+window_ mkWindow (Q windowing) =
+  Q (liftF (QWindow mkWindow windowing id))
+
 -- * Aggregators
-
--- class BeamSqlBackend be => Aggregating be agg s | agg -> s, agg -> be where
---     type LiftAggregationsToQExpr agg s
-
---     aggToSql :: Proxy s -> agg -> SQLGrouping be
---     liftAggToQExpr :: Proxy s -> agg -> LiftAggregationsToQExpr agg s
--- instance ( Table t, BeamSqlBackend be ) => Aggregating be (t (Aggregation be s)) s where
---     type LiftAggregationsToQExpr (t (Aggregation be s)) s = t (QExpr be s)
---     aggToSql s table = mconcat (allBeamValues (\(Columnar' x) -> aggToSql s x) table)
---     liftAggToQExpr s = changeBeamRep (\(Columnar' x) -> Columnar' (liftAggToQExpr s x))
--- instance BeamSqlBackend be => Aggregating be (Aggregation be s a) s where
---     type LiftAggregationsToQExpr (Aggregation be s a) s = QExpr be s a
---     aggToSql _ (GroupAgg e) = let eSql = optimizeExpr' e
---                               in mempty { sqlGroupBy = [eSql] }
---     aggToSql _ (ProjectAgg _) = mempty
-
---     liftAggToQExpr _ (GroupAgg e) = QExpr e
---     liftAggToQExpr _ (ProjectAgg e) = QExpr e
--- instance (Aggregating be a s, Aggregating be b s) => Aggregating be (a, b) s where
---     type LiftAggregationsToQExpr (a, b) s = ( LiftAggregationsToQExpr a s
---                                             , LiftAggregationsToQExpr b s)
---     aggToSql s (a, b) = aggToSql s a <> aggToSql s b
---     liftAggToQExpr s (a, b) = (liftAggToQExpr s a, liftAggToQExpr s b)
--- instance (Aggregating be a s, Aggregating be b s, Aggregating be c s) => Aggregating be (a, b, c) s where
---     type LiftAggregationsToQExpr (a, b, c) s = ( LiftAggregationsToQExpr a s
---                                                , LiftAggregationsToQExpr b s
---                                                , LiftAggregationsToQExpr c s )
---     aggToSql s (a, b, c) = aggToSql s a <> aggToSql s b <> aggToSql s c
---     liftAggToQExpr s (a, b, c) = (liftAggToQExpr s a, liftAggToQExpr s b, liftAggToQExpr s c)
--- instance (Aggregating be a s, Aggregating be b s, Aggregating be c s, Aggregating be d s) => Aggregating be (a, b, c, d) s where
---     type LiftAggregationsToQExpr (a, b, c, d) s = ( LiftAggregationsToQExpr a s
---                                                   , LiftAggregationsToQExpr b s
---                                                   , LiftAggregationsToQExpr c s
---                                                   , LiftAggregationsToQExpr d s)
---     aggToSql s (a, b, c, d) = aggToSql s a <> aggToSql s b <> aggToSql s c <> aggToSql s d
---     liftAggToQExpr s (a, b, c, d) = (liftAggToQExpr s a, liftAggToQExpr s b, liftAggToQExpr s c, liftAggToQExpr s d)
--- instance (Aggregating be a s, Aggregating be b s, Aggregating be c s, Aggregating be d s, Aggregating be e s) => Aggregating be (a, b, c, d, e) s where
---     type LiftAggregationsToQExpr (a, b, c, d, e) s = ( LiftAggregationsToQExpr a s
---                                                      , LiftAggregationsToQExpr b s
---                                                      , LiftAggregationsToQExpr c s
---                                                      , LiftAggregationsToQExpr d s
---                                                      , LiftAggregationsToQExpr e s)
---     aggToSql s (a, b, c, d, e) = aggToSql s a <> aggToSql s b <> aggToSql s c <> aggToSql s d <> aggToSql s e
---     liftAggToQExpr s (a, b, c, d, e) = (liftAggToQExpr s a, liftAggToQExpr s b, liftAggToQExpr s c, liftAggToQExpr s d, liftAggToQExpr s e)
-
--- -- | Type class for things that can be used as the basis of a grouping in a SQL GROUP BY
--- -- clause. This includes 'QExpr a', 'Table's, and 'PrimaryKey's. Because the given object forms the
--- -- basis of the group, its value is available for use in the result set.
--- class SqlGroupable a where
---     type GroupResult a
-
---     -- | When included in an 'Aggregating' expression, causes the results to be grouped by the
---     -- given column.
---     group_ :: a -> GroupResult a
--- instance SqlGroupable (QExpr be s a) where
---     type GroupResult (QExpr be s a) = Aggregation be s a
---     group_ (QExpr a) = GroupAgg a
--- -- instance {-# OVERLAPPING #-} Table t => SqlGroupable (PrimaryKey t (QExpr be s)) where
--- --     type GroupResult (PrimaryKey t (QExpr be s)) = PrimaryKey t (Aggregation be s)
--- --     group_ = pkChangeRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
--- instance Table t => SqlGroupable (t (QExpr be s)) where
---     type GroupResult (t (QExpr be s)) = t (Aggregation be s)
---     group_ = changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (GroupAgg e))
 
 aggregate_ :: forall select a r db s.
               ( ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
@@ -467,7 +481,9 @@ aggregate_ mkAggregation (Q aggregating) =
                   Nothing -> error "aggregate_: impossible"
 
           groupingExprs = execWriter (project' (Proxy @AggregateContext) doProject agg)
-      in groupByExpressions groupingExprs
+      in case groupingExprs of
+           [] -> Nothing
+           _ -> Just $ groupByExpressions groupingExprs
 
 group_ :: QExpr expr s a -> QGroupExpr expr s a
 group_ (QExpr a) = QExpr a

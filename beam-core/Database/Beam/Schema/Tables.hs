@@ -70,12 +70,13 @@ class Database db where
     --                     (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
     -- allTables f db = allTables' f (from' db)
 
-    zipTables :: Monad m
+    zipTables :: forall be f g h m.
+                 Monad m
               => Proxy be
               -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
                   f tbl -> g tbl -> m (h tbl))
               -> db f -> db g -> m (db h)
-    default zipTables :: forall be m f g h.
+    default zipTables :: forall be f g h m.
                          ( Generic (db f), Generic (db g), Generic (db h)
                          , Monad m
                          , GZipDatabase be f g h
@@ -83,7 +84,8 @@ class Database db where
                          Proxy be ->
                          (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl)) ->
                          db f -> db g -> m (db h)
-    zipTables _ combine f g = to <$> gZipDatabase (Proxy @f, Proxy @g, Proxy @h, Proxy @be) combine (from f) (from g)
+    zipTables _ combine f g =
+        to <$> gZipDatabase (Proxy @f, Proxy @g, Proxy @h, Proxy @be) combine (from f) (from g)
 
 defaultDbSettings :: ( Generic (DatabaseSettings be db)
                      , GAutoDbSettings (Rep (DatabaseSettings be db) ()) ) =>

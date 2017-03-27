@@ -65,7 +65,7 @@ data SelectBuilder syntax (db :: (* -> *) -> *) a where
   SelectBuilderGrouping ::
       ( IsSql92SelectSyntax syntax
       , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
-      a -> QueryBuilder syntax -> Sql92SelectGroupingSyntax syntax -> Maybe (Sql92SelectExpressionSyntax syntax) -> SelectBuilder syntax db a
+      a -> QueryBuilder syntax -> Maybe (Sql92SelectGroupingSyntax syntax) -> Maybe (Sql92SelectExpressionSyntax syntax) -> SelectBuilder syntax db a
   SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db a
   SelectBuilderTopLevel ::
     { sbLimit, sbOffset :: Maybe Integer
@@ -89,7 +89,7 @@ buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyn
 buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_))) =
     selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ Nothing Nothing) ordering limit offset
 buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ from where_) grouping having)) =
-    selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ (Just grouping) having) ordering limit offset
+    selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ grouping having) ordering limit offset
 buildSelect x = buildSelect (SelectBuilderTopLevel Nothing Nothing [] x)
 
 selectBuilderToTableSource :: ( Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
@@ -100,7 +100,7 @@ selectBuilderToTableSource (SelectBuilderSelectSyntax _ x) = x
 selectBuilderToTableSource (SelectBuilderQ x (QueryBuilder _ from where_)) =
   selectTableStmt (projExprs (defaultProjection x)) from where_ Nothing Nothing
 selectBuilderToTableSource (SelectBuilderGrouping x (QueryBuilder _ from where_) grouping having) =
-  selectTableStmt (projExprs (defaultProjection x)) from where_ (Just grouping) having
+  selectTableStmt (projExprs (defaultProjection x)) from where_ grouping having
 selectBuilderToTableSource sb =
     let (x, QueryBuilder _ from where_) = selectBuilderToQueryBuilder sb
     in selectTableStmt (projExprs (defaultProjection x)) from where_ Nothing Nothing

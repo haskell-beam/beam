@@ -131,7 +131,9 @@ instance FromBackendRow be x => FromBackendRow be (Maybe x) where
 -- * MonadBeam class
 
 class (BeamBackend be, Monad m, MonadIO m) =>
-  MonadBeam syntax be m | m -> syntax be where
+  MonadBeam syntax be m | m -> syntax be, be -> m where
+
+  runReturningMany :: FromBackendRow be x => syntax -> (m (Maybe x) -> m a) -> m a
 
   runNoReturn :: syntax -> m ()
   runNoReturn cmd =
@@ -149,14 +151,12 @@ class (BeamBackend be, Monad m, MonadIO m) =>
                  Nothing -> pure (Just x)
                  Just _ -> pure Nothing
 
-  runReturningMany :: FromBackendRow be x => syntax -> (m (Maybe x) -> m a) -> m a
-
-runReturningList :: (FromBackendRow be x, MonadBeam syntax be m) => syntax -> m [x]
-runReturningList cmd =
-  runReturningMany cmd $ \next ->
-    let collectM acc = do
-          a <- next
-          case a of
-            Nothing -> pure (acc [])
-            Just x -> collectM (acc . (x:))
-    in collectM id
+  runReturningList :: FromBackendRow be x => syntax -> m [x]
+  runReturningList cmd =
+      runReturningMany cmd $ \next ->
+          let collectM acc = do
+                a <- next
+                case a of
+                  Nothing -> pure (acc [])
+                  Just x -> collectM (acc . (x:))
+          in collectM id

@@ -1,4 +1,4 @@
-{-# LANGUAGE FunctionalDependencies, UndecidableInstances, TypeApplications, DeriveFunctor #-}
+{-# LANGUAGE FunctionalDependencies, UndecidableInstances, TypeApplications, DeriveFunctor, DataKinds #-}
 module Database.Beam.Query.Internal where
 
 import           Database.Beam.Backend.Types
@@ -18,6 +18,7 @@ import           Control.Monad.Identity
 import           Control.Monad.State
 import           Control.Monad.Writer
 
+import           GHC.TypeLits
 import           GHC.Types
 
 type ProjectibleInSelectSyntax syntax a =
@@ -25,7 +26,8 @@ type ProjectibleInSelectSyntax syntax a =
   , Eq (Sql92SelectExpressionSyntax syntax)
   , Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax) ~ Sql92SelectExpressionSyntax syntax
   , Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
-  , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
+  , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a
+  , ProjectibleValue (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a)
 
 data QF select db s next where
   QAll :: DatabaseEntity be db (TableEntity table)
@@ -46,9 +48,14 @@ data QF select db s next where
               (r -> [ Sql92SelectOrderingSyntax select ])
            -> QM select db s r -> (r -> next) -> QF select db s next
 
-
+  -- -- | Equivalent to 'pure', but with extra context information which allows window functions ('pure' doesn't)
+  -- QProject :: ProjectibleWithPredicate ScalarContext (Sql2003SelectExpressionSyntax select) a =>
+  --             a -> (a -> next) -> QF select db s next
+  QWindow :: Projectible (Sql92SelectExpressionSyntax select) a =>
+             QM select db s a -> (a -> next) -> QF select db s next
   QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a =>
-                (a -> Sql92SelectGroupingSyntax select) -> QM select db s a -> (a -> next) -> QF select db s next
+                (a -> Maybe (Sql92SelectGroupingSyntax select)) ->
+                QM select db s a -> (a -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
 
 type QM select db s = F (QF select db s)
@@ -82,13 +89,19 @@ data QAggregateContext
 data QGroupingContext
 data QValueContext
 data QOrderingContext
+data QWindowingContext
 newtype QGenExpr context syntax s t = QExpr syntax
 type QExpr = QGenExpr QValueContext
 type QAgg = QGenExpr QAggregateContext
 type QOrd = QGenExpr QOrderingContext
+type QWindowExpr = QGenExpr QWindowingContext
 type QGroupExpr = QGenExpr QGroupingContext
 deriving instance Show syntax => Show (QGenExpr context syntax s t)
 deriving instance Eq syntax => Eq (QGenExpr context syntax s t)
+
+newtype QWindow syntax s = QWindow (Sql2003ExpressionWindowFrameSyntax syntax)
+newtype QFrameBounds syntax = QFrameBounds (Maybe syntax)
+newtype QFrameBound syntax = QFrameBound syntax
 
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) [Char] ) =>
@@ -132,8 +145,50 @@ data Aggregation syntax s a
 -- tuples up to size 5. If you need more, follow the implementations here.
 
 class Typeable context => AggregateContext context
-instance AggregateContext QAggregateContext
-instance AggregateContext QGroupingContext
+instance (IsAggregateContext a, Typeable a) => AggregateContext a
+
+type family ContextName a :: Symbol
+type instance ContextName QValueContext = "a value"
+type instance ContextName QWindowingContext = "a window expression"
+type instance ContextName QOrderingContext = "an ordering expression"
+type instance ContextName QAggregateContext = "an aggregate"
+type instance ContextName QGroupingContext = "an aggregate grouping"
+
+type family IsAggregateContext a :: Constraint where
+    IsAggregateContext QAggregateContext = ()
+    IsAggregateContext QGroupingContext = ()
+    IsAggregateContext a = TypeError ('Text "Non-aggregate expression where aggregate expected." :$$:
+                                      ('Text "Got " :<>: 'Text (ContextName a) :<>: 'Text ". Expected an aggregate or a grouping") :$$:
+                                      AggregateContextSuggestion a)
+
+type family AggregateContextSuggestion a :: ErrorMessage where
+    AggregateContextSuggestion QValueContext = 'Text "Perhaps you forgot to wrap a value expression with 'group_'"
+    AggregateContextSuggestion QWindowingContext = 'Text "Perhaps you meant to use 'window_' instead of 'aggregate_'"
+    AggregateContextSuggestion QOrderingContext = 'Text "You cannot use an ordering in an aggregate"
+    AggregateContextSuggestion b = 'Text ""
+
+class Typeable context => ValueContext context
+instance (IsValueContext a, Typeable a, a ~ QValueContext) => ValueContext a
+
+class AnyType a
+instance AnyType a
+
+type family IsValueContext a :: Constraint where
+    IsValueContext QValueContext = ()
+    IsValueContext a = TypeError ('Text "Non-scalar context in projection" :$$:
+                                  ('Text "Got " :<>: 'Text (ContextName a) :<>: 'Text ". Expected a value") :$$:
+                                  ValueContextSuggestion a)
+
+type family ValueContextSuggestion a :: ErrorMessage where
+    ValueContextSuggestion QWindowingContext = 'Text "Use 'window_' to projecct aggregate expressions to the value level"
+    ValueContextSuggestion QOrderingContext = 'Text "An ordering context cannot be used in a projection. Try removing the 'asc_' or 'desc_', or use 'orderBy_' to sort the result set"
+    ValueContextSuggestion QAggregateContext = ('Text "Aggregate functions and groupings cannot be contained in value expressions." :$$:
+                                                'Text "Use 'aggregate_' to compute aggregations at the value level.")
+    ValueContextSuggestion QGroupingContext = ValueContextSuggestion QAggregateContext
+    ValueContextSuggestion _ = 'Text ""
+
+type Projectible = ProjectibleWithPredicate AnyType
+type ProjectibleValue = ProjectibleWithPredicate ValueContext
 
 class ContextRewritable a where
   type WithRewrittenContext a ctxt :: *
@@ -267,10 +322,6 @@ instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPr
     (,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
               <*> project' p mkE g <*> project' p mkE h
-
-class AnyType a
-instance AnyType a
-type Projectible = ProjectibleWithPredicate AnyType
 
 project :: Projectible syntax a => a -> [ syntax ]
 project = DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)

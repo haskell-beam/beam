@@ -7,6 +7,7 @@ module Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Backend.SQL.Types
 import           Database.Beam.Backend.SQL.SQL92
 import           Database.Beam.Backend.SQL.SQL99
+import           Database.Beam.Backend.SQL.SQL2003
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
@@ -16,6 +17,7 @@ import qualified Data.Text as T
 import           Data.Text (Text)
 
 import           Data.Coerce
+import           Data.Int
 import           Data.Monoid
 import           Data.String
 
@@ -194,15 +196,69 @@ instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
   distinctE = sqlUnOp "DISTINCT"
   similarToE = sqlBinOp "SIMILAR TO"
 
+instance IsSql2003ExpressionSyntax SqlSyntaxBuilder where
+  type Sql2003ExpressionWindowFrameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  overE expr frame =
+      SqlSyntaxBuilder $
+      buildSql expr <> buildSql frame
+
+instance IsSql2003WindowFrameSyntax SqlSyntaxBuilder where
+  type Sql2003WindowFrameExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql2003WindowFrameOrderingSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql2003WindowFrameBoundsSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  frameSyntax filter_ partition_ ordering_ bounds_ =
+      SqlSyntaxBuilder $
+      maybe mempty (\e -> byteString "FILTER (WHERE " <> buildSql e <> byteString ")") filter_ <>
+      byteString " OVER (" <>
+      maybe mempty (\p -> byteString "PARTITION BY " <> buildSepBy (byteString ", ") (map buildSql p)) partition_ <>
+      maybe mempty (\o -> byteString " ORDER BY " <> buildSepBy (byteString ", ") (map buildSql o)) ordering_ <>
+      maybe mempty (\b -> byteString " RANGE " <> buildSql b) bounds_ <>
+      byteString ")"
+
+data SqlWindowFrameBound = SqlWindowFrameUnbounded
+                         | SqlWindowFrameBounded Int
+                           deriving Show
+
+instance IsSql2003WindowFrameBoundsSyntax SqlSyntaxBuilder where
+  type Sql2003WindowFrameBoundsBoundSyntax SqlSyntaxBuilder = SqlWindowFrameBound
+
+  fromToBoundSyntax SqlWindowFrameUnbounded Nothing = SqlSyntaxBuilder "UNBOUNDED PRECEDING"
+  fromToBoundSyntax (SqlWindowFrameBounded 0) Nothing = SqlSyntaxBuilder "CURRENT ROW"
+  fromToBoundSyntax (SqlWindowFrameBounded n) Nothing = SqlSyntaxBuilder (fromString (show n) <> " PRECEDING")
+  fromToBoundSyntax SqlWindowFrameUnbounded (Just SqlWindowFrameUnbounded) =
+      SqlSyntaxBuilder "BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"
+  fromToBoundSyntax SqlWindowFrameUnbounded (Just (SqlWindowFrameBounded 0)) =
+      SqlSyntaxBuilder "BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW"
+  fromToBoundSyntax SqlWindowFrameUnbounded (Just (SqlWindowFrameBounded n)) =
+      SqlSyntaxBuilder ("BETWEEN UNBOUNDED PRECEDING AND " <> fromString (show n) <> " FOLLOWING")
+  fromToBoundSyntax (SqlWindowFrameBounded 0) (Just SqlWindowFrameUnbounded) =
+      SqlSyntaxBuilder "BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING"
+  fromToBoundSyntax (SqlWindowFrameBounded 0) (Just (SqlWindowFrameBounded 0)) =
+      SqlSyntaxBuilder "BETWEEN CURRENT ROW AND CURRENT ROW"
+  fromToBoundSyntax (SqlWindowFrameBounded 0) (Just (SqlWindowFrameBounded n)) =
+      SqlSyntaxBuilder ("BETWEEN CURRENT ROW AND " <> fromString (show n) <> " FOLLOWING")
+  fromToBoundSyntax (SqlWindowFrameBounded n) (Just SqlWindowFrameUnbounded) =
+      SqlSyntaxBuilder ("BETWEEN " <> fromString (show n) <> " PRECEDING AND UNBOUNDED FOLLOWING")
+  fromToBoundSyntax (SqlWindowFrameBounded n) (Just (SqlWindowFrameBounded 0)) =
+      SqlSyntaxBuilder ("BETWEEN " <> fromString (show n) <> " PRECEDING AND CURRENT ROW")
+  fromToBoundSyntax (SqlWindowFrameBounded n1) (Just (SqlWindowFrameBounded n2)) =
+      SqlSyntaxBuilder ("BETWEEN " <> fromString (show n1) <> " PRECEDING AND " <> fromString (show n2) <> " FOLLOWING")
+
+instance IsSql2003WindowFrameBoundSyntax SqlWindowFrameBound where
+  unboundedSyntax = SqlWindowFrameUnbounded
+  nrowsBoundSyntax = SqlWindowFrameBounded
+
 instance IsSql92AggregationExpressionSyntax SqlSyntaxBuilder where
   type Sql92AggregationSetQuantifierSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
   countAllE = SqlSyntaxBuilder (byteString "COUNT(*)")
   countE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
   avgE q x = SqlSyntaxBuilder (byteString "AVG(" <>  maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
-  minE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
-  maxE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
-  sumE q x = SqlSyntaxBuilder (byteString "COUNT(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+  minE q x = SqlSyntaxBuilder (byteString "MIN(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+  maxE q x = SqlSyntaxBuilder (byteString "MAX(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
+  sumE q x = SqlSyntaxBuilder (byteString "SUM(" <> maybe mempty (\q' -> buildSql q' <> byteString " ") q <> buildSql x <> byteString ")")
 
 instance IsSql92AggregationSetQuantifierSyntax SqlSyntaxBuilder where
   setQuantifierAll = SqlSyntaxBuilder (byteString "ALL")
@@ -279,6 +335,9 @@ sqlOptNumericPrec (Just (prec, Just dec)) = "(" <> fromString (show prec) <> ", 
 
 -- TODO These instances are wrong (Text doesn't handle quoting for example)
 instance HasSqlValueSyntax SqlSyntaxBuilder Int where
+  sqlValueSyntax x = SqlSyntaxBuilder $
+    byteString (fromString (show x))
+instance HasSqlValueSyntax SqlSyntaxBuilder Int32 where
   sqlValueSyntax x = SqlSyntaxBuilder $
     byteString (fromString (show x))
 instance HasSqlValueSyntax SqlSyntaxBuilder Bool where
