@@ -1,5 +1,5 @@
 name:                beam
-version:             0.4.0.0
+version:             0.4.1.0
 synopsis:            A type-safe SQL mapper for Haskell that doesn't use Template Haskell
 description:         See the documentation on <http://travis.athougies.net/tags/beam.html my blog> and on <https://github.com/tathougies/beam/tree/master/Doc GitHub>.
 homepage:            http://travis.athougies.net/projects/beam.html
@@ -65,6 +65,15 @@ executable beam-example
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        LambdaCase
+
+test-suite spec
+  default-language:   Haskell2010
+  ghc-options:        -Wall
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     test
+  main-is:            Spec.hs
+  build-depends:      base >=4.7 && <4.9, text, beam, hspec, QuickCheck
+  extensions:         StandaloneDeriving, TypeSynonymInstances,FlexibleInstances, TypeFamilies, DeriveGeneric, OverloadedStrings
 
 source-repository head
   type: git

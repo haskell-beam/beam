@@ -107,11 +107,17 @@ openDatabase' isDebug db strat dbSettings =
 
      return beam'
 
+
 dumpSchema :: Database db => DatabaseSettings db -> IO ()
-dumpSchema (db :: DatabaseSettings db) =
+dumpSchema (db :: DatabaseSettings db) = do
+  putStrLn "Dumping database schema ..."
+  schema <- showSchema db
+  mapM_ putStrLn $ lines schema
+
+showSchema :: Database db => DatabaseSettings db -> IO String
+showSchema (db :: DatabaseSettings db) =
     do let createTableStmts = allTables (\(DatabaseTable tbl name) -> createStmtFor debugBeam name tbl) db
-       putStrLn "Dumping database schema ..."
-       mapM_ (putStrLn . fst . ppSQL . CreateTable) createTableStmts
+       return $ unlines (map (fst . ppSQL . CreateTable) createTableStmts)
     where debugBeam ::Beam db Identity
           debugBeam = Beam { beamDbSettings = db
                            , beamDebug = False
@@ -120,3 +126,4 @@ dumpSchema (db :: DatabaseSettings db) =
                            , adjustColDescForBackend = id
                            , getLastInsertedRow = \_ -> return []
                            , withHDBCConnection = \_ -> error "trying to run in debug mode" }
+
