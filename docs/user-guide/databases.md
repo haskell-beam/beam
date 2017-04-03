@@ -50,6 +50,11 @@ data ExampleDb f
     } deriving Generic
 ```
 
+Now we can use `postAndPosters` wherever we'd use a table. Note that you do not
+need to specify the definition of the view. The definition is not important to
+access the view, so beam does not need to know about it at the type-level. If
+you want to manipulate view definitions, use the migrations packgae.
+
 ### Unique constraints
 
 The `TableEntityWithUnique` database entity allows you to declare

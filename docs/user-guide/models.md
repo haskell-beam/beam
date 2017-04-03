@@ -160,7 +160,7 @@ over. To declare a table without a primary key, simply instantiate the
 
 ## More complicated relationships
 
-This is the extent of b1eam's support for defining models. Although
+This is the extent of beam's support for defining models. Although
 similar packages in other languages provide support for declaring
 one-to-many, many-to-one, and many-to-many relationships, beam's
 focused is providing a direct mapping of relational database concepts
