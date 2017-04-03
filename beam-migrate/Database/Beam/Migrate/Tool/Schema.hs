@@ -3,6 +3,7 @@ module Database.Beam.Migrate.Tool.Schema
   , migrationToolSchemaMigration
   , V0001.MigrationDb(..)
   , V0001.MigrationT(..)
+  , V0001.MigrationTable
 
   , module V0001 ) where
 

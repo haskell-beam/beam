@@ -101,15 +101,15 @@ migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts Proxy
                 getFields res >>= \fields ->
                 runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
                 case res of
-                  Left err -> pure (PgStreamDone (Left (Tool.DdlError ("Row read error: " ++ show err))))
+                  Left err -> pure (PgStreamDone (Left (Tool.DdlCustomError ("Row read error: " ++ show err))))
                   Right r -> next r Nothing
           stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
             getFields res >>= \fields ->
             runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
             case res of
-              Left err -> pure (PgStreamDone (Left (Tool.DdlError ("Row read error: " ++ show err))))
+              Left err -> pure (PgStreamDone (Left (Tool.DdlCustomError ("Row read error: " ++ show err))))
               Right r -> pure (PgStreamContinue (next (Just r)))
-          stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (Tool.DdlError "Nested queries not allowed")))
+          stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (Tool.DdlCustomError "Nested queries not allowed")))
 
           runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
           runConsumer s@(PgStreamDone x) _ = pure s
