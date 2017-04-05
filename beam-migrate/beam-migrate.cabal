@@ -27,10 +27,10 @@ library
                        Database.Beam.Migrate.Tool
                        Database.Beam.Migrate.Tool.Schema
                        Database.Beam.Migrate.Tool.Schema.V0001
-  -- other-modules:       
+  other-modules:       Database.Beam.Migrate.Tool.Types
   -- other-extensions:    
   build-depends:       base >=4.9 && <4.10, beam-core >=0.5.0.0, text, bytestring, free, time,
-                       optparse-applicative >=0.13.0.0, directory, filepath, mtl
+                       optparse-applicative >=0.13.0.0, directory, filepath, mtl, tabular
   -- hs-source-dirs:      
   default-language:    Haskell2010
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,

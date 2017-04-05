@@ -28,6 +28,11 @@ data MigrationF syntax next
     deriving Functor
 type Migration syntax = F (MigrationF syntax)
 
+migrationStepsToMigration :: MigrationSteps syntax a -> Migration syntax a
+migrationStepsToMigration steps = runF steps finish step
+  where finish x = pure x
+        step (MigrationStep name doStep next) = doStep >>= next
+
 migrationStep :: Text -> Migration syntax a -> MigrationSteps syntax a
 migrationStep stepName migration =
     liftF (MigrationStep stepName migration id)
