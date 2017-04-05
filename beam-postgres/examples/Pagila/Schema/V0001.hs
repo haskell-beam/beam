@@ -191,12 +191,12 @@ deriving instance Eq StaffId; deriving instance Show StaffId
 
 data PagilaDb f
   = PagilaDb
-  { actors     :: f (TableEntity ActorT)
-  , addresses  :: f (TableEntity AddressT)
-  , cities     :: f (TableEntity CityT)
-  , countries  :: f (TableEntity CountryT)
-  , categories :: f (TableEntity CategoryT)
-  , stores     :: f (TableEntity StoreT)
+  { actor      :: f (TableEntity ActorT)
+  , address    :: f (TableEntity AddressT)
+  , city       :: f (TableEntity CityT)
+  , country    :: f (TableEntity CountryT)
+  , category   :: f (TableEntity CategoryT)
+  , store      :: f (TableEntity StoreT)
   , staff      :: f (TableEntity StaffT)
   } deriving Generic
 instance Database PagilaDb

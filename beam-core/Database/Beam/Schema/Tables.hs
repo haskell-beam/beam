@@ -12,6 +12,7 @@ module Database.Beam.Schema.Tables
     , IsDatabaseEntity(..)
     , DatabaseEntityDescriptor(..)
     , DatabaseEntity(..), TableEntity
+    , dbEntityDescriptor
     -- , GenericDatabaseModification, GenericTableModification(..)
     -- , FieldModification(..)
     -- , dbModification, tableModification, withDbModification
@@ -62,14 +63,9 @@ import           GHC.Generics hiding (R)
 import           GHC.Types
 
 import           Lens.Micro hiding (to)
+import qualified Lens.Micro as Lens
 
 class Database db where
-    -- allTables :: (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
-    -- default allTables :: ( Generic (db f)
-    --                      , GAllTables f (Rep (db f) ()) ) =>
-    --                     (forall tbl. Table tbl => f tbl -> b) -> db f -> [b]
-    -- allTables f db = allTables' f (from' db)
-
     zipTables :: forall be f g h m.
                  Monad m
               => Proxy be
@@ -195,6 +191,9 @@ data DatabaseEntity be (db :: (* -> *) -> *) entityType  where
       IsDatabaseEntity be entityType =>
       DatabaseEntityDescriptor be entityType ->  DatabaseEntity be db entityType
 
+dbEntityDescriptor :: SimpleGetter (DatabaseEntity be db entityType) (DatabaseEntityDescriptor be entityType)
+dbEntityDescriptor = Lens.to (\(DatabaseEntity e) -> e)
+
 -- tableName :: Lens' (DatabaseTable db entity table) Text
 -- tableName f (DatabaseTable proxy name settings) = (\name' -> DatabaseTable proxy name' settings) <$> f name
 -- tableSettings :: Lens' (DatabaseTable db entity table) (TableSettings table)
@@ -214,15 +213,6 @@ instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements 
   GAutoDbSettings (S1 f (K1 Generic.R (DatabaseEntity be db x)) p) where
   autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto name)))
     where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
-
-class GAllTables f x where
-    allTables' :: (forall tbl. Table tbl => f tbl -> b) -> x -> [b]
-instance GAllTables f (x p) => GAllTables f (M1 s m x p) where
-    allTables' f (M1 x) = allTables' f x
-instance (GAllTables f (x p), GAllTables f (y p)) => GAllTables f ((x :*: y) p) where
-    allTables' f (x :*: y) = allTables' f x ++ allTables' f y
-instance Table tbl => GAllTables f (K1 Generic.R (f tbl) p) where
-    allTables' f (K1 x) = [f x]
 
 class GZipDatabase be f g h x y z where
   gZipDatabase :: Monad m =>

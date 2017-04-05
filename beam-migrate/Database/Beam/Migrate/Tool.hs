@@ -42,6 +42,7 @@ data BeamMigrationCommand beOptions
   = BeamMigrationCommand
   { migrationCommandBackend        :: String
   , migrationCommandMigrationModule :: String
+  , migrationCommandPackagePath    :: [String]
   , migrationCommandBackendOptions :: beOptions }
   deriving Show
 
@@ -77,6 +78,7 @@ migrationCommandArgParser :: Parser beOptions -> Parser (BeamMigrationCommand be
 migrationCommandArgParser beOptions =
   BeamMigrationCommand <$> strOption (long "backend" <> metavar "BACKEND" <> help "Module to load for migration backend. Must be given first")
                        <*> strOption (long "migration" <> short 'M' <> metavar "MIGRATIONMODULE" <> help "Module containing migration steps")
+                       <*> many (strOption (long "package-path" <> short 'P' <> metavar "PACKAGEPATH" <> help "Additional GHC package paths"))
                        <*> beOptions
 
 subcommandParser :: Parser BeamMigrationSubcommand

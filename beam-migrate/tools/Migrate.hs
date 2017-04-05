@@ -5,6 +5,8 @@ import Database.Beam
 import Database.Beam.Migrate.Tool
 import Database.Beam.Migrate.Types
 
+import Control.Monad
+
 import Data.Monoid
 import Data.Proxy
 import Data.Dynamic
@@ -19,6 +21,7 @@ import System.Exit
 import System.Environment
 
 import Language.Haskell.Interpreter
+import Language.Haskell.Interpreter.Unsafe
 
 showUsage :: ParserFailure ParserHelp -> ParserInfo a -> IO b
 showUsage failure opts =
@@ -29,11 +32,7 @@ showUsage failure opts =
 
 parsePartial :: ParserInfo a -> Args -> Either (ParserFailure ParserHelp) (a, Args)
 parsePartial info a =
-#if MIN_VERSION_optparse_applicative(0, 13, 0)
   let p = runParser (if infoIntersperse info then SkipOpts else AllowOpts) CmdStart (infoParser info) a
-#elif MIN_VERSION_optparse_applicative(0, 12, 0)
-  let p = runParser (if infoIntersperse info then SkipOpts else AllowOpts) (infoParser info) a
-#endif
   in case runP p defaultPrefs of
     (Left err, ctxt) -> Left (parserFailure defaultPrefs info err ctxt)
     (Right (a, remaining), ctxt) -> Right (a, remaining)
@@ -46,19 +45,23 @@ main = do
   case parsePartial bareInfo args of
     Left err ->
       do hPutStrLn stderr "Could not determine backend"
+         putStrLn (show err)
          showUsage err bareInfo
     Right (BeamMigrationCommand {..}, _) ->
       do putStrLn $ "Loading backend '" ++ migrationCommandBackend ++ "'..."
-         res <- runInterpreter $ do
-           setImports [ migrationCommandBackend
-                      , "Database.Beam.Migrate.Tool" ]
+         putStrLn $ "Loading dirs " ++ show migrationCommandPackagePath
+         let ghciArgs = foldMap (\p -> [ "-package-db", p]) migrationCommandPackagePath
+             runInterpreter' = unsafeRunInterpreterWithArgs ghciArgs
+         res <- runInterpreter' $ do
+           unsafeSetGhcOption "-v"
+           setImports [ "Database.Beam.Migrate.Tool",  migrationCommandBackend ]
            interpret "SomeBeamMigrationBackend migrationBackend" (undefined :: SomeBeamMigrationBackend)
          case res of
            Left err -> hPutStrLn stderr ("Plugin load error: " ++ show err)
            Right (SomeBeamMigrationBackend be@(BeamMigrationBackend {..} :: BeamMigrationBackend cmdSyntax beOptions)) ->
              do (opts, subcommand) <- execParser (migrationCommandAndSubcommandOptions backendOptsParser)
                 putStrLn "Loading migration from migrations directory..."
-                migration <- runInterpreter $ do
+                migration <- runInterpreter' $ do
                   reset
                   set [ languageExtensions := [ TypeFamilies, GADTs, RankNTypes, FlexibleInstances, FlexibleContexts, DeriveGeneric
                                               , ScopedTypeVariables, MultiParamTypeClasses, OverloadedStrings ] ]
