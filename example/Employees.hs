@@ -2,7 +2,7 @@
 module Main where
 
 import Database.Beam
---import Database.Beam.Postgres
+import Database.Beam.Postgres
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
 
@@ -124,9 +124,12 @@ instance Database EmployeeDatabase
 
 EmployeeDatabase { _departments = TableLens departmentsC } = dbLenses
 employeeDb :: DatabaseSettings be EmployeeDatabase
-employeeDb = defaultDbSettings --autoDbSettings & departmentsC . tableSettings . deptIdC . fieldSchema .~ varchar (Just 32)
+employeeDb = defaultDbSettings
 -- * main functions
-main = putStrLn "Hello" -- do [sqliteDbPath] <- getArgs
+main = putStrLn "Hello"
+
+
+-- do [sqliteDbPath] <- getArgs
 --           beam <- openDatabaseDebug employeeDb AutoMigrate (Sqlite3Settings sqliteDbPath)
 
 --           beamTxn beam $ \(EmployeeDatabase employeesT departmentsT groupsT ordersT) ->

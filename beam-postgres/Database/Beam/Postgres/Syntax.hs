@@ -63,9 +63,7 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
---import           Database.Beam.Query.Combinators
 import           Database.Beam.Query.Internal
---import           Database.Beam.Schema.Tables
 
 import           Control.Monad.Free
 import           Control.Monad.Free.Church

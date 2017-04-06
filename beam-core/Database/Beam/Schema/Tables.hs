@@ -310,7 +310,7 @@ data Nullable (c :: * -> *) x
 --   It is easiest to access these fields through the lenses 'fieldName', 'fieldConstraints', and 'fieldSettings'.
 --
 -- > data EmployeeT f = Employee
--- >                  { _employeeId :: Columnar f AutoId
+-- >                  { _employeeId :: Columnar f (Auto Int)
 -- >                  , _employeeDepartment :: Columnar f Text
 -- >                  , _employeeFirstName :: Columnar f Text
 -- >                  , _employeeLastName :: Columnar f Text }
@@ -334,8 +334,6 @@ data TableField (table :: (* -> *) -> *) ty = TableField
 
 fieldName :: Lens' (TableField table ty) Text
 fieldName f (TableField name) = TableField <$> f name
---fieldSchema :: Lens (TableField be table a) (TableField be table b) (BackendColumnSchema be) (BackendColumnSchema be)
---fieldSchema f (TableField name s) = (\s' -> TableField name s') <$> f s
 
 type TableSettings table = table (TableField table)
 
@@ -411,23 +409,6 @@ class Beamable table where
     tblSkeleton = withProxy $ \proxy -> to' (gTblSkeleton proxy)
         where withProxy :: (Proxy (Rep (TableSkeleton table)) -> TableSkeleton table) -> TableSkeleton table
               withProxy f = f Proxy
-    -- zipTablesM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
-    -- default zipTablesM ::  =>
-    --                     Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
-    -- zipTablesM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (table Exposed))) combine (from' f) (from' g)
-    --                             return (to' hRep)
-
-    -- zipPkM :: Monad m => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
-    -- default zipPkM :: ( GZipTables f g h (Rep (PrimaryKey table Exposed)) (Rep (PrimaryKey table f)) (Rep (PrimaryKey table g)) (Rep (PrimaryKey table h))
-    --                   , Generic (PrimaryKey table f), Generic (PrimaryKey table g), Generic (PrimaryKey table h)
-    --                   , Monad m) => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> PrimaryKey table f -> PrimaryKey table g -> m (PrimaryKey table h)
-    -- zipPkM combine f g = do hRep <- gZipTables (Proxy :: Proxy (Rep (PrimaryKey table Exposed))) combine (from' f) (from' g)
-    --                         return (to' hRep)
-
--- reifyTableSchema :: Beamable table => TableSettings be table -> ReifiedTableSchema be
--- reifyTableSchema =
---     allBeamValues (\(Columnar' (TableField name settings)) ->
---                        (name, settings))
 
 tableValuesNeeded :: Beamable table => Proxy table -> Int
 tableValuesNeeded (Proxy :: Proxy table) = length (allBeamValues (const ()) (tblSkeleton :: TableSkeleton table))
@@ -439,26 +420,8 @@ allBeamValues (f :: forall a. Columnar' f a -> b) (tbl :: table f) =
           combine x _ = do tell [f x]
                            return x
 
--- pkAllValues :: Table t => (forall a. Columnar' f a -> b) -> PrimaryKey t f -> [b]
--- pkAllValues (f :: forall a. Columnar' f a -> b) (pk :: PrimaryKey table f) = execWriter (zipPkM combine pk pk)
---     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
---           combine x _ = do tell [f x]
---                            return x
-
--- fieldAllValues :: Table t => (forall a. Columnar' f a -> b) -> t f -> [b]
--- fieldAllValues  (f :: forall a. Columnar' f a -> b) (tbl :: table f) = execWriter (zipTablesM combine tbl tbl)
---     where combine :: Columnar' f a -> Columnar' f a -> Writer [b] (Columnar' f a)
---           combine x _ = do tell [f x]
---                            return x
-
 changeBeamRep :: Beamable table => (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
 changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl)
-
--- pkChangeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> PrimaryKey t f -> PrimaryKey t g
--- pkChangeRep f pk = runIdentity (zipPkM (\x _ -> return (f x))  pk pk)
-
--- changeRep :: Table t => (forall a. Columnar' f a -> Columnar' g a) -> t f -> t g
--- changeRep f tbl = runIdentity (zipTablesM (\x _ -> return (f x)) tbl tbl)
 
 data WithConstraint (c :: * -> Constraint) x where
   WithConstraint :: c x => x -> WithConstraint c x
@@ -489,54 +452,6 @@ type FieldsFulfillConstraint (c :: * -> Constraint) t =
 type FieldsFulfillConstraintNullable (c :: * -> Constraint) t =
   ( Generic (t (Nullable (WithConstraint c))), Generic (t (Nullable Identity)), Generic (t (Nullable Exposed))
   , GFieldsFulfillConstraint c (Rep (t (Nullable Exposed))) (Rep (t (Nullable Identity))) (Rep (t (Nullable (WithConstraint c)))))
-
--- class GFieldsAreSerializable be values backendvalue where
---     gMakeBackendLiterals :: Proxy be -> values () -> backendvalue ()
--- instance GFieldsAreSerializable be values backendvalue =>
---     GFieldsAreSerializable be (M1 s m values) (M1 s m backendvalue) where
---         gMakeBackendLiterals be (M1 x) = M1 (gMakeBackendLiterals be x)
--- instance GFieldsAreSerializable be U1 U1 where
---     gMakeBackendLiterals _ _ = U1
--- instance (GFieldsAreSerializable be a aBackend, GFieldsAreSerializable be b bBackend) =>
---     GFieldsAreSerializable be (a :*: b) (aBackend :*: bBackend) where
---         gMakeBackendLiterals be (a :*: b) = gMakeBackendLiterals be a :*: gMakeBackendLiterals be b
--- instance (FromBackendLiteral be x, Show x, Eq x, Typeable x) => GFieldsAreSerializable be (K1 Generic.R x) (K1 Generic.R (BackendLiteral' be x)) where
---     gMakeBackendLiterals be (K1 x) = K1 (BackendLiteral' x)
--- instance MakeBackendLiterals be t => GFieldsAreSerializable be (K1 Generic.R (t Identity)) (K1 Generic.R (t (BackendLiteral' be))) where
---     gMakeBackendLiterals be (K1 x) = K1 (makeBackendLiterals x)
--- instance ( Generic (t (Nullable (BackendLiteral' be))), Generic (t (Nullable Identity))
---          , GFieldsAreSerializable be (Rep (t (Nullable Identity))) (Rep (t (Nullable (BackendLiteral' be)))) )
---     => GFieldsAreSerializable be (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (BackendLiteral' be)))) where
-
---     gMakeBackendLiterals be (K1 x) = K1 (to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' x)))
-
--- type MakeBackendLiterals be t = ( Generic (t (BackendLiteral' be)), Generic (t Identity)
---                                 , GFieldsFulfillConstraint c be (Rep (t Identity)) (Rep (t (WithContraint  be))) )
-
--- makeBackendLiterals :: MakeBackendLiterals be t => t Identity -> t (BackendLiteral' be)
--- makeBackendLiterals tbl =
---     fix $ \(_ :: t (BackendLiteral' be)) ->
---             to' (gMakeBackendLiterals (Proxy :: Proxy be) (from' tbl))
-
--- class GTableFromBackendLiterals be x where
---     gTableFromBackendLiterals :: FromBackendLiteralsM be (x ())
--- instance GTableFromBackendLiterals be x => GTableFromBackendLiterals be (M1 s m x) where
---     gTableFromBackendLiterals = M1 <$> gTableFromBackendLiterals
--- instance GTableFromBackendLiterals be U1 where
---     gTableFromBackendLiterals = pure U1
--- instance (GTableFromBackendLiterals be a, GTableFromBackendLiterals be b) =>
---     GTableFromBackendLiterals be (a :*: b) where
---         gTableFromBackendLiterals =
---           do a <- gTableFromBackendLiterals
---              b <- gTableFromBackendLiterals
---              pure (a :*: b)
--- instance FromBackendLiterals be x => GTableFromBackendLiterals be (K1 Generic.R x) where
---     gTableFromBackendLiterals = K1 <$> fromBackendLiterals
-
--- type TableFromBackendLiterals be t = ( Generic (t Identity)
---                                      , GTableFromBackendLiterals be (Rep (t Identity)) )
--- tableFromBackendLiterals :: TableFromBackendLiterals be t => FromBackendLiteralsM be (t Identity)
--- tableFromBackendLiterals = to' <$> gTableFromBackendLiterals
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f
@@ -646,9 +561,6 @@ instance ( Selector f
 --   gDefTblFieldSettings _ = M1 . K1 . magic (\(TableField x) -> TableField x) $ q
 --     where q :: rel q
 --           M1 (K1 q) = gDefTblFieldSettings (Proxy @(S1 f (K1 Generic.R (rel q)) p))
-
-magic :: (forall a. q a -> q (Maybe a)) -> rel q -> rel (Nullable q)
-magic _ = undefined
 
 -- instance ( Table table, Table related
 --          , BeamBackend be
@@ -784,9 +696,3 @@ unCamelCaseSel original =
                  [] -> symbolLeft
                  [xs] -> xs
                  _:xs -> T.intercalate "_" xs
-
--- maybeFieldSchema :: FieldSchema be ty -> FieldSchema be (Maybe ty)
--- maybeFieldSchema base = let SQLColumnSchema desc isPrimaryKey isAuto _ constraints =  fsColDesc base
---                             in FieldSchema
---                                { fsColDesc = SQLColumnSchema desc isPrimaryKey isAuto True (constraintNullifiesAs constraints)
---                                , fsHumanReadable = "maybeFieldSchema (" ++ fsHumanReadable base ++ ")" }

@@ -68,17 +68,6 @@ import Data.Typeable
 
 import GHC.Generics
 
--- instance (BeamBackend be, FromBackendLiteral be String) => IsString (Aggregation be s Text) where
---     fromString = ProjectAgg . SQLValE . SQLValue
--- instance (Num a, BeamBackend be, FromBackendLiteral be Integer) => Num (Aggregation be s a) where
---     fromInteger x = ProjectAgg (SQLValE (SQLValue x))
---     ProjectAgg a + ProjectAgg b = ProjectAgg (SQLBinOpE "+" a b)
---     ProjectAgg a - ProjectAgg b = ProjectAgg (SQLBinOpE "-" a b)
---     ProjectAgg a * ProjectAgg b = ProjectAgg (SQLBinOpE "*" a b)
---     negate (ProjectAgg a) = ProjectAgg (SQLUnOpE "-" a)
---     abs (ProjectAgg x) = ProjectAgg (SQLFuncE "ABS" [x])
---     signum x = error "signum: not defined for Aggregation. Use CASE...WHEN"
-
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: forall be (db :: (* -> *) -> *) table select s.
         ( Database db
