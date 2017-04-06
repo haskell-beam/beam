@@ -24,7 +24,7 @@ import qualified Data.Text as T
 import           System.IO
 
 import           Text.Tabular
-import           Text.Tabular.SimpleText
+import           Text.Tabular.AsciiArt
 
 -- * Migration table creation script
 
@@ -76,7 +76,9 @@ invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  su
            Left err -> hPutStrLn stderr ("Could not run query: " ++ show err)
            Right alreadyRun  ->
              do let status = migrationStatus allMigrationNames alreadyRun
-                    lastMigrationNumber = maximum (migrationNumber <$> migrationsStatusApplied status)
+                    lastMigrationNumber = case migrationNumber <$> migrationsStatusApplied status of
+                                            [] -> 0
+                                            nums -> maximum nums
                     migrations = map (\m -> (MigrationApplied, migrationNumber m, migrationName m, Just (migrationRanAt m))) (migrationsStatusApplied status) ++
                                  case migrationsStatusFutureStatus status of
                                    MigrationsFutureStatusUpToDate -> []
@@ -93,21 +95,19 @@ invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  su
                   MigrationsStatusDiverged {} ->
                     putStrLn "There are migrations to be run, but it seems like someone else has modified the database in the meantime."
 
-                let tbl = Table (Group SingleLine ([] :: [Header ()]))
-                                (Group SingleLine [ Header "Number"
-                                                  , Header "Name"
+                let tbl = Table (Group SingleLine (map (Header . head) tblData))
+                                (Group SingleLine [ Header "Name"
                                                   , Header "Ran At"
                                                   , Header "Status" ])
-                                (map (\(sts, num, nm, ranAt) -> [show num, T.unpack nm, show ranAt, statusText sts]) migrations)
+                                (map tail tblData)
+                    tblData = map (\(sts, num, nm, ranAt) -> [show num, T.unpack nm, maybe "Never" show ranAt, statusText sts]) migrations
 
                     statusText MigrationDiverged = "Diverged"
                     statusText MigrationApplied  = "Applied"
                     statusText MigrationUnknown  = "Unknown"
                     statusText MigrationScheduled = "Scheduled"
 
-                putStrLn ("Status is: " ++ show status)
-
-                putStrLn $ render " " (const "") id id tbl
+                putStrLn $ render id id id tbl
 
 
 
