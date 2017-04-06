@@ -12,6 +12,7 @@ module Database.Beam.Migrate.SQL.Types
 
   , default_, notNull
   , int, smallint, char, varchar, double
+  , numeric
   , timestamp, timestamptz ) where
 
 import Database.Beam
@@ -23,6 +24,7 @@ import Database.Beam.Migrate.SQL.SQL92
 import Data.Text (Text)
 import Data.Proxy
 import Data.Time (LocalTime)
+import Data.Scientific (Scientific)
 
 import GHC.TypeLits
 
@@ -59,6 +61,9 @@ varchar prec = DataType (varCharType prec Nothing)
 
 double :: IsSql92DataTypeSyntax syntax => DataType syntax Double
 double = DataType doubleType
+
+numeric :: IsSql92DataTypeSyntax syntax => Maybe (Word, Maybe Word) -> DataType syntax Scientific
+numeric = DataType . numericType
 
 timestamp, timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
 timestamptz = DataType (timestampType Nothing True)
