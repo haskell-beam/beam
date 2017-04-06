@@ -279,7 +279,7 @@ runPgRowReader conn rowIdx res fields readRow =
       | curCol >= colCount = next Nothing curCol colCount fields
     step (PeekField next) curCol colCount fields@(field:_) =
       do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
-         res <- Pg.runConversion (Pg.fromField field fieldValue) conn
+         res <-Pg.runConversion (Pg.fromField field fieldValue) conn
          case res of
            Pg.Errors xs -> do putStrLn ("Got errors " <> show xs)
                               next Nothing curCol colCount fields
@@ -287,7 +287,7 @@ runPgRowReader conn rowIdx res fields readRow =
 
     step (CheckNextNNull n next) curCol colCount fields =
       doCheckNextN (fromIntegral n) (curCol :: CInt) (colCount :: CInt) fields >>= \yes ->
-      next yes curCol colCount fields
+      next yes (curCol + if yes then fromIntegral n else 0) colCount (if yes then drop (fromIntegral n) fields else fields)
 
     doCheckNextN 0 _ _ _ = pure False
     doCheckNextN n curCol colCount fields
