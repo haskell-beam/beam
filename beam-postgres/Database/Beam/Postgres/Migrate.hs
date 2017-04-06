@@ -28,6 +28,7 @@ import           Data.ByteString.Builder
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
+import qualified Data.Text as T
 import           Data.Char
 import           Data.Coerce
 import           Data.List (intersperse)
@@ -165,6 +166,9 @@ smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax a
 smallserial = Db.DataType (PgDataTypeSyntax (emit "SMALLSERIAL"))
 serial = Db.DataType (PgDataTypeSyntax (emit "SERIAL"))
 bigserial = Db.DataType (PgDataTypeSyntax (emit "BIGSERIAL"))
+
+text :: Db.DataType PgDataTypeSyntax T.Text
+text = Db.DataType (PgDataTypeSyntax (emit "TEXT"))
 
 boolean :: Db.DataType PgDataTypeSyntax a
 boolean = Db.DataType pgBooleanType

@@ -22,6 +22,7 @@ import Data.Text (Text)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import Data.Time.LocalTime (LocalTime)
+import Data.Scientific (Scientific)
 
 -- Address table
 
@@ -109,7 +110,7 @@ deriving instance Show ActorId; deriving instance Eq ActorId
 data CategoryT f
   = CategoryT
   { categoryId :: Columnar f Int
-  , categoryName :: Columnar f Int
+  , categoryName :: Columnar f Text
   , categoryLastUpdate :: Columnar f LocalTime
   } deriving Generic
 type Category = CategoryT Identity
@@ -187,6 +188,67 @@ instance Table StaffT where
 type StaffId = PrimaryKey StaffT Identity
 deriving instance Eq StaffId; deriving instance Show StaffId
 
+-- Film
+
+data FilmT f
+  = FilmT
+  { filmId             :: Columnar f Int
+  , filmTitle          :: Columnar f Text
+  , filmDescription    :: Columnar f Text
+  , filmReleaseYear    :: Columnar f Int
+  , filmLanguage       :: PrimaryKey LanguageT f
+  , filmOriginalLanguage :: PrimaryKey LanguageT f
+  , filmRentalDuration :: Columnar f Int
+  , filmRentalRate     :: Columnar f Scientific
+  , filmLength         :: Columnar f Int
+  , filmReplacementCost :: Columnar f Scientific
+  , filmRating         :: Columnar f Text
+  , filmLastUpdate     :: Columnar f LocalTime
+  } deriving Generic
+type Film = FilmT Identity
+deriving instance Eq Film; deriving instance Show Film
+
+instance Table FilmT where
+  data PrimaryKey FilmT f = FilmId (Columnar f Int) deriving Generic
+  primaryKey = FilmId . filmId
+type FilmId = PrimaryKey FilmT Identity
+deriving instance Eq FilmId; deriving instance Show FilmId
+
+-- Film category
+
+data FilmCategoryT f
+  = FilmCategoryT
+  { filmCategoryFilm       :: PrimaryKey FilmT f
+  , filmCategoryCategory   :: PrimaryKey CategoryT f
+  , filmCategoryLastUpdate :: Columnar f LocalTime
+  } deriving Generic
+type FilmCategory = FilmCategoryT Identity
+deriving instance Eq FilmCategory; deriving instance Show FilmCategory
+
+instance Table FilmCategoryT where
+  data PrimaryKey FilmCategoryT f = FilmCategoryId (PrimaryKey FilmT f) (PrimaryKey CategoryT f)
+    deriving Generic
+  primaryKey fc = FilmCategoryId (filmCategoryFilm fc) (filmCategoryCategory fc)
+type FilmCategoryId = PrimaryKey FilmCategoryT Identity
+deriving instance Eq FilmCategoryId; deriving instance Show FilmCategoryId
+
+-- Language
+
+data LanguageT f
+  = LanguageT
+  { languageId   :: Columnar f Int
+  , languageName :: Columnar f Text
+  , languageLastUpdate :: Columnar f LocalTime
+  }  deriving Generic
+type Language = LanguageT Identity
+deriving instance Eq Language; deriving instance Show Language
+
+instance Table LanguageT where
+  data PrimaryKey LanguageT f = LanguageId (Columnar f Int) deriving Generic
+  primaryKey = LanguageId . languageId
+type LanguageId = PrimaryKey LanguageT Identity
+deriving instance Eq LanguageId; deriving instance Show LanguageId
+
 -- Pagila db
 
 data PagilaDb f
@@ -196,6 +258,9 @@ data PagilaDb f
   , city       :: f (TableEntity CityT)
   , country    :: f (TableEntity CountryT)
   , category   :: f (TableEntity CategoryT)
+  , film       :: f (TableEntity FilmT)
+  , filmCategory :: f (TableEntity FilmCategoryT)
+  , language   :: f (TableEntity LanguageT)
   , store      :: f (TableEntity StoreT)
   , staff      :: f (TableEntity StaffT)
   } deriving Generic
@@ -219,6 +284,12 @@ instance Beamable (PrimaryKey StoreT)
 instance Beamable StoreT
 instance Beamable (PrimaryKey StaffT)
 instance Beamable StaffT
+instance Beamable (PrimaryKey FilmT)
+instance Beamable FilmT
+instance Beamable (PrimaryKey FilmCategoryT)
+instance Beamable FilmCategoryT
+instance Beamable (PrimaryKey LanguageT)
+instance Beamable LanguageT
 
 lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
 lastUpdateField = field "last_update" timestamp (default_ now_) notNull
@@ -242,6 +313,26 @@ migration =
                            lastUpdateField)
            <*> createTable "category"
                  (CategoryT (field "category_id" smallserial) (field "name" (varchar (Just 25)) notNull)
+                            lastUpdateField)
+           <*> createTable "film"
+                 (FilmT     (field "film_id" smallserial notNull)
+                            (field "title" (varchar (Just 255)) notNull)
+                            (field "description" text)
+                            (field "release_year" smallint {- TODO year -})
+                            (LanguageId (field "language_id" smallint notNull))
+                            (LanguageId (field "language_id" smallint))
+                            (field "rental_duration" smallint notNull)
+                            (field "rental_rate" (numeric (Just (4, Just 2))))
+                            (field "length" smallint)
+                            (field "replacement_cost" (numeric (Just (5, Just 2))))
+                            (field "rating_text" text)
+                            lastUpdateField)
+           <*> createTable "film_category"
+                 (FilmCategoryT (FilmId (field "film_id" smallint))
+                                (CategoryId (field "category_id" smallint)) lastUpdateField)
+           <*> createTable "language"
+                 (LanguageT (field "language_id" smallserial notNull)
+                            (field "name" (varchar (Just 20)))
                             lastUpdateField)
            <*> createTable "store"
                  (StoreT (field "store_id" smallserial) (StaffId (field "manager_staff_id" smallint notNull))
