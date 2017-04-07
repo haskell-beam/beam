@@ -41,6 +41,7 @@ data DdlError
 
 data BeamMigrationBackend commandSyntax beOptions where
   BeamMigrationBackend :: ( Show beOptions, MonadBeam commandSyntax be m
+                          , HasQBuilder (Sql92SelectSyntax commandSyntax)
                           , Sql92ReasonableMarshaller be ) =>
                        { backendOptsParser :: Parser beOptions
                        , backendProxy :: Proxy be

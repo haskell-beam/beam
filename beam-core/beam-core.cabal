@@ -21,8 +21,10 @@ bug-reports:         https://github.com/tathougies/beam/issues
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
                        Database.Beam.Query
-                       Database.Beam.Schema
                        Database.Beam.Query.Internal
+                       Database.Beam.Query.SQL92
+
+                       Database.Beam.Schema
 
                        Database.Beam.Backend.Types
                        Database.Beam.Backend.SQL

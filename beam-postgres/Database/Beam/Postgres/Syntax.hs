@@ -64,6 +64,7 @@ import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Query.Internal
+import           Database.Beam.Query.SQL92
 
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
@@ -144,6 +145,8 @@ instance SupportedSyntax Postgres PgCommandSyntax
 
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
 instance SupportedSyntax Postgres PgSelectSyntax
+instance HasQBuilder PgSelectSyntax where
+  buildSqlQuery = buildSql92Query
 
 newtype PgSelectTableSyntax = PgSelectTableSyntax { fromPgSelectTable :: PgSyntax }
 instance SupportedSyntax Postgres PgSelectTableSyntax

@@ -46,10 +46,11 @@ newtype SqlSelect select a
 
 select :: forall q syntax db s res.
           ( ProjectibleInSelectSyntax syntax res
-          , IsSql92SelectSyntax syntax ) =>
+          , IsSql92SelectSyntax syntax
+          , HasQBuilder syntax ) =>
           Q syntax db QueryInaccessible res -> SqlSelect syntax (QExprToIdentity res)
 select q =
-  SqlSelect (buildSql92Query q)
+  SqlSelect (buildSqlQuery q)
 
 runSelectReturningList ::
   (IsSql92Syntax cmd, MonadBeam cmd be m, FromBackendRow be a) =>

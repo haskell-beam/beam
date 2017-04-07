@@ -171,28 +171,31 @@ offset_ offset' (Q q) =
 -- | Use the SQL exists operator to determine if the given query returns any results
 exists_, unique_ ::
   ( IsSql92SelectSyntax select
+  , HasQBuilder select
   , ProjectibleInSelectSyntax select a
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   Q select db s a
   -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
-exists_ = QExpr . existsE . buildSql92Query
-unique_ = QExpr . uniqueE . buildSql92Query
+exists_ = QExpr . existsE . buildSqlQuery
+unique_ = QExpr . uniqueE . buildSqlQuery
 distinct_ ::
   ( IsSql99ExpressionSyntax (Sql92SelectExpressionSyntax select)
+  , HasQBuilder select
   , ProjectibleInSelectSyntax select a
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   Q select db s a
   -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
-distinct_ = QExpr . distinctE . buildSql92Query
+distinct_ = QExpr . distinctE . buildSqlQuery
 
 subquery_ ::
   ( IsSql92SelectSyntax select
+  , HasQBuilder select
   , ProjectibleInSelectSyntax select (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   Q select (db :: (* -> *) -> *) s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
   -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
 subquery_ =
-  QExpr . subqueryE . buildSql92Query
+  QExpr . subqueryE . buildSqlQuery
 
 -- ** Combinators for boolean expressions
 
