@@ -1,5 +1,7 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE BangPatterns #-}
+
 module Database.Beam.Query.Types
     ( Q, QExpr, QExprToIdentity, QWindow, QWindowFrame
 
@@ -23,8 +25,6 @@ import           Data.Maybe
 import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
-
-import Debug.Trace
 
 -- * Beam queries
 
@@ -142,6 +142,23 @@ offsetSelectBuilder offset (SelectBuilderTopLevel (Just limit) offset' ordering 
     SelectBuilderTopLevel (Just $ max 0 (limit - offset)) (Just $ offset + fromMaybe 0 offset') ordering tbl
 offsetSelectBuilder offset x = SelectBuilderTopLevel Nothing (Just offset) [] x
 
+buildJoinTableSourceQuery
+  :: ( IsSql92SelectSyntax select
+     , Projectible (Sql92SelectExpressionSyntax select) x
+     , Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax select)) ~ select )
+  => select
+  -> x -> QueryBuilder select
+  -> (x, QueryBuilder select)
+buildJoinTableSourceQuery tblSource x qb =
+  let qb' = QueryBuilder (tblRef + 1) from' (qbWhere qb)
+      !tblRef = qbNextTblRef qb
+      from' = case qbFrom qb of
+                Nothing -> Just newSource
+                Just oldFrom -> Just (innerJoin oldFrom newSource Nothing)
+      newSource = fromTable (tableFromSubSelect tblSource) (Just newTblNm)
+      newTblNm = "t" <> fromString (show tblRef)
+  in (reproject (fieldNameFunc (qualifiedField newTblNm)) x, qb')
+
 buildInnerJoinQuery
     :: forall select db s be table.
        (IsSql92SelectSyntax select) =>
@@ -201,23 +218,28 @@ buildSql92Query (Q q) =
                -> SelectBuilder select db x
     buildQuery (Pure x) = SelectBuilderQ x emptyQb
     buildQuery (Free (QGuard _ next)) = buildQuery next
-    buildQuery f@(Free (QAll {})) = buildJoinedQuery f emptyQb
-    buildQuery f@(Free (QLeftJoin {})) = buildJoinedQuery f emptyQb
-    buildQuery f@(Free (QAggregate mkAgg q next)) =
-        let sb = buildQuery (fromF q)
-            aggProj = sbProj sb
-
-            havingProj = reproject (fieldNameFunc unqualifiedField) aggProj
+    buildQuery f@(Free QAll {}) = buildJoinedQuery f emptyQb
+    buildQuery f@(Free QLeftJoin {}) = buildJoinedQuery f emptyQb
+    buildQuery (Free (QAggregate mkAgg q' next)) =
+        let sb = buildQuery (fromF q')
+            (groupingSyntax, aggProj) = mkAgg (sbProj sb)
         in case tryBuildGuardsOnly (next aggProj) Nothing of
             Just (proj, having) ->
                 case sb of
-                  SelectBuilderQ _ q -> SelectBuilderGrouping proj q (mkAgg aggProj) having
+                  SelectBuilderQ _ q'' -> SelectBuilderGrouping proj q'' groupingSyntax having
                   _ -> let (proj', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb proj)
                        in SelectBuilderQ proj' qb
-            Nothing -> error "Can't join aggregates yet"
+            Nothing ->
+              let qb = case sb of
+                    SelectBuilderQ _ q'' -> q''
+                    _ -> let (_, qb''') = selectBuilderToQueryBuilder sb
+                         in qb'''
+                  (x', qb') = selectBuilderToQueryBuilder $
+                              SelectBuilderGrouping aggProj qb groupingSyntax Nothing
+              in buildJoinedQuery (next x') qb'
 
-    buildQuery f@(Free (QOrderBy mkOrdering q next)) =
-        let sb = buildQuery (fromF q)
+    buildQuery (Free (QOrderBy mkOrdering q' next)) =
+        let sb = buildQuery (fromF q')
             proj = sbProj sb
             ordering = mkOrdering proj
 
@@ -234,8 +256,8 @@ buildSql92Query (Q q) =
                            SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj')
                        SelectBuilderSelectSyntax {} ->
                            SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj')
-                       SelectBuilderTopLevel limit offset [] sb ->
-                           SelectBuilderTopLevel limit offset ordering (setSelectBuilderProjection sb proj')
+                       SelectBuilderTopLevel limit offset [] sb' ->
+                           SelectBuilderTopLevel limit offset ordering (setSelectBuilderProjection sb' proj')
                        SelectBuilderTopLevel {}
                            | (proj'', qb) <- selectBuilderToQueryBuilder sb,
                              Pure proj''' <- next proj'' ->
@@ -243,45 +265,45 @@ buildSql92Query (Q q) =
                            | otherwise -> doJoined
              _ -> doJoined
 
-    buildQuery (Free (QWindowOver mkWindows mkProjection q next)) =
-        let sb = buildQuery (fromF q)
+    buildQuery (Free (QWindowOver mkWindows mkProjection q' next)) =
+        let sb = buildQuery (fromF q')
 
             x = sbProj sb
             windows = mkWindows x
             projection = mkProjection x windows
         in case next projection of
-             Pure x -> setSelectBuilderProjection sb x
+             Pure x' -> setSelectBuilderProjection sb x'
              _      ->
                let (x', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb projection)
                in buildJoinedQuery (next x') qb
 
-    buildQuery (Free (QLimit limit q next)) =
-        let sb = limitSelectBuilder limit (buildQuery (fromF q))
+    buildQuery (Free (QLimit limit q' next)) =
+        let sb = limitSelectBuilder limit (buildQuery (fromF q'))
             x = sbProj sb
         -- In the case of limit, we must directly return whatever was given
         in case next x of
-             Pure x -> setSelectBuilderProjection sb x
+             Pure x' -> setSelectBuilderProjection sb x'
 
              -- Otherwise, this is going to be part of a join...
              _ -> let (x', qb) = selectBuilderToQueryBuilder sb
                   in buildJoinedQuery (next x') qb
 
-    buildQuery (Free (QOffset offset q next)) =
-        let sb = offsetSelectBuilder offset (buildQuery (fromF q))
+    buildQuery (Free (QOffset offset q' next)) =
+        let sb = offsetSelectBuilder offset (buildQuery (fromF q'))
             x = sbProj sb
         -- In the case of limit, we must directly return whatever was given
         in case next x of
-             Pure x -> setSelectBuilderProjection sb x
+             Pure x' -> setSelectBuilderProjection sb x'
              -- Otherwise, this is going to be part of a join...
              _ -> let (x', qb) = selectBuilderToQueryBuilder sb
                   in buildJoinedQuery (next x') qb
 
-    buildQuery (Free (QUnion all left right next)) =
-      buildTableCombination (unionTables all) left right next
-    buildQuery (Free (QIntersect all left right next)) =
-      buildTableCombination (intersectTables all) left right next
-    buildQuery (Free (QExcept all left right next)) =
-      buildTableCombination (exceptTable all) left right next
+    buildQuery (Free (QUnion all_ left right next)) =
+      buildTableCombination (unionTables all_) left right next
+    buildQuery (Free (QIntersect all_ left right next)) =
+      buildTableCombination (intersectTables all_) left right next
+    buildQuery (Free (QExcept all_ left right next)) =
+      buildTableCombination (exceptTable all_) left right next
 
     tryBuildGuardsOnly :: Free (QF select db s) x
                        -> Maybe (Sql92SelectExpressionSyntax select)
@@ -320,3 +342,35 @@ buildSql92Query (Q q) =
         in buildJoinedQuery (next newTbl) qb'
     buildJoinedQuery (Free (QGuard cond next)) qb =
         buildJoinedQuery next (qb { qbWhere = andE' (qbWhere qb) (Just cond) })
+    buildJoinedQuery now qb =
+      onlyQ now
+        (\now' next ->
+           let sb = buildQuery now'
+               tblSource = buildSelect sb
+               (x', qb') = buildJoinTableSourceQuery tblSource (sbProj sb) qb
+           in buildJoinedQuery (next x') qb')
+
+    onlyQ :: Free (QF select db s) x
+          -> (forall a'. Projectible (Sql92SelectExpressionSyntax select) a' => Free (QF select db s) a' -> (a' -> Free (QF select db s) x) -> SelectBuilder select db x)
+          -> SelectBuilder select db x
+    onlyQ (Free (QAll entity mkOn next)) f =
+      f (Free (QAll entity mkOn Pure)) next
+    onlyQ (Free (QLeftJoin entity mkOn next)) f =
+      f (Free (QLeftJoin entity mkOn Pure)) next
+    onlyQ (Free (QLimit limit q' next)) f =
+      f (Free (QLimit limit q' Pure)) next
+    onlyQ (Free (QOffset offset q' next)) f =
+      f (Free (QOffset offset q' Pure)) next
+    onlyQ (Free (QUnion all_ a b next)) f =
+      f (Free (QUnion all_ a b Pure)) next
+    onlyQ (Free (QIntersect all_ a b next)) f =
+      f (Free (QIntersect all_ a b Pure)) next
+    onlyQ (Free (QExcept all_ a b next)) f =
+      f (Free (QExcept all_ a b Pure)) next
+    onlyQ (Free (QOrderBy mkOrdering q' next)) f =
+      f (Free (QOrderBy mkOrdering q' Pure)) next
+    onlyQ (Free (QWindowOver mkWindow mkProj q' next)) f =
+      f (Free (QWindowOver mkWindow mkProj q' Pure)) next
+    onlyQ (Free (QAggregate mkAgg q' next)) f =
+      f (Free (QAggregate mkAgg q' Pure)) next
+    onlyQ _ _ = error "impossible"

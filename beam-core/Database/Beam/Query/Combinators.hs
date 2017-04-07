@@ -443,6 +443,7 @@ withWindow_ mkWindow mkProjection (Q windowOver)=
 aggregate_ :: forall select a r db s.
               ( ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
               , Projectible (Sql92SelectExpressionSyntax select) r
+              , Projectible (Sql92SelectExpressionSyntax select) a
 
               , ContextRewritable a
               , IsSql92SelectSyntax select )
@@ -450,7 +451,7 @@ aggregate_ :: forall select a r db s.
            -> Q select db s r
            -> Q select db s (WithRewrittenContext a QValueContext)
 aggregate_ mkAggregation (Q aggregating) =
-  Q (liftF (QAggregate mkAggregation' aggregating (rewriteContext (Proxy @QValueContext) . mkAggregation)))
+  Q (liftF (QAggregate mkAggregation' aggregating (rewriteContext (Proxy @QValueContext))))
   where
     mkAggregation' x =
       let agg = mkAggregation x
@@ -468,8 +469,8 @@ aggregate_ mkAggregation (Q aggregating) =
 
           groupingExprs = execWriter (project' (Proxy @AggregateContext) doProject agg)
       in case groupingExprs of
-           [] -> Nothing
-           _ -> Just $ groupByExpressions groupingExprs
+           [] -> (Nothing, agg)
+           _ -> (Just (groupByExpressions groupingExprs), agg)
 
 group_ :: QExpr expr s a -> QGroupExpr expr s a
 group_ (QExpr a) = QExpr a

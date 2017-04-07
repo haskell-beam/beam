@@ -30,10 +30,12 @@ type ProjectibleInSelectSyntax syntax a =
   , ProjectibleValue (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a)
 
 data QF select db s next where
-  QAll :: DatabaseEntity be db (TableEntity table)
+  QAll :: Beamable table
+       => DatabaseEntity be db (TableEntity table)
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
-  QLeftJoin :: DatabaseEntity be db (TableEntity table)
+  QLeftJoin :: Beamable table
+            => DatabaseEntity be db (TableEntity table)
             -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
             -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
   QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next
@@ -56,9 +58,11 @@ data QF select db s next where
                  , Projectible (Sql92SelectExpressionSyntax select) a )
               => (r -> window) -> (r -> window -> a)
               -> QM select db s r -> (a -> next) -> QF select db s next
-  QAggregate :: Projectible (Sql92SelectExpressionSyntax select) a =>
-                (a -> Maybe (Sql92SelectGroupingSyntax select)) ->
-                QM select db s a -> (a -> next) -> QF select db s next
+  QAggregate :: ( Projectible (Sql92SelectExpressionSyntax select) grouping
+                , Projectible (Sql92SelectExpressionSyntax select) a ) =>
+                (a -> (Maybe (Sql92SelectGroupingSyntax select), grouping)) ->
+                QM select db s a ->
+                (grouping -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
 
 type QM select db s = F (QF select db s)

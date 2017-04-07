@@ -179,7 +179,9 @@ aggregates :: TestTree
 aggregates =
   testGroup "Aggregate support"
     [ basicAggregate
-    , basicHaving ]
+    , basicHaving
+    , aggregateInJoin
+    , aggregateInJoinReverse ]
   where
     basicAggregate =
       testCase "Basic aggregate support" $
@@ -216,6 +218,68 @@ aggregates =
          selectGrouping @?= Just (Grouping [ ExpressionFieldName (QualifiedField t0 "age") ])
          selectHaving @?= Just (ExpressionCompOp ">" Nothing (ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ])
                                                              (ExpressionValue (Value (42 :: Int))))
+
+    aggregateInJoin =
+      testCase "Aggregate in JOIN" $
+      do SqlSelect Select { selectTable = SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           do (age, maxFirstNameLength) <- aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+                                           all_ (_employees employeeDbSettings)
+              role <- all_ (_roles employeeDbSettings)
+              pure (age, maxFirstNameLength, _roleName role)
+
+         Just (InnerJoin (FromTable (TableFromSubSelect subselect) (Just t0))
+                         (FromTable (TableNamed "roles") (Just t1))
+                         Nothing) <- pure selectFrom
+         selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t0 "res0"), Just "res0")
+                                        , (ExpressionFieldName (QualifiedField t0 "res1"), Just "res1")
+                                        , (ExpressionFieldName (QualifiedField t1 "name"), Just "res2") ]
+         selectWhere @?= Nothing
+         selectGrouping @?= Nothing
+         selectHaving @?= Nothing
+
+         Select { selectTable = SelectTable { .. }
+                , selectLimit = Nothing, selectOffset = Nothing
+                , selectOrdering = [] } <- pure subselect
+         Just (FromTable (TableNamed "employees") (Just t0)) <- pure selectFrom
+         selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t0 "age"), Just "res0")
+                                        , (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))], Just "res1") ]
+         selectWhere @?= Nothing
+         selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
+         selectHaving @?= Nothing
+
+    aggregateInJoinReverse =
+      testCase "Aggregate in JOIN (reverse order)" $
+      do SqlSelect Select { selectTable = SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           do role <- all_ (_roles employeeDbSettings)
+              (age, maxFirstNameLength) <- aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+                                           all_ (_employees employeeDbSettings)
+              pure (age, maxFirstNameLength, _roleName role)
+
+         Just (InnerJoin (FromTable (TableNamed "roles") (Just t0))
+                         (FromTable (TableFromSubSelect subselect) (Just t1))
+                         Nothing) <- pure selectFrom
+         selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t1 "res0"), Just "res0")
+                                        , (ExpressionFieldName (QualifiedField t1 "res1"), Just "res1")
+                                        , (ExpressionFieldName (QualifiedField t0 "name"), Just "res2") ]
+         selectWhere @?= Nothing
+         selectGrouping @?= Nothing
+         selectHaving @?= Nothing
+
+         Select { selectTable = SelectTable { .. }
+                , selectLimit = Nothing, selectOffset = Nothing
+                , selectOrdering = [] } <- pure subselect
+         Just (FromTable (TableNamed "employees") (Just t0)) <- pure selectFrom
+         selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t0 "age"), Just "res0")
+                                        , (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))], Just "res1") ]
+         selectWhere @?= Nothing
+         selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
+         selectHaving @?= Nothing
 
 -- * Ensure that isJustE and isNothingE work correctly for simple types
 
