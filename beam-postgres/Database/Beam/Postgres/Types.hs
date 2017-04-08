@@ -56,6 +56,8 @@ instance Pg.ToField x => Pg.ToField (Auto x) where
   toField (Auto x) = Pg.toField x
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
+instance Pg.ToField SqlNull where
+  toField _ = Pg.toField Pg.Null
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
 instance FromBackendRow Postgres SqlNull

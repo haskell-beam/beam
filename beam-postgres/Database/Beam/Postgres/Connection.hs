@@ -38,7 +38,7 @@ import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 
-import           Database.Beam
+import           Database.Beam hiding (runInsert)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.Types
 import           Database.Beam.Query.Internal
