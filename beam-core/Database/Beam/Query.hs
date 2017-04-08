@@ -13,6 +13,7 @@ module Database.Beam.Query
 
     , SqlInsert(..)
     , insert
+    , runInsert
 
     , SqlInsertValues(..)
     , insertValues
@@ -20,6 +21,7 @@ module Database.Beam.Query
 
     , SqlUpdate(..)
     , update
+    , runUpdate
 
     , SqlDelete(..)
     , delete ) where
@@ -70,12 +72,16 @@ newtype SqlInsert syntax = SqlInsert syntax
 
 insert :: IsSql92InsertSyntax syntax =>
           DatabaseEntity be db (TableEntity table)
-       -> Sql92InsertValuesSyntax syntax
+       -> SqlInsertValues (Sql92InsertValuesSyntax syntax) table
        -> SqlInsert syntax
-insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) insertValues =
+insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues insertValues) =
     SqlInsert (insertStmt tblNm tblFields insertValues)
   where
     tblFields = allBeamValues (\(Columnar' f) -> _fieldName f) tblSettings
+
+runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be m)
+          => SqlInsert (Sql92InsertSyntax cmd) -> m ()
+runInsert (SqlInsert insert) = runNoReturn (insertCmd insert)
 
 newtype SqlInsertValues insertValues (tbl :: (* -> *) -> *)
     = SqlInsertValues insertValues
@@ -113,6 +119,10 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField tblNm name)) tblSettings
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (unqualifiedField nm)))) tblFields
+
+runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be m)
+          => SqlUpdate (Sql92UpdateSyntax cmd) tbl -> m ()
+runUpdate (SqlUpdate update) = runNoReturn (updateCmd update)
 
 -- * DELETE
 

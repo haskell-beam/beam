@@ -90,6 +90,21 @@ instance IsSql92InsertSyntax SqlSyntaxBuilder where
     byteString "(" <> buildSepBy (byteString ", ") (map quoteSql fields) <> byteString ") " <>
     buildSql values
 
+instance IsSql92InsertValuesSyntax SqlSyntaxBuilder where
+  type Sql92InsertValuesExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92InsertValuesSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  insertSqlExpressions values =
+    SqlSyntaxBuilder $
+    byteString "VALUES " <>
+    buildSepBy (byteString ", ") (map mkValues values)
+    where mkValues values' =
+            byteString "(" <>
+            buildSepBy (byteString ", ") (map buildSql values') <>
+            byteString ")"
+
+  insertFromSql select = select
+
 instance IsSql92UpdateSyntax SqlSyntaxBuilder where
   type Sql92UpdateFieldNameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92UpdateExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

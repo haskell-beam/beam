@@ -30,6 +30,8 @@ type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql9
 type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
 
+type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax))
+
 -- Putting these in the head constraint can cause infinite recursion that would
 -- need UndecidableSuperclasses. If we define them here, we can easily use them
 -- in functions that need them and avoid unnecessary extensions.
@@ -40,8 +42,10 @@ type Sql92SelectSanityCheck select =
   , Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)) ~
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
   , Sql92OrderingExpressionSyntax (Sql92SelectOrderingSyntax select) ~
-    Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select) )
-type Sql92SanityCheck cmd = ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd) )
+    Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))
+type Sql92SanityCheck cmd = ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd)
+                            , Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd))) ~ Sql92ValueSyntax cmd
+                            , Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)) ~ Sql92ValueSyntax cmd )
 
 type Sql92ReasonableMarshaller be =
    ( FromBackendRow be Int, FromBackendRow be SqlNull
@@ -104,14 +108,17 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
   unionTables, intersectTables, exceptTable ::
     Bool -> select -> select -> select
 
-class IsSql92InsertSyntax insert where
+class IsSql92InsertValuesSyntax (Sql92InsertValuesSyntax insert) =>
+  IsSql92InsertSyntax insert where
+
   type Sql92InsertValuesSyntax insert :: *
   insertStmt :: Text
              -> [ Text ]
              -> Sql92InsertValuesSyntax insert
              -> insert
 
-class IsSql92InsertValuesSyntax insertValues where
+class IsSql92ExpressionSyntax (Sql92InsertValuesExpressionSyntax insertValues) =>
+  IsSql92InsertValuesSyntax insertValues where
   type Sql92InsertValuesExpressionSyntax insertValues :: *
   type Sql92InsertValuesSelectSyntax insertValues :: *
 
