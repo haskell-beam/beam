@@ -294,8 +294,8 @@ instance Beamable LanguageT
 lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
 lastUpdateField = field "last_update" timestamp (default_ now_) notNull
 
-migration :: Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
-migration =
+migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+migration () =
   PagilaDb <$> createTable "actor"
                  (ActorT (field "actor_id" smallserial) (field "first_name" (varchar (Just 45)))
                          (field "last_name" (varchar (Just 45)))
@@ -320,7 +320,7 @@ migration =
                             (field "description" text)
                             (field "release_year" smallint {- TODO year -})
                             (LanguageId (field "language_id" smallint notNull))
-                            (LanguageId (field "language_id" smallint))
+                            (LanguageId (field "original_language_id" smallint))
                             (field "rental_duration" smallint notNull)
                             (field "rental_rate" (numeric (Just (4, Just 2))))
                             (field "length" smallint)

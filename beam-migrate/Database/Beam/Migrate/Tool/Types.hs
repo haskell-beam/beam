@@ -1,5 +1,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Database.Beam.Migrate.Tool.Types where
 
@@ -8,10 +9,15 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Tool.Schema
 import           Database.Beam.Migrate.Types (MigrationSteps)
+import           Database.Beam.Query
+
+import           Control.Exception (Exception)
 
 import qualified Data.ByteString.Lazy as BL
+import           Data.Foldable
 import           Data.Monoid
 import           Data.Proxy
+import           Data.Maybe (isJust)
 import           Data.Text (Text)
 import           Data.Time (LocalTime)
 
@@ -19,19 +25,29 @@ import           Options.Applicative
 
 -- * Options type
 
+data BeamMigrateBackendError = BeamMigrateBackendError DdlError
+  deriving (Show,  Typeable)
+instance Exception BeamMigrateBackendError
+data MigrationsDiverged = MigrationsDiverged
+  deriving (Show, Typeable)
+instance Exception MigrationsDiverged
+
+type BeamMigrateRunTransaction m options =
+  forall a. options -> m a -> IO (Either String a)
+
 data BeamMigrationCommand beOptions
   = BeamMigrationCommand
-  { migrationCommandBackend        :: String
-  , migrationCommandMigrationModule :: String
-  , migrationCommandPackagePath :: [String]
-  , migrationCommandBackendOptions :: beOptions }
+  { migrationCommandBackend         :: String
+  , migrationCommandMigrationModule :: Maybe String
+  , migrationCommandPackagePath     :: [String]
+  , migrationCommandBackendOptions  :: beOptions }
   deriving Show
 
 data BeamMigrationSubcommand
   = WriteScript
   | ListMigrations
   | Init | Status
-  | Up
+  | Migrate (Maybe Int)
   deriving Show
 
 data DdlError
@@ -42,10 +58,15 @@ data DdlError
 data BeamMigrationBackend commandSyntax beOptions where
   BeamMigrationBackend :: ( Show beOptions, MonadBeam commandSyntax be m
                           , HasQBuilder (Sql92SelectSyntax commandSyntax)
+                          , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) LocalTime
+                          , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) (Maybe LocalTime)
+                          , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) Text
+                          , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) SqlNull
+                          , Sql92SanityCheck commandSyntax
                           , Sql92ReasonableMarshaller be ) =>
                        { backendOptsParser :: Parser beOptions
                        , backendProxy :: Proxy be
-                       , backendRenderSteps :: forall a. MigrationSteps commandSyntax a -> BL.ByteString
+                       , backendRenderSteps :: forall a. MigrationSteps commandSyntax () a -> BL.ByteString
                        , backendRenderSyntax :: commandSyntax -> String
                        , backendTransact :: forall a. beOptions -> m a -> IO (Either DdlError a)
                        } -> BeamMigrationBackend commandSyntax beOptions
@@ -61,17 +82,18 @@ data SomeBeamMigrationBackend where
 
 data MigrationsStatus
   = MigrationsStatus
-  { migrationsStatusApplied :: [ MigrationTable ]
+  { migrationsStatusApplied :: [ (MigrationTable, Bool) ]
   , migrationsStatusFutureStatus :: MigrationsFutureStatus }
   deriving Show
 data MigrationsFutureStatus
   = MigrationsFutureStatusUpToDate
-  | MigrationsFutureStatusNotYet [ Text ]
+  | MigrationsFutureStatusNotYet Int [ Text ]
   | MigrationsStatusDiverged LocalTime [ Text ] [ MigrationTable ]
   deriving Show
 
 data MigrationStatus
   = MigrationApplied
+  | MigrationIncomplete
   | MigrationScheduled
   | MigrationUnknown
   | MigrationDiverged
@@ -79,16 +101,18 @@ data MigrationStatus
 
 -- | Given a list of all migrations, and the current list of migrations run,
 --   calculate an appropriate 'MigrationStatus'
-migrationStatus :: [Text]           {-^ All available migrations, in order -}
+migrationStatus :: Int              {-^ Migration number of first migration -}
+                -> [Text]           {-^ All available migrations, in order -}
                 -> [MigrationTable] {-^ Migrations that have already been run -}
                 -> MigrationsStatus
-migrationStatus [] [] = MigrationsStatus [] MigrationsFutureStatusUpToDate
-migrationStatus names [] = MigrationsStatus [] (MigrationsFutureStatusNotYet names)
-migrationStatus [] run = MigrationsStatus [] (MigrationsStatusDiverged (migrationRanAt (head run)) [] run)
-migrationStatus (name:names) (m:ms)
-  | name == migrationName m = let sts = migrationStatus names ms
-                              in sts { migrationsStatusApplied = m:migrationsStatusApplied sts }
-  | otherwise = MigrationsStatus [] (MigrationsStatusDiverged (migrationRanAt m) (name:names) (m:ms))
+migrationStatus  _ [] [] = MigrationsStatus [] MigrationsFutureStatusUpToDate
+migrationStatus !i names [] = MigrationsStatus [] (MigrationsFutureStatusNotYet i names)
+migrationStatus  _ [] run = MigrationsStatus [] (MigrationsStatusDiverged (migrationStartedAt (head run)) [] run)
+migrationStatus  i (name:names) (m:ms)
+  | name == migrationName m = let sts = migrationStatus (i + 1) names ms
+                                  complete = isJust (migrationRanAt m)
+                              in sts { migrationsStatusApplied = (m, complete):migrationsStatusApplied sts }
+  | otherwise = MigrationsStatus [] (MigrationsStatusDiverged (migrationStartedAt m) (name:names) (m:ms))
 
 
 -- * Options parsing
@@ -96,15 +120,17 @@ migrationStatus (name:names) (m:ms)
 migrationCommandArgParser :: Parser beOptions -> Parser (BeamMigrationCommand beOptions)
 migrationCommandArgParser beOptions =
   BeamMigrationCommand <$> strOption (long "backend" <> metavar "BACKEND" <> help "Module to load for migration backend. Must be given first")
-                       <*> strOption (long "migration" <> short 'M' <> metavar "MIGRATIONMODULE" <> help "Module containing migration steps")
+                       <*> optional (strOption (long "migration" <> short 'M' <> metavar "MIGRATIONMODULE" <> help "Module containing migration steps"))
                        <*> many (strOption (long "package-path" <> short 'P' <> metavar "PACKAGEPATH" <> help "Additional GHC package paths"))
                        <*> beOptions
 
 subcommandParser :: Parser BeamMigrationSubcommand
-subcommandParser = subparser (command "write-script" writeScriptCommand <> help "Write the entire set of migrations as one script") <|>
-                   subparser (command "list-migrations" listMigrationsCommand <> help "List all discovered migrations") <|>
-                   subparser (command "init" initCommand <> help "Initialize the database for running migrations") <|>
-                   subparser (command "status" statusCommand <> help "Display status of applied migrations")
+subcommandParser = subparser $
+                   mconcat [ command "write-script" writeScriptCommand
+                           , command "list-migrations" listMigrationsCommand
+                           , command "init" initCommand
+                           , command "status" statusCommand
+                           , command "migrate" migrateCommand ]
   where
     writeScriptCommand =
       info (writeScriptArgParser <**> helper) (fullDesc <> progDesc "Write a migration script for the given migrations")
@@ -114,18 +140,21 @@ subcommandParser = subparser (command "write-script" writeScriptCommand <> help 
       info (initArgParser <**> helper) (fullDesc <> progDesc "Initialize the given database for running migrations")
     statusCommand =
       info (statusArgParser <**> helper) (fullDesc <> progDesc "Display status of applied migrations")
+    migrateCommand =
+      info (migrateArgParser <**> helper) (fullDesc <> progDesc "Run necessary migrations")
 
     writeScriptArgParser    = pure WriteScript
     listMigrationsArgParser = pure ListMigrations
     initArgParser = pure Init
     statusArgParser = pure Status
+    migrateArgParser = Migrate <$> optional (option auto (metavar "UNTIL" <> help "Last migration to run"))
 
 migrationCommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions)
 migrationCommandOptions beOptions =
   info (migrationCommandArgParser beOptions <**> helper)
        (fullDesc <> progDesc "Beam schema migration tool" <> header "beam-migrate -- migrate database schemas for various beam backends")
 
-migrationCommandAndSubcommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions, BeamMigrationSubcommand)
+migrationCommandAndSubcommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions, Maybe BeamMigrationSubcommand)
 migrationCommandAndSubcommandOptions beOptions =
-  info (((,) <$> migrationCommandArgParser beOptions <*> subcommandParser) <**> helper)
+  info (((,) <$> migrationCommandArgParser beOptions <*> optional (subcommandParser)) <**> helper)
        (fullDesc <> progDesc "Beam schema migration tool" <> header "beam-migrate -- migrate database schemas for various beam backends")

@@ -17,12 +17,12 @@ import qualified Database.Beam.Migrate.Tool.Schema.V0001 as V0001
 
 migrationToolSchemaMigration ::
   IsSql92DdlCommandSyntax syntax =>
-  MigrationSteps syntax (CheckedDatabaseSettings be V0001.MigrationDb)
+  MigrationSteps syntax () (CheckedDatabaseSettings be V0001.MigrationDb)
 migrationToolSchemaMigration = migration
 
 migration :: IsSql92DdlCommandSyntax syntax =>
-             MigrationSteps syntax (CheckedDatabaseSettings be V0001.MigrationDb)
+             MigrationSteps syntax () (CheckedDatabaseSettings be V0001.MigrationDb)
 migration = migrationStep "Initial beam migration tables" V0001.migration
 
 migrationDb :: forall be. DatabaseSettings be V0001.MigrationDb
-migrationDb = unCheckDatabase (evaluateDatabase (migration :: MigrationSteps SqlSyntaxBuilder (CheckedDatabaseSettings be V0001.MigrationDb)))
+migrationDb = unCheckDatabase (evaluateDatabase (migration :: MigrationSteps SqlSyntaxBuilder () (CheckedDatabaseSettings be V0001.MigrationDb)))

@@ -11,6 +11,7 @@ import qualified Database.Beam.Migrate.SQL.Types as Db
 import qualified Database.Beam.Migrate.Tool as Tool
 import qualified Database.Beam.Migrate.Types as Db
 import           Database.Beam.Postgres.Connection
+import           Database.Beam.Postgres.PgSpecific
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 
@@ -138,7 +139,7 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
     escapePgBytea b = error "escapePgBytea: no connection"
     escapePgIdentifier b = error "escapePgIdentifier: no connection"
 
-migrateScript :: Db.MigrationSteps PgCommandSyntax a -> [BL.ByteString]
+migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
 migrateScript steps =
   "-- CAUTION: beam-postgres currently escapes postgres string literals somewhat\n"                 :
   "--          haphazardly when generating scripts (but not when generating commands)\n"            :
@@ -157,10 +158,16 @@ migrateScript steps =
     renderCommand command =
       Endo ((pgRenderSyntaxScript (fromPgCommand command) <> ";\n"):)
 
-writeMigrationScript :: FilePath -> Db.MigrationSteps PgCommandSyntax a -> IO ()
+writeMigrationScript :: FilePath -> Db.MigrationSteps PgCommandSyntax () a -> IO ()
 writeMigrationScript fp steps =
   let stepBs = migrateScript steps
   in BL.writeFile fp (BL.concat stepBs)
+
+tsquery :: Db.DataType PgDataTypeSyntax TsQuery
+tsquery = Db.DataType (PgDataTypeSyntax (emit "tsquery"))
+
+tsvector :: Db.DataType PgDataTypeSyntax TsVector
+tsvector = Db.DataType (PgDataTypeSyntax (emit "tsvector"))
 
 smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax a
 smallserial = Db.DataType (PgDataTypeSyntax (emit "SMALLSERIAL"))

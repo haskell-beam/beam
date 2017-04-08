@@ -27,3 +27,7 @@ createTable tblName tblSettings =
 
      upDown command Nothing
      pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblName tbl') tblChecks) [])
+
+preserve :: CheckedDatabaseEntity be db e
+         -> Migration syntax (CheckedDatabaseEntity be db' e)
+preserve (CheckedDatabaseEntity desc checks) = pure (CheckedDatabaseEntity desc checks)

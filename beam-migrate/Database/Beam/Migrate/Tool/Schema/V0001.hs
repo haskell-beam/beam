@@ -30,7 +30,8 @@ data MigrationT f
   = MigrationT
   { migrationNumber :: Columnar f Int
   , migrationName   :: Columnar f Text
-  , migrationRanAt  :: Columnar f LocalTime
+  , migrationStartedAt :: Columnar f LocalTime
+  , migrationRanAt  :: Columnar f (Maybe LocalTime)
   } deriving Generic
 instance Beamable MigrationT
 type MigrationTable = MigrationT Identity
@@ -49,9 +50,9 @@ data MigrationDb f
 instance Database MigrationDb
 
 migration :: IsSql92DdlCommandSyntax syntax =>
-             Migration syntax (CheckedDatabaseSettings be MigrationDb)
-migration = MigrationDb
+             () -> Migration syntax (CheckedDatabaseSettings be MigrationDb)
+migration () = MigrationDb
   <$> createTable "beam_migration_version"
         (MigrationSchemaVersionT (field "version" int))
   <*> createTable "beam_migration"
-        (MigrationT (field "number" int) (field "name" (varchar Nothing)) (field "ran_at" timestamp))
+        (MigrationT (field "number" int notNull) (field "name" (varchar Nothing) notNull) (field "started_at" timestamp notNull) (field "ran_at" timestamp))
