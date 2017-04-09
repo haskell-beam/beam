@@ -30,7 +30,7 @@ module Database.Beam.Query.Combinators
     , (&&.), (||.), not_, div_, mod_
     , (<-.)
     , HaskellLiteralForQExpr
-    , SqlValable(..), As(..)
+    , SqlValable(..)
 
     , over_, frame_, bounds_, fromBound_, noBounds_, noOrder_
     , partitionBy_, withWindow_
@@ -345,12 +345,9 @@ as_ = id
 type family HaskellLiteralForQExpr x = a
 type instance HaskellLiteralForQExpr (QGenExpr context syntax s a) = a
 type instance HaskellLiteralForQExpr (table (QGenExpr context syntax s)) = table Identity
-type instance HaskellLiteralForQExpr (As x -> QGenExpr context syntax s x) = x
 
 type family QExprSyntax x where
   QExprSyntax (QGenExpr ctxt syntax s a) = syntax
-
-data As x = As
 
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
@@ -359,11 +356,6 @@ instance (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a, IsSql92Expres
   SqlValable (QGenExpr ctxt syntax s a) where
 
   val_ = QExpr . valueE . sqlValueSyntax
-instance ( x ~ QGenExpr context syntax s a
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax (QExprSyntax x)) a
-         , IsSql92ExpressionSyntax (QExprSyntax x) ) =>
-  SqlValable (As a -> x) where
-  val_ x _ = val_ x
 instance ( Beamable table
          , IsSql92ExpressionSyntax syntax
          , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>

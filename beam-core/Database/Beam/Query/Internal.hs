@@ -112,6 +112,9 @@ newtype QWindow syntax s = QWindow syntax
 newtype QFrameBounds syntax = QFrameBounds (Maybe syntax)
 newtype QFrameBound syntax = QFrameBound syntax
 
+unsafeRetype :: QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a'
+unsafeRetype (QExpr v) = QExpr v
+
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) [Char] ) =>
     IsString (QGenExpr context syntax s Text) where
