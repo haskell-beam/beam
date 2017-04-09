@@ -1,4 +1,4 @@
-{-# LANGUAGE PolyKinds #-}
+{-# L<ANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -46,7 +46,7 @@ module Database.Beam.Postgres.Syntax
     , PgInsertOnConflict(..)
     , onConflictDefault, onConflictUpdate, onConflictDoNothing
 
-    , pgQuotedIdentifier, pgUnOp, pgSepBy, pgDebugRenderSyntax
+    , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
     , pgBuildAction
 
     , insert
@@ -54,7 +54,11 @@ module Database.Beam.Postgres.Syntax
     , PgInsertReturning(..)
     , insertReturning
 
-    , now_ ) where
+    , now_
+
+    , pgBinOp, pgCompOp, pgUnOp, pgPostFix
+
+    , pgTestSyntax ) where
 
 import           Database.Beam.Postgres.Types
 
@@ -71,22 +75,21 @@ import           Control.Monad.Free.Church
 import           Control.Monad.State
 
 import           Data.ByteString (ByteString)
-import           Data.ByteString.Builder (Builder, toLazyByteString)
+import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import           Data.ByteString.Lazy (toStrict)
+import qualified Data.ByteString.Lazy as BL
 import           Data.Coerce
 import           Data.Monoid
-import           Data.Proxy
-import           Data.Ratio
-import           Data.String (fromString)
+import           Data.String (IsString(..), fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           Data.Time (LocalTime)
 
-import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 
 data PostgresInaccessible
 
+-- TODO This probably shouldn't be a free monad... oh well.
 data PgSyntaxF f where
   EmitByteString :: ByteString -> f -> PgSyntaxF f
   EmitBuilder    :: Builder -> f -> PgSyntaxF f
@@ -890,3 +893,35 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
 
 now_ :: QExpr PgExpressionSyntax s LocalTime
 now_ = QExpr (PgExpressionSyntax (emit "NOW()"))
+
+-- * Testing support
+
+data PgEscapeType = PgEscapeString | PgEscapeBytea | PgEscapeIdentifier
+  deriving (Show, Eq, Ord, Enum, Bounded)
+data PgSyntaxPrim = PgSyntaxPrim (Maybe PgEscapeType) BL.ByteString
+
+instance IsString PgSyntaxPrim where
+  fromString = PgSyntaxPrim Nothing . fromString
+
+pgTestSyntax :: PgSyntax -> [ PgSyntaxPrim ]
+pgTestSyntax (PgSyntax syntax) = runF syntax finish step Nothing mempty id
+  where
+    finish _ escapeType curBuilder a =
+      let chunk = toLazyByteString curBuilder
+      in if BL.null chunk then a []
+         else a [ PgSyntaxPrim escapeType chunk ]
+
+    go next curType nextType curBuilder nextBuilder a
+      | curType == nextType = next curType (curBuilder <> nextBuilder) a
+      | otherwise = next nextType mempty (a . (PgSyntaxPrim curType (toLazyByteString curBuilder):))
+
+    step (EmitByteString bs next) curType curBuilder a =
+      go next curType Nothing curBuilder (byteString bs) a
+    step (EmitBuilder bs next) curType curBuilder a =
+      go next curType Nothing curBuilder bs a
+    step (EscapeString s next) curType curBuilder a =
+      go next curType (Just PgEscapeString) curBuilder (byteString s) a
+    step (EscapeBytea s next) curType curBuilder a =
+      go next curType (Just PgEscapeBytea) curBuilder (byteString s) a
+    step (EscapeIdentifier s next) curType curBuilder a =
+      go next curType (Just PgEscapeIdentifier) curBuilder (byteString s) a
