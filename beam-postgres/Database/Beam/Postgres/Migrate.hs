@@ -29,14 +29,15 @@ import           Data.ByteString.Builder
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
-import qualified Data.Text as T
 import           Data.Char
 import           Data.Coerce
 import           Data.List (intersperse)
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Vector as V
 import           Data.Word (Word16)
 
 import           Options.Applicative
@@ -182,3 +183,8 @@ boolean = Db.DataType pgBooleanType
 
 bytea :: Db.DataType PgDataTypeSyntax ByteString
 bytea = Db.DataType pgByteaType
+
+array :: Maybe Int -> Db.DataType PgDataTypeSyntax a
+      -> Db.DataType PgDataTypeSyntax (V.Vector a)
+array Nothing (Db.DataType (PgDataTypeSyntax syntax)) = Db.DataType (PgDataTypeSyntax (syntax <> emit "[]"))
+array (Just sz) (Db.DataType (PgDataTypeSyntax syntax)) = Db.DataType (PgDataTypeSyntax (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
