@@ -189,7 +189,7 @@ Now, back in GHCi, we can create a connection to this database.
 
 ```
 Prelude Database.Beam.Sqlite> basics <- open "basics.db"
-Prelude Database.Beam.Sqlite> withConnection basics $ runSelectReturningList (select (all_ (persons exampleDb)))
+Prelude Database.Beam.Sqlite> withDatabase basics $ runSelectReturningList (select (all_ (persons exampleDb)))
 [ .. ]
 ```
 

@@ -18,12 +18,10 @@ Prelude Database.Beam.Sqlite> :load beam-sqlite/examples/Chinook/Schema.hs
 Prelude Chinook.Schema> chinook <- open "chinook.db"
 ```
 
-One more thing, before we explore how beam handles relationships. In the
-following example we will be using the `withConnectionTutorial` function. This
-is defined as
+One more thing, before we explore how beam handles relationships. Before we do, let's define a quick utility function.
 
 ```haskell
-withConnectionTutorial = withConnectionDebug putStrLn
+Prelude Chinook.Schema> let withConnectionTutorial = withDatabaseDebug putStrLn chinook
 ```
 
 This function prints each of our queries to standard output before running them.

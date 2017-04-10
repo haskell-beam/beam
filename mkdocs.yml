@@ -21,6 +21,9 @@ pages:
       - 'beam-postgres': 'user-guide/backends/beam-postgres.md'
       - 'beam-sqlite': 'user-guide/backends/beam-sqlite.md'
       - 'Writing a Custom Backend': 'user-guide/custom-backends.md'
+  - Reference:
+      - 'Expressions': 'reference/expression.md'
+      - 'Queries': 'reference/queries.md'
   - About:
       - 'Compatibility Matrix': 'about/compatibility.md'
       - 'License': 'about/license.md'
