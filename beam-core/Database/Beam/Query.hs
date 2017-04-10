@@ -55,7 +55,7 @@ select q =
   SqlSelect (buildSqlQuery q)
 
 runSelectReturningList ::
-  (IsSql92Syntax cmd, MonadBeam cmd be m, FromBackendRow be a) =>
+  (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
   SqlSelect (Sql92SelectSyntax cmd) a -> m [ a ]
 runSelectReturningList (SqlSelect select) =
   runReturningList (selectCmd select)
@@ -79,7 +79,7 @@ insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues inser
   where
     tblFields = allBeamValues (\(Columnar' f) -> _fieldName f) tblSettings
 
-runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be m)
+runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlInsert (Sql92InsertSyntax cmd) -> m ()
 runInsert (SqlInsert insert) = runNoReturn (insertCmd insert)
 
@@ -120,7 +120,7 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField tblNm name)) tblSettings
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (unqualifiedField nm)))) tblFields
 
-runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be m)
+runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlUpdate (Sql92UpdateSyntax cmd) tbl -> m ()
 runUpdate (SqlUpdate update) = runNoReturn (updateCmd update)
 

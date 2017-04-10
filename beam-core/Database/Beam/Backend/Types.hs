@@ -22,6 +22,16 @@ class BeamBackend be where
 --  backendNull :: BackendLiteral be
 --  backendIsNull :: BackendLiteral be -> Bool
 
+-- | Support for NULLable Foreign Key references.
+--
+-- > data MyTable f = MyTable
+-- >                { nullableRef :: PrimaryKey AnotherTable (Nullable f)
+-- >                , ... }
+-- >                 deriving (Generic, Typeable)
+--
+-- See 'Columnar' for more information.
+data Nullable (c :: * -> *) x
+
 class BeamBackend be => SupportedSyntax be syntax
 
 newtype Auto x = Auto { unAuto :: Maybe x }
@@ -131,7 +141,13 @@ instance FromBackendRow be x => FromBackendRow be (Maybe x) where
 -- * MonadBeam class
 
 class (BeamBackend be, Monad m, MonadIO m) =>
-  MonadBeam syntax be m | m -> syntax be, be -> m where
+  MonadBeam syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+
+  withDatabaseDebug :: (String -> IO ())
+                    -> handle
+                    -> m a -> IO a
+  withDatabase :: handle -> m a -> IO a
+  withDatabase = withDatabaseDebug (\_ -> pure ())
 
   runReturningMany :: FromBackendRow be x => syntax -> (m (Maybe x) -> m a) -> m a
 

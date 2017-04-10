@@ -24,7 +24,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
 import           Data.String
 
-newtype SqliteM a = SqliteM { runSqliteM :: ReaderT Connection IO a }
+newtype SqliteM a = SqliteM { runSqliteM :: ReaderT (String -> IO (), Connection) IO a }
   deriving (Monad, Functor, Applicative, MonadIO)
 
 newtype BeamSqliteParams = BeamSqliteParams [SQLData]
@@ -52,20 +52,33 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
               ro <- ask
               st <- get
               case runStateT (runReaderT (unRP (replicateM_ n (field :: RowParser Null))) ro) st of
-                Ok ((), _) -> unRP (next True)
+                Ok ((), st') ->
+                  do put st'
+                     unRP (next True)
                 _ -> unRP (next False)
 
 runSqlite :: Connection -> SqliteM a -> IO a
-runSqlite conn x = runReaderT (runSqliteM x) conn
+runSqlite = runSqliteDebug (\_ -> pure ())
 
-instance MonadBeam SqliteCommandSyntax Sqlite SqliteM where
+runSqliteDebug :: (String -> IO ()) -> Connection
+               -> SqliteM a -> IO a
+runSqliteDebug printStmt conn x =
+  runReaderT (runSqliteM x) (printStmt, conn)
+
+instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
+  withDatabase = runSqlite
+  withDatabaseDebug = runSqliteDebug
+
   runReturningMany (SqliteCommandSyntax (SqliteSyntax cmd vals)) action =
       SqliteM $ do
-        conn <- ask
-        liftIO . withStatement conn (fromString (BL.unpack (toLazyByteString cmd))) $ \stmt ->
+        (logger, conn) <- ask
+        let cmdString = BL.unpack (toLazyByteString cmd)
+        liftIO $ do
+          logger cmdString
+          withStatement conn (fromString cmdString) $ \stmt ->
             do bind stmt (BeamSqliteParams (D.toList vals))
                let nextRow' = liftIO (nextRow stmt) >>= \x ->
                               case x of
                                 Nothing -> pure Nothing
                                 Just (BeamSqliteRow row) -> pure row
-               runReaderT (runSqliteM (action nextRow')) conn
+               runReaderT (runSqliteM (action nextRow')) (logger, conn)

@@ -5,6 +5,7 @@ module Database.Beam.Sqlite.Syntax
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Query.SQL92
+import           Database.Beam.Query
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
@@ -20,7 +21,7 @@ data SqliteSyntax = SqliteSyntax Builder (DL.DList SQLData)
 
 instance Monoid SqliteSyntax where
   mempty = SqliteSyntax mempty mempty
-  mappend (SqliteSyntax ab av)< (SqliteSyntax bb bv) =
+  mappend (SqliteSyntax ab av) (SqliteSyntax bb bv) =
     SqliteSyntax (ab <> bb) (av <> bv)
 
 instance Eq SqliteSyntax where

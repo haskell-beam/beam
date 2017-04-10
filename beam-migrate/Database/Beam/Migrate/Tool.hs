@@ -33,7 +33,7 @@ import           Text.Tabular.AsciiArt
 
 -- * Migration table creation script
 
-runMigrationSteps :: MonadBeam syntax be m => (syntax -> String)
+runMigrationSteps :: MonadBeam syntax be hdl m => (syntax -> String)
                   -> Migration syntax a -> m (Either DdlError a)
 runMigrationSteps renderSyntax steps =
   runF steps finish step

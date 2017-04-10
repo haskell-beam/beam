@@ -56,7 +56,7 @@ data DdlError
   deriving Show
 
 data BeamMigrationBackend commandSyntax beOptions where
-  BeamMigrationBackend :: ( Show beOptions, MonadBeam commandSyntax be m
+  BeamMigrationBackend :: ( Show beOptions, MonadBeam commandSyntax be hdl m
                           , HasQBuilder (Sql92SelectSyntax commandSyntax)
                           , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) LocalTime
                           , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) (Maybe LocalTime)
