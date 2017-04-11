@@ -377,10 +377,10 @@ selectCombinators =
     basicUnion =
       testCase "Basic UNION support" $
       do let hireDates = do e <- all_ (_employees employeeDbSettings)
-                            pure (val_ "hire" (As @Text), just_ (_employeeHireDate e))
+                            pure (as_ @Text $ val_ "hire", just_ (_employeeHireDate e))
              leaveDates = do e <- all_ (_employees employeeDbSettings)
                              guard_ (isJust_ (_employeeLeaveDate e))
-                             pure (val_ "leave" (As @Text), _employeeLeaveDate e)
+                             pure (as_ @Text $ val_ "leave", _employeeLeaveDate e)
          SqlSelect Select { selectTable = UnionTables False a b } <- pure (select (union_ hireDates leaveDates))
          a @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res1") ])
@@ -396,10 +396,10 @@ selectCombinators =
     fieldNamesCapturedCorrectly =
       testCase "UNION field names are propagated correctly" $
       do let hireDates = do e <- all_ (_employees employeeDbSettings)
-                            pure (val_ "hire" (As @Text), _employeeAge e, just_ (_employeeHireDate e))
+                            pure (as_ @Text $ val_ "hire", _employeeAge e, just_ (_employeeHireDate e))
              leaveDates = do e <- all_ (_employees employeeDbSettings)
                              guard_ (isJust_ (_employeeLeaveDate e))
-                             pure (val_ "leave" (As @Text), _employeeAge e, _employeeLeaveDate e)
+                             pure (as_ @Text $ val_ "leave", _employeeAge e, _employeeLeaveDate e)
          SqlSelect Select { selectTable = SelectTable { .. }, selectLimit = Nothing, selectOffset = Nothing, selectOrdering = [] } <-
            pure (select $ do
                     (type_, age, date) <- limit_ 10 (union_ hireDates leaveDates)
