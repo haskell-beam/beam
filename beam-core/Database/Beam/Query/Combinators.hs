@@ -34,7 +34,9 @@ module Database.Beam.Query.Combinators
 --  , overlaps_, nullIf_, cast_
     , (<.), (>.), (<=.), (>=.), (==.), (/=.)
     , (&&.), (||.), not_, div_, mod_
-    , (<-.)
+
+    , (<-.), current_
+
     , HaskellLiteralForQExpr
     , SqlValable(..)
 
@@ -421,6 +423,14 @@ mod_, div_ ::
 div_ = qBinOpE divE
 mod_ = qBinOpE modE
 
+-- * UPDATE operators
+
+-- | Extract an expression representing the current (non-UPDATEd) value of a 'QField'
+current_ :: IsSql92ExpressionSyntax expr
+         => QField s ty -> QExpr expr s ty
+current_ (QField _ nm) = QExpr (fieldE (unqualifiedField nm))
+
+infix 4 <-.
 (<-.) :: IsSql92FieldNameSyntax fieldName
       => QField s a
       -> QExpr expr s a

@@ -33,7 +33,9 @@ tests = testGroup "SQL generation tests"
                   , tableEquality
                   , related
                   , selectCombinators
-                  , limitOffset ]
+                  , limitOffset
+
+                  , updateCurrent ]
 
 -- * Ensure simple select selects the right fields
 
@@ -500,3 +502,17 @@ limitOffset =
 -- * Ensure exists_ generates the correct sub-select
 
 -- * Ensure results can be correctly sorted with orderBy
+
+-- * UPDATE can correctly get the current value
+
+updateCurrent :: TestTree
+updateCurrent =
+  testCase "UPDATE can use current value" $
+  do SqlUpdate Update { .. } <-
+       pure $ update (_employees employeeDbSettings)
+                     (\employee -> [ _employeeAge employee <-. current_ (_employeeAge employee) + 1])
+                     (\employee -> _employeeFirstName employee ==. "Joe")
+
+     updateTable @?= "employees"
+     updateFields @?= [ (UnqualifiedField "age", ExpressionBinOp "+" (ExpressionFieldName (UnqualifiedField "age")) (ExpressionValue (Value (1 :: Int)))) ]
+     updateWhere @?= Just (ExpressionCompOp "==" Nothing (ExpressionFieldName (UnqualifiedField "first_name")) (ExpressionValue (Value ("Joe" :: String))))
