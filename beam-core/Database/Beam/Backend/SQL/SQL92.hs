@@ -220,7 +220,9 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
   existsE, uniqueE, subqueryE
     :: Sql92ExpressionSelectSyntax expr -> expr
 
-class IsSql92AggregationExpressionSyntax expr where
+class IsSql92AggregationSetQuantifierSyntax (Sql92AggregationSetQuantifierSyntax expr) =>
+  IsSql92AggregationExpressionSyntax expr where
+
   type Sql92AggregationSetQuantifierSyntax expr :: *
 
   countAllE :: expr

@@ -137,6 +137,8 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
   where
     QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (fieldE (unqualifiedField name)))) tblSettings)
 
+
+
 --delete :: blah
 
 -- runSQL' :: (BeamBackend be, MonadIO m) => Bool -> Beam be d m -> SQLCommand be -> m (Either String (IO (Maybe [BeamBackendValue be])))
@@ -265,47 +267,6 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
 --                            Rollback e -> beamRollback beam
 --                          return res
 
--- toBeamResult :: Either String a -> BeamResult e a
--- toBeamResult = (Rollback . InternalError) ||| Success
-
--- runQuery :: ( MonadIO m
---             , FromSqlValues be (QExprToIdentity a)
---             , Projectible be a
---             , IsQuery q ) =>
---             q be db s a -> Beam be db m -> m (Either String (Source m (QExprToIdentity a)))
--- runQuery q beam =
---     do let selectCmd = Select select
---            (_, _, select) = queryToSQL' (toQ q) 0
-
---        res <- runSQL' (beamDebug beam) beam selectCmd
-
---        case res of
---          Left err -> return (Left err)
---          Right fetchRow -> do let source = do row <- liftIO fetchRow
---                                               case row of
---                                                 Just row ->
---                                                     case fromSqlValues row of
---                                                       Left err -> fail err
---                                                       Right  q -> do yield q
---                                                                      source
---                                                 Nothing -> return ()
---                               return (Right source)
-
--- -- | Run the given query in the transaction and yield a 'Source' that can be used to read results
--- -- incrementally. If your result set is small and you want to just get a list, use 'queryList'.
--- query :: (IsQuery q, MonadIO m, Functor m, FromSqlValues be (QExprToIdentity a), Projectible be a) => q be db () a -> BeamT be e db m (Source (BeamT be e db m) (QExprToIdentity a))
--- query q = BeamT $ \beam ->
---           do res <- runQuery q beam
---              case res of
---                Right x -> return (Success (transPipe (BeamT . const . fmap Success) x))
---                Left err -> return (Rollback (InternalError err))
-
--- -- | Execute 'query' and use the 'Data.Conduit.List.consume' function to return a list of
--- -- results. Best used for small result sets.
--- queryList :: (IsQuery q, MonadIO m, Functor m, FromSqlValues be (QExprToIdentity a), Projectible be a) => q be db () a -> BeamT be e db m [QExprToIdentity a]
--- queryList q = do src <- query q
---                  src $$ C.consume
-
 -- -- | Execute the query using 'query' and return exactly one result. The return value will be
 -- -- 'Nothing' if either zero or more than one values were returned.
 -- getOne :: (IsQuery q, MonadIO m, Functor m, FromSqlValues be (QExprToIdentity a), Projectible be a) => q be db () a -> BeamT be e db m (Maybe (QExprToIdentity a))
@@ -320,10 +281,3 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
 --                             Just  _ -> return Nothing
 --        src <- query q
 --        src $$ justOneSink
-
--- fromSqlValues :: FromSqlValues be a => [BeamBackendValue be] -> Either String a
--- fromSqlValues (vals :: [BeamBackendValue be]) =
---     case runState (runErrorT fromSqlValues') vals of
---       (Right a, []) -> Right a
---       (Right _,  _) -> Left "fromSqlValues: Not all values were consumed"
---       (Left err, _) -> Left err

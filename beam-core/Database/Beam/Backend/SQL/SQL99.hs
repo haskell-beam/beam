@@ -1,6 +1,7 @@
 module Database.Beam.Backend.SQL.SQL99
   ( module Database.Beam.Backend.SQL.SQL92
   , IsSql99ExpressionSyntax(..)
+  , IsSql99AggregationExpressionSyntax(..)
   , IsSql99SelectSyntax(..)
   , IsSql99DataTypeSyntax(..) ) where
 
@@ -21,6 +22,10 @@ class IsSql92ExpressionSyntax expr =>
 
   instanceFieldE :: expr -> Text -> expr
   refFieldE :: expr -> Text -> expr
+
+class IsSql92AggregationExpressionSyntax expr =>
+  IsSql99AggregationExpressionSyntax expr where
+  everyE, someE, anyE :: Maybe (Sql92AggregationSetQuantifierSyntax expr) -> expr -> expr
 
 class IsSql99DataTypeSyntax dataType where
   characterLargeObjectType :: dataType
