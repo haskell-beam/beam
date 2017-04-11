@@ -179,6 +179,10 @@ instance IsSql92OrderingSyntax SqliteOrderingSyntax where
 
 instance HasSqlValueSyntax SqliteValueSyntax Int where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Bool where
+  sqlValueSyntax = sqlValueSyntax . (\b -> if b then 1 else 0 :: Int)
+instance HasSqlValueSyntax SqliteValueSyntax SqlNull where
+  sqlValueSyntax _ = SqliteValueSyntax (emit "NULL")
 
 instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionValueSyntax SqliteExpressionSyntax = SqliteValueSyntax
