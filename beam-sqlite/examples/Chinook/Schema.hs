@@ -63,6 +63,9 @@ instance Beamable (PrimaryKey AlbumT)
 type AlbumId = PrimaryKey AlbumT Identity; deriving instance Show AlbumId
 deriving instance Show (PrimaryKey AlbumT (Nullable Identity))
 
+albumArtists :: OneToMany ChinookDb s AlbumT ArtistT
+albumArtists = oneToMany_ (artist chinookDb) albumArtist
+
 -- * Employee
 
 data EmployeeT f
@@ -219,6 +222,12 @@ instance Table PlaylistTrackT where
 instance Beamable (PrimaryKey PlaylistTrackT)
 type PlaylistTrackId = PrimaryKey PlaylistTrackT Identity; deriving instance Show PlaylistTrackId
 
+--playlistTrackRelationship :: ManyToMany ChinookDb PlaylistT TrackT
+--playlistTrackRelationship =
+--  manyToMany_ (playlistTrack chinookDb)
+--              playlistTrackPlaylistId
+--              playlistTrackTrackId
+
 -- * Track
 
 data TrackT f
@@ -226,9 +235,9 @@ data TrackT f
   { trackId           :: Columnar f Int32
   , trackName         :: Columnar f Text
   , trackAlbumId      :: PrimaryKey AlbumT (Nullable f)
-  , trackMediaType    :: PrimaryKey MediaTypeT f
+  , trackMediaTypeId  :: PrimaryKey MediaTypeT f
   , trackGenreId      :: PrimaryKey GenreT (Nullable f)
-  , trackComposer     :: Columnar f Text
+  , trackComposer     :: Columnar f (Maybe Text)
   , trackMilliseconds :: Columnar f Int32
   , trackBytes        :: Columnar f Int32
   , trackUnitPrice    :: Columnar f Scientific
@@ -241,6 +250,13 @@ instance Table TrackT where
   primaryKey = TrackId . trackId
 instance Beamable (PrimaryKey TrackT)
 type TrackId = PrimaryKey TrackT Identity; deriving instance Show TrackId
+
+trackGenre :: OneToManyOptional ChinookDb s TrackT GenreT
+trackGenre = oneToManyOptional_ (genre chinookDb) trackGenreId
+trackMediaType :: OneToMany ChinookDb s TrackT MediaTypeT
+trackMediaType = oneToMany_ (mediaType chinookDb) trackMediaTypeId
+trackAlbum :: OneToManyOptional ChinookDb s TrackT AlbumT
+trackAlbum = oneToManyOptional_ (album chinookDb) trackAlbumId
 
 -- * database
 
