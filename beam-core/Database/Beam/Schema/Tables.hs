@@ -32,6 +32,7 @@ module Database.Beam.Schema.Tables
 
     , TableSettings, TableSkeleton, Ignored(..)
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint, WithConstraint(..)
+    , TagReducesTo(..), ReplaceBaseTag
 
     -- * Tables
     , Table(..), Beamable(..)
@@ -559,6 +560,10 @@ instance {-# OVERLAPPING #-}
 
           settings' :: sub f
           settings' = changeBeamRep (reduceTag %~ \(Columnar' (TableField nm)) -> Columnar' (TableField (relName <> "__" <> nm))) tbl
+
+type family ReplaceBaseTag tag f where
+  ReplaceBaseTag tag (Nullable f) = Nullable (ReplaceBaseTag tag f)
+  ReplaceBaseTag tag x = tag
 
 -- | Class to automatically unwrap nested Nullables
 class TagReducesTo f f' | f -> f' where

@@ -39,7 +39,8 @@ module Database.Beam.Query.Combinators
 
     -- * SQL GROUP BY and aggregation
     , aggregate_
-    , group_
+
+    , QGroupable(..)
 
     , sum_, avg_, min_, max_, count_, countAll_
     , sumOver_, avgOver_, minOver_, maxOver_, countOver_
@@ -72,6 +73,8 @@ import Data.String
 import Data.Maybe
 import Data.Proxy
 import Data.Typeable
+
+import Lens.Micro hiding (to)
 
 import GHC.Generics
 
@@ -503,8 +506,13 @@ aggregate_ mkAggregation (Q aggregating) =
            [] -> (Nothing, agg)
            _ -> (Just (groupByExpressions groupingExprs), agg)
 
-group_ :: QExpr expr s a -> QGroupExpr expr s a
-group_ (QExpr a) = QExpr a
+class QGroupable expr grouped | expr -> grouped, grouped -> expr where
+  group_ :: expr -> grouped
+instance QGroupable (QExpr expr s a) (QGroupExpr expr s a) where
+  group_ (QExpr a) = QExpr a
+instance Beamable tbl =>
+  QGroupable (tbl (QExpr expr s)) (tbl (QGroupExpr expr s)) where
+  group_ = changeBeamRep (\(Columnar' (QExpr x)) -> Columnar' (QExpr x))
 
 min_, max_, avg_, sum_
   :: ( IsSql92AggregationExpressionSyntax expr

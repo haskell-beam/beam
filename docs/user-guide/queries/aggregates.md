@@ -4,7 +4,7 @@ version of Haskell's `groupBy`.
 
 You use `aggregate_` by specifying an underlying query to run and a function
 that produces an aggregation projection. An aggregation projection is either a
-value of type `QAgg syntax s a`, a value of type `QGroupExpr syntax s a` or a
+value of type `QAgg syntax s a`, a value of type `QGroupExpr syntax s a`, or a
 tuple of such values. Any `QGenExpr` that uses an aggregate function is
 automatically assigned the `QAgg syntax s a` type. Any `QGenExpr` that contains
 the `group_` combinator is given the type `QGroupExpr`.
@@ -32,17 +32,13 @@ aggregate_ (\_ -> countAll_) (all_ (genre chinookDb))
 
 Above, SQL used the default grouping, which puts all rows in one group. We can
 also specify columns and expressions to group by. For example, if we wanted to
-count the number of tracks for each genre.
+count the number of tracks for each genre, we can use the `group_` function to
+group by the genre.
 
 ```haskell
 aggregate_ (\(genre, track) -> (group_ genre, count_ (trackId track)))
            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
 ```
-
-withConnectionTutorial $
-runSelectReturningList $ select $
-aggregate_ (\(genre, track) -> (group_ (genreId genre), group_ (genreName genre), as_ @Int $ count_ (trackId track)))
-           ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
 
 ## SQL compatibility
 
