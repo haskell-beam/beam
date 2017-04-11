@@ -77,7 +77,7 @@ newtype Q syntax (db :: (* -> *) -> *) s a
 data QInternal
 data QNested s
 
-data QField s as
+data QField s ty
   = QField
   { qFieldTblName :: T.Text
   , qFieldName    :: T.Text }
