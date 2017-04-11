@@ -77,8 +77,6 @@ newtype Q syntax (db :: (* -> *) -> *) s a
 data QInternal
 data QNested s
 
--- * QExpr type
-
 data QField s as
   = QField
   { qFieldTblName :: T.Text
@@ -88,6 +86,8 @@ data QField s as
 data QAssignment fieldName expr s
   = QAssignment fieldName expr
   deriving (Show, Eq, Ord)
+
+-- * QGenExpr type
 
 -- | The type of lifted beam expressions that will yield the haskell type `t` when run with
 -- `queryList` or `query`. In the future, this will include a thread argument meant to prevent

@@ -3,7 +3,11 @@ module Database.Beam.Query.Combinators
     ( all_, join_, guard_, related_, relatedBy_
     , leftJoin_
 
-    , manyToMany_
+    , ManyToMany
+    , manyToMany_, manyToManyPassthrough_
+
+    , OneToMany, OneToManyOptional
+    , oneToMany_, oneToManyOptional_
 
     , SqlReferences(..)
     , SqlJustable(..)
@@ -124,10 +128,6 @@ guard_ :: forall select db s.
           QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool -> Q select db s ()
 guard_ (QExpr guardE') =
     Q (liftF (QGuard guardE' ()))
-    -- modify $ \qb@QueryBuilder { qbWhere = guardE } ->
-  -- qb { qbWhere = case guardE of
-  --                  Nothing -> Just guardE'
-  --                  Just guardE -> Just $ andE guardE guardE' }
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
 related_ :: forall be db rel select s.
@@ -138,7 +138,7 @@ related_ :: forall be db rel select s.
          -> PrimaryKey rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)
          -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 related_ relTbl pk =
-    Q $ liftF (QAll relTbl (\rel -> let QExpr on = pk ==. primaryKey rel :: QExpr (Sql92SelectExpressionSyntax select) s Bool in Just on) id)
+  join_ relTbl (\rel -> pk ==. primaryKey rel)
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
 relatedBy_ :: forall be db rel select s.
@@ -149,27 +149,94 @@ relatedBy_ :: forall be db rel select s.
            -> (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) ->
                 QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-relatedBy_ relTbl mkOn =
-    Q $ liftF (QAll relTbl (\rel -> let QExpr on = mkOn rel  :: QExpr (Sql92SelectExpressionSyntax select) s Bool in Just on) id)
+relatedBy_ = join_
 
-manyToMany_ :: ( Database db, Table joinThrough
-               , Table left, Table right
-               , Sql92SelectSanityCheck syntax
-               , IsSql92SelectSyntax syntax
+type OneToMany db s tbl rel =
+  forall syntax.
+  ( IsSql92SelectSyntax syntax
+  , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool ) =>
+  tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) ->
+  Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
 
-               , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
-               , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) )
-            => DatabaseEntity be db (TableEntity joinThrough)
-            -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left g)
-            -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right h)
-            -> Q syntax db s (left g) -> Q syntax db s (right h)
-            -> Q syntax db s (left g, right h)
-manyToMany_ joinTbl leftKey rightKey left right =
+type OneToManyOptional db s tbl rel =
+  forall syntax.
+  ( IsSql92SelectSyntax syntax
+  , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
+  , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) SqlNull ) =>
+  tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) ->
+  Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
+
+oneToMany_ :: ( IsSql92SelectSyntax syntax
+              , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
+              , Database db
+              , Table tbl, Table rel )
+           => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch -}
+           -> (tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
+              {-^ Foreign key -}
+           -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
+           -> Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
+oneToMany_ rel getKey tbl =
+  join_ rel (\rel -> pk rel ==. getKey tbl)
+
+oneToManyOptional_
+  :: ( IsSql92SelectSyntax syntax
+     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
+     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) SqlNull
+     , Database db
+     , Table tbl, Table rel )
+  => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch -}
+  -> (tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
+     {-^ Foreign key -}
+  -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
+  -> Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
+oneToManyOptional_ rel getKey tbl =
+  leftJoin_ rel (\rel -> just_ (pk rel) ==. getKey tbl)
+
+-- ** Many-to-many relationships
+
+type ManyToMany db left right =
+  forall s be syntax g h.
+  ( Sql92SelectSanityCheck syntax, IsSql92SelectSyntax syntax
+  , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
+  , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) ) =>
+  Q syntax db s (left g) -> Q syntax db s (right h) ->
+  Q syntax db s (left g, right h)
+
+manyToMany_
+  :: ( Database db, Table joinThrough
+     , Table left, Table right
+     , Sql92SelectSanityCheck syntax
+     , IsSql92SelectSyntax syntax
+
+     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
+     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) )
+  => DatabaseEntity be db (TableEntity joinThrough)
+  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left g)
+  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right h)
+  -> Q syntax db s (left g) -> Q syntax db s (right h)
+  -> Q syntax db s (left g, right h)
+manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, left, right) -> (left, right)) $
+                                                  manyToManyPassthrough_ joinTbl leftKey rightKey left right
+
+manyToManyPassthrough_
+  :: ( Database db, Table joinThrough
+     , Table left, Table right
+     , Sql92SelectSanityCheck syntax
+     , IsSql92SelectSyntax syntax
+
+     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
+     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) )
+  => DatabaseEntity be db (TableEntity joinThrough)
+  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left g)
+  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right h)
+  -> Q syntax db s (left g) -> Q syntax db s (right h)
+  -> Q syntax db s (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s), left g, right h)
+manyToManyPassthrough_ joinTbl leftKey rightKey left right =
   do left_ <- left
      right_ <- right
-     join_ joinTbl (\joinTbl_ -> leftKey joinTbl_ ==. primaryKey left_ &&.
-                                 rightKey joinTbl_ ==. primaryKey right_)
-     pure (left_, right_)
+     joinTbl_ <- join_ joinTbl (\joinTbl_ -> leftKey joinTbl_ ==. primaryKey left_ &&.
+                                             rightKey joinTbl_ ==. primaryKey right_)
+     pure (joinTbl_, left_, right_)
 
 class IsSql92ExpressionSyntax syntax => SqlReferences syntax f s | f -> syntax where
     -- | Check that the 'PrimaryKey' given matches the table. Polymorphic so it works over both
@@ -699,16 +766,6 @@ instance IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax (QExpr syn
     maybe_ (QExpr onNothing) onJust (QExpr e) = let QExpr onJust' = onJust (QExpr e)
                                                 in QExpr (caseE [(isNotNullE e, onJust')] onNothing)
 
--- instance {-# OVERLAPPING #-} ( BeamBackend be, Table t
---                              , AllBeamValues t (QExprBool be s)
---                              , HasBeamFields t (Nullable (QExpr be s)) (Nullable (QExpr be s)) (QExprBool be s) )
---     => SqlDeconstructMaybe be (PrimaryKey t (Nullable (QExpr be s))) (PrimaryKey t (QExpr be s)) s where
---     isJust_ pk = let fieldsAreJust = changeBeamRep (\(Columnar' x) -> Columnar' (QExprBool (isJust_ x))) pk :: PrimaryKey t (QExprBool be s)
---                  in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool e)) -> e) fieldsAreJust)
---     isNothing_ pk = let fieldsAreNothing = changeBeamRep (\(Columnar' x) -> Columnar' (QExprBool (isNothing_ x))) pk :: PrimaryKey t (QExprBool be s)
---                     in foldr (&&.) (QExpr (SQLValE (sqlBool True))) (allBeamValues (\(Columnar' (QExprBool e)) -> e) fieldsAreNothing)
---     maybe_ = undefined
-
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
          , Beamable t )
@@ -716,26 +773,3 @@ instance ( IsSql92ExpressionSyntax syntax
     isJust_ t = allE (allBeamValues (\(Columnar' e) -> isJust_ e) t)
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
     maybe_ = undefined
-
--- class BeamUnwrapMaybe c where
---     beamUnwrapMaybe :: Columnar' (Nullable c) x -> Columnar' c x
--- instance BeamUnwrapMaybe (QExpr syntax s) where
---     beamUnwrapMaybe (Columnar' (QExpr e)) = Columnar' (QExpr e)
--- instance BeamUnwrapMaybe c => BeamUnwrapMaybe (Nullable c) where
---     beamUnwrapMaybe (Columnar' x :: Columnar' (Nullable (Nullable c)) x) =
---         let Columnar' x' = beamUnwrapMaybe (Columnar' x :: Columnar' (Nullable c) (Maybe x)) :: Columnar' c (Maybe x)
-
---             xCol :: Columnar' (Nullable c) x
---             xCol = Columnar' x'
---         in xCol
-
--- instance {-# OVERLAPPING #-} ( SqlDeconstructMaybe be (PrimaryKey t (Nullable c)) res s, Table t, BeamUnwrapMaybe (Nullable c)) => SqlDeconstructMaybe be (PrimaryKey t (Nullable (Nullable c))) res s where
---     isJust_ t = isJust_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
---     isNothing_ t = isNothing_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
---     maybe_ = undefined
-
--- instance ( SqlDeconstructMaybe syntax (t (Nullable c)) res s, BeamUnwrapMaybe (Nullable c)
---          , Beamable t) => SqlDeconstructMaybe syntax (t (Nullable (Nullable c))) res s where
---     isJust_ t = isJust_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
---     isNothing_ t = isNothing_ (changeBeamRep (\(f :: Columnar' (Nullable (Nullable c)) x) -> beamUnwrapMaybe f :: Columnar' (Nullable c) x) t)
---     maybe_ = undefined

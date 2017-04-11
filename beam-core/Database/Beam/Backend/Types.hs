@@ -79,6 +79,9 @@ instance FromBackendRow be x => GFromBackendRow be (K1 R (Exposed x)) (K1 R x) w
 instance FromBackendRow be (t Identity) => GFromBackendRow be (K1 R (t Exposed)) (K1 R (t Identity)) where
     gFromBackendRow _ = K1 <$> fromBackendRow
     gValuesNeeded be _ _ = valuesNeeded be (Proxy @(t Identity))
+instance FromBackendRow be (t (Nullable Identity)) => GFromBackendRow be (K1 R (t (Nullable Exposed))) (K1 R (t (Nullable Identity))) where
+    gFromBackendRow _ = K1 <$> fromBackendRow
+    gValuesNeeded be _ _ = valuesNeeded be (Proxy @(t (Nullable Identity)))
 instance BeamBackend be => FromBackendRow be () where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ()))
   valuesNeeded _ _ = 0
@@ -131,6 +134,12 @@ instance ( BeamBackend be, Generic (tbl Identity), Generic (tbl Exposed)
     FromBackendRow be (tbl Identity) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (tbl Exposed)))
   valuesNeeded be _ = gValuesNeeded be (Proxy @(Rep (tbl Exposed))) (Proxy @(Rep (tbl Identity)))
+instance ( BeamBackend be, Generic (tbl (Nullable Identity)), Generic (tbl (Nullable Exposed))
+         , GFromBackendRow be (Rep (tbl (Nullable Exposed))) (Rep (tbl (Nullable Identity)))) =>
+
+    FromBackendRow be (tbl (Nullable Identity)) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (tbl (Nullable Exposed))))
+  valuesNeeded be _ = gValuesNeeded be (Proxy @(Rep (tbl (Nullable Exposed)))) (Proxy @(Rep (tbl (Nullable Identity))))
 
 instance FromBackendRow be x => FromBackendRow be (Maybe x) where
   fromBackendRow =
