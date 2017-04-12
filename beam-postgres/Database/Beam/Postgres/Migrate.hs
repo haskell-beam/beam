@@ -16,8 +16,8 @@ import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 
 import qualified Database.PostgreSQL.Simple as Pg
-import qualified Database.PostgreSQL.Simple.Internal as PgI
 
+import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad.Free.Church
 import           Control.Monad.Reader (ask)
@@ -59,9 +59,6 @@ parsePgMigrateOpts =
                 <*> strOption (long "user" <> metavar "USER" <> help "Name of postgres user")
                 <*> pure True
 
-data PgStream a = PgStreamDone     (Either Tool.DdlError a)
-                | PgStreamContinue (Maybe PgI.Row -> IO (PgStream a))
-
 beConnectInfo :: PgMigrateOpts -> Pg.ConnectInfo
 beConnectInfo opts = Pg.defaultConnectInfo { connectHost = pgMigrateHost opts
                                            , connectPort = pgMigratePort opts
@@ -72,58 +69,13 @@ migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax PgMigrateOpts
 migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts Proxy
                         (BL.concat . migrateScript)
                         (BCL.unpack . pgRenderSyntaxScript . fromPgCommand)
-                        (\beOptions (Pg action) -> do
-                            bracket (Pg.connect (beConnectInfo beOptions)) Pg.close (runPg action))
+                        (\beOptions action -> do
+                            bracket (Pg.connect (beConnectInfo beOptions)) Pg.close $ \conn ->
+                              left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
   where
-    runPg :: forall a. F PgF a -> Pg.Connection -> IO (Either Tool.DdlError a)
-    runPg action conn =
-      let finish x = pure (Right x)
-          step (PgLiftIO action next) = action >>= next
-          step (PgFetchNext next) = next Nothing
-          step (PgRunReturning (PgCommandSyntax syntax)
-                               (mkProcess :: Pg (Maybe x) -> Pg a')
-                               next) =
-            do query <- pgRenderSyntax conn syntax
-               let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-               action <- runF process finishProcess stepProcess Nothing
-               case action of
-                 PgStreamDone (Right x) -> Pg.execute_ conn (fromString (BS.unpack query)) >> next x
-                 PgStreamDone (Left err) -> pure (Left err)
-                 PgStreamContinue nextStream ->
-                   let finishUp (PgStreamDone (Right x)) = next x
-                       finishUp (PgStreamDone (Left err)) = pure (Left err)
-                       finishUp (PgStreamContinue next) = next Nothing >>= finishUp
+    pgToToolError (PgRowParseError err) = Tool.DdlCustomError (show err)
+    pgToToolError (PgInternalError err) = Tool.DdlCustomError err
 
-                       columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
-                   in Pg.foldWith_ (PgI.RP (put columnCount >> ask)) conn (fromString (BS.unpack query)) (PgStreamContinue nextStream) runConsumer >>= finishUp
-
-          finishProcess :: forall row a. a -> Maybe PgI.Row -> IO (PgStream a)
-          finishProcess x _ = pure (PgStreamDone (Right x))
-
-          stepProcess :: forall a. PgF (Maybe PgI.Row -> IO (PgStream a)) -> Maybe PgI.Row -> IO (PgStream a)
-          stepProcess (PgLiftIO action next) row = action >>= flip next row
-          stepProcess (PgFetchNext next) Nothing =
-            pure . PgStreamContinue $ \res ->
-            case res of
-              Nothing -> next Nothing Nothing
-              Just (PgI.Row rowIdx res) ->
-                getFields res >>= \fields ->
-                runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
-                case res of
-                  Left err -> pure (PgStreamDone (Left (Tool.DdlCustomError ("Row read error: " ++ show err))))
-                  Right r -> next r Nothing
-          stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
-            getFields res >>= \fields ->
-            runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
-            case res of
-              Left err -> pure (PgStreamDone (Left (Tool.DdlCustomError ("Row read error: " ++ show err))))
-              Right r -> pure (PgStreamContinue (next (Just r)))
-          stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (Tool.DdlCustomError "Nested queries not allowed")))
-
-          runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
-          runConsumer s@(PgStreamDone x) _ = pure s
-          runConsumer (PgStreamContinue next) row = next (Just row)
-      in runF action finish step
 
 pgRenderSyntaxScript :: PgSyntax -> BL.ByteString
 pgRenderSyntaxScript (PgSyntax mkQuery) =

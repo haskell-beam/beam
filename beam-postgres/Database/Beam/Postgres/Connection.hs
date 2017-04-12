@@ -22,16 +22,18 @@ module Database.Beam.Postgres.Connection
   , Pg.close
 
   -- * Beam-specific calls
-  , RowReadError(..)
+  , RowReadError(..), PgError(..)
 
   , runSelect, runInsert, runInsertReturning
   , Q.select
 
   , Q.insertValues, Q.insertFrom
 
-  , pgRenderSyntax, runPgRowReader, getFields ) where
+  , pgRenderSyntax, runPgRowReader, getFields
 
-import           Control.Exception (Exception)
+  , withPgDebug ) where
+
+import           Control.Exception (Exception, throwIO)
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
 
@@ -53,26 +55,39 @@ import qualified Database.PostgreSQL.LibPQ as Pg hiding
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.Internal as Pg
-  ( Field(..)
+  ( Field(..), RowParser(..)
   , withConnection, escapeStringConn, escapeIdentifier, escapeByteaConn)
+import qualified Database.PostgreSQL.Simple.Internal as PgI
 import qualified Database.PostgreSQL.Simple.Ok as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..))
 
+import           Control.Exception (Exception)
 import           Control.Monad.Reader
+import           Control.Monad.State
 
 import           Data.ByteString.Builder (toLazyByteString, byteString)
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as C
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
+import           Data.String
 
 import           Foreign.C.Types
 
 -- | We can use this to parameterize the thread parameters in 'Q'.
  --  This guarantees that library users can't use arbitrary 'QExpr's in a 'Q'.
 data PostgresInaccessible
+
+data PgError
+  = PgRowParseError RowReadError
+  | PgInternalError String
+  deriving Show
+instance Exception PgError
+data PgStream a = PgStreamDone     (Either PgError a)
+                | PgStreamContinue (Maybe PgI.Row -> IO (PgStream a))
 
 -- * Functions to query
 
@@ -306,6 +321,56 @@ runPgRowReader conn rowIdx res fields readRow =
 
     finish x _ _ _ = pure (Right x)
 
+withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either PgError a)
+withPgDebug dbg conn (Pg action) =
+  let finish x = pure (Right x)
+      step (PgLiftIO action next) = action >>= next
+      step (PgFetchNext next) = next Nothing
+      step (PgRunReturning (PgCommandSyntax syntax)
+                           (mkProcess :: Pg (Maybe x) -> Pg a')
+                           next) =
+        do query <- pgRenderSyntax conn syntax
+           let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
+           action <- runF process finishProcess stepProcess Nothing
+           case action of
+             PgStreamDone (Right x) -> Pg.execute_ conn (fromString (BS.unpack query)) >> next x
+             PgStreamDone (Left err) -> pure (Left err)
+             PgStreamContinue nextStream ->
+               let finishUp (PgStreamDone (Right x)) = next x
+                   finishUp (PgStreamDone (Left err)) = pure (Left err)
+                   finishUp (PgStreamContinue next) = next Nothing >>= finishUp
+
+                   columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
+               in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (fromString (BS.unpack query)) (PgStreamContinue nextStream) runConsumer >>= finishUp
+
+      finishProcess :: forall row a. a -> Maybe PgI.Row -> IO (PgStream a)
+      finishProcess x _ = pure (PgStreamDone (Right x))
+
+      stepProcess :: forall a. PgF (Maybe PgI.Row -> IO (PgStream a)) -> Maybe PgI.Row -> IO (PgStream a)
+      stepProcess (PgLiftIO action next) row = action >>= flip next row
+      stepProcess (PgFetchNext next) Nothing =
+        pure . PgStreamContinue $ \res ->
+        case res of
+          Nothing -> next Nothing Nothing
+          Just (PgI.Row rowIdx res) ->
+            getFields res >>= \fields ->
+            runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
+            case res of
+              Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
+              Right r -> next r Nothing
+      stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
+        getFields res >>= \fields ->
+        runPgRowReader conn rowIdx res fields fromBackendRow >>= \res ->
+        case res of
+          Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
+          Right r -> pure (PgStreamContinue (next (Just r)))
+      stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
+
+      runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
+      runConsumer s@(PgStreamDone x) _ = pure s
+      runConsumer (PgStreamContinue next) row = next (Just row)
+  in runF action finish step
+
 -- * Beam Monad class
 
 data PgF next where
@@ -324,6 +389,11 @@ newtype Pg a = Pg { runPg :: F PgF a }
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)
 
-instance MonadBeam PgCommandSyntax Postgres Pg where
+instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
+    withDatabase conn action =
+      withPgDebug (\_ -> pure ()) conn action >>= either throwIO pure
+    withDatabaseDebug dbg conn action =
+      withPgDebug dbg conn action >>= either throwIO pure
+
     runReturningMany cmd consume =
         liftF (PgRunReturning cmd consume id)
