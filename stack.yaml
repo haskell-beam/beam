@@ -1,0 +1,6 @@
+resolver: lts-8.4
+packages:
+  - beam-sqlite
+  - beam-postgres
+  - beam-core
+  - beam-migrate
