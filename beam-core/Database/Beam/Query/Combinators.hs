@@ -9,7 +9,9 @@ module Database.Beam.Query.Combinators
     , OneToMany, OneToManyOptional
     , oneToMany_, oneToManyOptional_
 
-    , SqlReferences(..)
+    , OneToOne, OneToMaybe
+    , oneToOne_, oneToMaybe_
+
     , SqlJustable(..)
     , SqlDeconstructMaybe(..)
     , SqlOrderable
@@ -153,13 +155,15 @@ relatedBy_ :: forall be db rel select s.
            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 relatedBy_ = join_
 
-type OneToMany db s tbl rel =
+type OneToOne db s one many = OneToMany db s one many
+type OneToMany db s one many =
   forall syntax.
   ( IsSql92SelectSyntax syntax
   , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool ) =>
-  tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) ->
-  Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  one (QExpr (Sql92SelectExpressionSyntax syntax) s) ->
+  Q syntax db s (many (QExpr (Sql92SelectExpressionSyntax syntax) s))
 
+type OneToMaybe db s tbl rel = OneToManyOptional db s tbl rel
 type OneToManyOptional db s tbl rel =
   forall syntax.
   ( IsSql92SelectSyntax syntax
@@ -168,31 +172,34 @@ type OneToManyOptional db s tbl rel =
   tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) ->
   Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
 
-oneToMany_ :: ( IsSql92SelectSyntax syntax
-              , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-              , Database db
-              , Table tbl, Table rel )
-           => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch -}
-           -> (tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
-              {-^ Foreign key -}
-           -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
-           -> Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
+oneToMany_, oneToOne_
+  :: ( IsSql92SelectSyntax syntax
+     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
+     , Database db
+     , Table tbl, Table rel )
+  => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch (many) -}
+  -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (QExpr (Sql92SelectExpressionSyntax syntax) s))
+     {-^ Foreign key -}
+  -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
+  -> Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
 oneToMany_ rel getKey tbl =
-  join_ rel (\rel -> pk rel ==. getKey tbl)
+  join_ rel (\rel -> getKey rel ==. pk tbl)
+oneToOne_ = oneToMany_
 
-oneToManyOptional_
+oneToManyOptional_, oneToMaybe_
   :: ( IsSql92SelectSyntax syntax
      , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
      , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) SqlNull
      , Database db
      , Table tbl, Table rel )
   => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch -}
-  -> (tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
+  -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
      {-^ Foreign key -}
   -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
   -> Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
 oneToManyOptional_ rel getKey tbl =
-  leftJoin_ rel (\rel -> just_ (pk rel) ==. getKey tbl)
+  leftJoin_ rel (\rel -> getKey rel ==. just_ (pk tbl))
+oneToMaybe_ = oneToManyOptional_
 
 -- ** Many-to-many relationships
 
@@ -240,31 +247,22 @@ manyToManyPassthrough_ joinTbl leftKey rightKey left right =
                                              rightKey joinTbl_ ==. primaryKey right_)
      pure (joinTbl_, left_, right_)
 
-class IsSql92ExpressionSyntax syntax => SqlReferences syntax f s | f -> syntax where
-    -- | Check that the 'PrimaryKey' given matches the table. Polymorphic so it works over both
-    -- regular tables and those that have been made nullable by 'leftJoin_'.
-    references_ :: Table tbl => PrimaryKey tbl f -> tbl f -> QExpr syntax s Bool
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool ) =>
-    SqlReferences syntax (QExpr syntax s) s where
-    references_ pk (tbl :: tbl (QExpr syntax s)) = pk ==. primaryKey tbl
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool ) =>
-    SqlReferences syntax (Nullable (QExpr syntax s)) s where
-    references_ pk (tbl :: tbl (Nullable (QExpr syntax s))) = pk ==. primaryKey tbl
-
 -- | Limit the number of results returned by a query.
 --
-limit_ :: ProjectibleInSelectSyntax select a =>
-          Integer -> Q select db s a -> Q select db s a
+limit_ :: forall s a select db.
+           ( ProjectibleInSelectSyntax select a
+          , ThreadRewritable (QNested s) a ) =>
+          Integer -> Q select db (QNested s) a -> Q select db s (WithRewrittenThread (QNested s) s a)
 limit_ limit' (Q q) =
-  Q (liftF (QLimit limit' q id))
+  Q (liftF (QLimit limit' q (rewriteThread (Proxy @s))))
 
 -- | Drop the first `offset'` results.
-offset_ :: ProjectibleInSelectSyntax select a =>
-           Integer -> Q select db s a -> Q select db s a
+offset_ :: forall s a select db.
+           ( ProjectibleInSelectSyntax select a
+           , ThreadRewritable (QNested s) a ) =>
+           Integer -> Q select db (QNested s) a -> Q select db s (WithRewrittenThread (QNested s) s a)
 offset_ offset' (Q q) =
-  Q (liftF (QOffset offset' q id))
+  Q (liftF (QOffset offset' q (rewriteThread (Proxy @s))))
 
 -- | Use the SQL exists operator to determine if the given query returns any results
 exists_, unique_ ::
@@ -444,14 +442,15 @@ union_, unionAll_, intersect_, intersectAll_, except_, exceptAll_ ::
   forall select db s a.
   ( IsSql92SelectSyntax select
   , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) a
-  , ProjectibleInSelectSyntax select a ) =>
-  Q select db s a -> Q select db s a -> Q select db s a
-union_ (Q a) (Q b) = Q (liftF (QUnion False a b id))
-unionAll_ (Q a) (Q b) = Q (liftF (QUnion True a b id))
-intersect_ (Q a) (Q b) = Q (liftF (QIntersect False a b id))
-intersectAll_ (Q a) (Q b) = Q (liftF (QIntersect True a b id))
-except_ (Q a) (Q b) = Q (liftF (QExcept False a b id))
-exceptAll_ (Q a) (Q b) = Q (liftF (QExcept True a b id))
+  , ProjectibleInSelectSyntax select a
+  , ThreadRewritable (QNested s) a) =>
+  Q select db (QNested s) a -> Q select db (QNested s) a -> Q select db s (WithRewrittenThread (QNested s) s a)
+union_ (Q a) (Q b) = Q (liftF (QUnion False a b (rewriteThread (Proxy @s))))
+unionAll_ (Q a) (Q b) = Q (liftF (QUnion True a b (rewriteThread (Proxy @s))))
+intersect_ (Q a) (Q b) = Q (liftF (QIntersect False a b (rewriteThread (Proxy @s))))
+intersectAll_ (Q a) (Q b) = Q (liftF (QIntersect True a b (rewriteThread (Proxy @s))))
+except_ (Q a) (Q b) = Q (liftF (QExcept False a b (rewriteThread (Proxy @s))))
+exceptAll_ (Q a) (Q b) = Q (liftF (QExcept True a b (rewriteThread (Proxy @s))))
 
 as_ :: forall a ctxt syntax s. QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a
 as_ = id
@@ -538,16 +537,18 @@ over_ :: IsSql2003ExpressionSyntax syntax =>
          QAgg syntax s a -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s -> QWindowExpr syntax s a
 over_ (QExpr a) (QWindow frame) = QExpr (overE a frame)
 
-withWindow_ :: ( ProjectibleWithPredicate WindowFrameContext (Sql2003ExpressionWindowFrameSyntax (Sql92SelectExpressionSyntax select)) window
+withWindow_ :: forall window a s r select db.
+               ( ProjectibleWithPredicate WindowFrameContext (Sql2003ExpressionWindowFrameSyntax (Sql92SelectExpressionSyntax select)) window
                , Projectible (Sql92SelectExpressionSyntax select) r
                , Projectible (Sql92SelectExpressionSyntax select) a
                , ContextRewritable a
+               , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
                , IsSql92SelectSyntax select)
             => (r -> window) -> (r -> window -> a)
-            -> Q select db s r
-            -> Q select db s (WithRewrittenContext a QValueContext)
+            -> Q select db (QNested s) r
+            -> Q select db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
 withWindow_ mkWindow mkProjection (Q windowOver)=
-  Q (liftF (QWindowOver mkWindow mkProjection windowOver (rewriteContext (Proxy @QValueContext))))
+  Q (liftF (QWindowOver mkWindow mkProjection windowOver (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
 
 -- * Aggregators
 
@@ -557,12 +558,14 @@ aggregate_ :: forall select a r db s.
               , Projectible (Sql92SelectExpressionSyntax select) a
 
               , ContextRewritable a
+              , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
+
               , IsSql92SelectSyntax select )
            => (r -> a)
-           -> Q select db s r
-           -> Q select db s (WithRewrittenContext a QValueContext)
+           -> Q select db (QNested s) r
+           -> Q select db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
 aggregate_ mkAggregation (Q aggregating) =
-  Q (liftF (QAggregate mkAggregation' aggregating (rewriteContext (Proxy @QValueContext))))
+  Q (liftF (QAggregate mkAggregation' aggregating (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
   where
     mkAggregation' x =
       let agg = mkAggregation x
@@ -673,11 +676,13 @@ instance ( SqlOrderable syntax a
     makeSQLOrdering (a, b, c, d, e) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <> makeSQLOrdering e
 
 -- | Order by certain expressions, either ascending ('asc_') or descending ('desc_')
-orderBy_ :: ( Projectible (Sql92SelectExpressionSyntax syntax) a
-            , SqlOrderable (Sql92SelectOrderingSyntax syntax) ordering ) =>
-            (a -> ordering) -> Q syntax db s a -> Q syntax db s a
+orderBy_ :: forall s a ordering syntax db.
+            ( Projectible (Sql92SelectExpressionSyntax syntax) a
+            , SqlOrderable (Sql92SelectOrderingSyntax syntax) ordering
+            , ThreadRewritable (QNested s) a) =>
+            (a -> ordering) -> Q syntax db (QNested s) a -> Q syntax db s (WithRewrittenThread (QNested s) s a)
 orderBy_ orderer (Q q) =
-    Q (liftF (QOrderBy (makeSQLOrdering . orderer) q id))
+    Q (liftF (QOrderBy (makeSQLOrdering . orderer) q (rewriteThread (Proxy @s))))
 
 desc_, asc_ :: forall syntax s a.
   IsSql92OrderingSyntax syntax =>

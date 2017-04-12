@@ -40,15 +40,15 @@ data QF select db s next where
             -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
   QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next
 
-  QLimit :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
-  QOffset :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db s r -> (r -> next) -> QF select db s next
+  QLimit :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
+  QOffset :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
 
-  QUnion ::Projectible (Sql92SelectExpressionSyntax select) r =>  Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
-  QIntersect :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
-  QExcept :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db s r -> QM select db s r -> (r -> next) -> QF select db s next
+  QUnion ::Projectible (Sql92SelectExpressionSyntax select) r =>  Bool -> QM select db (QNested s) r -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
+  QIntersect :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db (QNested s) r -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
+  QExcept :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db (QNested s) r -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
   QOrderBy :: Projectible (Sql92SelectExpressionSyntax select) r =>
               (r -> [ Sql92SelectOrderingSyntax select ])
-           -> QM select db s r -> (r -> next) -> QF select db s next
+           -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
 
   -- -- | Equivalent to 'pure', but with extra context information which allows window functions ('pure' doesn't)
   -- QProject :: ProjectibleWithPredicate ScalarContext (Sql2003SelectExpressionSyntax select) a =>
@@ -57,11 +57,11 @@ data QF select db s next where
                  , Projectible (Sql92SelectExpressionSyntax select) r
                  , Projectible (Sql92SelectExpressionSyntax select) a )
               => (r -> window) -> (r -> window -> a)
-              -> QM select db s r -> (a -> next) -> QF select db s next
+              -> QM select db (QNested s) r -> (a -> next) -> QF select db s next
   QAggregate :: ( Projectible (Sql92SelectExpressionSyntax select) grouping
                 , Projectible (Sql92SelectExpressionSyntax select) a ) =>
                 (a -> (Maybe (Sql92SelectGroupingSyntax select), grouping)) ->
-                QM select db s a ->
+                QM select db (QNested s) a ->
                 (grouping -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
 
@@ -211,6 +211,71 @@ type family ValueContextSuggestion a :: ErrorMessage where
 
 type Projectible = ProjectibleWithPredicate AnyType
 type ProjectibleValue = ProjectibleWithPredicate ValueContext
+
+class ThreadRewritable s a | a -> s where
+  type WithRewrittenThread s s' a :: *
+
+  rewriteThread :: Proxy s' -> a -> WithRewrittenThread s s' a
+instance Beamable tbl => ThreadRewritable s (tbl (QGenExpr ctxt syntax s)) where
+  type WithRewrittenThread s s' (tbl (QGenExpr ctxt syntax s)) = tbl (QGenExpr ctxt syntax s')
+  rewriteThread _ = changeBeamRep (\(Columnar' (QExpr a)) -> Columnar' (QExpr a))
+instance Beamable tbl => ThreadRewritable s (tbl (Nullable (QGenExpr ctxt syntax s))) where
+  type WithRewrittenThread s s' (tbl (Nullable (QGenExpr ctxt syntax s))) = tbl (Nullable (QGenExpr ctxt syntax s'))
+  rewriteThread _ = changeBeamRep (\(Columnar' (QExpr a)) -> Columnar' (QExpr a))
+instance ThreadRewritable s (QGenExpr ctxt syntax s a) where
+  type WithRewrittenThread s s' (QGenExpr ctxt syntax s a) = QGenExpr ctxt syntax s' a
+  rewriteThread _ (QExpr a) = QExpr a
+instance ( ThreadRewritable s a, ThreadRewritable s b ) =>
+  ThreadRewritable s (a, b) where
+  type WithRewrittenThread s s' (a, b) = (WithRewrittenThread s s' a, WithRewrittenThread s s' b)
+  rewriteThread s' (a, b) = (rewriteThread s' a, rewriteThread s' b)
+instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c ) =>
+  ThreadRewritable s (a, b, c) where
+  type WithRewrittenThread s s' (a, b, c) =
+    (WithRewrittenThread s s' a, WithRewrittenThread s s' b, WithRewrittenThread s s' c)
+  rewriteThread s' (a, b, c) = (rewriteThread s' a, rewriteThread s' b, rewriteThread s' c)
+instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c, ThreadRewritable s d ) =>
+  ThreadRewritable s (a, b, c, d) where
+  type WithRewrittenThread s s' (a, b, c, d) =
+    (WithRewrittenThread s s' a, WithRewrittenThread s s' b, WithRewrittenThread s s' c, WithRewrittenThread s s' d)
+  rewriteThread s' (a, b, c, d) =
+    (rewriteThread s' a, rewriteThread s' b, rewriteThread s' c, rewriteThread s' d)
+instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c, ThreadRewritable s d
+         , ThreadRewritable s e ) =>
+  ThreadRewritable s (a, b, c, d, e) where
+  type WithRewrittenThread s s' (a, b, c, d, e) =
+    ( WithRewrittenThread s s' a, WithRewrittenThread s s' b, WithRewrittenThread s s' c, WithRewrittenThread s s' d
+    , WithRewrittenThread s s' e )
+  rewriteThread s' (a, b, c, d, e) =
+    ( rewriteThread s' a, rewriteThread s' b, rewriteThread s' c, rewriteThread s' d
+    , rewriteThread s' e)
+instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c, ThreadRewritable s d
+         , ThreadRewritable s e, ThreadRewritable s f ) =>
+  ThreadRewritable s (a, b, c, d, e, f) where
+  type WithRewrittenThread s s' (a, b, c, d, e, f) =
+    ( WithRewrittenThread s s' a, WithRewrittenThread s s' b, WithRewrittenThread s s' c, WithRewrittenThread s s' d
+    , WithRewrittenThread s s' e, WithRewrittenThread s s' f )
+  rewriteThread s' (a, b, c, d, e, f) =
+    ( rewriteThread s' a, rewriteThread s' b, rewriteThread s' c, rewriteThread s' d
+    , rewriteThread s' e, rewriteThread s' f)
+instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c, ThreadRewritable s d
+         , ThreadRewritable s e, ThreadRewritable s f, ThreadRewritable s g ) =>
+  ThreadRewritable s (a, b, c, d, e, f, g) where
+  type WithRewrittenThread s s' (a, b, c, d, e, f, g) =
+    ( WithRewrittenThread s s' a, WithRewrittenThread s s' b, WithRewrittenThread s s' c, WithRewrittenThread s s' d
+    , WithRewrittenThread s s' e, WithRewrittenThread s s' f, WithRewrittenThread s s' g)
+  rewriteThread s' (a, b, c, d, e, f, g) =
+    ( rewriteThread s' a, rewriteThread s' b, rewriteThread s' c, rewriteThread s' d
+    , rewriteThread s' e, rewriteThread s' f, rewriteThread s' g )
+instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c, ThreadRewritable s d
+         , ThreadRewritable s e, ThreadRewritable s f, ThreadRewritable s g, ThreadRewritable s h ) =>
+  ThreadRewritable s (a, b, c, d, e, f, g, h) where
+  type WithRewrittenThread s s' (a, b, c, d, e, f, g, h) =
+    ( WithRewrittenThread s s' a, WithRewrittenThread s s' b, WithRewrittenThread s s' c, WithRewrittenThread s s' d
+    , WithRewrittenThread s s' e, WithRewrittenThread s s' f, WithRewrittenThread s s' g, WithRewrittenThread s s' h)
+  rewriteThread s' (a, b, c, d, e, f, g, h) =
+    ( rewriteThread s' a, rewriteThread s' b, rewriteThread s' c, rewriteThread s' d
+    , rewriteThread s' e, rewriteThread s' f, rewriteThread s' g, rewriteThread s' h )
 
 class ContextRewritable a where
   type WithRewrittenContext a ctxt :: *

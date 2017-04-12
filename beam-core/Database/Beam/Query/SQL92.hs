@@ -193,7 +193,8 @@ buildSql92Query ::
 buildSql92Query (Q q) =
     buildSelect (buildQuery (fromF q))
   where
-    buildQuery :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+    buildQuery :: forall s x.
+                  Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
                   Free (QF select db s) x
                -> SelectBuilder select db x
     buildQuery (Pure x) = SelectBuilderQ x emptyQb
@@ -285,7 +286,8 @@ buildSql92Query (Q q) =
     buildQuery (Free (QExcept all_ left right next)) =
       buildTableCombination (exceptTable all_) left right next
 
-    tryBuildGuardsOnly :: Free (QF select db s) x
+    tryBuildGuardsOnly :: forall s x.
+                          Free (QF select db s) x
                        -> Maybe (Sql92SelectExpressionSyntax select)
                        -> Maybe (x, Maybe (Sql92SelectExpressionSyntax select))
     tryBuildGuardsOnly (Pure x) having = Just (x, having)
@@ -293,10 +295,11 @@ buildSql92Query (Q q) =
     tryBuildGuardsOnly _ _ = Nothing
 
     buildTableCombination ::
+      forall s x r.
         ( Projectible (Sql92ProjectionExpressionSyntax projSyntax) r
         , Projectible (Sql92ProjectionExpressionSyntax projSyntax) x ) =>
         (Sql92SelectSelectTableSyntax select -> Sql92SelectSelectTableSyntax select -> Sql92SelectSelectTableSyntax select) ->
-        QM select db s x -> QM select db s x -> (x -> Free (QF select db s) r) -> SelectBuilder select db r
+        QM select db (QNested s) x -> QM select db (QNested s) x -> (x -> Free (QF select db s) r) -> SelectBuilder select db r
     buildTableCombination combineTables left right next =
         let leftSb = buildQuery (fromF left)
             leftTb = selectBuilderToTableSource leftSb
@@ -311,7 +314,8 @@ buildSql92Query (Q q) =
              _ -> let (x', qb) = selectBuilderToQueryBuilder sb
                   in buildJoinedQuery (next x') qb
 
-    buildJoinedQuery :: Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
+    buildJoinedQuery :: forall s x.
+                        Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
                         Free (QF select db s) x -> QueryBuilder select -> SelectBuilder select db x
     buildJoinedQuery (Pure x) qb = SelectBuilderQ x qb
     buildJoinedQuery (Free (QAll tbl on next)) qb =
@@ -330,7 +334,8 @@ buildSql92Query (Q q) =
                (x', qb') = buildJoinTableSourceQuery tblSource (sbProj sb) qb
            in buildJoinedQuery (next x') qb')
 
-    onlyQ :: Free (QF select db s) x
+    onlyQ :: forall s x.
+             Free (QF select db s) x
           -> (forall a'. Projectible (Sql92SelectExpressionSyntax select) a' => Free (QF select db s) a' -> (a' -> Free (QF select db s) x) -> SelectBuilder select db x)
           -> SelectBuilder select db x
     onlyQ (Free (QAll entity mkOn next)) f =
