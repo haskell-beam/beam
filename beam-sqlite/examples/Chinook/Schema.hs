@@ -4,7 +4,6 @@
 module Chinook.Schema where
 
 import Database.Beam
-import Database.Beam.Sqlite
 
 import Data.Int
 import Data.Text (Text)
@@ -63,8 +62,8 @@ instance Beamable (PrimaryKey AlbumT)
 type AlbumId = PrimaryKey AlbumT Identity; deriving instance Show AlbumId
 deriving instance Show (PrimaryKey AlbumT (Nullable Identity))
 
-albumArtists :: OneToMany ChinookDb s AlbumT ArtistT
-albumArtists = oneToMany_ (artist chinookDb) albumArtist
+artistAlbums :: OneToMany ChinookDb s ArtistT AlbumT
+artistAlbums = oneToMany_ (album chinookDb) albumArtist
 
 -- * Employee
 
@@ -153,6 +152,9 @@ instance Table InvoiceT where
   primaryKey = InvoiceId . invoiceId
 instance Beamable (PrimaryKey InvoiceT)
 type InvoiceId = PrimaryKey InvoiceT Identity; deriving instance Show InvoiceId
+
+invoiceLines :: OneToMany ChinookDb s InvoiceT InvoiceLineT
+invoiceLines = oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice
 
 -- * InvoiceLine
 
@@ -251,12 +253,14 @@ instance Table TrackT where
 instance Beamable (PrimaryKey TrackT)
 type TrackId = PrimaryKey TrackT Identity; deriving instance Show TrackId
 
-trackGenre :: OneToManyOptional ChinookDb s TrackT GenreT
-trackGenre = oneToManyOptional_ (genre chinookDb) trackGenreId
-trackMediaType :: OneToMany ChinookDb s TrackT MediaTypeT
-trackMediaType = oneToMany_ (mediaType chinookDb) trackMediaTypeId
-trackAlbum :: OneToManyOptional ChinookDb s TrackT AlbumT
-trackAlbum = oneToManyOptional_ (album chinookDb) trackAlbumId
+genreTracks :: OneToManyOptional ChinookDb s GenreT TrackT
+genreTracks = oneToManyOptional_ (track chinookDb) trackGenreId
+
+mediaTypeTracks :: OneToMany ChinookDb s MediaTypeT TrackT
+mediaTypeTracks = oneToMany_ (track chinookDb) trackMediaTypeId
+
+albumTracks :: OneToManyOptional ChinookDb s AlbumT TrackT
+albumTracks = oneToManyOptional_ (track chinookDb) trackAlbumId
 
 -- * database
 

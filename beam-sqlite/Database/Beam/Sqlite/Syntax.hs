@@ -1,7 +1,9 @@
 module Database.Beam.Sqlite.Syntax
   ( SqliteSyntax(..)
 
-  , SqliteCommandSyntax(..) ) where
+  , SqliteCommandSyntax(..)
+
+  , SqliteSelectSyntax(..) ) where
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Query.SQL92
@@ -11,6 +13,7 @@ import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
 import           Data.Coerce
 import qualified Data.DList as DL
+import           Data.Int
 import           Data.Monoid
 import           Data.String
 import qualified Data.Text as T
@@ -177,12 +180,24 @@ instance IsSql92OrderingSyntax SqliteOrderingSyntax where
   ascOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " ASC")
   descOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " DESC")
 
+instance IsSqlExpressionSyntaxStringType SqliteExpressionSyntax T.Text
+instance IsSqlExpressionSyntaxStringType SqliteExpressionSyntax String
 instance HasSqlValueSyntax SqliteValueSyntax Int where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Int8 where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Int16 where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Int32 where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Int64 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Bool where
   sqlValueSyntax = sqlValueSyntax . (\b -> if b then 1 else 0 :: Int)
 instance HasSqlValueSyntax SqliteValueSyntax SqlNull where
   sqlValueSyntax _ = SqliteValueSyntax (emit "NULL")
+instance HasSqlValueSyntax SqliteValueSyntax String where
+  sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString s)))
 
 instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionValueSyntax SqliteExpressionSyntax = SqliteValueSyntax
