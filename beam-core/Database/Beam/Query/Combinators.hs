@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications, NamedFieldPuns #-}
 module Database.Beam.Query.Combinators
-    ( all_, join_, guard_, related_, relatedBy_
+    ( all_, join_, guard_, filter_, related_, relatedBy_
     , leftJoin_
 
     , ManyToMany
@@ -132,6 +132,13 @@ guard_ :: forall select db s.
           QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool -> Q select db s ()
 guard_ (QExpr guardE') =
     Q (liftF (QGuard guardE' ()))
+
+-- | Synonym for 'clause >>= \x -> guard_ (mkExpr x)>> pure x'
+filter_ :: forall r select db s.
+           ( IsSql92SelectSyntax select )
+        => (r -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
+        -> Q select db s r -> Q select db s r
+filter_ mkExpr clause = clause >>= \x -> guard_ (mkExpr x) >> pure x
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
 related_ :: forall be db rel select s.
@@ -365,12 +372,17 @@ isNotFalse_ (QExpr s) = QExpr (isNotFalseE s)
 isUnknown_ (QExpr s) = QExpr (isUnknownE s)
 isNotUnknown_ (QExpr s) = QExpr (isNotUnknownE s)
 
-like_, position_ ::
+like_ ::
   ( IsSqlExpressionSyntaxStringType syntax text
   , IsSql92ExpressionSyntax syntax ) =>
-  QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s text
+  QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s Bool
 like_ (QExpr scrutinee) (QExpr search) =
   QExpr (likeE scrutinee search)
+
+position_ ::
+  ( IsSqlExpressionSyntaxStringType syntax text
+  , IsSql92ExpressionSyntax syntax, Integral b ) =>
+  QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s b
 position_ (QExpr needle) (QExpr haystack) =
   QExpr (likeE needle haystack)
 
