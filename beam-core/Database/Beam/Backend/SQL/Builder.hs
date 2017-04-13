@@ -26,6 +26,13 @@ newtype SqlSyntaxBuilder
 newtype SqlSyntaxBuilder1 (x :: k)
   = SqlSyntaxBuilder1 { buildSql_1 :: Builder }
 
+instance Show SqlSyntaxBuilder where
+  showsPrec prec (SqlSyntaxBuilder s) =
+    showParen (prec > 10) $
+    showString "SqlSyntaxBuilder (" .
+    shows (toLazyByteString s) .
+    showString ")"
+
 instance Eq SqlSyntaxBuilder where
   a == b = toLazyByteString (buildSql a) == toLazyByteString (buildSql b)
 
