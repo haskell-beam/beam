@@ -26,6 +26,9 @@ exampleDb = autoDbSettings
 
 ### Views
 
+!!! note "Note"
+    Views have not yet been implemented, but this is the expected syntax
+
 Some databases also offer the concept of 'views' -- pseudo-tables that
 are built from a pre-defined query. Suppose we wanted to create a view
 that returned the latest comments and their respective posters.
@@ -56,6 +59,9 @@ access the view, so beam does not need to know about it at the type-level. If
 you want to manipulate view definitions, use the migrations packgae.
 
 ### Unique constraints
+
+!!! note "Note"
+    This is the current implementation plan. Uniques are not currently implemented.
 
 The `TableEntityWithUnique` database entity allows you to declare
 tables with additional uniqueness constraints (the primary key is

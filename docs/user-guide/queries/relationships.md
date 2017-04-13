@@ -32,7 +32,10 @@ Using this function will let us see what SQL is executing.
 Beam supports querying for one-to-many joins. For example, to get every
 `InvoiceLine` for each `Invoice`, use the `oneToMany_` combinator.
 
+!beam-query
 ```haskell
+!chinook sqlite3
+!chinookpg postgres
 do i <- all_ (invoice chinookDb)
    ln <- oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice i
    pure (i, ln)
@@ -66,6 +69,11 @@ and
 invoiceLines (val_ i)
 ```
 
+### Nullable columns
+
+If you have a nullable foreign key in your many table, you can use
+`oneToManyOptional_` and `OneToManyOptional`, respectively. For example, 
+
 ### One-to-one
 
 One to one relationships are a special case of one to many relationships, save
@@ -73,7 +81,8 @@ for a unique constraint on one column. Thus, there are no special constructs for
 one-to-one relationships.
 
 For convenience, `oneToOne_` and `OneToOne` are equivalent to `oneToMany_` and
-`OneToMany`.
+`OneToMany`. Additionally, `oneToMaybe_` and `OneToMaybe` correspond to
+`oneToManyOptional_` and `OneToManyOptional`.
 
 ## Many-to-many
 
@@ -134,6 +143,9 @@ Under the hood `manyToMany_` is defined simply as
 manyToMany_ = fmap (\(_, left, right) -> (left, right)) manyToManyPassthrough_
 ```
 
+!!! TODO "TODO"
+    It would be nice to have a `ManyToMany` type or some equivalent.
+
 ## Arbitrary Joins
 
 Joins with arbitrary conditions can be specified using the `join_` construct.
@@ -144,9 +156,16 @@ Joins with arbitrary conditions can be specified using the `join_` construct.
 
 Left joins with arbitrary conditions can be specified with the `leftJoin_` construct.
 
+
+!!! TODO "TODO""
+    `rightJoin_` is not yet implemented
+
 Right joins are supported (albeit awkwardly) with the `rightJoin_` construct.
 
-### Outer joins
+### Full Outer joins
+
+!!! TODO "TODO"
+    `outerJoin_` not yet supported
 
 Full outer joins are supported via the `outerJoin_` construct.
 
@@ -159,18 +178,15 @@ LIMIT, you would normally have to write both queries as subqueries. In beam, you
 can write such queries as you'd expect. The library takes care of creating
 subqueries as expected.
 
-For example,
+For example, the following query generates the code you'd expect.
 
+!beam-query
 ```haskell
-do i <- limit_ 10 $ all_ (invoice chinookDb)
-   line <- limit_ 10 $ invoiceLInes_ i
+!chinook sqlite3
+!chinookpg postgres
+do (i :: _) <- limit_ 10 $ all_ (invoice chinookDb)
+   line <- invoiceLines i
    pure (i, line)
-```
-
-generates
-
-```sql
--- TODO 
 ```
 
 If you need to (for efficiency for example), you can also generate subqueries

@@ -1,0 +1,43 @@
+.code-nav-container {
+    padding: 0 0 0 0;
+    background-color: #123a54;
+    color: white;
+}
+
+.code-nav-container ul.nav-tabs {
+    list-style: none;
+    margin: 0 0 -17px 0;
+    padding: 0 0 0 5px;
+}
+
+.code-nav-container .nav-tabs .nav-item {
+    padding: 0 10px;
+    margin: 0;
+    display: inline-block;
+}
+.code-nav-container .nav-tabs .nav-item.active {
+    background-color: #fff;
+    color: black;
+}
+.code-nav-container .nav-tabs .nav-item.active a {
+    color: black;
+}
+
+.code-nav-container .nav-tabs .nav-item a {
+    color: white;
+    cursor: pointer;
+    font-size: 8pt;
+    text-transform: uppercase;
+}
+
+div.tab-content {
+    padding: 0 5px 5px 5px;
+}
+
+div.tab-content .tab-pane {
+    display: none;
+}
+
+div.tab-content .tab-pane.active {
+    display: block;
+}

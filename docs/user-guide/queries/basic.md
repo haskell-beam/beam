@@ -107,6 +107,10 @@ the last section, we can say
 all_ (persons exampleDb) :: Q syntax ExampleDb s (PersonT (QExpr s))
 ```
 
+!!! note "Note"
+    We give the full type of the query here for illustrative purposes only. There 
+    is no need to do so in your own code
+
 Two things to note. Firstly, here `PersonT` is parameterized over the `QExpr s`
 higher-kinded type. This means that each field in `PersonT` now contains a SQL
 expression instead of a Haskell value. This is the magic that our parameterized
@@ -152,6 +156,16 @@ Internally, `dumpSqlSelect` uses a `beam-core` provided syntax to generate
 standard ANSI SQL expressions. Note that these expressions should not be shipped
 to a backend directly, as they may not be escaped properly. Still, it is useful
 to see what would run.
+
+## A note on composability
+
+All beam queries are *composable*. This means that you can freely mix values of
+type `Q` in whichever way typechecks and expect a reasonable SQL query. This
+differs from the behavior of SQL, where the syntax for composing queries depends
+on the structure of that query.
+
+For example, suppose you wanted to fetch all rows of a table, filter them by a
+condition, and then limit the amount of rows returned. In beam, 
 
 ## Connecting to a database
 

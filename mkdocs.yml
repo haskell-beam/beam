@@ -1,5 +1,6 @@
 site_name: Beam Documentation
 theme: readthedocs
+theme_dir: docs/theme
 pages:
   - Home: 'index.md'
   - Frequently Asked Questions: 'about/faq.md'
@@ -8,6 +9,7 @@ pages:
       - 'Models': 'user-guide/models.md'
       - 'Databases': 'user-guide/databases.md'
       - 'Basic Queries': 'user-guide/queries/basic.md'
+      - 'More complex SELECTs': 'user-guide/queries/select.md'
       - 'Relationships': 'user-guide/queries/relationships.md'
       - 'Aggregates': 'user-guide/queries/aggregates.md'
       - 'Combining queries': 'user-guide/queries/combining-queries.md'
@@ -24,7 +26,14 @@ pages:
   - Reference:
       - 'Expressions': 'reference/expression.md'
       - 'Queries': 'reference/queries.md'
+      - 'Extending': 'reference/extensibility.md'
   - About:
       - 'Compatibility Matrix': 'about/compatibility.md'
       - 'License': 'about/license.md'
       - 'Release Notes': 'about/release-notes.md'
+markdown_extensions:
+  - admonition
+  - docs.markdown.beam_query:
+      template_dir: 'docs/beam-templates'
+      cache_dir: 'docs/.beam-query-cache'
+  - markdown_fenced_code_tabs

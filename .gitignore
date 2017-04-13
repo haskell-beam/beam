@@ -10,4 +10,5 @@ dist
 graveyard
 *.o
 *.hi
-
+*.pyc
+.beam-query-cache

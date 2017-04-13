@@ -331,6 +331,7 @@ withPgDebug dbg conn (Pg action) =
                            next) =
         do query <- pgRenderSyntax conn syntax
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
+           dbg (BS.unpack query)
            action <- runF process finishProcess stepProcess Nothing
            case action of
              PgStreamDone (Right x) -> Pg.execute_ conn (fromString (BS.unpack query)) >> next x

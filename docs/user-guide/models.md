@@ -41,8 +41,9 @@ instance Table PersonT where
   primaryKey person = PersonKey (personFirstName person) (personLastName person)
 ```
 
-*Note*: Using the first and last name as a primary key is a bad idea, we use it
-here to illustrate using multiple fields as the primary key.
+!!! note "Note"
+    Using the first and last name as a primary key is a bad idea, we use it here
+    to illustrate using multiple fields as the primary key.
 
 For ease-of-use purposes we define some type synonyms for `PersonT` and
 `PrimaryKey PersonT` and some convenient instances. These are not strictly

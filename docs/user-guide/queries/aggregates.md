@@ -21,11 +21,11 @@ expressions as usual.
 
 Suppose we wanted to count the number of genres in our database.
 
+!beam-query
 ```haskell
+!chinook sqlite3
+!chinookpg postgres
 aggregate_ (\_ -> countAll_) (all_ (genre chinookDb))
--- Translates to (sqlite syntax):
---
--- SELECT COUNT(*) AS [res0] FROM [Genre] AS [t0]
 ```
 
 ### Adding a GROUP BY clause
@@ -35,10 +35,16 @@ also specify columns and expressions to group by. For example, if we wanted to
 count the number of tracks for each genre, we can use the `group_` function to
 group by the genre.
 
+!beam-query
 ```haskell
-aggregate_ (\(genre, track) -> (group_ genre, count_ (trackId track)))
+!chinook sqlite3
+!chinookpg postgres
+aggregate_ (\(genre, track) -> (group_ genre, as_ @Int $ count_ (trackId track)))
            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
 ```
+
+!!! tip "Tip"
+    `count_` can return any `Integral` type. Adding the explicit `as_ @Int` above prevents an ambiguous type error.
 
 ## SQL compatibility
 
@@ -58,6 +64,17 @@ each aggregate is obtained by using the `allInGroup_` quantifier. Thus, `sum_ ==
 sumOver_ allInGroup_`. Because `ALL` is the default set quantifier, beam does
 not typically generate it in queries. If, for some reason, you would like beam
 to be explicit about it, you can use the `allInGroupExplicitly_` quantifier.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+aggregate_ (\(genre, track) ->
+              ( group_ genre
+              , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+              , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+           ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
+```
 
 The `beam-core` library supports the standard SQL aggregation functions.
 Individual backends are likely to support the full range of aggregates available
