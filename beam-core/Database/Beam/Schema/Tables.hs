@@ -25,7 +25,7 @@ module Database.Beam.Schema.Tables
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
-    , Columnar, Columnar'(..)
+    , Columnar, C, Columnar'(..)
     , Nullable, TableField(..)
     , Exposed(..)
     , fieldName
@@ -260,6 +260,9 @@ type family Columnar (f :: * -> *) x where
 
     Columnar f x = f x
 
+-- | A short type-alias for 'Columnar'. May shorten yopr schema definitions
+type C f a = Columnar f a
+
 newtype Columnar' f a = Columnar' (Columnar f a)
 
 -- | Metadata for a field of type 'ty' in 'table'.
@@ -314,8 +317,7 @@ type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed)) (Rep (
 --
 --   The kind of all table types is `(* -> *) -> *`. This is because all table types are actually /table type constructors/.
 --   Every table type takes in another type constructor, called the /column tag/, and uses that constructor to instantiate the column types.
---   See the documentation for 'Columnar'. In order for the default deriving to work, every type passed into 'Columnar' must be an instance
---   of 'FieldSchema'.
+--   See the documentation for 'Columnar'.
 --
 --   This class is mostly Generic-derivable. You need only specify a type for the table's primary key and a method to extract the primary key
 --   given the table.
