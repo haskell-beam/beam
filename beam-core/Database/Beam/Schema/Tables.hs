@@ -58,7 +58,7 @@ import qualified Data.Text as T
 import           Data.Typeable
 
 import qualified GHC.Generics as Generic
-import           GHC.Generics hiding (R)
+import           GHC.Generics hiding (R, C)
 import           GHC.TypeLits
 import           GHC.Types
 
