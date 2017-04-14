@@ -146,6 +146,9 @@ instance FromBackendRow be x => FromBackendRow be (Maybe x) where
     do isNull <- checkNextNNull (valuesNeeded (Proxy @be) (Proxy @(Maybe x)))
        if isNull then pure Nothing else Just <$> fromBackendRow
   valuesNeeded be _ = valuesNeeded be (Proxy @x)
+instance (BeamBackend be, FromBackendRow be (Maybe x)) => FromBackendRow be (Auto x) where
+  fromBackendRow = Auto <$> fromBackendRow
+  valuesNeeded be _ = valuesNeeded be (Proxy @(Maybe x))
 
 -- * MonadBeam class
 
