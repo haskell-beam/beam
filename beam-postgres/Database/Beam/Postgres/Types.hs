@@ -60,6 +60,7 @@ instance Pg.ToField SqlNull where
   toField _ = Pg.toField Pg.Null
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
+instance Pg.FromField a => FromBackendRow Postgres (Auto a)
 instance FromBackendRow Postgres SqlNull
 instance FromBackendRow Postgres Bool
 instance FromBackendRow Postgres Char
