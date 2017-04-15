@@ -300,7 +300,6 @@ joinHaving =
                                        all_ (_employees employeeDbSettings)
           role <- all_ (_roles employeeDbSettings)
           pure (age, maxFirstNameLength, _roleName role)
-     putStrLn ("where " ++ show selectWhere)
 
      Just (InnerJoin
             (FromTable (TableFromSubSelect subselect) (Just t0))
