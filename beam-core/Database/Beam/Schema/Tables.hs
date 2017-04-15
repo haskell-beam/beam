@@ -25,7 +25,7 @@ module Database.Beam.Schema.Tables
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
-    , Columnar, Database.Beam.Schema.Tables.C, Columnar'(..)
+    , Columnar, C, Columnar'(..)
     , Nullable, TableField(..)
     , Exposed(..)
     , fieldName
