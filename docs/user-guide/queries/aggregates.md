@@ -44,7 +44,8 @@ aggregate_ (\(genre, track) -> (group_ genre, as_ @Int $ count_ (trackId track))
 ```
 
 !!! tip "Tip"
-    `count_` can return any `Integral` type. Adding the explicit `as_ @Int` above prevents an ambiguous type error.
+    `count_` can return any `Integral` type. Adding the explicit `as_ @Int` above 
+    prevents an ambiguous type error.
 
 ## SQL compatibility
 
@@ -92,3 +93,63 @@ on that backend (if not, please send a bug report).
 | EVERY(x)            | SQL99             | `every_`                     | `everyOver_`               |
 | ANY(x)/SOME(x)      | SQL99             | `any_`, `some_`              | `anyOver_`, `someOver_`    |
 
+### The `HAVING` clause
+
+SQL allows users to specify a `HAVING` condition to filter results based on the
+computed result of an aggregate. Beam fully supports `HAVIVG` clauses, but does
+not use any special syntax. Simply use `filter_` or `guard_` as usual, and beam
+will add a `HAVING` clause if it forms legal SQL. Otherwise, beam will create a
+subselect and add a `WHERE` clause. Either way, this is transparent to the user.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+-- Only return results for genres whose total track length is over 5 minutes
+filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
+aggregate_ (\(genre, track) ->
+              ( group_ genre
+              , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+              , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+           ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
+```
+
+Beam will also handle the `filter_` correctly in the presence of more
+complicated queries. For example, we can now join our aggregate on genres back
+over tracks.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+-- Only return results for genres whose total track length is over 5 minutes
+filter_ (\(genre, track, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
+do (genre, priceCnt, trackLength) <-
+            aggregate_ (\(genre, track) ->
+                          ( group_ genre
+                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
+   track <- join_ (track chinookDb) (\track -> trackGenreId track ==. just_ (pk genre))
+   pure (genre, track, priceCnt, trackLength)
+```
+
+The position of `filter_` changes the code generated. Above, the `filter_`
+produced a `WHERE` clause on the outermost `SELECT`. If instead, we put the
+`filter_` clause right outside the `aggregate_`, beam will produce a `HAVING` clause instead.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+-- Only return results for genres whose total track length is over 5 minutes
+do (genre, priceCnt, trackLength) <-
+            filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
+            aggregate_ (\(genre, track) ->
+                          ( group_ genre
+                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
+   track <- join_ (track chinookDb) (\track -> trackGenreId track ==. just_ (pk genre))
+   pure (genre, track, priceCnt, trackLength)
+```
