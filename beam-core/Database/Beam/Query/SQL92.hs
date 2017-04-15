@@ -211,13 +211,15 @@ buildSql92Query (Q q) =
                   _ -> let (proj', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb proj)
                        in SelectBuilderQ proj' qb
             Nothing ->
-              let qb = case sb of
+              let (_, having) = tryCollectHaving (next aggProj) Nothing
+                  (next', _) = tryCollectHaving (next x') Nothing
+                  qb = case sb of
                     SelectBuilderQ _ q'' -> q''
                     _ -> let (_, qb''') = selectBuilderToQueryBuilder sb
                          in qb'''
                   (x', qb') = selectBuilderToQueryBuilder $
-                              SelectBuilderGrouping aggProj qb groupingSyntax Nothing
-              in buildJoinedQuery (next x') qb'
+                              SelectBuilderGrouping aggProj qb groupingSyntax having
+              in buildJoinedQuery next' qb'
 
     buildQuery (Free (QOrderBy mkOrdering q' next)) =
         let sb = buildQuery (fromF q')
@@ -290,9 +292,17 @@ buildSql92Query (Q q) =
                           Free (QF select db s) x
                        -> Maybe (Sql92SelectExpressionSyntax select)
                        -> Maybe (x, Maybe (Sql92SelectExpressionSyntax select))
-    tryBuildGuardsOnly (Pure x) having = Just (x, having)
-    tryBuildGuardsOnly (Free (QGuard cond next)) having = tryBuildGuardsOnly next (andE' having (Just cond))
-    tryBuildGuardsOnly _ _ = Nothing
+    tryBuildGuardsOnly next having =
+      case tryCollectHaving next having of
+        (Pure x, having') -> Just (x, having')
+        _ -> Nothing
+
+    tryCollectHaving :: forall s x.
+                        Free (QF select db s) x
+                     -> Maybe (Sql92SelectExpressionSyntax select)
+                     -> (Free (QF select db s) x, Maybe (Sql92SelectExpressionSyntax select))
+    tryCollectHaving (Free (QGuard cond next)) having = tryCollectHaving next (andE' having (Just cond))
+    tryCollectHaving next having = (next, having)
 
     buildTableCombination ::
       forall s x r.

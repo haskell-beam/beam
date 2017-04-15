@@ -28,6 +28,9 @@ tests = testGroup "SQL generation tests"
                   , selfJoin
                   , leftJoin
                   , aggregates
+
+                  , joinHaving
+
                   , maybeFieldTypes
 
                   , tableEquality
@@ -282,6 +285,43 @@ aggregates =
          selectWhere @?= Nothing
          selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
          selectHaving @?= Nothing
+
+-- * HAVING clause should not be floated out of a join
+
+joinHaving :: TestTree
+joinHaving =
+  testCase "HAVING clause should not be floated out of a join" $
+  do SqlSelect Select { selectTable = SelectTable { .. }
+                      , selectLimit = Nothing, selectOffset = Nothing
+                      , selectOrdering = [] } <-
+       pure $ select $
+       do (age, maxFirstNameLength) <- filter_ (\(_, nameLength) -> nameLength >=. 20) $
+                                       aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+                                       all_ (_employees employeeDbSettings)
+          role <- all_ (_roles employeeDbSettings)
+          pure (age, maxFirstNameLength, _roleName role)
+     putStrLn ("where " ++ show selectWhere)
+
+     Just (InnerJoin
+            (FromTable (TableFromSubSelect subselect) (Just t0))
+            (FromTable (TableNamed "roles") (Just t1))
+            Nothing) <- pure selectFrom
+     selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t0 "res0"), Just "res0")
+                                    , (ExpressionFieldName (QualifiedField t0 "res1"), Just "res1")
+                                    , (ExpressionFieldName (QualifiedField t1 "name"), Just "res2") ]
+     selectWhere @?= Nothing
+     selectGrouping @?= Nothing
+     selectHaving @?= Nothing
+
+     Select { selectTable = SelectTable { .. }
+            , selectLimit = Nothing, selectOffset = Nothing
+            , selectOrdering = [] } <- pure subselect
+     Just (FromTable (TableNamed "employees") (Just t0)) <- pure selectFrom
+     selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t0 "age"), Just "res0")
+                                    , (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))], Just "res1") ]
+     selectWhere @?= Nothing
+     selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
+     selectHaving @?= Just (ExpressionCompOp ">=" Nothing (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))]) (ExpressionValue (Value (20 :: Int))))
 
 -- * Ensure that isJustE and isNothingE work correctly for simple types
 

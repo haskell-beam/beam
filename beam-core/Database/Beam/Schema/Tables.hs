@@ -25,7 +25,7 @@ module Database.Beam.Schema.Tables
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
-    , Columnar, C, Columnar'(..)
+    , Columnar, Database.Beam.Schema.Tables.C, Columnar'(..)
     , Nullable, TableField(..)
     , Exposed(..)
     , fieldName
@@ -322,10 +322,6 @@ type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed)) (Rep (
 --   This class is mostly Generic-derivable. You need only specify a type for the table's primary key and a method to extract the primary key
 --   given the table.
 --
---   Even though all methods are derivable, you are free to override them. Typically, you may want to override 'tblFieldSettings' if you want
---   to specify options for column storage or to rename columns. See 'TableField' for more information. You may want to use 'tableConfigLenses'
---   to simplify accessing 'tblFieldSettings'.
---
 --   An example table:
 --
 -- > data BlogPostT f = BlogPost
@@ -386,6 +382,7 @@ allBeamValues (f :: forall a. Columnar' f a -> b) (tbl :: table f) =
 changeBeamRep :: Beamable table => (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
 changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl)
 
+-- Carry a constraint instanc
 data WithConstraint (c :: * -> Constraint) x where
   WithConstraint :: c x => x -> WithConstraint c x
 
