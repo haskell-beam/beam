@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Database.Beam.Migrate.Tool
   ( module Database.Beam.Migrate.Tool.Types
@@ -9,8 +10,14 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Tool.Schema hiding (migration)
 import           Database.Beam.Migrate.Types ( MigrationStep(..), MigrationF(..), Migration
-                                             , MigrationSteps, stepNames
-                                             , migrationStepsToMigration )
+                                             , MigrationSteps, SomeDatabasePredicate(..)
+                                             , DatabasePredicate(..)
+
+                                             , stepNames
+                                             , migrationStepsToMigration
+                                             , collectChecks )
+import           Database.Beam.Migrate.Diff
+import           Database.Beam.Migrate.Resolvers
 
 import           Database.Beam.Migrate.Tool.Types
 
@@ -44,12 +51,11 @@ runMigrationSteps renderSyntax steps =
              next
 
 writeMigrationsTable :: IsSql92DdlCommandSyntax cmdSyntax =>
-                        BeamMigrationBackend cmdSyntax beOptions -> beOptions -> IO ()
+                        BeamMigrationBackend be cmdSyntax beOptions -> beOptions -> IO ()
 writeMigrationsTable BeamMigrationBackend {..} opts =
   void $
   migrationStepsToMigration 0 Nothing migrationToolSchemaMigration
     (\nm -> smartTransact . smartTransact . backendTransact opts . runMigrationSteps backendRenderSyntax)
-
 
 -- * Tool entry point
 
@@ -64,7 +70,7 @@ smartTransact runTransact =
 calcMigrationStatus :: ( IsSql92DdlCommandSyntax cmdSyntax
                        , IsSql92Syntax cmdSyntax
                        , Sql92SanityCheck cmdSyntax)
-                    => BeamMigrationBackend cmdSyntax options -> options
+                    => BeamMigrationBackend be cmdSyntax options -> options
                     -> MigrationSteps cmdSyntax () () -> IO MigrationsStatus
 calcMigrationStatus BeamMigrationBackend {..} beOptions steps =
   do let allMigrationNames = stepNames steps
@@ -77,10 +83,13 @@ calcMigrationStatus BeamMigrationBackend {..} beOptions steps =
 
      pure (migrationStatus 0 allMigrationNames alreadyRun)
 
-invokeMigrationTool :: (IsSql92DdlCommandSyntax cmdSyntax, IsSql92Syntax cmdSyntax, Sql92SanityCheck cmdSyntax ) =>
-                       BeamMigrationBackend cmdSyntax beOptions -> BeamMigrationCommand beOptions
-                    -> BeamMigrationSubcommand -> MigrationSteps cmdSyntax () () -> IO ()
-invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  subcommand steps =
+invokeMigrationTool :: forall cmdSyntax be beOptions.
+                       (IsSql92DdlCommandSyntax cmdSyntax, IsSql92Syntax cmdSyntax, Sql92SanityCheck cmdSyntax ) =>
+                       BeamMigrationBackend be cmdSyntax beOptions -> BeamMigrationCommand beOptions
+                    -> BeamMigrationSubcommand -> MigrationSteps cmdSyntax () ()
+                    -> SomeCheckedDatabase be
+                    -> IO ()
+invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  subcommand steps (SomeCheckedDatabase db) =
   case subcommand of
     ListMigrations ->
       do putStrLn "Registered migrations:"
@@ -159,6 +168,48 @@ invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  su
                            pure res)
 
          pure ()
+
+    Diff direction ->
+      do dbConstraints <- backendGetDbConstraints migrationCommandBackendOptions
+         let schemaConstraints = collectChecks db
+             resolvers = [ trivialSolver ]
+         putStrLn ("GOing from " <> show direction)
+         let schemaDiff =
+               case direction of
+                 DiffDbToMigration -> diff resolvers dbConstraints schemaConstraints
+                 DiffMigrationToDb -> diff resolvers schemaConstraints dbConstraints
+
+         -- putStrLn "This is what our schema expected"
+         -- forM_ schemaConstraints $ \(SomeDatabasePredicate p) ->
+         --   putStrLn ("  - " <> englishDescription p)
+
+         putStrLn "These are our goal constraints (what we will try to make true):"
+         forM_ (diffGoalTrue schemaDiff) $ \(SomeDatabasePredicate p) ->
+           putStrLn ("  - " <> englishDescription p)
+         putStrLn "\nThese are the constraints we will try to make false:"
+         forM_ (diffGoalFalse schemaDiff) $ \(SomeDatabasePredicate p) ->
+           putStrLn ("  - " <> englishDescription p)
+
+         -- First falsify everything, then make everything true
+         res <-
+           orderGoals (diffGoalFalse schemaDiff) $ \roots preds ->
+           do putStrLn "Going to resolve any one of"
+              forM_ roots $ \(_, SomeDatabasePredicate root) ->
+                putStrLn ("  - " <> englishDescription root)
+              putStrLn "\nWith context"
+              forM_ preds $ \(_, SomeDatabasePredicate pred) ->
+                putStrLn ("  - " <> englishDescription pred)
+
+              runResolver (makeTrueResolver @(Sql92DdlCommandColumnSchemaSyntax cmdSyntax)) roots preds
+
+         putStrLn "The actions would be"
+         forM_ res $ \step ->
+           putStrLn ("  - " ++ step)
+
+         pure ()
+
+         -- Try to order the goals
+         --V.fromList (diffGoalTrue schemaDiff)
 
 --    Up ->
 --      do ensureMigrationsTable

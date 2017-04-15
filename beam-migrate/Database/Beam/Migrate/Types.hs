@@ -8,6 +8,8 @@ import Database.Beam
 
 import Control.Monad.Free.Church
 import Control.Monad.Identity
+import Control.Monad.Writer
+import Control.Monad.State
 import Control.Arrow
 import Control.Category (Category)
 
@@ -15,6 +17,7 @@ import Data.Functor
 import Data.Monoid
 import Data.Text (Text)
 import Data.Proxy
+import Data.Typeable
 
 -- * Migration types
 
@@ -88,14 +91,34 @@ stepNames (MigrationSteps f) = runF (runKleisli f ()) (\_ x -> x) (\(MigrationSt
 
 -- * Checked database entities
 
-data DatabaseCheck
-data TableCheck = TableFieldCheck Text FieldCheck deriving (Show, Eq)
-data FieldCheck = FieldCheck deriving (Show, Eq)
+class (Show p, Typeable p, Eq p) => DatabasePredicate p where
+  englishDescription :: p -> String
+  dependencies :: p -> [SomeDatabasePredicate]
+  dependencies _ = []
+
+data SomeDatabasePredicate where
+  SomeDatabasePredicate :: DatabasePredicate p =>
+                           p -> SomeDatabasePredicate
+instance Show SomeDatabasePredicate where
+  showsPrec _ (SomeDatabasePredicate p) =
+    showParen True $
+    shows p .
+    showString " :: " .
+    shows (typeOf p)
+instance Eq SomeDatabasePredicate where
+  SomeDatabasePredicate a == SomeDatabasePredicate b =
+    case cast a of
+      Nothing -> False
+      Just a' -> a' == b
+
+newtype TableCheck = TableCheck (Text -> SomeDatabasePredicate)
+newtype FieldCheck = FieldCheck (Text -> Text -> SomeDatabasePredicate)
 
 class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
   data CheckedDatabaseEntityDescriptor be entity :: *
 
   unCheck :: CheckedDatabaseEntityDescriptor be entity -> DatabaseEntityDescriptor be entity
+  collectEntityChecks :: CheckedDatabaseEntityDescriptor be entity -> [ SomeDatabasePredicate ]
 
 instance IsCheckedDatabaseEntity be (TableEntity tbl) where
   data CheckedDatabaseEntityDescriptor be (TableEntity tbl) where
@@ -103,14 +126,25 @@ instance IsCheckedDatabaseEntity be (TableEntity tbl) where
                          -> [ TableCheck ] -> CheckedDatabaseEntityDescriptor be (TableEntity tbl)
 
   unCheck (CheckedDatabaseTable x _) = x
+  collectEntityChecks (CheckedDatabaseTable (DatabaseTable tbl _) tblChecks) =
+    map (\(TableCheck mkCheck) -> mkCheck tbl) tblChecks
 
 data CheckedDatabaseEntity be (db :: (* -> *) -> *) entityType where
   CheckedDatabaseEntity :: IsCheckedDatabaseEntity be entityType
                         => CheckedDatabaseEntityDescriptor be entityType
-                        -> [ DatabaseCheck ]
+                        -> [ SomeDatabasePredicate ]
                         -> CheckedDatabaseEntity be db entityType
 
 type CheckedDatabaseSettings be db = db (CheckedDatabaseEntity be db)
 
 unCheckDatabase :: forall be db. Database db => CheckedDatabaseSettings be db -> DatabaseSettings be db
 unCheckDatabase db = runIdentity $ zipTables (Proxy @be) (\(CheckedDatabaseEntity x _) _ -> pure $ DatabaseEntity (unCheck x)) db db
+
+collectChecks :: forall be db. Database db => CheckedDatabaseSettings be db -> [ SomeDatabasePredicate ]
+collectChecks db = let x :: CheckedDatabaseSettings be db
+                       (x, a) = runWriter $ zipTables (Proxy @be) 
+                                  (\(CheckedDatabaseEntity entity cs :: CheckedDatabaseEntity be db entityType) b ->
+                                     do tell (collectEntityChecks entity)
+                                        tell cs
+                                        pure b) db db
+                   in a

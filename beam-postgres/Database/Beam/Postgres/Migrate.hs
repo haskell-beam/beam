@@ -6,7 +6,9 @@
 
 module Database.Beam.Postgres.Migrate where
 
+import           Database.Beam.Backend.SQL.SQL92
 import           Database.Beam.Backend.Types
+import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
 import qualified Database.Beam.Migrate.Tool as Tool
 import qualified Database.Beam.Migrate.Types as Db
@@ -16,9 +18,12 @@ import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 
 import qualified Database.PostgreSQL.Simple as Pg
+import qualified Database.PostgreSQL.Simple.Types as Pg
+import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 
 import           Control.Arrow
 import           Control.Exception (bracket)
+import           Control.Monad
 import           Control.Monad.Free.Church
 import           Control.Monad.Reader (ask)
 import           Control.Monad.State (put)
@@ -65,9 +70,10 @@ beConnectInfo opts = Pg.defaultConnectInfo { connectHost = pgMigrateHost opts
                                            , connectUser = pgMigrateUser opts
                                            , connectDatabase = pgMigrateDatabase opts }
 
-migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax PgMigrateOpts
-migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts Proxy
+migrationBackend :: Tool.BeamMigrationBackend Postgres PgCommandSyntax PgMigrateOpts
+migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts
                         (BL.concat . migrateScript)
+                        (\options -> Pg.connect (beConnectInfo options) >>= getDbConstraints)
                         (BCL.unpack . pgRenderSyntaxScript . fromPgCommand)
                         (\beOptions action -> do
                             bracket (Pg.connect (beConnectInfo beOptions)) Pg.close $ \conn ->
@@ -116,19 +122,40 @@ writeMigrationScript fp steps =
   let stepBs = migrateScript steps
   in BL.writeFile fp (BL.concat stepBs)
 
+-- * Create constraints from a connection
+
+getDbConstraints :: Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
+getDbConstraints conn =
+  do tbls <- Pg.query_ conn "SELECT oid, relname FROM pg_catalog.pg_class where relnamespace=(select oid from pg_catalog.pg_namespace where nspname='public') and relkind='r'"
+     let tblsExist = map (\(_, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate tbl)) tbls
+
+     columnChecks <-
+       fmap mconcat . forM tbls $ \(oid, tbl) ->
+       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, typname FROM pg_catalog.pg_attribute att JOIN pg_catalog.pg_type type ON type.oid=att.atttypid WHERE att.attrelid=? AND att.attnum>0"
+                       (Pg.Only (oid :: Pg.Oid))
+          let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, typ :: T.Text) ->
+                                    let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
+                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm (PgDataTypeSyntax (PgDataTypeDescrOid typId typmod') (emit "")) :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
+
+          pure columnChecks
+
+     pure (tblsExist ++ columnChecks)
+
+-- * Data types
+
 tsquery :: Db.DataType PgDataTypeSyntax TsQuery
-tsquery = Db.DataType (PgDataTypeSyntax (emit "tsquery"))
+tsquery = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsqueryType) Nothing) (emit "tsquery"))
 
 tsvector :: Db.DataType PgDataTypeSyntax TsVector
-tsvector = Db.DataType (PgDataTypeSyntax (emit "tsvector"))
+tsvector = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsvectorType) Nothing) (emit "tsvector"))
 
 smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax a
-smallserial = Db.DataType (PgDataTypeSyntax (emit "SMALLSERIAL"))
-serial = Db.DataType (PgDataTypeSyntax (emit "SERIAL"))
-bigserial = Db.DataType (PgDataTypeSyntax (emit "BIGSERIAL"))
+smallserial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL"))
+serial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL"))
+bigserial = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL"))
 
 text :: Db.DataType PgDataTypeSyntax T.Text
-text = Db.DataType (PgDataTypeSyntax (emit "TEXT"))
+text = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.text) Nothing) (emit "TEXT"))
 
 boolean :: Db.DataType PgDataTypeSyntax a
 boolean = Db.DataType pgBooleanType
@@ -138,5 +165,5 @@ bytea = Db.DataType pgByteaType
 
 array :: Maybe Int -> Db.DataType PgDataTypeSyntax a
       -> Db.DataType PgDataTypeSyntax (V.Vector a)
-array Nothing (Db.DataType (PgDataTypeSyntax syntax)) = Db.DataType (PgDataTypeSyntax (syntax <> emit "[]"))
-array (Just sz) (Db.DataType (PgDataTypeSyntax syntax)) = Db.DataType (PgDataTypeSyntax (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
+array Nothing (Db.DataType (PgDataTypeSyntax a syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]"))
+array (Just sz) (Db.DataType (PgDataTypeSyntax a syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
