@@ -220,7 +220,7 @@ type PlaylistTrack = PlaylistTrackT Identity; deriving instance Show PlaylistTra
 instance Table PlaylistTrackT where
   data PrimaryKey PlaylistTrackT f = PlaylistTrackId (PrimaryKey PlaylistT f) (PrimaryKey TrackT f)
     deriving Generic
-  primaryKey (PlaylistTrack playlist track) = PlaylistTrackId playlist track
+  primaryKey = PlaylistTrackId <$> playlistTrackPlaylistId <*> playlistTrackTrackId
 instance Beamable (PrimaryKey PlaylistTrackT)
 type PlaylistTrackId = PrimaryKey PlaylistTrackT Identity; deriving instance Show PlaylistTrackId
 
