@@ -62,13 +62,13 @@ main = do
            interpret "SomeBeamMigrationBackend migrationBackend" (undefined :: SomeBeamMigrationBackend)
          case res of
            Left err -> hPutStrLn stderr ("Plugin load error: " ++ show err)
-           Right (SomeBeamMigrationBackend be@(BeamMigrationBackend {..} :: BeamMigrationBackend cmdSyntax beOptions)) ->
+           Right (SomeBeamMigrationBackend be@(BeamMigrationBackend { ..} :: BeamMigrationBackend be cmdSyntax beOptions)) ->
              do let withBackendInfo = migrationCommandAndSubcommandOptions backendOptsParser
                 (opts, subcommand) <- execParser withBackendInfo
                 case (migrationCommandMigrationModule, subcommand) of
                   (Just migrationCommandMigrationModule, Just subcommand) ->
                     do putStrLn "Loading migration from migrations directory..."
-                       migration <- runInterpreter' $ do
+                       res <- runInterpreter' $ do
                          reset
                          set [ languageExtensions := [ TypeFamilies, GADTs, RankNTypes, FlexibleInstances, FlexibleContexts, DeriveGeneric
                                                      , ScopedTypeVariables, MultiParamTypeClasses, OverloadedStrings ] ]
@@ -78,16 +78,18 @@ main = do
                                     , "Database.Beam.Migrate.Tool"
                                     , migrationCommandBackend ]
                          setTopLevelModules [ migrationCommandMigrationModule ]
-                         interpret "toDyn (eraseMigrationType () migration)" (undefined :: Dynamic)
-                       case migration of
+                         migration <- interpret "toDyn (eraseMigrationType () migration)" (undefined :: Dynamic)
+                         checkedDb <- interpret "SomeCheckedDatabase (evaluateDatabase migration)" (undefined :: SomeCheckedDatabase be)
+                         pure (migration, checkedDb)
+                       case res of
                          Left err -> do hPutStrLn stderr "Plugin error: could not load migrations: "
                                         case err of
                                           WontCompile errs -> mapM_ (hPutStrLn stderr . errMsg) errs
                                           _ -> hPutStrLn stderr (show err)
-                         Right migration ->
-                           case fromDynamic migration of
+                         Right (migration, checkedDb) ->
+                           case (,) <$> fromDynamic migration <*> pure checkedDb of
                              Nothing -> hPutStrLn stderr "Migration did not have correct type"
-                             Just (migration :: MigrationSteps cmdSyntax () ()) ->
-                               invokeMigrationTool be opts subcommand migration
+                             Just (migration :: MigrationSteps cmdSyntax () (), checkedDb :: SomeCheckedDatabase be) ->
+                               invokeMigrationTool be opts subcommand migration checkedDb
                   (Nothing, _) -> showUsage (Left ("No migration module supplied", ExitFailure 1)) withBackendInfo
                   (_, Nothing) -> showUsage (Left ("Please specify a command", ExitFailure 1)) withBackendInfo
