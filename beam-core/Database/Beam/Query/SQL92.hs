@@ -208,8 +208,14 @@ buildSql92Query (Q q) =
             Just (proj, having) ->
                 case sb of
                   SelectBuilderQ _ q'' -> SelectBuilderGrouping proj q'' groupingSyntax having
-                  _ -> let (proj', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb proj)
-                       in SelectBuilderQ proj' qb
+
+                  -- We'll have to generate a subselect
+                  _ -> let (subProj, qb) = selectBuilderToQueryBuilder sb --(setSelectBuilderProjection sb aggProj)
+                           (groupingSyntax, aggProj') = mkAgg subProj
+                       in case tryBuildGuardsOnly (next aggProj') Nothing of
+                            Nothing -> error "buildQuery (Free (QAggregate ...)): Impossible"
+                            Just (aggProj'', having') ->
+                              SelectBuilderGrouping aggProj'' qb groupingSyntax having'
             Nothing ->
               let (_, having) = tryCollectHaving (next aggProj) Nothing
                   (next', _) = tryCollectHaving (next x') Nothing
@@ -226,7 +232,26 @@ buildSql92Query (Q q) =
             proj = sbProj sb
             ordering = mkOrdering proj
 
-            doJoined = error "TODO: QOrderBy: doJoined"
+            doJoined =
+                let sb' = case sb of
+                            SelectBuilderQ {} ->
+                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb reproj)
+                            SelectBuilderGrouping {} ->
+                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb reproj)
+                            SelectBuilderSelectSyntax {} ->
+                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb reproj)
+                            SelectBuilderTopLevel Nothing Nothing [] sb' ->
+                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb' reproj)
+                            SelectBuilderTopLevel (Just 0) (Just 0) [] sb' ->
+                                SelectBuilderTopLevel (Just 0) (Just 0) ordering (setSelectBuilderProjection sb' reproj)
+                            SelectBuilderTopLevel {}
+                                | (proj'', qb) <- selectBuilderToQueryBuilder sb ->
+                                    SelectBuilderTopLevel Nothing Nothing (mkOrdering proj'') (SelectBuilderQ proj'' qb)
+                                | otherwise -> error "buildQuery (Free (QOrderBy ...)): query inspected expression"
+
+                    (reproj, _) = selectBuilderToQueryBuilder sb
+                    (joinedProj, qb) = selectBuilderToQueryBuilder sb'
+                in buildJoinedQuery (next joinedProj) qb
         in case next proj of
              Pure proj' ->
                case ordering of
@@ -239,13 +264,15 @@ buildSql92Query (Q q) =
                            SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj')
                        SelectBuilderSelectSyntax {} ->
                            SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj')
-                       SelectBuilderTopLevel limit offset [] sb' ->
-                           SelectBuilderTopLevel limit offset ordering (setSelectBuilderProjection sb' proj')
+                       SelectBuilderTopLevel Nothing Nothing [] sb' ->
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb' proj')
+                       SelectBuilderTopLevel (Just 0) (Just 0) [] sb' ->
+                           SelectBuilderTopLevel (Just 0) (Just 0) ordering (setSelectBuilderProjection sb' proj')
                        SelectBuilderTopLevel {}
                            | (proj'', qb) <- selectBuilderToQueryBuilder sb,
                              Pure proj''' <- next proj'' ->
                                SelectBuilderTopLevel Nothing Nothing (mkOrdering proj'') (SelectBuilderQ proj''' qb)
-                           | otherwise -> doJoined
+                           | otherwise -> error "buildQuery (Free (QOrderBy ...)): query inspected expression"
              _ -> doJoined
 
     buildQuery (Free (QWindowOver mkWindows mkProjection q' next)) =

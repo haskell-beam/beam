@@ -17,7 +17,6 @@ build-type:          Simple
 cabal-version:       >=1.18
 bug-reports:         https://github.com/tathougies/beam/issues
 
-
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
                        Database.Beam.Query
@@ -45,6 +44,8 @@ library
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications, TypeFamilyDependencies
+--  if flag(hpc)
+  ghc-options: -fhpc
 
 test-suite beam-core-tests
   type: exitcode-stdio-1.0
@@ -56,6 +57,8 @@ test-suite beam-core-tests
   default-extensions: OverloadedStrings, FlexibleInstances, FlexibleContexts, GADTs, TypeFamilies,
                       DeriveGeneric, DefaultSignatures, RankNTypes, StandaloneDeriving, KindSignatures,
                       TypeApplications, ScopedTypeVariables, MultiParamTypeClasses
+--  if flag (hpc)
+  ghc-options: -fhpc
 
 source-repository head
   type: git

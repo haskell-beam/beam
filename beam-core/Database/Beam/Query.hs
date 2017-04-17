@@ -16,6 +16,7 @@ module Database.Beam.Query
     , runInsert
 
     , SqlInsertValues(..)
+    , insertExpressions
     , insertValues
     , insertFrom
 
@@ -24,7 +25,8 @@ module Database.Beam.Query
     , runUpdate
 
     , SqlDelete(..)
-    , delete ) where
+    , delete
+    , runDelete ) where
 
 import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
@@ -86,15 +88,26 @@ runInsert (SqlInsert insert) = runNoReturn (insertCmd insert)
 newtype SqlInsertValues insertValues (tbl :: (* -> *) -> *)
     = SqlInsertValues insertValues
 
+insertExpressions ::
+    forall syntax table.
+    ( Beamable table
+    , IsSql92InsertValuesSyntax syntax ) =>
+    (forall s. [ table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ]) ->
+    SqlInsertValues syntax table
+insertExpressions tbls =
+    SqlInsertValues $
+    insertSqlExpressions (map mkSqlExprs tbls)
+    where
+      mkSqlExprs :: forall s. table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) -> [Sql92InsertValuesExpressionSyntax syntax]
+      mkSqlExprs = allBeamValues (\(Columnar' (QExpr x)) -> x)
+
 insertValues ::
+    forall table syntax.
     ( Beamable table
     , IsSql92InsertValuesSyntax syntax
-    , exprSyntax ~ Sql92InsertValuesExpressionSyntax syntax
-    , IsSql92ExpressionSyntax exprSyntax
-    , valueSyntax ~ Sql92ExpressionValueSyntax exprSyntax
-    , MakeSqlLiterals valueSyntax table ) =>
+    , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax syntax))) table) =>
     [ table Identity ] -> SqlInsertValues syntax table
-insertValues = SqlInsertValues . insertValuesGeneric
+insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ])
 
 insertFrom ::
     IsSql92InsertValuesSyntax syntax =>
@@ -137,147 +150,6 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
   where
     QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (fieldE (unqualifiedField name)))) tblSettings)
 
-
-
---delete :: blah
-
--- runSQL' :: (BeamBackend be, MonadIO m) => Bool -> Beam be d m -> SQLCommand be -> m (Either String (IO (Maybe [BeamBackendValue be])))
--- runSQL' debug beam cmd =
---   do let (sql, vals) = ppSQL cmd
---      when debug (liftIO (putStrLn ("Will execute " ++ sql ++ " with " ++ show vals)))
---      beamExecute beam sql vals
-
--- * Data insertion, updating, and deletion
-
--- insertToSQL :: (Table table, BeamBackend be, MakeBackendLiterals be table) => T.Text -> table Identity -> SQLInsert be
--- insertToSQL name (table :: table Identity) = fix $ \(_ :: SQLInsert be ) ->
---                                              SQLInsert name
---                                                        (allBeamValues (\(Columnar' (BackendLiteral' x :: BackendLiteral' be a)) -> SQLValue x)
---                                                                       (makeBackendLiterals table))
-
--- runInsert :: (MonadIO m, Table table, FromSqlValues be (table Identity), BeamBackend be, MakeSqlValues be table)
---              => DatabaseTable be d table -> table Identity -> Beam be d m -> m (Either String (table Identity))
--- runInsert tbl@(DatabaseTable _ tableName tblFieldSettings :: DatabaseTable be d table) (table :: table Identity) beam =
---     do let insertCmd = Insert sqlInsert :: SQLCommand be
---            sqlInsert@(SQLInsert tblName sqlValues) = insertToSQL tableName table
---        runSQL' (beamDebug beam) beam insertCmd
-
---        -- There are three possibilities here:
---        --
---        --   * we have no autoincrement keys, and so we simply have to return the
---        --     newly created QueryTable, or
---        --   * we have autoincrement keys, but all the fields marked autoincrement
---        --     were non-null. In this case, we have all the information needed to
---        --     construct the QueryTable, or
---        --   * we have autoincrement keys, and some of the fields were marked null.
---        --     In this case, we need to ask the backend for the last inserted row.
---        let tableSchema = reifyTableSchema tblFieldSettings
-
---            autosAreNull = zipWith (\(_, columnSchema) value -> csIsAuto columnSchema && value == sqlNull) tableSchema sqlValues
---            hasNullAutos = or autosAreNull
-
---        insertedValues <- if hasNullAutos
---                          then getLastInsertedRow beam tblName
---                          else return sqlValues
---        return (fromSqlValues insertedValues)
-
--- -- | Insert the given row value into the table specified by the first argument.
--- insertInto :: (MonadIO m, Functor m, Table table, FromSqlValues be (table Identity), BeamBackend be, MakeSqlValues be table) =>
---               DatabaseTable be db table -> table Identity -> BeamT be e db m (table Identity)
--- insertInto tbl data_ =
---     BeamT (\beam -> toBeamResult <$> runInsert tbl data_ beam)
-
--- updateToSQL :: (Table table, BeamSqlBackend be) => DatabaseTable be db tbl -> table (QExpr be s) -> QExpr be s Bool -> Maybe (SQLUpdate be)
--- updateToSQL (DatabaseTable _ name tblFieldSettings) (setTo :: table (QExpr be s)) where_ =
---     let setExprs = allBeamValues (\(Columnar' x) -> optimizeExpr x) setTo
---         setColumns = allBeamValues (\(Columnar' fieldS) -> _fieldName fieldS) tblFieldSettings
-
---         isInteresting columnName (SQLFieldE (SQLFieldName fName))
---             | fName == columnName = Nothing
---         isInteresting columnName newE = Just (SQLFieldName columnName, newE)
-
---         assignments = catMaybes (zipWith isInteresting setColumns setExprs)
-
---         where_' = case optimizeExpr where_ of
---                     SQLValE v | sqlValueIsTrue v -> Nothing
---                     where_' -> Just where_'
-
---     in case assignments of
---          [] -> Nothing
---          _  -> Just SQLUpdate
---                { uTableNames = [name]
---                , uAssignments = assignments
---                , uWhere = where_' }
-
--- -- | Update every entry in the given table where the third argument yields true, using the second
--- -- argument to give the new values.
--- updateWhere :: (MonadIO m, Table tbl, BeamBackend be) => DatabaseTable be db tbl -> (tbl (QExpr be s) -> tbl (QExpr be s)) -> (tbl (QExpr be s) -> QExpr be s Bool) -> BeamT be e db m ()
--- updateWhere tbl@(DatabaseTable _ name tblFieldSettings) mkAssignments mkWhere =
---     do let assignments = mkAssignments tblExprs
---            where_ = mkWhere tblExprs
-
---            tblExprs = changeBeamRep (\(Columnar' fieldS) -> Columnar' (QExpr (SQLFieldE (QField name Nothing (_fieldName fieldS))))) tblFieldSettings
-
---        case updateToSQL tbl assignments where_ of
---          Nothing -> pure () -- Assignments were empty, so do nothing
---          Just upd ->
---              let updateCmd = Update upd
---              in BeamT $ \beam ->
---                  do runSQL' (beamDebug beam) beam updateCmd
---                     pure (Success ())
-
--- -- | Use the 'PrimaryKey' of the given table entry to update the corresponding table row in the
--- -- database.
--- saveTo :: ( MonadIO m, Table tbl, BeamBackend be
---           , MakeSqlValues be (PrimaryKey tbl)
---           , MakeSqlValues be tbl )
---          => DatabaseTable be db tbl -> tbl Identity -> BeamT be e db m ()
--- saveTo tbl (newValues :: tbl Identity) =
---     updateWhere tbl (\_ -> val_ newValues) (val_ (primaryKey newValues) `references_`)
-
--- -- | Delete all entries in the given table matched by the expression
--- deleteWhere :: (MonadIO m, Table tbl, BeamBackend be) => DatabaseTable be db tbl -> (tbl (QExpr be s) -> QExpr be s Bool) -> BeamT be e db m ()
--- deleteWhere (DatabaseTable _ name tblFieldSettings) mkWhere =
---     let tblExprs = changeBeamRep (\(Columnar' fieldS) -> Columnar' (QExpr (SQLFieldE (QField name Nothing (_fieldName fieldS))))) tblFieldSettings
-
---         cmd = Delete SQLDelete
---               { dTableName = name
---               , dWhere = case optimizeExpr (mkWhere tblExprs) of
---                            SQLValE v | backendAsBool v -> Nothing
---                            where_ -> Just where_ }
---     in BeamT $ \beam ->
---         do runSQL' (beamDebug beam) beam cmd
---            pure (Success ())
-
--- -- | Delete the entry referenced by the given 'PrimaryKey' in the given table.
--- deleteFrom :: ( MonadIO m, Table tbl, BeamBackend be
---               , MakeSqlValues be (PrimaryKey tbl) )
---              => DatabaseTable be db tbl -> PrimaryKey tbl Identity -> BeamT be e db m ()
--- deleteFrom tbl pkToDelete = deleteWhere tbl (\tbl -> primaryKey tbl ==. val_ pkToDelete)
-
--- -- * BeamT actions
-
--- -- | Run the 'BeamT' action in a database transaction. On successful
--- -- completion, the transaction will be committed. Use 'throwError' to
--- -- stop the transaction and report an error.
--- beamTxn :: MonadIO m => Beam be db m -> (DatabaseSettings be db -> BeamT be e db m a) -> m (BeamResult e a)
--- beamTxn beam action = do res <- runBeamT (action (beamDbSettings beam)) beam
---                          case res of
---                            Success  x -> beamCommit beam
---                            Rollback e -> beamRollback beam
---                          return res
-
--- -- | Execute the query using 'query' and return exactly one result. The return value will be
--- -- 'Nothing' if either zero or more than one values were returned.
--- getOne :: (IsQuery q, MonadIO m, Functor m, FromSqlValues be (QExprToIdentity a), Projectible be a) => q be db () a -> BeamT be e db m (Maybe (QExprToIdentity a))
--- getOne q =
---     do let justOneSink = await >>= \x ->
---                          case x of
---                            Nothing -> return Nothing
---                            Just  x -> noMoreSink x
---            noMoreSink x = await >>= \nothing ->
---                           case nothing of
---                             Nothing -> return (Just x)
---                             Just  _ -> return Nothing
---        src <- query q
---        src $$ justOneSink
+runDelete :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
+          => SqlDelete (Sql92DeleteSyntax cmd) table -> m ()
+runDelete (SqlDelete delete) = runNoReturn (deleteCmd delete)

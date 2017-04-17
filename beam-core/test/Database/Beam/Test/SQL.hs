@@ -186,7 +186,11 @@ aggregates =
     [ basicAggregate
     , basicHaving
     , aggregateInJoin
-    , aggregateInJoinReverse ]
+    , aggregateInJoinReverse
+    , aggregateOverTopLevel
+    , filterAfterTopLevelAggregate
+    , joinTopLevelAggregate
+    , joinTopLevelAggregate2 ]
   where
     basicAggregate =
       testCase "Basic aggregate support" $
@@ -285,6 +289,114 @@ aggregates =
          selectWhere @?= Nothing
          selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
          selectHaving @?= Nothing
+
+    aggregateOverTopLevel =
+      testCase "Aggregate over top-level" $
+      do SqlSelect Select { selectTable = s@SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+           limit_ 10 (all_ (_employees employeeDbSettings))
+
+         Just (FromTable (TableFromSubSelect subselect) (Just t0)) <- pure selectFrom
+
+         selectProjection @?= ProjExprs [(ExpressionFieldName (QualifiedField t0 "res3"),Just "res0"),(ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0"))], Just "res1")]
+         selectWhere @?= Nothing
+         selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "res3")])
+         selectHaving @?= Nothing
+
+         selectLimit subselect @?= Just 10
+         selectOffset subselect @?= Nothing
+         selectOrdering subselect @?= []
+
+         SelectTable {selectFrom = Just (FromTable (TableNamed "employees") (Just t0')), .. } <-
+             pure $ selectTable subselect
+
+         selectWhere @?= Nothing
+         selectGrouping @?= Nothing
+         selectHaving @?= Nothing
+         selectProjection @?=
+            ProjExprs [ (ExpressionFieldName (QualifiedField t0' "first_name"), Just "res0")
+                      , (ExpressionFieldName (QualifiedField t0' "last_name"),  Just "res1")
+                      , (ExpressionFieldName (QualifiedField t0' "phone_number"), Just "res2")
+                      , (ExpressionFieldName (QualifiedField t0' "age"), Just "res3")
+                      , (ExpressionFieldName (QualifiedField t0' "salary"), Just "res4")
+                      , (ExpressionFieldName (QualifiedField t0' "hire_date"), Just "res5")
+                      , (ExpressionFieldName (QualifiedField t0' "leave_date"), Just "res6")
+                      , (ExpressionFieldName (QualifiedField t0' "created"), Just "res7") ]
+
+--         assertFailure ("Select " ++ show s)
+
+    filterAfterTopLevelAggregate =
+      testCase "Filter after top-level aggregate" $
+      do SqlSelect Select { selectTable = s@SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           filter_ (\(age, l) -> l <. 10 ||. l >. 20) $
+           aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+           limit_ 10 (all_ (_employees employeeDbSettings))
+         Just (FromTable (TableFromSubSelect subselect) (Just t0)) <- pure selectFrom
+
+         selectProjection @?= ProjExprs [(ExpressionFieldName (QualifiedField t0 "res3"),Just "res0"),(ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0"))], Just "res1")]
+         selectWhere @?= Nothing
+         selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "res3")])
+         selectHaving @?= Just (ExpressionBinOp "OR" (ExpressionCompOp "<" Nothing
+                                                      (ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ])
+                                                      (ExpressionValue (Value (10 :: Int))))
+                                                     (ExpressionCompOp ">" Nothing
+                                                      (ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ])
+                                                      (ExpressionValue (Value (20 :: Int)))))
+
+         selectLimit subselect @?= Just 10
+         selectOffset subselect @?= Nothing
+         selectOrdering subselect @?= []
+
+         SelectTable {selectFrom = Just (FromTable (TableNamed "employees") (Just t0')), .. } <-
+             pure $ selectTable subselect
+
+         selectWhere @?= Nothing
+         selectGrouping @?= Nothing
+         selectHaving @?= Nothing
+         selectProjection @?=
+            ProjExprs [ (ExpressionFieldName (QualifiedField t0' "first_name"), Just "res0")
+                      , (ExpressionFieldName (QualifiedField t0' "last_name"),  Just "res1")
+                      , (ExpressionFieldName (QualifiedField t0' "phone_number"), Just "res2")
+                      , (ExpressionFieldName (QualifiedField t0' "age"), Just "res3")
+                      , (ExpressionFieldName (QualifiedField t0' "salary"), Just "res4")
+                      , (ExpressionFieldName (QualifiedField t0' "hire_date"), Just "res5")
+                      , (ExpressionFieldName (QualifiedField t0' "leave_date"), Just "res6")
+                      , (ExpressionFieldName (QualifiedField t0' "created"), Just "res7") ]
+
+    joinTopLevelAggregate =
+      testCase "Join against top-level aggregate" $
+      do SqlSelect Select { selectTable = s@SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           do (lastName, firstNameLength) <-
+                  aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
+                  limit_ 10 (all_ (_employees employeeDbSettings))
+              role <- relatedBy_ (_roles employeeDbSettings) (\r -> _roleName r ==. lastName)
+              pure (firstNameLength, role, lastName)
+
+         assertFailure ("Select " ++ show s)
+
+    joinTopLevelAggregate2 =
+      testCase "Join against top-level aggregate (places reversed)" $
+      do SqlSelect Select { selectTable = s@SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
+           pure $ select $
+           do role <- all_ (_roles employeeDbSettings)
+              (lastName, firstNameLength) <-
+                  aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
+                  limit_ 10 (all_ (_employees employeeDbSettings))
+              guard_ (_roleName role ==. lastName)
+              pure (firstNameLength, role, lastName)
+
+         assertFailure ("Select " ++ show s)
 
 -- * HAVING clause should not be floated out of a join
 
@@ -413,7 +525,9 @@ selectCombinators =
     , fieldNamesCapturedCorrectly
     , basicIntersect
     , basicExcept
-    , equalProjectionsDontHaveSubSelects ]
+    , equalProjectionsDontHaveSubSelects
+
+    , unionWithGuards ]
   where
     basicUnion =
       testCase "Basic UNION support" $
@@ -507,12 +621,44 @@ selectCombinators =
                pure (firstName, (lastName, age))
          pure ()
 
+    unionWithGuards =
+      testCase "UNION with guards" $
+      do let hireDates = do e <- all_ (_employees employeeDbSettings)
+                            pure (as_ @Text $ val_ "hire", _employeeAge e, just_ (_employeeHireDate e))
+             leaveDates = do e <- all_ (_employees employeeDbSettings)
+                             guard_ (isJust_ (_employeeLeaveDate e))
+                             pure (as_ @Text $ val_ "leave", _employeeAge e, _employeeLeaveDate e)
+         SqlSelect Select { selectTable =
+                                SelectTable
+                                { selectFrom = Just (FromTable (TableFromSubSelect (Select (UnionTables False a b) [] Nothing Nothing)) (Just t0))
+                                , selectProjection = proj
+                                , selectWhere = Just where_
+                                , selectGrouping = Nothing
+                                , selectHaving = Nothing }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <- pure (select (filter_ (\(type_, age, dt) -> age <. 40) (union_ hireDates leaveDates)))
+         a @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
+                                      , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res1") ])
+                           (Just (FromTable (TableNamed "employees") (Just "t0")))
+                           Nothing Nothing Nothing
+         b @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
+                                      , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res1") ])
+                           (Just (FromTable (TableNamed "employees") (Just "t0")))
+                           (Just (ExpressionIsNotNull (ExpressionFieldName (QualifiedField "t0" "leave_date"))))
+                           Nothing Nothing
+         assertFailure ("proj " ++ show proj)
+         assertFailure ("where " ++ show where_)
+         pure ()
+
+
 -- * Ensure simple selects can be used with limit_ and offset_
 
 limitOffset :: TestTree
 limitOffset =
   testGroup "LIMIT/OFFSET support"
-  [ limitSupport, offsetSupport, limitOffsetSupport ]
+  [ limitSupport, offsetSupport, limitOffsetSupport
+
+  , limitPlacedOnUnion ]
   where
     limitSupport =
       testCase "Basic LIMIT support" $
@@ -537,6 +683,13 @@ limitOffset =
 
          selectLimit @?= Just 98
          selectOffset @?= Just 2
+
+    limitPlacedOnUnion =
+      testCase "LIMIT placed on UNION" $
+      do SqlSelect s@Select {} <-
+             pure $ select $ limit_ 10 $ union_ (filter_ (\e -> _employeeAge e <. 40) (all_ (_employees employeeDbSettings)))
+                                                (filter_ (\e -> _employeeAge e >. 50) (all_ (_employees employeeDbSettings)))
+         assertFailure ("Select " ++ show s)
 
 -- * Ensure exists_ generates the correct sub-select
 
