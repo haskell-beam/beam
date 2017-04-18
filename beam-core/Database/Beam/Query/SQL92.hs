@@ -217,14 +217,16 @@ buildSql92Query (Q q) =
                             Just (aggProj'', having') ->
                               SelectBuilderGrouping aggProj'' qb groupingSyntax having'
             Nothing ->
-              let (_, having) = tryCollectHaving (next aggProj) Nothing
+              let (_, having) = tryCollectHaving (next aggProj') Nothing
                   (next', _) = tryCollectHaving (next x') Nothing
-                  qb = case sb of
-                    SelectBuilderQ _ q'' -> q''
-                    _ -> let (_, qb''') = selectBuilderToQueryBuilder sb
-                         in qb'''
+                  (groupingSyntax', aggProj', qb) =
+                    case sb of
+                      SelectBuilderQ _ q'' -> (groupingSyntax, aggProj, q'')
+                      _ -> let (proj', qb''') = selectBuilderToQueryBuilder sb
+                               (groupingSyntax', aggProj') = mkAgg proj'
+                           in (groupingSyntax', aggProj', qb''')
                   (x', qb') = selectBuilderToQueryBuilder $
-                              SelectBuilderGrouping aggProj qb groupingSyntax having
+                              SelectBuilderGrouping aggProj' qb groupingSyntax' having
               in buildJoinedQuery next' qb'
 
     buildQuery (Free (QOrderBy mkOrdering q' next)) =

@@ -376,27 +376,114 @@ aggregates =
                           , selectOrdering = [] } <-
            pure $ select $
            do (lastName, firstNameLength) <-
+                  filter_ (\(lastName, charLength) -> charLength >. 10) $
                   aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               role <- relatedBy_ (_roles employeeDbSettings) (\r -> _roleName r ==. lastName)
               pure (firstNameLength, role, lastName)
 
-         assertFailure ("Select " ++ show s)
+         Just (InnerJoin (FromTable (TableFromSubSelect subselect) (Just t0))
+                         (FromTable (TableNamed "roles") (Just t1))
+                         (Just joinCond) ) <-
+           pure selectFrom
+
+         joinCond @?= ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField t1 "name")) (ExpressionFieldName (QualifiedField t0 "res0"))
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0 "res1"), Just "res0" )
+                                        , ( ExpressionFieldName (QualifiedField t1 "for_employee__first_name"), Just "res1" )
+                                        , ( ExpressionFieldName (QualifiedField t1 "for_employee__last_name"), Just "res2" )
+                                        , ( ExpressionFieldName (QualifiedField t1 "for_employee__created"), Just "res3" )
+                                        , ( ExpressionFieldName (QualifiedField t1 "name"), Just "res4" )
+                                        , ( ExpressionFieldName (QualifiedField t1 "started"), Just "res5" )
+                                        , ( ExpressionFieldName (QualifiedField t0 "res0"), Just "res6" ) ]
+         selectWhere @?= Nothing
+         selectHaving @?= Nothing
+         selectGrouping @?= Nothing
+
+         Select { selectTable = SelectTable { .. }, selectLimit = Nothing
+                , selectOffset = Nothing, selectOrdering = [] } <-
+           pure subselect
+         Just (FromTable (TableFromSubSelect employeesSelect) (Just t0')) <- pure selectFrom
+         selectWhere @?= Nothing
+         selectHaving @?= Just (ExpressionCompOp ">" Nothing (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))])
+                                                             (ExpressionValue (Value (10 :: Int))))
+         selectGrouping @?= Just (Grouping [ (ExpressionFieldName (QualifiedField t0' "res1")) ])
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0' "res1"), Just "res0" )
+                                        , ( ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))], Just "res1" ) ]
+
+         Select { selectTable = SelectTable { .. }, selectLimit = Just 10
+                , selectOffset = Nothing, selectOrdering = [] } <-
+           pure employeesSelect
+         Just (FromTable (TableNamed "employees") (Just t0'')) <- pure selectFrom
+
+         selectWhere @?= Nothing
+         selectHaving @?= Nothing
+         selectGrouping @?= Nothing
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0'' "first_name"), Just "res0" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "last_name"), Just "res1" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "phone_number"), Just "res2" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "age"), Just "res3" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "salary"), Just "res4" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "hire_date"), Just "res5" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "leave_date"), Just "res6" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "created"), Just "res7" ) ]
 
     joinTopLevelAggregate2 =
       testCase "Join against top-level aggregate (places reversed)" $
-      do SqlSelect Select { selectTable = s@SelectTable { .. }
-                          , selectLimit = Nothing, selectOffset = Nothing
-                          , selectOrdering = [] } <-
+      do SqlSelect s@Select { selectTable = SelectTable { .. }
+                            , selectLimit = Nothing, selectOffset = Nothing
+                            , selectOrdering = [] } <-
            pure $ select $
            do role <- all_ (_roles employeeDbSettings)
               (lastName, firstNameLength) <-
+                  filter_ (\(lastName, charLength) -> charLength >. 10) $
                   aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               guard_ (_roleName role ==. lastName)
               pure (firstNameLength, role, lastName)
 
-         assertFailure ("Select " ++ show s)
+         Just (InnerJoin (FromTable (TableNamed "roles") (Just t0))
+                         (FromTable (TableFromSubSelect subselect) (Just t1))
+                         Nothing) <-
+           pure selectFrom
+         selectWhere @?= Just (ExpressionBinOp "AND"
+                               (ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField t1 "res1")) (ExpressionValue (Value (10 :: Int))))
+                               (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField t0 "name")) (ExpressionFieldName (QualifiedField t1 "res0"))))
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t1 "res1"), Just "res0" )
+                                        , ( ExpressionFieldName (QualifiedField t0 "for_employee__first_name"), Just "res1" )
+                                        , ( ExpressionFieldName (QualifiedField t0 "for_employee__last_name"), Just "res2" )
+                                        , ( ExpressionFieldName (QualifiedField t0 "for_employee__created"), Just "res3" )
+                                        , ( ExpressionFieldName (QualifiedField t0 "name"), Just "res4" )
+                                        , ( ExpressionFieldName (QualifiedField t0 "started"), Just "res5" )
+                                        , ( ExpressionFieldName (QualifiedField t1 "res0"), Just "res6" ) ]
+         selectHaving @?= Nothing
+         selectGrouping @?= Nothing
+
+         Select { selectTable = SelectTable { .. }, selectLimit = Nothing
+                , selectOffset = Nothing, selectOrdering = [] } <-
+           pure subselect
+         Just (FromTable (TableFromSubSelect employeesSelect) (Just t0')) <- pure selectFrom
+         selectWhere @?= Nothing
+         selectHaving @?= Nothing
+         selectGrouping @?= Just (Grouping [ (ExpressionFieldName (QualifiedField t0' "res1")) ])
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0' "res1"), Just "res0" )
+                                        , ( ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))], Just "res1" ) ]
+
+         Select { selectTable = SelectTable { .. }, selectLimit = Just 10
+                , selectOffset = Nothing, selectOrdering = [] } <-
+           pure employeesSelect
+         Just (FromTable (TableNamed "employees") (Just t0'')) <- pure selectFrom
+
+         selectWhere @?= Nothing
+         selectHaving @?= Nothing
+         selectGrouping @?= Nothing
+         selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0'' "first_name"), Just "res0" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "last_name"), Just "res1" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "phone_number"), Just "res2" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "age"), Just "res3" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "salary"), Just "res4" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "hire_date"), Just "res5" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "leave_date"), Just "res6" )
+                                        , ( ExpressionFieldName (QualifiedField t0'' "created"), Just "res7" ) ]
 
 -- * HAVING clause should not be floated out of a join
 
@@ -638,16 +725,21 @@ selectCombinators =
                           , selectLimit = Nothing, selectOffset = Nothing
                           , selectOrdering = [] } <- pure (select (filter_ (\(type_, age, dt) -> age <. 40) (union_ hireDates leaveDates)))
          a @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
-                                      , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res1") ])
+                                      , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
+                                      , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res2") ])
                            (Just (FromTable (TableNamed "employees") (Just "t0")))
                            Nothing Nothing Nothing
          b @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
-                                      , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res1") ])
+                                      , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
+                                      , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res2") ])
                            (Just (FromTable (TableNamed "employees") (Just "t0")))
                            (Just (ExpressionIsNotNull (ExpressionFieldName (QualifiedField "t0" "leave_date"))))
                            Nothing Nothing
-         assertFailure ("proj " ++ show proj)
-         assertFailure ("where " ++ show where_)
+
+         proj @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0 "res0"), Just "res0" )
+                            , ( ExpressionFieldName (QualifiedField t0 "res1"), Just "res1" )
+                            , ( ExpressionFieldName (QualifiedField t0 "res2"), Just "res2" ) ]
+         where_ @?= ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField "t0" "res1")) (ExpressionValue (Value (40 :: Int)))
          pure ()
 
 
@@ -686,10 +778,37 @@ limitOffset =
 
     limitPlacedOnUnion =
       testCase "LIMIT placed on UNION" $
-      do SqlSelect s@Select {} <-
+      do SqlSelect Select { selectOffset = Nothing, selectLimit = Just 10
+                          , selectOrdering = []
+                          , selectTable = UnionTables False a b } <-
              pure $ select $ limit_ 10 $ union_ (filter_ (\e -> _employeeAge e <. 40) (all_ (_employees employeeDbSettings)))
-                                                (filter_ (\e -> _employeeAge e >. 50) (all_ (_employees employeeDbSettings)))
-         assertFailure ("Select " ++ show s)
+                                                (filter_ (\e -> _employeeAge e >. 50) (do { e <- all_ (_employees employeeDbSettings); pure e { _employeeFirstName = _employeeLastName e, _employeeLastName = _employeeFirstName e} }))
+
+         selectProjection a @?= ProjExprs [ (ExpressionFieldName (QualifiedField "t0" "first_name"), Just "res0")
+                                          , (ExpressionFieldName (QualifiedField "t0" "last_name"), Just "res1")
+                                          , (ExpressionFieldName (QualifiedField "t0" "phone_number"), Just "res2")
+                                          , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res3")
+                                          , (ExpressionFieldName (QualifiedField "t0" "salary"), Just "res4")
+                                          , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res5")
+                                          , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res6")
+                                          , (ExpressionFieldName (QualifiedField "t0" "created"), Just "res7") ]
+         selectFrom a @?= Just (FromTable (TableNamed "employees") (Just "t0"))
+         selectWhere a @?= Just (ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField "t0" "age")) (ExpressionValue (Value (40 :: Int))))
+         selectGrouping a @?= Nothing
+         selectHaving a @?= Nothing
+
+         selectProjection b @?= ProjExprs [ (ExpressionFieldName (QualifiedField "t0" "last_name"), Just "res0")
+                                          , (ExpressionFieldName (QualifiedField "t0" "first_name"), Just "res1")
+                                          , (ExpressionFieldName (QualifiedField "t0" "phone_number"), Just "res2")
+                                          , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res3")
+                                          , (ExpressionFieldName (QualifiedField "t0" "salary"), Just "res4")
+                                          , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res5")
+                                          , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res6")
+                                          , (ExpressionFieldName (QualifiedField "t0" "created"), Just "res7") ]
+         selectFrom b @?= Just (FromTable (TableNamed "employees") (Just "t0"))
+         selectWhere b @?= Just (ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField "t0" "age")) (ExpressionValue (Value (50 :: Int))))
+         selectGrouping b @?= Nothing
+         selectHaving b @?= Nothing
 
 -- * Ensure exists_ generates the correct sub-select
 
