@@ -2,6 +2,7 @@ module Database.Beam.Migrate.SQL.Tables where
 
 import Database.Beam
 import Database.Beam.Migrate.Types
+import Database.Beam.Migrate.Checks
 import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.SQL.SQL92
 
@@ -22,8 +23,11 @@ createTable tblName tblSettings =
          command = createTableCmd createTableCommand
 
          tbl' = changeBeamRep (\(Columnar' (TableFieldSchema name _ _)) -> Columnar' (TableField name)) tblSettings
---         fieldChecks = concat (allBeamValues (\(Columnar' (TableFieldSchema nm _ cs)) -> map (TableFieldCheck nm) cs) tblSettings)
-         tblChecks = []
+
+         fieldChecks = mconcat $
+                       allBeamValues (\(Columnar' (TableFieldSchema nm _ cs)) -> map (\(FieldCheck mkCheck) -> TableCheck (\tblName -> mkCheck tblName nm)) cs) tblSettings
+         tblChecks = [ TableCheck (\tblName -> SomeDatabasePredicate (TableExistsPredicate tblName)) ] ++
+                     fieldChecks -- TODO add primary key check
 
      upDown command Nothing
      pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblName tbl') tblChecks) [])

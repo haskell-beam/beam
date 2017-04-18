@@ -12,12 +12,13 @@ module Database.Beam.Migrate.SQL.Types
 
   , default_, notNull
   , int, smallint, char, varchar, double
-  , numeric
+  , numeric, date
   , timestamp, timestamptz ) where
 
 import Database.Beam
 import Database.Beam.Query.Internal
 import Database.Beam.Backend.SQL
+import Database.Beam.Migrate.Checks
 import Database.Beam.Migrate.Types
 import Database.Beam.Migrate.SQL.SQL92
 
@@ -33,7 +34,6 @@ type TableSchema fieldSchemaSyntax tbl =
 
 data TableFieldSchema fieldSchemaSyntax a
     = TableFieldSchema Text (FieldSchema fieldSchemaSyntax a) [FieldCheck]
-      deriving (Show, Eq)
 
 newtype FieldSchema syntax a = FieldSchema syntax
   deriving (Show, Eq)
@@ -54,6 +54,10 @@ notNull = Constraint notNullConstraintSyntax
 smallint, int :: (IsSql92DataTypeSyntax syntax, Integral a) => DataType syntax a
 int = DataType intType
 smallint = DataType smallIntType
+
+-- TODO should this be Day or something?
+date :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
+date = DataType dateType
 
 char, varchar :: IsSql92DataTypeSyntax syntax => Maybe Word -> DataType syntax Text
 char prec = DataType (charType prec Nothing)
@@ -99,11 +103,13 @@ instance ( FieldReturnType defaultGiven collationGiven syntax resTy a
   FieldReturnType defaultGiven collationGiven syntax resTy (DataType syntax' x -> a) where
   field' = error "Unreachable because of GHC Custom Type Errors"
 
-instance IsSql92ColumnSchemaSyntax syntax =>
+instance ( Typeable syntax, Show (Sql92ColumnSchemaColumnTypeSyntax syntax), Eq (Sql92ColumnSchemaColumnTypeSyntax syntax)
+         , IsSql92ColumnSchemaSyntax syntax ) =>
   FieldReturnType defaultGiven collationGiven syntax resTy (TableFieldSchema syntax resTy) where
   field' _ _ nm ty default_ collation constraints =
-    TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_ constraints collation)) []
+    TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_ constraints collation))
+                     [ FieldCheck (\tbl field -> SomeDatabasePredicate (TableHasColumn tbl field ty :: TableHasColumn syntax)) ]
 
-field :: IsSql92ColumnSchemaSyntax syntax =>
+field :: ( IsSql92ColumnSchemaSyntax syntax ) =>
   FieldReturnType 'False 'False syntax resTy a => Text -> DataType (Sql92ColumnSchemaColumnTypeSyntax syntax) ty -> a
 field name (DataType ty) = field' (Proxy @'False) (Proxy @'False) name ty Nothing Nothing []

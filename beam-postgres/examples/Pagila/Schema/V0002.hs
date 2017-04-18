@@ -63,6 +63,7 @@ data PagilaDb f
   , city       :: f (TableEntity V0001.CityT)
   , country    :: f (TableEntity V0001.CountryT)
   , category   :: f (TableEntity V0001.CategoryT)
+  , customer   :: f (TableEntity V0001.CustomerT)
   , film       :: f (TableEntity V0001.FilmT)
   , filmCategory :: f (TableEntity V0001.FilmCategoryT)
   , filmActor  :: f (TableEntity FilmActorT)
@@ -81,6 +82,7 @@ migration oldDb =
     <*> preserve (V0001.city oldDb)
     <*> preserve (V0001.country oldDb)
     <*> preserve (V0001.category oldDb)
+    <*> preserve (V0001.customer oldDb)
     <*> preserve (V0001.film oldDb)
     <*> preserve (V0001.filmCategory oldDb)
     <*> createTable "film_actor"

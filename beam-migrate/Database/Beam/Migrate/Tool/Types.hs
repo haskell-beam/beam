@@ -8,7 +8,7 @@ import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Tool.Schema
-import           Database.Beam.Migrate.Types (MigrationSteps)
+import           Database.Beam.Migrate.Types (MigrationSteps, CheckedDatabaseSettings, SomeDatabasePredicate)
 import           Database.Beam.Query
 
 import           Control.Exception (Exception)
@@ -43,11 +43,18 @@ data BeamMigrationCommand beOptions
   , migrationCommandBackendOptions  :: beOptions }
   deriving Show
 
+data DiffDirection
+  = DiffMigrationToDb | DiffDbToMigration
+  deriving Show
+
 data BeamMigrationSubcommand
   = WriteScript
   | ListMigrations
   | Init | Status
   | Migrate (Maybe Int)
+
+  | Diff DiffDirection
+
   deriving Show
 
 data DdlError
@@ -55,8 +62,14 @@ data DdlError
   | DdlCustomError String
   deriving Show
 
-data BeamMigrationBackend commandSyntax beOptions where
+data SomeCheckedDatabase be where
+  SomeCheckedDatabase :: Database db
+                      => CheckedDatabaseSettings be db
+                      -> SomeCheckedDatabase be
+
+data BeamMigrationBackend be commandSyntax beOptions where
   BeamMigrationBackend :: ( Show beOptions, MonadBeam commandSyntax be hdl m
+                          , Typeable be
                           , HasQBuilder (Sql92SelectSyntax commandSyntax)
                           , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) LocalTime
                           , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) (Maybe LocalTime)
@@ -65,17 +78,17 @@ data BeamMigrationBackend commandSyntax beOptions where
                           , Sql92SanityCheck commandSyntax
                           , Sql92ReasonableMarshaller be ) =>
                        { backendOptsParser :: Parser beOptions
-                       , backendProxy :: Proxy be
                        , backendRenderSteps :: forall a. MigrationSteps commandSyntax () a -> BL.ByteString
+                       , backendGetDbConstraints :: beOptions -> IO [ SomeDatabasePredicate ]
                        , backendRenderSyntax :: commandSyntax -> String
                        , backendTransact :: forall a. beOptions -> m a -> IO (Either DdlError a)
-                       } -> BeamMigrationBackend commandSyntax beOptions
+                       } -> BeamMigrationBackend be commandSyntax beOptions
 data SomeBeamMigrationBackend where
   SomeBeamMigrationBackend :: ( Typeable commandSyntax, Typeable beOptions
                               , IsSql92DdlCommandSyntax commandSyntax
                               , IsSql92Syntax commandSyntax
                               , Sql92SanityCheck commandSyntax ) =>
-                              BeamMigrationBackend commandSyntax beOptions
+                              BeamMigrationBackend be commandSyntax beOptions
                            -> SomeBeamMigrationBackend
 
 -- * Migrations status
@@ -130,7 +143,8 @@ subcommandParser = subparser $
                            , command "list-migrations" listMigrationsCommand
                            , command "init" initCommand
                            , command "status" statusCommand
-                           , command "migrate" migrateCommand ]
+                           , command "migrate" migrateCommand
+                           , command "diff" diffCommand]
   where
     writeScriptCommand =
       info (writeScriptArgParser <**> helper) (fullDesc <> progDesc "Write a migration script for the given migrations")
@@ -142,12 +156,14 @@ subcommandParser = subparser $
       info (statusArgParser <**> helper) (fullDesc <> progDesc "Display status of applied migrations")
     migrateCommand =
       info (migrateArgParser <**> helper) (fullDesc <> progDesc "Run necessary migrations")
+    diffCommand = info (diffArgParser <**> helper) (fullDesc <> progDesc "Diff against the database/schema")
 
     writeScriptArgParser    = pure WriteScript
     listMigrationsArgParser = pure ListMigrations
     initArgParser = pure Init
     statusArgParser = pure Status
     migrateArgParser = Migrate <$> optional (option auto (metavar "UNTIL" <> help "Last migration to run"))
+    diffArgParser = Diff <$> ((\b -> if b then DiffMigrationToDb else DiffDbToMigration) <$> switch (long "to-db" <> help "Compute the diff as though the current database schema is the target, rather than the Haskell schema"))
 
 migrationCommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions)
 migrationCommandOptions beOptions =

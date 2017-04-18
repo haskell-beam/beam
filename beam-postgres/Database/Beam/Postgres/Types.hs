@@ -41,7 +41,8 @@ instance SupportedSyntax Postgres SqlSyntaxBuilder
 instance Pg.FromField x => Pg.FromField (Auto x) where
   fromField field d = fmap (Auto . Just) (Pg.fromField field d)
 instance Pg.ToField x => Pg.ToField (Auto x) where
-  toField (Auto x) = Pg.toField x
+  toField (Auto Nothing) = Pg.Plain "DEFAULT"
+  toField (Auto (Just x)) = Pg.toField x
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 instance Pg.ToField SqlNull where

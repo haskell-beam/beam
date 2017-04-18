@@ -258,6 +258,7 @@ data PagilaDb f
   , city       :: f (TableEntity CityT)
   , country    :: f (TableEntity CountryT)
   , category   :: f (TableEntity CategoryT)
+  , customer   :: f (TableEntity CustomerT)
   , film       :: f (TableEntity FilmT)
   , filmCategory :: f (TableEntity FilmCategoryT)
   , language   :: f (TableEntity LanguageT)
@@ -297,7 +298,7 @@ lastUpdateField = field "last_update" timestamp (default_ now_) notNull
 migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
 migration () =
   PagilaDb <$> createTable "actor"
-                 (ActorT (field "actor_id" smallserial) (field "first_name" (varchar (Just 45)))
+                 (ActorT (field "actor_id" serial) (field "first_name" (varchar (Just 45)))
                          (field "last_name" (varchar (Just 45)))
                          lastUpdateField)
            <*> createTable "address"
@@ -313,6 +314,16 @@ migration () =
                            lastUpdateField)
            <*> createTable "category"
                  (CategoryT (field "category_id" smallserial) (field "name" (varchar (Just 25)) notNull)
+                            lastUpdateField)
+           <*> createTable "customer"
+                 (CustomerT (field "customer_id" serial notNull)
+                            (StoreId (field "store_id" smallint notNull))
+                            (field "first_name" (varchar (Just 45)) notNull)
+                            (field "last_name" (varchar (Just 45)) notNull)
+                            (field "email" (varchar (Just 50)))
+                            (AddressId (field "address_id" smallint notNull))
+                            (field "activebool" boolean (default_ (val_ True)) notNull)
+                            (field "create_date" date (default_ now_) notNull)
                             lastUpdateField)
            <*> createTable "film"
                  (FilmT     (field "film_id" smallserial notNull)
@@ -332,7 +343,7 @@ migration () =
                                 (CategoryId (field "category_id" smallint)) lastUpdateField)
            <*> createTable "language"
                  (LanguageT (field "language_id" smallserial notNull)
-                            (field "name" (varchar (Just 20)))
+                            (field "name" (char (Just 20)))
                             lastUpdateField)
            <*> createTable "store"
                  (StoreT (field "store_id" smallserial) (StaffId (field "manager_staff_id" smallint notNull))

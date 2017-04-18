@@ -3,6 +3,11 @@ module Database.Beam.Migrate.SQL.SQL92 where
 import Database.Beam.Backend.SQL.SQL92
 
 import Data.Text (Text)
+import Data.Typeable
+
+type Sql92DdlCommandDataTypeSyntax syntax =
+  Sql92ColumnSchemaColumnTypeSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
+type Sql92DdlCommandColumnSchemaSyntax syntax = Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax syntax)
 
 class (IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)) =>
   IsSql92DdlCommandSyntax syntax where
@@ -25,7 +30,10 @@ class ( IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax synt
 
 class ( IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
       , IsSql92DataTypeSyntax (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
-      , IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax columnSchema) ) =>
+      , Show (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
+      , Eq (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
+      , IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax columnSchema)
+      , Typeable columnSchema, Show columnSchema, Eq columnSchema ) =>
   IsSql92ColumnSchemaSyntax columnSchema where
   type Sql92ColumnSchemaColumnTypeSyntax columnSchema :: *
   type Sql92ColumnSchemaExpressionSyntax columnSchema :: *
