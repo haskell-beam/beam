@@ -1,7 +1,7 @@
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications, NamedFieldPuns #-}
 module Database.Beam.Query.Combinators
     ( all_, join_, guard_, filter_, related_, relatedBy_
-    , leftJoin_
+    , leftJoin_, subselect_
 
     , ManyToMany
     , manyToMany_, manyToManyPassthrough_
@@ -125,6 +125,14 @@ leftJoin_ ::
   Q select db s (table (Nullable (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)))
 leftJoin_ tbl mkOn =
     Q $ liftF (QLeftJoin tbl (\tbl -> let QExpr x = mkOn tbl in Just x) id)
+
+subselect_ :: forall s r select db.
+            ( ThreadRewritable (QNested s) r
+            , ProjectibleInSelectSyntax select r )
+           => Q select db (QNested s) r
+           -> Q select db s (WithRewrittenThread (QNested s) s r)
+subselect_ (Q q') =
+  Q (liftF (QSubSelect q' (rewriteThread (Proxy @s))))
 
 -- | Only allow results for which the 'QExpr' yields 'True'
 guard_ :: forall select db s.

@@ -201,6 +201,10 @@ buildSql92Query (Q q) =
     buildQuery (Free (QGuard _ next)) = buildQuery next
     buildQuery f@(Free QAll {}) = buildJoinedQuery f emptyQb
     buildQuery f@(Free QLeftJoin {}) = buildJoinedQuery f emptyQb
+    buildQuery (Free (QSubSelect q' next)) =
+        let sb = buildQuery (fromF q')
+            (proj, qb) = selectBuilderToQueryBuilder sb
+        in buildJoinedQuery (next proj) qb
     buildQuery (Free (QAggregate mkAgg q' next)) =
         let sb = buildQuery (fromF q')
             (groupingSyntax, aggProj) = mkAgg (sbProj sb)
@@ -381,6 +385,8 @@ buildSql92Query (Q q) =
       f (Free (QAll entity mkOn Pure)) next
     onlyQ (Free (QLeftJoin entity mkOn next)) f =
       f (Free (QLeftJoin entity mkOn Pure)) next
+    onlyQ (Free (QSubSelect q' next)) f =
+      f (Free (QSubSelect q' Pure)) next
     onlyQ (Free (QLimit limit q' next)) f =
       f (Free (QLimit limit q' Pure)) next
     onlyQ (Free (QOffset offset q' next)) f =
