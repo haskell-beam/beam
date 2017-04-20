@@ -3,6 +3,7 @@ module Database.Beam.Backend.SQL.SQL2003
 
     , IsSql2003FromSyntax(..)
     , IsSql2003ExpressionSyntax(..)
+    , IsSql2003ExpressionAdvancedOLAPOperationsSyntax(..)
     , IsSql2003WindowFrameSyntax(..)
     , IsSql2003WindowFrameBoundsSyntax(..)
     , IsSql2003WindowFrameBoundSyntax(..)
@@ -39,14 +40,19 @@ class ( IsSql99ExpressionSyntax expr
           -> Sql2003ExpressionWindowFrameSyntax expr
           -> expr
 
+-- | Optional SQL2003 "Advanced OLAP operations" T612 support
+class IsSql2003ExpressionSyntax expr =>
+  IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr where
+
+  filterAggE :: expr -> expr -> expr
+
 class IsSql2003WindowFrameBoundsSyntax (Sql2003WindowFrameBoundsSyntax frame) =>
     IsSql2003WindowFrameSyntax frame where
     type Sql2003WindowFrameExpressionSyntax frame :: *
     type Sql2003WindowFrameOrderingSyntax frame :: *
     type Sql2003WindowFrameBoundsSyntax frame :: *
 
-    frameSyntax :: Maybe (Sql2003WindowFrameExpressionSyntax frame)
-                -> Maybe [Sql2003WindowFrameExpressionSyntax frame]
+    frameSyntax :: Maybe [Sql2003WindowFrameExpressionSyntax frame]
                 -> Maybe [Sql2003WindowFrameOrderingSyntax frame]
                 -> Maybe (Sql2003WindowFrameBoundsSyntax frame)
                 -> frame

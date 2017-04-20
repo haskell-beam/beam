@@ -208,6 +208,7 @@ data PgDataTypeSyntax
   { pgDataTypeDescr :: PgDataTypeDescr
   , fromPgDataType :: PgSyntax } deriving (Show)
 newtype PgColumnConstraintDefinitionSyntax = PgColumnConstraintDefinitionSyntax { fromPgColumnConstraintDefinition :: PgSyntax }
+  deriving (Show, Eq)
 newtype PgColumnConstraintSyntax = PgColumnConstraintSyntax { fromPgColumnConstraint :: PgSyntax }
 newtype PgTableConstraintSyntax = PgTableConstraintSyntax { fromPgTableConstraint :: PgSyntax }
 newtype PgMatchTypeSyntax = PgMatchTypeSyntax { fromPgMatchType :: PgSyntax }
@@ -438,14 +439,18 @@ instance IsSql2003ExpressionSyntax PgExpressionSyntax where
     PgExpressionSyntax $
     fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
 
+instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax PgExpressionSyntax where
+  filterAggE agg filter =
+    PgExpressionSyntax $
+    emit "(" <> fromPgExpression agg <> emit ") FILTER (WHERE " <> fromPgExpression filter <> emit ")"
+
 instance IsSql2003WindowFrameSyntax PgWindowFrameSyntax where
   type Sql2003WindowFrameExpressionSyntax PgWindowFrameSyntax = PgExpressionSyntax
   type Sql2003WindowFrameOrderingSyntax PgWindowFrameSyntax = PgOrderingSyntax
   type Sql2003WindowFrameBoundsSyntax PgWindowFrameSyntax = PgWindowFrameBoundsSyntax
 
-  frameSyntax filter_ partition_ ordering_ bounds_ =
+  frameSyntax partition_ ordering_ bounds_ =
     PgWindowFrameSyntax $
-    maybe mempty (\e -> emit "FILTER (WHERE" <> fromPgExpression e <> emit ")") filter_ <>
     emit "OVER " <>
     pgParens
     (

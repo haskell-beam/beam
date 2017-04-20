@@ -230,14 +230,18 @@ instance IsSql2003WindowFrameSyntax SqlSyntaxBuilder where
   type Sql2003WindowFrameOrderingSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql2003WindowFrameBoundsSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  frameSyntax filter_ partition_ ordering_ bounds_ =
+  frameSyntax partition_ ordering_ bounds_ =
       SqlSyntaxBuilder $
-      maybe mempty (\e -> byteString "FILTER (WHERE " <> buildSql e <> byteString ")") filter_ <>
       byteString " OVER (" <>
       maybe mempty (\p -> byteString "PARTITION BY " <> buildSepBy (byteString ", ") (map buildSql p)) partition_ <>
       maybe mempty (\o -> byteString " ORDER BY " <> buildSepBy (byteString ", ") (map buildSql o)) ordering_ <>
       maybe mempty (\b -> byteString " RANGE " <> buildSql b) bounds_ <>
       byteString ")"
+
+instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax SqlSyntaxBuilder where
+  filterAggE agg_ filter_ =
+    SqlSyntaxBuilder $
+    buildSql agg_ <> byteString " FILTER (WHERE " <> buildSql filter_ <> byteString ")"
 
 data SqlWindowFrameBound = SqlWindowFrameUnbounded
                          | SqlWindowFrameBounded Int

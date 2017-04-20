@@ -52,6 +52,7 @@ module Database.Beam.Query.Combinators
 
     , sum_, avg_, min_, max_, count_, countAll_
     , sumOver_, avgOver_, minOver_, maxOver_, countOver_
+    , filterWhere_
 
     , every_, any_, some_
     , everyOver_, anyOver_, someOver_
@@ -530,21 +531,19 @@ partitionBy_ :: forall syntax partition s.
                 partition -> QWindow syntax s
 partitionBy_ p =
   QWindow $
-  frameSyntax Nothing (case project p of { [] -> Nothing; xs -> Just xs }) Nothing Nothing --frame_ Nothing p (noOrder_ :: Maybe (QOrd syntax s Int)) noBounds_
+  frameSyntax (case project p of { [] -> Nothing; xs -> Just xs }) Nothing Nothing
 
 frame_ :: ( IsSql2003ExpressionSyntax syntax
           , SqlOrderable (Sql2003WindowFrameOrderingSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) ordering
           , Projectible syntax partition
-          , Sql2003ExpressionSanityCheck syntax ) =>
-          Maybe (QExpr syntax s Bool) {-^ FILTER -}
-       -> partition                   {-^ PARTITION BY -}
+          , Sql2003ExpressionSanityCheck syntax )
+       => partition                   {-^ PARTITION BY -}
        -> Maybe ordering              {-^ ORDER BY -}
        -> QFrameBounds (Sql2003WindowFrameBoundsSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) {-^ RANGE / ROWS -}
        -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s
-frame_ filter_ partition_ ordering_ (QFrameBounds bounds) =
+frame_ partition_ ordering_ (QFrameBounds bounds) =
     QWindow $
-    frameSyntax (fmap (\(QExpr e) -> e) filter_)
-                (case project partition_ of
+    frameSyntax (case project partition_ of
                    [] -> Nothing
                    xs -> Just xs)
                 (case fmap makeSQLOrdering ordering_ of
@@ -660,6 +659,12 @@ everyOver_, someOver_, anyOver_
 everyOver_ q (QExpr a) = QExpr (everyE q a)
 someOver_  q (QExpr a) = QExpr (someE q a)
 anyOver_   q (QExpr a) = QExpr (anyE  q a)
+
+-- | Support for FILTER (WHERE ...) syntax for aggregates.
+--   Part of SQL2003 Advanced OLAP operations feature (T612)
+filterWhere_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
+             => QAgg expr s a -> QExpr expr s Bool -> QAgg expr s a
+filterWhere_ (QExpr agg) (QExpr filter) = QExpr (filterAggE agg filter)
 
 every_, some_, any_
   :: IsSql99AggregationExpressionSyntax expr
