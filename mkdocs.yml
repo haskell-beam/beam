@@ -10,6 +10,7 @@ pages:
       - 'Databases': 'user-guide/databases.md'
       - 'Basic Queries': 'user-guide/queries/basic.md'
       - 'More complex SELECTs': 'user-guide/queries/select.md'
+      - 'Ordering': 'user-guide/queries/ordering.md'
       - 'Relationships': 'user-guide/queries/relationships.md'
       - 'Aggregates': 'user-guide/queries/aggregates.md'
       - 'Combining queries': 'user-guide/queries/combining-queries.md'

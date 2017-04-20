@@ -44,6 +44,12 @@ instance Table PersonT where
 !!! note "Note"
     Using the first and last name as a primary key is a bad idea, we use it here
     to illustrate using multiple fields as the primary key.
+    
+!!! tip "Tip"
+    Many people find it useful to use the `Applicative` instance for `(->) a` to
+    write `primaryKey`. For example, we could have written the above `primaryKey
+    person = PersonKey (personFirstName person) (personLastName person)` as
+    `primaryKey = PersonKey <$> personFirstName <*> personLastName`.
 
 For ease-of-use purposes we define some type synonyms for `PersonT` and
 `PrimaryKey PersonT` and some convenient instances. These are not strictly
@@ -70,6 +76,11 @@ data Person
 
 This allows us to use your type definitions for Beam as regular
 Haskell data structures without wrapping/unwrapping.
+
+!!! tip "Tip"
+    Typing `Columnar` may become tiresome. `Database.Beam` also exports `C` as a
+    type alias for `Columnar`, which may make writing models easier. Since `C`
+    may cause name clashes, all examples are given using `Columnar`.
 
 ## Foreign references
 

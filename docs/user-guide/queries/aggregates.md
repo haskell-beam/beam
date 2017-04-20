@@ -153,3 +153,46 @@ do (genre, priceCnt, trackLength) <-
    track <- join_ (track chinookDb) (\track -> trackGenreId track ==. just_ (pk genre))
    pure (genre, track, priceCnt, trackLength)
 ```
+
+Due to the monadic structure, putting the filtered aggregate as the second
+clause in the JOIN causes the HAVING to be floated out, because the compiler
+can't prove that the conditional expression only depends on the results of the
+aggregate.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+-- Only return results for genres whose total track length is over 5 minutes
+do track_ <- all_ (track chinookDb)
+   (genre, priceCnt, trackLength) <-
+            filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
+            aggregate_ (\(genre, track) ->
+                          ( group_ genre
+                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb)) 
+   guard_ (trackGenreId track_ ==. just_ (pk genre))
+   pure (genre, track_, priceCnt, trackLength)
+```
+
+You can prove to the compiler that the `filter_` should generate a having by
+using the `subselect_` combinator.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+-- Only return results for genres whose total track length is over 5 minutes
+do track_ <- all_ (track chinookDb)
+   (genre, priceCnt, trackLength) <-
+            subselect_ $
+            filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
+            aggregate_ (\(genre, track) ->
+                          ( group_ genre
+                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb)) 
+   guard_ (trackGenreId track_ ==. just_ (pk genre))
+   pure (genre, track_, priceCnt, trackLength)
+```

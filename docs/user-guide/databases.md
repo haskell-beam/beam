@@ -19,7 +19,7 @@ data ExampleDb f
 instance Database ExampleDb
 
 exampleDb :: DatabaseSettings be ExampleDb
-exampleDb = autoDbSettings
+exampleDb = defaultDbSettings
 ```
 
 ## Other database entities

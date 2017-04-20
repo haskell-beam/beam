@@ -88,3 +88,41 @@ filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerL
 
 ## `LIMIT`/`OFFSET` support
 
+The `limit_` and `offset_` functions can be used to truncate the result set at a
+certain length and fetch different portions of the result. They correspond to
+the `LIMIT` and `OFFSET` SQL constructs.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+limit_ 10 $ offset_ 100 $
+filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
+                      (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
+        all_ (customer chinookDb)
+```
+
+!!! note "Note"
+    Nested `limit_`s and `offset_`s compose in the way you'd expect without
+    generating extraneous subqueries.
+    
+!!! danger "Warning"
+    Note that the order of the `limit_` and `offset_` functions matter.
+    Offseting an already limited result is not the same as limiting an offseted
+    result. For example, if you offset three rows into a limited set of five
+    results, you will get at most two rows. On the other hand, if you offset
+    three rows and then limit the result to the next five, you may get up to
+    five. Beam will generate exactly the query you specify. Notice the
+    difference below, where the order of the clauses made beam generate a query
+    that returns no results.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+offset_ 100 $ limit_ 10 $
+filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
+                      (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
+        all_ (customer chinookDb)
+```
+

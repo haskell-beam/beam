@@ -154,10 +154,22 @@ Joins with arbitrary conditions can be specified using the `join_` construct.
 
 ### Left and right joins
 
-Left joins with arbitrary conditions can be specified with the `leftJoin_` construct.
+Left joins with arbitrary conditions can be specified with the `leftJoin_`
+construct. `leftJoin_` takes a table and a join condition. It associates each
+result record with a record of the table given or an fully NULL row of that
+table in case no row matches. For this reason, the result of `leftJoin_` has an
+extra `Nullable` column tag, which converts each field into the corresponding
+`Maybe` type.
 
+!!! note "Note"
+    The table parameter passed in as the join condition does not have a 
+    `Nullable` column tag. The join condition should be written as if a 
+    concrete row from that table exists.
+    
+!!! note "TODO"
+    Give an example of `leftJoin_`
 
-!!! TODO "TODO""
+!!! note "TODO""
     `rightJoin_` is not yet implemented
 
 Right joins are supported (albeit awkwardly) with the `rightJoin_` construct.
@@ -184,10 +196,22 @@ For example, the following query generates the code you'd expect.
 ```haskell
 !chinook sqlite3
 !chinookpg postgres
-do (i :: _) <- limit_ 10 $ all_ (invoice chinookDb)
+do i <- limit_ 10 $ all_ (invoice chinookDb)
    line <- invoiceLines i
    pure (i, line)
 ```
 
 If you need to (for efficiency for example), you can also generate subqueries
-explicitly, using `subselect_`.
+explicitly, using `subselect_`. The `subselect_` will force a new query to be
+output in most cases. For simple queries, such as `all_`, `subselect_` will have
+no effect.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+-- Same as above, but with explicit sub select
+do i <- subselect_ $ limit_ 10 $ all_ (invoice chinookDb)
+   line <- invoiceLines i
+   pure (i, line)
+```

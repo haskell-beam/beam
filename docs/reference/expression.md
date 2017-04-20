@@ -91,4 +91,4 @@ if it is part of any SQL standard. If it is not, then check the backend you are
 using to see if it provides a corresponding construct. If the backend does not
 or if the function / operator you need is part of a SQL standard, please open an
 issue on GitHub. Alternatively, implement the construct yourself and send us a
-pull request! See the section on [adding your own functions](reference/extensibility.md)
+pull request! See the section on [adding your own functions](extensibility.md)
