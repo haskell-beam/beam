@@ -12,3 +12,6 @@ graveyard
 *.hi
 *.pyc
 .beam-query-cache
+.hpc
+*.tix
+*.mix
