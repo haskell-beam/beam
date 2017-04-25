@@ -42,15 +42,16 @@ module Database.Beam.Query.Combinators
     , HaskellLiteralForQExpr
     , SqlValable(..)
 
-    , over_, frame_, bounds_, fromBound_, noBounds_, noOrder_
-    , partitionBy_, withWindow_
+    , over_, frame_, bounds_, unbounded_, nrows_, fromBound_
+    , noBounds_, noOrder_, noPartition_
+    , partitionBy_, orderPartitionBy_, withWindow_
 
     -- * SQL GROUP BY and aggregation
     , aggregate_
 
     , QGroupable(..)
 
-    , sum_, avg_, min_, max_, count_, countAll_
+    , sum_, avg_, min_, max_, count_, countAll_, rank_
     , sumOver_, avgOver_, minOver_, maxOver_, countOver_
     , filterWhere_
 
@@ -542,28 +543,35 @@ bounds_ (QFrameBound start) end =
     fromToBoundSyntax start
       (fmap (\(QFrameBound end) -> end) end)
 
-noOrder_ :: Maybe (QOrd syntax s Int)
-noOrder_ = Nothing
+unbounded_ :: IsSql2003WindowFrameBoundSyntax syntax
+           => QFrameBound syntax
+unbounded_ = QFrameBound unboundedSyntax
 
-partitionBy_ :: forall syntax partition s.
-                ( Projectible (Sql2003WindowFrameExpressionSyntax syntax) partition
-                , IsSql2003WindowFrameSyntax syntax ) =>
-                partition -> QWindow syntax s
-partitionBy_ p =
-  QWindow $
-  frameSyntax (case project p of { [] -> Nothing; xs -> Just xs }) Nothing Nothing
+nrows_ :: IsSql2003WindowFrameBoundSyntax syntax
+       => Int -> QFrameBound syntax
+nrows_ x = QFrameBound (nrowsBoundSyntax x)
+
+noPartition_, noOrder_ :: Maybe (QOrd syntax s Int)
+noOrder_ = Nothing
+noPartition_ = Nothing
+
+partitionBy_, orderPartitionBy_ :: partition -> Maybe partition
+partitionBy_  = Just
+orderPartitionBy_ = Just
+--  QWindow $
+--  frameSyntax (case project p of { [] -> Nothing; xs -> Just xs }) Nothing Nothing
 
 frame_ :: ( IsSql2003ExpressionSyntax syntax
           , SqlOrderable (Sql2003WindowFrameOrderingSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) ordering
           , Projectible syntax partition
           , Sql2003ExpressionSanityCheck syntax )
-       => partition                   {-^ PARTITION BY -}
+       => Maybe partition             {-^ PARTITION BY -}
        -> Maybe ordering              {-^ ORDER BY -}
        -> QFrameBounds (Sql2003WindowFrameBoundsSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) {-^ RANGE / ROWS -}
        -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s
 frame_ partition_ ordering_ (QFrameBounds bounds) =
     QWindow $
-    frameSyntax (case project partition_ of
+    frameSyntax (case maybe [] project partition_ of
                    [] -> Nothing
                    xs -> Just xs)
                 (case fmap makeSQLOrdering ordering_ of
@@ -654,6 +662,10 @@ allInGroup_, distinctInGroup_, allInGroupExplicitly_
 allInGroup_ = Nothing
 distinctInGroup_ = Just setQuantifierDistinct
 allInGroupExplicitly_ = Just setQuantifierAll
+
+rank_ :: IsSql2003ExpressionEnhancedNumericFunctionsSyntax expr
+      => QAgg expr s Int
+rank_ = QExpr rankAggE
 
 minOver_, maxOver_, avgOver_, sumOver_
   :: ( IsSql92AggregationExpressionSyntax expr

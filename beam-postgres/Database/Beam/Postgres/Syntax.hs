@@ -445,10 +445,13 @@ instance IsSql2003ExpressionSyntax PgExpressionSyntax where
     PgExpressionSyntax $
     fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
 
+instance IsSql2003ExpressionEnhancedNumericFunctionsSyntax PgExpressionSyntax where
+  rankAggE = PgExpressionSyntax $ emit "RANK()"
+
 instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax PgExpressionSyntax where
   filterAggE agg filter =
     PgExpressionSyntax $
-    emit "(" <> fromPgExpression agg <> emit ") FILTER (WHERE " <> fromPgExpression filter <> emit ")"
+    fromPgExpression agg <> emit " FILTER (WHERE " <> fromPgExpression filter <> emit ")"
 
 instance IsSql2003WindowFrameSyntax PgWindowFrameSyntax where
   type Sql2003WindowFrameExpressionSyntax PgWindowFrameSyntax = PgExpressionSyntax
@@ -462,7 +465,7 @@ instance IsSql2003WindowFrameSyntax PgWindowFrameSyntax where
     (
       maybe mempty (\p -> emit "PARTITION BY " <> pgSepBy (emit ", ") (map fromPgExpression p)) partition_ <>
       maybe mempty (\o -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering o)) ordering_ <>
-      maybe mempty (\b -> emit " RANGE " <> fromPgWindowFrameBounds b) bounds_
+      maybe mempty (\b -> emit " ROWS " <> fromPgWindowFrameBounds b) bounds_
     )
 
 instance IsSql2003WindowFrameBoundsSyntax PgWindowFrameBoundsSyntax where

@@ -235,8 +235,11 @@ instance IsSql2003WindowFrameSyntax SqlSyntaxBuilder where
       byteString " OVER (" <>
       maybe mempty (\p -> byteString "PARTITION BY " <> buildSepBy (byteString ", ") (map buildSql p)) partition_ <>
       maybe mempty (\o -> byteString " ORDER BY " <> buildSepBy (byteString ", ") (map buildSql o)) ordering_ <>
-      maybe mempty (\b -> byteString " RANGE " <> buildSql b) bounds_ <>
+      maybe mempty (\b -> byteString " ROWS " <> buildSql b) bounds_ <>
       byteString ")"
+
+instance IsSql2003ExpressionEnhancedNumericFunctionsSyntax SqlSyntaxBuilder where
+  rankAggE = SqlSyntaxBuilder "RANK()"
 
 instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax SqlSyntaxBuilder where
   filterAggE agg_ filter_ =
