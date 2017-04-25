@@ -14,6 +14,7 @@ module Database.Beam.Test.Schema
   , tests ) where
 
 import Database.Beam
+import Database.Beam.Schema.Tables
 import Database.Beam.Backend
 import Database.Beam.Backend.SQL.AST
 
@@ -34,7 +35,6 @@ tests = testGroup "Schema Tests"
 --                  , dbSchemaModification ]
 
 data DummyBackend
-instance SupportedSyntax DummyBackend Select
 instance BeamBackend DummyBackend
 
 data EmployeeT f
