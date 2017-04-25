@@ -1,3 +1,7 @@
+!!! warning "Warning"
+    The `beam-migrations` package is still a WIP. The following manual represents
+    both planned and implemented features.
+
 In the User Guide we saw how to declare a schema for an already created database
 and use it to perform queries. Beam can also manage a database schema based on
 Haskell datatypes you feed it.

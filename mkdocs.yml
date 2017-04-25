@@ -14,8 +14,9 @@ pages:
       - 'Relationships': 'user-guide/queries/relationships.md'
       - 'Aggregates': 'user-guide/queries/aggregates.md'
       - 'Combining queries': 'user-guide/queries/combining-queries.md'
-      - 'Common data types': 'user-guide/queries/data-types.md'
+#      - 'Common data types': 'user-guide/queries/data-types.md'
       - 'Window functions': 'user-guide/queries/window-functions.md'
+      - 'Advanced features': 'user-guide/queries/advanced-features.md'
   - Schema management:
       - 'The Migrations Framework': 'schema-guide/migrations.md'
       - 'The beam-migrate tool': 'schema-guide/tool.md'
@@ -25,6 +26,7 @@ pages:
       - 'beam-sqlite': 'user-guide/backends/beam-sqlite.md'
       - 'Writing a Custom Backend': 'user-guide/custom-backends.md'
   - Reference:
+      - 'Models': 'reference/models.md'
       - 'Expressions': 'reference/expression.md'
       - 'Queries': 'reference/queries.md'
       - 'Extending': 'reference/extensibility.md'

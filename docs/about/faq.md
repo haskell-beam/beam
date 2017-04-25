@@ -45,3 +45,13 @@ listEmployees :: ( IsSql92Syntax cmd, Sql92SanityCheck cmd
               => m [Employee]
 listEmployees = runSelectReturningList $ select (all_ (employees employeeDb))
 ```
+
+## Other database mappers simulate features on databases that lack support, why not beam?
+
+Beam assumes that the developer has picked their RDBMS for a reason. Beam does
+not try to take on features of the RDBMS, because often there is no reasonable
+and equally performant substitution that can be made. Beam tries to follow the
+principle of least surprise -- the SQL queries beam generates should be easily
+guessable from the Haskell query DSL (modulo aliasing). Generating complicated
+emulation code which can result in unpredictable performance would violate this
+principle.

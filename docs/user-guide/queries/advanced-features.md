@@ -1,0 +1,40 @@
+This page documents other advanced features that beam supports across backends
+that support them.
+
+## SQL2003 T612: Advanced OLAP operations
+
+This optional SQL2003 feature allows attaching arbitrary `FILTER (WHERE ..)`
+clauses to aggregates. During querying only rows matching the given expression
+are included in computing the aggregate. This can often be simulated in other
+databases by an appropriate `CASE` expression, but beam will not do this
+translation.
+
+!beam-query
+```haskell
+!chinookpg postgres
+aggregate_ (\i -> (group_ (invoiceCustomer i), as_ @Int $ countAll_ `filterWhere_` (invoiceTotal i >. 500), as_ @Int $ countAll_ `filterWhere_` (invoiceTotal i <. 100))) $
+all_ (invoice chinookDb)
+```
+
+These combine as you'd expect with window functions. For example, to return each
+invoice along with the average total of all invoices by the same customer where
+the invoice was billed to an address in Los Angeles,
+
+!beam-query
+```haskell
+!chinookpg postgres
+withWindow_ (\i -> frame_ (partitionBy_ (invoiceCustomer i)) noOrder_ noBounds_)
+            (\i w -> (i, avg_ (invoiceTotal i) `filterWhere_` (addressCity (invoiceBillingAddress i) ==. just_ "Los Angeles") `over_` w))
+            (all_ (invoice chinookDb))
+```
+
+!!! danger "Danger""
+    `FILTER (WHERE ..)` must be applied directly to a SQL aggregate function,
+    but this isn't enforced at compile time. This may be fixed in a later
+    version of beam.
+
+## SQL2003 T621: Enhanced Numeric functions
+
+This extension provides various numeric statistic functions for SQL. The only
+one beam currently implements is `RANK()` via the `rank_` function.
+Contributions are appreciated!

@@ -41,9 +41,6 @@ On backends which allow such nesting (like Postgres), the query is translated
 directly. On backends that do not (like SQLite), an appropriate subselect is
 generated.
 
-!!! todo "TODO"
-    This isn't implemented yet :)
-
 !beam-query
 ```haskell
 !chinook sqlite3
@@ -58,7 +55,7 @@ let customerFirstNames =
       fmap customerLastName
            (all_ (customer chinookDb))
     employeeLastNames =
-      fmap employeeFirstName
+      fmap employeeLastName
            (all_ (employee chinookDb))
 in (customerFirstNames `union_`employeeFirstNames) `intersect_`
    (customerLastNames `except_` employeeLastNames)

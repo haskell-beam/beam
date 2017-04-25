@@ -118,11 +118,57 @@ although this guarantee is not enforced at the type level (yet).
 
 ## Embedding
 
-Sometimes, we want to declare multiple models with fields in
-common. Beam allows you to simple embed such fields in common types
-and embed those directly into models. For example,
+Sometimes, we want to declare multiple models with fields in common. Beam allows
+you to simple embed such fields in common types and embed those directly into
+models. For example, in the Chinook example schema (see
+`beam-sqlite/examples/Chinook/Schema.hs`), we define the following structure for
+addresses.
 
-<!-- TODO(travis) -->
+```haskell
+data AddressMixin f
+  = Address
+  { address           :: Columnar f (Maybe Text)
+  , addressCity       :: Columnar f (Maybe Text)
+  , addressState      :: Columnar f (Maybe Text)
+  , addressCountry    :: Columnar f (Maybe Text)
+  , addressPostalCode :: Columnar f (Maybe Text)
+  } deriving Generic
+instance Beamable AddressMixin
+type Address = AddressMixin Identity
+deriving instance Show (AddressMixin Identity)
+```
+
+We can then use `AddressMixin` in our models.
+
+```haskell
+data EmployeeT f
+  = Employee
+  { employeeId        :: Columnar f Int32
+  , employeeLastName  :: Columnar f Text
+  , employeeFirstName :: Columnar f Text
+  , employeeTitle     :: Columnar f (Maybe Text)
+  , employeeReportsTo :: PrimaryKey EmployeeT (Nullable f)
+  , employeeBirthDate :: Columnar f (Maybe LocalTime)
+  , employeeHireDate  :: Columnar f (Maybe LocalTime)
+  , employeeAddress   :: AddressMixin f
+  , employeePhone     :: Columnar f (Maybe Text)
+  , employeeFax       :: Columnar f (Maybe Text)
+  , employeeEmail     :: Columnar f (Maybe Text)
+  } deriving Generic
+-- ...
+data CustomerT f
+  = Customer
+  { customerId        :: Columnar f Int32
+  , customerFirstName :: Columnar f Text
+  , customerLastName  :: Columnar f Text
+  , customerCompany   :: Columnar f (Maybe Text)
+  , customerAddress   :: AddressMixin f
+  , customerPhone     :: Columnar f (Maybe Text)
+  , customerFax       :: Columnar f (Maybe Text)
+  , customerEmail     :: Columnar f Text
+  , customerSupportRep :: PrimaryKey EmployeeT (Nullable f)
+  } deriving Generic
+```
 
 ## Defaults
 
@@ -161,7 +207,7 @@ identifiers. Thus, queries can sometimes fail if your tables use
 mixtures of lower- and upper-case to distinguish between fields.
 
 All of these defaults can be overriden using the modifications system,
-described in the next section.
+described in the [model reference](../reference/models.md).
 
 ## What about tables without primary keys?
 

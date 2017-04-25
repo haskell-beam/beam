@@ -22,6 +22,20 @@ of each of the arguments to `customExpr_`. The arguments are properly
 parenthesized and can be inserted whole into the final expression. You will
 likely need to explicitly supply a result type using the `as_` function.
 
+For example, below, we use `customExpr_` to access the `regr_intercept` and
+`regr_slope` functions in postgres.
+
+!beam-query
+```haskell
+!chinookpg postgres
+aggregate_ (\t -> ( as_ @Double @QAggregateContext $ customExpr_ (\bytes ms -> "regr_intercept(" <> bytes <> ", " <> ms <> ")") (trackBytes t) (trackMilliseconds t)
+                  , as_ @Double @QAggregateContext $ customExpr_ (\bytes ms -> "regr_slope(" <> bytes <> ", " <> ms <> ")") (trackBytes t) (trackMilliseconds t) )) $
+all_ (track chinookDb)
+```
+
+Of course, this requires that the expression is easily expressible as a
+`ByteString`.
+
 ## Custom queries
 
 Sometimes you would like to drop down to raw SQL to write a query that will

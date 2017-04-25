@@ -106,7 +106,7 @@ filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerL
     Nested `limit_`s and `offset_`s compose in the way you'd expect without
     generating extraneous subqueries.
     
-!!! danger "Warning"
+!!! warning "Warning"
     Note that the order of the `limit_` and `offset_` functions matter.
     Offseting an already limited result is not the same as limiting an offseted
     result. For example, if you offset three rows into a limited set of five

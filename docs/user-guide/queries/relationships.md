@@ -165,14 +165,21 @@ extra `Nullable` column tag, which converts each field into the corresponding
     The table parameter passed in as the join condition does not have a 
     `Nullable` column tag. The join condition should be written as if a 
     concrete row from that table exists.
-    
-!!! note "TODO"
-    Give an example of `leftJoin_`
 
-!!! note "TODO""
-    `rightJoin_` is not yet implemented
+For example, to get every artist along with their albums, but always including
+every artist, use `leftJoin_` as follows.
 
-Right joins are supported (albeit awkwardly) with the `rightJoin_` construct.
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do artist <- all_ (artist chinookDb)
+   album  <- leftJoin_ (album chinookDb) (\album -> albumArtist album ==. primaryKey artist)
+   pure (artist, album)
+```
+
+Right joins are not yet supported. They can always be rewritten as left joins.
+If you have a compelling use case, please file an issue!
 
 ### Full Outer joins
 
