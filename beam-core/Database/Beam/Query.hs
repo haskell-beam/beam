@@ -5,6 +5,10 @@ module Database.Beam.Query
 
     -- * General query combinators
     , module Database.Beam.Query.Combinators
+    , module Database.Beam.Query.CustomSQL
+
+    , QAggregateContext, QGroupingContext, QValueContext
+    , QWindowingContext, QWindowFrameContext
 
     , SqlSelect(..)
     , select
@@ -30,6 +34,7 @@ module Database.Beam.Query
 
 import Database.Beam.Query.Types
 import Database.Beam.Query.Combinators
+import Database.Beam.Query.CustomSQL
 import Database.Beam.Query.Internal
 
 import Database.Beam.Backend.Types

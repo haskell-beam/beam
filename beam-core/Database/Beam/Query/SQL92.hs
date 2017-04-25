@@ -3,7 +3,7 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Database.Beam.Query.SQL92
-    ( buildSql92Query ) where
+    ( buildSql92Query' ) where
 
 import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
@@ -43,12 +43,19 @@ data SelectBuilder syntax (db :: (* -> *) -> *) a where
       ( IsSql92SelectSyntax syntax
       , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
       a -> QueryBuilder syntax -> Maybe (Sql92SelectGroupingSyntax syntax) -> Maybe (Sql92SelectExpressionSyntax syntax) -> SelectBuilder syntax db a
-  SelectBuilderSelectSyntax :: a -> Sql92SelectSelectTableSyntax syntax -> SelectBuilder syntax db a
+  SelectBuilderSelectSyntax :: Bool {-^ Whether or not this contains UNION, INTERSECT, EXCEPT, etc -}
+                            -> a -> Sql92SelectSelectTableSyntax syntax
+                            -> SelectBuilder syntax db a
   SelectBuilderTopLevel ::
     { sbLimit, sbOffset :: Maybe Integer
     , sbOrdering        :: [ Sql92SelectOrderingSyntax syntax ]
     , sbTable           :: SelectBuilder syntax db a } ->
     SelectBuilder syntax db a
+
+sbContainsSetOperation :: SelectBuilder syntax db a -> Bool
+sbContainsSetOperation (SelectBuilderSelectSyntax contains _ _) = contains
+sbContainsSetOperation (SelectBuilderTopLevel { sbTable = tbl }) = sbContainsSetOperation tbl
+sbContainsSetOperation _ = False
 
 fieldNameFunc :: IsSql92ExpressionSyntax expr =>
                  (T.Text -> Sql92ExpressionFieldNameSyntax expr) -> Int
@@ -64,7 +71,7 @@ defaultProjection =
 buildSelect :: ( IsSql92SelectSyntax syntax
                , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax)) a ) =>
                SelectBuilder syntax db a -> syntax
-buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax proj table)) =
+buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ proj table)) =
     selectStmt table ordering limit offset
 buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_))) =
     selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ Nothing Nothing) ordering limit offset
@@ -76,7 +83,7 @@ selectBuilderToTableSource :: ( Sql92TableSourceSelectSyntax (Sql92FromTableSour
                               , IsSql92SelectSyntax syntax
                               , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax)) a ) =>
                               SelectBuilder syntax db a -> Sql92SelectSelectTableSyntax syntax
-selectBuilderToTableSource (SelectBuilderSelectSyntax _ x) = x
+selectBuilderToTableSource (SelectBuilderSelectSyntax _ _ x) = x
 selectBuilderToTableSource (SelectBuilderQ x (QueryBuilder _ from where_)) =
   selectTableStmt (projExprs (defaultProjection x)) from where_ Nothing Nothing
 selectBuilderToTableSource (SelectBuilderGrouping x (QueryBuilder _ from where_) grouping having) =
@@ -100,14 +107,14 @@ emptyQb = QueryBuilder 0 Nothing Nothing
 sbProj :: SelectBuilder syntax db a -> a
 sbProj (SelectBuilderQ proj _) = proj
 sbProj (SelectBuilderGrouping proj _ _ _) = proj
-sbProj (SelectBuilderSelectSyntax proj _) = proj
+sbProj (SelectBuilderSelectSyntax _ proj _) = proj
 sbProj (SelectBuilderTopLevel _ _ _ sb) = sbProj sb
 
 setSelectBuilderProjection :: Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax)) b =>
                               SelectBuilder syntax db a -> b -> SelectBuilder syntax db b
 setSelectBuilderProjection (SelectBuilderQ _ q) proj = SelectBuilderQ proj q
 setSelectBuilderProjection (SelectBuilderGrouping _ q grouping having) proj = SelectBuilderGrouping proj q grouping having
-setSelectBuilderProjection (SelectBuilderSelectSyntax _ q) proj = SelectBuilderSelectSyntax proj q
+setSelectBuilderProjection (SelectBuilderSelectSyntax containsSetOp _ q) proj = SelectBuilderSelectSyntax containsSetOp proj q
 setSelectBuilderProjection (SelectBuilderTopLevel limit offset ord sb) proj =
     SelectBuilderTopLevel limit offset ord (setSelectBuilderProjection sb proj)
 
@@ -180,7 +187,7 @@ projOrder :: Projectible expr x =>
              x -> [ expr ]
 projOrder = execWriter . project' (Proxy @AnyType) (\_ x -> tell [x] >> pure x)
 
-buildSql92Query ::
+buildSql92Query' ::
     forall select projSyntax db s a.
     ( IsSql92SelectSyntax select
     , Eq (Sql92SelectExpressionSyntax select)
@@ -189,8 +196,10 @@ buildSql92Query ::
 
     , Sql92ProjectionExpressionSyntax projSyntax ~ Sql92SelectExpressionSyntax select
     , Projectible (Sql92ProjectionExpressionSyntax projSyntax) a ) =>
-    Q select db s a -> select
-buildSql92Query (Q q) =
+    Bool {-^ Whether this backend supports arbitrary nested UNION, INTERSECT, EXCEPT -} ->
+    Q select db s a ->
+    select
+buildSql92Query' arbitrarilyNestedCombinations (Q q) =
     buildSelect (buildQuery (fromF q))
   where
     buildQuery :: forall s x.
@@ -288,8 +297,12 @@ buildSql92Query (Q q) =
             windows = mkWindows x
             projection = mkProjection x windows
         in case next projection of
-             Pure x' -> setSelectBuilderProjection sb x'
-             _      ->
+             Pure x' ->
+               -- Windowing makes this automatically a top-level (this prevents aggregates from being added directly)
+               case setSelectBuilderProjection sb x' of
+                 sb'@SelectBuilderTopLevel {} -> sb'
+                 sb' -> SelectBuilderTopLevel Nothing Nothing [] sb'
+             _       ->
                let (x', qb) = selectBuilderToQueryBuilder (setSelectBuilderProjection sb projection)
                in buildJoinedQuery (next x') qb
 
@@ -346,11 +359,23 @@ buildSql92Query (Q q) =
     buildTableCombination combineTables left right next =
         let leftSb = buildQuery (fromF left)
             leftTb = selectBuilderToTableSource leftSb
-            rightTb = selectBuilderToTableSource $ buildQuery (fromF right)
+            rightSb = buildQuery (fromF right)
+            rightTb = selectBuilderToTableSource rightSb
 
             proj = reproject (fieldNameFunc unqualifiedField) (sbProj leftSb)
 
-            sb = SelectBuilderSelectSyntax proj (combineTables leftTb rightTb)
+            leftTb' | arbitrarilyNestedCombinations = leftTb
+                    | sbContainsSetOperation leftSb =
+                      let (x', qb) = selectBuilderToQueryBuilder leftSb
+                      in selectBuilderToTableSource (SelectBuilderQ x' qb)
+                    | otherwise = leftTb
+            rightTb' | arbitrarilyNestedCombinations = rightTb
+                     | sbContainsSetOperation rightSb =
+                       let (x', qb) = selectBuilderToQueryBuilder rightSb
+                       in selectBuilderToTableSource (SelectBuilderQ x' qb)
+                     | otherwise = rightTb
+
+            sb = SelectBuilderSelectSyntax True proj (combineTables leftTb' rightTb')
         in case next proj of
              Pure proj'
                | projOrder proj == projOrder proj' -> setSelectBuilderProjection sb proj'

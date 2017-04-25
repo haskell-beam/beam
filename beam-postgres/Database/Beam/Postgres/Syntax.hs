@@ -49,7 +49,7 @@ module Database.Beam.Postgres.Syntax
     , onConflictDefault, onConflictUpdate, onConflictDoNothing
 
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
-    , pgBuildAction
+    , pgRenderSyntaxScript, pgBuildAction
 
     , insert
 
@@ -78,9 +78,11 @@ import           Control.Monad.State
 
 import           Data.Bits
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import           Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy as BL
+import           Data.Char
 import           Data.Coerce
 import           Data.Int
 import           Data.Maybe
@@ -164,7 +166,7 @@ instance SupportedSyntax Postgres PgCommandSyntax
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
 instance SupportedSyntax Postgres PgSelectSyntax
 instance HasQBuilder PgSelectSyntax where
-  buildSqlQuery = buildSql92Query
+  buildSqlQuery = buildSql92Query' True
 
 newtype PgSelectTableSyntax = PgSelectTableSyntax { fromPgSelectTable :: PgSyntax }
 instance SupportedSyntax Postgres PgSelectTableSyntax
@@ -362,6 +364,10 @@ pgByteaType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bytea) Nothing)
 mkNumericPrec :: Maybe (Word, Maybe Word) -> Maybe Int32
 mkNumericPrec Nothing = Nothing
 mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. (fromIntegral (fromMaybe 0 dec) .&. 0xFFFF)
+
+instance IsCustomSqlSyntax PgExpressionSyntax where
+  customExprSyntax = PgExpressionSyntax . emit
+  renderSyntax = BL.toStrict . ("(" <>) . (<> ")") . pgRenderSyntaxScript . fromPgExpression
 
 instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
@@ -869,3 +875,18 @@ pgTestSyntax (PgSyntax syntax) = runF syntax finish step Nothing mempty id
       go next curType (Just PgEscapeBytea) curBuilder (byteString s) a
     step (EscapeIdentifier s next) curType curBuilder a =
       go next curType (Just PgEscapeIdentifier) curBuilder (byteString s) a
+
+pgRenderSyntaxScript :: PgSyntax -> BL.ByteString
+pgRenderSyntaxScript (PgSyntax mkQuery) =
+  toLazyByteString (runF mkQuery finish step)
+  where
+    finish _ = mempty
+    step (EmitBuilder b next) = b <> next
+    step (EmitByteString b next) = byteString b <> next
+    step (EscapeString b next) = escapePgString b <> next
+    step (EscapeBytea b next) = escapePgBytea b <> next
+    step (EscapeIdentifier b next) = escapePgIdentifier b <> next
+
+    escapePgString b = byteString (B.concatMap (\w -> if w == fromIntegral (ord '\'') then "''" else B.singleton w) b)
+    escapePgBytea b = error "escapePgBytea: no connection"
+    escapePgIdentifier b = error "escapePgIdentifier: no connection"

@@ -82,22 +82,6 @@ migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts
     pgToToolError (PgRowParseError err) = Tool.DdlCustomError (show err)
     pgToToolError (PgInternalError err) = Tool.DdlCustomError err
 
-
-pgRenderSyntaxScript :: PgSyntax -> BL.ByteString
-pgRenderSyntaxScript (PgSyntax mkQuery) =
-  toLazyByteString (runF mkQuery finish step)
-  where
-    finish _ = mempty
-    step (EmitBuilder b next) = b <> next
-    step (EmitByteString b next) = byteString b <> next
-    step (EscapeString b next) = escapePgString b <> next
-    step (EscapeBytea b next) = escapePgBytea b <> next
-    step (EscapeIdentifier b next) = escapePgIdentifier b <> next
-
-    escapePgString b = byteString (B.concatMap (\w -> if w == fromIntegral (ord '\'') then "''" else B.singleton w) b)
-    escapePgBytea b = error "escapePgBytea: no connection"
-    escapePgIdentifier b = error "escapePgIdentifier: no connection"
-
 migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
 migrateScript steps =
   "-- CAUTION: beam-postgres currently escapes postgres string literals somewhat\n"                 :

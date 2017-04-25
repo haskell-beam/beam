@@ -11,6 +11,7 @@ import           Database.Beam.Query
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
+import qualified Data.ByteString.Lazy as BL
 import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Int
@@ -50,7 +51,7 @@ emitValue v = SqliteSyntax (byteString "?") (DL.singleton v)
 newtype SqliteCommandSyntax = SqliteCommandSyntax { fromSqliteCommand :: SqliteSyntax }
 newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSyntax }
 instance HasQBuilder SqliteSelectSyntax where
-  buildSqlQuery = buildSql92Query
+  buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
 newtype SqliteInsertSyntax = SqliteInsertSyntax { fromSqliteInsert :: SqliteSyntax }
 newtype SqliteUpdateSyntax = SqliteUpdateSyntax { fromSqliteUpdate :: SqliteSyntax }
 newtype SqliteDeleteSyntax = SqliteDeleteSyntax { fromSqliteDelete :: SqliteSyntax }
@@ -124,7 +125,7 @@ instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
 tableOp :: ByteString -> SqliteSelectTableSyntax -> SqliteSelectTableSyntax -> SqliteSelectTableSyntax
 tableOp op a b =
   SqliteSelectTableSyntax $
-  parens (fromSqliteSelectTable a) <> spaces (emit op) <> parens (fromSqliteSelectTable b)
+  fromSqliteSelectTable a <> spaces (emit op) <> fromSqliteSelectTable b
 
 instance IsSql92FromSyntax SqliteFromSyntax where
   type Sql92FromExpressionSyntax SqliteFromSyntax = SqliteExpressionSyntax
@@ -198,6 +199,13 @@ instance HasSqlValueSyntax SqliteValueSyntax SqlNull where
   sqlValueSyntax _ = SqliteValueSyntax (emit "NULL")
 instance HasSqlValueSyntax SqliteValueSyntax String where
   sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString s)))
+
+instance IsCustomSqlSyntax SqliteExpressionSyntax where
+  customExprSyntax = SqliteExpressionSyntax . emit
+  renderSyntax s = let SqliteSyntax b vs = fromSqliteExpression s
+                   in if null (DL.toList vs)
+                      then BL.toStrict $ toLazyByteString b
+                      else error "renderSyntax{SqliteExpressionSyntax}: TODO: Can't renderSyntax with values yet"
 
 instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionValueSyntax SqliteExpressionSyntax = SqliteValueSyntax
