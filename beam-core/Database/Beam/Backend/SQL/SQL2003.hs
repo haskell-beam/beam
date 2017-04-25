@@ -3,8 +3,8 @@ module Database.Beam.Backend.SQL.SQL2003
 
     , IsSql2003FromSyntax(..)
     , IsSql2003ExpressionSyntax(..)
+    , IsSql2003ExpressionElementaryOLAPOperationsSyntax(..)
     , IsSql2003ExpressionAdvancedOLAPOperationsSyntax(..)
-    , IsSql2003ExpressionEnhancedNumericFunctionsSyntax(..)
     , IsSql2003WindowFrameSyntax(..)
     , IsSql2003WindowFrameBoundsSyntax(..)
     , IsSql2003WindowFrameBoundSyntax(..)
@@ -44,13 +44,14 @@ class ( IsSql99ExpressionSyntax expr
 -- | Optional SQL2003 "Advanced OLAP operations" T612 support
 class IsSql2003ExpressionSyntax expr =>
   IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr where
+  percentRankAggE :: expr
+  cumeDistAggE :: expr
+
+-- | Optional SQL2003 "Elementary OLAP operations" T611 support
+class IsSql2003ExpressionSyntax expr =>
+  IsSql2003ExpressionElementaryOLAPOperationsSyntax expr where
 
   filterAggE :: expr -> expr -> expr
-
--- | Optional SQL2003 "Enhanced Numeric Functions" T621 support
-class IsSql2003ExpressionSyntax expr =>
-  IsSql2003ExpressionEnhancedNumericFunctionsSyntax expr where
-
   rankAggE :: expr
 
 class IsSql2003WindowFrameBoundsSyntax (Sql2003WindowFrameBoundsSyntax frame) =>

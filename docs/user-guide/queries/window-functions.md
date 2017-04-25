@@ -39,9 +39,9 @@ withWindow_ (\i -> ( frame_ noPartition_ (orderPartitionBy_ (asc_ (invoiceTotal 
 
 !!! note "Note"
     `rank_` is only available in backends that implement the optional SQL2003
-    T621 feature "Enhanced Numeric Functions". Beam syntaxes that implement this
+    T611 feature "Elementary OLAP operations". Beam syntaxes that implement this
     functionality implement the
-    `IsSql2003ExpressionEnhancedNumericFunctionsSyntax` type class.
+    `IsSql2003ExpressionElementaryOLAPOperationsSyntax` type class.
     
 
 Notice that aggregates over the result of the window expression work as you'd

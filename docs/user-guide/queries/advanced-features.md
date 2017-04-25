@@ -1,7 +1,7 @@
 This page documents other advanced features that beam supports across backends
 that support them.
 
-## SQL2003 T612: Advanced OLAP operations
+## SQL2003 T611: Elementary OLAP operations
 
 This optional SQL2003 feature allows attaching arbitrary `FILTER (WHERE ..)`
 clauses to aggregates. During querying only rows matching the given expression
@@ -33,8 +33,11 @@ withWindow_ (\i -> frame_ (partitionBy_ (invoiceCustomer i)) noOrder_ noBounds_)
     but this isn't enforced at compile time. This may be fixed in a later
     version of beam.
 
-## SQL2003 T621: Enhanced Numeric functions
+This extension also provides various window functions for SQL. The only one beam
+currently implements is `RANK()` via the `rank_` function. Contributions are
+appreciated!
 
-This extension provides various numeric statistic functions for SQL. The only
-one beam currently implements is `RANK()` via the `rank_` function.
-Contributions are appreciated!
+## SQL2003 T612: Advanced OLAP operations
+
+This provides both the `PERCENT_RANK()` and `CUME_DIST()` functions as
+`percentRank_` and `cumeDist_` respectively.

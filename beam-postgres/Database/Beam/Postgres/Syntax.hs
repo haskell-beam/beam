@@ -445,10 +445,12 @@ instance IsSql2003ExpressionSyntax PgExpressionSyntax where
     PgExpressionSyntax $
     fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
 
-instance IsSql2003ExpressionEnhancedNumericFunctionsSyntax PgExpressionSyntax where
-  rankAggE = PgExpressionSyntax $ emit "RANK()"
-
 instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax PgExpressionSyntax where
+  percentRankAggE = PgExpressionSyntax $ emit "PERCENT_RANK()"
+  cumeDistAggE = PgExpressionSyntax $ emit "CUME_DIST()"
+
+instance IsSql2003ExpressionElementaryOLAPOperationsSyntax PgExpressionSyntax where
+  rankAggE = PgExpressionSyntax $ emit "RANK()"
   filterAggE agg filter =
     PgExpressionSyntax $
     fromPgExpression agg <> emit " FILTER (WHERE " <> fromPgExpression filter <> emit ")"

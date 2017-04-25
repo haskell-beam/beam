@@ -51,7 +51,8 @@ module Database.Beam.Query.Combinators
 
     , QGroupable(..)
 
-    , sum_, avg_, min_, max_, count_, countAll_, rank_
+    , sum_, avg_, min_, max_, count_, countAll_
+    , rank_, cumeDist_, percentRank_
     , sumOver_, avgOver_, minOver_, maxOver_, countOver_
     , filterWhere_
 
@@ -663,7 +664,13 @@ allInGroup_ = Nothing
 distinctInGroup_ = Just setQuantifierDistinct
 allInGroupExplicitly_ = Just setQuantifierAll
 
-rank_ :: IsSql2003ExpressionEnhancedNumericFunctionsSyntax expr
+cumeDist_, percentRank_
+  :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
+  => QAgg expr s Double
+cumeDist_ = QExpr cumeDistAggE
+percentRank_ = QExpr percentRankAggE
+
+rank_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
       => QAgg expr s Int
 rank_ = QExpr rankAggE
 
@@ -694,7 +701,7 @@ anyOver_   q (QExpr a) = QExpr (anyE  q a)
 
 -- | Support for FILTER (WHERE ...) syntax for aggregates.
 --   Part of SQL2003 Advanced OLAP operations feature (T612)
-filterWhere_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
+filterWhere_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
              => QAgg expr s a -> QExpr expr s Bool -> QAgg expr s a
 filterWhere_ (QExpr agg) (QExpr filter) = QExpr (filterAggE agg filter)
 

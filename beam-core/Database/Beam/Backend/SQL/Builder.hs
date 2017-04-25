@@ -238,13 +238,15 @@ instance IsSql2003WindowFrameSyntax SqlSyntaxBuilder where
       maybe mempty (\b -> byteString " ROWS " <> buildSql b) bounds_ <>
       byteString ")"
 
-instance IsSql2003ExpressionEnhancedNumericFunctionsSyntax SqlSyntaxBuilder where
-  rankAggE = SqlSyntaxBuilder "RANK()"
-
-instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax SqlSyntaxBuilder where
+instance IsSql2003ExpressionElementaryOLAPOperationsSyntax SqlSyntaxBuilder where
   filterAggE agg_ filter_ =
     SqlSyntaxBuilder $
     buildSql agg_ <> byteString " FILTER (WHERE " <> buildSql filter_ <> byteString ")"
+  rankAggE = SqlSyntaxBuilder "RANK()"
+
+instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax SqlSyntaxBuilder where
+  percentRankAggE = SqlSyntaxBuilder "PERCENT_RANK()"
+  cumeDistAggE = SqlSyntaxBuilder "CUME_DIST()"
 
 data SqlWindowFrameBound = SqlWindowFrameUnbounded
                          | SqlWindowFrameBounded Int
