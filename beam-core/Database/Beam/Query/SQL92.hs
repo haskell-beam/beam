@@ -43,7 +43,7 @@ data SelectBuilder syntax (db :: (* -> *) -> *) a where
       ( IsSql92SelectSyntax syntax
       , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
       a -> QueryBuilder syntax -> Maybe (Sql92SelectGroupingSyntax syntax) -> Maybe (Sql92SelectExpressionSyntax syntax) -> SelectBuilder syntax db a
-  SelectBuilderSelectSyntax :: Bool {-^ Whether or not this contains UNION, INTERSECT, EXCEPT, etc -}
+  SelectBuilderSelectSyntax :: Bool {- Whether or not this contains UNION, INTERSECT, EXCEPT, etc -}
                             -> a -> Sql92SelectSelectTableSyntax syntax
                             -> SelectBuilder syntax db a
   SelectBuilderTopLevel ::

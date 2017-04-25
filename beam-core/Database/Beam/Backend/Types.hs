@@ -19,9 +19,6 @@ newtype Exposed x = Exposed x
 class BeamBackend be where
   type BackendFromField be :: * -> Constraint
 
---  backendNull :: BackendLiteral be
---  backendIsNull :: BackendLiteral be -> Bool
-
 -- | Support for NULLable Foreign Key references.
 --
 -- > data MyTable f = MyTable
@@ -31,8 +28,6 @@ class BeamBackend be where
 --
 -- See 'Columnar' for more information.
 data Nullable (c :: * -> *) x
-
-class BeamBackend be => SupportedSyntax be syntax
 
 newtype Auto x = Auto { unAuto :: Maybe x }
   deriving (Show, Read, Eq, Ord)

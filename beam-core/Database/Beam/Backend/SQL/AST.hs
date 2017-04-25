@@ -151,7 +151,7 @@ data CastTarget
   deriving (Show, Eq)
 
 data DataType
-  = DataTypeChar Bool {-^ Varying -} (Maybe Int)
+  = DataTypeChar Bool {- Varying -} (Maybe Int)
   | DataTypeNationalChar Bool (Maybe Int)
   | DataTypeBit Bool (Maybe Int)
   | DataTypeNumeric Int (Maybe Int)
@@ -161,7 +161,7 @@ data DataType
   | DataTypeReal
   | DataTypeDoublePrecision
   | DataTypeDate
-  | DataTypeTime (Maybe Word) {-^ time fractional seconds precision -} Bool {-^ With time zone -}
+  | DataTypeTime (Maybe Word) {- time fractional seconds precision -} Bool {- With time zone -}
   | DataTypeTimeStamp (Maybe Word) Bool
   | DataTypeInterval ExtractField
   | DataTypeIntervalFromTo ExtractField ExtractField
