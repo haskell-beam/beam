@@ -86,7 +86,7 @@ data QField s ty
   deriving (Show, Eq, Ord)
 
 data QAssignment fieldName expr s
-  = QAssignment fieldName expr
+  = QAssignment [(fieldName, expr)]
   deriving (Show, Eq, Ord)
 
 -- * QGenExpr type

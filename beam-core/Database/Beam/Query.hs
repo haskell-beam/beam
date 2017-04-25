@@ -127,7 +127,7 @@ update :: ( Beamable table
 update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere =
   SqlUpdate (updateStmt tblNm assignments (Just where_))
   where
-    assignments = map (\(QAssignment fieldName expr) -> (fieldName, expr)) (mkAssignments tblFields)
+    assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
     QExpr where_ = mkWhere tblFieldExprs
 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField tblNm name)) tblSettings

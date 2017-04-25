@@ -1,4 +1,4 @@
-{-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications, NamedFieldPuns #-}
+{-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications, NamedFieldPuns, InstanceSigs #-}
 module Database.Beam.Query.Combinators
     ( all_, join_, guard_, filter_, related_, relatedBy_
     , leftJoin_, subselect_
@@ -76,6 +76,7 @@ import Control.Monad.RWS
 import Control.Monad.Writer
 import Control.Monad.Identity
 import Control.Monad.Free
+import Control.Applicative
 
 import Data.Monoid
 import Data.String
@@ -450,12 +451,31 @@ current_ :: IsSql92ExpressionSyntax expr
 current_ (QField _ nm) = QExpr (fieldE (unqualifiedField nm))
 
 infix 4 <-.
-(<-.) :: IsSql92FieldNameSyntax fieldName
-      => QField s a
-      -> QExpr expr s a
-      -> QAssignment fieldName expr s
-QField _ fieldName <-. QExpr expr =
-  QAssignment (unqualifiedField fieldName) expr
+class SqlUpdatable expr s lhs rhs | rhs -> expr, lhs -> s, rhs -> s, lhs s expr -> rhs, rhs -> lhs where
+  (<-.) :: forall fieldName.
+           IsSql92FieldNameSyntax fieldName
+        => lhs
+        -> rhs
+        -> QAssignment fieldName expr s
+instance SqlUpdatable expr s (QField s a) (QExpr expr s a) where
+  QField _ fieldName <-. QExpr expr =
+    QAssignment [(unqualifiedField fieldName, expr)]
+instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s)) where
+  (<-.) :: forall fieldName.
+           IsSql92FieldNameSyntax fieldName
+        => tbl (QField s) -> tbl (QExpr expr s)
+        -> QAssignment fieldName expr s
+  lhs <-. rhs =
+    QAssignment $
+    allBeamValues (\(Columnar' (Const assignments)) -> assignments) $
+    runIdentity $
+    zipBeamFieldsM (\(Columnar' (QField _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
+                       pure (Columnar' (Const (unqualifiedField f, e)) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
+
+-- (<-.) :: IsSql92FieldNameSyntax fieldName
+--       => QField s a
+--       -> QExpr expr s a
+--       -> QAssignment fieldName expr s
 
 -- * Combine table sources via UNION, INTERSECT, and EXCEPT
 
