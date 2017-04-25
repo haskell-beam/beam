@@ -65,12 +65,14 @@ module Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 
 import           Database.Beam hiding (insert)
+import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.Types
-import           Database.Beam.Migrate.SQL
-import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
+
+import           Database.Beam.Migrate.SQL
+import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
@@ -161,24 +163,17 @@ nextSyntaxStep (EscapeIdentifier _ next) = next
 -- * Syntax types
 
 newtype PgCommandSyntax = PgCommandSyntax { fromPgCommand :: PgSyntax }
-instance SupportedSyntax Postgres PgCommandSyntax
-
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
-instance SupportedSyntax Postgres PgSelectSyntax
 instance HasQBuilder PgSelectSyntax where
   buildSqlQuery = buildSql92Query' True
 
 newtype PgSelectTableSyntax = PgSelectTableSyntax { fromPgSelectTable :: PgSyntax }
-instance SupportedSyntax Postgres PgSelectTableSyntax
 
 newtype PgInsertSyntax = PgInsertSyntax { fromPgInsert :: PgSyntax }
-instance SupportedSyntax Postgres PgInsertSyntax
 
 newtype PgDeleteSyntax = PgDeleteSyntax { fromPgDelete :: PgSyntax }
-instance SupportedSyntax Postgres PgDeleteSyntax
 
 newtype PgUpdateSyntax = PgUpdateSyntax { fromPgUpdate :: PgSyntax }
-instance SupportedSyntax Postgres PgUpdateSyntax
 
 newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax } deriving Eq
 newtype PgAggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fromPgAggregationSetQuantifier :: PgSyntax }
