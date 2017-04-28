@@ -65,7 +65,26 @@ import           GHC.Types
 import           Lens.Micro hiding (to)
 import qualified Lens.Micro as Lens
 
+-- | Allows introspection into database types.
+--
+--   All database types must be of kind '(* -> *) -> *'. If the type parameter
+--   is named 'f', each field must be of the type of 'f' applied to some type
+--   for which an 'IsDatabaseEntity' instance exists.
+--
+--   Entities are documented under [the corresponding
+--   section](Database.Beam.Schema#entities) and in the
+--   [manual](http://tathougies.github.io/beam/user-guide/databases/)
 class Database db where
+
+    -- | Default derived function. Do not implement this yourself.
+    --
+    --   The idea is that, for any two databases over particular entity tags 'f'
+    --   and 'g', if we can take any entity in 'f' and 'g' to the corresponding
+    --   entity in 'h' (in the possibly effectful monad 'm'), then we can
+    --   transform the two databases over 'f' and 'g' to a database in 'h',
+    --   within the monad 'm'.
+    --
+    --   If that doesn't make sense, don't worry. This is mostly beam internal
     zipTables :: forall be f g h m.
                  Monad m
               => Proxy be
@@ -83,35 +102,78 @@ class Database db where
     zipTables _ combine f g =
         to <$> gZipDatabase (Proxy @f, Proxy @g, Proxy @h, Proxy @be) combine (from f) (from g)
 
+-- | Automatically provide names for tables, and descriptions for tables (using
+--   'defTblFieldSettings'). Your database must implement 'Generic', and must be
+--   auto-derivable. For more information on name generation, see the
+--   [manual](https://tathougies.github.io/beam/user-guide/models)
 defaultDbSettings :: ( Generic (DatabaseSettings be db)
                      , GAutoDbSettings (Rep (DatabaseSettings be db) ()) ) =>
                      DatabaseSettings be db
 defaultDbSettings = to' autoDbSettings'
 
+-- | A helper data type that lets you modify a database schema. Converts all
+-- entities in the database into functions from that entity to itself.
 type DatabaseModification f be db = db (EntityModification f be)
+-- | A newtype wrapper around 'f e -> f e' (i.e., an endomorphism between entity
+--   types in 'f'). You usually want to use 'modifyTable' or another function to
+--   contstruct these for you.
 newtype EntityModification f be e = EntityModification (f e -> f e)
+-- | A newtype wrapper around 'Columnar f a -> Columnar f ' (i.e., an
+--   endomorphism between 'Columnar's over 'f'). You usually want to use
+--   'fieldNamed' or the 'IsString' instance to rename the field, when 'f ~
+--   TableField'
 newtype FieldModification f a
   = FieldModification (Columnar f a -> Columnar f a)
 
+-- | Return a 'DatabaseModification' that does nothing. This is useful if you
+--   only want to rename one table. You can do
+--
+-- > dbModification { tbl1 = modifyTable (\oldNm -> "NewTableName") tableModification }
 dbModification :: forall f be db. Database db => DatabaseModification f be  db
 dbModification = runIdentity $
                  zipTables (Proxy @be) (\_ _ -> pure (EntityModification id)) (undefined :: DatabaseModification f be db) (undefined :: DatabaseModification f be db)
 
+-- | Return a table modification (for use with 'modifyTable') that does nothing.
+--   Useful if you only want to change the table name, or if you only want to
+--   modify a few fields.
+--
+--   For example,
+--
+-- > tableModification { field1 = "Column1" }
+--
+--   is a table modification (where 'f ~ TableField tbl') that changes the
+--   column name of 'field1' to "Column1".
 tableModification :: forall f tbl. Beamable tbl => tbl (FieldModification f)
 tableModification = runIdentity $
                     zipBeamFieldsM (\(Columnar' _ :: Columnar' Ignored x) (Columnar' _ :: Columnar' Ignored x) ->
                                       pure (Columnar' (FieldModification id :: FieldModification f x))) (undefined :: TableSkeleton tbl) (undefined :: TableSkeleton tbl)
 
+-- | Modify a database according to a given modification. Most useful for
+--   'DatabaseSettings' to change the name mappings of tables and fields. For
+--   example, you can use this to modify the default names of a table
+--
+-- > db :: DatabaseSettings MyDb
+-- > db = defaultDbSettings `withDbModification`
+-- >      dbModification {
+-- >        -- Change default name "table1" to "Table_1". Change the name of "table1Field1" to "first_name"
+-- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
+-- >      }
 withDbModification :: forall db f be.
                       Database db => db f -> DatabaseModification f be db -> db f
 withDbModification db mods =
   runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification mod) -> pure (mod tbl)) db mods
 
+-- | Modify a table according to the given field modifications. Invoked by
+--   'modifyTable' to apply the modification in the database. Not used as often in
+--   user code, but provided for completeness.
 withTableModification :: Beamable tbl => tbl (FieldModification f) -> tbl f -> tbl f
 withTableModification mods tbl =
   runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification mod :: FieldModification f a)) ->
                                   pure (Columnar' (mod field))) tbl mods
 
+-- | Provide an 'EntityModification' for 'TableEntity's. Allows you to modify
+--   the name of the table and provide a modification for each field in the
+--   table. See the examples for 'withDbModification' for more.
 modifyTable :: (Text -> Text)
             -> tbl (FieldModification (TableField tbl))
             -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)
@@ -119,6 +181,8 @@ modifyTable modTblNm modFields =
   EntityModification (\(DatabaseEntity (DatabaseTable nm fields)) ->
                          (DatabaseEntity (DatabaseTable (modTblNm nm) (withTableModification modFields fields))))
 
+-- | A field modification to rename the field. Also offered under the 'IsString'
+--   instance for 'FieldModification (TableField tbl) a' for convenience.
 fieldNamed :: Text -> FieldModification (TableField tbl) a
 fieldNamed newName = FieldModification (\_ -> TableField newName)
 
@@ -126,10 +190,13 @@ instance IsString (FieldModification (TableField tbl) a) where
   fromString = fieldNamed . fromString
 
 -- * Database entity types
+
+-- | An entity tag for tables. See the documentation for 'Table' or consult the
+--   [manual](https://tathougies.github.io/beam/user-guide/models) for more.
 data TableEntity (tbl :: (* -> *) -> *)
 data ViewEntity (view :: (* -> *) -> *)
 data UniqueConstraint (tbl :: (* -> *) -> *) (c :: (* -> *) -> *)
-data DomainType (ty :: *)
+data DomainTypeEntity (ty :: *)
 data CharacterSetEntity
 data CollationEntity
 data TranslationEntity
@@ -157,6 +224,9 @@ instance IsDatabaseEntity be (TableEntity tbl) where
   dbEntityAuto nm =
     DatabaseTable (unCamelCaseSel nm) defTblFieldSettings
 
+-- | Represents a meta-description of a particular entityType. Mostly, a wrapper
+--   around 'DatabaseEntityDescriptor be entityType', but carries around the
+--   'IsDatabaseEntity' dictionary.
 data DatabaseEntity be (db :: (* -> *) -> *) entityType  where
     DatabaseEntity ::
       IsDatabaseEntity be entityType =>
@@ -170,6 +240,11 @@ dbEntityDescriptor = Lens.to (\(DatabaseEntity e) -> e)
 -- tableSettings :: Lens' (DatabaseTable db entity table) (TableSettings table)
 -- tableSettings f (DatabaseTable proxy name settings) = (\settings' -> DatabaseTable proxy name settings') <$> f settings
 
+-- | When parameterized by this entity tag, a database type will hold
+--   meta-information on the Haskell mappings of database entities. Under the
+--   hood, each entity type is transformed into its 'DatabaseEntityDescriptor'
+--   type. For tables this includes the table name as well as the corresponding
+--   'TableSettings', which provides names for each column.
 type DatabaseSettings be db = db (DatabaseEntity be db)
 
 class GAutoDbSettings x where
@@ -260,9 +335,18 @@ type family Columnar (f :: * -> *) x where
 
     Columnar f x = f x
 
--- | A short type-alias for 'Columnar'. May shorten yopr schema definitions
+-- | A short type-alias for 'Columnar'. May shorten your schema definitions
 type C f a = Columnar f a
 
+-- | If you declare a function 'Columnar f a -> b' and try to constrain your
+--   function by a type class for 'f', GHC will complain, because 'f' is
+--   ambiguous in 'Columnar f a'. For example, 'Columnar Identity (Maybe a) ~
+--   Maybe a' and 'Columnar (Nullable Identity) a ~ Maybe a', so given a type
+--   'Columnar f a', we cannot know the type of 'f'.
+--
+--   Thus, if you need to know 'f', you can instead use 'Columnar''. Since its a
+--   newtype, it carries around the 'f' paramater unambiguously. Internally, it
+--   simply wraps 'Columnar f a'
 newtype Columnar' f a = Columnar' (Columnar f a)
 
 -- | Metadata for a field of type 'ty' in 'table'.
@@ -296,9 +380,13 @@ data TableField (table :: (* -> *) -> *) ty = TableField
                                             { _fieldName        :: Text                   -- ^ The field name
                                             } deriving (Show, Eq)
 
+-- | Retrieve the field name from a 'TableField'
 fieldName :: Lens' (TableField table ty) Text
 fieldName f (TableField name) = TableField <$> f name
 
+-- | Represents a table that contains metadata on its fields. In particular,
+--   each field of type 'Columnar f a' is transformed into 'TableField table a'.
+--   You can get or update the name of each field by using the 'fieldName' lens.
 type TableSettings table = table (TableField table)
 
 data Ignored x = Ignored
@@ -315,7 +403,7 @@ type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed)) (Rep (
 
 -- | The big Kahuna! All beam tables implement this class.
 --
---   The kind of all table types is `(* -> *) -> *`. This is because all table types are actually /table type constructors/.
+--   The kind of all table types is '(* -> *) -> *'. This is because all table types are actually /table type constructors/.
 --   Every table type takes in another type constructor, called the /column tag/, and uses that constructor to instantiate the column types.
 --   See the documentation for 'Columnar'.
 --
@@ -332,9 +420,11 @@ type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed)) (Rep (
 -- >                  , _blogPostTagline :: Columnar f (Maybe Text)
 -- >                  , _blogPostImageGallery :: PrimaryKey ImageGalleryT (Nullable f) }
 -- >                    deriving Generic
+-- > instance Beamable BlogPostT
 -- > instance Table BlogPostT where
--- >    data PrimaryKey BlogPostT f = BlogPostId (Columnar f Text)
+-- >    data PrimaryKey BlogPostT f = BlogPostId (Columnar f Text) deriving Generic
 -- >    primaryKey = BlogPostId . _blogPostSlug
+-- > instance Beamable (PrimaryKey BlogPostT)
 --
 --   We can interpret this as follows:
 --
@@ -353,6 +443,12 @@ class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (ta
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
     primaryKey :: table column -> PrimaryKey table column
 
+-- | Provides a number of introspection routines for the beam library. Allows us
+--   to "zip" tables with different column tags together. Always instantiate an
+--   empty 'Beamable' instance for tables, primary keys, and any type that you
+--   would like to embed within either. See the
+--   [manual](https://tathougies.github.io/beam/user-guide/models) for more
+--   information on embedding.
 class Beamable table where
     zipBeamFieldsM :: Applicative m =>
                       (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
@@ -417,6 +513,10 @@ type FieldsFulfillConstraintNullable (c :: * -> Constraint) t =
 pk :: Table t => t f -> PrimaryKey t f
 pk = primaryKey
 
+-- | Return a 'TableSettings' for the appropriate 'table' type where each column
+--   has been given its default name. See the
+--   [manual](https://tathougies.github.io/beam/user-guide/models) for
+--   information on the default naming convention.
 defTblFieldSettings :: ( Generic (TableSettings table)
                        , GDefaultTableFieldSettings (Rep (TableSettings table) ())) =>
                        TableSettings table

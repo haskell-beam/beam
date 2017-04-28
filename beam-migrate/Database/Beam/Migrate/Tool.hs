@@ -7,7 +7,9 @@ module Database.Beam.Migrate.Tool
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.SQL
+import           Database.Beam.Migrate.Tool.Interactive
 import           Database.Beam.Migrate.Tool.Schema hiding (migration)
 import           Database.Beam.Migrate.Types ( MigrationStep(..), MigrationF(..), Migration
                                              , MigrationSteps, SomeDatabasePredicate(..)
@@ -16,14 +18,13 @@ import           Database.Beam.Migrate.Types ( MigrationStep(..), MigrationF(..)
                                              , stepNames
                                              , migrationStepsToMigration
                                              , collectChecks )
-import           Database.Beam.Migrate.Diff
-import           Database.Beam.Migrate.Resolvers
 
 import           Database.Beam.Migrate.Tool.Types
 
 import           Control.Exception (throwIO)
 import           Control.Monad
 import           Control.Monad.Free.Church
+import           Control.Monad.Trans
 
 import qualified Data.ByteString.Lazy as BL hiding (putStrLn)
 import qualified Data.ByteString.Lazy.Char8 as BL (putStrLn)
@@ -89,7 +90,7 @@ invokeMigrationTool :: forall cmdSyntax be beOptions.
                     -> BeamMigrationSubcommand -> MigrationSteps cmdSyntax () ()
                     -> SomeCheckedDatabase be
                     -> IO ()
-invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  subcommand steps (SomeCheckedDatabase db) =
+invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  subcommand steps checkedDb@(SomeCheckedDatabase db) =
   case subcommand of
     ListMigrations ->
       do putStrLn "Registered migrations:"
@@ -169,47 +170,70 @@ invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  su
 
          pure ()
 
-    Diff direction ->
-      do dbConstraints <- backendGetDbConstraints migrationCommandBackendOptions
+    Diff interactive direction ->
+      do putStrLn "Getting database constraints..."
+         dbConstraints <- backendGetDbConstraints migrationCommandBackendOptions
          let schemaConstraints = collectChecks db
-             resolvers = [ trivialSolver ]
-         putStrLn ("GOing from " <> show direction)
-         let schemaDiff =
+
+         let (preConditions, postConditions) = 
                case direction of
-                 DiffDbToMigration -> diff resolvers dbConstraints schemaConstraints
-                 DiffMigrationToDb -> diff resolvers schemaConstraints dbConstraints
+                 DiffDbToMigration ->
+                   ( filter (not . (`elem` schemaConstraints)) dbConstraints
+                   , filter (not . (`elem` dbConstraints)) schemaConstraints )
+                 DiffMigrationToDb ->
+                   ( filter (not . (`elem` dbConstraints)) schemaConstraints
+                   , filter (not . (`elem` schemaConstraints)) dbConstraints )
 
-         -- putStrLn "This is what our schema expected"
-         -- forM_ schemaConstraints $ \(SomeDatabasePredicate p) ->
-         --   putStrLn ("  - " <> englishDescription p)
+         if interactive
+           then diffInteractive be migrationCommandBackendOptions preConditions postConditions
+           else do
+             -- putStrLn "This is what our schema expected"
+             -- forM_ schemaConstraints $ \(SomeDatabasePredicate p) ->
+             --   putStrLn ("  - " <> englishDescription p)
 
-         putStrLn "These are our goal constraints (what we will try to make true):"
-         forM_ (diffGoalTrue schemaDiff) $ \(SomeDatabasePredicate p) ->
-           putStrLn ("  - " <> englishDescription p)
-         putStrLn "\nThese are the constraints we will try to make false:"
-         forM_ (diffGoalFalse schemaDiff) $ \(SomeDatabasePredicate p) ->
-           putStrLn ("  - " <> englishDescription p)
+             putStrLn "Preconditions:"
+             forM_ preConditions $ \(SomeDatabasePredicate p) ->
+               putStrLn ("  - " <> englishDescription p)
+             putStrLn "\nPostconditions:"
+             forM_ postConditions $ \(SomeDatabasePredicate p) ->
+               putStrLn ("  - " <> englishDescription p)
 
-         -- First falsify everything, then make everything true
-         res <-
-           orderGoals (diffGoalFalse schemaDiff) $ \roots preds ->
-           do putStrLn "Going to resolve any one of"
-              forM_ roots $ \(_, SomeDatabasePredicate root) ->
-                putStrLn ("  - " <> englishDescription root)
-              putStrLn "\nWith context"
-              forM_ preds $ \(_, SomeDatabasePredicate pred) ->
-                putStrLn ("  - " <> englishDescription pred)
+             putStrLn "Beam-migrate will now"
 
-              runResolver (makeTrueResolver @(Sql92DdlCommandColumnSchemaSyntax cmdSyntax)) roots preds
+             res <- pure (guessActions defaultActionProviders preConditions postConditions)
 
-         putStrLn "The actions would be"
-         forM_ res $ \step ->
-           putStrLn ("  - " ++ step)
+             case res of
+               GuessResultSolved solutions -> do
+                 putStrLn "Possible sequences would be"
+                 showSolutions 1 backendRenderSyntax solutions
 
-         pure ()
+               GuessResultCandidates cs -> do
+                 putStrLn "NO SOLUTION FOUND"
+                 forM_ (zip [1..10] cs) $ \(i, steps) ->
+                   do putStrLn (show i <> ")")
+                      forM_ (dbStateCmdSequence steps) $ \step ->
+                        putStrLn ("    - " ++ backendRenderSyntax step)
+                      putStrLn "  Remaining to be solved:"
+                      forM_ (dbStatePostConditionsLeft steps) $ \(SomeDatabasePredicate pred) ->
+                        putStrLn ("    - " ++ englishDescription pred)
+                      putStrLn "  Unhandled pre conditions:"
+                      forM_ (dbStatePreConditionsLeft steps) $ \(SomeDatabasePredicate pred) ->
+                        putStrLn ("    - " ++ englishDescription pred)
+
+             pure ()
 
          -- Try to order the goals
          --V.fromList (diffGoalTrue schemaDiff)
 
 --    Up ->
 --      do ensureMigrationsTable
+
+showSolutions _ _ [] = putStrLn "No more solutions"
+showSolutions i renderSyntax (solution:solutions) =
+  do putStrLn (show i <> ")")
+     forM_ solution $ \step ->
+       putStrLn ("  - " ++ renderSyntax step)
+
+     putStrLn "See more?"
+     a <- getLine
+     if a == "q" then pure () else putStrLn "Finding another" >> showSolutions (i + 1) renderSyntax solutions

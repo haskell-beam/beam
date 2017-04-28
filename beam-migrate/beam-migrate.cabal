@@ -19,8 +19,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:     Database.Beam.Migrate.Types
                        Database.Beam.Migrate.Checks
-                       Database.Beam.Migrate.Resolvers
-                       Database.Beam.Migrate.Diff
+                       Database.Beam.Migrate.Actions
 
                        Database.Beam.Migrate.SQL
                        Database.Beam.Migrate.SQL.Types
@@ -29,13 +28,14 @@ library
                        Database.Beam.Migrate.SQL.SQL92
 
                        Database.Beam.Migrate.Tool
+                       Database.Beam.Migrate.Tool.Interactive
                        Database.Beam.Migrate.Tool.Schema
                        Database.Beam.Migrate.Tool.Schema.V0001
   other-modules:       Database.Beam.Migrate.Tool.Types
   -- other-extensions:    
   build-depends:       base >=4.9 && <4.10, beam-core >=0.5.0.0, text, bytestring, free, time,
                        optparse-applicative >=0.13.0.0, directory, filepath, mtl, tabular, scientific,
-                       fgl, vector
+                       fgl, vector, containers, pqueue, unordered-containers, hashable, brick, vty
   -- hs-source-dirs:      
   default-language:    Haskell2010
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,
@@ -51,6 +51,7 @@ executable beam-migrate
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,
                        StandaloneDeriving, GADTs, DeriveFunctor, RankNTypes, ScopedTypeVariables,
                        FlexibleInstances, CPP
+  ghc-options:         -threaded                                              
 
 source-repository head
   type: git

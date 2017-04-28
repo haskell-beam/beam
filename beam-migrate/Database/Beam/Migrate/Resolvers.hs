@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
@@ -8,9 +9,13 @@ import Database.Beam.Migrate.Types
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.Checks
 
+import Control.Monad
+
 import Data.Typeable
 import Data.Maybe
 import Data.Monoid
+import Data.Traversable
+import Data.Foldable
 
 import Debug.Trace
 
@@ -37,13 +42,6 @@ instance (Monad m, Monoid a) => Monoid (Resolver m a) where
 
        return $ if aSolvedCnt > bSolvedCnt then (aSolved, aRes) else (bSolved, bRes)
 
-checkPredicate :: Typeable p => (p -> Bool)
-               -> SomeDatabasePredicate -> Bool
-checkPredicate check (SomeDatabasePredicate p) =
-  case cast p of
-    Nothing -> False
-    Just p -> check p
-
 matchRoot :: forall m a p.
              (Monad m, Monoid a, Typeable p, DatabasePredicate p) =>
              (p -> SomeDatabasePredicate -> Bool)
@@ -58,26 +56,55 @@ matchRoot filterCtxt resolve =
          (resolved, res) <- resolve root ctxt'
          pure ((n, SomeDatabasePredicate root):resolved, res)
 
-createTableResolver :: forall columnSchemaSyntax. Typeable columnSchemaSyntax => Resolver IO [String]
-createTableResolver =
-  matchRoot (\(TableExistsPredicate creatingTbl) -> checkPredicate (\(TableHasColumn tbl _ _ :: TableHasColumn columnSchemaSyntax) -> creatingTbl == tbl)) $
-  \(TableExistsPredicate creatingTbl) ctxt ->
-    pure (ctxt, ["Create table " ++ show creatingTbl])
+tryPredicate :: Typeable p => (p -> a) -> SomeDatabasePredicate -> Maybe a
+tryPredicate f (SomeDatabasePredicate p) = f <$> cast p
 
-addColumnResolver :: forall columnSchemaSyntax.
-                     ( Show (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax)
-                     , Eq (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax)
-                     , Typeable columnSchemaSyntax) =>
-                     Resolver IO [String]
+createTableResolver :: forall cmd. Sql92SaneDdlCommandSyntax cmd => Resolver IO [cmd]
+createTableResolver =
+  matchRoot (\(TableExistsPredicate creatingTbl) ->
+                checkAny [ checkPredicate (\(TableHasColumn tbl _ _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd)) -> creatingTbl == tbl)
+                         , checkPredicate (\(TableColumnHasConstraint tbl _ _ :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd)) -> creatingTbl == tbl)
+                         , checkPredicate (\(TableHasPrimaryKey tbl _) -> creatingTbl == tbl) ] ) $
+  \(TableExistsPredicate creatingTbl) ctxt ->
+    let cmd = createTableSyntax Nothing creatingTbl cols cs
+        cols = mapMaybe mkCol ctxt
+        mkCol (_, SomeDatabasePredicate p) =
+          case cast p of
+            Nothing -> Nothing
+            Just (TableHasColumn _ nm schema :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd)) ->
+              Just (nm, columnSchemaSyntax schema Nothing (fieldConstraints nm) Nothing)
+
+        cs = foldMap mkConstraint ctxt
+        mkConstraint (_, p) =
+          maybeToList . asum . fmap ($p) $
+          [ tryPredicate (\(TableHasPrimaryKey _ cols) -> primaryKeyConstraintSyntax cols) ]
+
+        fieldConstraints fieldNm = foldMap (mkFieldConstraint fieldNm) ctxt
+        mkFieldConstraint fieldNm (_, p) =
+          maybeToList . asum . fmap (join . ($p)) $
+          [ tryPredicate (\(TableColumnHasConstraint _ fieldNm' cs :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd)) ->
+                            guard (fieldNm == fieldNm') >> Just cs) ]
+
+    in pure (ctxt, [createTableCmd cmd])
+
+addColumnResolver :: forall cmd. Sql92SaneDdlCommandSyntax cmd =>
+                     Resolver IO [cmd]
 addColumnResolver =
   matchRoot (\_ _ -> False) $
-  \(TableHasColumn tbl colNm colType :: TableHasColumn columnSchemaSyntax) _ ->
-    pure ([], ["Alter table " ++ show tbl ++ " to add column " ++ show colNm ++ " with type " ++ show colType])
+  \(TableHasColumn tbl colNm colType :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd)) _ ->
+    pure ([], []) --"Alter table " ++ show tbl ++ " to add column " ++ show colNm ++ " with type " ++ show colType])
 
-makeTrueResolver :: forall columnSchemaSyntax.
-                    ( Show (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax)
-                    , Eq (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax)
-                    , Typeable columnSchemaSyntax ) =>
-                    Resolver IO [String]
-makeTrueResolver = addColumnResolver @columnSchemaSyntax <>
-                   createTableResolver @columnSchemaSyntax
+addConstraintResolver :: forall cmd. Sql92SaneDdlCommandSyntax cmd =>
+                         Resolver IO [cmd]
+addConstraintResolver =
+  matchRoot (\_ _ -> False) $
+  \(TableColumnHasConstraint tbl nm constraint :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd)) ctxt ->
+    -- TODO
+    let cmd = alterTableCmd (alterTableSyntax tbl (alterColumnSyntax nm setNotNullSyntax))
+    in pure (ctxt, [ cmd ])
+
+makeTrueResolver :: Sql92SaneDdlCommandSyntax cmd =>
+                    Resolver IO [cmd]
+makeTrueResolver = addColumnResolver <>
+                   createTableResolver <>
+                   addConstraintResolver

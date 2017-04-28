@@ -1,7 +1,18 @@
 {-# LANGUAGE PolyKinds #-}
+
+-- | Provides a syntax 'SqlSyntaxBuilder' that uses a
+--   'Data.ByteString.Builder.Builder' to construct SQL expressions as strings.
+--   Mainly serves as documentation for how to write a syntax for backends. Note
+--   that, although you can use this to turn most 'Q' and 'QGenExpr's into
+--   'ByteString' queries, it is /very unwise/ to ship these to the database.
+--   This module does not take into account server-specific quoting. Some
+--   backends are very particular to quoting, and shipping arbitrary
+--   'ByteString's as queries can expose you to SQL injection vulnerabilities.
+--   Always use the provided backends to submit queries and data manipulation
+--   commands to the database.
 module Database.Beam.Backend.SQL.Builder
   ( SqlSyntaxBuilder(..), buildSepBy
-  , buildSql, quoteSql
+  , quoteSql
   , renderSql ) where
 
 import           Database.Beam.Backend.SQL.Types
@@ -18,13 +29,20 @@ import           Data.Text (Text)
 
 import           Data.Coerce
 import           Data.Int
+import           Data.Hashable
 import           Data.Monoid
 import           Data.String
 
+-- | The main syntax. A wrapper over 'Builder'
 newtype SqlSyntaxBuilder
   = SqlSyntaxBuilder { buildSql :: Builder }
+-- | Some syntax elements take a type parameter. We ignore that parameter here,
+--   since we're just building strings.
 newtype SqlSyntaxBuilder1 (x :: k)
   = SqlSyntaxBuilder1 { buildSql_1 :: Builder }
+
+instance Hashable SqlSyntaxBuilder where
+  hashWithSalt salt (SqlSyntaxBuilder b) = hashWithSalt salt (toLazyByteString b)
 
 instance Show SqlSyntaxBuilder where
   showsPrec prec (SqlSyntaxBuilder s) =
@@ -378,43 +396,54 @@ instance HasSqlValueSyntax SqlSyntaxBuilder Text where
   sqlValueSyntax x = SqlSyntaxBuilder $
     byteString (fromString (show x))
 instance HasSqlValueSyntax SqlSyntaxBuilder SqlNull where
-  sqlValueSyntax x = SqlSyntaxBuilder (byteString "NULL")
+  sqlValueSyntax _ = SqlSyntaxBuilder (byteString "NULL")
 
 renderSql :: SqlSyntaxBuilder -> String
 renderSql (SqlSyntaxBuilder b) = BL.unpack (toLazyByteString b)
 
 buildSepBy :: Builder -> [Builder] -> Builder
-buildSepBy sep [] = mempty
-buildSepBy sep [x] = x
+buildSepBy _   [] = mempty
+buildSepBy _   [x] = x
 buildSepBy sep (x:xs) = x <> sep <> buildSepBy sep xs
 
 -- TODO actual quoting
+quoteSql :: Text -> Builder
 quoteSql table =
     byteString "\"" <> byteString (TE.encodeUtf8 table) <> byteString "\""
 
+join :: ByteString
+     -> SqlSyntaxBuilder -> SqlSyntaxBuilder
+     -> Maybe SqlSyntaxBuilder -> SqlSyntaxBuilder
 join type_ a b on =
     SqlSyntaxBuilder $
     buildSql a <> byteString " " <>  byteString type_ <> byteString " " <> buildSql b <>
     case on of
       Nothing -> mempty
       Just on -> byteString " ON (" <> buildSql on <> byteString ")"
+sqlPostFixOp, sqlUnOp :: ByteString -> SqlSyntaxBuilder -> SqlSyntaxBuilder
 sqlUnOp op a =
   SqlSyntaxBuilder $
   byteString op <> byteString " (" <> buildSql a <> byteString ")"
 sqlPostFixOp op a =
   SqlSyntaxBuilder $
   byteString "(" <> buildSql a <> byteString ") " <> byteString op
+sqlCompOp :: ByteString -> Maybe SqlSyntaxBuilder
+          -> SqlSyntaxBuilder -> SqlSyntaxBuilder
+          -> SqlSyntaxBuilder
 sqlCompOp op quant a b =
     SqlSyntaxBuilder $
     byteString "(" <> buildSql a <> byteString ") " <>
     byteString op <>
     maybe mempty (\quant -> byteString " " <> buildSql quant) quant <>
     byteString " (" <> buildSql b <> byteString ")"
+sqlBinOp :: ByteString -> SqlSyntaxBuilder -> SqlSyntaxBuilder
+         -> SqlSyntaxBuilder
 sqlBinOp op a b =
     SqlSyntaxBuilder $
     byteString "(" <> buildSql a <> byteString ") " <>
     byteString op <>
     byteString " (" <> buildSql b <> byteString ")"
+sqlFuncOp :: ByteString -> SqlSyntaxBuilder -> SqlSyntaxBuilder
 sqlFuncOp fun a =
   SqlSyntaxBuilder $
   byteString fun <> byteString "(" <> buildSql a <> byteString")"

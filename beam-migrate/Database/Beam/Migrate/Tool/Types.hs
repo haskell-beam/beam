@@ -53,7 +53,7 @@ data BeamMigrationSubcommand
   | Init | Status
   | Migrate (Maybe Int)
 
-  | Diff DiffDirection
+  | Diff Bool {- Interactive -} DiffDirection
 
   deriving Show
 
@@ -163,7 +163,9 @@ subcommandParser = subparser $
     initArgParser = pure Init
     statusArgParser = pure Status
     migrateArgParser = Migrate <$> optional (option auto (metavar "UNTIL" <> help "Last migration to run"))
-    diffArgParser = Diff <$> ((\b -> if b then DiffMigrationToDb else DiffDbToMigration) <$> switch (long "to-db" <> help "Compute the diff as though the current database schema is the target, rather than the Haskell schema"))
+    diffArgParser = Diff <$> (switch (long "interactive" <> short 'i' <> help "Enable interactive mode"))
+                         <*> ((\b -> if b then DiffMigrationToDb else DiffDbToMigration) <$>
+                              switch (long "to-db" <> help "Compute the diff as though the current database schema is the target, rather than the Haskell schema"))
 
 migrationCommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions)
 migrationCommandOptions beOptions =

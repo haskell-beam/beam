@@ -10,6 +10,7 @@ import           Database.Beam.Backend.SQL.SQL92
 import           Database.Beam.Backend.Types
 import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
+import qualified Database.Beam.Migrate.SQL.SQL92 as Db
 import qualified Database.Beam.Migrate.Tool as Tool
 import qualified Database.Beam.Migrate.Types as Db
 import           Database.Beam.Postgres.Connection
@@ -115,15 +116,27 @@ getDbConstraints conn =
 
      columnChecks <-
        fmap mconcat . forM tbls $ \(oid, tbl) ->
-       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, typname FROM pg_catalog.pg_attribute att JOIN pg_catalog.pg_type type ON type.oid=att.atttypid WHERE att.attrelid=? AND att.attnum>0"
+       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, typname FROM pg_catalog.pg_attribute att JOIN pg_catalog.pg_type type ON type.oid=att.atttypid WHERE att.attrelid=? AND att.attnum>0"
                        (Pg.Only (oid :: Pg.Oid))
-          let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, typ :: T.Text) ->
+          let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: T.Text) ->
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
                                     in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm (PgDataTypeSyntax (PgDataTypeDescrOid typId typmod') (emit "")) :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
+              notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
+                                           if isNotNull then
+                                            [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tbl nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
+                                              :: Db.TableColumnHasConstraint PgColumnSchemaSyntax)]
+                                           else [] ) columns
 
-          pure columnChecks
+          pure (columnChecks ++ notNullChecks)
 
-     pure (tblsExist ++ columnChecks)
+     primaryKeys <-
+       map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey relnm (V.toList cols))) <$>
+       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname) from pg_index i "
+                                           , "join pg_attribute a on a.attrelid=i.indrelid and a.attnum=ANY(i.indkey) "
+                                           , "join pg_class c on c.oid=i.indrelid "
+                                           , "where c.relkind='r' and i.indisprimary group by c.relname, i.indrelid" ]))
+
+     pure (tblsExist ++ columnChecks ++ primaryKeys)
 
 -- * Data types
 

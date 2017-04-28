@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Database.Beam.Postgres.Syntax
     ( PgSyntaxF(..), PgSyntaxM
@@ -35,6 +36,8 @@ module Database.Beam.Postgres.Syntax
     , PgCreateTableSyntax(..), PgTableOptionsSyntax(..), PgColumnSchemaSyntax(..)
     , PgDataTypeSyntax(..), PgColumnConstraintDefinitionSyntax(..), PgColumnConstraintSyntax(..)
     , PgTableConstraintSyntax(..), PgMatchTypeSyntax(..), PgReferentialActionSyntax(..)
+
+    , PgAlterTableSyntax(..), PgAlterTableActionSyntax(..), PgAlterColumnActionSyntax(..)
 
     , PgWindowFrameSyntax(..), PgWindowFrameBoundsSyntax(..), PgWindowFrameBoundSyntax(..)
 
@@ -86,6 +89,7 @@ import           Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy as BL
 import           Data.Char
 import           Data.Coerce
+import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
 import           Data.Monoid
@@ -97,7 +101,9 @@ import           Data.Word
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
-import qualified Database.PostgreSQL.Simple.Types as Pg (Oid)
+import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..))
+
+import           GHC.Generics
 
 data PostgresInaccessible
 
@@ -123,6 +129,16 @@ instance Eq f => Eq (PgSyntaxF f) where
   EscapeIdentifier b1 next1 == EscapeIdentifier b2 next2 =
       b1 == b2 && next1 == next2
   _ == _ = False
+
+instance Hashable PgSyntax where
+  hashWithSalt salt (PgSyntax s) = runF s finish step salt
+    where
+      finish _ salt = hashWithSalt salt ()
+      step (EmitByteString b hashRest) salt = hashRest (hashWithSalt salt (0 :: Int, b))
+      step (EmitBuilder b hashRest)    salt = hashRest (hashWithSalt salt (1 :: Int, toLazyByteString b))
+      step (EscapeString  b hashRest)  salt = hashRest (hashWithSalt salt (2 :: Int, b))
+      step (EscapeBytea  b hashRest)   salt = hashRest (hashWithSalt salt (3 :: Int, b))
+      step (EscapeIdentifier b hashRest) salt = hashRest (hashWithSalt salt (4 :: Int, b))
 
 type PgSyntaxM = F PgSyntaxF
 newtype PgSyntax
@@ -195,7 +211,12 @@ newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPg
 data PgDataTypeDescr
   = PgDataTypeDescrOid Pg.Oid (Maybe Int32)
   | PgDataTypeDescrDomain T.Text
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+instance Hashable PgDataTypeDescr where
+  hashWithSalt salt (PgDataTypeDescrOid (Pg.Oid oid) dim) =
+    hashWithSalt salt (0 :: Int, fromIntegral oid :: Word32, dim)
+  hashWithSalt salt (PgDataTypeDescrDomain t) =
+    hashWithSalt salt (1 :: Int, t)
 
 newtype PgCreateTableSyntax = PgCreateTableSyntax { fromPgCreateTable :: PgSyntax }
 data PgTableOptionsSyntax = PgTableOptionsSyntax PgSyntax PgSyntax
@@ -210,10 +231,16 @@ newtype PgColumnConstraintSyntax = PgColumnConstraintSyntax { fromPgColumnConstr
 newtype PgTableConstraintSyntax = PgTableConstraintSyntax { fromPgTableConstraint :: PgSyntax }
 newtype PgMatchTypeSyntax = PgMatchTypeSyntax { fromPgMatchType :: PgSyntax }
 newtype PgReferentialActionSyntax = PgReferentialActionSyntax { fromPgReferentialAction :: PgSyntax }
+newtype PgDropTableSyntax = PgDropTableSyntax { fromPgDropTable :: PgSyntax }
+newtype PgAlterTableSyntax = PgAlterTableSyntax { fromPgAlterTable :: PgSyntax }
+newtype PgAlterTableActionSyntax = PgAlterTableActionSyntax { fromPgAlterTableAction :: PgSyntax }
+newtype PgAlterColumnActionSyntax = PgAlterColumnActionSyntax { fromPgAlterColumnAction :: PgSyntax }
 newtype PgWindowFrameSyntax = PgWindowFrameSyntax { fromPgWindowFrame :: PgSyntax }
 newtype PgWindowFrameBoundsSyntax = PgWindowFrameBoundsSyntax { fromPgWindowFrameBounds :: PgSyntax }
 newtype PgWindowFrameBoundSyntax = PgWindowFrameBoundSyntax { fromPgWindowFrameBound :: ByteString -> PgSyntax }
 
+instance Hashable PgDataTypeSyntax where
+  hashWithSalt salt (PgDataTypeSyntax a _) = hashWithSalt salt a
 instance Eq PgDataTypeSyntax where
   PgDataTypeSyntax a _ == PgDataTypeSyntax b _ = a == b
 
@@ -230,8 +257,12 @@ instance IsSql92Syntax PgCommandSyntax where
 
 instance IsSql92DdlCommandSyntax PgCommandSyntax where
   type Sql92DdlCommandCreateTableSyntax PgCommandSyntax = PgCreateTableSyntax
+  type Sql92DdlCommandDropTableSyntax PgCommandSyntax = PgDropTableSyntax
+  type Sql92DdlCommandAlterTableSyntax PgCommandSyntax = PgAlterTableSyntax
 
   createTableCmd = coerce
+  dropTableCmd = coerce
+  alterTableCmd = coerce
 
 instance IsSql92UpdateSyntax PgUpdateSyntax where
   type Sql92UpdateFieldNameSyntax PgUpdateSyntax = PgFieldNameSyntax
@@ -542,6 +573,29 @@ instance IsSql92InsertValuesSyntax PgInsertValuesSyntax where
 insertDefaults :: SqlInsertValues PgInsertValuesSyntax tbl
 insertDefaults = SqlInsertValues (PgInsertValuesSyntax (emit "DEFAULT VALUES"))
 
+instance IsSql92DropTableSyntax PgDropTableSyntax where
+  dropTableSyntax tblNm =
+    PgDropTableSyntax $
+    emit "DROP TABLE " <> pgQuotedIdentifier tblNm
+
+instance IsSql92AlterTableSyntax PgAlterTableSyntax where
+  type Sql92AlterTableAlterTableActionSyntax PgAlterTableSyntax = PgAlterTableActionSyntax
+
+  alterTableSyntax tblNm action =
+    PgAlterTableSyntax $
+    emit "ALTER TABLE " <> pgQuotedIdentifier tblNm <> emit " " <> fromPgAlterTableAction action
+
+instance IsSql92AlterTableActionSyntax PgAlterTableActionSyntax where
+  type Sql92AlterTableAlterColumnActionSyntax PgAlterTableActionSyntax = PgAlterColumnActionSyntax
+
+  alterColumnSyntax colNm action =
+    PgAlterTableActionSyntax $
+    emit "ALTER COLUMN " <> pgQuotedIdentifier colNm <> emit " " <> fromPgAlterColumnAction action
+
+instance IsSql92AlterColumnActionSyntax PgAlterColumnActionSyntax where
+  setNullSyntax = PgAlterColumnActionSyntax (emit "DROP NOT NULL")
+  setNotNullSyntax = PgAlterColumnActionSyntax (emit "DROP NULL")
+
 instance IsSql92CreateTableSyntax PgCreateTableSyntax where
   type Sql92CreateTableColumnSchemaSyntax PgCreateTableSyntax = PgColumnSchemaSyntax
   type Sql92CreateTableTableConstraintSyntax PgCreateTableSyntax = PgTableConstraintSyntax
@@ -567,6 +621,8 @@ instance IsSql92TableConstraintSyntax PgTableConstraintSyntax where
     PgTableConstraintSyntax $
     emit "PRIMARY KEY(" <> pgSepBy (emit ", ") (map pgQuotedIdentifier fieldNames) <> emit ")"
 
+instance Hashable PgColumnSchemaSyntax where
+  hashWithSalt salt = hashWithSalt salt . fromPgColumnSchema
 instance IsSql92ColumnSchemaSyntax PgColumnSchemaSyntax where
   type Sql92ColumnSchemaColumnTypeSyntax PgColumnSchemaSyntax = PgDataTypeSyntax
   type Sql92ColumnSchemaExpressionSyntax PgColumnSchemaSyntax = PgExpressionSyntax
@@ -602,6 +658,8 @@ fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
         deferrableBuilder False = emit "NOT DEFERRABLE"
         deferrableBuilder True = emit "DEFERRABLE"
 
+instance Hashable PgColumnConstraintDefinitionSyntax where
+  hashWithSalt salt = hashWithSalt salt . fromPgColumnConstraintDefinition
 instance IsSql92ColumnConstraintDefinitionSyntax PgColumnConstraintDefinitionSyntax where
   type Sql92ColumnConstraintDefinitionConstraintSyntax PgColumnConstraintDefinitionSyntax = PgColumnConstraintSyntax
   type Sql92ColumnConstraintDefinitionAttributesSyntax PgColumnConstraintDefinitionSyntax = SqlConstraintAttributesBuilder

@@ -226,9 +226,9 @@ type FilmCategory = FilmCategoryT Identity
 deriving instance Eq FilmCategory; deriving instance Show FilmCategory
 
 instance Table FilmCategoryT where
-  data PrimaryKey FilmCategoryT f = FilmCategoryId (PrimaryKey FilmT f) (PrimaryKey CategoryT f)
+  data PrimaryKey FilmCategoryT f = FilmCategoryId (PrimaryKey CategoryT f) (PrimaryKey FilmT f)
     deriving Generic
-  primaryKey fc = FilmCategoryId (filmCategoryFilm fc) (filmCategoryCategory fc)
+  primaryKey = FilmCategoryId <$> filmCategoryCategory <*> filmCategoryFilm
 type FilmCategoryId = PrimaryKey FilmCategoryT Identity
 deriving instance Eq FilmCategoryId; deriving instance Show FilmCategoryId
 

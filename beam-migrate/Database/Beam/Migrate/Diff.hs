@@ -72,12 +72,16 @@ orderGoals :: (Monad m, Monoid a)
            -> m a
 orderGoals goals solveGoal =
   let goalsVector = V.fromList goals
-      allDependencies = fmap (\(i, SomeDatabasePredicate p) -> (i, mapMaybe (flip V.elemIndex goalsVector) $ dependencies p)) $
+      allDependencies = fmap (\(i, SomeDatabasePredicate p) ->
+                                V.filter (/= i) $
+                                V.findIndices (isDependentOn p) $
+                                fmap PostCondition $
+                                goalsVector) $
                         V.indexed goalsVector
 
       grNodes :: Gr SomeDatabasePredicate ()
       grNodes = mkGraph (V.toList (V.indexed goalsVector)) []
-      gr = foldr (\(nodeIdx, depIdxs) gr -> insEdges (map (\i -> (i, nodeIdx, ())) depIdxs) gr ) grNodes allDependencies
+      gr = foldr (\(nodeIdx, depIdxs) gr -> insEdges (V.toList $ fmap (\i -> (i, nodeIdx, ())) depIdxs) gr ) grNodes (V.indexed allDependencies)
 
       reduce gr =
         case components gr of

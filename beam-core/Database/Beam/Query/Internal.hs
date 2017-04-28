@@ -3,7 +3,7 @@ module Database.Beam.Query.Internal where
 
 import           Database.Beam.Backend.Types
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Schema
+import           Database.Beam.Schema.Tables
 
 import           Data.Monoid
 import           Data.String

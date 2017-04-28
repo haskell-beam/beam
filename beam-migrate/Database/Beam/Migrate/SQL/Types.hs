@@ -103,12 +103,15 @@ instance ( FieldReturnType defaultGiven collationGiven syntax resTy a
   FieldReturnType defaultGiven collationGiven syntax resTy (DataType syntax' x -> a) where
   field' = error "Unreachable because of GHC Custom Type Errors"
 
-instance ( Typeable syntax, Show (Sql92ColumnSchemaColumnTypeSyntax syntax), Eq (Sql92ColumnSchemaColumnTypeSyntax syntax)
+instance ( Typeable syntax, Typeable (Sql92ColumnSchemaColumnTypeSyntax syntax)
+         , Show (Sql92ColumnSchemaColumnTypeSyntax syntax), Eq (Sql92ColumnSchemaColumnTypeSyntax syntax)
+         , Show (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax), Eq (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
          , IsSql92ColumnSchemaSyntax syntax ) =>
   FieldReturnType defaultGiven collationGiven syntax resTy (TableFieldSchema syntax resTy) where
   field' _ _ nm ty default_ collation constraints =
-    TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_ constraints collation))
-                     [ FieldCheck (\tbl field -> SomeDatabasePredicate (TableHasColumn tbl field ty :: TableHasColumn syntax)) ]
+    TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_ constraints collation)) checks
+    where checks = [ FieldCheck (\tbl field -> SomeDatabasePredicate (TableHasColumn tbl field ty :: TableHasColumn syntax)) ] ++
+                   map (\cns -> FieldCheck (\tbl field -> SomeDatabasePredicate (TableColumnHasConstraint tbl field cns :: TableColumnHasConstraint syntax))) constraints
 
 field :: ( IsSql92ColumnSchemaSyntax syntax ) =>
   FieldReturnType 'False 'False syntax resTy a => Text -> DataType (Sql92ColumnSchemaColumnTypeSyntax syntax) ty -> a

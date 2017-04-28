@@ -45,9 +45,9 @@ type FilmActor = FilmActorT Identity
 deriving instance Eq FilmActor; deriving instance Show FilmActor
 
 instance Table FilmActorT where
-  data PrimaryKey FilmActorT f = FilmActorId (PrimaryKey V0001.FilmT f) (PrimaryKey V0001.ActorT f)
+  data PrimaryKey FilmActorT f = FilmActorId (PrimaryKey V0001.ActorT f) (PrimaryKey V0001.FilmT f)
     deriving Generic
-  primaryKey fa = FilmActorId (filmActorFilm fa) (filmActorActor fa)
+  primaryKey fa = FilmActorId (filmActorActor fa) (filmActorFilm fa)
 type FilmActorId = PrimaryKey FilmActorT Identity
 deriving instance Eq FilmActorId; deriving instance Show FilmActorId
 

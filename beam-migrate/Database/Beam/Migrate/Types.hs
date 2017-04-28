@@ -1,10 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveTraversable #-}
 
 module Database.Beam.Migrate.Types where
 
 import Database.Beam
+import Database.Beam.Schema.Tables
 
 import Control.Monad.Free.Church
 import Control.Monad.Identity
@@ -18,6 +20,8 @@ import Data.Monoid
 import Data.Text (Text)
 import Data.Proxy
 import Data.Typeable
+import Data.Foldable
+import Data.Hashable
 
 -- * Migration types
 
@@ -91,10 +95,20 @@ stepNames (MigrationSteps f) = runF (runKleisli f ()) (\_ x -> x) (\(MigrationSt
 
 -- * Checked database entities
 
-class (Show p, Typeable p, Eq p) => DatabasePredicate p where
+data ConditionType a
+  = PostCondition a
+  | PreCondition a
+  deriving ( Show, Eq, Functor
+           , Traversable, Foldable)
+
+class (Show p, Typeable p, Hashable p, Eq p) => DatabasePredicate p where
   englishDescription :: p -> String
-  dependencies :: p -> [SomeDatabasePredicate]
-  dependencies _ = []
+
+  predicateCascadesDropOn :: DatabasePredicate p' => p -> p' -> Bool
+  predicateCascadesDropOn _ _ = False
+
+  isDependentOn :: p -> ConditionType SomeDatabasePredicate -> Bool
+  isDependentOn _ _ = False
 
 data SomeDatabasePredicate where
   SomeDatabasePredicate :: DatabasePredicate p =>
@@ -110,6 +124,25 @@ instance Eq SomeDatabasePredicate where
     case cast a of
       Nothing -> False
       Just a' -> a' == b
+instance Hashable SomeDatabasePredicate where
+  hashWithSalt salt (SomeDatabasePredicate p) = hashWithSalt salt (typeOf p, p)
+
+p :: DatabasePredicate p => p -> SomeDatabasePredicate
+p = SomeDatabasePredicate
+
+checkPredicate :: Typeable p => (p -> Bool)
+               -> SomeDatabasePredicate -> Bool
+checkPredicate check (SomeDatabasePredicate p) =
+  case cast p of
+    Nothing -> False
+    Just p -> check p
+
+checkGoal :: Typeable p => (ConditionType p -> Bool)
+          -> ConditionType SomeDatabasePredicate -> Bool
+checkGoal check = maybe False check . traverse (\(SomeDatabasePredicate p) -> cast p)
+
+checkAny :: [ a -> Bool ] -> a -> Bool
+checkAny = foldrM (flip (fmap . (||))) False
 
 newtype TableCheck = TableCheck (Text -> SomeDatabasePredicate)
 newtype FieldCheck = FieldCheck (Text -> Text -> SomeDatabasePredicate)

@@ -16,7 +16,34 @@ data SqlSyntaxBuilderCreateTableOptions
 
 instance IsSql92DdlCommandSyntax SqlSyntaxBuilder where
   type Sql92DdlCommandCreateTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92DdlCommandDropTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92DdlCommandAlterTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   createTableCmd = id
+  alterTableCmd = id
+  dropTableCmd = id
+
+instance IsSql92DropTableSyntax SqlSyntaxBuilder where
+  dropTableSyntax tblNm =
+    SqlSyntaxBuilder $
+    byteString "DROP TABLE " <> quoteSql tblNm
+
+instance IsSql92AlterTableSyntax SqlSyntaxBuilder where
+  type Sql92AlterTableAlterTableActionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  alterTableSyntax tblNm action =
+    SqlSyntaxBuilder $
+    byteString "ALTER TABLE " <> quoteSql tblNm <> byteString " " <> buildSql action
+
+instance IsSql92AlterTableActionSyntax SqlSyntaxBuilder where
+  type Sql92AlterTableAlterColumnActionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  alterColumnSyntax colNm action =
+    SqlSyntaxBuilder $
+    byteString "ALTER COLUMN " <> quoteSql colNm <> byteString " " <> buildSql action
+
+instance IsSql92AlterColumnActionSyntax SqlSyntaxBuilder where
+  setNotNullSyntax = SqlSyntaxBuilder (byteString "SET NOT NULL")
+  setNullSyntax = SqlSyntaxBuilder (byteString "DROP NOT NULL")
 
 instance IsSql92CreateTableSyntax SqlSyntaxBuilder where
   type Sql92CreateTableColumnSchemaSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
