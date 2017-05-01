@@ -36,10 +36,18 @@ instance IsSql92AlterTableSyntax SqlSyntaxBuilder where
 
 instance IsSql92AlterTableActionSyntax SqlSyntaxBuilder where
   type Sql92AlterTableAlterColumnActionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92AlterTableColumnSchemaSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
   alterColumnSyntax colNm action =
     SqlSyntaxBuilder $
     byteString "ALTER COLUMN " <> quoteSql colNm <> byteString " " <> buildSql action
+
+  addColumnSyntax colNm colSchema =
+    SqlSyntaxBuilder $
+    byteString "ADD COLUMN " <> quoteSql colNm <> byteString " " <> buildSql colSchema
+  dropColumnSyntax colNm =
+    SqlSyntaxBuilder $
+    byteString "DROP COLUMN " <> quoteSql colNm
 
 instance IsSql92AlterColumnActionSyntax SqlSyntaxBuilder where
   setNotNullSyntax = SqlSyntaxBuilder (byteString "SET NOT NULL")

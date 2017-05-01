@@ -13,7 +13,10 @@ type Sql92DdlCommandColumnSchemaSyntax syntax = Sql92CreateTableColumnSchemaSynt
 
 type Sql92SaneDdlCommandSyntax cmd =
   ( IsSql92DdlCommandSyntax cmd
-  , Typeable (Sql92DdlCommandColumnSchemaSyntax cmd) )
+  , Typeable (Sql92DdlCommandColumnSchemaSyntax cmd)
+  , Sql92AlterTableColumnSchemaSyntax
+      (Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax cmd)) ~
+      Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd) )
 
 class ( IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
       , IsSql92DropTableSyntax (Sql92DdlCommandDropTableSyntax syntax)
@@ -49,11 +52,15 @@ class IsSql92AlterTableActionSyntax (Sql92AlterTableAlterTableActionSyntax synta
   alterTableSyntax :: Text -> Sql92AlterTableAlterTableActionSyntax syntax
                    -> syntax
 
-class IsSql92AlterColumnActionSyntax (Sql92AlterTableAlterColumnActionSyntax syntax) =>
+class ( IsSql92ColumnSchemaSyntax (Sql92AlterTableColumnSchemaSyntax syntax)
+      , IsSql92AlterColumnActionSyntax (Sql92AlterTableAlterColumnActionSyntax syntax) ) =>
   IsSql92AlterTableActionSyntax syntax where
   type Sql92AlterTableAlterColumnActionSyntax syntax :: *
+  type Sql92AlterTableColumnSchemaSyntax syntax :: *
   alterColumnSyntax :: Text -> Sql92AlterTableAlterColumnActionSyntax syntax
                     -> syntax
+  addColumnSyntax :: Text -> Sql92AlterTableColumnSchemaSyntax syntax -> syntax
+  dropColumnSyntax :: Text -> syntax
 
 class IsSql92AlterColumnActionSyntax syntax where
   setNotNullSyntax, setNullSyntax :: syntax

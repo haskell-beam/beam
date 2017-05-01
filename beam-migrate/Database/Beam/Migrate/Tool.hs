@@ -34,6 +34,7 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time
 
+import           System.CPUTime
 import           System.IO
 
 import           Text.Tabular
@@ -83,6 +84,20 @@ calcMigrationStatus BeamMigrationBackend {..} beOptions steps =
                    all_ (migrationDbMigrations migrationDb)
 
      pure (migrationStatus 0 allMigrationNames alreadyRun)
+
+finalSolutionIO :: Solver cmd -> IO (FinalSolution cmd)
+finalSolutionIO s = getCPUTime >>= finalSolutionIO' s 0
+  where
+    finalSolutionIO' s iterCount lastStart
+      | iterCount >= 10 =
+        do now <- getCPUTime
+           putStrLn $ "10 iterations took "  ++ show (fromIntegral (now - lastStart) / 1e9) ++ " milliseconds"
+           finalSolutionIO' s 0 now
+      | otherwise =
+          case s of
+            ProvideSolution Nothing sts -> pure (Candidates sts)
+            ProvideSolution (Just cmds) _ -> pure (Solved cmds)
+            ChooseActions _ _ actions next -> finalSolutionIO' (next actions) (iterCount + 1) lastStart
 
 invokeMigrationTool :: forall cmdSyntax be beOptions.
                        (IsSql92DdlCommandSyntax cmdSyntax, IsSql92Syntax cmdSyntax, Sql92SanityCheck cmdSyntax ) =>
@@ -178,11 +193,11 @@ invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  su
          let (preConditions, postConditions) = 
                case direction of
                  DiffDbToMigration ->
-                   ( filter (not . (`elem` schemaConstraints)) dbConstraints
-                   , filter (not . (`elem` dbConstraints)) schemaConstraints )
+                   ( dbConstraints --filter (not . (`elem` schemaConstraints)) dbConstraints
+                   , schemaConstraints ) --filter (not . (`elem` dbConstraints)) schemaConstraints )
                  DiffMigrationToDb ->
-                   ( filter (not . (`elem` dbConstraints)) schemaConstraints
-                   , filter (not . (`elem` schemaConstraints)) dbConstraints )
+                   ( schemaConstraints -- filter (not . (`elem` dbConstraints)) schemaConstraints
+                   , dbConstraints ) -- filter (not . (`elem` schemaConstraints)) dbConstraints )
 
          if interactive
            then diffInteractive be migrationCommandBackendOptions preConditions postConditions
@@ -200,24 +215,24 @@ invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  su
 
              putStrLn "Beam-migrate will now"
 
-             res <- pure (guessActions defaultActionProviders preConditions postConditions)
+             res <- finalSolutionIO (heuristicSolver defaultActionProviders preConditions postConditions)
 
              case res of
-               GuessResultSolved solutions -> do
+               Solved solutions -> do
                  putStrLn "Possible sequences would be"
-                 showSolutions 1 backendRenderSyntax solutions
+                 showSolution backendRenderSyntax solutions
 
-               GuessResultCandidates cs -> do
+               Candidates cs -> do
                  putStrLn "NO SOLUTION FOUND"
                  forM_ (zip [1..10] cs) $ \(i, steps) ->
                    do putStrLn (show i <> ")")
                       forM_ (dbStateCmdSequence steps) $ \step ->
                         putStrLn ("    - " ++ backendRenderSyntax step)
-                      putStrLn "  Remaining to be solved:"
-                      forM_ (dbStatePostConditionsLeft steps) $ \(SomeDatabasePredicate pred) ->
+                      putStrLn "  Cur state: TODO"
+                      forM_ (dbStateKey steps) $ \(SomeDatabasePredicate pred) ->
                         putStrLn ("    - " ++ englishDescription pred)
-                      putStrLn "  Unhandled pre conditions:"
-                      forM_ (dbStatePreConditionsLeft steps) $ \(SomeDatabasePredicate pred) ->
+                      putStrLn "  Goal:"
+                      forM_ (postConditions) $ \(SomeDatabasePredicate pred) ->
                         putStrLn ("    - " ++ englishDescription pred)
 
              pure ()
@@ -228,12 +243,6 @@ invokeMigrationTool be@(BeamMigrationBackend {..}) BeamMigrationCommand {..}  su
 --    Up ->
 --      do ensureMigrationsTable
 
-showSolutions _ _ [] = putStrLn "No more solutions"
-showSolutions i renderSyntax (solution:solutions) =
-  do putStrLn (show i <> ")")
-     forM_ solution $ \step ->
-       putStrLn ("  - " ++ renderSyntax step)
-
-     putStrLn "See more?"
-     a <- getLine
-     if a == "q" then pure () else putStrLn "Finding another" >> showSolutions (i + 1) renderSyntax solutions
+showSolution renderSyntax solution =
+  forM_ solution $ \step ->
+  putStrLn ("  - " ++ renderSyntax step)

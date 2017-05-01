@@ -30,7 +30,7 @@ createTable tblName tblSettings =
                        allBeamValues (\(Columnar' (TableFieldSchema nm _ cs)) -> map (\(FieldCheck mkCheck) -> TableCheck (\tblName -> mkCheck tblName nm)) cs) tblSettings
          tblChecks = [ TableCheck (\tblName -> SomeDatabasePredicate (TableExistsPredicate tblName)) ] ++
                      primaryKeyCheck ++
-                     fieldChecks -- TODO add primary key check
+                     fieldChecks
          primaryKeyCheck =
            case allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings) of
              [] -> []

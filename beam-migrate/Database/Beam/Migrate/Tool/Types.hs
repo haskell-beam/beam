@@ -75,7 +75,7 @@ data BeamMigrationBackend be commandSyntax beOptions where
                           , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) (Maybe LocalTime)
                           , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) Text
                           , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) SqlNull
-                          , Sql92SanityCheck commandSyntax
+                          , Sql92SanityCheck commandSyntax, Sql92SaneDdlCommandSyntax commandSyntax
                           , Sql92ReasonableMarshaller be ) =>
                        { backendOptsParser :: Parser beOptions
                        , backendRenderSteps :: forall a. MigrationSteps commandSyntax () a -> BL.ByteString
