@@ -14,7 +14,7 @@ module Database.Beam.Schema.Tables
     , DatabaseSettings
     , IsDatabaseEntity(..)
     , DatabaseEntityDescriptor(..)
-    , DatabaseEntity(..), TableEntity
+    , DatabaseEntity(..), TableEntity, DomainTypeEntity
     , dbEntityDescriptor
     , DatabaseModification, EntityModification(..)
     , FieldModification(..)
@@ -223,6 +223,15 @@ instance IsDatabaseEntity be (TableEntity tbl) where
   dbEntityName f (DatabaseTable t s) = fmap (\t' -> DatabaseTable t' s) (f t)
   dbEntityAuto nm =
     DatabaseTable (unCamelCaseSel nm) defTblFieldSettings
+
+instance IsDatabaseEntity be (DomainTypeEntity ty) where
+  data DatabaseEntityDescriptor be (DomainTypeEntity ty)
+    = DatabaseDomainType !Text
+  type DatabaseEntityDefaultRequirements be (DomainTypeEntity ty) = ()
+  type DatabaseEntityRegularRequirements be (DomainTypeEntity ty) = ()
+
+  dbEntityName f (DatabaseDomainType t) = DatabaseDomainType <$> f t
+  dbEntityAuto = DatabaseDomainType
 
 -- | Represents a meta-description of a particular entityType. Mostly, a wrapper
 --   around 'DatabaseEntityDescriptor be entityType', but carries around the

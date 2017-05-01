@@ -17,12 +17,14 @@
 module Database.Beam
      ( module Database.Beam.Query
      , module Database.Beam.Schema
+     , Auto(..)
 
        -- * Re-exports for convenience
      , Typeable, Generic, Identity ) where
 
 import Database.Beam.Query
 import Database.Beam.Schema
+import Database.Beam.Backend
 
 import Control.Monad.Identity
 

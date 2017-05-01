@@ -45,6 +45,7 @@ library
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications, TypeFamilyDependencies
+  ghc-options:         -O2                                       
 
 test-suite beam-core-tests
   type: exitcode-stdio-1.0
