@@ -91,10 +91,10 @@ migrateScript steps =
   "--          Connection in order to correctly escape strings. Please verify that the\n"           :
   "--          Generated migration script is correct before running it on your database.\n"         :
   "--          If you feel so called, please contribute better escaping support to beam-postgres\n" :
-  "\n":
-  "-- Set connection encoding to UTF-8\n":
-  "SET client_encoding = 'UTF8';\n":
-  "SET standard_conforming_strings = off;\n\n":
+  "\n"                                                                                              :
+  "-- Set connection encoding to UTF-8\n"                                                           :
+  "SET client_encoding = 'UTF8';\n"                                                                 :
+  "SET standard_conforming_strings = off;\n\n"                                                      :
   appEndo (Db.migrateScript renderHeader renderCommand steps) []
   where
     renderHeader nm =
@@ -116,11 +116,11 @@ getDbConstraints conn =
 
      columnChecks <-
        fmap mconcat . forM tbls $ \(oid, tbl) ->
-       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, typname FROM pg_catalog.pg_attribute att JOIN pg_catalog.pg_type type ON type.oid=att.atttypid WHERE att.attrelid=? AND att.attnum>0"
+       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, pg_catalog.format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute att WHERE att.attrelid=? AND att.attnum>0"
                        (Pg.Only (oid :: Pg.Oid))
-          let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: T.Text) ->
+          let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: ByteString) ->
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
-                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm (PgDataTypeSyntax (PgDataTypeDescrOid typId typmod') (emit "")) :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
+                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm (PgDataTypeSyntax (PgDataTypeDescrOid typId typmod') (emit typ)) :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
               notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
                                            if isNotNull then
                                             [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tbl nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
@@ -131,10 +131,10 @@ getDbConstraints conn =
 
      primaryKeys <-
        map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey relnm (V.toList cols))) <$>
-       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname) from pg_index i "
-                                           , "join pg_attribute a on a.attrelid=i.indrelid and a.attnum=ANY(i.indkey) "
-                                           , "join pg_class c on c.oid=i.indrelid "
-                                           , "where c.relkind='r' and i.indisprimary group by c.relname, i.indrelid" ]))
+       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname) FROM pg_index i "
+                                           , "JOIN pg_attribute a ON  a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey) "
+                                           , "JOIN pg_class c     ON  c.oid=i.indrelid "
+                                           , "WHERE c.relkind='r' AND i.indisprimary GROUP BY c.relname, i.indrelid" ]))
 
      pure (tblsExist ++ columnChecks ++ primaryKeys)
 
@@ -145,11 +145,6 @@ tsquery = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsqueryTy
 
 tsvector :: Db.DataType PgDataTypeSyntax TsVector
 tsvector = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsvectorType) Nothing) (emit "tsvector"))
-
-smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax a
-smallserial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL"))
-serial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL"))
-bigserial = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL"))
 
 text :: Db.DataType PgDataTypeSyntax T.Text
 text = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.text) Nothing) (emit "TEXT"))
@@ -164,3 +159,10 @@ array :: Maybe Int -> Db.DataType PgDataTypeSyntax a
       -> Db.DataType PgDataTypeSyntax (V.Vector a)
 array Nothing (Db.DataType (PgDataTypeSyntax a syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]"))
 array (Just sz) (Db.DataType (PgDataTypeSyntax a syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
+
+-- * Pseudo-data types
+
+smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax a
+smallserial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL"))
+serial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL"))
+bigserial = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL"))

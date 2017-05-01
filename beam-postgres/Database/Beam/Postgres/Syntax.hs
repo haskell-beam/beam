@@ -587,14 +587,23 @@ instance IsSql92AlterTableSyntax PgAlterTableSyntax where
 
 instance IsSql92AlterTableActionSyntax PgAlterTableActionSyntax where
   type Sql92AlterTableAlterColumnActionSyntax PgAlterTableActionSyntax = PgAlterColumnActionSyntax
+  type Sql92AlterTableColumnSchemaSyntax PgAlterTableActionSyntax = PgColumnSchemaSyntax
 
   alterColumnSyntax colNm action =
     PgAlterTableActionSyntax $
     emit "ALTER COLUMN " <> pgQuotedIdentifier colNm <> emit " " <> fromPgAlterColumnAction action
 
+  addColumnSyntax colNm schema =
+    PgAlterTableActionSyntax $
+    emit "ADD COLUMN " <> pgQuotedIdentifier colNm <> emit " " <> fromPgColumnSchema schema
+
+  dropColumnSyntax colNm =
+    PgAlterTableActionSyntax $
+    emit "DROP COLUMN " <> pgQuotedIdentifier colNm
+
 instance IsSql92AlterColumnActionSyntax PgAlterColumnActionSyntax where
   setNullSyntax = PgAlterColumnActionSyntax (emit "DROP NOT NULL")
-  setNotNullSyntax = PgAlterColumnActionSyntax (emit "DROP NULL")
+  setNotNullSyntax = PgAlterColumnActionSyntax (emit "SET NOT NULL")
 
 instance IsSql92CreateTableSyntax PgCreateTableSyntax where
   type Sql92CreateTableColumnSchemaSyntax PgCreateTableSyntax = PgColumnSchemaSyntax

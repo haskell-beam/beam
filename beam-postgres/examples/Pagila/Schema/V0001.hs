@@ -296,14 +296,15 @@ lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
 lastUpdateField = field "last_update" timestamp (default_ now_) notNull
 
 migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
-migration () =
+migration () = do
+--  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "actor"
-                 (ActorT (field "actor_id" serial) (field "first_name" (varchar (Just 45)))
-                         (field "last_name" (varchar (Just 45)))
+                 (ActorT (field "actor_id" serial) (field "first_name" (varchar (Just 45)) notNull)
+                         (field "last_name" (varchar (Just 45)) notNull)
                          lastUpdateField)
            <*> createTable "address"
                  (AddressT (field "address_id" smallserial) (field "address" (varchar (Just 50)) notNull)
-                           (field "address2" (varchar (Just 50))) (field "district" (varchar (Just 20)))
+                           (field "address2" (varchar (Just 50))) (field "district" (varchar (Just 20)) notNull)
                            (CityId (field "city_id" smallint notNull)) (field "postal_code" (varchar (Just 10)))
                            (field "phone" (varchar (Just 20)) notNull) lastUpdateField)
            <*> createTable "city"
@@ -316,7 +317,7 @@ migration () =
                  (CategoryT (field "category_id" smallserial) (field "name" (varchar (Just 25)) notNull)
                             lastUpdateField)
            <*> createTable "customer"
-                 (CustomerT (field "customer_id" serial notNull)
+                 (CustomerT (field "customer_id" serial)
                             (StoreId (field "store_id" smallint notNull))
                             (field "first_name" (varchar (Just 45)) notNull)
                             (field "last_name" (varchar (Just 45)) notNull)
@@ -326,7 +327,7 @@ migration () =
                             (field "create_date" date (default_ now_) notNull)
                             lastUpdateField)
            <*> createTable "film"
-                 (FilmT     (field "film_id" smallserial notNull)
+                 (FilmT     (field "film_id" smallserial)
                             (field "title" (varchar (Just 255)) notNull)
                             (field "description" text)
                             (field "release_year" smallint {- TODO year -})
@@ -339,11 +340,11 @@ migration () =
                             (field "rating_text" text)
                             lastUpdateField)
            <*> createTable "film_category"
-                 (FilmCategoryT (FilmId (field "film_id" smallint))
+                 (FilmCategoryT (FilmId (field "film_id" smallint notNull))
                                 (CategoryId (field "category_id" smallint)) lastUpdateField)
            <*> createTable "language"
-                 (LanguageT (field "language_id" smallserial notNull)
-                            (field "name" (char (Just 20)))
+                 (LanguageT (field "language_id" smallserial)
+                            (field "name" (char (Just 20)) notNull)
                             lastUpdateField)
            <*> createTable "store"
                  (StoreT (field "store_id" smallserial) (StaffId (field "manager_staff_id" smallint notNull))
