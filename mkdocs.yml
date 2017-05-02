@@ -1,5 +1,5 @@
 site_name: Beam Documentation
-theme: readthedocs
+theme: material #readthedocs
 theme_dir: docs/theme
 pages:
   - Home: 'index.md'
@@ -40,3 +40,10 @@ markdown_extensions:
       template_dir: 'docs/beam-templates'
       cache_dir: 'docs/.beam-query-cache'
   - markdown_fenced_code_tabs
+  - def_list
+  - codehilite
+  - footnotes
+extra:
+  logo: 'img/logo.svg'
+repo_name: 'tathougies/beam'
+repo_url: 'https://github.com/tathougies/beam'
