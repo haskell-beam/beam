@@ -199,6 +199,8 @@ instance HasSqlValueSyntax SqliteValueSyntax SqlNull where
   sqlValueSyntax _ = SqliteValueSyntax (emit "NULL")
 instance HasSqlValueSyntax SqliteValueSyntax String where
   sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString s)))
+instance HasSqlValueSyntax SqliteValueSyntax T.Text where
+  sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText s))
 
 instance IsCustomSqlSyntax SqliteExpressionSyntax where
   customExprSyntax = SqliteExpressionSyntax . emit
@@ -206,6 +208,10 @@ instance IsCustomSqlSyntax SqliteExpressionSyntax where
                    in if null (DL.toList vs)
                       then BL.toStrict $ toLazyByteString b
                       else error "renderSyntax{SqliteExpressionSyntax}: TODO: Can't renderSyntax with values yet"
+
+instance IsSql92QuantifierSyntax SqliteComparisonQuantifierSyntax where
+  quantifyOverAll = SqliteComparisonQuantifierSyntax (emit "ALL")
+  quantifyOverAny = SqliteComparisonQuantifierSyntax (emit "ANY")
 
 instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionValueSyntax SqliteExpressionSyntax = SqliteValueSyntax

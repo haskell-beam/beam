@@ -395,6 +395,10 @@ instance IsCustomSqlSyntax PgExpressionSyntax where
   customExprSyntax = PgExpressionSyntax . emit
   renderSyntax = BL.toStrict . ("(" <>) . (<> ")") . pgRenderSyntaxScript . fromPgExpression
 
+instance IsSql92QuantifierSyntax PgComparisonQuantifierSyntax where
+  quantifyOverAll = PgComparisonQuantifierSyntax (emit "ALL")
+  quantifyOverAny = PgComparisonQuantifierSyntax (emit "ANY")
+
 instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
   type Sql92ExpressionSelectSyntax PgExpressionSyntax = PgSelectSyntax

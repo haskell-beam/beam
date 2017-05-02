@@ -298,7 +298,7 @@ instance IsSql92AggregationExpressionSyntax Expression where
   maxE q = ExpressionAgg "MAX" q . pure
   avgE q = ExpressionAgg "AVG" q . pure
 
-data Projection
+newtype Projection
   = ProjExprs [ (Expression, Maybe Text ) ]
   deriving (Show, Eq)
 
@@ -318,7 +318,7 @@ instance IsSql92OrderingSyntax Ordering where
   ascOrdering = OrderingAsc
   descOrdering = OrderingDesc
 
-data Grouping = Grouping [ Expression ] deriving (Show, Eq)
+newtype Grouping = Grouping [ Expression ] deriving (Show, Eq)
 
 instance IsSql92GroupingSyntax Grouping where
   type Sql92GroupingExpressionSyntax Grouping = Expression

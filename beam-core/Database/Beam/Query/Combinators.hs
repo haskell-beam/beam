@@ -1,16 +1,8 @@
-{-# LANGUAGE UndecidableInstances, FunctionalDependencies, TypeApplications, NamedFieldPuns, InstanceSigs #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Database.Beam.Query.Combinators
     ( all_, join_, guard_, filter_, related_, relatedBy_
     , leftJoin_, subselect_
-
-    , ManyToMany
-    , manyToMany_, manyToManyPassthrough_
-
-    , OneToMany, OneToManyOptional
-    , oneToMany_, oneToManyOptional_
-
-    , OneToOne, OneToMaybe
-    , oneToOne_, oneToMaybe_
 
     , SqlJustable(..)
     , SqlDeconstructMaybe(..)
@@ -30,12 +22,7 @@ module Database.Beam.Query.Combinators
     , coalesce_, if_, then_, else_
     , between_, like_, similarTo_, position_
     , charLength_, octetLength_, bitLength_
-    , isTrue_, isNotTrue_
-    , isFalse_, isNotFalse_
-    , isUnknown_, isNotUnknown_
 --  , overlaps_, nullIf_, cast_
-    , (<.), (>.), (<=.), (>=.), (==.), (/=.)
-    , (&&.), (||.), not_, div_, mod_
 
     , (<-.), current_
 
@@ -46,21 +33,6 @@ module Database.Beam.Query.Combinators
     , noBounds_, noOrder_, noPartition_
     , partitionBy_, orderPartitionBy_, withWindow_
 
-    -- * SQL GROUP BY and aggregation
-    , aggregate_
-
-    , QGroupable(..)
-
-    , sum_, avg_, min_, max_, count_, countAll_
-    , rank_, cumeDist_, percentRank_
-    , sumOver_, avgOver_, minOver_, maxOver_, countOver_
-    , filterWhere_
-
-    , every_, any_, some_
-    , everyOver_, anyOver_, someOver_
-
-    , distinctInGroup_, allInGroup_, allInGroupExplicitly_
-
     -- * SQL ORDER BY
     , orderBy_, asc_, desc_
     ) where
@@ -69,6 +41,8 @@ import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
 
 import Database.Beam.Query.Internal
+import Database.Beam.Query.Ord
+import Database.Beam.Query.Operator
 import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
@@ -174,98 +148,6 @@ relatedBy_ :: forall be db rel select s.
            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 relatedBy_ = join_
 
-type OneToOne db s one many = OneToMany db s one many
-type OneToMany db s one many =
-  forall syntax.
-  ( IsSql92SelectSyntax syntax
-  , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool ) =>
-  one (QExpr (Sql92SelectExpressionSyntax syntax) s) ->
-  Q syntax db s (many (QExpr (Sql92SelectExpressionSyntax syntax) s))
-
-type OneToMaybe db s tbl rel = OneToManyOptional db s tbl rel
-type OneToManyOptional db s tbl rel =
-  forall syntax.
-  ( IsSql92SelectSyntax syntax
-  , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-  , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) SqlNull ) =>
-  tbl (QExpr (Sql92SelectExpressionSyntax syntax) s) ->
-  Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
-
-oneToMany_, oneToOne_
-  :: ( IsSql92SelectSyntax syntax
-     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-     , Database db
-     , Table tbl, Table rel )
-  => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch (many) -}
-  -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (QExpr (Sql92SelectExpressionSyntax syntax) s))
-     {-^ Foreign key -}
-  -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
-  -> Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
-oneToMany_ rel getKey tbl =
-  join_ rel (\rel -> getKey rel ==. pk tbl)
-oneToOne_ = oneToMany_
-
-oneToManyOptional_, oneToMaybe_
-  :: ( IsSql92SelectSyntax syntax
-     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) SqlNull
-     , Database db
-     , Table tbl, Table rel )
-  => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch -}
-  -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
-     {-^ Foreign key -}
-  -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
-  -> Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
-oneToManyOptional_ rel getKey tbl =
-  leftJoin_ rel (\rel -> getKey rel ==. just_ (pk tbl))
-oneToMaybe_ = oneToManyOptional_
-
--- ** Many-to-many relationships
-
-type ManyToMany db left right =
-  forall s be syntax g h.
-  ( Sql92SelectSanityCheck syntax, IsSql92SelectSyntax syntax
-  , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
-  , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) ) =>
-  Q syntax db s (left g) -> Q syntax db s (right h) ->
-  Q syntax db s (left g, right h)
-
-manyToMany_
-  :: ( Database db, Table joinThrough
-     , Table left, Table right
-     , Sql92SelectSanityCheck syntax
-     , IsSql92SelectSyntax syntax
-
-     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
-     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) )
-  => DatabaseEntity be db (TableEntity joinThrough)
-  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left g)
-  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right h)
-  -> Q syntax db s (left g) -> Q syntax db s (right h)
-  -> Q syntax db s (left g, right h)
-manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, left, right) -> (left, right)) $
-                                                  manyToManyPassthrough_ joinTbl leftKey rightKey left right
-
-manyToManyPassthrough_
-  :: ( Database db, Table joinThrough
-     , Table left, Table right
-     , Sql92SelectSanityCheck syntax
-     , IsSql92SelectSyntax syntax
-
-     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
-     , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) )
-  => DatabaseEntity be db (TableEntity joinThrough)
-  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left g)
-  -> (forall s. joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right h)
-  -> Q syntax db s (left g) -> Q syntax db s (right h)
-  -> Q syntax db s (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s), left g, right h)
-manyToManyPassthrough_ joinTbl leftKey rightKey left right =
-  do left_ <- left
-     right_ <- right
-     joinTbl_ <- join_ joinTbl (\joinTbl_ -> leftKey joinTbl_ ==. primaryKey left_ &&.
-                                             rightKey joinTbl_ ==. primaryKey right_)
-     pure (joinTbl_, left_, right_)
-
 -- | Limit the number of results returned by a query.
 --
 limit_ :: forall s a select db.
@@ -314,53 +196,6 @@ subquery_ =
 
 -- ** Combinators for boolean expressions
 
-class SqlOrd expr a | a -> expr where
-    (==.), (/=.) :: a -> a -> expr Bool
-
-instance IsSql92ExpressionSyntax syntax =>
-  SqlOrd (QGenExpr context syntax s) (QGenExpr context syntax s a) where
-    (==.) = qBinOpE (eqE Nothing)
-    (/=.) = qBinOpE (neqE Nothing)
-
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
-         , Beamable tbl ) =>
-         SqlOrd (QGenExpr context syntax s) (tbl (QGenExpr context syntax s)) where
-    a ==. b = let (_, e) = runState (zipBeamFieldsM
-                                     (\x'@(Columnar' x) (Columnar' y) -> do
-                                         modify (\expr ->
-                                                   case expr of
-                                                     Nothing -> Just $ x ==. y
-                                                     Just expr -> Just $ expr &&. x ==. y)
-                                         return x') a b) Nothing
-              in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
-    a /=. b = not_ (a ==. b)
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
-         , Beamable tbl)
-    => SqlOrd (QGenExpr context syntax s) (tbl (Nullable (QGenExpr context syntax s))) where
-    a ==. b = let (_, e) = runState (zipBeamFieldsM
-                                      (\x'@(Columnar' x) (Columnar' y) -> do
-                                          modify (\expr ->
-                                                    case expr of
-                                                      Nothing -> Just $ x ==. y
-                                                      Just expr -> Just $ expr &&. x ==. y)
-                                          return x') a b) Nothing
-              in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
-    a /=. b = not_ (a ==. b)
-
-qBinOpE :: forall syntax context s a b c. IsSql92ExpressionSyntax syntax =>
-           (syntax -> syntax -> syntax)
-        -> QGenExpr context syntax s a -> QGenExpr context syntax s b
-        -> QGenExpr context syntax s c
-qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE a b)
-
-between_ :: IsSql92ExpressionSyntax syntax
-         => QGenExpr context syntax s a -> QGenExpr context syntax s a
-         -> QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-between_ (QExpr a) (QExpr min_) (QExpr max_) =
-  QExpr (betweenE a min_ max_)
-
 charLength_, octetLength_ ::
   ( IsSqlExpressionSyntaxStringType syntax text
   , IsSql92ExpressionSyntax syntax ) =>
@@ -371,18 +206,6 @@ bitLength_ ::
   IsSql92ExpressionSyntax syntax =>
   QGenExpr context syntax s SqlBitString -> QGenExpr context syntax s Int
 bitLength_ (QExpr x) = QExpr (bitLengthE x)
-
-isTrue_, isNotTrue_,
-  isFalse_, isNotFalse_,
-  isUnknown_, isNotUnknown_
-    :: IsSql92ExpressionSyntax syntax =>
-       QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-isTrue_ (QExpr s) = QExpr (isTrueE s)
-isNotTrue_ (QExpr s) = QExpr (isNotTrueE s)
-isFalse_ (QExpr s) = QExpr (isFalseE s)
-isNotFalse_ (QExpr s) = QExpr (isNotFalseE s)
-isUnknown_ (QExpr s) = QExpr (isUnknownE s)
-isNotUnknown_ (QExpr s) = QExpr (isNotUnknownE s)
 
 like_ ::
   ( IsSqlExpressionSyntaxStringType syntax text
@@ -405,45 +228,12 @@ similarTo_ ::
 similarTo_ (QExpr scrutinee) (QExpr search) =
   QExpr (similarToE scrutinee search)
 
-
-(<.), (>.), (<=.), (>=.) :: IsSql92ExpressionSyntax syntax
-                         => QGenExpr context syntax s a
-                         -> QGenExpr context syntax s a
-                         -> QGenExpr context syntax s Bool
-(<.) = qBinOpE (ltE Nothing)
-(>.) = qBinOpE (gtE Nothing)
-(<=.) = qBinOpE (leE Nothing)
-(>=.) = qBinOpE (geE Nothing)
-
 allE :: ( IsSql92ExpressionSyntax syntax, HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool) =>
         [ QGenExpr context syntax s Bool ] -> QGenExpr context syntax s Bool
 allE es = fromMaybe (QExpr (valueE (sqlValueSyntax True))) $
           foldl (\expr x ->
                    Just $ maybe x (\e -> e &&. x) expr)
                 Nothing es
-
-(&&.), (||.) :: IsSql92ExpressionSyntax syntax
-             => QGenExpr context syntax s Bool
-             -> QGenExpr context syntax s Bool
-             -> QGenExpr context syntax s Bool
-(&&.) = qBinOpE andE
-(||.) = qBinOpE orE
-
-infixr 3 &&.
-infixr 2 ||.
-infix 4 ==., /=.
-
-not_ :: forall syntax context s.
-        IsSql92ExpressionSyntax syntax
-     => QGenExpr context syntax s Bool
-     -> QGenExpr context syntax s Bool
-not_ (QExpr a) = QExpr (notE a)
-
-mod_, div_ ::
-  (Integral a, IsSql92ExpressionSyntax syntax) =>
-  QGenExpr context syntax s a -> QGenExpr context syntax s a -> QGenExpr context syntax s a
-div_ = qBinOpE divE
-mod_ = qBinOpE modE
 
 -- * UPDATE operators
 
@@ -473,11 +263,6 @@ instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s
     runIdentity $
     zipBeamFieldsM (\(Columnar' (QField _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
                        pure (Columnar' (Const (unqualifiedField f, e)) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
-
--- (<-.) :: IsSql92FieldNameSyntax fieldName
---       => QField s a
---       -> QExpr expr s a
---       -> QAssignment fieldName expr s
 
 -- * Combine table sources via UNION, INTERSECT, and EXCEPT
 
@@ -597,120 +382,6 @@ withWindow_ :: forall window a s r select db.
             -> Q select db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
 withWindow_ mkWindow mkProjection (Q windowOver)=
   Q (liftF (QWindowOver mkWindow mkProjection windowOver (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
-
--- * Aggregators
-
-aggregate_ :: forall select a r db s.
-              ( ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
-              , Projectible (Sql92SelectExpressionSyntax select) r
-              , Projectible (Sql92SelectExpressionSyntax select) a
-
-              , ContextRewritable a
-              , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
-
-              , IsSql92SelectSyntax select )
-           => (r -> a)
-           -> Q select db (QNested s) r
-           -> Q select db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
-aggregate_ mkAggregation (Q aggregating) =
-  Q (liftF (QAggregate mkAggregation' aggregating (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
-  where
-    mkAggregation' x =
-      let agg = mkAggregation x
-          doProject :: AggregateContext c => Proxy c -> Sql92SelectExpressionSyntax select
-                    -> Writer [Sql92SelectExpressionSyntax select] (Sql92SelectExpressionSyntax select)
-          doProject p expr =
-            case cast p of
-              Just (Proxy :: Proxy QGroupingContext) ->
-                tell [ expr ] >> pure expr
-              Nothing ->
-                case cast p of
-                  Just (Proxy :: Proxy QAggregateContext) ->
-                    pure expr
-                  Nothing -> error "aggregate_: impossible"
-
-          groupingExprs = execWriter (project' (Proxy @AggregateContext) doProject agg)
-      in case groupingExprs of
-           [] -> (Nothing, agg)
-           _ -> (Just (groupByExpressions groupingExprs), agg)
-
-class QGroupable expr grouped | expr -> grouped, grouped -> expr where
-  group_ :: expr -> grouped
-instance QGroupable (QExpr expr s a) (QGroupExpr expr s a) where
-  group_ (QExpr a) = QExpr a
-instance Beamable tbl =>
-  QGroupable (tbl (QExpr expr s)) (tbl (QGroupExpr expr s)) where
-  group_ = changeBeamRep (\(Columnar' (QExpr x)) -> Columnar' (QExpr x))
-
-min_, max_, avg_, sum_
-  :: ( IsSql92AggregationExpressionSyntax expr
-     , Num a ) => QExpr expr s a -> QAgg expr s a
-sum_ = sumOver_ allInGroup_
-avg_ = avgOver_ allInGroup_
-min_ = minOver_ allInGroup_
-max_ = maxOver_ allInGroup_
-
-countAll_ :: IsSql92AggregationExpressionSyntax expr => QAgg expr s Int
-countAll_ = QExpr countAllE
-
-count_ :: ( IsSql92AggregationExpressionSyntax expr
-          , Integral b ) => QExpr expr s a -> QAgg expr s b
-count_ (QExpr over) = QExpr (countE Nothing over)
-
-allInGroup_, distinctInGroup_, allInGroupExplicitly_
-  :: IsSql92AggregationSetQuantifierSyntax s
-  => Maybe s
-allInGroup_ = Nothing
-distinctInGroup_ = Just setQuantifierDistinct
-allInGroupExplicitly_ = Just setQuantifierAll
-
-cumeDist_, percentRank_
-  :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
-  => QAgg expr s Double
-cumeDist_ = QExpr cumeDistAggE
-percentRank_ = QExpr percentRankAggE
-
-rank_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
-      => QAgg expr s Int
-rank_ = QExpr rankAggE
-
-minOver_, maxOver_, avgOver_, sumOver_
-  :: ( IsSql92AggregationExpressionSyntax expr
-     , Num a )
-  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s a -> QAgg expr s a
-minOver_ q (QExpr a) = QExpr (minE q a)
-maxOver_ q (QExpr a) = QExpr (maxE q a)
-avgOver_ q (QExpr a) = QExpr (avgE q a)
-sumOver_ q (QExpr a) = QExpr (sumE q a)
-
-countOver_
-  :: ( IsSql92AggregationExpressionSyntax expr
-     , Integral b )
-  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s a -> QAgg expr s b
-countOver_ q (QExpr a) = QExpr (countE q a)
-
-everyOver_, someOver_, anyOver_
-  :: IsSql99AggregationExpressionSyntax expr
-  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s Bool -> QAgg expr s Bool
-everyOver_ q (QExpr a) = QExpr (everyE q a)
-someOver_  q (QExpr a) = QExpr (someE q a)
-anyOver_   q (QExpr a) = QExpr (anyE  q a)
-
--- | Support for FILTER (WHERE ...) syntax for aggregates.
---   Part of SQL2003 Advanced OLAP operations feature (T612)
-filterWhere_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
-             => QAgg expr s a -> QExpr expr s Bool -> QAgg expr s a
-filterWhere_ (QExpr agg) (QExpr filter) = QExpr (filterAggE agg filter)
-
-every_, some_, any_
-  :: IsSql99AggregationExpressionSyntax expr
-  => QExpr expr s Bool -> QAgg expr s Bool
-every_ = everyOver_ allInGroup_
-some_  = someOver_  allInGroup_
-any_   = anyOver_   allInGroup_
 
 -- * Order bys
 

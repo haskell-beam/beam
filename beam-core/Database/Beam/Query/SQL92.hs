@@ -1,6 +1,4 @@
-{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module Database.Beam.Query.SQL92
     ( buildSql92Query' ) where

@@ -224,11 +224,11 @@ instance Table PlaylistTrackT where
 instance Beamable (PrimaryKey PlaylistTrackT)
 type PlaylistTrackId = PrimaryKey PlaylistTrackT Identity; deriving instance Show PlaylistTrackId
 
---playlistTrackRelationship :: ManyToMany ChinookDb PlaylistT TrackT
---playlistTrackRelationship =
---  manyToMany_ (playlistTrack chinookDb)
---              playlistTrackPlaylistId
---              playlistTrackTrackId
+playlistTrackRelationship :: ManyToMany ChinookDb PlaylistT TrackT
+playlistTrackRelationship =
+ manyToMany_ (playlistTrack chinookDb)
+             playlistTrackPlaylistId
+             playlistTrackTrackId
 
 -- * Track
 

@@ -37,6 +37,10 @@ library
                        Database.Beam.Backend.SQL.AST
   other-modules:       Database.Beam.Query.Types
                        Database.Beam.Query.Combinators
+                       Database.Beam.Query.Ord
+                       Database.Beam.Query.Relationships
+                       Database.Beam.Query.Operator
+                       Database.Beam.Query.Aggregate
 
                        Database.Beam.Schema.Lenses
   build-depends:       base >=4.7 && <5.0, text, bytestring, mtl, microlens, ghc-prim, free, dlist, time, hashable
@@ -44,8 +48,8 @@ library
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
-                       TypeApplications, TypeFamilyDependencies
-  ghc-options:         -O2                                       
+                       TypeApplications, TypeFamilyDependencies, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
+  ghc-options:         -O2 -Wall                                       
 
 test-suite beam-core-tests
   type: exitcode-stdio-1.0

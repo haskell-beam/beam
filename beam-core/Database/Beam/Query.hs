@@ -4,11 +4,19 @@ module Database.Beam.Query
       module Database.Beam.Query.Types
 
     -- * General query combinators
-    , module Database.Beam.Query.Combinators
     , module Database.Beam.Query.CustomSQL
+    , module Database.Beam.Query.Relationships
+    , module Database.Beam.Query.Operator
+    , module Database.Beam.Query.Combinators
+    , module Database.Beam.Query.Aggregate
 
     , QAggregateContext, QGroupingContext, QValueContext
     , QWindowingContext, QWindowFrameContext
+
+    , SqlEq(..), SqlOrd(..)
+    , SqlEqQuantified(..), SqlOrdQuantified(..)
+    , QQuantified
+    , anyOf_, allOf_
 
     , SqlSelect(..)
     , select
@@ -32,10 +40,14 @@ module Database.Beam.Query
     , delete
     , runDelete ) where
 
-import Database.Beam.Query.Types
+import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.CustomSQL
 import Database.Beam.Query.Internal
+import Database.Beam.Query.Ord
+import Database.Beam.Query.Relationships
+import Database.Beam.Query.Operator
+import Database.Beam.Query.Types
 
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL

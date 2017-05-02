@@ -1,4 +1,6 @@
-{-# LANGUAGE FunctionalDependencies, UndecidableInstances, TypeApplications, DeriveFunctor, DataKinds #-}
+{-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors#-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Database.Beam.Query.Internal where
 
 import           Database.Beam.Backend.Types
@@ -114,6 +116,12 @@ newtype QWindow syntax s = QWindow syntax
 newtype QFrameBounds syntax = QFrameBounds (Maybe syntax)
 newtype QFrameBound syntax = QFrameBound syntax
 
+qBinOpE :: forall syntax context s a b c. IsSql92ExpressionSyntax syntax =>
+           (syntax -> syntax -> syntax)
+        -> QGenExpr context syntax s a -> QGenExpr context syntax s b
+        -> QGenExpr context syntax s c
+qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE a b)
+
 unsafeRetype :: QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a'
 unsafeRetype (QExpr v) = QExpr v
 
@@ -214,8 +222,8 @@ type family ValueContextSuggestion a :: ErrorMessage where
 type Projectible = ProjectibleWithPredicate AnyType
 type ProjectibleValue = ProjectibleWithPredicate ValueContext
 
-class ThreadRewritable s a | a -> s where
-  type WithRewrittenThread s s' a :: *
+class ThreadRewritable (s :: *) (a :: *) | a -> s where
+  type WithRewrittenThread s (s' :: *) a :: *
 
   rewriteThread :: Proxy s' -> a -> WithRewrittenThread s s' a
 instance Beamable tbl => ThreadRewritable s (tbl (QGenExpr ctxt syntax s)) where

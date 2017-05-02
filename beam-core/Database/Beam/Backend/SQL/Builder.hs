@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE PolyKinds #-}
 
 -- | Provides a syntax 'SqlSyntaxBuilder' that uses a
@@ -36,10 +37,6 @@ import           Data.String
 -- | The main syntax. A wrapper over 'Builder'
 newtype SqlSyntaxBuilder
   = SqlSyntaxBuilder { buildSql :: Builder }
--- | Some syntax elements take a type parameter. We ignore that parameter here,
---   since we're just building strings.
-newtype SqlSyntaxBuilder1 (x :: k)
-  = SqlSyntaxBuilder1 { buildSql_1 :: Builder }
 
 instance Hashable SqlSyntaxBuilder where
   hashWithSalt salt (SqlSyntaxBuilder b) = hashWithSalt salt (toLazyByteString b)
@@ -90,10 +87,10 @@ instance IsSql92SelectTableSyntax SqlSyntaxBuilder where
   selectTableStmt proj from where_ grouping having =
     SqlSyntaxBuilder $
     byteString "SELECT " <> buildSql proj <>
-    (maybe mempty ((byteString " FROM " <>) . buildSql) from) <>
-    (maybe mempty (\w -> byteString " WHERE " <> buildSql w) where_) <>
-    (maybe mempty (\g -> byteString " GROUP BY " <> buildSql g) grouping) <>
-    (maybe mempty (\e -> byteString " HAVING " <> buildSql e) having)
+    maybe mempty ((byteString " FROM " <>) . buildSql) from <>
+    maybe mempty (\w -> byteString " WHERE " <> buildSql w) where_ <>
+    maybe mempty (\g -> byteString " GROUP BY " <> buildSql g) grouping <>
+    maybe mempty (\e -> byteString " HAVING " <> buildSql e) having
 
   unionTables = tableOp "UNION"
   intersectTables  = tableOp "INTERSECT"
@@ -160,6 +157,10 @@ instance IsSql92FieldNameSyntax SqlSyntaxBuilder where
     byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`"
 
 instance IsSqlExpressionSyntaxStringType SqlSyntaxBuilder Text
+
+instance IsSql92QuantifierSyntax SqlSyntaxBuilder where
+  quantifyOverAll = SqlSyntaxBuilder "ALL"
+  quantifyOverAny = SqlSyntaxBuilder "ANY"
 
 instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   type Sql92ExpressionValueSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

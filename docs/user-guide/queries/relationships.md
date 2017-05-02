@@ -93,18 +93,19 @@ The `manyToMany_` construct can be used to fetch both, one, or no sides of a
 many-to-many relationship.
 
 ```haskell
-manyToMany_ :: ( Database db, Table joinThrough
-               , Table left, Table right
-               , Sql92SelectSanityCheck syntax
-               , IsSql92SelectSyntax syntax
+manyToMany_
+  :: ( Database db, Table joinThrough
+     , Table left, Table right
+     , Sql92SelectSanityCheck syntax
+     , IsSql92SelectSyntax syntax
 
-               , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
-               , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) )
-            => DatabaseEntity be db (TableEntity joinThrough)
-            -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left g)
-            -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right h)
-            -> Q syntax db s (left g) -> Q syntax db s (right h)
-            -> Q syntax db s (left g, right h)
+     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
+     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s)) )
+  => DatabaseEntity be db (TableEntity joinThrough)
+  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s)) -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s), right (QExpr (Sql92SelectExpressionSyntax syntax) s))
 ```
 
 This reads: for any database `db`; tables `joinThrough`, `left`, and `right`;
@@ -114,7 +115,23 @@ key of `left` and `right` from `joinThrough`, associate all entries of `left`
 with those of `right` through `joinThrough` and return the results of `left` and
 `right`.
 
-For example, 
+The Chinook database associates multiple tracks with a playlist via the
+`playlist_track` table. For example, to get all tracks from the playlists named
+either "Movies" or "Music".
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+manyToMany_ (playlistTrack chinookDb)
+            playlistTrackPlaylistId playlistTrackTrackId
+            
+            (filter_ (\p -> playlistName p ==. just_ (val_ "Music") ||.
+                            playlistName p ==. just_ (val_ "Movies"))
+                     (all_ (playlist chinookDb)))
+            
+            (all_ (track chinookDb))
+```
 
 ### Many-to-many with arbitrary data
 
@@ -122,19 +139,22 @@ Sometimes you want to have additional data for each relationship. For this, use
 `manyToManyPassthrough_`.
 
 ```haskell
-manyToManyPassthrough_ 
-    :: ( Database db, Table joinThrough
-       , Table left, Table right
-       , Sql92SelectSanityCheck syntax
-       , IsSql92SelectSyntax syntax
+manyToManyPassthrough_
+  :: ( Database db, Table joinThrough
+     , Table left, Table right
+     , Sql92SelectSanityCheck syntax
+     , IsSql92SelectSyntax syntax
 
-       , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left g)
-       , SqlOrd (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right h) )
-    => DatabaseEntity be db (TableEntity joinThrough)
-    -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left g)
-    -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right h)
-    -> Q syntax db s (left g) -> Q syntax db s (right h)
-    -> Q syntax db s (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s), left g, right h)
+     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
+     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s)) )
+  => DatabaseEntity be db (TableEntity joinThrough)
+  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> Q syntax db s ( joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s)
+                   , left (QExpr (Sql92SelectExpressionSyntax syntax) s)
+                   , right (QExpr (Sql92SelectExpressionSyntax syntax) s))
 ```
 
 Under the hood `manyToMany_` is defined simply as 
@@ -143,12 +163,65 @@ Under the hood `manyToMany_` is defined simply as
 manyToMany_ = fmap (\(_, left, right) -> (left, right)) manyToManyPassthrough_
 ```
 
-!!! TODO "TODO"
-    It would be nice to have a `ManyToMany` type or some equivalent.
+### Declaring many-to-many relationships
+
+Like one-to-many relationships, beam allows you to extract commonly used
+many-to-many relationships, via the `ManyToMany` type.
+
+For example, the playlist/track relationship above can be defined as follows
+
+```haskell
+playlistTrackRelationship :: ManyToMany ChinookDb PlaylistT TrackT
+playlistTrackRelationshipu =
+  manyToMany_ (playlistTrack chinookDb) playlistTrackPlaylistId playlistTrackTrackId
+```
+
+And we can use it as expected:
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+playlistTrackRelationship
+    (filter_ (\p -> playlistName p ==. just_ (val_ "Music") ||.
+                    playlistName p ==. just_ (val_ "Movies"))
+             (all_ (playlist chinookDb)))
+    
+    (all_ (track chinookDb))
+```
+
+`ManyToManyThrough` is the equivalent for `manyToManyThrough_`, except it takes
+another table parameter for the 'through' table.
 
 ## Arbitrary Joins
 
 Joins with arbitrary conditions can be specified using the `join_` construct.
+For example, `oneToMany_` is implemented as
+
+```haskell
+oneToMany_ rel getKey tbl =
+  join_ rel (\rel -> getKey rel ==. pk tbl)
+```
+
+Thus, the invoice example above could be rewritten. For example, instead of 
+
+```haskell
+do i <- all_ (invoice chinookDb)
+   ln <- oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice i
+   pure (i, ln)
+```
+
+We could write
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do i <- all_ (invoice chinookDb)
+   ln <- join_ (invoiceLine chinookDb) (\line -> invoiceLineInvoice line ==. primaryKey i)
+   pure (i, ln)
+```
+
 
 ## Outer joins
 

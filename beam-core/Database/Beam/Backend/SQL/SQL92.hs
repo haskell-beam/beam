@@ -175,7 +175,8 @@ class IsSql92DataTypeSyntax dataType where
   -- TODO interval type
 
 class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
-      , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr) ) =>
+      , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
+      , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr) ) =>
     IsSql92ExpressionSyntax expr where
   type Sql92ExpressionQuantifierSyntax expr :: *
   type Sql92ExpressionValueSyntax expr :: *
