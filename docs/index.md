@@ -1,3 +1,5 @@
+<img src="/img/logo.svg" width="250px"/>
+
 Beam is a highly-general library for accessing any kind of database with
 Haskell. Currently, it supports two SQL backends, Postgres and SQLite. Work is
 underway for a MySQL backend. For information on creating additional SQL

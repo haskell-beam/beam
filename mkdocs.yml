@@ -4,6 +4,10 @@ theme_dir: docs/theme
 pages:
   - Home: 'index.md'
   - Frequently Asked Questions: 'about/faq.md'
+  - Tutorial:
+      - 'Part 1': 'tutorials/tutorial1.md'
+      - 'Part 2': 'tutorials/tutorial2.md'
+      - 'Part 3': 'tutorials/tutorial3.md'
   - User Guide:
       - 'Getting Started': 'user-guide/getting-started.md'
       - 'Models': 'user-guide/models.md'
