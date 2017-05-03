@@ -77,6 +77,7 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
       liftIO (execute conn (fromString cmdString) (D.toList vals))
 
   runReturningMany (SqliteCommandSyntax (SqliteSyntax cmd vals)) action =
+
       SqliteM $ do
         (logger, conn) <- ask
         let cmdString = BL.unpack (toLazyByteString cmd)
