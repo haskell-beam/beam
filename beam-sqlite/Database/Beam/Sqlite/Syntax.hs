@@ -319,7 +319,7 @@ instance IsSql92InsertSyntax SqliteInsertSyntax where
 
   insertStmt tblName fields values =
     SqliteInsertSyntax $
-    emit "INSERT INTO " <> quotedIdentifier tblName <> parens (commas (map quotedIdentifier fields)) <>
+    emit "INSERT INTO " <> quotedIdentifier tblName <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
     fromSqliteInsertValues values
 
 instance IsSql92InsertValuesSyntax SqliteInsertValuesSyntax where

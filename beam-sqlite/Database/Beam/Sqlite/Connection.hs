@@ -73,7 +73,7 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
     SqliteM $ do
       (logger, conn) <- ask
       let cmdString = BL.unpack (toLazyByteString cmd)
-      logger cmdString
+      liftIO (logger (cmdString ++ "\n-- With values: " ++ show (D.toList vals)))
       liftIO (execute conn (fromString cmdString) (D.toList vals))
 
   runReturningMany (SqliteCommandSyntax (SqliteSyntax cmd vals)) action =
@@ -81,7 +81,7 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
         (logger, conn) <- ask
         let cmdString = BL.unpack (toLazyByteString cmd)
         liftIO $ do
-          logger cmdString
+          logger (cmdString ++ "\n-- With values: " ++ show (D.toList vals))
           withStatement conn (fromString cmdString) $ \stmt ->
             do bind stmt (BeamSqliteParams (D.toList vals))
                let nextRow' = liftIO (nextRow stmt) >>= \x ->
