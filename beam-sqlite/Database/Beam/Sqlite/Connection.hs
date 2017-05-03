@@ -8,7 +8,7 @@ import           Database.Beam.Sqlite.Syntax
 import           Database.Beam.Sqlite.Types
 
 import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
-                                        , SQLData, field
+                                        , SQLData, field, execute
                                         , withStatement, bind, nextRow)
 import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
@@ -68,6 +68,13 @@ runSqliteDebug printStmt conn x =
 instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
   withDatabase = runSqlite
   withDatabaseDebug = runSqliteDebug
+
+  runNoReturn (SqliteCommandSyntax (SqliteSyntax cmd vals)) =
+    SqliteM $ do
+      (logger, conn) <- ask
+      let cmdString = BL.unpack (toLazyByteString cmd)
+      logger cmdString
+      liftIO (execute conn (fromString cmdString) (D.toList vals))
 
   runReturningMany (SqliteCommandSyntax (SqliteSyntax cmd vals)) action =
       SqliteM $ do

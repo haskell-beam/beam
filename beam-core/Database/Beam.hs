@@ -17,7 +17,7 @@
 module Database.Beam
      ( module Database.Beam.Query
      , module Database.Beam.Schema
-     , MonadBeam(..)
+     , MonadBeam(..), MonadIO(..)
      , Auto(..)
 
        -- * Re-exports for convenience
@@ -28,6 +28,7 @@ import Database.Beam.Schema
 import Database.Beam.Backend
 
 import Control.Monad.Identity
+import Control.Monad.IO.Class (MonadIO(..))
 
 import Data.Typeable
 
