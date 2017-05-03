@@ -550,7 +550,6 @@ instance ( fa ~ Columnar f a
          , ha ~ Columnar h a) =>
     GZipTables f g h (K1 Generic.R (Exposed a)) (K1 Generic.R fa) (K1 Generic.R ga) (K1 Generic.R ha) where
         gZipTables _ combine ~(K1 f) ~(K1 g) = (\(Columnar' h) -> K1 h) <$> combine (Columnar' f :: Columnar' f a) (Columnar' g :: Columnar' g a)
---                                                return (K1 (h :: Columnar h a))
 instance ( Generic (tbl f)
          , Generic (tbl g)
          , Generic (tbl h)
@@ -558,6 +557,9 @@ instance ( Generic (tbl f)
          , GZipTables f g h (Rep (tbl Exposed)) (Rep (tbl f)) (Rep (tbl g)) (Rep (tbl h))) =>
     GZipTables f g h (K1 Generic.R (tbl Exposed)) (K1 Generic.R (tbl f)) (K1 Generic.R (tbl g)) (K1 Generic.R (tbl h)) where
     gZipTables _ combine ~(K1 f) ~(K1 g) = K1 . to' <$> gZipTables (Proxy :: Proxy (Rep (tbl Exposed))) combine (from' f) (from' g)
+
+instance GZipTables f g h U1 U1 U1 U1 where
+  gZipTables _ _ _ _ = pure U1
 
 instance  ( Generic (tbl (Nullable f))
           , Generic (tbl (Nullable g))

@@ -17,6 +17,7 @@
 module Database.Beam
      ( module Database.Beam.Query
      , module Database.Beam.Schema
+     , MonadBeam(..)
      , Auto(..)
 
        -- * Re-exports for convenience

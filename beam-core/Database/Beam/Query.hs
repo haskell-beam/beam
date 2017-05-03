@@ -21,6 +21,7 @@ module Database.Beam.Query
     , SqlSelect(..)
     , select
     , runSelectReturningList
+    , runSelectReturningOne
     , dumpSqlSelect
 
     , SqlInsert(..)
@@ -78,6 +79,12 @@ runSelectReturningList ::
   SqlSelect (Sql92SelectSyntax cmd) a -> m [ a ]
 runSelectReturningList (SqlSelect select) =
   runReturningList (selectCmd select)
+
+runSelectReturningOne ::
+  (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
+  SqlSelect (Sql92SelectSyntax cmd) a -> m (Maybe a)
+runSelectReturningOne (SqlSelect select) =
+  runReturningOne (selectCmd select)
 
 dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
                  Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()

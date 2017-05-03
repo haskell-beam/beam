@@ -54,9 +54,6 @@ data QF select db s next where
               (r -> [ Sql92SelectOrderingSyntax select ])
            -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
 
-  -- -- | Equivalent to 'pure', but with extra context information which allows window functions ('pure' doesn't)
-  -- QProject :: ProjectibleWithPredicate ScalarContext (Sql2003SelectExpressionSyntax select) a =>
-  --             a -> (a -> next) -> QF select db s next
   QWindowOver :: ( ProjectibleWithPredicate WindowFrameContext (Sql2003ExpressionWindowFrameSyntax (Sql92SelectExpressionSyntax select)) window
                  , Projectible (Sql92SelectExpressionSyntax select) r
                  , Projectible (Sql92SelectExpressionSyntax select) a )
@@ -356,13 +353,6 @@ instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
     , rewriteContext p d, rewriteContext p e, rewriteContext p f
     , rewriteContext p g, rewriteContext p h )
 
--- type family QExprRewriteContext context x
--- type instance QExprRewriteContext context (table (QGenExpr old syntax s)) = table (QGenExpr context syntax s)
--- type instance QExprRewriteContext context (table (Nullable (QGenExpr old syntax s))) = table (Nullable (QGenExpr context syntax s))
--- type instance QExprRewriteContext context (QGenExpr old syntax s a) = QGenExpr context syntax s a
--- type instance QExprRewriteContext context (QGenExpr old1 syntax1 s1 a, QGenExpr old2 syntax2 s2 b) =
---   (QGenExpr context syntax1 s1 a, QGenExpr context syntax2 s2 b)
-
 class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) syntax a | a -> syntax where
   project' :: Monad m => Proxy contextPredicate -> (forall context. contextPredicate context => Proxy context -> syntax -> m syntax) -> a -> m a
 instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate syntax (t (QGenExpr context syntax s)) where
@@ -429,41 +419,3 @@ reproject :: (IsSql92ExpressionSyntax syntax, Projectible syntax a) =>
              (Int -> syntax) -> a -> a
 reproject mkField a =
   evalState (project' (Proxy @AnyType) (\_ _ -> state (\i -> (i, i + 1)) >>= pure . mkField) a) 0
-
--- class IsSql92ExpressionSyntax syntax => Projectible syntax a where
---     project :: a -> [syntax]
--- instance (Typeable a, IsSql92ExpressionSyntax syntax) => Projectible syntax (QExpr syntax s a) where
---     project (QExpr x) = [x]
--- instance ( IsSql92ExpressionSyntax syntax
---          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SQLNull) =>
---     Projectible syntax () where
-
---     project () = [valueE (sqlValueSyntax SQLNull)]
--- instance (Projectible syntax a, Projectible syntax b) => Projectible syntax (a, b) where
---     project (a, b) = project a ++ project b
--- instance ( Projectible syntax a
---          , Projectible syntax b<
---          , Projectible syntax c ) => Projectible syntax (a, b, c) where
---     project (a, b, c) = project a ++ project b ++ project c
--- instance ( Projectible syntax a
---          , Projectible syntax b
---          , Projectible syntax c
---          , Projectible syntax d ) => Projectible syntax (a, b, c, d) where
---     project (a, b, c, d) = project a ++ project b ++ project c ++ project d
--- instance ( Projectible syntax a
---          , Projectible syntax b
---          , Projectible syntax c
---          , Projectible syntax d
---          , Projectible syntax e ) => Projectible syntax (a, b, c, d, e) where
---     project (a, b, c, d, e) = project a ++ project b ++ project c ++ project d ++ project e
-
--- instance (Beamable t, IsSql92ExpressionSyntax syntax)
---     => Projectible syntax (t (QExpr syntax s)) where
---     project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
--- instance (Beamable t, IsSql92ExpressionSyntax syntax) => Projectible syntax (t (Nullable (QExpr syntax s))) where
---     project t = allBeamValues (\(Columnar' (QExpr e)) -> e) t
-
--- tableVal :: Table tbl => tbl Identity -> tbl (QExpr s)
--- tableVal = changeRep valToQExpr . makeSqlValues
---     where valToQExpr :: Columnar' SqlValue' a -> Columnar' (QExpr s) a
---           valToQExpr (Columnar' (SqlValue' v)) = Columnar' (QExpr (SQLValE v))
