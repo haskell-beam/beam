@@ -1,33 +1,51 @@
 module Database.Beam.Backend.SQL
   ( module Database.Beam.Backend.SQL.SQL2003
   , module Database.Beam.Backend.SQL.Types
-  , module Database.Beam.Backend.Types ) where
+  , module Database.Beam.Backend.Types
+
+  , MonadBeam(..) ) where
 
 import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
-import Data.Proxy
+import Control.Monad.IO.Class
 
--- sqlBooleanOpts :: BeamSqlBackend be => SQLExpr be -> Maybe (SQLExpr be)
--- sqlBooleanOpts (SQLBinOpE "AND" (SQLValE false) _)
---   | sqlValueIsFalse false = Just (SQLValE (SQLValue False))
--- sqlBooleanOpts (SQLBinOpE "AND" _ (SQLValE false))
---   | sqlValueIsFalse false = Just (SQLValE (SQLValue False))
--- sqlBooleanOpts (SQLBinOpE "AND" (SQLValE true) q)
---   | sqlValueIsTrue true = Just q
--- sqlBooleanOpts (SQLBinOpE "AND" q (SQLValE true))
---   | sqlValueIsTrue true = Just q
+-- * MonadBeam class
 
--- sqlBooleanOpts (SQLBinOpE "OR" q (SQLValE false))
---   | sqlValueIsFalse false = Just q
--- sqlBooleanOpts (SQLBinOpE "OR" (SQLValE false) q)
---   | sqlValueIsFalse false = Just q
--- sqlBooleanOpts (SQLBinOpE "OR" (SQLValE true1) (SQLValE true2))
---   | sqlValueIsTrue true1, sqlValueIsTrue true2 = Just (SQLValE (SQLValue True))
+class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
+  MonadBeam syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
 
--- sqlBooleanOpts _ = Nothing
+  withDatabaseDebug :: (String -> IO ())
+                    -> handle
+                    -> m a -> IO a
+  withDatabase :: handle -> m a -> IO a
+  withDatabase = withDatabaseDebug (\_ -> pure ())
 
---  sqlExprOptimizations ::
---    Monad m => SQLExpr be -> m (Maybe (SQLExpr be))
---  sqlExprOptimizations e = pure (sqlBooleanOpts e)
+  runReturningMany :: FromBackendRow be x => syntax -> (m (Maybe x) -> m a) -> m a
+
+  runNoReturn :: syntax -> m ()
+  runNoReturn cmd =
+      runReturningMany cmd $ \(_ :: m (Maybe ())) -> pure ()
+
+  runReturningOne :: FromBackendRow be x => syntax -> m (Maybe x)
+  runReturningOne cmd =
+      runReturningMany cmd $ \next ->
+        do a <- next
+           case a of
+             Nothing -> pure Nothing
+             Just x -> do
+               a' <- next
+               case a' of
+                 Nothing -> pure (Just x)
+                 Just _ -> pure Nothing
+
+  runReturningList :: FromBackendRow be x => syntax -> m [x]
+  runReturningList cmd =
+      runReturningMany cmd $ \next ->
+          let collectM acc = do
+                a <- next
+                case a of
+                  Nothing -> pure (acc [])
+                  Just x -> collectM (acc . (x:))
+          in collectM id
