@@ -48,7 +48,7 @@ library
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
-                       TypeApplications, TypeFamilyDependencies, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
+                       TypeApplications, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
   ghc-options:         -O2 -Wall                                       
 
 test-suite beam-core-tests

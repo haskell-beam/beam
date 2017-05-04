@@ -85,22 +85,27 @@ class Database db where
     --   within the monad 'm'.
     --
     --   If that doesn't make sense, don't worry. This is mostly beam internal
-    zipTables :: forall be f g h m.
-                 Monad m
+    zipTables :: Monad m
               => Proxy be
               -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
                   f tbl -> g tbl -> m (h tbl))
               -> db f -> db g -> m (db h)
-    default zipTables :: forall be f g h m.
-                         ( Generic (db f), Generic (db g), Generic (db h)
+    default zipTables :: ( Generic (db f), Generic (db g), Generic (db h)
                          , Monad m
                          , GZipDatabase be f g h
                                         (Rep (db f)) (Rep (db g)) (Rep (db h)) ) =>
                          Proxy be ->
                          (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl)) ->
                          db f -> db g -> m (db h)
-    zipTables _ combine f g =
-        to <$> gZipDatabase (Proxy @f, Proxy @g, Proxy @h, Proxy @be) combine (from f) (from g)
+    -- We need the pattern type signature on 'combine' to get around a type checking bug in GHC 8.0.1. In future releases,
+    -- we will switch to the standard forall.
+    zipTables be combine (f :: db f) (g :: db g) =
+      refl $ \h ->
+        to <$> gZipDatabase (Proxy @f, Proxy @g, h, be) combine (from f) (from g)
+      where
+        -- For GHC 8.0.1 renamer bug
+        refl :: (Proxy h -> m (db h)) -> m (db h)
+        refl f = f Proxy
 
 -- | Automatically provide names for tables, and descriptions for tables (using
 --   'defTblFieldSettings'). Your database must implement 'Generic', and must be
