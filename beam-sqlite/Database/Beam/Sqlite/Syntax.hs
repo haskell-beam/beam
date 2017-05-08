@@ -1,9 +1,16 @@
+{-# LANGUAGE UndecidableInstances #-}
+
 module Database.Beam.Sqlite.Syntax
   ( SqliteSyntax(..)
 
   , SqliteCommandSyntax(..)
 
-  , SqliteSelectSyntax(..) ) where
+  , SqliteSelectSyntax(..), SqliteInsertSyntax(..)
+  , SqliteInsertValuesSyntax(..)
+
+  , SqliteValueSyntax(..)
+
+  , sqliteEscape ) where
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Query.SQL92
@@ -40,8 +47,10 @@ emit' :: Show a => a -> SqliteSyntax
 emit' x = SqliteSyntax (byteString (fromString (show x))) mempty
 
 quotedIdentifier :: T.Text -> SqliteSyntax
-quotedIdentifier txt = emit "\"" <> SqliteSyntax (stringUtf8 (T.unpack (escape txt))) mempty <> emit "\""
-  where escape = T.concatMap (\c -> if c == '"' then "\"\"" else T.singleton c)
+quotedIdentifier txt = emit "\"" <> SqliteSyntax (stringUtf8 (T.unpack (sqliteEscape txt))) mempty <> emit "\""
+
+sqliteEscape :: T.Text -> T.Text
+sqliteEscape = T.concatMap (\c -> if c == '"' then "\"\"" else T.singleton c)
 
 emitValue :: SQLData -> SqliteSyntax
 emitValue v = SqliteSyntax (byteString "?") (DL.singleton v)
@@ -201,6 +210,12 @@ instance HasSqlValueSyntax SqliteValueSyntax String where
   sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString s)))
 instance HasSqlValueSyntax SqliteValueSyntax T.Text where
   sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText s))
+instance HasSqlValueSyntax SqliteValueSyntax x =>
+  HasSqlValueSyntax SqliteValueSyntax (Maybe x) where
+  sqlValueSyntax (Just x) = sqlValueSyntax x
+  sqlValueSyntax Nothing = sqlValueSyntax SqlNull
+instance HasSqlValueSyntax SqliteValueSyntax (Maybe x) => HasSqlValueSyntax SqliteValueSyntax (Auto x) where
+  sqlValueSyntax (Auto x) = sqlValueSyntax x
 
 instance IsCustomSqlSyntax SqliteExpressionSyntax where
   customExprSyntax = SqliteExpressionSyntax . emit
