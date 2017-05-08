@@ -1,9 +1,15 @@
-<img src="/img/logo.svg" width="250px"/>
+<img src="img/logo.svg" width="250px"/>
 
 Beam is a highly-general library for accessing any kind of database with
 Haskell. Currently, it supports two SQL backends, Postgres and SQLite. Work is
-underway for a MySQL backend. For information on creating additional SQL
-backends, see the [manual section](user-guide/custom-backends.md) for more.
+underway for an official MySQL backend (contributions appreciated and
+accepted!).
+
+Beam is highly extensible and other backends can be shipped independently
+without requiring any changes in the core libraries. For example, there is an
+independently maintained [Firebird](https://github.com/gibranrosa/beam-firebird)
+backend. For information on creating additional SQL backends, see
+the [manual section](user-guide/custom-backends.md) for more.
 
 Beam features
 
@@ -49,21 +55,32 @@ You will also need to install an appropriate backend. Available backends are
   
 ## Quick Start Guide
 
-If you already have a database schema, you can use the `beam-migrate` command to
-automatically generate appropriate Beam data definitions.
+For those looking to get started with beam, we first recommend you go through
+the [tutorial](tutorials/tutorial1.md). The [user guide](user-guide/models.md)
+contains much more detailed reference-like information. Finally, the
+documentation on hackage is always available (although the types may seem
+obtuse).
 
-```bash
-beam-migrate --backend <backend-module> <backend-options> new <output-module-name>
-```
+If you're interested if beam supports your favorite database feature, refer to
+the documentation for your backend or take a look at
+the [compatibility matrix](about/compatibility.md).
 
-For example, to generate a schema for the Postgres database `employees` at
-`localhost:5000` with the user `beam`, run the following command.
 
-```bash
-beam-migrate --backend Database.Beam.Postgres.Migrate --pgconnect postgres://beam@localhost:5000/employees new BeamTutorial.Schema
-```
+<!-- If you already have a database schema, you can use the `beam-migrate` command to -->
+<!-- automatically generate appropriate Beam data definitions. -->
 
-This will generate a
+<!-- ```bash -->
+<!-- beam-migrate --backend <backend-module> <backend-options> new <output-module-name> -->
+<!-- ``` -->
+
+<!-- For example, to generate a schema for the Postgres database `employees` at -->
+<!-- `localhost:5000` with the user `beam`, run the following command. -->
+
+<!-- ```bash -->
+<!-- beam-migrate --backend Database.Beam.Postgres.Migrate --pgconnect postgres://beam@localhost:5000/employees new BeamTutorial.Schema -->
+<!-- ``` -->
+
+<!-- This will generate a -->
 
 ## How to Contribute
 
@@ -82,6 +99,12 @@ Group. The following is a quick step-by-step guide of contributing a new feature
 5. When the maintainer feels comfortable with your patch, he will commit it to
    the `master` branch and it will be included in the next minor version.
    API-breaking changes will not be included until the next major version.
+   
+!!! tip "Tip"
+    Be sure to add your name to
+    the
+    [`CONTRIBUTORS`](https://github.com/tathougies/beam/blob/master/CONTRIBUTORS) file
+    for eternal fame and glory!
 
 ## Questions, Feedback, Discussion
 
@@ -96,9 +119,9 @@ Group. The following is a quick step-by-step guide of contributing a new feature
 Beam is the most feature-complete, turnkey Haskell database solution out there.
 It supports the entire breadth of the SQL92, SQL99, SQL2003, SQL2006, SQL2008,
 SQL2011, and SQL2016 specifications, as well as the entire breadth of features
-of each of its backends. See
-the [compatibility matrix](about/compatibility.md). You will rarely be forced to
-write a SQL query 'by hand' when using Beam.
+of each of its backends. See the [compatibility matrix](about/compatibility.md).
+You will rarely be forced to write a SQL query 'by hand' when using Beam
+(but [you can](reference/extensibility.md)).
 
 Additionally, Beam plays nice with the rest of the Haskell ecosystem, the
 standard Beam backends are all implemented in terms of the underlying

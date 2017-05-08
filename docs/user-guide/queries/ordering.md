@@ -1,7 +1,7 @@
 Usually, queries are ordered before `LIMIT` and `OFFSET` are applied. Beam
 supports the standard SQL `ORDER BY` construct through the `orderBy_` function.
 
-`orderBy_` works like the Haskell function `sortBy`, wich some restructions. Its
+`orderBy_` works like the Haskell function `sortBy`, with some restructions. Its
 first argument is a function which takes as input the output of the given query.
 The function should return a sorting key, which is either a single sort ordering
 or a tuple of them. A sort ordering specifies an expression and a direction by
@@ -18,7 +18,7 @@ For example, to get the first ten albums when sorted lexicographically, use
 ```haskell
 !chinook sqlite3
 !chinookpg postgres
-limit_ 10 $
+limit_ 10  $
 orderBy_ (asc_ . albumTitle) $
 all_ (album chinookDb)
 ```
@@ -35,4 +35,21 @@ arbitrarily chosen rows, you can use a different ordering.
 orderBy_ (asc_ . albumTitle) $
 limit_ 10 $
 all_ (album chinookDb)
+```
+
+## Multiple ordering keys
+
+You can specify multiple keys to order by as well. Keys are sorted
+lexicographically in the given direction, as specified in the SQL standard.
+
+For example, we can sort all employees by their state of residence in ascending
+order and by their city name in descending order.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+limit_ 10 $
+orderBy_ (\e -> (asc_ (addressState (employeeAddress e)), desc_ (addressCity (employeeAddress e)))) $
+all_ (employee chinookDb)
 ```

@@ -222,17 +222,16 @@ do i <- all_ (invoice chinookDb)
    pure (i, ln)
 ```
 
-
 ## Outer joins
 
 ### Left and right joins
 
 Left joins with arbitrary conditions can be specified with the `leftJoin_`
-construct. `leftJoin_` takes a table and a join condition. It associates each
-result record with a record of the table given or an fully NULL row of that
-table in case no row matches. For this reason, the result of `leftJoin_` has an
-extra `Nullable` column tag, which converts each field into the corresponding
-`Maybe` type.
+construct. `leftJoin_` takes an arbitrary query and a join condition. It
+associates each result record with a record of the table given or a fully NULL
+row of that table in case no row matches. For this reason, the result of
+`leftJoin_` has an extra `Nullable` column tag, which converts each field into
+the corresponding `Maybe` type.
 
 !!! note "Note"
     The table parameter passed in as the join condition does not have a 
@@ -247,7 +246,7 @@ every artist, use `leftJoin_` as follows.
 !chinook sqlite3
 !chinookpg postgres
 do artist <- all_ (artist chinookDb)
-   album  <- leftJoin_ (album chinookDb) (\album -> albumArtist album ==. primaryKey artist)
+   album  <- leftJoin_ (all_ (album chinookDb)) (\album -> albumArtist album ==. primaryKey artist)
    pure (artist, album)
 ```
 

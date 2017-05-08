@@ -134,7 +134,25 @@ inspect the type of `s` from outside `Q`.
 
 Once we have a query in terms of `Q`, we can use the `select` function from
 `Database.Beam.Query` to turn it into a select statement that can be run against
-the backend.
+the backend. `select` takes an expression of type `Q`, and converts it into a
+SQL statement, ready to be executed against the database.
+
+The output of the query passed to `select` must follow some conventions, so that
+beam knows how to serialize, deserialize, and project the appropriate values
+from the query. In particular, the return type of your query must be either
+
+* a plain expression (i.e., type `QExpr`),
+* a `Beamable` type (i.e., a table or primary key, defined as above), or
+* any combination of tuples of the above (Beam supports up to 8-tuples by
+  default). Higher-order tuples can be formed by nested tuples. For example, for
+  16 return values, you can return a 2-tuple of 8-tuples or an 8-tuple of
+  2-tuples or a 4-tuple of 4-tuples, etc.
+  
+With this in mind, we can use `select` to get a query statement against our
+database. The return type of `all_` is just the table we ask for. In this case,
+we're interested in the `persons` table. The `persons` table has the `Beamable`
+type `PersonT`. As expected, the `SqlSelect` will return us concrete `Person`
+values (recall that `Person` is equivalent to `PersonT Identity`).
 
 ```haskell
 select (all_ (persons exampleDb)) :: (...) => SqlSelect syntax Person
@@ -157,6 +175,9 @@ standard ANSI SQL expressions. Note that these expressions should not be shipped
 to a backend directly, as they may not be escaped properly. Still, it is useful
 to see what would run.
 
+!!! tip "Tip"
+    `all_` only works for `TableEntity`s. Use `allFromView_` for `ViewEntity`s.
+
 ## A note on composability
 
 All beam queries are *composable*. This means that you can freely mix values of
@@ -165,52 +186,46 @@ differs from the behavior of SQL, where the syntax for composing queries depends
 on the structure of that query.
 
 For example, suppose you wanted to fetch all rows of a table, filter them by a
-condition, and then limit the amount of rows returned. In beam, 
+condition, limit the amount of rows returned and then join these rows with
+another table. In SQL, you'd have to write explicit subselects, take care of
+handling projections, etc. This is because this query doesn't fit into the
+'standard' SQL query structure.
 
-## Connecting to a database
+However, in beam, you can simply write this query. Beam will take care of
+generating explicit subselects and handling projections. Scoping rules enforced
+by the Haskell type system ensure that the query is constructed correctly.
 
-Okay, so we can print out a SQL statement, but how do we execute it against a
-database? Beam provides a convenient `MonadBeam` type class that allows us to
-write queries in a backend agnostic manner. This is good-enough for most
-applications and preserves portability across databases. However, `MonadBeam`
-does not support features specific to each backend, nor does it guarantee the
-highest-performance. Most backends provide additional methods to query a
-database, and you should prefer these if you've committed to a particular
-backend. For tutorial purposes, we will use the `beam-sqlite` backend.
+For example, we can write the following (meaningless) query, and things will work as expected.
 
-First, install `beam-sqlite` with `cabal` or `stack`:
-
-```
-$ cabal install beam-sqlite
-# or
-$ stack install beam-sqlite
-```
-
-Now, load `beam-sqlite` in GHCi. 
-
-```
-Prelude> import Database.Beam.Sqlite
-Prelude Database.Beam.Sqlite> 
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do tbl1 <- 
+     limit_ 10 $
+     filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
+                           (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
+             all_ (customer chinookDb)
+   tbl2 <- all_ (track chinookDb)
+   pure (tbl1, tbl2)
 ```
 
-Now, in another terminal, load the example database provided. 
+This allows you to easily factor out queries. This means you can build a query
+library in your application and then freely mix and match these queries as
+necessary. This allows you to offload as much processing to the database as
+possible, rather than shipping data to your application pre-processing.
 
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+-- 'complicatedQuery' could be declared and imported from an external module here. The generated query is the same regardless
+let complicatedQuery = 
+       filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
+                             (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
+               all_ (customer chinookDb)
+in do tbl1 <- limit_ 10 $ complicatedQuery
+      tbl2 <- all_ (track chinookDb)
+      pure (tbl1, tbl2)
 ```
-$ sqlite3 basics.db < beam-sqlite/examples/basics.sql
-```
 
-Now, back in GHCi, we can create a connection to this database.
-
-```
-Prelude Database.Beam.Sqlite> basics <- open "basics.db"
-Prelude Database.Beam.Sqlite> withDatabase basics $ runSelectReturningList (select (all_ (persons exampleDb)))
-[ .. ]
-```
-
-The `runSelectReturningList` function takes a `SqlSelect` for the given syntax
-and returns the results via a list.
-
-Voilà! We've successfully created our first query and run it against an example
-database. We have now seen the major functionalities of the beam library. In the
-next section we'll explore more advanced querying and using relationships
-between tables.
