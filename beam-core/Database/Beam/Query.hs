@@ -19,7 +19,7 @@ module Database.Beam.Query
     , anyOf_, allOf_
 
     , SqlSelect(..)
-    , select
+    , select, lookup
     , runSelectReturningList
     , runSelectReturningOne
     , dumpSqlSelect
@@ -34,12 +34,14 @@ module Database.Beam.Query
     , insertFrom
 
     , SqlUpdate(..)
-    , update
+    , update, save
     , runUpdate
 
     , SqlDelete(..)
     , delete
     , runDelete ) where
+
+import Prelude hiding (lookup)
 
 import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
@@ -56,6 +58,9 @@ import Database.Beam.Backend.SQL.Builder
 import Database.Beam.Schema.Tables
 
 import Control.Monad.Identity
+import Control.Monad.Writer
+
+import GHC.Generics
 
 -- * Query
 
@@ -73,6 +78,23 @@ select :: forall q syntax db s res.
           Q syntax db QueryInaccessible res -> SqlSelect syntax (QExprToIdentity res)
 select q =
   SqlSelect (buildSqlQuery q)
+
+lookup :: ( HasQBuilder syntax
+          , Sql92SelectSanityCheck syntax
+
+          , SqlValableTable (PrimaryKey table) (Sql92SelectExpressionSyntax syntax)
+          , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
+
+          , Beamable table, Table table
+
+          , Database db )
+       => DatabaseEntity be db (TableEntity table)
+       -> PrimaryKey table Identity
+       -> SqlSelect syntax (table Identity)
+lookup tbl tblKey =
+  select $
+  filter_ (\t -> pk t ==. val_ tblKey) $
+  all_ tbl
 
 runSelectReturningList ::
   (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
@@ -156,6 +178,32 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField tblNm name)) tblSettings
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (unqualifiedField nm)))) tblFields
+
+save :: forall table syntax be db.
+        ( Table table
+        , IsSql92UpdateSyntax syntax
+
+        , SqlValableTable (PrimaryKey table) (Sql92UpdateExpressionSyntax syntax)
+        , SqlValableTable table (Sql92UpdateExpressionSyntax syntax)
+
+        , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax syntax)) Bool
+        )
+     => DatabaseEntity be db (TableEntity table)
+     -> table Identity -> SqlUpdate syntax table
+save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
+  update tbl (\(tblField :: table (QField s)) ->
+                execWriter $
+                zipBeamFieldsM
+                  (\(Columnar' field) c@(Columnar' value) ->
+                     do when (qFieldName field `notElem` primaryKeyFieldNames) $
+                          tell [ field <-. value ]
+                        pure c)
+                  tblField (val_ v :: table (QExpr (Sql92UpdateExpressionSyntax syntax) s)))
+             (\tblE -> primaryKey tblE ==. val_ (primaryKey v))
+
+  where
+    primaryKeyFieldNames =
+      allBeamValues (\(Columnar' (TableField fieldNm)) -> fieldNm) (primaryKey tblSettings)
 
 runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlUpdate (Sql92UpdateSyntax cmd) tbl -> m ()

@@ -65,7 +65,7 @@ oneToManyOptional_, oneToMaybe_
   -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
   -> Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
 oneToManyOptional_ rel getKey tbl =
-  leftJoin_ rel (\rel -> getKey rel ==. just_ (pk tbl))
+  leftJoin_ (all_ rel) (\rel -> getKey rel ==. just_ (pk tbl))
 oneToMaybe_ = oneToManyOptional_
 
 -- ** Many-to-many relationships

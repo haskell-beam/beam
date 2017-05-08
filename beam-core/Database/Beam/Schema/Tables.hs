@@ -10,11 +10,13 @@
 module Database.Beam.Schema.Tables
     (
     -- * Database Types
-      Database(..)
+      Database
+    , zipTables
+
     , DatabaseSettings
     , IsDatabaseEntity(..)
     , DatabaseEntityDescriptor(..)
-    , DatabaseEntity(..), TableEntity, DomainTypeEntity
+    , DatabaseEntity(..), TableEntity, ViewEntity, DomainTypeEntity
     , dbEntityDescriptor
     , DatabaseModification, EntityModification(..)
     , FieldModification(..)
@@ -30,12 +32,13 @@ module Database.Beam.Schema.Tables
     , Exposed(..)
     , fieldName
 
-    , TableSettings, TableSkeleton, Ignored(..)
+    , TableSettings(..), TableSkeleton, Ignored(..)
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint, WithConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
 
     -- * Tables
     , Table(..), Beamable(..)
+    , Retaggable(..)
     , defTblFieldSettings
     , tableValuesNeeded
     , pk
@@ -48,8 +51,7 @@ import           Control.Arrow (first)
 import           Control.Monad.Identity
 import           Control.Monad.Writer
 
-import           Data.Char (isUpper, toUpper, toLower)
-import           Data.List (intercalate)
+import           Data.Char (isUpper, toLower)
 import           Data.Monoid ((<>))
 import           Data.Proxy
 import           Data.String (IsString(..))
@@ -229,6 +231,19 @@ instance IsDatabaseEntity be (TableEntity tbl) where
   dbEntityAuto nm =
     DatabaseTable (unCamelCaseSel nm) defTblFieldSettings
 
+instance IsDatabaseEntity be (ViewEntity tbl) where
+  data DatabaseEntityDescriptor be (ViewEntity tbl) where
+    DatabaseView :: Text -> TableSettings tbl -> DatabaseEntityDescriptor be (ViewEntity tbl)
+  type DatabaseEntityDefaultRequirements be (ViewEntity tbl) =
+    ( GDefaultTableFieldSettings (Rep (TableSettings tbl) ())
+    , Generic (TableSettings tbl), Beamable tbl )
+  type DatabaseEntityRegularRequirements be (ViewEntity tbl) =
+    (  Beamable tbl )
+
+  dbEntityName f (DatabaseView t s) = fmap (\t' -> DatabaseView t' s) (f t)
+  dbEntityAuto nm =
+    DatabaseView (unCamelCaseSel nm) defTblFieldSettings
+
 instance IsDatabaseEntity be (DomainTypeEntity ty) where
   data DatabaseEntityDescriptor be (DomainTypeEntity ty)
     = DatabaseDomainType !Text
@@ -248,11 +263,6 @@ data DatabaseEntity be (db :: (* -> *) -> *) entityType  where
 
 dbEntityDescriptor :: SimpleGetter (DatabaseEntity be db entityType) (DatabaseEntityDescriptor be entityType)
 dbEntityDescriptor = Lens.to (\(DatabaseEntity e) -> e)
-
--- tableName :: Lens' (DatabaseTable db entity table) Text
--- tableName f (DatabaseTable proxy name settings) = (\name' -> DatabaseTable proxy name' settings) <$> f name
--- tableSettings :: Lens' (DatabaseTable db entity table) (TableSettings table)
--- tableSettings f (DatabaseTable proxy name settings) = (\settings' -> DatabaseTable proxy name settings') <$> f settings
 
 -- | When parameterized by this entity tag, a database type will hold
 --   meta-information on the Haskell mappings of database entities. Under the
@@ -342,8 +352,8 @@ type family Columnar (f :: * -> *) x where
 
     Columnar Identity x = x
 
-    Columnar (Lenses t Identity) x = LensFor (t Identity) (Columnar Identity x)
-    Columnar (Lenses t f) x = LensFor (t f) (f x)
+    Columnar (Lenses t f) x = LensFor (t f) (Columnar f x)
+--    Columnar (Lenses t f) x = LensFor (t f) (f x)
 
     Columnar (Nullable c) x = Columnar c (Maybe x)
 
@@ -365,36 +375,19 @@ newtype Columnar' f a = Columnar' (Columnar f a)
 
 -- | Metadata for a field of type 'ty' in 'table'.
 --
--- > Columnar (TableField table) ty = TableField table ty
+--   Essentially a wrapper over the field name, but with a phantom type
+--   parameter, so that it forms an appropriate column tag.
 --
---   This is used to declare 'tblFieldSettings' in the 'Table' class.
---
---   It is easiest to access these fields through the lenses 'fieldName', 'fieldConstraints', and 'fieldSettings'.
---
--- > data EmployeeT f = Employee
--- >                  { _employeeId :: Columnar f (Auto Int)
--- >                  , _employeeDepartment :: Columnar f Text
--- >                  , _employeeFirstName :: Columnar f Text
--- >                  , _employeeLastName :: Columnar f Text }
--- >                    deriving Generic
---
---   Now we can use 'tableConfigLenses' and the 'TableField' lenses to modify the default table configuration
---
--- > Employee (LensFor employeeIdC) (LensFor employeeDepartmentC) (LensFor employeeFirstNameC) (LensFor employeeLastNameC) = tableConfigLenses
--- >
--- > instance Table EmployeeT where
--- >    data PrimaryKey EmployeeT f = EmployeeId (Columnar f AutoId)
--- >    primaryKey = EmployeeId . _beamEmployeeId
--- >
--- >    tblFieldSettings = defTblFieldSettings
--- >                     & employeeFirstNameC . fieldName .~ "fname"
--- >                     & employeeLastNameC  . fieldName .~ "lname"
--- >                     & employeeLastNameC  . fieldSettings .~ Varchar (Just 128) -- Give it a 128 character limit
-data TableField (table :: (* -> *) -> *) ty = TableField
-                                            { _fieldName        :: Text                   -- ^ The field name
-                                            } deriving (Show, Eq)
+--   Usually you use the 'defaultDbSettings' function to generate an appropriate
+--   naming convention for you, and then modify it with 'withDbModification' if
+--   necessary. Under this scheme, the field can be renamed using the 'IsString'
+--   instance for 'TableField', or the 'fieldNamed' function.
+data TableField (table :: (* -> *) -> *) ty
+  = TableField
+  { _fieldName :: Text  -- ^ The field name
+  } deriving (Show, Eq)
 
--- | Retrieve the field name from a 'TableField'
+-- | Van Laarhoven lens to retrieve or set the field name from a 'TableField'.
 fieldName :: Lens' (TableField table ty) Text
 fieldName f (TableField name) = TableField <$> f name
 
@@ -403,7 +396,10 @@ fieldName f (TableField name) = TableField <$> f name
 --   You can get or update the name of each field by using the 'fieldName' lens.
 type TableSettings table = table (TableField table)
 
+-- | Column tag that ignores the type.
 data Ignored x = Ignored
+-- | A form of 'table' all fields 'Ignored'. Useful as a parameter to
+--   'zipTables' when you only care about one table.
 type TableSkeleton table = table Ignored
 
 from' :: Generic x => x -> Rep x ()
@@ -492,7 +488,80 @@ allBeamValues (f :: forall a. Columnar' f a -> b) (tbl :: table f) =
 changeBeamRep :: Beamable table => (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
 changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl)
 
--- Carry a constraint instanc
+class Retaggable f x | x -> f where
+  type Retag (tag :: (* -> *) -> * -> *) x :: *
+
+  retag :: (forall a. Columnar' f a -> Columnar' (tag f) a) -> x
+        -> Retag tag x
+
+instance Beamable tbl => Retaggable f (tbl (f :: * -> *)) where
+  type Retag tag (tbl f) = tbl (tag f)
+
+  retag = changeBeamRep
+
+instance (Retaggable f a, Retaggable f b) => Retaggable f (a, b) where
+  type Retag tag (a, b) = (Retag tag a, Retag tag b)
+
+  retag transform (a, b) = (retag transform a, retag transform b)
+
+instance (Retaggable f a, Retaggable f b, Retaggable f c) =>
+  Retaggable f (a, b, c) where
+  type Retag tag (a, b, c) = (Retag tag a, Retag tag b, Retag tag c)
+
+  retag transform (a, b, c) = (retag transform a, retag transform b, retag transform c)
+
+instance (Retaggable f a, Retaggable f b, Retaggable f c, Retaggable f d) =>
+  Retaggable f (a, b, c, d) where
+  type Retag tag (a, b, c, d) =
+    (Retag tag a, Retag tag b, Retag tag c, Retag tag d)
+
+  retag transform (a, b, c, d) =
+    (retag transform a, retag transform b, retag transform c, retag transform d)
+
+instance ( Retaggable f a, Retaggable f b, Retaggable f c, Retaggable f d
+         , Retaggable f e ) =>
+  Retaggable f (a, b, c, d, e) where
+  type Retag tag (a, b, c, d, e) =
+    (Retag tag a, Retag tag b, Retag tag c, Retag tag d, Retag tag e)
+
+  retag transform (a, b, c, d, e) =
+    ( retag transform a, retag transform b, retag transform c, retag transform d
+    , retag transform e)
+
+instance ( Retaggable f' a, Retaggable f' b, Retaggable f' c, Retaggable f' d
+         , Retaggable f' e, Retaggable f' f ) =>
+  Retaggable f' (a, b, c, d, e, f) where
+  type Retag tag (a, b, c, d, e, f) =
+    ( Retag tag a, Retag tag b, Retag tag c, Retag tag d
+    , Retag tag e, Retag tag f)
+
+  retag transform (a, b, c, d, e, f) =
+    ( retag transform a, retag transform b, retag transform c, retag transform d
+    , retag transform e, retag transform f )
+
+instance ( Retaggable f' a, Retaggable f' b, Retaggable f' c, Retaggable f' d
+         , Retaggable f' e, Retaggable f' f, Retaggable f' g ) =>
+  Retaggable f' (a, b, c, d, e, f, g) where
+  type Retag tag (a, b, c, d, e, f, g) =
+    ( Retag tag a, Retag tag b, Retag tag c, Retag tag d
+    , Retag tag e, Retag tag f, Retag tag g )
+
+  retag transform (a, b, c, d, e, f, g) =
+    ( retag transform a, retag transform b, retag transform c, retag transform d
+    , retag transform e, retag transform f, retag transform g )
+
+instance ( Retaggable f' a, Retaggable f' b, Retaggable f' c, Retaggable f' d
+         , Retaggable f' e, Retaggable f' f, Retaggable f' g, Retaggable f' h ) =>
+  Retaggable f' (a, b, c, d, e, f, g, h) where
+  type Retag tag (a, b, c, d, e, f, g, h) =
+    ( Retag tag a, Retag tag b, Retag tag c, Retag tag d
+    , Retag tag e, Retag tag f, Retag tag g, Retag tag h )
+
+  retag transform (a, b, c, d, e, f, g, h) =
+    ( retag transform a, retag transform b, retag transform c, retag transform d
+    , retag transform e, retag transform f, retag transform g, retag transform h )
+
+-- Carry a constraint instance
 data WithConstraint (c :: * -> Constraint) x where
   WithConstraint :: c x => x -> WithConstraint c x
 

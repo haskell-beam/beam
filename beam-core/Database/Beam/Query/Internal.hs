@@ -7,16 +7,12 @@ import           Database.Beam.Backend.Types
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Schema.Tables
 
-import           Data.Monoid
 import           Data.String
-import           Data.Text (Text, unpack)
 import qualified Data.Text as T
 import qualified Data.DList as DList
 import           Data.Typeable
 
-import           Control.Applicative
 import           Control.Monad.Free.Church
-import           Control.Monad.Identity
 import           Control.Monad.State
 import           Control.Monad.Writer
 
@@ -31,15 +27,20 @@ type ProjectibleInSelectSyntax syntax a =
   , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a
   , ProjectibleValue (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a)
 
-data QF select db s next where
+data QF select (db :: (* -> *) -> *) s next where
   QAll :: Beamable table
-       => DatabaseEntity be db (TableEntity table)
+       => T.Text -> TableSettings table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
-  QLeftJoin :: Beamable table
-            => DatabaseEntity be db (TableEntity table)
-            -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
-            -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
+  QLeftJoin :: Projectible (Sql92SelectExpressionSyntax select) r
+            => QM select db (QNested s) r
+            -> (r -> Maybe (Sql92SelectExpressionSyntax select))
+            -> (r -> next)
+            -> QF select db s next
+--  QLeftJoin :: Beamable table
+--            => DatabaseEntity be db (TableEntity table)
+--            -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
+--            -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
   QSubSelect :: Projectible (Sql92SelectExpressionSyntax select) r =>
                 QM select db (QNested s) r -> (r -> next) -> QF select db s next
   QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next
@@ -68,11 +69,11 @@ deriving instance Functor (QF select db s)
 
 type QM select db s = F (QF select db s)
 
--- | The type of queries over the database `db` returning results of type `a`. The `s` argument is a
--- threading argument meant to restrict cross-usage of `QExpr`s although this is not yet
--- implemented.
+-- | The type of queries over the database `db` returning results of type `a`.
+-- The `s` argument is a threading argument meant to restrict cross-usage of
+-- `QExpr`s. 'syntax' represents the SQL syntax that this query is building.
 newtype Q syntax (db :: (* -> *) -> *) s a
-  = Q { runQ :: QM syntax db s a } -- State (QueryBuilder syntax) a}
+  = Q { runQ :: QM syntax db s a }
     deriving (Monad, Applicative, Functor)
 
 data QInternal
@@ -90,16 +91,29 @@ data QAssignment fieldName expr s
 
 -- * QGenExpr type
 
--- | The type of lifted beam expressions that will yield the haskell type `t` when run with
--- `queryList` or `query`. In the future, this will include a thread argument meant to prevent
--- cross-usage of expressions, but this is unimplemented for technical reasons.
 data QAggregateContext
 data QGroupingContext
 data QValueContext
 data QOrderingContext
 data QWindowingContext
 data QWindowFrameContext
+
+-- | The type of lifted beam expressions that will yield the haskell type 't'.
+--
+--   'context' is a type-level representation of the types of expressions this
+--   can contain. For example, 'QAggregateContext' represents expressions that
+--   may contain aggregates, and 'QWindowingContext' represents expressions that
+--   may contain @OVER@.
+--
+--   'syntax' is the expression syntax being built (usually a type that
+--   implements 'IsSql92ExpressionSyntax' at least, but not always).
+--
+--   's' is a state threading parameter that prevents 'QExpr's from incompatible
+--   sources to be combined. For example, this is used to prevent monadic joins
+--   from depending on the result of previous joins (so-called @LATERAL@ joins).
 newtype QGenExpr context syntax s t = QExpr syntax
+
+-- | 'QExpr's represent expressions not containing aggregates.
 type QExpr = QGenExpr QValueContext
 type QAgg = QGenExpr QAggregateContext
 type QOrd = QGenExpr QOrderingContext
@@ -124,7 +138,7 @@ unsafeRetype (QExpr v) = QExpr v
 
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) [Char] ) =>
-    IsString (QGenExpr context syntax s Text) where
+    IsString (QGenExpr context syntax s T.Text) where
     fromString = QExpr . valueE . sqlValueSyntax
 instance (Num a
          , IsSql92ExpressionSyntax syntax

@@ -160,7 +160,7 @@ leftJoin =
   do SqlSelect Select { selectTable = SelectTable { selectWhere = Nothing, selectFrom } } <-
        pure $ select $
        do r <- all_ (_roles employeeDbSettings)
-          e <- leftJoin_ (_employees employeeDbSettings) (\e -> primaryKey e ==. _roleForEmployee r)
+          e <- leftJoin_ (all_ (_employees employeeDbSettings)) (\e -> primaryKey e ==. _roleForEmployee r)
           pure (e, r)
 
      Just (LeftJoin (FromTable (TableNamed "roles") (Just roles))

@@ -145,12 +145,12 @@ buildJoinTableSourceQuery tblSource x qb =
   in (reproject (fieldNameFunc (qualifiedField newTblNm)) x, qb')
 
 buildInnerJoinQuery
-    :: forall select db s be table.
-       (IsSql92SelectSyntax select) =>
-       DatabaseEntity be db (TableEntity table)
+    :: forall select db s be table
+     . (Beamable table, IsSql92SelectSyntax select)
+    => T.Text -> TableSettings table
     -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
     -> QueryBuilder select -> (table (QExpr (Sql92SelectExpressionSyntax select) s), QueryBuilder select)
-buildInnerJoinQuery (DatabaseEntity (DatabaseTable tbl tblSettings)) mkOn qb =
+buildInnerJoinQuery tbl tblSettings mkOn qb =
   let qb' = QueryBuilder (tblRef + 1) from' where'
       tblRef = qbNextTblRef qb
       newTblNm = "t" <> fromString (show tblRef)
@@ -162,13 +162,14 @@ buildInnerJoinQuery (DatabaseEntity (DatabaseTable tbl tblSettings)) mkOn qb =
 
       newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
   in (newTbl, qb')
+
 buildLeftJoinQuery
-    :: forall select db s be table.
-       (IsSql92SelectSyntax select) =>
-       DatabaseEntity be db (TableEntity table)
+    :: forall select db s be table
+     . ( Beamable table, IsSql92SelectSyntax select)
+    => T.Text -> TableSettings table
     -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
     -> QueryBuilder select -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)), QueryBuilder select)
-buildLeftJoinQuery (DatabaseEntity (DatabaseTable tbl tblSettings)) mkOn qb =
+buildLeftJoinQuery tbl tblSettings mkOn qb =
   let qb' = QueryBuilder (tblRef + 1) from' where'
       tblRef = qbNextTblRef qb
       newTblNm  = "t" <> fromString (show tblRef)
@@ -180,6 +181,24 @@ buildLeftJoinQuery (DatabaseEntity (DatabaseTable tbl tblSettings)) mkOn qb =
           Nothing -> (Just newSource, andE' (qbWhere qb) (mkOn newTbl))
           Just oldFrom -> (Just (leftJoin oldFrom newSource (mkOn newTbl)), qbWhere qb)
   in (newTblNullable, qb')
+
+nullableTbl :: forall table e s.
+               Beamable table
+            => table (QExpr e s)
+            -> table (Nullable (QExpr e s))
+nullableTbl = retag (\(Columnar' (QExpr x) :: Columnar' (QExpr e s) a) -> Columnar' (QExpr x))
+
+nextTbl :: (IsSql92SelectSyntax select, Beamable table)
+        => QueryBuilder select
+        -> T.Text -> TableSettings table
+        -> ( table (QExpr (Sql92SelectExpressionSyntax select) s)
+           , T.Text
+           , QueryBuilder select )
+nextTbl qb _ tblSettings =
+  let tblRef = qbNextTblRef qb
+      newTblNm = "t" <> fromString (show tblRef)
+      newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
+  in (newTbl, newTblNm, qb { qbNextTblRef = qbNextTblRef qb + 1})
 
 projOrder :: Projectible expr x =>
              x -> [ expr ]
@@ -384,12 +403,22 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
                         Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
                         Free (QF select db s) x -> QueryBuilder select -> SelectBuilder select db x
     buildJoinedQuery (Pure x) qb = SelectBuilderQ x qb
-    buildJoinedQuery (Free (QAll tbl on next)) qb =
-        let (newTbl, qb') = buildInnerJoinQuery tbl on qb
+    buildJoinedQuery (Free (QAll tbl tblSettings on next)) qb =
+        let (newTbl, qb') = buildInnerJoinQuery tbl tblSettings on qb
         in buildJoinedQuery (next newTbl) qb'
-    buildJoinedQuery (Free (QLeftJoin tbl on next)) qb =
-        let (newTbl, qb') = buildLeftJoinQuery tbl on qb
-        in buildJoinedQuery (next newTbl) qb'
+    buildJoinedQuery (Free (QLeftJoin q on next)) qb =
+      let q' = fromF q
+      in case q' of
+           Free (QAll dbTblNm dbTblSettings on' next')
+             | (newTbl, newTblNm, qb') <- nextTbl qb dbTblNm dbTblSettings,
+               Just (proj, on'') <- tryBuildGuardsOnly (next' newTbl) (on' newTbl) ->
+               let newSource = fromTable (tableNamed dbTblNm) (Just newTblNm)
+                   on''' =  andE' on'' (on proj)
+                   (from', where') =
+                     case qbFrom qb' of
+                       Nothing -> (Just newSource, andE' (qbWhere qb) on''')
+                       Just oldFrom -> (Just (leftJoin oldFrom newSource on'''), qbWhere qb)
+               in buildJoinedQuery (next proj) (qb' { qbFrom = from', qbWhere = where' })
     buildJoinedQuery (Free (QGuard cond next)) qb =
         buildJoinedQuery next (qb { qbWhere = andE' (qbWhere qb) (Just cond) })
     buildJoinedQuery now qb =
@@ -404,8 +433,8 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
              Free (QF select db s) x
           -> (forall a'. Projectible (Sql92SelectExpressionSyntax select) a' => Free (QF select db s) a' -> (a' -> Free (QF select db s) x) -> SelectBuilder select db x)
           -> SelectBuilder select db x
-    onlyQ (Free (QAll entity mkOn next)) f =
-      f (Free (QAll entity mkOn Pure)) next
+    onlyQ (Free (QAll entityNm entitySettings mkOn next)) f =
+      f (Free (QAll entityNm entitySettings mkOn Pure)) next
     onlyQ (Free (QLeftJoin entity mkOn next)) f =
       f (Free (QLeftJoin entity mkOn Pure)) next
     onlyQ (Free (QSubSelect q' next)) f =

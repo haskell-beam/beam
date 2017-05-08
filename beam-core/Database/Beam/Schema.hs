@@ -36,7 +36,7 @@ module Database.Beam.Schema
     , modifyTable, fieldNamed
 
     -- * Types for lens generation
-    , Lenses, LensFor
+    , Lenses, LensFor(..)
 
     , module Database.Beam.Schema.Lenses ) where
 

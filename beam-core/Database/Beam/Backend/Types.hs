@@ -29,6 +29,18 @@ class BeamBackend be where
 -- See 'Columnar' for more information.
 data Nullable (c :: * -> *) x
 
+-- | Newtype wrapper for types that may be given default values by the database.
+--   Essentially, a wrapper around 'Maybe x'.
+--
+--   When a value of type 'Auto x' is written to a database (via @INSERT@ or
+--   @UPDATE@, for example), backends will translate a 'Nothing' value into an
+--   expression that will evaluate to whatever default value the database would
+--   choose. This is useful to insert rows with columns that are
+--   auto-incrementable or have a @DEFAULT@ value.
+--
+--   When read from the database, the wrapped value will always be a 'Just'
+--   value. This isn't currently enforced at the type-level, but may be in
+--   future versions of beam.
 newtype Auto x = Auto { unAuto :: Maybe x }
   deriving (Show, Read, Eq, Ord)
 

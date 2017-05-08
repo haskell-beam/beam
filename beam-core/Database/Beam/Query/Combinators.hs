@@ -1,8 +1,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Query.Combinators
-    ( all_, join_, guard_, filter_, related_, relatedBy_
-    , leftJoin_, subselect_
+    ( all_, allFromView_, join_, guard_, filter_
+    , related_, relatedBy_, references_
+    , leftJoin_, perhaps_, subselect_
 
     , SqlJustable(..)
     , SqlDeconstructMaybe(..)
@@ -27,7 +28,7 @@ module Database.Beam.Query.Combinators
     , (<-.), current_
 
     , HaskellLiteralForQExpr
-    , SqlValable(..)
+    , SqlValable(..), SqlValableTable
 
     , over_, frame_, bounds_, unbounded_, nrows_, fromBound_
     , noBounds_, noOrder_, noPartition_
@@ -76,8 +77,22 @@ all_ :: forall be (db :: (* -> *) -> *) table select s.
         , Table table )
        => DatabaseEntity be db (TableEntity table)
        -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-all_ tbl =
-    Q $ liftF (QAll tbl (\_ -> Nothing) id)
+all_ (DatabaseEntity (DatabaseTable tblNm tblSkeleton)) =
+    Q $ liftF (QAll tblNm tblSkeleton (\_ -> Nothing) id)
+
+-- | Introduce all entries of a view into the 'Q' monad
+allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
+                ( Database db
+                , IsSql92SelectSyntax select
+
+                , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
+                , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)))
+                , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+                , Beamable table )
+               => DatabaseEntity be db (ViewEntity table)
+               -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
+    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) id)
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given SQLExprbuildJoin :: forall db syntax table be s.
 join_ :: ( Database db, Table table
@@ -88,21 +103,52 @@ join_ :: ( Database db, Table table
          DatabaseEntity be db (TableEntity table)
       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
       -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-join_ tbl mkOn =
-    Q $ liftF (QAll tbl (\tbl -> let QExpr on = mkOn tbl in Just on) id)
+join_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
+    Q $ liftF (QAll tblNm tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) id)
 
--- | Introduce a table using a left join. Because this is not an inner join, the resulting table is
--- made nullable. This means that each field that would normally have type 'QExpr x' will now have
--- type 'QExpr (Maybe x)'.
-leftJoin_ ::
-  forall be db table select s.
-  ( Database db, Table table
-  , IsSql92SelectSyntax select ) =>
-  DatabaseEntity be db (TableEntity table) ->
-  (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool) ->
-  Q select db s (table (Nullable (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)))
-leftJoin_ tbl mkOn =
-    Q $ liftF (QLeftJoin tbl (\tbl -> let QExpr x = mkOn tbl in Just x) id)
+-- | Introduce a table using a left join with no ON clause. Because this is not
+-- an inner join, the resulting table is made nullable. This means that each
+-- field that would normally have type 'QExpr x' will now have type 'QExpr
+-- (Maybe x)'.
+perhaps_ :: forall s r select db.
+          ( Projectible (Sql92SelectExpressionSyntax select) r
+          , ThreadRewritable (QNested s) r
+          , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
+         => Q select db (QNested s) r
+         -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
+perhaps_ (Q sub) =
+  Q $ liftF (QLeftJoin sub (\_ -> Nothing)
+                           (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
+                                            Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
+                                  rewriteThread (Proxy @s) r))
+
+
+-- | Introduce a table using a left join. The ON clause is required here.Because
+-- this is not an inner join, the resulting table is made nullable. This means
+-- that each field that would normally have type 'QExpr x' will now have type
+-- 'QExpr (Maybe x)'.
+leftJoin_ :: forall s r select db.
+           ( Projectible (Sql92SelectExpressionSyntax select) r
+           , ThreadRewritable (QNested s) r
+           , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
+          => Q select db (QNested s) r
+          -> (WithRewrittenThread (QNested s) s r -> QExpr (Sql92SelectExpressionSyntax select) s Bool)
+          -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
+leftJoin_ (Q sub) on_ =
+  Q $ liftF (QLeftJoin sub (\r -> let QExpr e = on_ (rewriteThread (Proxy @s) r) in Just e)
+                           (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
+                                            Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
+                                  rewriteThread (Proxy @s) r))
+
+-- leftJoin_ ::
+--   forall be db table select s.
+--   ( Database db, Table table
+--   , IsSql92SelectSyntax select ) =>
+--   DatabaseEntity be db (TableEntity table) ->
+--   (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool) ->
+--   Q select db s (table (Nullable (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)))
+-- leftJoin_ tbl mkOn =
+--     Q $ liftF (QLeftJoin tbl (\tbl -> let QExpr x = mkOn tbl in Just x) id)
 
 subselect_ :: forall s r select db.
             ( ThreadRewritable (QNested s) r
@@ -147,6 +193,12 @@ relatedBy_ :: forall be db rel select s.
                 QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 relatedBy_ = join_
+
+references_ :: ( IsSql92ExpressionSyntax expr
+               , HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Bool
+               , Table t )
+            => PrimaryKey t (QGenExpr ctxt expr s) -> t (QGenExpr ctxt expr s) -> QGenExpr ctxt expr s Bool
+references_ fk tbl = fk ==. pk tbl
 
 -- | Limit the number of results returned by a query.
 --
@@ -291,6 +343,11 @@ type instance HaskellLiteralForQExpr (table (QGenExpr context syntax s)) = table
 
 type family QExprSyntax x where
   QExprSyntax (QGenExpr ctxt syntax s a) = syntax
+
+type SqlValableTable table expr =
+   ( Beamable table
+   , IsSql92ExpressionSyntax expr
+   , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax expr)) table )
 
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
