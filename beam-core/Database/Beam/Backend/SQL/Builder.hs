@@ -233,9 +233,25 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   subqueryE a = SqlSyntaxBuilder $ byteString "(" <> buildSql a <> byteString ")"
   valueE = id
 
+  currentTimestampE = SqlSyntaxBuilder (byteString "CURRENT_TIMESTAMP")
+
 instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
   distinctE = sqlUnOp "DISTINCT"
   similarToE = sqlBinOp "SIMILAR TO"
+
+  functionCallE function args =
+    SqlSyntaxBuilder $
+    buildSql function <>
+    byteString "(" <>
+    buildSepBy (byteString ", ") (map buildSql args) <>
+    byteString ")"
+
+  instanceFieldE e fieldNm =
+    SqlSyntaxBuilder $
+    byteString "(" <> buildSql e <> byteString ")." <> byteString (TE.encodeUtf8 fieldNm)
+  refFieldE e fieldNm =
+    SqlSyntaxBuilder $
+    byteString "(" <> buildSql e <> byteString ")->" <> byteString (TE.encodeUtf8 fieldNm)
 
 instance IsSql2003ExpressionSyntax SqlSyntaxBuilder where
   type Sql2003ExpressionWindowFrameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

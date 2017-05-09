@@ -60,8 +60,6 @@ import Database.Beam.Schema.Tables
 import Control.Monad.Identity
 import Control.Monad.Writer
 
-import GHC.Generics
-
 -- * Query
 
 data QueryInaccessible
@@ -71,7 +69,7 @@ data QueryInaccessible
 newtype SqlSelect select a
     = SqlSelect select
 
-select :: forall q syntax db s res.
+select :: forall syntax db res.
           ( ProjectibleInSelectSyntax syntax res
           , IsSql92SelectSyntax syntax
           , HasQBuilder syntax ) =>
@@ -99,14 +97,14 @@ lookup tbl tblKey =
 runSelectReturningList ::
   (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
   SqlSelect (Sql92SelectSyntax cmd) a -> m [ a ]
-runSelectReturningList (SqlSelect select) =
-  runReturningList (selectCmd select)
+runSelectReturningList (SqlSelect s) =
+  runReturningList (selectCmd s)
 
 runSelectReturningOne ::
   (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
   SqlSelect (Sql92SelectSyntax cmd) a -> m (Maybe a)
-runSelectReturningOne (SqlSelect select) =
-  runReturningOne (selectCmd select)
+runSelectReturningOne (SqlSelect s) =
+  runReturningOne (selectCmd s)
 
 dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
                  Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()
@@ -122,14 +120,14 @@ insert :: IsSql92InsertSyntax syntax =>
           DatabaseEntity be db (TableEntity table)
        -> SqlInsertValues (Sql92InsertValuesSyntax syntax) table
        -> SqlInsert syntax
-insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues insertValues) =
-    SqlInsert (insertStmt tblNm tblFields insertValues)
+insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues vs) =
+    SqlInsert (insertStmt tblNm tblFields vs)
   where
     tblFields = allBeamValues (\(Columnar' f) -> _fieldName f) tblSettings
 
 runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlInsert (Sql92InsertSyntax cmd) -> m ()
-runInsert (SqlInsert insert) = runNoReturn (insertCmd insert)
+runInsert (SqlInsert i) = runNoReturn (insertCmd i)
 
 newtype SqlInsertValues insertValues (tbl :: (* -> *) -> *)
     = SqlInsertValues insertValues
@@ -158,7 +156,7 @@ insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92
 insertFrom ::
     IsSql92InsertValuesSyntax syntax =>
     SqlSelect (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
-insertFrom (SqlSelect select) = SqlInsertValues . insertFromSql $ select
+insertFrom (SqlSelect s) = SqlInsertValues (insertFromSql s)
 
 -- * UPDATE
 
@@ -207,7 +205,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
 
 runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlUpdate (Sql92UpdateSyntax cmd) tbl -> m ()
-runUpdate (SqlUpdate update) = runNoReturn (updateCmd update)
+runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
 
 -- * DELETE
 
@@ -224,4 +222,4 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
 
 runDelete :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlDelete (Sql92DeleteSyntax cmd) table -> m ()
-runDelete (SqlDelete delete) = runNoReturn (deleteCmd delete)
+runDelete (SqlDelete d) = runNoReturn (deleteCmd d)

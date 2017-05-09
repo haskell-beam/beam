@@ -90,7 +90,7 @@ instance ( IsSql92ExpressionSyntax syntax
                                        do modify (\expr ->
                                                     case expr of
                                                       Nothing -> Just $ x ==. y
-                                                      Just expr -> Just $ expr &&. x ==. y)
+                                                      Just expr' -> Just $ expr' &&. x ==. y)
                                           return x') a b) Nothing
             in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
@@ -105,7 +105,7 @@ instance ( IsSql92ExpressionSyntax syntax
                                           modify (\expr ->
                                                     case expr of
                                                       Nothing -> Just $ x ==. y
-                                                      Just expr -> Just $ expr &&. x ==. y)
+                                                      Just expr' -> Just $ expr' &&. x ==. y)
                                           return x') a b) Nothing
             in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)

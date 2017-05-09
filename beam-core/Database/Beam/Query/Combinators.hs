@@ -23,7 +23,7 @@ module Database.Beam.Query.Combinators
     , coalesce_, if_, then_, else_
     , between_, like_, similarTo_, position_
     , charLength_, octetLength_, bitLength_
---  , overlaps_, nullIf_, cast_
+    , currentTimestamp_
 
     , (<-.), current_
 
@@ -48,20 +48,14 @@ import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
 
-import Control.Monad.State
-import Control.Monad.RWS
 import Control.Monad.Writer
 import Control.Monad.Identity
 import Control.Monad.Free
 import Control.Applicative
 
-import Data.Monoid
-import Data.String
 import Data.Maybe
 import Data.Proxy
-import Data.Typeable
-
-import Lens.Micro hiding (to)
+import Data.Time (LocalTime)
 
 import GHC.Generics
 
@@ -77,8 +71,8 @@ all_ :: forall be (db :: (* -> *) -> *) table select s.
         , Table table )
        => DatabaseEntity be db (TableEntity table)
        -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-all_ (DatabaseEntity (DatabaseTable tblNm tblSkeleton)) =
-    Q $ liftF (QAll tblNm tblSkeleton (\_ -> Nothing) id)
+all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
+    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) id)
 
 -- | Introduce all entries of a view into the 'Q' monad
 allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
@@ -140,16 +134,6 @@ leftJoin_ (Q sub) on_ =
                                             Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
                                   rewriteThread (Proxy @s) r))
 
--- leftJoin_ ::
---   forall be db table select s.
---   ( Database db, Table table
---   , IsSql92SelectSyntax select ) =>
---   DatabaseEntity be db (TableEntity table) ->
---   (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool) ->
---   Q select db s (table (Nullable (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)))
--- leftJoin_ tbl mkOn =
---     Q $ liftF (QLeftJoin tbl (\tbl -> let QExpr x = mkOn tbl in Just x) id)
-
 subselect_ :: forall s r select db.
             ( ThreadRewritable (QNested s) r
             , ProjectibleInSelectSyntax select r )
@@ -180,8 +164,8 @@ related_ :: forall be db rel select s.
             DatabaseEntity be db (TableEntity rel)
          -> PrimaryKey rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)
          -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-related_ relTbl pk =
-  join_ relTbl (\rel -> pk ==. primaryKey rel)
+related_ relTbl relKey =
+  join_ relTbl (\rel -> relKey ==. primaryKey rel)
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
 relatedBy_ :: forall be db rel select s.
@@ -259,6 +243,9 @@ bitLength_ ::
   QGenExpr context syntax s SqlBitString -> QGenExpr context syntax s Int
 bitLength_ (QExpr x) = QExpr (bitLengthE x)
 
+currentTimestamp_ :: IsSql92ExpressionSyntax syntax => QGenExpr ctxt syntax s LocalTime
+currentTimestamp_ = QExpr currentTimestampE
+
 like_ ::
   ( IsSqlExpressionSyntaxStringType syntax text
   , IsSql92ExpressionSyntax syntax ) =>
@@ -302,8 +289,8 @@ class SqlUpdatable expr s lhs rhs | rhs -> expr, lhs -> s, rhs -> s, lhs s expr 
         -> rhs
         -> QAssignment fieldName expr s
 instance SqlUpdatable expr s (QField s a) (QExpr expr s a) where
-  QField _ fieldName <-. QExpr expr =
-    QAssignment [(unqualifiedField fieldName, expr)]
+  QField _ fieldNm <-. QExpr expr =
+    QAssignment [(unqualifiedField fieldNm, expr)]
 instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s)) where
   (<-.) :: forall fieldName.
            IsSql92FieldNameSyntax fieldName
@@ -384,7 +371,7 @@ bounds_ :: IsSql2003WindowFrameBoundsSyntax syntax
 bounds_ (QFrameBound start) end =
     QFrameBounds . Just $
     fromToBoundSyntax start
-      (fmap (\(QFrameBound end) -> end) end)
+      (fmap (\(QFrameBound end') -> end') end)
 
 unbounded_ :: IsSql2003WindowFrameBoundSyntax syntax
            => QFrameBound syntax
@@ -512,22 +499,22 @@ instance {-# OVERLAPPING #-} ( Table t
                              , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull ) =>
     SqlJustable (PrimaryKey t (QExpr syntax s)) (PrimaryKey t (Nullable (QExpr syntax s))) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
-    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' nothing_) (primaryKey (tblSkeleton :: TableSkeleton t))
+    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' nothing_) (primaryKey (tblSkeleton :: TableSkeleton t))
 
 instance {-# OVERLAPPING #-} ( Table t
                              , IsSql92ExpressionSyntax syntax
                              , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull ) =>
     SqlJustable (t (QExpr syntax s)) (t (Nullable (QExpr syntax s))) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
-    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' nothing_) (tblSkeleton :: TableSkeleton t)
+    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' nothing_) (tblSkeleton :: TableSkeleton t)
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (PrimaryKey t Identity) (PrimaryKey t (Nullable Identity)) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (Just q))
-    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' Nothing) (primaryKey (tblSkeleton :: TableSkeleton t))
+    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' Nothing) (primaryKey (tblSkeleton :: TableSkeleton t))
 
 instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Identity)) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (Just q))
-    nothing_ = changeBeamRep (\(Columnar' q) -> Columnar' Nothing) (tblSkeleton :: TableSkeleton t)
+    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' Nothing) (tblSkeleton :: TableSkeleton t)
 
 -- * Nullable checking
 
@@ -544,8 +531,8 @@ if_ :: IsSql92ExpressionSyntax expr =>
        [ QIfCond expr s a ]
     -> QIfElse expr s a
     -> QExpr expr s a
-if_ conds (QIfElse (QExpr else_)) =
-  QExpr (caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond, res)) conds) else_)
+if_ conds (QIfElse (QExpr elseExpr)) =
+  QExpr (caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond, res)) conds) elseExpr)
 
 coalesce_ :: IsSql92ExpressionSyntax expr =>
              [ QExpr expr s (Maybe a) ] -> QExpr expr s a -> QExpr expr s a
@@ -579,4 +566,7 @@ instance ( IsSql92ExpressionSyntax syntax
     => SqlDeconstructMaybe syntax (t (Nullable (QExpr syntax s))) (t (QExpr syntax s)) s where
     isJust_ t = allE (allBeamValues (\(Columnar' e) -> isJust_ e) t)
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
-    maybe_ = undefined
+    maybe_ (QExpr onNothing) onJust tbl =
+      let QExpr onJust' = onJust (changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (QExpr e)) tbl)
+          QExpr cond = isJust_ tbl
+      in QExpr (caseE [(cond, onJust')] onNothing)

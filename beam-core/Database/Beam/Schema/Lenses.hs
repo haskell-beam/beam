@@ -1,6 +1,6 @@
 {-# LANGUAGE PolyKinds #-}
 module Database.Beam.Schema.Lenses
-    ( tableConfigLenses, tableLenses
+    ( tableLenses
     , TableLens(..)
 
     , dbLenses ) where
@@ -39,28 +39,11 @@ tableLenses' :: ( lensType ~ Lenses t f
 tableLenses' (Proxy :: Proxy t) (Proxy :: Proxy f) =
     to (gTableLenses (Proxy :: Proxy (Rep (t f))) ((\f x -> to <$> f (from x)) :: Lens' (t f) (Rep (t f) ())))
 
-tableLenses :: ( lensType ~ Lenses t f
-                , Generic (t lensType)
-                , Generic (t f)
-                , GTableLenses t f (Rep (t f)) (Rep (t lensType)) ) =>
-               t (Lenses t f)
-tableLenses = let res = tableLenses' (tProxy res) (fProxy res)
-
-                  tProxy :: t (Lenses t f) -> Proxy t
-                  tProxy _ = Proxy
-                  fProxy :: t (Lenses t f) -> Proxy f
-                  fProxy _ = Proxy
-              in res
-
-simpleTableLenses :: ( lensType ~ Lenses t Identity
-                     , Generic (t lensType)
-                     , Generic (t Identity)
-                     , GTableLenses t Identity (Rep (t Identity)) (Rep (t lensType)) ) =>
-                     t (Lenses t Identity)
-simpleTableLenses = tableLenses
-
--- | Automatically deduce lenses for 'TableSettings table'. You can expose the lenses at global level by doing a
---   top-level pattern match on 'tableConfigLenses', replacing every column in the pattern with `LensFor <nameOfLensForField>'.
+-- | Automatically deduce lenses for a table over any column tag. lenses at
+--   global level by doing a top-level pattern match on 'tableLenses', replacing
+--   every column in the pattern with `LensFor <nameOfLensForField>'. The lenses
+--   are generated per-column, not per field in the record. Thus if you have
+--   nested 'Beamable' types, lenses are generated for each nested field.
 --
 --   For example,
 --
@@ -88,13 +71,29 @@ simpleTableLenses = tableLenses
 -- >          (LensFor blogPostBody)
 -- >          (LensFor blogPostDate)
 -- >          (AuthorId (LensFor blogPostAuthorEmail))
--- >          (LensFor blogPostTagLine) = tableConfigLenses
-tableConfigLenses :: ( lensType ~ Lenses t (TableField t)
-                     , Generic (t lensType)
-                     , Generic (t (TableField t))
-                     , GTableLenses t (TableField t) (Rep (t (TableField t))) (Rep (t lensType)) ) =>
-                     t (Lenses t (TableField t))
-tableConfigLenses = tableLenses
+-- >          (LensFor blogPostTagLine) = tableLenses
+--
+--   Note: In order to have GHC deduce the right type, you will need to turn off
+--   the monomorphism restriction. This is a part of the Haskell standard that
+--   specifies that top-level definitions must be inferred to have a monomorphic
+--   type. However, lenses need a polymorphic type to work properly. You can
+--   turn off the monomorphism restriction by enabling the
+--   'NoMonomorphismRestriction' extension. You can do this per-file by using
+--   the {-# LANGUAGE NoMonomorphismRestriction #-} pragma at the top of the
+--   file. You can also pass the @-XNoMonomorphismRestriction@ command line flag
+--   to GHC during compilation.
+tableLenses :: ( lensType ~ Lenses t f
+                , Generic (t lensType)
+                , Generic (t f)
+                , GTableLenses t f (Rep (t f)) (Rep (t lensType)) ) =>
+               t (Lenses t f)
+tableLenses = let res = tableLenses' (tProxy res) (fProxy res)
+
+                  tProxy :: t (Lenses t f) -> Proxy t
+                  tProxy _ = Proxy
+                  fProxy :: t (Lenses t f) -> Proxy f
+                  fProxy _ = Proxy
+              in res
 
 newtype TableLens f db (x :: k) = TableLens (Lens' (db f) (f x))
 
@@ -110,6 +109,8 @@ instance GDatabaseLenses (db f) (K1 R (f x))
                                 (K1 R (TableLens f db x)) where
     gDatabaseLenses lensToHere = K1 (TableLens (\f -> lensToHere (\(K1 x) -> K1 <$> f x)))
 
+-- | Like 'tableLenses' but for types that are instances of 'Database'. Instead
+--   of pattern matching on 'LensFor', pattern match on 'TableLens'.
 dbLenses :: ( Generic (db (TableLens f db))
             , Generic (db f)
             , GDatabaseLenses (db f) (Rep (db f)) (Rep (db (TableLens f db))) )

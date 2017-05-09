@@ -1,15 +1,13 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
 module Database.Beam.Backend.Types where
 
-import Control.Monad.Except
-import Control.Monad.State
 import Control.Monad.Free.Church
 import Control.Monad.Identity
 
 import Data.Proxy
-import Data.Monoid
 
 import GHC.Generics
 import GHC.Types
@@ -129,7 +127,6 @@ instance ( BeamBackend be
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g)))
   valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
                       valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g)
-deriving instance Generic (a, b, c, d, e, f, g, h)
 instance ( BeamBackend be
          , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
          , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
@@ -160,3 +157,5 @@ instance FromBackendRow be x => FromBackendRow be (Maybe x) where
 instance (BeamBackend be, FromBackendRow be (Maybe x)) => FromBackendRow be (Auto x) where
   fromBackendRow = Auto <$> fromBackendRow
   valuesNeeded be _ = valuesNeeded be (Proxy @(Maybe x))
+
+deriving instance Generic (a, b, c, d, e, f, g, h)

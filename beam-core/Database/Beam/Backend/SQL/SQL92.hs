@@ -1,20 +1,13 @@
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE PolyKinds #-}
 
 module Database.Beam.Backend.SQL.SQL92 where
 
-import Control.Monad.Identity hiding (join)
-
-import Database.Beam.Schema.Tables
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL.Types
 
-import Data.Proxy
 import Data.Text (Text)
 import Data.Int
 import Data.Time (LocalTime)
-
-import GHC.Generics
 
 class ( BeamSqlBackend be ) =>
       BeamSql92Backend be where
@@ -24,6 +17,9 @@ class ( BeamSqlBackend be ) =>
 class HasSqlValueSyntax expr ty where
   sqlValueSyntax :: ty -> expr
 class IsSqlExpressionSyntaxStringType expr ty
+
+autoSqlValueSyntax :: (HasSqlValueSyntax expr String, Show a) => a -> expr
+autoSqlValueSyntax = sqlValueSyntax . show
 
 type Sql92SelectExpressionSyntax select = Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
@@ -220,6 +216,8 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
 
   existsE, uniqueE, subqueryE
     :: Sql92ExpressionSelectSyntax expr -> expr
+
+  currentTimestampE :: expr
 
 class IsSql92AggregationSetQuantifierSyntax (Sql92AggregationSetQuantifierSyntax expr) =>
   IsSql92AggregationExpressionSyntax expr where

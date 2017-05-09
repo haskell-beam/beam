@@ -30,26 +30,34 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Builder (byteString, toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
 
+import Data.String
+
 -- | A type-class for expression syntaxes that can embed custom expressions.
-class IsCustomSqlSyntax syntax where
+class (Monoid (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
+  IsCustomSqlSyntax syntax where
+  data CustomSqlSyntax syntax :: *
+
   -- | Given an arbitrary 'ByteString', produce a 'syntax' that represents the
   --   'ByteString' as a SQL expression.
-  customExprSyntax :: ByteString -> syntax
+  customExprSyntax :: CustomSqlSyntax syntax -> syntax
 
   -- | Given an arbitrary 'syntax', produce a 'ByteString' that corresponds to
   --   how that syntax would look when rendered in the backend.
-  renderSyntax :: syntax -> ByteString
+  renderSyntax :: syntax -> CustomSqlSyntax syntax
 
 instance IsCustomSqlSyntax SqlSyntaxBuilder where
-  customExprSyntax s = SqlSyntaxBuilder (byteString s)
-  renderSyntax = toStrict . toLazyByteString . buildSql
+  newtype CustomSqlSyntax SqlSyntaxBuilder = SqlSyntaxBuilderCustom ByteString
+    deriving (IsString, Monoid)
+
+  customExprSyntax (SqlSyntaxBuilderCustom bs) = SqlSyntaxBuilder (byteString bs)
+  renderSyntax = SqlSyntaxBuilderCustom . toStrict . toLazyByteString . buildSql
 
 class IsCustomExprFn fn res | res -> fn where
   customExpr_ :: fn -> res
 
-instance IsCustomSqlSyntax syntax => IsCustomExprFn ByteString (QGenExpr ctxt syntax s a) where
+instance IsCustomSqlSyntax syntax => IsCustomExprFn (CustomSqlSyntax syntax) (QGenExpr ctxt syntax s a) where
   customExpr_ = QExpr . customExprSyntax
-instance (IsCustomExprFn a res, IsCustomSqlSyntax syntax) => IsCustomExprFn (ByteString -> a) (QGenExpr ctxt syntax s r -> res) where
+instance (IsCustomExprFn a res, IsCustomSqlSyntax syntax) => IsCustomExprFn (CustomSqlSyntax syntax -> a) (QGenExpr ctxt syntax s r -> res) where
   customExpr_ fn (QExpr e) = customExpr_ $ fn (renderSyntax e)
 
 -- | Force a 'QGenExpr' to be typed as a value expression (a 'QExpr'). Useful

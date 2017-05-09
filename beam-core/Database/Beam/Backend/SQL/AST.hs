@@ -218,6 +218,8 @@ data Expression
   | ExpressionUnique Select
   | ExpressionDistinct Select
   | ExpressionExists Select
+
+  | ExpressionCurrentTimestamp
   deriving (Show, Eq)
 
 instance IsSqlExpressionSyntaxStringType Expression Text
@@ -280,6 +282,8 @@ instance IsSql92ExpressionSyntax Expression where
   subqueryE = ExpressionSubquery
   uniqueE = ExpressionUnique
   existsE = ExpressionExists
+
+  currentTimestampE = ExpressionCurrentTimestamp
 
 instance IsSql99ExpressionSyntax Expression where
   distinctE = ExpressionDistinct
@@ -362,7 +366,7 @@ instance (Show a, Eq a, Typeable a) => HasSqlValueSyntax Value a where
 instance Eq Value where
   Value a == Value b =
     case cast a of
-      Just a -> a == b
+      Just a' -> a' == b
       Nothing -> False
 instance Show Value where
   showsPrec prec (Value a) =

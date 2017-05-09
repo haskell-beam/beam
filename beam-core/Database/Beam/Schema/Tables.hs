@@ -32,7 +32,7 @@ module Database.Beam.Schema.Tables
     , Exposed(..)
     , fieldName
 
-    , TableSettings(..), TableSkeleton, Ignored(..)
+    , TableSettings, TableSkeleton, Ignored(..)
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint, WithConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
 
@@ -107,7 +107,7 @@ class Database db where
       where
         -- For GHC 8.0.1 renamer bug
         refl :: (Proxy h -> m (db h)) -> m (db h)
-        refl f = f Proxy
+        refl fn = fn Proxy
 
 -- | Automatically provide names for tables, and descriptions for tables (using
 --   'defTblFieldSettings'). Your database must implement 'Generic', and must be
@@ -168,15 +168,15 @@ tableModification = runIdentity $
 withDbModification :: forall db f be.
                       Database db => db f -> DatabaseModification f be db -> db f
 withDbModification db mods =
-  runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification mod) -> pure (mod tbl)) db mods
+  runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
 
 -- | Modify a table according to the given field modifications. Invoked by
 --   'modifyTable' to apply the modification in the database. Not used as often in
 --   user code, but provided for completeness.
 withTableModification :: Beamable tbl => tbl (FieldModification f) -> tbl f -> tbl f
 withTableModification mods tbl =
-  runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification mod :: FieldModification f a)) ->
-                                  pure (Columnar' (mod field))) tbl mods
+  runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification fieldFn :: FieldModification f a)) ->
+                                  pure (Columnar' (fieldFn field))) tbl mods
 
 -- | Provide an 'EntityModification' for 'TableEntity's. Allows you to modify
 --   the name of the table and provide a modification for each field in the
@@ -202,12 +202,12 @@ instance IsString (FieldModification (TableField tbl) a) where
 --   [manual](https://tathougies.github.io/beam/user-guide/models) for more.
 data TableEntity (tbl :: (* -> *) -> *)
 data ViewEntity (view :: (* -> *) -> *)
-data UniqueConstraint (tbl :: (* -> *) -> *) (c :: (* -> *) -> *)
+--data UniqueConstraint (tbl :: (* -> *) -> *) (c :: (* -> *) -> *)
 data DomainTypeEntity (ty :: *)
-data CharacterSetEntity
-data CollationEntity
-data TranslationEntity
-data AssertionEntity
+--data CharacterSetEntity
+--data CollationEntity
+--data TranslationEntity
+--data AssertionEntity
 
 class IsDatabaseEntity be entityType where
   data DatabaseEntityDescriptor be entityType :: *
@@ -662,27 +662,6 @@ instance Selector f  =>
         where s = TableField name
               name = unCamelCaseSel (T.pack (selName (undefined :: S1 f (K1 Generic.R (TableField table field)) ())))
 
--- instance {-# OVERLAPPING #-}
---          ( Selector f'
---          , Table rel
---          , Generic (rel f)
---          , Generic (PrimaryKey rel f)
---          , TagReducesTo f (TableField tbl)
-
---          , GDefaultTableFieldSettings (Rep (rel f) ())
---          , Beamable rel ) =>
---     GDefaultTableFieldSettings (S1 f' (K1 Generic.R (PrimaryKey rel f)) p) where
-
---     gDefTblFieldSettings _ = M1 . K1 $ pkSettings'
---         where tbl :: rel f
---               tbl = to' $ gDefTblFieldSettings (Proxy @(Rep (rel f) ()))
---               pkSettings = primaryKey tbl
-
---               relName = unCamelCaseSel (T.pack (selName (undefined :: S1 f' (K1 Generic.R (PrimaryKey rel (TableField tbl))) p)))
-
---               pkSettings' :: PrimaryKey rel f
---               pkSettings' = changeBeamRep (reduceTag %~ \(Columnar' (TableField nm)) -> Columnar' $ TableField (relName <> "__" <> nm)) pkSettings
-
 instance ( TypeError ('Text "All Beamable types must be record types, so appropriate names can be given to columns")) => GDefaultTableFieldSettings (K1 r f p) where
   gDefTblFieldSettings _ = error "impossible"
 
@@ -711,7 +690,7 @@ type family CheckNullable (f :: * -> *) :: Constraint where
 class SubTableStrategyImpl (strategy :: SubTableStrategy) (f :: * -> *) sub where
   namedSubTable :: Proxy strategy -> sub f
 
--- The defaulting with TAbleField rel is necessary to avoid infinite loops
+-- The defaulting with @TableField rel@ is necessary to avoid infinite loops
 instance ( Table rel, Generic (rel (TableField rel))
          , TagReducesTo f (TableField tbl)
          , GDefaultTableFieldSettings (Rep (rel (TableField rel)) ()) ) =>
@@ -756,82 +735,12 @@ class TagReducesTo f f' | f -> f' where
             -> Columnar' f a -> m (Columnar' f a)
 instance TagReducesTo (TableField tbl) (TableField tbl) where
   reduceTag f ~(Columnar' (TableField nm)) =
-    (\(Columnar' (TableField nm)) -> Columnar' (TableField nm)) <$>
+    (\(Columnar' (TableField nm')) -> Columnar' (TableField nm')) <$>
     f (Columnar' (TableField nm))
 instance TagReducesTo f f' => TagReducesTo (Nullable f) f' where
   reduceTag fn ~(Columnar' x :: Columnar' (Nullable f) a) =
     (\(Columnar' x' :: Columnar' f (Maybe a')) -> Columnar' x') <$>
           reduceTag fn (Columnar' x :: Columnar' f (Maybe a))
-
--- instance (GDefaultTableFieldSettings (S1 f (K1 Generic.R (rel q)) p)) =>
---   GDefaultTableFieldSettings (S1 f (K1 Generic.R (rel (Nullable q))) p) where
-
---   gDefTblFieldSettings _ = M1 . K1 . magic (\(TableField x) -> TableField x) $ q
---     where q :: rel q
---           M1 (K1 q) = gDefTblFieldSettings (Proxy @(S1 f (K1 Generic.R (rel q)) p))
-
--- instance ( Table table, Table related
---          , BeamBackend be
---          , Selector f
-
---          , Generic (PrimaryKey related (TableField be related))
---          , Generic (PrimaryKey related (TableField be table))
---          , Generic (TableSettings be related)
---          , GDefaultTableFieldSettings (Rep (TableSettings be related) ())
---          , GZipTables (TableField be related) (TableField be related) (TableField be table)
---                       (Rep (PrimaryKey related Exposed))
---                       (Rep (PrimaryKey related (TableField be related))) (Rep (PrimaryKey related (TableField be related))) (Rep (PrimaryKey related (TableField be table))) ) =>
---     GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) p) where
-
---     gDefTblFieldSettings _ = M1 . K1 $ primaryKeySettings'
---         where tableSettings = defTblFieldSettings :: TableSettings be related
---               primaryKeySettings :: PrimaryKey related (TableField be related)
---               primaryKeySettings = primaryKey tableSettings
-
---               primaryKeySettings' :: PrimaryKey related (TableField be table)
---               primaryKeySettings' = to' (runIdentity (gZipTables (Proxy :: Proxy (Rep (PrimaryKey related Exposed))) convertToForeignKeyField (from' primaryKeySettings) (from' primaryKeySettings)))
-
---               convertToForeignKeyField :: Columnar' (TableField be related) c -> Columnar' (TableField be related) c -> Identity (Columnar' (TableField be table) c)
---               convertToForeignKeyField (Columnar' tf) _ =
---                   pure . Columnar' $
---                   tf { _fieldName = keyName <> "__" <> _fieldName tf
---                      , _fieldSchema = nestedSchema (_fieldSchema tf :: BackendColumnSchema be) }
-
---               keyName = T.pack (unCamelCaseSel (selName (undefined :: S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) ())))
-
--- instance ( Table table, Table related
---          , Selector f
---          , BeamBackend be
-
---          , Generic (PrimaryKey related (TableField be related))
---          , Generic (PrimaryKey related (TableField be table))
---          , Generic (PrimaryKey related (Nullable (TableField be table)))
---          , Generic (TableSettings be related)
---          , GDefaultTableFieldSettings (Rep (TableSettings be related) ())
---          , GZipTables (TableField be table) (TableField be table) (Nullable (TableField be table))
---                       (Rep (PrimaryKey related Exposed))
---                       (Rep (PrimaryKey related (TableField be table)))
---                       (Rep (PrimaryKey related (TableField be table)))
---                       (Rep (PrimaryKey related (Nullable (TableField be table))))
---          , GZipTables (TableField be related) (TableField be related) (TableField be table)
---                       (Rep (PrimaryKey related Exposed))
---                       (Rep (PrimaryKey related (TableField be related)))
---                       (Rep (PrimaryKey related (TableField be related)))
---                       (Rep (PrimaryKey related (TableField be table)))) =>
---     GDefaultTableFieldSettings (S1 f (K1 Generic.R (PrimaryKey related (Nullable (TableField be table)))) p) where
-
---     gDefTblFieldSettings _ =
---         M1 . K1 $ settings
---         where M1 (K1 nonNullSettings) = gDefTblFieldSettings (Proxy :: Proxy (S1 f (K1 Generic.R (PrimaryKey related (TableField be table))) p))
---               nonNullSettingsRep = from' nonNullSettings :: Rep (PrimaryKey related (TableField be table)) ()
-
---               settings :: PrimaryKey related (Nullable (TableField be table))
---               settings = to' (runIdentity (gZipTables (Proxy :: Proxy (Rep (PrimaryKey related Exposed))) removeNotNullConstraints nonNullSettingsRep nonNullSettingsRep))
-
---               removeNotNullConstraints :: Columnar' (TableField be table) ty -> Columnar' (TableField be table) ty -> Identity (Columnar' (Nullable (TableField be table)) ty)
---               removeNotNullConstraints (Columnar' tf) _ =
---                   pure . Columnar' $
---                   tf { _fieldSchema = maybeFieldSchema (_fieldSchema tf) }
 
 class GTableSkeleton x where
     gTblSkeleton :: Proxy x -> x ()
@@ -853,27 +762,7 @@ instance ( Generic (tbl (Nullable Ignored))
     GTableSkeleton (K1 Generic.R (tbl (Nullable Ignored))) where
     gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (tbl (Nullable Ignored))))))
 
--- * Parsing tables from rows
-
--- instance (TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl) => FromBackendLiterals be (tbl Identity) where
---     fromBackendLiterals = tableFromBackendLiterals
---     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
---     toBackendLiterals = allBeamValues (\(Columnar' (BackendLiteral' b :: BackendLiteral' be a)) -> toBackendLiteral b) . makeBackendLiterals
-
--- instance (BeamBackend be, TableFromBackendLiterals be tbl, Beamable tbl, MakeBackendLiterals be tbl, FromBackendLiterals be (tbl Identity)) => FromBackendLiterals be (tbl (Nullable Identity)) where
---     valuesNeeded _ _ = tableValuesNeeded (Proxy :: Proxy tbl)
---     fromBackendLiterals =
---       do tbl <- fromBackendLiterals
---          case tbl of
---            Just tbl -> pure (changeBeamRep (\(Columnar' x) -> Columnar' (Just x)) (tbl :: tbl Identity))
---            Nothing -> pure (changeBeamRep (\_ -> Columnar' Nothing) (tblSkeleton :: TableSkeleton tbl))
---     toBackendLiterals tbl =
---       let values = allBeamValues (\(Columnar' b) -> isNothing b) tbl
---       in if all id values
---          then toBackendLiterals (Nothing :: Maybe (tbl Identity))
---          else toBackendLiterals (Just (changeBeamRep (\(Columnar' (Just x)) -> Columnar' x) tbl :: tbl Identity))
-
--- Internal functions
+-- * Internal functions
 
 unCamelCase :: T.Text -> [T.Text]
 unCamelCase "" = []

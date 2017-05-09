@@ -20,7 +20,6 @@ import Database.Beam.Query.Ord
 import Database.Beam.Schema
 
 import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL.SQL92
 
 type OneToOne db s one many = OneToMany db s one many
 type OneToMany db s one many =
@@ -50,7 +49,7 @@ oneToMany_, oneToOne_
   -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
   -> Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
 oneToMany_ rel getKey tbl =
-  join_ rel (\rel -> getKey rel ==. pk tbl)
+  join_ rel (\rel' -> getKey rel' ==. pk tbl)
 oneToOne_ = oneToMany_
 
 oneToManyOptional_, oneToMaybe_
@@ -65,13 +64,13 @@ oneToManyOptional_, oneToMaybe_
   -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
   -> Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
 oneToManyOptional_ rel getKey tbl =
-  leftJoin_ (all_ rel) (\rel -> getKey rel ==. just_ (pk tbl))
+  leftJoin_ (all_ rel) (\rel' -> getKey rel' ==. just_ (pk tbl))
 oneToMaybe_ = oneToManyOptional_
 
 -- ** Many-to-many relationships
 
 type ManyToMany db left right =
-  forall syntax g h s.
+  forall syntax s.
   ( Sql92SelectSanityCheck syntax, IsSql92SelectSyntax syntax
 
   , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
@@ -79,7 +78,7 @@ type ManyToMany db left right =
   Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s)) -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s)) ->
   Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s), right (QExpr (Sql92SelectExpressionSyntax syntax) s))
 type ManyToManyThrough db through left right =
-  forall syntax g h s.
+  forall syntax s.
   ( Sql92SelectSanityCheck syntax, IsSql92SelectSyntax syntax
 
   , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
@@ -102,7 +101,7 @@ manyToMany_
   -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s))
   -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s)) -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s))
   -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s), right (QExpr (Sql92SelectExpressionSyntax syntax) s))
-manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, left, right) -> (left, right)) $
+manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, l, r) -> (l, r)) $
                                                   manyToManyPassthrough_ joinTbl leftKey rightKey left right
 
 manyToManyPassthrough_

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-dodgy-exports #-}
 module Database.Beam.Backend.SQL.SQL99
   ( module Database.Beam.Backend.SQL.SQL92
   , IsSql99ExpressionSyntax(..)

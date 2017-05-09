@@ -23,8 +23,6 @@ import Control.Monad.Writer
 import Control.Monad.Free
 
 import Data.Typeable
-import Data.Proxy
-import Data.Maybe
 
 aggregate_ :: forall select a r db s.
               ( ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
@@ -129,7 +127,7 @@ anyOver_   q (QExpr a) = QExpr (anyE  q a)
 --   Part of SQL2003 Advanced OLAP operations feature (T612)
 filterWhere_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
              => QAgg expr s a -> QExpr expr s Bool -> QAgg expr s a
-filterWhere_ (QExpr agg) (QExpr filter) = QExpr (filterAggE agg filter)
+filterWhere_ (QExpr agg) (QExpr cond) = QExpr (filterAggE agg cond)
 
 every_, some_, any_
   :: IsSql99AggregationExpressionSyntax expr
