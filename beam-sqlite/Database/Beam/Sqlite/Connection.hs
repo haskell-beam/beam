@@ -133,7 +133,7 @@ runInsertReturningList (SqliteInsertReturning nm (SqliteInsertSyntax (SqliteSynt
     createInsertedValuesTable conn =
       execute_ conn (Query ("CREATE TEMPORARY TABLE inserted_values AS SELECT * FROM \"" <> sqliteEscape nm <> "\" LIMIT 0"))
     dropInsertedValuesTable conn () =
-      execute_ conn (Query ("DROP TABLE \"" <> sqliteEscape nm <> "\""))
+      execute_ conn (Query ("DROP TABLE inserted_values"))
 
     createInsertTrigger conn =
       execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger AFTER INSERT ON \"" <> sqliteEscape nm <> "\" BEGIN " <>
