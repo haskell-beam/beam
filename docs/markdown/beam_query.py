@@ -12,17 +12,6 @@ import os
 import os.path
 
 def run_example(template_path, cache_dir, example_lines):
-    lines_hash = md5.md5("$$TEMPLATEPATH$$" + template_path +
-                         "".join(example_lines))
-    with open(template_path) as f:
-        for line in f:
-            lines_hash.update(line)
-    lines_hash = lines_hash.hexdigest()
-    if os.path.exists(os.path.join(cache_dir, lines_hash)):
-        with open(os.path.join(cache_dir, lines_hash)) as cached:
-            return [x.rstrip() for x in cached]
-
-    print "run_example", template_path, example_lines
     template_data = []
     options = {}
     with open(template_path) as f:
@@ -42,6 +31,27 @@ def run_example(template_path, cache_dir, example_lines):
 
     build_dir = options.get('BUILD_DIR', '.')
     build_command = options.get('BUILD_COMMAND')
+    extra_deps = options.get('EXTRA_DEPS', "").split()
+
+    lines_hash = md5.md5("$$TEMPLATEPATH$$" + template_path +
+                         "".join(example_lines))
+    with open(template_path) as f:
+        for line in f:
+            lines_hash.update(line)
+
+    for extra_dep in extra_deps:
+        extra_dep = os.path.join(os.path.dirname(template_path), extra_dep)
+        lines_hash.update("EXTRA_DEP: %s" % extra_dep)
+        with open(extra_dep) as f:
+            for line in f:
+                lines_hash.update(line)
+
+    lines_hash = lines_hash.hexdigest()
+    if os.path.exists(os.path.join(cache_dir, lines_hash)):
+        with open(os.path.join(cache_dir, lines_hash)) as cached:
+            return [x.rstrip() for x in cached]
+
+    print "run_example", template_path, example_lines
     if build_command is None:
         return ["No BUILD_COMMAND specified"] + example_lines
 

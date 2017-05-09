@@ -121,7 +121,7 @@ It supports the entire breadth of the SQL92, SQL99, SQL2003, SQL2006, SQL2008,
 SQL2011, and SQL2016 specifications, as well as the entire breadth of features
 of each of its backends. See the [compatibility matrix](about/compatibility.md).
 You will rarely be forced to write a SQL query 'by hand' when using Beam
-(but [you can](reference/extensibility.md)).
+(but [you can](user-guide/extensibility.md)).
 
 Additionally, Beam plays nice with the rest of the Haskell ecosystem, the
 standard Beam backends are all implemented in terms of the underlying

@@ -1,6 +1,9 @@
 !!! warning "Warning"
-    The `beam-migrations` package is still a WIP. The following manual represents
-    both planned and implemented features.
+    The `beam-migrations` package is still a WIP. The following manual
+    represents both planned and implemented features. If you'd like to help
+    guide development, please join
+    the
+    [`beam-discussion` mailing list](https://groups.google.com/forum/#!forum/beam-discussion).
 
 In the User Guide we saw how to declare a schema for an already created database
 and use it to perform queries. Beam can also manage a database schema based on

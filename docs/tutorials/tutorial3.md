@@ -128,6 +128,11 @@ instance Beamable (PrimaryKey LineItemT)
 Now we'll add all these tables to our database.
 
 ```haskell
+-- Some convenience lenses
+
+LineItem _ _ (LensFor lineItemQuantity) = tableLenses
+Product (LensFor productId) (LensFor productTitle) (LensFor productDescription) (LensFor productPrice) = tableLenses
+
 data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers         :: f (TableEntity UserT)
                       , _shoppingCartUserAddresses :: f (TableEntity AddressT)
@@ -157,7 +162,7 @@ shoppingCartDb = defaultDbSettings `withDbModification`
                                          tableModification {
                                            _orderShippingInfo = ShippingInfoId "shipping_info__id"
                                          },
-                   _shoppingCartShippingInfos = modifyTable (\_ -> "shipping") $
+                   _shoppingCartShippingInfos = modifyTable (\_ -> "shipping_info") $
                                                 tableModification {
                                                   _shippingInfoId = "id",
                                                   _shippingInfoCarrier = "carrier",
@@ -178,9 +183,9 @@ conn <- open "shoppingcart3.db"
 execute_ conn "CREATE TABLE cart_users (email VARCHAR NOT NULL, first_name VARCHAR NOT NULL, last_name VARCHAR NOT NULL, password VARCHAR NOT NULL, PRIMARY KEY( email ));"
 execute_ conn "CREATE TABLE addresses ( id INTEGER PRIMARY KEY AUTOINCREMENT, address1 VARCHAR NOT NULL, address2 VARCHAR, city VARCHAR NOT NULL, state VARCHAR NOT NULL, zip VARCHAR NOT NULL, for_user__email VARCHAR NOT NULL );"
 execute_ conn "CREATE TABLE products ( id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR NOT NULL, description VARCHAR NOT NULL, price INT NOT NULL );"
-execute_ conn "CREATE TABLE orders ( id INTEGER PRIMARY KEY AUTOINCREMENT, date TIMESTAMP NOT NULL, for_user__id INT NOT NULL, address__id INT NOT NULL, shipping_info__id INT);"
+execute_ conn "CREATE TABLE orders ( id INTEGER PRIMARY KEY AUTOINCREMENT, date TIMESTAMP NOT NULL, for_user__email VARCHAR NOT NULL, ship_to_address__id INT NOT NULL, shipping_info__id INT);"
 execute_ conn "CREATE TABLE shipping_info ( id INTEGER PRIMARY KEY AUTOINCREMENT, carrier VARCHAR NOT NULL, tracking_number VARCHAR NOT NULL);"
-
+execute_ conn "CREATE TABLE line_items (item_in_order__id INTEGER NOT NULL, item_for_product__id INTEGER NOT NULL, item_quantity INTEGER NOT NULL)"
 ```
 
 Let's put some sample data into our database. Below, we will use the
@@ -220,6 +225,14 @@ let users@[james, betty, sam] =
     pure ( jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase )
 ```
 
+Now, if we take a look at one of the returned addresses, like `jamesAddress1`,
+we see it has had it's `Auto` field assigned correctly.
+
+```haskell
+Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro> jamesAddress1
+Address {_addressId = Auto {unAuto = Just 1}, _addressLine1 = "123 Little Street", _addressLine2 = Nothing, _addressCity = "Boston", _addressState = "MA", _addressZip = "12345", _addressForUser = UserId "james@example.com"}
+```
+
 !!! note "Note"
     `insertReturning` and `runInsertReturningList` are from the `beam-sqlite`
     package. They emulate the `INSERT .. RETURNING ..` functionatily you may
@@ -230,13 +243,15 @@ let users@[james, betty, sam] =
     package you're interested in for more information, as well as notes on the
     implementation.
 
+## Marshalling a custom type
+
 Now we can insert shipping information. Of course, the shipping information
 contains the `ShippingCarrier` enumeration.
 
 ```haskell
 bettyShippingInfo <- 
   withDatabaseDebug putStrLn conn $ do
-    [bettysShippingInfo] <-
+    [bettyShippingInfo] <-
       runInsertReturningList $
       insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
       insertValues [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
@@ -245,60 +260,171 @@ bettyShippingInfo <-
 
 If you run this, you'll get an error from GHCi.
 
-> main :: IO ()
-> main = do beam <- openDatabaseDebug shoppingCartDb AutoMigrate (Sqlite3Settings "shoppingcart3.db")
->           dumpSchema shoppingCartDb
->
->           let users = [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
->                       , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
->                       , User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -} ]
->
->           Success [james, betty, sam] <- beamTxn beam $ \db ->
->                                          mapM (insertInto (_shoppingCartUsers db)) users
->
->           let addresses = [ Address UnassignedId "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
->
->                           , Address UnassignedId "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
->                           , Address UnassignedId "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty) ]
->
->               products = [ Product UnassignedId "Red Ball" "A bright red, very spherical ball" 1000
->                          , Product UnassignedId "Math Textbook" "Contains a lot of important math theorems and formulae" 2500
->                          , Product UnassignedId "Intro to Haskell" "Learn the best programming language in the world" 3000
->                          , Product UnassignedId "Suitcase" "A hard durable suitcase" 15000 ]
->
->           Success [jamesAddress1, bettyAddress1, bettyAddress2] <-
->               beamTxn beam $ \db ->
->               mapM (insertInto (_shoppingCartUserAddresses db)) addresses
->           Success [redBall, mathTextbook, introToHaskell, suitcase] <-
->               beamTxn beam $ \db ->
->               mapM (insertInto (_shoppingCartProducts db)) products
->
->           Success bettysShippingInfo <- beamTxn beam $ \db ->
->                                         insertInto (_shoppingCartShippingInfos db)
->                                                    (ShippingInfo UnassignedId USPS "123456790ABCDEFGHI")
->
->           now <- getCurrentTime
->           let orders = [ Order UnassignedId now (pk james) (pk jamesAddress1) nothing_
->                        , Order UnassignedId now (pk betty) (pk bettyAddress1) (just_ (pk bettysShippingInfo))
->                        , Order UnassignedId now (pk james) (pk jamesAddress1) nothing_ ]
->           (res :: BeamResult () [Order]) <-
->               beamTxn beam $ \db ->
->                   mapM (insertInto (_shoppingCartOrders db)) orders
->           putStrLn ("Got " ++ show res)
->           let Success [jamesOrder1, bettysOrder, jamesOrder2] = res
->
->
->           let lineItems = [ LineItem (pk jamesOrder1) (pk redBall) 10
->                           , LineItem (pk jamesOrder1) (pk mathTextbook) 1
->                           , LineItem (pk jamesOrder1) (pk introToHaskell) 4
->
->                           , LineItem (pk bettysOrder) (pk mathTextbook) 3
->                           , LineItem (pk bettysOrder) (pk introToHaskell) 3
->
->                           , LineItem (pk jamesOrder2) (pk mathTextbook) 1 ]
->
->           beamTxn beam $ \db ->
->               mapM_ (insertInto (_shoppingCartLineItems db)) lineItems
+```
+<interactive>:263:7: error:
+    * No instance for (Database.Beam.Backend.Types.FromBackendRow
+                         Sqlite ShippingCarrier)
+        arising from a use of 'runInsertReturningList'
+    * In a stmt of a 'do' block:
+        [bettyShippingInfo] <- runInsertReturningList
+                               $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+                                 $ insertValues
+                                     [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]
+      In the second argument of '($)', namely
+        'do { [bettyShippingInfo] <- runInsertReturningList
+                                     $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+                                       $ insertValues
+                                           [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"];
+              pure bettyShippingInfo }''
+      In the first argument of 'GHC.GHCi.ghciStepIO ::
+                                  forall a. IO a -> IO a', namely
+        'withDatabaseDebug putStrLn conn
+         $ do { [bettyShippingInfo] <- runInsertReturningList
+                                       $ insertReturning
+                                           (shoppingCartDb ^. shoppingCartShippingInfos)
+                                         $ insertValues
+                                             [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"];
+                pure bettyShippingInfo }'
+
+<interactive>:265:7: error:
+    * No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax
+                         SqliteValueSyntax ShippingCarrier)
+        arising from a use of 'insertValues'
+    * In the second argument of '($)', namely
+        'insertValues
+           [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]''
+      In the second argument of '($)', namely
+        'insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+         $ insertValues
+             [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]'
+      In a stmt of a 'do' block:
+        [bettyShippingInfo] <- runInsertReturningList
+                               $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+                                 $ insertValues
+                                     [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]
+```
+
+These errors are because there's no way to express a `ShippingCarrier` in the
+backend syntax. We can fix this by writing instances for beam. We can re-use the
+functionality we already have for `String`.
+
+The `HasSqlValueSyntax` class tells us how to convert a Haskell value into a
+corresponding backend value.
+
+```haskell
+import Database.Beam.Backend.SQL
+
+:set -XUndecidableInstances
+
+instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
+  sqlValueSyntax = autoSqlValueSyntax
+```
+
+The `FromBackendRow` class tells us how to convert a value from the database
+into a corresponding Haskell value. Most often, it is enough to declare an empty
+instance, so long as there is a backend-specific instance for unmarshaling your
+data type.
+
+For example,
+
+```haskell
+Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro> import Database.Beam.Backend
+Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro Database.Beam.Backend> :set -XMultiParamTypeClasses
+Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro Database.Beam.Backend> instance FromBackendRow Sqlite ShippingCarrier
+
+<interactive>:271:10: error:
+    * No instance for (Database.SQLite.Simple.FromField.FromField
+                         ShippingCarrier)
+        arising from a use of 'Database.Beam.Backend.Types.$dmfromBackendRow'
+    * In the expression:
+        Database.Beam.Backend.Types.$dmfromBackendRow
+          @Sqlite @ShippingCarrier
+      In an equation for 'fromBackendRow':
+          fromBackendRow
+            = Database.Beam.Backend.Types.$dmfromBackendRow
+                @Sqlite @ShippingCarrier
+      In the instance declaration for
+        'FromBackendRow Sqlite ShippingCarrier'
+```
+
+Let's see if we can write `Database.SQLite.Simple.FromField.FromField` instance
+for `ShippingCarrier` and then let's try re-instantiating `FromBackendRow`.
+
+```haskell
+import Database.SQLite.Simple.FromField
+import Text.Read
+
+instance FromField ShippingCarrier where
+  fromField f = do x <- readMaybe <$> fromField f
+                   case x of
+                     Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
+                     Just x -> pure x
+instance FromBackendRow be ShippingCarrier
+```
+
+Now, if we try to insert the shipping info again, it works.
+
+```haskell
+bettyShippingInfo <- 
+  withDatabaseDebug putStrLn conn $ do
+    [bettyShippingInfo] <-
+      runInsertReturningList $
+      insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
+      insertValues [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
+    pure bettyShippingInfo
+```
+
+And if we look at the value of `bettyShippingInfo`, `ShippingCarrier` has been
+stored correctly.
+
+```haskell
+> bettyShippingInfo
+ShippingInfo {_shippingInfoId = Auto {unAuto = Just 1}, _shippingInfoCarrier = USPS, _shippingInfoTrackingNumber = "12345790ABCDEFGHI"}
+```
+
+Now, let's insert some orders that just came in. In the previous `INSERT`
+examples, we used `insertValues` to insert arbitrary values into the database.
+Now, we want to insert transactions with the current database timestamp (i.e.,
+`CURRENT_TIMESTAMP` in SQL). We can insert rows containing arbitrary expressions
+using the `insertExpressions` function. As you can see, the resulting rows have
+a timestamp set by the database.
+
+!beam-query
+```haskell
+!employee3sql sql
+!employee3out console
+[ jamesOrder1, bettyOrder1, jamesOrder2 ] <-
+  withDatabaseDebug putStrLn conn $ do
+    runInsertReturningList $
+      insertReturning (shoppingCartDb ^. shoppingCartOrders) $
+      insertExpressions $
+      [ Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ 
+      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo))) 
+      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ ]
+      
+print jamesOrder1
+print bettyOrder1
+print jamesOrder2
+```
+
+Finally, let's add some line items
+
+!beam-query
+```haskell
+!employee3sql-1 sql
+let lineItems = [ LineItem (pk jamesOrder1) (pk redBall) 10
+                , LineItem (pk jamesOrder1) (pk mathTextbook) 1
+                , LineItem (pk jamesOrder1) (pk introToHaskell) 4
+
+                , LineItem (pk bettyOrder1) (pk mathTextbook) 3
+                , LineItem (pk bettyOrder1) (pk introToHaskell) 3
+
+                , LineItem (pk jamesOrder2) (pk mathTextbook) 1 ]
+
+withDatabaseDebug putStrLn conn $ do
+  runInsert $ insert (shoppingCartDb ^. shoppingCartLineItems) $
+    insertValues lineItems
+```
 
 Phew! Let's write some queries on this data!
 
@@ -307,89 +433,92 @@ Would you like some left joins with that?
 
 Suppose we want to do some analytics on our users, and so we want to know how many orders each user
 has made in our system. We can write a query to list every user along with the orders they've
-made. We can use `perhapsAll_` to include all users in our result set, even those who have no
+made. We can use `leftJoin_` to include all users in our result set, even those who have no
 orders.
 
->           putStrLn "All pairs of users and orders, but listing all users"
->           Success allPairs <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 do user <- all_ (_shoppingCartUsers db)
->                    order <- perhapsAll_ (_shoppingCartOrders db) (\order -> _orderForUser order ==. just_ (pk user))
->                    return (user, order)
->           mapM_ (putStrLn . show) allPairs
->           putStrLn "----\n\n"
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
+usersAndOrders <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $ do
+      user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+      order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
+      pure (user, order)
+      
+mapM_ print usersAndOrders
+```
 
-Notice that sam is included in the result set, even though he doesn't have any associated
-orders. Instead of a `Just (Order ..)`, `Nothing` is returned instead.
+Notice that sam is included in the result set, even though he doesn't have any
+associated orders. Instead of a `Just (Order ..)`, `Nothing` is returned
+instead.
 
-< Will execute SELECT `t0`.`email`, `t0`.`first_name`, `t0`.`last_name`, `t0`.`password`, `t1`.`id`, `t1`.`date`, `t1`.`for_user__email`, `t1`.`ship_to_address__id`, `t1`.`shipping_info__info_id` FROM  cart_users AS t0 LEFT JOIN cart_orders AS t1 ON (`t1`.`for_user__email` == `t0`.`email`) with []
-< (User {_userEmail = "james@example.com", _userFirstName = "James", _userLastName = "Smith", _userPassword = "b4cc344d25a2efe540adbf2678e2304c"},Just (Order {_orderId = AssignedId 1, _orderDate = 2016-01-25 20:02:14.007038 UTC, _orderForUser = UserId "james@example.com", _orderShipToAddress = AddressId (AssignedId 1), _orderShippingInfo = ShippingInfoId Nothing}))
-< (User {_userEmail = "james@example.com", _userFirstName = "James", _userLastName = "Smith", _userPassword = "b4cc344d25a2efe540adbf2678e2304c"},Just (Order {_orderId = AssignedId 3, _orderDate = 2016-01-25 20:02:14.007038 UTC, _orderForUser = UserId "james@example.com", _orderShipToAddress = AddressId (AssignedId 1), _orderShippingInfo = ShippingInfoId Nothing}))
-< (User {_userEmail = "betty@example.com", _userFirstName = "Betty", _userLastName = "Jones", _userPassword = "82b054bd83ffad9b6cf8bdb98ce3cc2f"},Just (Order {_orderId = AssignedId 2, _orderDate = 2016-01-25 20:02:14.007038 UTC, _orderForUser = UserId "betty@example.com", _orderShipToAddress = AddressId (AssignedId 2), _orderShippingInfo = ShippingInfoId (Just (AssignedId 1))}))
-< (User {_userEmail = "sam@example.com", _userFirstName = "Sam", _userLastName = "Taylor", _userPassword = "332532dcfaa1cbf61e2a266bd723612c"},Nothing)
+Next, perhaps our marketing team wanted to send e-mails out to all users with no
+orders. We can use `isNothing_` or `isJust_` to determine the status if a
+nullable table or `QExpr s (Maybe x)`. The following query uses `isNothing_` to
+find users who have no associated orders.
 
-Next, perhaps our marketing team wanted to send e-mails out to all users with no orders. We can use
-`isNothing_` or `isJust_` to determine the status if a nullable table or `QExpr s (Maybe x)`. The
-following query uses `isNothing_` to find users who have no associated orders.
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
+usersWithNoOrders <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $ do
+      user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+      order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
+      guard_ (isNothing_ order)
+      pure user
+      
+mapM_ print usersWithNoOrders
+```
 
->           putStrLn "All users without any orders, using WHERE"
->           Success allPairsWithoutOrdersUsingWhere <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 do user <- all_ (_shoppingCartUsers db)
->                    order <- perhapsAll_ (_shoppingCartOrders db) (\order -> _orderForUser order ==. just_ (pk user))
->                    guard_ (isNothing_ order)
->                    return user
->           mapM_ (putStrLn . show) allPairsWithoutOrdersUsingWhere
->           putStrLn "----\n\n"
-
-We see that beam generates a sensible SQL SELECT using the WHERE clause.
-
-< All users without any orders, using WHERE
-< Will execute SELECT `t0`.`email`, `t0`.`first_name`, `t0`.`last_name`, `t0`.`password` FROM  cart_users AS t0 LEFT JOIN cart_orders AS t1 ON (`t1`.`for_user__email` == `t0`.`email`) WHERE (`t1`.`id` IS NULL AND (`t1`.`date` IS NULL AND (`t1`.`for_user__email` IS NULL AND (`t1`.`ship_to_address__id` IS NULL AND `t1`.`shipping_info__info_id` IS NULL)))) with []
-< User {_userEmail = "sam@example.com", _userFirstName = "Sam", _userLastName = "Taylor", _userPassword = "332532dcfaa1cbf61e2a266bd723612c"}
-< ----
+We see that beam generates a sensible SQL `SELECT` and `WHERE` clause.
 
 We can also use the `exists_` combinator to utilize the SQL `EXISTS` clause.
 
->           putStrLn "All users without any orders, using EXISTS"
->           Success allPairsWithoutOrdersUsingExists <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 do user <- all_ (_shoppingCartUsers db)
->                    guard_ (not_ (exists_ (do order <- all_ (_shoppingCartOrders db)
->                                              guard_ (_orderForUser order ==. pk user))))
->                    return user
->           mapM_ (putStrLn . show) allPairsWithoutOrdersUsingExists
->           putStrLn "----\n\n"
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
+usersWithNoOrders <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $ do
+      user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+      guard_ (not_ (exists_ (filter_ (\order -> _orderForUser order `references_` user) (all_ (shoppingCartDb ^. shoppingCartOrders)))))
+      pure user
+      
+mapM_ print usersWithNoOrders
+```
 
-Now suppose we wanted to do some analysis on the orders themselves. To start, we want to get the
-orders sorted by their portion of revenue. We can use `aggregate` to list every order and the total
-amount of all products in that order.
+Now suppose we wanted to do some analysis on the orders themselves. To start, we
+want to get the orders sorted by their portion of revenue. We can use
+`aggregate_` to list every order and the total amount of all products in that
+order.
 
->           putStrLn "All orders with the total cost of all products in that order, ordered by total cost descending"
->           Success allOrdersAndTotals <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 orderBy (\(order, total) -> desc_ total) $
->                 aggregate (\(order, lineItem, product) ->
->                                (group_ order, sum_ (_lineItemQuantity lineItem * _productPrice product))) $
->                 do lineItem <- all_ (_shoppingCartLineItems db)
->                    order <- related_ (_shoppingCartOrders db) (_lineItemInOrder lineItem)
->                    product <- related_ (_shoppingCartProducts db) (_lineItemForProduct lineItem)
->                    pure (order, lineItem, product)
->           mapM_ (putStrLn . show) allOrdersAndTotals
->           putStrLn "----\n\n"
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
 
-The output is just as we'd expect, with the correct `GROUP BY` and `ORDER BY` clauses.
-
-< All orders with the total cost of all products in that order, ordered by total cost descending
-< Will execute SELECT `t1`.`id`, `t1`.`date`, `t1`.`for_user__email`, `t1`.`ship_to_address__id`, `t1`.`shipping_info__info_id`, SUM((`t0`.`item_quantity` * `t2`.`price`)) FROM  cart_line_items AS t0 INNER JOIN cart_orders AS t1 ON (`t0`.`item_in_order__id` == `t1`.`id`) INNER JOIN cart_products AS t2 ON (`t0`.`item_for_product__id` == `t2`.`id`) GROUP BY `t1`.`id`, `t1`.`date`, `t1`.`for_user__email`, `t1`.`ship_to_address__id`, `t1`.`shipping_info__info_id` ORDER BY SUM((`t0`.`item_quantity` * `t2`.`price`)) DESC with []
-< (Order {_orderId = AssignedId 1, _orderDate = 2016-01-25 21:50:03.704396 UTC, _orderForUser = UserId "james@example.com", _orderShipToAddress = AddressId (AssignedId 1), _orderShippingInfo = ShippingInfoId Nothing},24500)
-< (Order {_orderId = AssignedId 2, _orderDate = 2016-01-25 21:50:03.704396 UTC, _orderForUser = UserId "betty@example.com", _orderShipToAddress = AddressId (AssignedId 2), _orderShippingInfo = ShippingInfoId (Just (AssignedId 1))},16500)
-< (Order {_orderId = AssignedId 3, _orderDate = 2016-01-25 21:50:03.704396 UTC, _orderForUser = UserId "james@example.com", _orderShipToAddress = AddressId (AssignedId 1), _orderShippingInfo = ShippingInfoId Nothing},2500)
-< ----
+ordersWithCostOrdered <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    orderBy_ (\(order, total) -> desc_ total) $
+    aggregate_ (\(order, lineItem, product) ->
+                   (group_ order, sum_ (lineItem ^. lineItemQuantity * product ^. productPrice))) $
+    do lineItem <- all_ (shoppingCartDb ^. shoppingCartLineItems)
+       order    <- related_ (shoppingCartDb ^. shoppingCartOrders) (_lineItemInOrder lineItem)
+       product  <- related_ (shoppingCartDb ^. shoppingCartProducts) (_lineItemForProduct lineItem)
+       pure (order, lineItem, product)
+       
+mapM_ print ordersWithCostOrdered
+```
 
 We can also get the total amount spent by each user, even including users with no orders. Notice
 that we have to use `maybe_` below in order to handle the fact that some tables have been introduced
@@ -397,35 +526,35 @@ into our query with a left join. `maybe_` is to `QExpr` what `maybe` is to norma
 values. `maybe_` is polymorphic to either `QExpr`s or full on tables of `QExpr`s. For our purposes,
 the type of `maybe_` is
 
-< maybe_ :: QExpr s a -> (QExpr s b -> QExpr s a) -> QExpr s (Maybe b) -> QExpr s a
+```haskell
+maybe_ :: QExpr s a -> (QExpr s b -> QExpr s a) -> QExpr s (Maybe b) -> QExpr s a
+```
 
 With that in mind, we can write the query to get the total spent by user
 
->           putStrLn "All users with total spent, including users who have spent nothing"
->           Success allUsersAndTotals <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 orderBy (\(user, total) -> desc_ total) $
->                 aggregate (\(user, order, lineItem, product) ->
->                                (group_ user, sum_ (maybe_ 0 id (_lineItemQuantity lineItem) * maybe_ 0 id (_productPrice product)))) $
->                 do user <- all_ (_shoppingCartUsers db)
->
->                    order <- perhapsAll_ (_shoppingCartOrders db) (\order -> _orderForUser order `references_` just_ user)
->                    lineItem <- perhapsAll_ (_shoppingCartLineItems db) (\lineItem -> _lineItemInOrder lineItem `references_` order)
->                    product <- perhapsAll_ (_shoppingCartProducts db) (\product -> _lineItemForProduct lineItem `references_` product)
->
->                    pure (user, order, lineItem, product)
->           mapM_ (putStrLn . show) allUsersAndTotals
->           putStrLn "----\n\n"
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
 
-Again beam produces the correct SQL and results.
-
-< All users with total spent, including users who have spent nothing
-< Will execute SELECT `t0`.`email`, `t0`.`first_name`, `t0`.`last_name`, `t0`.`password`, SUM(((CASE WHEN (`t2`.`item_quantity` IS NOT NULL) THEN `t2`.`item_quantity` ELSE ? END) * (CASE WHEN (`t3`.`price` IS NOT NULL) THEN `t3`.`price` ELSE ? END))) FROM  cart_users AS t0 LEFT JOIN cart_orders AS t1 ON (`t1`.`for_user__email` == `t0`.`email`) LEFT JOIN cart_line_items AS t2 ON (`t2`.`item_in_order__id` == `t1`.`id`) LEFT JOIN cart_products AS t3 ON (`t2`.`item_for_product__id` == `t3`.`id`) GROUP BY `t0`.`email`, `t0`.`first_name`, `t0`.`last_name`, `t0`.`password` ORDER BY SUM(((CASE WHEN (`t2`.`item_quantity` IS NOT NULL) THEN `t2`.`item_quantity` ELSE ? END) * (CASE WHEN (`t3`.`price` IS NOT NULL) THEN `t3`.`price` ELSE ? END))) DESC with [SqlInt64 0,SqlInt64 0,SqlInt64 0,SqlInt64 0]
-< (User {_userEmail = "james@example.com", _userFirstName = "James", _userLastName = "Smith", _userPassword = "b4cc344d25a2efe540adbf2678e2304c"},27000)
-< (User {_userEmail = "betty@example.com", _userFirstName = "Betty", _userLastName = "Jones", _userPassword = "82b054bd83ffad9b6cf8bdb98ce3cc2f"},16500)
-< (User {_userEmail = "sam@example.com", _userFirstName = "Sam", _userLastName = "Taylor", _userPassword = "332532dcfaa1cbf61e2a266bd723612c"},0)
-< ----
+allUsersAndTotals <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    orderBy_ (\(user, total) -> desc_ total) $
+    aggregate_ (\(user, lineItem, product) ->
+                   (group_ user, sum_ (maybe_ 0 id (_lineItemQuantity lineItem) * maybe_ 0 id (product ^. productPrice)))) $
+    do user     <- all_ (shoppingCartDb ^. shoppingCartUsers)
+       order    <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
+                             (\order -> _orderForUser order `references_` user)
+       lineItem <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartLineItems))
+                             (\lineItem -> maybe_ (val_ False) (\order -> _lineItemInOrder lineItem `references_` order) order)
+       product  <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartProducts))
+                             (\product -> maybe_ (val_ False) (\lineItem -> _lineItemForProduct lineItem `references_` product) lineItem)
+       pure (user, lineItem, product)
+       
+mapM_ print allUsersAndTotals
+```
 
 Queries with nullable foreign keys
 =======
@@ -436,89 +565,133 @@ nullable primary keys to optionally include information.
 
 Suppose we want to find all orders who have not been shipped. We can do this by simply writing a query over the orders.
 
->           putStrLn "All orders with no shipping information"
->           Success allUnshippedOrders <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 do order <- all_ (_shoppingCartOrders db)
->                    guard_ (isNothing_ (_orderShippingInfo order))
->                    pure order
->           mapM_ (putStrLn . show) allUnshippedOrders
->           putStrLn "----\n\n"
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
+
+allUnshippedOrders <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    filter_ (isNothing_ . _orderShippingInfo) $
+    all_ (shoppingCartDb ^. shoppingCartOrders)
+    
+mapM_ print allUnshippedOrders
+```
 
 Let's count up all shipped and unshipped orders by user, including users who have no orders.
 
->           putStrLn "Shipped and unshipped orders by user. Tuples returned like (user, unshipped, shipped)"
->           Success shippingInformationByUser <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 aggregate (\(user, order) ->
->                                let ShippingInfoId shippingInfoId = _orderShippingInfo order
->                                in ( group_ user
->                                   , count_ (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId :: QExpr _ _ (Maybe Int))
->                                   , count_ shippingInfoId )) $
->                 do user <- all_ (_shoppingCartUsers db)
->
->                    order <- perhapsAll_ (_shoppingCartOrders db) (\order -> _orderForUser order `references_` just_ user)
->                    pure (user, order)
->           mapM_ (putStrLn . show) shippingInformationByUser
->           putStrLn "----\n\n"
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
 
-Uh-oh! There's an error in the result set!
+shippingInformationByUser <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    aggregate_ (\(user, order) ->
+                   let ShippingInfoId shippingInfoId = _orderShippingInfo order
+                   in ( group_ user
+                      , as_ @Int $ count_ (as_ @(Maybe Int) (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId))
+                      , as_ @Int $ count_ shippingInfoId ) ) $
+    do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+       order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
+       pure (user, order)
+       
+mapM_ print shippingInformationByUser
+```
 
-< Shipped and unshipped orders by user. Tuples returned like (user, unshipped, shipped)
-< Will execute SELECT `t0`.`email`, `t0`.`first_name`, `t0`.`last_name`, `t0`.`password`, COUNT((CASE WHEN (`t1`.`shipping_info__info_id` IS NOT NULL) THEN ? ELSE ? END)), COUNT(`t1`.`shipping_info__info_id`) FROM  cart_users AS t0 LEFT JOIN cart_orders AS t1 ON (`t1`.`for_user__email` == `t0`.`email`) GROUP BY `t0`.`email`, `t0`.`first_name`, `t0`.`last_name`, `t0`.`password` with [SqlNull,SqlInt64 1]
-< (User {_userEmail = "betty@example.com", _userFirstName = "Betty", _userLastName = "Jones", _userPassword = "82b054bd83ffad9b6cf8bdb98ce3cc2f"},0,1)
-< (User {_userEmail = "james@example.com", _userFirstName = "James", _userLastName = "Smith", _userPassword = "b4cc344d25a2efe540adbf2678e2304c"},2,0)
-< (User {_userEmail = "sam@example.com", _userFirstName = "Sam", _userLastName = "Taylor", _userPassword = "332532dcfaa1cbf61e2a266bd723612c"},1,0)
-< ----
+Uh-oh! There's an error in the result set! Sam is reported as having one
+unshipped order, instead of zero.
 
-Here we hit one of the limitations of beam's mapping to SQL, and really one of the limitations of
-SQL itself. Notice that the type of `shippingInfoId` in the aggregate expression is `QExpr s (Maybe
-(Maybe Int))` because based on the Haskell query we constructed, `shippingInfoId` could be nullable
-at two levels: either it's null in the order, or it's null because the entire order is nothing. SQL
-makes no distinction between these two values, since they're both returned as `NULL`. When beam
-deserializes a `NULL` in a `Maybe` field, the outermost `Maybe` is the one populated with
-`Nothing`. Thus it is impossible to retrieve a value like `Just Nothing` from the database using the
-default serializers and deserializers. In general, it's best to avoid highly nested `Maybe`s in
-your queries because it makes them more difficult to understand.
+Here we hit one of the limitations of beam's mapping to SQL, and really one of
+the limitations of SQL itself. Namely, the NULL in the result rows for Sam is
+not distinguished from the NULL in the shipping info key itself. Beam however
+does make the distinction.
 
-One way to work around this issue in the above query is to use subqueries.
+When beam deserializes a `NULL` in a `Maybe` field, the outermost `Maybe` is the
+one populated with `Nothing`. Thus it is impossible to retrieve a value like
+`Just Nothing` from the database using the default serializers and
+deserializers. In general, it's best to avoid highly nested `Maybe`s in your
+queries because it makes them more difficult to understand.
 
->           putStrLn "Shipped and unshipped orders by user, with correct double maybe handling. Tuples returned like (user, unshipped, shipped)."
->           Success shippingInformationByUserCorrect <-
->               beamTxn beam $ \db ->
->                 queryList $
->                 do user <- all_ (_shoppingCartUsers db)
->                    (userEmail, unshippedCount) <- subquery_ $
->                                                   aggregate (\(userEmail, order) -> (group_ userEmail, count_ (_orderId order))) $
->                                                   do user <- all_ (_shoppingCartUsers db)
->                                                      order <- perhapsAll_ (_shoppingCartOrders db) (\order -> _orderForUser order `references_` just_ user &&.
->                                                                                                               isNothing_ (_orderShippingInfo order))
->                                                      pure (_userEmail user, order)
->
->                    guard_ (_userEmail user ==. userEmail)
->
->                    (userEmail, shippedCount) <- subquery_ $
->                                                 aggregate (\(userEmail, order) -> (group_ userEmail, count_ (_orderId order))) $
->                                                 do user <- all_ (_shoppingCartUsers db)
->                                                    order <- perhapsAll_ (_shoppingCartOrders db) (\order -> _orderForUser order `references_` just_ user &&.
->                                                                                                             isJust_ (_orderShippingInfo order))
->                                                    pure (_userEmail user, order)
->                    guard_ (_userEmail user ==. userEmail)
->
->                    pure (user, unshippedCount, shippedCount)
->           mapM_ (putStrLn . show) shippingInformationByUserCorrect
->           putStrLn "----\n\n"
+One way to work around this issue in the above query is to use subselects.
 
-And now we get the expected result
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
 
-< Shipped and unshipped orders by user, with correct double maybe handling. Tuples returned like (user, unshipped, shipped).
-< Will execute SELECT `t0`.`email`, `t0`.`first_name`, `t0`.`last_name`, `t0`.`password`, `t3`.`e1`, `t6`.`e1` FROM  cart_users AS t0 INNER JOIN (SELECT `t1`.`email` AS e0, COUNT(`t2`.`id`) AS e1 FROM  cart_users AS t1 LEFT JOIN cart_orders AS t2 ON ((`t2`.`for_user__email` == `t1`.`email`) AND (`t2`.`shipping_info__info_id` IS NULL)) GROUP BY `t1`.`email`) AS t3 INNER JOIN (SELECT `t4`.`email` AS e0, COUNT(`t5`.`id`) AS e1 FROM  cart_users AS t4 LEFT JOIN cart_orders AS t5 ON ((`t5`.`for_user__email` == `t4`.`email`) AND (`t5`.`shipping_info__info_id` IS NOT NULL)) GROUP BY `t4`.`email`) AS t6 WHERE ((`t0`.`email` == `t3`.`e0`) AND (`t0`.`email` == `t6`.`e0`)) with []
-< (User {_userEmail = "betty@example.com", _userFirstName = "Betty", _userLastName = "Jones", _userPassword = "82b054bd83ffad9b6cf8bdb98ce3cc2f"},0,1)
-< (User {_userEmail = "james@example.com", _userFirstName = "James", _userLastName = "Smith", _userPassword = "b4cc344d25a2efe540adbf2678e2304c"},2,0)
-< (User {_userEmail = "sam@example.com", _userFirstName = "Sam", _userLastName = "Taylor", _userPassword = "332532dcfaa1cbf61e2a266bd723612c"},0,0)
-< ----
+shippingInformationByUser <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
+    
+       (userEmail, unshippedCount) <-
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+            order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
+                               (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
+            pure (pk user, order)
+        
+       guard_ (userEmail `references_` user)
+       
+       (userEmail, shippedCount) <-
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+            order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
+                               (\order -> _orderForUser order `references_` user &&. isJust_ (_orderShippingInfo order))
+            pure (pk user, order)
+       guard_ (userEmail `references_` user)
+
+       pure (user, unshippedCount, shippedCount)
+
+mapM_ print shippingInformationByUser
+```
+
+Notice that the `aggregate_`s embedded in the `Q` monad were automatically
+converted into sub `SELECT`s. This is because beam queries are composable -- you
+can use them wherever they type check and sensible SQL will result. Of course,
+if you want more control, you can also use the `subselect_` combinator to force
+generation of a sub `SELECT`.
+
+!beam-query
+```haskell
+!employee3sql-2 sql
+!employee3out-2 out
+
+shippingInformationByUser <-
+  withDatabaseDebug putStrLn conn $
+    runSelectReturningList $
+    select $
+    do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
+    
+       (userEmail, unshippedCount) <-
+         subselect_ $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+            order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
+                               (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
+            pure (pk user, order)
+        
+       guard_ (userEmail `references_` user)
+       
+       (userEmail, shippedCount) <-
+         subselect_ $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+            order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
+                               (\order -> _orderForUser order `references_` user &&. isJust_ (_orderShippingInfo order))
+            pure (pk user, order)
+       guard_ (userEmail `references_` user)
+
+       pure (user, unshippedCount, shippedCount)
+
+mapM_ print shippingInformationByUser
+```
 
 Conclusion
 =======
@@ -532,3 +705,4 @@ havailable on [hackage](http://hackage.haskell.org/package/beam). Happy beaming!
 
 Beam is a work in progress. Please submit bugs and patches
 on [GitHub](https://github.com/tathougies/beam).
+
