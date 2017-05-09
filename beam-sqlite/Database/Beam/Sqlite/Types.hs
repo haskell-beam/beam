@@ -1,10 +1,10 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Sqlite.Types where
 
 import           Database.Beam
 import           Database.Beam.Backend.Types
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.SQL.Builder
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -72,7 +72,7 @@ instance Sql.FromField SqliteScientific where
     where
       tryRead s = case readMaybe s of
                     Nothing -> Sql.returnError Sql.ConversionFailed field $ "No conversion to Scientific for '" <> s <> "'"
-                    Just s  -> pure s
+                    Just s'  -> pure s'
 
 instance BeamSqlBackend Sqlite
 instance BeamSql92Backend Sqlite

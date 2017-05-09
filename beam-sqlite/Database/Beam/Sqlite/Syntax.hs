@@ -1,4 +1,6 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing#-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.Beam.Sqlite.Syntax
   ( SqliteSyntax(..)
@@ -18,7 +20,6 @@ import           Database.Beam.Query
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
-import qualified Data.ByteString.Lazy as BL
 import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Int
@@ -218,11 +219,14 @@ instance HasSqlValueSyntax SqliteValueSyntax (Maybe x) => HasSqlValueSyntax Sqli
   sqlValueSyntax (Auto x) = sqlValueSyntax x
 
 instance IsCustomSqlSyntax SqliteExpressionSyntax where
-  customExprSyntax = SqliteExpressionSyntax . emit
-  renderSyntax s = let SqliteSyntax b vs = fromSqliteExpression s
-                   in if null (DL.toList vs)
-                      then BL.toStrict $ toLazyByteString b
-                      else error "renderSyntax{SqliteExpressionSyntax}: TODO: Can't renderSyntax with values yet"
+  newtype CustomSqlSyntax SqliteExpressionSyntax =
+    SqliteCustomExpressionSyntax { fromSqliteCustomExpression :: SqliteSyntax }
+    deriving Monoid
+
+  customExprSyntax = SqliteExpressionSyntax . fromSqliteCustomExpression
+  renderSyntax = SqliteCustomExpressionSyntax . fromSqliteExpression
+instance IsString (CustomSqlSyntax SqliteExpressionSyntax) where
+  fromString = SqliteCustomExpressionSyntax . emit . fromString
 
 instance IsSql92QuantifierSyntax SqliteComparisonQuantifierSyntax where
   quantifyOverAll = SqliteComparisonQuantifierSyntax (emit "ALL")
@@ -287,6 +291,8 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
     foldMap (\(cond, res) -> emit "WHEN " <> fromSqliteExpression cond <> emit " THEN " <> fromSqliteExpression res <> emit " ") cases <>
     emit "ELSE " <> fromSqliteExpression else_ <> emit " END"
 
+  currentTimestampE = SqliteExpressionSyntax (emit "CURRENT_TIMESTAMP")
+
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
   SqliteExpressionSyntax $
@@ -344,7 +350,7 @@ instance IsSql92InsertValuesSyntax SqliteInsertValuesSyntax where
   insertSqlExpressions es =
     SqliteInsertValuesSyntax $
     emit "VALUES " <>
-    commas (map (\es -> parens (commas (map fromSqliteExpression es))) es)
+    commas (map (parens . commas . map fromSqliteExpression) es)
   insertFromSql (SqliteSelectSyntax a) = SqliteInsertValuesSyntax a
 
 instance IsSql92UpdateSyntax SqliteUpdateSyntax where

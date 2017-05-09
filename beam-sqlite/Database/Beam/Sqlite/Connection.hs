@@ -1,10 +1,10 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.Beam.Sqlite.Connection where
 
 import           Database.Beam.Backend
-import           Database.Beam.Backend.SQL
 import           Database.Beam.Query (SqlInsert(..), SqlInsertValues(..), insert)
 import           Database.Beam.Schema.Tables ( DatabaseEntity(..)
                                              , DatabaseEntityDescriptor(..)
@@ -27,7 +27,6 @@ import           Control.Monad.Free.Church
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
-import           Control.Monad.Trans
 
 import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -47,7 +46,7 @@ newtype BeamSqliteRow a = BeamSqliteRow a
 instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
   fromRow = BeamSqliteRow <$> runF (fromBackendRow :: FromBackendRowM Sqlite a) finish step
       where
-        finish x = pure x
+        finish = pure
 
         step :: FromBackendRowF Sqlite (RowParser a) -> RowParser a
         step (ParseOneField next) =
@@ -133,7 +132,7 @@ runInsertReturningList (SqliteInsertReturning nm (SqliteInsertSyntax (SqliteSynt
     createInsertedValuesTable conn =
       execute_ conn (Query ("CREATE TEMPORARY TABLE inserted_values AS SELECT * FROM \"" <> sqliteEscape nm <> "\" LIMIT 0"))
     dropInsertedValuesTable conn () =
-      execute_ conn (Query ("DROP TABLE inserted_values"))
+      execute_ conn (Query "DROP TABLE inserted_values")
 
     createInsertTrigger conn =
       execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger AFTER INSERT ON \"" <> sqliteEscape nm <> "\" BEGIN " <>

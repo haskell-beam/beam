@@ -24,6 +24,7 @@ library
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
                       CPP, TypeApplications, FlexibleContexts
+  ghc-options:        -O2 -Wall -Werror
 
 source-repository head
   type: git
