@@ -17,7 +17,7 @@ import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
                                         , SQLData, field
                                         , execute, execute_
                                         , withStatement, bind, nextRow
-                                        , withTransaction, query )
+                                        , withTransaction, query_ )
 import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
@@ -126,7 +126,8 @@ runInsertReturningList (SqliteInsertReturning nm (SqliteInsertSyntax (SqliteSynt
          bracket (createInsertTrigger conn) (dropInsertTrigger conn) $ \() -> do
            let cmdString = BL.unpack (toLazyByteString cmd)
            logger (cmdString ++ "\n-- With values: " ++ show (D.toList vals))
-           fmap (\(BeamSqliteRow r) -> r) <$> query conn (fromString cmdString) (BeamSqliteParams (D.toList vals))
+           execute conn (fromString cmdString) (BeamSqliteParams (D.toList vals))
+           fmap (\(BeamSqliteRow r) -> r) <$> query_ conn "SELECT * FROM inserted_values"
 
   where
     createInsertedValuesTable conn =
@@ -136,6 +137,6 @@ runInsertReturningList (SqliteInsertReturning nm (SqliteInsertSyntax (SqliteSynt
 
     createInsertTrigger conn =
       execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger AFTER INSERT ON \"" <> sqliteEscape nm <> "\" BEGIN " <>
-                            "INSERT INTO insert_values SELECT * FROM \"" <> sqliteEscape nm <> "\" WHERE ROWID=last_insert_rowid(); END" ))
+                            "INSERT INTO inserted_values SELECT * FROM \"" <> sqliteEscape nm <> "\" WHERE ROWID=last_insert_rowid(); END" ))
     dropInsertTrigger conn () =
       execute_ conn "DROP TRIGGER insert_trigger"
