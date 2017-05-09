@@ -16,17 +16,12 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Query.Internal
 
-import           Data.Attoparsec.ByteString
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
 import           Data.Foldable
-import           Data.Int
-import           Data.List (intersperse)
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
-import           Data.Text (Text)
-import qualified Data.Text.Encoding as TE
 import           Data.Type.Bool
 import qualified Data.Vector as V
 
@@ -53,7 +48,7 @@ instance Pg.FromField TsVector where
     if Pg.typeOid field /= Pg.typoid tsvectorType
     then Pg.returnError Pg.Incompatible field ""
     else case d of
-           Just d -> pure (TsVector d)
+           Just d' -> pure (TsVector d')
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
 
 instance Pg.ToField TsVector where
@@ -94,7 +89,7 @@ instance Pg.FromField TsQuery where
     if Pg.typeOid field /= Pg.typoid tsqueryType
     then Pg.returnError Pg.Incompatible field ""
     else case d of
-           Just d -> pure (TsQuery d)
+           Just d' -> pure (TsQuery d')
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
 
 -- * Array operators

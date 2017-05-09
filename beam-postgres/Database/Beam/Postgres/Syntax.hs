@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeApplications #-}
@@ -9,6 +10,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.Beam.Postgres.Syntax
     ( PgSyntaxF(..), PgSyntaxM
@@ -70,7 +72,6 @@ import           Database.Beam.Postgres.Types
 import           Database.Beam hiding (insert)
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.Types
 import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
 
@@ -79,15 +80,13 @@ import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttr
 
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
-import           Control.Monad.State
 
 import           Data.Bits
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString as B
-import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
+import qualified Data.ByteString.Char8 as B
+import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByteString)
 import           Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy as BL
-import           Data.Char
 import           Data.Coerce
 import           Data.Hashable
 import           Data.Int
@@ -102,8 +101,6 @@ import           Data.Word
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..))
-
-import           GHC.Generics
 
 data PostgresInaccessible
 
@@ -392,8 +389,13 @@ mkNumericPrec Nothing = Nothing
 mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. (fromIntegral (fromMaybe 0 dec) .&. 0xFFFF)
 
 instance IsCustomSqlSyntax PgExpressionSyntax where
-  customExprSyntax = PgExpressionSyntax . emit
-  renderSyntax = BL.toStrict . ("(" <>) . (<> ")") . pgRenderSyntaxScript . fromPgExpression
+  newtype CustomSqlSyntax PgExpressionSyntax =
+    PgCustomExpressionSyntax { fromPgCustomExpression :: PgSyntax }
+    deriving Monoid
+  customExprSyntax = PgExpressionSyntax . fromPgCustomExpression
+  renderSyntax = PgCustomExpressionSyntax . pgParens . fromPgExpression
+instance IsString (CustomSqlSyntax PgExpressionSyntax) where
+  fromString = PgCustomExpressionSyntax . emit . fromString
 
 instance IsSql92QuantifierSyntax PgComparisonQuantifierSyntax where
   quantifyOverAll = PgComparisonQuantifierSyntax (emit "ALL")
@@ -460,12 +462,27 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
       foldMap (\(cond, res) -> emit "WHEN " <> fromPgExpression cond <> emit " THEN " <> fromPgExpression res <> emit " ") cases <>
       emit "ELSE " <> fromPgExpression else_ <> emit " END"
 
+  currentTimestampE = PgExpressionSyntax $ emit "CURRENT_TIMESTAMP"
+
 instance IsSqlExpressionSyntaxStringType PgExpressionSyntax String
 instance IsSqlExpressionSyntaxStringType PgExpressionSyntax T.Text
 
 instance IsSql99ExpressionSyntax PgExpressionSyntax where
   distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
   similarToE = pgBinOp "SIMILAR TO"
+
+  functionCallE name args =
+    PgExpressionSyntax $
+    pgParens (fromPgExpression name) <>
+    pgParens (pgSepBy (emit ", ") (map fromPgExpression args))
+
+  instanceFieldE i nm =
+    PgExpressionSyntax $
+    pgParens (fromPgExpression i) <> emit "." <> escapeIdentifier (TE.encodeUtf8 nm)
+
+  refFieldE i nm =
+    PgExpressionSyntax $
+    pgParens (fromPgExpression i) <> emit "->" <> escapeIdentifier (TE.encodeUtf8 nm)
 
 instance IsSql2003ExpressionSyntax PgExpressionSyntax where
   type Sql2003ExpressionWindowFrameSyntax PgExpressionSyntax =
@@ -750,13 +767,7 @@ instance Pg.ToField a => HasSqlValueSyntax PgValueSyntax a where
 
 pgQuotedIdentifier :: T.Text -> PgSyntax
 pgQuotedIdentifier t =
-  emit "\"" <>
-  (emit . TE.encodeUtf8 $
-   T.concatMap quoteIdentifierChar t) <>
-  emit "\""
-  where
-    quoteIdentifierChar '"' = "\"\""
-    quoteIdentifierChar c = T.singleton c
+  escapeIdentifier (TE.encodeUtf8 t)
 
 pgParens :: PgSyntax -> PgSyntax
 pgParens a = emit "(" <> a <> emit ")"
@@ -826,6 +837,7 @@ pgDebugRenderSyntax (PgSyntax p) = go p Nothing
               nextSyntaxStep s (Just (fmap (const ()) s))
 
         renderStep (EmitByteString x _) = putStrLn ("EmitByteString " <> show x)
+        renderStep (EmitBuilder x _) = putStrLn ("EmitBuilder " <> show (toLazyByteString x))
         renderStep (EscapeString x _) = putStrLn ("EscapeString " <> show x)
         renderStep (EscapeBytea x _) = putStrLn ("EscapeBytea " <> show x)
         renderStep (EscapeIdentifier x _) = putStrLn ("EscapeIdentifier " <> show x)
@@ -958,6 +970,9 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
     step (EscapeBytea b next) = escapePgBytea b <> next
     step (EscapeIdentifier b next) = escapePgIdentifier b <> next
 
-    escapePgString b = byteString (B.concatMap (\w -> if w == fromIntegral (ord '\'') then "''" else B.singleton w) b)
-    escapePgBytea b = error "escapePgBytea: no connection"
-    escapePgIdentifier b = error "escapePgIdentifier: no connection"
+    escapePgString b = byteString (B.concatMap (\w -> if w == '\'' then "''" else B.singleton w) b)
+    escapePgBytea _ = error "escapePgBytea: no connection"
+    escapePgIdentifier bs = char8 '"' <> foldMap quoteIdentifierChar (B.unpack bs) <> char8 '"'
+      where
+        quoteIdentifierChar '"' = char8 '"' <> char8 '"'
+        quoteIdentifierChar c = char8 c

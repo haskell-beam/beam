@@ -21,13 +21,13 @@ library
                       Database.Beam.Postgres.PgSpecific
   build-depends:      base >=4.7 && <5.0, beam-core, beam-migrate,
                       text, bytestring, postgresql-libpq, hashable,
-                      postgresql-simple, attoparsec, free, time, mtl, conduit, aeson, uuid,
+                      postgresql-simple, free, time, mtl, conduit, aeson, uuid,
                       case-insensitive, scientific, vector, optparse-applicative, microlens
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
                       CPP, TypeApplications, FlexibleContexts
-  ghc-options:        -O2
+  ghc-options:        -O2 -Wall -Werror
 
 source-repository head
   type: git

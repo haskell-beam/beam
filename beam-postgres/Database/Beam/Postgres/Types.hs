@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -8,7 +10,6 @@ module Database.Beam.Postgres.Types where
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.SQL.Builder
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg

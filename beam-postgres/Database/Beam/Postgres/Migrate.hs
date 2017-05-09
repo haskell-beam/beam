@@ -1,13 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Database.Beam.Postgres.Migrate where
 
 import           Database.Beam.Backend.SQL.SQL92
-import           Database.Beam.Backend.Types
 import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
 import qualified Database.Beam.Migrate.SQL.SQL92 as Db
@@ -25,28 +23,18 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad
-import           Control.Monad.Free.Church
-import           Control.Monad.Reader (ask)
-import           Control.Monad.State (put)
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString as B
-import           Data.ByteString.Builder
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
-import           Data.Char
-import           Data.Coerce
-import           Data.List (intersperse)
 import           Data.Monoid
-import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import           Data.Word (Word16)
 
-import           Options.Applicative
+import           Options.Applicative hiding (action, command, columns)
 
 data PgMigrateOpts
   = PgMigrateOpts
@@ -76,7 +64,7 @@ migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts
                         (BL.concat . migrateScript)
                         (\options -> Pg.connect (beConnectInfo options) >>= getDbConstraints)
                         (BCL.unpack . pgRenderSyntaxScript . fromPgCommand)
-                        (\beOptions action -> do
+                        (\beOptions action ->
                             bracket (Pg.connect (beConnectInfo beOptions)) Pg.close $ \conn ->
                               left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
   where
@@ -157,8 +145,8 @@ bytea = Db.DataType pgByteaType
 
 array :: Maybe Int -> Db.DataType PgDataTypeSyntax a
       -> Db.DataType PgDataTypeSyntax (V.Vector a)
-array Nothing (Db.DataType (PgDataTypeSyntax a syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]"))
-array (Just sz) (Db.DataType (PgDataTypeSyntax a syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
+array Nothing (Db.DataType (PgDataTypeSyntax _ syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]"))
+array (Just sz) (Db.DataType (PgDataTypeSyntax _ syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
 
 -- * Pseudo-data types
 
