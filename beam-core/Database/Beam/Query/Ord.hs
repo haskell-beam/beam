@@ -35,10 +35,13 @@ import Control.Monad.State
 
 import Data.Maybe
 
+-- | A data structure representing the set to quantify a comparison operator over.
 data QQuantified expr s r
   = QQuantified (Sql92ExpressionQuantifierSyntax expr) expr
 
-allOf_, anyOf_
+-- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
+--   <#quantified-comparison-operator quantified comparison operator>
+allOf_
   :: forall s r select expr db.
    ( ThreadRewritable (QNested s) r
    , ProjectibleInSelectSyntax select r
@@ -49,17 +52,41 @@ allOf_, anyOf_
   => Q select db (QNested s) r
   -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
 allOf_ s = QQuantified quantifyOverAll (subqueryE (buildSqlQuery s))
+
+-- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
+--   <#quantified-comparison-operator quantified comparison operator>
+anyOf_
+  :: forall s r select expr db.
+   ( ThreadRewritable (QNested s) r
+   , ProjectibleInSelectSyntax select r
+   , IsSql92SelectSyntax select
+   , IsSql92ExpressionSyntax expr
+   , HasQBuilder select
+   , Sql92ExpressionSelectSyntax expr ~ select )
+  => Q select db (QNested s) r
+  -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
 anyOf_ s = QQuantified quantifyOverAny (subqueryE (buildSqlQuery s))
 
+-- | SQL @BETWEEN@ clause
 between_ :: IsSql92ExpressionSyntax syntax
          => QGenExpr context syntax s a -> QGenExpr context syntax s a
          -> QGenExpr context syntax s a -> QGenExpr context syntax s Bool
 between_ (QExpr a) (QExpr min_) (QExpr max_) =
   QExpr (betweenE a min_ max_)
 
+-- | Class for expression types or expression containers for which there is a
+--   notion of equality.
+--
+--   Instances are provided to check the equality of expressions of the same
+--   type as well as entire 'Beamable' types parameterized over 'QGenExpr'
 class SqlEq expr a | a -> expr where
-  (==.), (/=.) :: a -> a -> expr Bool
+  -- | Given two expressions, returns whether they are equal
+  (==.) :: a -> a -> expr Bool
+  -- | Given two expressions, returns whether they are not equal
+  (/=.) :: a -> a -> expr Bool
 
+-- | Class for expression types for which there is a notion of /quantified/
+--   equality.
 class SqlEq expr a => SqlEqQuantified expr quantified a | a -> expr quantified where
 
   (==*.), (/=*.) :: a -> quantified -> expr Bool
@@ -68,18 +95,21 @@ infix 4 ==., /=., ==*., /=*.
 infix 4 <., >., <=., >=.
 infix 4 <*., >*., <=*., >=*.
 
+-- | Compare two arbitrary expressions (of the same type) for equality
 instance IsSql92ExpressionSyntax syntax =>
   SqlEq (QGenExpr context syntax s) (QGenExpr context syntax s a) where
 
   (==.) = qBinOpE (eqE Nothing)
   (/=.) = qBinOpE (neqE Nothing)
 
+-- | Two arbitrary expressions can be quantifiably compared for equality.
 instance IsSql92ExpressionSyntax syntax =>
   SqlEqQuantified (QGenExpr context syntax s) (QQuantified syntax s a) (QGenExpr context syntax s a) where
 
   a ==*. QQuantified q b = qBinOpE (eqE (Just q)) a (QExpr b)
   a /=*. QQuantified q b = qBinOpE (neqE (Just q)) a (QExpr b)
 
+-- | Compare two arbitrary 'Beamable' types containing 'QGenExpr's for equality.
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
          , Beamable tbl ) =>
@@ -112,10 +142,17 @@ instance ( IsSql92ExpressionSyntax syntax
 
 -- * Comparisons
 
+-- | Class for expression types or expression containers for which there is a
+--   notion of ordering.
+--
+--   Instances are provided to check the ordering of expressions of the same
+--   type. Since there is no universal notion of ordering for an arbitrary
+--   number of expressions, no instance is provided for 'Beamable' types.
 class SqlEq expr e => SqlOrd expr e | e -> expr where
 
   (<.), (>.), (<=.), (>=.) :: e -> e -> expr Bool
 
+-- | Class for things which can be /quantifiably/ compared.
 class (SqlOrd expr e, SqlEqQuantified expr quantified e) =>
   SqlOrdQuantified expr quantified e | e -> expr quantified where
 

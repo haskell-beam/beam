@@ -29,7 +29,7 @@ module Database.Beam.Schema.Tables
     -- * Columnar and Column Tags
     , Columnar, C, Columnar'(..)
     , Nullable, TableField(..)
-    , Exposed(..)
+    , Exposed
     , fieldName
 
     , TableSettings, TableSkeleton, Ignored(..)

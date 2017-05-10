@@ -32,15 +32,13 @@ data QF select (db :: (* -> *) -> *) s next where
        => T.Text -> TableSettings table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
+
   QLeftJoin :: Projectible (Sql92SelectExpressionSyntax select) r
             => QM select db (QNested s) r
             -> (r -> Maybe (Sql92SelectExpressionSyntax select))
             -> (r -> next)
             -> QF select db s next
---  QLeftJoin :: Beamable table
---            => DatabaseEntity be db (TableEntity table)
---            -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
---            -> (table (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
+
   QSubSelect :: Projectible (Sql92SelectExpressionSyntax select) r =>
                 QM select db (QNested s) r -> (r -> next) -> QF select db s next
   QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next

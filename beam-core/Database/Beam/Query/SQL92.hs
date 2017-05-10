@@ -19,7 +19,6 @@ import qualified Data.Text as T
 
 -- * Beam queries
 
-
 andE' :: IsSql92ExpressionSyntax expr =>
          Maybe expr -> Maybe expr -> Maybe expr
 andE' Nothing Nothing = Nothing
@@ -179,6 +178,9 @@ projOrder :: Projectible expr x =>
              x -> [ expr ]
 projOrder = execWriter . project' (Proxy @AnyType) (\_ x -> tell [x] >> pure x)
 
+-- | Convenience functions to construct an arbitrary SQL92 select syntax type
+-- from a 'Q'. Used by most backends as the default implementation of
+-- 'buildSqlQuery' in 'HasQBuilder'.
 buildSql92Query' ::
     forall select projSyntax db s a.
     ( IsSql92SelectSyntax select

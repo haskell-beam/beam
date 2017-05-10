@@ -1,8 +1,18 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ConstraintKinds #-}
 
-module Database.Beam.Backend.Types where
+module Database.Beam.Backend.Types
+  ( BeamBackend(..)
+  , Auto(..)
+
+  , FromBackendRowF(..), FromBackendRowM
+  , parseOneField, peekField, checkNextNNull
+
+  , FromBackendRow(..)
+
+  , Exposed, Nullable ) where
 
 import Control.Monad.Free.Church
 import Control.Monad.Identity
@@ -12,20 +22,10 @@ import Data.Proxy
 import GHC.Generics
 import GHC.Types
 
-newtype Exposed x = Exposed x
-
+-- | Class for all beam backends
 class BeamBackend be where
+  -- | Requirements to marshal a certain type from a database of a particular backend
   type BackendFromField be :: * -> Constraint
-
--- | Support for NULLable Foreign Key references.
---
--- > data MyTable f = MyTable
--- >                { nullableRef :: PrimaryKey AnotherTable (Nullable f)
--- >                , ... }
--- >                 deriving (Generic, Typeable)
---
--- See 'Columnar' for more information.
-data Nullable (c :: * -> *) x
 
 -- | Newtype wrapper for types that may be given default values by the database.
 --   Essentially, a wrapper around 'Maybe x'.
@@ -65,6 +65,21 @@ class BeamBackend be => FromBackendRow be a where
 
   valuesNeeded :: Proxy be -> Proxy a -> Int
   valuesNeeded _ _ = 1
+
+-- | newtype mainly used to inspect tho tag structure of a particular
+--   'Beamable'. Prevents overlapping instances in some case. Usually not used
+--   in end-user code.
+data Exposed x
+
+-- | Support for NULLable Foreign Key references.
+--
+-- > data MyTable f = MyTable
+-- >                { nullableRef :: PrimaryKey AnotherTable (Nullable f)
+-- >                , ... }
+-- >                 deriving (Generic, Typeable)
+--
+-- See 'Columnar' for more information.
+data Nullable (c :: * -> *) x
 
 class GFromBackendRow be (exposed :: * -> *) rep where
   gFromBackendRow :: Proxy exposed -> FromBackendRowM be (rep ())

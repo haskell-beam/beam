@@ -1,5 +1,6 @@
 {-# LANGUAGE PolyKinds #-}
 
+-- | Finally tagless encoding of SQL92 syntax
 module Database.Beam.Backend.SQL.SQL92 where
 
 import Database.Beam.Backend.Types

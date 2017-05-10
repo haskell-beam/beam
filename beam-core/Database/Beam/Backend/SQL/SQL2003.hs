@@ -1,3 +1,5 @@
+-- | Modular finally tagless extension of SQL99 and SQL92 syntaxes for various
+--   SQL2003 core and optional features.
 module Database.Beam.Backend.SQL.SQL2003
     ( module Database.Beam.Backend.SQL.SQL99
 
