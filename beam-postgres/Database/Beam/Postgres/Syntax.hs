@@ -18,6 +18,7 @@ module Database.Beam.Postgres.Syntax
 
     , emit, emitBuilder, escapeString
     , escapeBytea, escapeIdentifier
+    , pgParens
 
     , nextSyntaxStep
 

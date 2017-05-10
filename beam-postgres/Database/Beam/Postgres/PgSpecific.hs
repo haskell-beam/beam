@@ -14,19 +14,25 @@ module Database.Beam.Postgres.PgSpecific where
 import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Postgres.Types
 import           Database.Beam.Query.Internal
 
+import           Data.Aeson
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
+import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
+import           Data.Hashable
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
 import           Data.Type.Bool
 import qualified Data.Vector as V
+import qualified Data.Text as T
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
+import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 
 import           GHC.TypeLits
 import           GHC.Exts hiding (toList)
@@ -164,3 +170,214 @@ array_ vs =
   pgSepBy (emit ", ") (map (\(QExpr e) -> fromPgExpression e) (toList vs)) <>
   emit "]"
 
+-- * JSON
+
+newtype PgJSON a = PgJSON a
+  deriving ( Show, Eq, Ord, Hashable, Monoid )
+
+instance (Typeable x, FromJSON x) => Pg.FromField (PgJSON x) where
+  fromField field d =
+    if Pg.typeOid field /= Pg.typoid Pg.json
+    then Pg.returnError Pg.Incompatible field ""
+    else case decodeStrict =<< d of
+           Just d' -> pure (PgJSON d')
+           Nothing -> Pg.returnError Pg.UnexpectedNull field ""
+
+instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSON a)
+instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
+  sqlValueSyntax (PgJSON a) =
+    PgValueSyntax $
+    escapeString (BL.toStrict (encode a)) <> emit "::json"
+
+newtype PgJSONB a = PgJSONB a
+  deriving ( Show, Eq, Ord, Hashable, Monoid )
+
+instance (Typeable x, FromJSON x) => Pg.FromField (PgJSONB x) where
+  fromField field d =
+    if Pg.typeOid field /= Pg.typoid Pg.jsonb
+    then Pg.returnError Pg.Incompatible field ""
+    else case decodeStrict =<< d of
+           Just d' -> pure (PgJSONB d')
+           Nothing -> Pg.returnError Pg.UnexpectedNull field ""
+
+instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSONB a)
+instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
+  sqlValueSyntax (PgJSONB a) =
+    PgValueSyntax $
+    escapeString (BL.toStrict (encode a)) <> emit "::jsonb"
+
+class IsPgJSON (json :: * -> *) where
+--  pgJsonEach     :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONTable (QGenExpr ctxt PgExpressionSyntax s))
+--  pgJsonEachText :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONTable (QGenExpr ctxt PgExpressionSyntax s))
+--  pgJsonKeys     :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONKeysTable (QGenExpr ctxt PgExpressionSyntax s))
+--  pgJsonArrayElements :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONValuesTable (QGenExpr ctxt PgExpressionSyntax s))
+--  pgJsonArrayElementsText :: GenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONValuesTextTable (QGenExpr ctxt PgExpressionSyntax s))
+--  pgJsonToRecord
+--  pgJsonToRecordSet
+  pgJsonTypeOf :: QGenExpr ctxt PgExpressionSyntax s (json a) -> QGenExpr ctxt PgExpressionSyntax s T.Text
+  pgJsonStripNulls :: QGenExpr ctxt PgExpressionSyntax s (json a) -> QGenExpr ctxt PgExpressionSyntax s (json b)
+
+  pgJsonAgg :: QExpr PgExpressionSyntax s a -> QAgg PgExpressionSyntax s (json a)
+  pgJsonObjectAgg :: QExpr PgExpressionSyntax s key -> QExpr PgExpressionSyntax s value
+                  -> QAgg PgExpressionSyntax s (json a)
+
+instance IsPgJSON PgJSON where
+  pgJsonTypeOf (QExpr a) =
+    QExpr . PgExpressionSyntax $
+    emit "json_typeof" <> pgParens (fromPgExpression a)
+
+  pgJsonStripNulls (QExpr a) =
+    QExpr . PgExpressionSyntax $
+    emit "json_strip_nulls" <> pgParens (fromPgExpression a)
+
+  pgJsonAgg (QExpr a) =
+    QExpr . PgExpressionSyntax $
+    emit "json_agg" <> pgParens (fromPgExpression a)
+
+  pgJsonObjectAgg (QExpr keys) (QExpr values) =
+    QExpr . PgExpressionSyntax $
+    emit "json_object_agg" <> pgParens (fromPgExpression keys <> emit ", " <> fromPgExpression values)
+
+instance IsPgJSON PgJSONB where
+  pgJsonTypeOf (QExpr a) =
+    QExpr . PgExpressionSyntax $
+    emit "jsonb_typeof" <> pgParens (fromPgExpression a)
+
+  pgJsonStripNulls (QExpr a) =
+    QExpr . PgExpressionSyntax $
+    emit "jsonb_strip_nulls" <> pgParens (fromPgExpression a)
+
+  pgJsonAgg (QExpr a) =
+    QExpr . PgExpressionSyntax $
+    emit "jsonb_agg" <> pgParens (fromPgExpression a)
+
+  pgJsonObjectAgg (QExpr keys) (QExpr values) =
+    QExpr . PgExpressionSyntax $
+    emit "jsonb_object_agg" <> pgParens (fromPgExpression keys <> emit ", " <> fromPgExpression values)
+
+(@>), (<@) :: IsPgJSON json
+           => QGenExpr ctxt PgExpressionSyntax s (json a)
+           -> QGenExpr ctxt PgExpressionSyntax s (json b)
+           -> QGenExpr ctxt PgExpressionSyntax s Bool
+QExpr a @> QExpr b =
+  QExpr (pgBinOp "@>" a b)
+QExpr a <@ QExpr b =
+  QExpr (pgBinOp "<@" a b)
+
+(->#) :: IsPgJSON json
+      => QGenExpr ctxt PgExpressionSyntax s (json a)
+      -> QGenExpr ctxt PgExpressionSyntax s Int
+      -> QGenExpr ctxt PgExpressionSyntax s (json b)
+QExpr a -># QExpr b =
+  QExpr (pgBinOp "->" a b)
+
+(->$) :: IsPgJSON json
+      => QGenExpr ctxt PgExpressionSyntax s (json a)
+      -> QGenExpr ctxt PgExpressionSyntax s T.Text
+      -> QGenExpr ctxt PgExpressionSyntax s (json b)
+QExpr a ->$ QExpr b =
+  QExpr (pgBinOp "->" a b)
+
+(->>#) :: IsPgJSON json
+       => QGenExpr ctxt PgExpressionSyntax s (json a)
+       -> QGenExpr ctxt PgExpressionSyntax s Int
+       -> QGenExpr ctxt PgExpressionSyntax s T.Text
+QExpr a ->># QExpr b =
+  QExpr (pgBinOp "->>" a b)
+
+(->>$) :: IsPgJSON json
+       => QGenExpr ctxt PgExpressionSyntax s (json a)
+       -> QGenExpr ctxt PgExpressionSyntax s T.Text
+       -> QGenExpr ctxt PgExpressionSyntax s T.Text
+QExpr a ->>$ QExpr b =
+  QExpr (pgBinOp "->>" a b)
+
+(#>) :: IsPgJSON json
+     => QGenExpr ctxt PgExpressionSyntax s (json a)
+     -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
+     -> QGenExpr ctxt PgExpressionSyntax s (json b)
+QExpr a #> QExpr b =
+  QExpr (pgBinOp "#>" a b)
+
+(#>>) :: IsPgJSON json
+      => QGenExpr ctxt PgExpressionSyntax s (json a)
+      -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
+      -> QGenExpr ctxt PgExpressionSyntax s T.Text
+QExpr a #>> QExpr b =
+  QExpr (pgBinOp "#>" a b)
+
+(?) :: IsPgJSON json
+    => QGenExpr ctxt PgExpressionSyntax s (json a)
+    -> QGenExpr ctxt PgExpressionSyntax s T.Text
+    -> QGenExpr ctxt PgExpressionSyntax s Bool
+QExpr a ? QExpr b =
+  QExpr (pgBinOp "?" a b)
+
+(?|), (?&) :: IsPgJSON json
+           => QGenExpr ctxt PgExpressionSyntax s (json a)
+           -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
+           -> QGenExpr ctxt PgExpressionSyntax s Bool
+QExpr a ?| QExpr b =
+  QExpr (pgBinOp "?|" a b)
+QExpr a ?& QExpr b =
+  QExpr (pgBinOp "?&" a b)
+
+withoutKey :: IsPgJSON json
+           => QGenExpr ctxt PgExpressionSyntax s (json a)
+           -> QGenExpr ctxt PgExpressionSyntax s T.Text
+           -> QGenExpr ctxt PgExpressionSyntax s (json b)
+QExpr a `withoutKey` QExpr b =
+  QExpr (pgBinOp "-" a b)
+
+withoutIdx :: IsPgJSON json
+           => QGenExpr ctxt PgExpressionSyntax s (json a)
+           -> QGenExpr ctxt PgExpressionSyntax s Int
+           -> QGenExpr ctxt PgExpressionSyntax s (json b)
+QExpr a `withoutIdx` QExpr b =
+  QExpr (pgBinOp "-" a b)
+
+withoutKeys :: IsPgJSON json
+            => QGenExpr ctxt PgExpressionSyntax s (json a)
+            -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
+            -> QGenExpr ctxt PgExpressionSyntax s (json b)
+QExpr a `withoutKeys` QExpr b =
+  QExpr (pgBinOp "#-" a b)
+
+pgJsonArrayLength :: IsPgJSON json => QGenExpr ctxt PgExpressionSyntax s (json a)
+                  -> QGenExpr ctxt PgExpressionSyntax s Int
+pgJsonArrayLength (QExpr a) =
+  QExpr . PgExpressionSyntax $
+  emit "json_array_length(" <> fromPgExpression a <> emit ")"
+
+pgJsonbUpdate, pgJsonbSet
+  :: QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
+  -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
+  -> QGenExpr ctxt PgExpressionSyntax s (PgJSONB b)
+  -> QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
+pgJsonbUpdate (QExpr a) (QExpr path) (QExpr newVal) =
+  QExpr . PgExpressionSyntax $
+  emit "jsonb_set" <> pgParens (fromPgExpression a <> emit ", " <> fromPgExpression path <> emit ", " <> fromPgExpression newVal)
+pgJsonbSet (QExpr a) (QExpr path) (QExpr newVal) =
+  QExpr . PgExpressionSyntax $
+  emit "jsonb_set" <> pgParens (fromPgExpression a <> emit ", " <> fromPgExpression path <> emit ", " <> fromPgExpression newVal <> emit ", true")
+
+pgJsonbPretty :: QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
+              -> QGenExpr ctxt PgExpressionSyntax s T.Text
+pgJsonbPretty (QExpr a) =
+  QExpr . PgExpressionSyntax $
+  emit "jsonb_pretty" <> pgParens (fromPgExpression a)
+
+-- * Postgresql aggregates
+
+pgArrayAgg :: QExpr PgExpressionSyntax s a
+           -> QAgg PgExpressionSyntax s (V.Vector a)
+pgArrayAgg (QExpr a) =
+  QExpr . PgExpressionSyntax $
+  emit "array_agg" <> pgParens (fromPgExpression a)
+
+pgStringAgg :: QExpr PgExpressionSyntax s T.Text
+            -> QExpr PgExpressionSyntax s T.Text
+            -> QAgg PgExpressionSyntax s T.Text
+pgStringAgg (QExpr v) (QExpr delim) =
+  QExpr . PgExpressionSyntax $
+  emit "string_agg" <> pgParens (fromPgExpression v <> emit ", " <> fromPgExpression delim)
