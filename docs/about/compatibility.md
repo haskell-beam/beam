@@ -65,7 +65,7 @@ planned.
 | E011-02 REAL, DOUBLE PRECISION, FLOAT                           | FULL     | Use `Double` and `Float`                                                                                                                  |
 | E011-03 DECIMAL and NUMERIC data types                          | FULL     | Use `Scientific`. You can provide the database precision using `beam-migrate`                                                             |
 | E011-04 Arithmetic operators                                    | FULL     | Use the `Num` instance for `QGenExpr`                                                                                                     |
-| E011-05 Numeric comparison                                      | FULL     | Use the `.` prefixed operators (i.e., `==.`, `/=.`, `<.`, etc)                                                                            |
+| E011-05 Numeric comparison                                      | FULL     | Use the `.` suffixed operators (i.e., `==.`, `/=.`, `<.`, etc)                                                                    |
 | E011-06 Implicit casting among numeric data types               | WONTFIX  | Beam never implicitly casts. Use `cast_`                                                                                                  |
 | **E021 Character string types**                                 |          |                                                                                                                                           |
 | E021-01 CHARACTER data type                                     | FULL     | Use `Text`. Use `beam-migrate` to specify width                                                                                           |
@@ -100,7 +100,7 @@ planned.
 | E061-04 LIKE predicate                                          | FULL     | Use `like_`                                                                                                                               |
 | E061-05 LIKE predicate ESCAPE clause                            | TODO     | Unsure how this would apply                                                                                                               |
 | E061-06 NULL predicate                                          | FULL     | Use `isNull_` and `isNotNull_`                                                                                                            |
-| E061-07 Quantified comparison predicate                         | PARTIAL  | Supported in syntaxes, not exposed in `QGenExpr` (TODO)                                                                                   |
+| E061-07 Quantified comparison predicate                         | FULL     | Use one of the *quantified comparison operators* (`==*.`, `/=*.`, `<*.`, `>*.`, `<=*.`, `>=*.`)                                           |
 | E051-08 EXISTS predicate                                        | FULL     | Use `exists_`                                                                                                                             |
 | E061-09 Subqueries in comparison predicate                      | FULL     | Use `subquery_` as usual                                                                                                                  |
 | E061-11 Subqueries in IN predicate                              | TODO     | Would be fixed by E061-03                                                                                                                 |

@@ -12,6 +12,7 @@ pages:
       - 'Models': 'user-guide/models.md'
       - 'Databases': 'user-guide/databases.md'
       - 'Backends': 'user-guide/backends.md'
+      - 'Expressions': 'user-guide/expressions.md'
       - 'Queries':
         - 'Basic Queries': 'user-guide/queries/basic.md'
         - 'More complex SELECTs': 'user-guide/queries/select.md'
