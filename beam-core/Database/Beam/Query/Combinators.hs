@@ -20,8 +20,10 @@ module Database.Beam.Query.Combinators
 
     , all_
     , allFromView_, join_, guard_, filter_
-    , related_, relatedBy_, references_
-    , leftJoin_, perhaps_, subselect_
+    , related_, relatedBy_
+    , leftJoin_, perhaps_
+    , outerJoin_
+    , subselect_, references_
 
     , SqlJustable(..)
     , SqlDeconstructMaybe(..)
@@ -103,7 +105,8 @@ allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
 allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
     Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) id)
 
--- | Introduce all entries of a table into the 'Q' monad based on the given SQLExprbuildJoin :: forall db syntax table be s.
+-- | Introduce all entries of a table into the 'Q' monad based on the given
+--   QExpr
 join_ :: ( Database db, Table table
          , IsSql92SelectSyntax select
          , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
@@ -116,38 +119,67 @@ join_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
     Q $ liftF (QAll tblNm tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) id)
 
 -- | Introduce a table using a left join with no ON clause. Because this is not
--- an inner join, the resulting table is made nullable. This means that each
--- field that would normally have type 'QExpr x' will now have type 'QExpr
--- (Maybe x)'.
+--   an inner join, the resulting table is made nullable. This means that each
+--   field that would normally have type 'QExpr x' will now have type 'QExpr
+--   (Maybe x)'.
 perhaps_ :: forall s r select db.
           ( Projectible (Sql92SelectExpressionSyntax select) r
+          , IsSql92SelectSyntax select
           , ThreadRewritable (QNested s) r
           , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
          => Q select db (QNested s) r
          -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
 perhaps_ (Q sub) =
-  Q $ liftF (QLeftJoin sub (\_ -> Nothing)
-                           (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
+  Q $ liftF (QArbitraryJoin
+              sub leftJoin
+              (\_ -> Nothing)
+              (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
                                             Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
                                   rewriteThread (Proxy @s) r))
 
+outerJoin_ :: forall s a b select db.
+              ( Projectible (Sql92SelectExpressionSyntax select) a, Projectible (Sql92SelectExpressionSyntax select) b
+              , ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
+              , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s a)
+              , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s b)
+              , IsSql92FromOuterJoinSyntax (Sql92SelectFromSyntax select) )
+           => Q select db (QNested s) a
+           -> Q select db (QNested s) b
+           -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr (Sql92SelectExpressionSyntax select) s Bool )
+           -> Q select db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
+                            , Retag Nullable (WithRewrittenThread (QNested s) s b) )
+outerJoin_ (Q a) (Q b) on_ =
+  Q $ liftF (QTwoWayJoin a b outerJoin
+              (\(a', b') ->
+                 let QExpr e = on_ (rewriteThread (Proxy @s) a', rewriteThread (Proxy @s) b')
+                 in Just e)
+              (\(a', b') ->
+                 let retag' :: (ThreadRewritable (QNested s) x, Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s x))
+                            => x -> Retag Nullable (WithRewrittenThread (QNested s) s x)
+                     retag' = retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) x) ->
+                                        Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) x) .
+                              rewriteThread (Proxy @s)
+                 in ( retag' a', retag' b' )))
 
 -- | Introduce a table using a left join. The ON clause is required here.Because
--- this is not an inner join, the resulting table is made nullable. This means
--- that each field that would normally have type 'QExpr x' will now have type
--- 'QExpr (Maybe x)'.
+--   this is not an inner join, the resulting table is made nullable. This means
+--   that each field that would normally have type 'QExpr x' will now have type
+--   'QExpr (Maybe x)'.
 leftJoin_ :: forall s r select db.
            ( Projectible (Sql92SelectExpressionSyntax select) r
+           , IsSql92SelectSyntax select
            , ThreadRewritable (QNested s) r
            , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
           => Q select db (QNested s) r
           -> (WithRewrittenThread (QNested s) s r -> QExpr (Sql92SelectExpressionSyntax select) s Bool)
           -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
 leftJoin_ (Q sub) on_ =
-  Q $ liftF (QLeftJoin sub (\r -> let QExpr e = on_ (rewriteThread (Proxy @s) r) in Just e)
-                           (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
-                                            Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
-                                  rewriteThread (Proxy @s) r))
+  Q $ liftF (QArbitraryJoin
+               sub leftJoin
+               (\r -> let QExpr e = on_ (rewriteThread (Proxy @s) r) in Just e)
+               (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
+                                Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
+                      rewriteThread (Proxy @s) r))
 
 subselect_ :: forall s r select db.
             ( ThreadRewritable (QNested s) r

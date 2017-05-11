@@ -30,7 +30,7 @@ type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelec
 type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax))
 
 -- Putting these in the head constraint can cause infinite recursion that would
--- need UndecidableSuperclasses. If we define them here, we can easily use them
+-- need <UndecidableSuperclasses. If we define them here, we can easily use them
 -- in functions that need them and avoid unnecessary extensions.
 type Sql92SelectSanityCheck select =
   ( Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~
@@ -267,6 +267,11 @@ class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
     :: from -> from
       -> Maybe (Sql92FromExpressionSyntax from)
       -> from
+
+class IsSql92FromSyntax from =>
+  IsSql92FromOuterJoinSyntax from where
+
+  outerJoin :: from -> from -> Maybe (Sql92FromExpressionSyntax from) -> from
 
 -- class Sql92Syntax cmd where
 

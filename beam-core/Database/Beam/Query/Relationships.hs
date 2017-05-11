@@ -13,7 +13,7 @@ module Database.Beam.Query.Relationships
   , OneToMany, OneToManyOptional
   , oneToMany_, oneToManyOptional_
 
-    -- ** One-to-one relationships
+    -- ** One-to-one relationshships
   , OneToOne, OneToMaybe
   , oneToOne_, oneToMaybe_ ) where
 

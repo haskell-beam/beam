@@ -255,10 +255,24 @@ If you have a compelling use case, please file an issue!
 
 ### Full Outer joins
 
-!!! TODO "TODO"
-    `outerJoin_` not yet supported
+Outer joins are supported with the `outerJoin_` function. `outerJoin_` takes two
+queries and a join condition and returns a `Q` that represents the `FULL OUTER
+JOIN` of the two queries. Because either table may be nullable, the output of
+the result has an additional `Nullable` tag.
 
-Full outer joins are supported via the `outerJoin_` construct.
+!!! note "NOTE"
+    Outer joins are only supported in backends whose SQL `FROM` syntax
+    implements `IsSql92FromOuterJoinSyntax`. Notably, this does not include
+    SQLite.
+    
+For example, to get join all employees with customers with the same first name
+but including all employees and customers, we can run the query
+    
+!beam-query
+```haskell
+!chinookpg postgres
+outerJoin_ (all_ (employee chinookDb)) (all_ (customer chinookDb)) (\(employee, customer) -> employeeFirstName employee ==. customerFirstName customer)
+```
 
 ## Subqueries
 

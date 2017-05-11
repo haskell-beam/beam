@@ -203,7 +203,8 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
     buildQuery (Pure x) = SelectBuilderQ x emptyQb
     buildQuery (Free (QGuard _ next)) = buildQuery next
     buildQuery f@(Free QAll {}) = buildJoinedQuery f emptyQb
-    buildQuery f@(Free QLeftJoin {}) = buildJoinedQuery f emptyQb
+    buildQuery f@(Free QArbitraryJoin {}) = buildJoinedQuery f emptyQb
+    buildQuery f@(Free QTwoWayJoin {}) = buildJoinedQuery f emptyQb
     buildQuery (Free (QSubSelect q' next)) =
         let sb = buildQuery (fromF q')
             (proj, qb) = selectBuilderToQueryBuilder sb
@@ -383,23 +384,23 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
     buildJoinedQuery (Free (QAll tbl tblSettings on next)) qb =
         let (newTbl, qb') = buildInnerJoinQuery tbl tblSettings on qb
         in buildJoinedQuery (next newTbl) qb'
-    buildJoinedQuery (Free (QLeftJoin q on next)) qb =
+    buildJoinedQuery (Free (QArbitraryJoin q mkJoin on next)) qb =
       case fromF q of
         Free (QAll dbTblNm dbTblSettings on' next')
           | (newTbl, newTblNm, qb') <- nextTbl qb dbTblNm dbTblSettings,
-            Just (proj, on'') <- tryBuildGuardsOnly (next' newTbl) (on' newTbl) ->
+            Nothing <- on' newTbl,
+            Pure proj <- next' newTbl ->
             let newSource = fromTable (tableNamed dbTblNm) (Just newTblNm)
-                on''' =  andE' on'' (on proj)
+                on'' =  on proj
                 (from', where') =
                   case qbFrom qb' of
-                    Nothing -> (Just newSource, andE' (qbWhere qb) on''')
-                    Just oldFrom -> (Just (leftJoin oldFrom newSource on'''), qbWhere qb)
+                    Nothing -> (Just newSource, andE' (qbWhere qb) on'')
+                    Just oldFrom -> (Just (mkJoin oldFrom newSource on''), qbWhere qb)
             in buildJoinedQuery (next proj) (qb' { qbFrom = from', qbWhere = where' })
 
         q' -> let sb = buildQuery q'
                   tblSource = buildSelect sb
                   newTblNm = "t" <> fromString (show (qbNextTblRef qb))
---                  (x', qb') = buildJoinTableSourceQuery tblSource (sbProj sb) qb
 
                   newSource = fromTable (tableFromSubSelect tblSource) (Just newTblNm)
 
@@ -409,10 +410,49 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
                   (from', where') =
                     case qbFrom qb of
                       Nothing -> (Just newSource, andE' (qbWhere qb) on')
-                      Just oldFrom -> (Just (leftJoin oldFrom newSource on'), qbWhere qb)
+                      Just oldFrom -> (Just (mkJoin oldFrom newSource on'), qbWhere qb)
 
               in buildJoinedQuery (next proj') (qb { qbNextTblRef = qbNextTblRef qb + 1
                                                    , qbFrom = from', qbWhere = where' })
+    buildJoinedQuery (Free (QTwoWayJoin a b mkJoin on next)) qb =
+      let (aProj, aSource, qb') =
+            case fromF a of
+              Free (QAll dbTblNm dbTblSettings on' next')
+                | (newTbl, newTblNm, qb') <- nextTbl qb dbTblNm dbTblSettings,
+                  Nothing <- on' newTbl, Pure proj <- next' newTbl ->
+                    (proj, fromTable (tableNamed dbTblNm) (Just newTblNm), qb')
+
+              a -> let sb = buildQuery a
+                       tblSource = buildSelect sb
+
+                       newTblNm = "t" <> fromString (show (qbNextTblRef qb))
+
+                       proj' = reproject (fieldNameFunc (qualifiedField newTblNm)) (sbProj sb)
+                   in (proj', fromTable (tableFromSubSelect tblSource) (Just newTblNm), qb { qbNextTblRef = qbNextTblRef qb + 1 })
+
+          (bProj, bSource, qb'') =
+            case fromF b of
+              Free (QAll dbTblNm dbTblSettings on' next')
+                | (newTbl, newTblNm, qb'') <- nextTbl qb' dbTblNm dbTblSettings,
+                  Nothing <- on' newTbl, Pure proj <- next' newTbl ->
+                    (proj, fromTable (tableNamed dbTblNm) (Just newTblNm), qb'')
+
+              b -> let sb = buildQuery b
+                       tblSource = buildSelect sb
+
+                       newTblNm = "t" <> fromString (show (qbNextTblRef qb))
+
+                       proj' = reproject (fieldNameFunc (qualifiedField newTblNm)) (sbProj sb)
+                   in (proj', fromTable (tableFromSubSelect tblSource) (Just newTblNm), qb { qbNextTblRef = qbNextTblRef qb + 1 })
+
+          abSource = mkJoin aSource bSource (on (aProj, bProj))
+
+          from' =
+            case qbFrom qb'' of
+              Nothing -> Just abSource
+              Just oldFrom -> Just (innerJoin oldFrom abSource Nothing)
+
+      in buildJoinedQuery (next (aProj, bProj)) (qb'' { qbFrom = from' })
     buildJoinedQuery (Free (QGuard cond next)) qb =
         buildJoinedQuery next (qb { qbWhere = andE' (qbWhere qb) (Just cond) })
     buildJoinedQuery now qb =
@@ -429,8 +469,10 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
           -> SelectBuilder select db x
     onlyQ (Free (QAll entityNm entitySettings mkOn next)) f =
       f (Free (QAll entityNm entitySettings mkOn Pure)) next
-    onlyQ (Free (QLeftJoin entity mkOn next)) f =
-      f (Free (QLeftJoin entity mkOn Pure)) next
+    onlyQ (Free (QArbitraryJoin entity mkJoin mkOn next)) f =
+      f (Free (QArbitraryJoin entity mkJoin mkOn Pure)) next
+    onlyQ (Free (QTwoWayJoin a b mkJoin mkOn next)) f =
+      f (Free (QTwoWayJoin a b mkJoin mkOn Pure)) next
     onlyQ (Free (QSubSelect q' next)) f =
       f (Free (QSubSelect q' Pure)) next
     onlyQ (Free (QLimit limit q' next)) f =

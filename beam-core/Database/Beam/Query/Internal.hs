@@ -33,11 +33,24 @@ data QF select (db :: (* -> *) -> *) s next where
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
 
-  QLeftJoin :: Projectible (Sql92SelectExpressionSyntax select) r
-            => QM select db (QNested s) r
-            -> (r -> Maybe (Sql92SelectExpressionSyntax select))
-            -> (r -> next)
-            -> QF select db s next
+  QArbitraryJoin :: Projectible (Sql92SelectExpressionSyntax select) r
+                 => QM select db (QNested s) r
+                 -> (Sql92SelectFromSyntax select -> Sql92SelectFromSyntax select ->
+                     Maybe (Sql92FromExpressionSyntax (Sql92SelectFromSyntax select)) ->
+                     Sql92SelectFromSyntax select)
+                 -> (r -> Maybe (Sql92SelectExpressionSyntax select))
+                 -> (r -> next)
+                 -> QF select db s next
+  QTwoWayJoin :: ( Projectible (Sql92SelectExpressionSyntax select) a
+                 , Projectible (Sql92SelectExpressionSyntax select) b )
+              => QM select db (QNested s) a
+              -> QM select db (QNested s) b
+              -> (Sql92SelectFromSyntax select -> Sql92SelectFromSyntax select ->
+                   Maybe (Sql92FromExpressionSyntax (Sql92SelectFromSyntax select)) ->
+                   Sql92SelectFromSyntax select)
+              -> ((a, b) -> Maybe (Sql92SelectExpressionSyntax select))
+              -> ((a, b) -> next)
+              -> QF select db s next
 
   QSubSelect :: Projectible (Sql92SelectExpressionSyntax select) r =>
                 QM select db (QNested s) r -> (r -> next) -> QF select db s next
