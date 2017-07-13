@@ -40,6 +40,14 @@ instance ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) haskTy
     nullableConstraint nm (Proxy @(NullableStatus haskTy)) (Proxy @(Sql92DdlCommandColumnSchemaSyntax syntax)) ++
     [ TableCheck (\tblNm -> p (TableHasColumn tblNm nm (defaultSqlDataType (Proxy @haskTy)) :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax syntax))) ]
 
+instance ( Generic (embeddedTbl (TableField tbl))
+         , IsSql92DdlCommandSyntax syntax
+         , GMigratableTableSettings syntax (Rep (embeddedTbl (TableField tbl))) (Rep (embeddedTbl Identity)) ) =>
+  GMigratableTableSettings syntax (Rec0 (embeddedTbl (TableField tbl))) (Rec0 (embeddedTbl Identity)) where
+
+  gDefaultTblSettingsChecks syntax _ (K1 embeddedTbl) =
+    gDefaultTblSettingsChecks syntax (Proxy :: Proxy (Rep (embeddedTbl Identity))) (from embeddedTbl)
+
 -- * Nullability check
 
 type family NullableStatus (x :: *) :: Bool where

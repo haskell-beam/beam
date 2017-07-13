@@ -34,6 +34,8 @@ library
 
                        Database.Beam.Migrate.Generics
 
+                       Database.Beam.Migrate.Simple
+
   other-modules:       Database.Beam.Migrate.Tool.Types
                        Database.Beam.Migrate.Generics.Types
                        Database.Beam.Migrate.Generics.Tables

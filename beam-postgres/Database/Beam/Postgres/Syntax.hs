@@ -79,6 +79,8 @@ import           Database.Beam.Query.SQL92
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 
+import           Database.Beam.Migrate.Generics
+
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
@@ -980,3 +982,11 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
       where
         quoteIdentifierChar '"' = char8 '"' <> char8 '"'
         quoteIdentifierChar c = char8 c
+
+
+-- * Instances for 'HasDefaultSqlDataType'
+
+instance HasDefaultSqlDataType PgDataTypeSyntax ByteString where
+  defaultSqlDataType _ = pgByteaType
+instance HasDefaultSqlDataType PgDataTypeSyntax LocalTime where
+  defaultSqlDataType _ = timestampType Nothing False
