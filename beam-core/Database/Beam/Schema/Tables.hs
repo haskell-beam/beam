@@ -31,6 +31,7 @@ module Database.Beam.Schema.Tables
     , Nullable, TableField(..)
     , Exposed
     , fieldName
+    , Field
 
     , TableSettings, TableSkeleton, Ignored(..)
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint, WithConstraint(..)
@@ -58,6 +59,7 @@ import           Data.String (IsString(..))
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Typeable
+import           Data.Time (UTCTime, LocalTime)
 
 import qualified GHC.Generics as Generic
 import           GHC.Generics hiding (R, C)
@@ -751,7 +753,7 @@ instance GTableSkeleton U1 where
 instance (GTableSkeleton a, GTableSkeleton b) =>
     GTableSkeleton (a :*: b) where
         gTblSkeleton _ = gTblSkeleton (Proxy :: Proxy a) :*: gTblSkeleton (Proxy :: Proxy b)
-instance GTableSkeleton (K1 Generic.R (Ignored field)) where
+instance Field field => GTableSkeleton (K1 Generic.R (Ignored field)) where
     gTblSkeleton _ = K1 Ignored
 instance ( Generic (tbl Ignored)
          , GTableSkeleton (Rep (tbl Ignored)) ) =>
@@ -761,6 +763,16 @@ instance ( Generic (tbl (Nullable Ignored))
          , GTableSkeleton (Rep (tbl (Nullable Ignored))) ) =>
     GTableSkeleton (K1 Generic.R (tbl (Nullable Ignored))) where
     gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (tbl (Nullable Ignored))))))
+
+class Field field
+instance Field field => Field (Maybe field)
+instance Field field => Field (Auto field)
+instance Field Int
+instance Field Text
+instance Field String
+instance Field Double
+instance Field UTCTime
+instance Field LocalTime
 
 -- * Internal functions
 
