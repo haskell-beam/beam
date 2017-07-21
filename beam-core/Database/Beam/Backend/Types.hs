@@ -40,7 +40,7 @@ class BeamBackend be where
 --   value. This isn't currently enforced at the type-level, but may be in
 --   future versions of beam.
 newtype Auto x = Auto { unAuto :: Maybe x }
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Read, Eq, Ord, Generic)
 
 data FromBackendRowF be f where
   ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
