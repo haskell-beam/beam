@@ -13,6 +13,7 @@ module Database.Beam
      , module Database.Beam.Schema
      , MonadBeam(withDatabase, withDatabaseDebug)
      , Auto(..)
+     , FromBackendRow(..)
 
        -- * Re-exports
      , MonadIO(..), Typeable

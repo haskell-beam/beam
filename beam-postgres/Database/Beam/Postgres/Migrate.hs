@@ -2,12 +2,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
 
 module Database.Beam.Postgres.Migrate where
 
-import           Database.Beam.Backend.SQL.SQL92
+import           Database.Beam.Backend.Types
 import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
+import           Database.Beam.Migrate.SQL.BeamExtensions
 import qualified Database.Beam.Migrate.SQL.SQL92 as Db
 import qualified Database.Beam.Migrate.Tool as Tool
 import qualified Database.Beam.Migrate.Types as Db
@@ -150,7 +152,10 @@ array (Just sz) (Db.DataType (PgDataTypeSyntax _ syntax)) = Db.DataType (PgDataT
 
 -- * Pseudo-data types
 
-smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax a
-smallserial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL"))
-serial = Db.DataType (PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL"))
-bigserial = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL"))
+smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax (Auto a)
+smallserial = Db.DataType pgSmallSerialType
+serial = Db.DataType pgSerialType
+bigserial = Db.DataType pgBigSerialType
+
+instance IsBeamSerialColumnSchemaSyntax PgColumnSchemaSyntax where
+  genericSerial nm = Db.field nm serial

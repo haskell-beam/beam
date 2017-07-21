@@ -65,7 +65,7 @@ planned.
 | E011-02 REAL, DOUBLE PRECISION, FLOAT                           | FULL     | Use `Double` and `Float`                                                                                                                  |
 | E011-03 DECIMAL and NUMERIC data types                          | FULL     | Use `Scientific`. You can provide the database precision using `beam-migrate`                                                             |
 | E011-04 Arithmetic operators                                    | FULL     | Use the `Num` instance for `QGenExpr`                                                                                                     |
-| E011-05 Numeric comparison                                      | FULL     | Use the `.` suffixed operators (i.e., `==.`, `/=.`, `<.`, etc)                                                                    |
+| E011-05 Numeric comparison                                      | FULL     | Use the `.` suffixed operators (i.e., `==.`, `/=.`, `<.`, etc)                                                                            |
 | E011-06 Implicit casting among numeric data types               | WONTFIX  | Beam never implicitly casts. Use `cast_`                                                                                                  |
 | **E021 Character string types**                                 |          |                                                                                                                                           |
 | E021-01 CHARACTER data type                                     | FULL     | Use `Text`. Use `beam-migrate` to specify width                                                                                           |
@@ -326,7 +326,7 @@ planned.
 | **S402 Distinct types based on distinct types**                 | TODO     |                                                                                                                                           |
 | **S403 ARRAY_MAX_CARDINALITY**                                  | TODO     |                                                                                                                                           |
 | **S404 TRIM_ARRAY**                                             | TODO     |                                                                                                                                           |
-| **T021 BINARY and VARBINARY data types**                        | TODO     |                                                                                                                                           |
+| **T021 BINARY and VARBINARY data types**                        | FULL     |                                                                                                                                           |
 | **T022 Advanced support for BINARY and VARBINARY data types**   | TODO     |                                                                                                                                           |
 | **T023 Compound binary literals**                               | TODO     |                                                                                                                                           |
 | **T024 Spaces in binary literals**                              | TODO     |                                                                                                                                           |

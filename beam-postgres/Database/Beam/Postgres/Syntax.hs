@@ -11,6 +11,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Beam.Postgres.Syntax
     ( PgSyntaxF(..), PgSyntaxM
@@ -22,7 +23,7 @@ module Database.Beam.Postgres.Syntax
 
     , nextSyntaxStep
 
-    , PgCommandSyntax(..)
+    , PgCommandSyntax(..), PgCommandType(..)
     , PgSelectSyntax(..)
     , PgInsertSyntax(..)
     , PgDeleteSyntax(..)
@@ -48,7 +49,7 @@ module Database.Beam.Postgres.Syntax
 
     , insertDefaults
     , pgSimpleMatchSyntax
-    , pgBooleanType, pgByteaType
+    , pgBooleanType, pgByteaType, pgSerialType, pgSmallSerialType, pgBigSerialType
 
     , IsPgInsertOnConflictSyntax(..)
     , PgInsertOnConflict(..)
@@ -66,7 +67,9 @@ module Database.Beam.Postgres.Syntax
 
     , pgBinOp, pgCompOp, pgUnOp, pgPostFix
 
-    , pgTestSyntax ) where
+    , pgTestSyntax
+
+    , PostgresInaccessible ) where
 
 import           Database.Beam.Postgres.Types
 
@@ -84,6 +87,7 @@ import           Database.Beam.Migrate.Generics
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
+import           Data.Aeson (Value)
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
@@ -97,13 +101,17 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.String (IsString(..), fromString)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as TE
-import           Data.Time (LocalTime)
+import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
 import           Data.Word
+import           Data.UUID (UUID)
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
-import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..))
+import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..), Binary(..), Null(..))
+import qualified Database.PostgreSQL.Simple.Time as Pg (Date, ZonedTimestamp, LocalTimestamp, UTCTimestamp)
+import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreList, HStoreMap, HStoreBuilder)
 
 data PostgresInaccessible
 
@@ -178,7 +186,16 @@ nextSyntaxStep (EscapeIdentifier _ next) = next
 
 -- * Syntax types
 
-newtype PgCommandSyntax = PgCommandSyntax { fromPgCommand :: PgSyntax }
+data PgCommandType
+    = PgCommandTypeQuery
+    | PgCommandTypeDdl
+    | PgCommandTypeDataUpdate
+    | PgCommandTypeDataUpdateReturning
+      deriving Show
+data PgCommandSyntax
+    = PgCommandSyntax
+    { pgCommandType :: PgCommandType
+    , fromPgCommand :: PgSyntax }
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
 instance HasQBuilder PgSelectSyntax where
   buildSqlQuery = buildSql92Query' True
@@ -250,19 +267,19 @@ instance IsSql92Syntax PgCommandSyntax where
   type Sql92UpdateSyntax PgCommandSyntax = PgUpdateSyntax
   type Sql92DeleteSyntax PgCommandSyntax = PgDeleteSyntax
 
-  selectCmd = coerce
-  insertCmd = coerce
-  deleteCmd = coerce
-  updateCmd = coerce
+  selectCmd = PgCommandSyntax PgCommandTypeQuery      . coerce
+  insertCmd = PgCommandSyntax PgCommandTypeDataUpdate . coerce
+  deleteCmd = PgCommandSyntax PgCommandTypeDataUpdate . coerce
+  updateCmd = PgCommandSyntax PgCommandTypeDataUpdate . coerce
 
 instance IsSql92DdlCommandSyntax PgCommandSyntax where
   type Sql92DdlCommandCreateTableSyntax PgCommandSyntax = PgCreateTableSyntax
   type Sql92DdlCommandDropTableSyntax PgCommandSyntax = PgDropTableSyntax
   type Sql92DdlCommandAlterTableSyntax PgCommandSyntax = PgAlterTableSyntax
 
-  createTableCmd = coerce
-  dropTableCmd = coerce
-  alterTableCmd = coerce
+  createTableCmd = PgCommandSyntax PgCommandTypeDdl . coerce
+  dropTableCmd   = PgCommandSyntax PgCommandTypeDdl . coerce
+  alterTableCmd  = PgCommandSyntax PgCommandTypeDdl . coerce
 
 instance IsSql92UpdateSyntax PgUpdateSyntax where
   type Sql92UpdateFieldNameSyntax PgUpdateSyntax = PgFieldNameSyntax
@@ -371,6 +388,8 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   timeType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.time) Nothing) (emit "TIME" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
   timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.timestamp) Nothing) (emit "TIMESTAMP" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
 
+
+
 pgOptPrec :: Maybe Word -> PgSyntax
 pgOptPrec Nothing = mempty
 pgOptPrec (Just x) = emit "(" <> emit (fromString (show x)) <> emit ")"
@@ -389,6 +408,11 @@ pgBooleanType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bool) Nothing
 
 pgByteaType :: PgDataTypeSyntax
 pgByteaType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bytea) Nothing) (emit "BYTEA")
+
+pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
+pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL")
+pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL")
+pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL")
 
 mkNumericPrec :: Maybe (Word, Maybe Word) -> Maybe Int32
 mkNumericPrec Nothing = Nothing
@@ -469,6 +493,8 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
       emit "ELSE " <> fromPgExpression else_ <> emit " END"
 
   currentTimestampE = PgExpressionSyntax $ emit "CURRENT_TIMESTAMP"
+
+  defaultE = PgExpressionSyntax $ emit "DEFAULT"
 
 instance IsSqlExpressionSyntaxStringType PgExpressionSyntax String
 instance IsSqlExpressionSyntaxStringType PgExpressionSyntax T.Text
@@ -767,9 +793,60 @@ onConflictDoNothing :: IsPgInsertOnConflictSyntax insertOnConflict =>
                     -> PgInsertOnConflict insertOnConflict tbl
 onConflictDoNothing tgt = PgInsertOnConflict $ onConflictDoNothingSyntax tgt
 
-instance Pg.ToField a => HasSqlValueSyntax PgValueSyntax a where
-  sqlValueSyntax =
+defaultPgValueSyntax :: Pg.ToField a => a -> PgValueSyntax
+defaultPgValueSyntax =
     PgValueSyntax . pgBuildAction . pure . Pg.toField
+
+#define DEFAULT_SQL_SYNTAX(ty)                                  \
+           instance HasSqlValueSyntax PgValueSyntax ty where    \
+             sqlValueSyntax = defaultPgValueSyntax
+
+DEFAULT_SQL_SYNTAX(Bool)
+DEFAULT_SQL_SYNTAX(Double)
+DEFAULT_SQL_SYNTAX(Float)
+DEFAULT_SQL_SYNTAX(Int)
+DEFAULT_SQL_SYNTAX(Int8)
+DEFAULT_SQL_SYNTAX(Int16)
+DEFAULT_SQL_SYNTAX(Int32)
+DEFAULT_SQL_SYNTAX(Integer)
+DEFAULT_SQL_SYNTAX(Word)
+DEFAULT_SQL_SYNTAX(Word8)
+DEFAULT_SQL_SYNTAX(Word16)
+DEFAULT_SQL_SYNTAX(Word32)
+DEFAULT_SQL_SYNTAX(Word64)
+DEFAULT_SQL_SYNTAX(T.Text)
+DEFAULT_SQL_SYNTAX(TL.Text)
+DEFAULT_SQL_SYNTAX(UTCTime)
+DEFAULT_SQL_SYNTAX(Value)
+DEFAULT_SQL_SYNTAX(Pg.Oid)
+DEFAULT_SQL_SYNTAX(LocalTime)
+DEFAULT_SQL_SYNTAX(ZonedTime)
+DEFAULT_SQL_SYNTAX(TimeOfDay)
+DEFAULT_SQL_SYNTAX(NominalDiffTime)
+DEFAULT_SQL_SYNTAX(Day)
+DEFAULT_SQL_SYNTAX(UUID)
+DEFAULT_SQL_SYNTAX([Char])
+DEFAULT_SQL_SYNTAX(Pg.HStoreMap)
+DEFAULT_SQL_SYNTAX(Pg.HStoreList)
+DEFAULT_SQL_SYNTAX(Pg.HStoreBuilder)
+DEFAULT_SQL_SYNTAX(Pg.Date)
+DEFAULT_SQL_SYNTAX(Pg.ZonedTimestamp)
+DEFAULT_SQL_SYNTAX(Pg.LocalTimestamp)
+DEFAULT_SQL_SYNTAX(Pg.UTCTimestamp)
+
+instance HasSqlValueSyntax PgValueSyntax SqlNull where
+  sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
+instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Auto x) where
+  sqlValueSyntax (Auto Nothing) = PgValueSyntax (emit "DEFAULT")
+  sqlValueSyntax (Auto (Just x)) = sqlValueSyntax x
+instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Maybe x) where
+  sqlValueSyntax Nothing = sqlValueSyntax SqlNull
+  sqlValueSyntax (Just x) = sqlValueSyntax x
+
+instance HasSqlValueSyntax PgValueSyntax B.ByteString where
+  sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
+instance HasSqlValueSyntax PgValueSyntax BL.ByteString where
+  sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
 
 pgQuotedIdentifier :: T.Text -> PgSyntax
 pgQuotedIdentifier t =
@@ -879,7 +956,7 @@ pgBuildAction =
 
 -- * Postgres specific commands
 
-insert :: DatabaseEntity Postgres be (TableEntity table)
+insert :: DatabaseEntity Postgres db (TableEntity table)
        -> SqlInsertValues PgInsertValuesSyntax table
        -> PgInsertOnConflict PgInsertOnConflictSyntax table
        -> SqlInsert PgInsertSyntax
@@ -987,6 +1064,12 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
 -- * Instances for 'HasDefaultSqlDataType'
 
 instance HasDefaultSqlDataType PgDataTypeSyntax ByteString where
-  defaultSqlDataType _ = pgByteaType
+  defaultSqlDataType _ _ = pgByteaType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax ByteString
 instance HasDefaultSqlDataType PgDataTypeSyntax LocalTime where
-  defaultSqlDataType _ = timestampType Nothing False
+  defaultSqlDataType _ _ = timestampType Nothing False
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax LocalTime
+instance HasDefaultSqlDataType PgDataTypeSyntax (SqlSerial Int) where
+  defaultSqlDataType _ False = pgSerialType
+  defaultSqlDataType _ _ = intType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (SqlSerial Int)

@@ -8,7 +8,7 @@ module Database.Beam.Postgres
   , Pg.Pg ) where
 
 import Database.Beam.Postgres.Connection hiding (Pg(..), PgF(..), pgRenderSyntax, runPgRowReader, getFields)
-import Database.Beam.Postgres.Syntax
+import Database.Beam.Postgres.Syntax hiding (PostgresInaccessible)
 import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.PgSpecific
 

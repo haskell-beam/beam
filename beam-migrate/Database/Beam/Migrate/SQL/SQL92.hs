@@ -10,6 +10,10 @@ import Data.Typeable
 type Sql92DdlCommandDataTypeSyntax syntax =
   Sql92ColumnSchemaColumnTypeSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
 type Sql92DdlCommandColumnSchemaSyntax syntax = Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax syntax)
+type Sql92DdlColumnSchemaConstraintSyntax syntax =
+  Sql92ColumnConstraintDefinitionConstraintSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
+type Sql92DdlCommandColumnConstraintSyntax syntax =
+  Sql92DdlColumnSchemaConstraintSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
 
 type Sql92SaneDdlCommandSyntax cmd =
   ( IsSql92DdlCommandSyntax cmd

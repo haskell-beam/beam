@@ -7,6 +7,7 @@ module Database.Beam.Backend.SQL.SQL2003
     , IsSql2003ExpressionSyntax(..)
     , IsSql2003ExpressionElementaryOLAPOperationsSyntax(..)
     , IsSql2003ExpressionAdvancedOLAPOperationsSyntax(..)
+    , IsSql2003BinaryAndVarBinaryDataTypeSyntax(..)
     , IsSql2003WindowFrameSyntax(..)
     , IsSql2003WindowFrameBoundsSyntax(..)
     , IsSql2003WindowFrameBoundSyntax(..)
@@ -55,6 +56,12 @@ class IsSql2003ExpressionSyntax expr =>
 
   filterAggE :: expr -> expr -> expr
   rankAggE :: expr
+
+-- | Optional SQL2003 "BINARY AND VARBINARY data type" T021 support
+class IsSql99DataTypeSyntax dataType =>
+  IsSql2003BinaryAndVarBinaryDataTypeSyntax dataType where
+  binaryType :: Maybe Word -> dataType
+  varBinaryType :: Maybe Word -> dataType
 
 class IsSql2003WindowFrameBoundsSyntax (Sql2003WindowFrameBoundsSyntax frame) =>
     IsSql2003WindowFrameSyntax frame where

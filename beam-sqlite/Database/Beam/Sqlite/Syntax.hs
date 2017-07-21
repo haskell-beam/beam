@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing#-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Database.Beam.Sqlite.Syntax
   ( SqliteSyntax(..)
@@ -15,21 +16,36 @@ module Database.Beam.Sqlite.Syntax
   , sqliteEscape ) where
 
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Query.SQL92
+import           Database.Beam.Migrate.Checks
+import           Database.Beam.Migrate.Generics
+import           Database.Beam.Migrate.SQL.SQL92
+import           Database.Beam.Migrate.Types.Predicates
 import           Database.Beam.Query
+import           Database.Beam.Query.SQL92
+
+import           Control.Applicative
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
 import           Data.Coerce
 import qualified Data.DList as DL
+import           Data.Hashable
 import           Data.Int
+import           Data.Maybe
 import           Data.Monoid
 import           Data.String
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import           Data.Time
 
 import           Database.SQLite.Simple (SQLData(..))
 
 data SqliteSyntax = SqliteSyntax Builder (DL.DList SQLData)
+newtype SqliteData = SqliteData SQLData -- newtype for Hashable
+
+instance Show SqliteSyntax where
+  show (SqliteSyntax s d) =
+    "SqliteSyntax (" <> show (toLazyByteString s) <> ") " <> show d
 
 instance Monoid SqliteSyntax where
   mempty = SqliteSyntax mempty mempty
@@ -40,6 +56,15 @@ instance Eq SqliteSyntax where
   SqliteSyntax ab av == SqliteSyntax bb bv =
     toLazyByteString ab == toLazyByteString bb &&
     av == bv
+
+instance Hashable SqliteSyntax where
+  hashWithSalt salt (SqliteSyntax s d) = hashWithSalt salt (toLazyByteString s, map SqliteData (DL.toList d))
+instance Hashable SqliteData where
+  hashWithSalt salt (SqliteData (SQLInteger i)) = hashWithSalt salt (0 :: Int, i)
+  hashWithSalt salt (SqliteData (SQLFloat d))   = hashWithSalt salt (1 :: Int, d)
+  hashWithSalt salt (SqliteData (SQLText t))    = hashWithSalt salt (2 :: Int, t)
+  hashWithSalt salt (SqliteData (SQLBlob b))    = hashWithSalt salt (3 :: Int, b)
+  hashWithSalt salt (SqliteData SQLNull)        = hashWithSalt salt (4 :: Int)
 
 emit :: ByteString -> SqliteSyntax
 emit b = SqliteSyntax (byteString b) mempty
@@ -67,7 +92,7 @@ newtype SqliteUpdateSyntax = SqliteUpdateSyntax { fromSqliteUpdate :: SqliteSynt
 newtype SqliteDeleteSyntax = SqliteDeleteSyntax { fromSqliteDelete :: SqliteSyntax }
 
 newtype SqliteSelectTableSyntax = SqliteSelectTableSyntax { fromSqliteSelectTable :: SqliteSyntax }
-newtype SqliteExpressionSyntax = SqliteExpressionSyntax { fromSqliteExpression :: SqliteSyntax } deriving Eq
+newtype SqliteExpressionSyntax = SqliteExpressionSyntax { fromSqliteExpression :: SqliteSyntax } deriving (Show, Eq, Hashable)
 newtype SqliteFromSyntax = SqliteFromSyntax { fromSqliteFromSyntax :: SqliteSyntax }
 newtype SqliteComparisonQuantifierSyntax = SqliteComparisonQuantifierSyntax { fromSqliteComparisonQuantifier :: SqliteSyntax }
 newtype SqliteExtractFieldSyntax = SqliteExtractFieldSyntax { fromSqliteExtractField :: SqliteSyntax }
@@ -81,13 +106,18 @@ newtype SqliteFieldNameSyntax = SqliteFieldNameSyntax { fromSqliteFieldNameSynta
 newtype SqliteInsertValuesSyntax = SqliteInsertValuesSyntax { fromSqliteInsertValues :: SqliteSyntax }
 newtype SqliteCreateTableSyntax = SqliteCreateTableSyntax { fromSqliteCreateTable :: SqliteSyntax }
 data SqliteTableOptionsSyntax = SqliteTableOptionsSyntax SqliteSyntax SqliteSyntax
-newtype SqliteColumnSchemaSyntax = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax }
-newtype SqliteDataTypeSyntax = SqliteDataTypeSyntax { fromSqliteDataType :: SqliteSyntax }
-newtype SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintDefinitionSyntax { fromSqliteColumnConstraintDefinition :: SqliteSyntax }
-newtype SqliteColumnConstraintSyntax = SqliteColumnConstraintSyntax { fromSqliteColumnConstraint :: SqliteSyntax }
+newtype SqliteColumnSchemaSyntax = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax } deriving (Show, Eq, Hashable)
+newtype SqliteDataTypeSyntax = SqliteDataTypeSyntax { fromSqliteDataType :: SqliteSyntax } deriving (Show, Eq, Hashable)
+newtype SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintDefinitionSyntax { fromSqliteColumnConstraintDefinition :: SqliteSyntax } deriving (Show, Eq, Hashable)
+newtype SqliteColumnConstraintSyntax = SqliteColumnConstraintSyntax { fromSqliteColumnConstraint :: SqliteConstraintAttributesSyntax -> SqliteSyntax }
+data SqliteConstraintAttributesSyntax = SqliteConstraintAttributesSyntax (Maybe Bool) (Maybe SqliteSyntax)
 newtype SqliteTableConstraintSyntax = SqliteTableConstraintSyntax { fromSqliteTableConstraint :: SqliteSyntax }
 newtype SqliteMatchTypeSyntax = SqliteMatchTypeSyntax { fromSqliteMatchType :: SqliteSyntax }
 newtype SqliteReferentialActionSyntax = SqliteReferentialActionSyntax { fromSqliteReferentialAction :: SqliteSyntax }
+newtype SqliteAlterTableSyntax = SqliteAlterTableSyntax { fromSqliteAlterTable :: SqliteSyntax }
+newtype SqliteAlterTableActionSyntax = SqliteAlterTableActionSyntax { fromSqliteAlterTableAction :: Maybe SqliteSyntax }
+newtype SqliteAlterColumnActionSyntax = SqliteAlterColumnActionSyntax { fromSqliteAlterColumnAction :: Maybe SqliteSyntax }
+newtype SqliteDropTableSyntax = SqliteDropTableSyntax { fromSqliteDropTable :: SqliteSyntax }
 
 instance IsSql92Syntax SqliteCommandSyntax where
   type Sql92SelectSyntax SqliteCommandSyntax = SqliteSelectSyntax
@@ -99,6 +129,172 @@ instance IsSql92Syntax SqliteCommandSyntax where
   insertCmd = SqliteCommandSyntax . fromSqliteInsert
   updateCmd = SqliteCommandSyntax . fromSqliteUpdate
   deleteCmd = SqliteCommandSyntax . fromSqliteDelete
+
+instance IsSql92DdlCommandSyntax SqliteCommandSyntax where
+  type Sql92DdlCommandCreateTableSyntax SqliteCommandSyntax = SqliteCreateTableSyntax
+  type Sql92DdlCommandAlterTableSyntax SqliteCommandSyntax  = SqliteAlterTableSyntax
+  type Sql92DdlCommandDropTableSyntax SqliteCommandSyntax = SqliteDropTableSyntax
+
+  createTableCmd = SqliteCommandSyntax . fromSqliteCreateTable
+  alterTableCmd = SqliteCommandSyntax . fromSqliteAlterTable
+  dropTableCmd = SqliteCommandSyntax . fromSqliteDropTable
+
+instance IsSql92DropTableSyntax SqliteDropTableSyntax where
+  dropTableSyntax nm = SqliteDropTableSyntax (emit "DROP TABLE " <> quotedIdentifier nm)
+
+instance IsSql92AlterTableSyntax SqliteAlterTableSyntax where
+  type Sql92AlterTableAlterTableActionSyntax SqliteAlterTableSyntax = SqliteAlterTableActionSyntax
+
+  alterTableSyntax nm action =
+    SqliteAlterTableSyntax $
+    case fromSqliteAlterTableAction action of
+      Just alterTable ->
+        emit "ALTER TABLE " <> quotedIdentifier nm <> alterTable
+      Nothing ->
+        emit "SELECT 1"
+
+instance IsSql92AlterTableActionSyntax SqliteAlterTableActionSyntax where
+  type Sql92AlterTableAlterColumnActionSyntax SqliteAlterTableActionSyntax = SqliteAlterColumnActionSyntax
+  type Sql92AlterTableColumnSchemaSyntax SqliteAlterTableActionSyntax = SqliteColumnSchemaSyntax
+
+  alterColumnSyntax columnNm columnAction =
+    SqliteAlterTableActionSyntax $
+    case fromSqliteAlterColumnAction columnAction of
+      Nothing -> Nothing
+      Just columnAction ->
+        Just (emit "ALTER COLUMN " <> quotedIdentifier columnNm <> columnAction)
+  addColumnSyntax columnNm schema =
+    SqliteAlterTableActionSyntax . Just $
+    emit "ADD COLUMN " <> quotedIdentifier columnNm <> emit " " <> fromSqliteColumnSchema schema
+  dropColumnSyntax _ = SqliteAlterTableActionSyntax Nothing
+
+instance IsSql92AlterColumnActionSyntax SqliteAlterColumnActionSyntax where
+  setNotNullSyntax = SqliteAlterColumnActionSyntax Nothing
+  setNullSyntax = SqliteAlterColumnActionSyntax Nothing
+
+instance IsSql92ColumnSchemaSyntax SqliteColumnSchemaSyntax where
+  type Sql92ColumnSchemaColumnTypeSyntax SqliteColumnSchemaSyntax = SqliteDataTypeSyntax
+  type Sql92ColumnSchemaExpressionSyntax SqliteColumnSchemaSyntax = SqliteExpressionSyntax
+  type Sql92ColumnSchemaColumnConstraintDefinitionSyntax SqliteColumnSchemaSyntax = SqliteColumnConstraintDefinitionSyntax
+
+  columnSchemaSyntax  ty defVal constraints collation =
+    SqliteColumnSchemaSyntax $
+    fromSqliteDataType ty <>
+    maybe mempty (\defVal -> emit " DEFAULT " <> parens (fromSqliteExpression defVal)) defVal <>
+    foldMap (\constraint -> emit " " <> fromSqliteColumnConstraintDefinition constraint <> emit " ") constraints <>
+    maybe mempty (\c -> emit " COLLATE " <> quotedIdentifier c) collation
+
+instance IsSql92ColumnConstraintDefinitionSyntax SqliteColumnConstraintDefinitionSyntax where
+  type Sql92ColumnConstraintDefinitionConstraintSyntax SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintSyntax
+  type Sql92ColumnConstraintDefinitionAttributesSyntax SqliteColumnConstraintDefinitionSyntax = SqliteConstraintAttributesSyntax
+
+  constraintDefinitionSyntax nm def attrs =
+    SqliteColumnConstraintDefinitionSyntax $
+    maybe mempty (\nm' -> emit "CONSTRAINT " <> quotedIdentifier nm') nm <>
+    fromSqliteColumnConstraint def (fromMaybe mempty attrs)
+
+instance IsSql92ColumnConstraintSyntax SqliteColumnConstraintSyntax where
+  type Sql92ColumnConstraintMatchTypeSyntax SqliteColumnConstraintSyntax = SqliteMatchTypeSyntax
+  type Sql92ColumnConstraintReferentialActionSyntax SqliteColumnConstraintSyntax = SqliteReferentialActionSyntax
+  type Sql92ColumnConstraintExpressionSyntax SqliteColumnConstraintSyntax = SqliteExpressionSyntax
+
+  notNullConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "NOT NULL")
+  uniqueColumnConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "UNIQUE")
+  primaryKeyColumnConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "PRIMARY KEY")
+  checkColumnConstraintSyntax expr =
+    SqliteColumnConstraintSyntax $ \_ ->
+    emit "CHECK " <> parens (fromSqliteExpression expr)
+  referencesConstraintSyntax tbl fields matchType onUpdate onDelete =
+    SqliteColumnConstraintSyntax $ \(SqliteConstraintAttributesSyntax deferrable atTime) ->
+    emit "REFERENCES " <> quotedIdentifier tbl <> parens (commas (map quotedIdentifier fields)) <>
+    maybe mempty (\matchType' -> emit " MATCH " <> fromSqliteMatchType matchType') matchType <>
+    maybe mempty (\onUpdate' -> emit " ON UPDATE " <> fromSqliteReferentialAction onUpdate') onUpdate <>
+    maybe mempty (\onDelete' -> emit " ON DELETE " <> fromSqliteReferentialAction onDelete') onDelete <>
+    case (deferrable, atTime) of
+      (_, Just atTime) ->
+        let deferrable' = fromMaybe False deferrable
+        in (if deferrable' then emit " DEFERRABLE " else emit " NOT DEFERRABLE ") <>
+           atTime
+      (Just deferrable', _) ->
+        if deferrable' then emit " DEFERRABLE" else emit " NOT DEFERRABLE"
+      _ -> mempty
+
+instance IsSql92MatchTypeSyntax SqliteMatchTypeSyntax where
+  fullMatchSyntax = SqliteMatchTypeSyntax (emit "FULL")
+  partialMatchSyntax = SqliteMatchTypeSyntax (emit "PARTIAL")
+
+instance IsSql92ReferentialActionSyntax SqliteReferentialActionSyntax where
+  referentialActionCascadeSyntax = SqliteReferentialActionSyntax (emit "CASCADE")
+  referentialActionSetNullSyntax = SqliteReferentialActionSyntax (emit "SET NULL")
+  referentialActionSetDefaultSyntax = SqliteReferentialActionSyntax (emit "SET DEFAULT")
+  referentialActionNoActionSyntax = SqliteReferentialActionSyntax (emit "NO ACTION")
+
+instance IsSql92TableConstraintSyntax SqliteTableConstraintSyntax where
+  primaryKeyConstraintSyntax fields =
+    SqliteTableConstraintSyntax $
+    emit "PRIMARY KEY" <> parens (commas (map quotedIdentifier fields))
+
+instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
+  type Sql92CreateTableColumnSchemaSyntax SqliteCreateTableSyntax = SqliteColumnSchemaSyntax
+  type Sql92CreateTableTableConstraintSyntax SqliteCreateTableSyntax = SqliteTableConstraintSyntax
+  type Sql92CreateTableOptionsSyntax SqliteCreateTableSyntax = SqliteTableOptionsSyntax
+
+  createTableSyntax _ nm fields constraints =
+    let fieldDefs = map mkFieldDef fields
+        constraintDefs = map fromSqliteTableConstraint constraints
+
+        mkFieldDef (fieldNm, fieldTy) =
+          quotedIdentifier fieldNm <> emit " " <> fromSqliteColumnSchema fieldTy
+
+    in SqliteCreateTableSyntax $
+       emit "CREATE TABLE " <> quotedIdentifier nm <> parens (commas (fieldDefs <> constraintDefs))
+
+instance Monoid SqliteConstraintAttributesSyntax where
+  mempty = SqliteConstraintAttributesSyntax Nothing Nothing
+  mappend (SqliteConstraintAttributesSyntax aDef aAtTime) (SqliteConstraintAttributesSyntax bDef bAtTime) =
+    SqliteConstraintAttributesSyntax (bDef <|> aDef) (bAtTime <|> aAtTime)
+
+instance IsSql92ConstraintAttributesSyntax SqliteConstraintAttributesSyntax where
+  initiallyDeferredAttributeSyntax = SqliteConstraintAttributesSyntax Nothing (Just (emit "INITIALLY DEFERRED"))
+  initiallyImmediateAttributeSyntax = SqliteConstraintAttributesSyntax Nothing (Just (emit "INITIALLY IMMEDIATE"))
+  notDeferrableAttributeSyntax = SqliteConstraintAttributesSyntax (Just False) Nothing
+  deferrableAttributeSyntax = SqliteConstraintAttributesSyntax (Just True) Nothing
+
+instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
+  domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm)
+  charType prec charSet = SqliteDataTypeSyntax $ emit "CHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet
+  varCharType prec charSet = SqliteDataTypeSyntax $ emit "VARCHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet
+  nationalCharType prec = SqliteDataTypeSyntax $ emit "NATIONAL CHAR" <> sqliteOptPrec prec
+  nationalVarCharType prec = SqliteDataTypeSyntax $ emit "NATIONAL CHARACTER VARYING" <> sqliteOptPrec prec
+
+  bitType prec = SqliteDataTypeSyntax $ emit "BIT" <> sqliteOptPrec prec
+  varBitType prec = SqliteDataTypeSyntax $ emit "BIT VARYING" <> sqliteOptPrec prec
+
+  numericType prec = SqliteDataTypeSyntax $ emit "NUMERIC" <> sqliteOptNumericPrec prec
+  decimalType prec = SqliteDataTypeSyntax $ emit "DOUBLE" <> sqliteOptNumericPrec prec
+
+  intType = SqliteDataTypeSyntax (emit "INTEGER")
+  smallIntType = SqliteDataTypeSyntax (emit "SMALLINT")
+
+  floatType prec = SqliteDataTypeSyntax (emit "FLOAT" <> sqliteOptPrec prec)
+  doubleType = SqliteDataTypeSyntax (emit "DOUBLE PRECISION")
+  realType = SqliteDataTypeSyntax (emit "REAL")
+  dateType = SqliteDataTypeSyntax (emit "DATE")
+  timeType prec withTz = SqliteDataTypeSyntax $ emit "TIME" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty
+  timestampType prec withTz = SqliteDataTypeSyntax $ emit "TIMESTAMP" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty
+
+sqliteOptPrec :: Maybe Word -> SqliteSyntax
+sqliteOptPrec Nothing = mempty
+sqliteOptPrec (Just x) = parens (emit (fromString (show x)))
+
+sqliteOptNumericPrec :: Maybe (Word, Maybe Word)  -> SqliteSyntax
+sqliteOptNumericPrec Nothing = mempty
+sqliteOptNumericPrec (Just (prec, Nothing)) = sqliteOptPrec (Just prec)
+sqliteOptNumericPrec (Just (prec, Just dec)) = parens $ emit (fromString (show prec)) <> emit ", " <> emit (fromString (show dec))
+
+sqliteOptCharSet :: Maybe T.Text -> SqliteSyntax
+sqliteOptCharSet Nothing = mempty
+sqliteOptCharSet (Just cs) = emit " CHARACTER SET " <> emit (TE.encodeUtf8 cs)
 
 instance IsSql92SelectSyntax SqliteSelectSyntax where
   type Sql92SelectSelectTableSyntax SqliteSelectSyntax = SqliteSelectTableSyntax
@@ -293,6 +489,8 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
 
   currentTimestampE = SqliteExpressionSyntax (emit "CURRENT_TIMESTAMP")
 
+  defaultE = SqliteExpressionSyntax (emit "NULL")
+
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
   SqliteExpressionSyntax $
@@ -382,3 +580,24 @@ commas :: [SqliteSyntax] -> SqliteSyntax
 commas [] = mempty
 commas [x] = x
 commas (x:xs) = x <> foldMap (emit ", " <>) xs
+
+instance HasDefaultSqlDataType SqliteDataTypeSyntax (SqlSerial Int) where
+  defaultSqlDataType _ _ = intType
+instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax (SqlSerial Int) where
+  defaultSqlDataTypeConstraints _ _ colNm False = [ TableCheck $ \tblNm -> p (TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint SqliteColumnSchemaSyntax) ]
+    where c = constraintDefinitionSyntax Nothing (SqliteColumnConstraintSyntax (\_ -> emit "DEFAULT ROWID")) Nothing
+  defaultSqlDataTypeConstraints _ _ _ _ = []
+
+instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where
+  defaultSqlDataType _ _ = SqliteDataTypeSyntax (emit "VARBINARY")
+instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax ByteString
+
+instance HasDefaultSqlDataType SqliteDataTypeSyntax LocalTime where
+  defaultSqlDataType _ _ = timestampType Nothing False
+instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax LocalTime
+
+instance HasSqlValueSyntax SqliteValueSyntax ByteString where
+  sqlValueSyntax bs = SqliteValueSyntax (emitValue (SQLBlob bs))
+instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
+  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
+    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S%Q")) tm

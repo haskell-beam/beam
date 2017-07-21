@@ -12,7 +12,6 @@ import           Database.Beam
 import           Database.Beam.Backend.SQL
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
-import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreMap, HStoreList)
 import qualified Database.PostgreSQL.Simple.Types as Pg
 import qualified Database.PostgreSQL.Simple.Range as Pg (PGRange)
@@ -39,13 +38,8 @@ instance BeamBackend Postgres where
 
 instance Pg.FromField x => Pg.FromField (Auto x) where
   fromField field d = fmap (Auto . Just) (Pg.fromField field d)
-instance Pg.ToField x => Pg.ToField (Auto x) where
-  toField (Auto Nothing) = Pg.Plain "DEFAULT"
-  toField (Auto (Just x)) = Pg.toField x
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
-instance Pg.ToField SqlNull where
-  toField _ = Pg.toField Pg.Null
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
 instance FromBackendRow Postgres SqlNull

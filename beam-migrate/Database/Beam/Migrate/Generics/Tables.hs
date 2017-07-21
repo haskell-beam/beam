@@ -1,7 +1,11 @@
+{-# LANGUAGE ConstraintKinds #-}
+
 module Database.Beam.Migrate.Generics.Tables where
 
 import Database.Beam
+import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.SQL.SQL92
+import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Types.Predicates
@@ -16,37 +20,39 @@ import Data.Int
 import GHC.Generics
 
 class IsSql92DdlCommandSyntax syntax => GMigratableTableSettings syntax s (i :: * -> *) where
-  gDefaultTblSettingsChecks :: Proxy syntax -> Proxy i -> s () -> [TableCheck]
+  gDefaultTblSettingsChecks :: Proxy syntax -> Proxy i -> Bool -> s () -> [TableCheck]
 
 instance (IsSql92DdlCommandSyntax syntax, GMigratableTableSettings syntax xStgs xId) =>
   GMigratableTableSettings syntax (M1 t s xStgs) (M1 t s xId) where
-  gDefaultTblSettingsChecks syntax Proxy (M1 x) =
-    gDefaultTblSettingsChecks syntax (Proxy @xId) x
+  gDefaultTblSettingsChecks syntax Proxy embedded (M1 x) =
+    gDefaultTblSettingsChecks syntax (Proxy @xId) embedded x
 
 instance ( IsSql92DdlCommandSyntax syntax
          , GMigratableTableSettings syntax aStgs aId
          , GMigratableTableSettings syntax bStgs bId ) =>
   GMigratableTableSettings syntax (aStgs :*: bStgs) (aId :*: bId) where
-  gDefaultTblSettingsChecks syntax Proxy (a :*: b) =
-    gDefaultTblSettingsChecks syntax (Proxy @aId) a ++
-    gDefaultTblSettingsChecks syntax (Proxy @bId) b
+  gDefaultTblSettingsChecks syntax Proxy embedded (a :*: b) =
+    gDefaultTblSettingsChecks syntax (Proxy @aId) embedded a ++
+    gDefaultTblSettingsChecks syntax (Proxy @bId) embedded b
 
 instance ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) haskTy
+         , HasDefaultSqlDataTypeConstraints (Sql92DdlCommandColumnSchemaSyntax syntax) haskTy
          , HasNullableConstraint (NullableStatus haskTy) (Sql92DdlCommandColumnSchemaSyntax syntax)
          , IsSql92DdlCommandSyntax syntax ) =>
   GMigratableTableSettings syntax (Rec0 (TableField tbl x)) (Rec0 haskTy) where
 
-  gDefaultTblSettingsChecks _ _ (K1 (TableField nm)) =
+  gDefaultTblSettingsChecks _ _ embedded (K1 (TableField nm)) =
     nullableConstraint nm (Proxy @(NullableStatus haskTy)) (Proxy @(Sql92DdlCommandColumnSchemaSyntax syntax)) ++
-    [ TableCheck (\tblNm -> p (TableHasColumn tblNm nm (defaultSqlDataType (Proxy @haskTy)) :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax syntax))) ]
+    defaultSqlDataTypeConstraints (Proxy @haskTy) (Proxy @(Sql92DdlCommandColumnSchemaSyntax syntax)) nm embedded ++
+    [ TableCheck (\tblNm -> p (TableHasColumn tblNm nm (defaultSqlDataType (Proxy @haskTy) embedded) :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax syntax))) ]
 
 instance ( Generic (embeddedTbl (TableField tbl))
          , IsSql92DdlCommandSyntax syntax
          , GMigratableTableSettings syntax (Rep (embeddedTbl (TableField tbl))) (Rep (embeddedTbl Identity)) ) =>
   GMigratableTableSettings syntax (Rec0 (embeddedTbl (TableField tbl))) (Rec0 (embeddedTbl Identity)) where
 
-  gDefaultTblSettingsChecks syntax _ (K1 embeddedTbl) =
-    gDefaultTblSettingsChecks syntax (Proxy :: Proxy (Rep (embeddedTbl Identity))) (from embeddedTbl)
+  gDefaultTblSettingsChecks syntax _ _   (K1 embeddedTbl) =
+    gDefaultTblSettingsChecks syntax (Proxy :: Proxy (Rep (embeddedTbl Identity))) True (from embeddedTbl)
 
 -- * Nullability check
 
@@ -67,30 +73,53 @@ instance IsSql92ColumnSchemaSyntax syntax =>
 
 -- * Default data types
 
+class IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty where
+  defaultSqlDataTypeConstraints :: Proxy ty -> Proxy columnSchemaSyntax -> Text -> Bool {-^ Embedded -} -> [ TableCheck ]
+  defaultSqlDataTypeConstraints _ _ _ _ = []
+
 class IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax ty where
-  defaultSqlDataType :: Proxy ty -> dataTypeSyntax
+  defaultSqlDataType :: Proxy ty -> Bool {-^ Embedded -} -> dataTypeSyntax
 
 instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
   HasDefaultSqlDataType dataTypeSyntax (Auto ty) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
+instance (IsSql92ColumnSchemaSyntax columnSchemaSyntax, HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty) =>
+  HasDefaultSqlDataTypeConstraints columnSchemaSyntax (Auto ty) where
+  defaultSqlDataTypeConstraints _ = defaultSqlDataTypeConstraints (Proxy @ty)
 
 instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
   HasDefaultSqlDataType dataTypeSyntax (Maybe ty) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
+instance (IsSql92ColumnSchemaSyntax columnSchemaSyntax, HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty) =>
+  HasDefaultSqlDataTypeConstraints columnSchemaSyntax (Maybe ty) where
+  defaultSqlDataTypeConstraints _ = defaultSqlDataTypeConstraints (Proxy @ty)
 
 -- TODO Not sure if individual databases will want to customize these types
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Int where
-  defaultSqlDataType _ = intType
+  defaultSqlDataType _ _ = intType
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Int
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Int32 where
-  defaultSqlDataType _ = intType
+  defaultSqlDataType _ _ = intType
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Int32
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Int16 where
-  defaultSqlDataType _ = intType
+  defaultSqlDataType _ _ = intType
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Int16
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Text where
-  defaultSqlDataType _ = varCharType Nothing Nothing
+  defaultSqlDataType _ _ = varCharType Nothing Nothing
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Text
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax SqlBitString where
+  defaultSqlDataType _ _ = varBitType Nothing
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax SqlBitString
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Double where
-  defaultSqlDataType _ = realType
+  defaultSqlDataType _ _ = realType
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Double
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Scientific where
-  defaultSqlDataType _ = numericType (Just (20, Just 10))
+  defaultSqlDataType _ _ = numericType (Just (20, Just 10))
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Scientific
+
+type Sql92HasDefaultDataType syntax ty =
+  ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) ty
+  , HasDefaultSqlDataTypeConstraints (Sql92DdlCommandColumnSchemaSyntax syntax) ty )

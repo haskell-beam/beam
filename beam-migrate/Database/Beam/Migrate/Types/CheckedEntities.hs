@@ -81,5 +81,5 @@ instance IsCheckedDatabaseEntity be (TableEntity tbl) where
         pk = allBeamValues (\(Columnar' (TableField x)) -> x) (primaryKey tblSettings)
     in CheckedDatabaseTable tbl' ( TableCheck (\tblName -> SomeDatabasePredicate (TableExistsPredicate tblName))
                                  : TableCheck (\tblName -> SomeDatabasePredicate (TableHasPrimaryKey tblName pk))
-                                 : gDefaultTblSettingsChecks syntax (Proxy @(Rep (tbl Identity))) (from tblSettings) )
+                                 : gDefaultTblSettingsChecks syntax (Proxy @(Rep (tbl Identity))) False (from tblSettings) )
 

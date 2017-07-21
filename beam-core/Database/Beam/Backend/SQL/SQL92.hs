@@ -3,12 +3,12 @@
 -- | Finally tagless encoding of SQL92 syntax
 module Database.Beam.Backend.SQL.SQL92 where
 
-import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL.Types
+import           Database.Beam.Backend.Types
+import           Database.Beam.Backend.SQL.Types
 
-import Data.Text (Text)
-import Data.Int
-import Data.Time (LocalTime)
+import           Data.Int
+import           Data.Text (Text)
+import           Data.Time (LocalTime)
 
 class ( BeamSqlBackend be ) =>
       BeamSql92Backend be where
@@ -226,6 +226,9 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
 
   defaultE :: expr
 
+instance HasSqlValueSyntax syntax x => HasSqlValueSyntax syntax (SqlSerial x) where
+  sqlValueSyntax (SqlSerial x) = sqlValueSyntax x
+
 class IsSql92AggregationSetQuantifierSyntax (Sql92AggregationSetQuantifierSyntax expr) =>
   IsSql92AggregationExpressionSyntax expr where
 
@@ -279,85 +282,3 @@ class IsSql92FromSyntax from =>
 
   outerJoin :: from -> from -> Maybe (Sql92FromExpressionSyntax from) -> from
 
--- class Sql92Syntax cmd where
-
---   -- data Sql92ValueSyntax cmd :: *
---   -- data Sql92FieldNameSyntax cmd :: *
-
---   selectCmd :: Sql92SelectSyntax cmd -> cmd
-
-
---   -- data Sql92TableSourceSyntax cmd :: *
-
---   -- data Sql92InsertValuesSyntax cmd ::  *
-
---   -- data Sql92AliasingSyntax cmd :: * -> *
-
---   insertSqlExpressions :: [ [ Sql92ExpressionSyntax cmd ] ]
---                        -> Sql92InsertValuesSyntax cmd
---   insertFromSql :: Sql92SelectSyntax cmd
---                 -> Sql92InsertValuesSyntax cmd
-
---   -- nullV     :: Sql92ValueSyntax cmd
---   -- trueV     :: Sql92ValueSyntax cmd
---   -- falseV    :: Sql92ValueSyntax cmd
---   -- stringV   :: String -> Sql92ValueSyntax cmd
---   -- numericV  :: Integer -> Sql92ValueSyntax cmd
---   -- rationalV :: Rational -> Sql92ValueSyntax cmd
-
---   -- aliasExpr :: Sql92ExpressionSyntax cmd
---   --           -> Maybe Text
---   --           -> Sql92AliasingSyntax cmd (Sql92ExpressionSyntax cmd)
-
---   -- projExprs :: [Sql92AliasingSyntax cmd (Sql92ExpressionSyntax cmd)]
---   --           -> Sql92ProjectionSyntax cmd
-
---   -- ascOrdering, descOrdering
---   --   :: Sql92ExpressionSyntax cmd -> Sql92OrderingSyntax cmd
-
---   tableNamed :: Text -> Sql92TableSourceSyntax cmd
-
---   -- fromTable
---   --   :: Sql92TableSourceSyntax cmd
---   --   -> Maybe Text
---   --   -> Sql92FromSyntax cmd
-
---   innerJoin, leftJoin, rightJoin
---     :: Sql92FromSyntax cmd
---     -> Sql92FromSyntax cmd
---     -> Maybe (Sql92ExpressionSyntax cmd)
---     -> Sql92FromSyntax cmd
-
--- instance HasSqlValueSyntax Sql92SyntaxBuilder Int32 where
---   sqlValueSyntax = numericV . fromIntegral
-
--- -- | Build a query using ANSI SQL92 syntax. This is likely to work out-of-the-box
--- --   in many databases, but its use is a security risk, as different databases have
--- --   different means of escaping values. It is best to customize this class per-backend
--- instance Sql92Syntax Sql92SyntaxBuilder where
-
---   trueV = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (byteString "TRUE"))
---   falseV = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (byteString "FALSE"))
---   stringV x = Sql92ValueSyntaxBuilder . Sql92SyntaxBuilder $
---                 byteString "\'" <>
---                 stringUtf8 (foldMap escapeChar x) <>
---                 byteString "\'"
---     where escapeChar '\'' = "''"
---           escapeChar x = [x]
---   numericV x = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (stringUtf8 (show x)))
---   rationalV x = let Sql92ExpressionSyntaxBuilder e =
---                         divE (valueE (numericV (numerator x)))
---                              (valueE (numericV (denominator x)))
---                 in Sql92ValueSyntaxBuilder e
---   nullV = Sql92ValueSyntaxBuilder (Sql92SyntaxBuilder (byteString "NULL"))
-
---   fromTable tableSrc Nothing = coerce tableSrc
---   fromTable tableSrc (Just nm) =
---     Sql92FromSyntaxBuilder . Sql92SyntaxBuilder $
---     buildSql92 (coerce tableSrc) <> byteString " AS " <> stringUtf8 (T.unpack nm)
-
---   innerJoin = join "INNER JOIN"
---   leftJoin = join "LEFT JOIN"
---   rightJoin = join "RIGHT JOIN"
-
---   tableNamed nm = Sql92TableSourceSyntaxBuilder (Sql92SyntaxBuilder (stringUtf8 (T.unpack nm)))

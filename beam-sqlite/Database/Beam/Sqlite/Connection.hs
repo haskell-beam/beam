@@ -5,6 +5,8 @@
 module Database.Beam.Sqlite.Connection where
 
 import           Database.Beam.Backend
+import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
+import           Database.Beam.Backend.URI
 import           Database.Beam.Query (SqlInsert(..), SqlInsertValues(..), insert)
 import           Database.Beam.Schema.Tables ( DatabaseEntity(..)
                                              , DatabaseEntityDescriptor(..)
@@ -17,7 +19,8 @@ import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
                                         , SQLData, field
                                         , execute, execute_
                                         , withStatement, bind, nextRow
-                                        , withTransaction, query_ )
+                                        , withTransaction, query_
+                                        , withConnection )
 import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
@@ -34,6 +37,8 @@ import qualified Data.DList as D
 import           Data.Monoid
 import           Data.String
 import           Data.Text (Text)
+
+import           Network.URI
 
 newtype SqliteM a = SqliteM { runSqliteM :: ReaderT (String -> IO (), Connection) IO a }
   deriving (Monad, Functor, Applicative, MonadIO)
@@ -68,6 +73,15 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
                      unRP (next True)
                 _ -> unRP (next False)
 
+sqliteUriSyntax :: c SqliteCommandSyntax Sqlite Connection SqliteM
+                -> BeamURIOpeners c
+sqliteUriSyntax =
+  mkUriOpener "sqlite:"
+    (\uri action -> do
+       let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
+       withConnection sqliteName $ \conn ->
+           withDatabase conn action)
+
 runSqlite :: Connection -> SqliteM a -> IO a
 runSqlite = runSqliteDebug (\_ -> pure ())
 
@@ -101,6 +115,10 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
                                 Nothing -> pure Nothing
                                 Just (BeamSqliteRow row) -> pure row
                runReaderT (runSqliteM (action nextRow')) (logger, conn)
+
+instance Beam.MonadBeamInsertReturning SqliteCommandSyntax Sqlite Connection SqliteM where
+  runInsertReturningList tbl values =
+    runInsertReturningList (insertReturning tbl values)
 
 -- * emulated INSERT returning support
 

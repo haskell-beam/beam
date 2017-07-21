@@ -32,7 +32,9 @@ module Database.Beam.Postgres.Connection
 
   , pgRenderSyntax, runPgRowReader, getFields
 
-  , withPgDebug ) where
+  , withPgDebug
+
+  , postgresUriSyntax ) where
 
 import           Control.Exception (Exception, throwIO)
 import           Control.Monad.Free.Church
@@ -41,25 +43,31 @@ import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
 
 import           Database.Beam hiding (runInsert, insert)
+import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.SQL.BeamExtensions
+import           Database.Beam.Backend.URI
 import qualified Database.Beam.Query as Q
+import           Database.Beam.Query.Types (QGenExpr(..))
 
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 
 import qualified Database.PostgreSQL.LibPQ as Pg hiding
-  (Connection, escapeStringConn, escapeIdentifier, escapeByteaConn)
+  (Connection, escapeStringConn, escapeIdentifier, escapeByteaConn, exec)
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.Internal as Pg
   ( Field(..), RowParser(..)
-  , withConnection, escapeStringConn, escapeIdentifier, escapeByteaConn)
+  , withConnection, escapeStringConn, escapeIdentifier, escapeByteaConn
+  , exec )
 import qualified Database.PostgreSQL.Simple.Internal as PgI
 import qualified Database.PostgreSQL.Simple.Ok as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..))
 
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Control.Exception (bracket)
 
 import           Data.ByteString.Builder (toLazyByteString, byteString)
 import qualified Data.ByteString.Char8 as BS
@@ -73,10 +81,7 @@ import           Data.String
 
 import           Foreign.C.Types
 
--- | We can use this to parameterize the thread parameters in 'Q'.
- --  This guarantees that library users can't use arbitrary 'QExpr's in a 'Q'.
-
--- data PostgresInaccessible
+import           Network.URI (uriToString)
 
 data PgError
   = PgRowParseError RowReadError
@@ -85,6 +90,15 @@ data PgError
 instance Exception PgError
 data PgStream a = PgStreamDone     (Either PgError a)
                 | PgStreamContinue (Maybe PgI.Row -> IO (PgStream a))
+
+postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
+                  -> BeamURIOpeners c
+postgresUriSyntax =
+    mkUriOpener "postgresql:"
+        (\uri action -> do
+            let pgConnStr = fromString (uriToString id uri "")
+            bracket (Pg.connectPostgreSQL pgConnStr) Pg.close $ \conn ->
+                withDatabase conn action)
 
 -- * Functions to query
 
@@ -310,7 +324,7 @@ withPgDebug dbg conn (Pg action) =
   let finish x = pure (Right x)
       step (PgLiftIO io next) = io >>= next
       step (PgFetchNext next) = next Nothing
-      step (PgRunReturning (PgCommandSyntax syntax)
+      step (PgRunReturning (PgCommandSyntax PgCommandTypeQuery syntax)
                            (mkProcess :: Pg (Maybe x) -> Pg a')
                            next) =
         do query <- pgRenderSyntax conn syntax
@@ -327,6 +341,38 @@ withPgDebug dbg conn (Pg action) =
 
                    columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
                in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (fromString (BS.unpack query)) (PgStreamContinue nextStream) runConsumer >>= finishUp
+      step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
+        do query <- pgRenderSyntax conn syntax
+           dbg (BS.unpack query)
+
+           res <- Pg.exec conn query
+
+           let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
+           runF process (\x _ -> Pg.unsafeFreeResult res >> next x) (stepReturningList res) 0
+      step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
+        do query <- pgRenderSyntax conn syntax
+           dbg (BS.unpack query)
+           _ <- Pg.execute_ conn (fromString (BS.unpack query))
+
+           let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
+           runF process next stepReturningNone
+
+      stepReturningNone :: forall a. PgF (IO (Either PgError a)) -> IO (Either PgError a)
+      stepReturningNone (PgLiftIO action' next) = action' >>= next
+      stepReturningNone (PgFetchNext next) = next Nothing
+      stepReturningNone (PgRunReturning _ _ _) = pure (Left (PgInternalError "Nested queries not allowed"))
+
+      stepReturningList :: forall a. Pg.Result -> PgF (CInt -> IO (Either PgError a)) -> CInt -> IO (Either PgError a)
+      stepReturningList _   (PgLiftIO action' next) rowIdx = action' >>= \x -> next x rowIdx
+      stepReturningList res (PgFetchNext next) rowIdx =
+        do fields <- getFields res
+           Pg.Row rowCount <- Pg.ntuples res
+           if rowIdx >= rowCount
+             then next Nothing rowIdx
+             else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
+                    Left err -> pure (Left (PgRowParseError err))
+                    Right r -> next (Just r) (rowIdx + 1)
+      stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (PgInternalError "Nested queries not allowed"))
 
       finishProcess :: forall a. a -> Maybe PgI.Row -> IO (PgStream a)
       finishProcess x _ = pure (PgStreamDone (Right x))
@@ -380,3 +426,12 @@ instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
 
     runReturningMany cmd consume =
         liftF (PgRunReturning cmd consume id)
+
+instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg.Connection Pg where
+    runInsertReturningList tbl values = do
+        let PgInsertReturning insertReturningCmd =
+                insertReturning tbl values onConflictDefault
+                                (Just (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
+                                                              Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty)))
+
+        runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
