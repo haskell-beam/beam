@@ -1,5 +1,5 @@
 module Database.Beam.Query.Types
-  ( Q, QExpr, QExprToIdentity, QWindow, QWindowFrame
+  ( Q, QExpr, QGenExpr(..), QExprToIdentity, QWindow, QWindowFrame
 
   , Projectible, Aggregation
 
