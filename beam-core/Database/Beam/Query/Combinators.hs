@@ -15,6 +15,7 @@ module Database.Beam.Query.Combinators
     -- * Project Haskell values to 'QGenExpr's
     , HaskellLiteralForQExpr
     , SqlValable(..), SqlValableTable
+    , default_
 
     -- * General query combinators
 
@@ -466,6 +467,10 @@ instance ( Beamable table
                                             (Proxy @(Rep (table Exposed))) (from tbl))
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) x)) ->
                          Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
+
+default_ :: IsSql92ExpressionSyntax expr
+         => QGenExpr ctxt expr s a
+default_ = QExpr defaultE
 
 -- * Window functions
 

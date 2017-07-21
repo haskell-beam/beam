@@ -235,6 +235,8 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
 
   currentTimestampE = SqlSyntaxBuilder (byteString "CURRENT_TIMESTAMP")
 
+  defaultE = SqlSyntaxBuilder (byteString "DEFAULT")
+
 instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
   distinctE = sqlUnOp "DISTINCT"
   similarToE = sqlBinOp "SIMILAR TO"

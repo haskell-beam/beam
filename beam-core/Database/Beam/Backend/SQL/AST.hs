@@ -177,6 +177,7 @@ instance IsSql92AggregationSetQuantifierSyntax SetQuantifier where
 
 data Expression
   = ExpressionValue Value
+  | ExpressionDefault
   | ExpressionRow [ Expression ]
 
   | ExpressionIsNull Expression
@@ -284,6 +285,8 @@ instance IsSql92ExpressionSyntax Expression where
   existsE = ExpressionExists
 
   currentTimestampE = ExpressionCurrentTimestamp
+
+  defaultE = ExpressionDefault
 
 instance IsSql99ExpressionSyntax Expression where
   distinctE = ExpressionDistinct

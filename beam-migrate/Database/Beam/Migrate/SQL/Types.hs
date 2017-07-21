@@ -5,12 +5,12 @@
 
 module Database.Beam.Migrate.SQL.Types
   ( TableSchema(..), TableFieldSchema(..)
-  , FieldSchema(..), DataType(..)
+  , FieldSchema(..), DataType(..), Constraint(..)
   , FieldReturnType(..)
 
   , field
 
-  , default_, notNull
+  , defaultTo_, notNull
   , int, smallint, char, varchar, double
   , numeric, date
   , timestamp, timestamptz ) where
@@ -42,10 +42,10 @@ newtype DataType syntax a = DataType syntax
 newtype DefaultValue syntax a = DefaultValue (Sql92ColumnSchemaExpressionSyntax syntax)
 newtype Constraint syntax = Constraint (Sql92ColumnConstraintDefinitionConstraintSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax))
 
-default_ :: IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax syntax) =>
-            (forall s. QExpr (Sql92ColumnSchemaExpressionSyntax syntax) s a)
-         -> DefaultValue syntax a
-default_ (QExpr e) =
+defaultTo_ :: IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax syntax) =>
+              (forall s. QExpr (Sql92ColumnSchemaExpressionSyntax syntax) s a)
+           -> DefaultValue syntax a
+defaultTo_ (QExpr e) =
   DefaultValue e
 
 notNull :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax

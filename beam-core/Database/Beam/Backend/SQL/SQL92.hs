@@ -27,7 +27,9 @@ type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql9
 type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
 
-type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax))
+type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92ExpressionSyntax cmdSyntax)
+type Sql92ExpressionSyntax cmdSyntax = Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax)
+type Sql92HasValueSyntax cmdSyntax = HasSqlValueSyntax (Sql92ValueSyntax cmdSyntax)
 
 -- Putting these in the head constraint can cause infinite recursion that would
 -- need <UndecidableSuperclasses. If we define them here, we can easily use them
@@ -42,7 +44,9 @@ type Sql92SelectSanityCheck select =
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))
 type Sql92SanityCheck cmd = ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd)
                             , Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd))) ~ Sql92ValueSyntax cmd
-                            , Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)) ~ Sql92ValueSyntax cmd )
+                            , Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)) ~ Sql92ValueSyntax cmd
+                            , Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax (Sql92SelectSyntax cmd)) ~
+                              Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd)) )
 
 type Sql92ReasonableMarshaller be =
    ( FromBackendRow be Int, FromBackendRow be SqlNull
@@ -219,6 +223,8 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
     :: Sql92ExpressionSelectSyntax expr -> expr
 
   currentTimestampE :: expr
+
+  defaultE :: expr
 
 class IsSql92AggregationSetQuantifierSyntax (Sql92AggregationSetQuantifierSyntax expr) =>
   IsSql92AggregationExpressionSyntax expr where
