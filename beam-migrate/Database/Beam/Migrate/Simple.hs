@@ -1,6 +1,7 @@
 module Database.Beam.Migrate.Simple
   ( simpleSchema
-  , module Database.Beam.Migrate.Actions ) where
+  , module Database.Beam.Migrate.Actions
+  , module Database.Beam.Migrate.Types ) where
 
 import Database.Beam
 import Database.Beam.Migrate.Types
@@ -18,4 +19,3 @@ simpleSchema providers settings =
   in case finalSolution solver of
        Solved cmds -> Just cmds
        Candidates {} -> Nothing
- 

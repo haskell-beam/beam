@@ -83,6 +83,7 @@ class ( IsSql92SelectTableSyntax (Sql92SelectSelectTableSyntax select)
                -> select
 
 class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
+      , IsSql92AggregationExpressionSyntax (Sql92SelectTableExpressionSyntax select)
       , IsSql92ProjectionSyntax (Sql92SelectTableProjectionSyntax select)
       , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
       , IsSql92GroupingSyntax (Sql92SelectTableGroupingSyntax select)
