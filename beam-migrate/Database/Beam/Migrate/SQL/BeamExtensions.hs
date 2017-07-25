@@ -2,6 +2,7 @@ module Database.Beam.Migrate.SQL.BeamExtensions where
 
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.SQL.Types
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.SQL.Types
 

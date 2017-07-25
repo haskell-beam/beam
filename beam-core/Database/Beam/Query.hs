@@ -13,6 +13,8 @@ module Database.Beam.Query
     , QAggregateContext, QGroupingContext, QValueContext
     , QWindowingContext, QWindowFrameContext
 
+    , QueryableSqlSyntax
+
     , module Database.Beam.Query.Combinators
 
     , module Database.Beam.Query.Relationships
@@ -90,6 +92,11 @@ data QueryInaccessible
 --   rows of type 'a'.
 newtype SqlSelect select a
     = SqlSelect select
+
+type QueryableSqlSyntax cmd =
+  ( IsSql92Syntax cmd
+  , Sql92SanityCheck cmd
+  , HasQBuilder (Sql92SelectSyntax cmd) )
 
 -- | Build a 'SqlSelect' for the given 'Q'.
 select :: forall syntax db res.
