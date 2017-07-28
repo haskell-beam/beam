@@ -42,16 +42,6 @@ import           Text.Tabular.AsciiArt
 
 -- * Migration table creation script
 
-runMigrationSteps :: MonadBeam syntax be hdl m => (syntax -> String)
-                  -> Migration syntax a -> m (Either DdlError a)
-runMigrationSteps renderSyntax steps =
-  runF steps finish step
-  where finish x = pure (Right x)
-        step (MigrationRunCommand up _ next) =
-          do liftIO (putStrLn (renderSyntax up))
-             runNoReturn up
-             next
-
 writeMigrationsTable :: IsSql92DdlCommandSyntax cmdSyntax =>
                         BeamMigrationBackend be cmdSyntax beOptions -> beOptions -> IO ()
 writeMigrationsTable BeamMigrationBackend {..} opts =

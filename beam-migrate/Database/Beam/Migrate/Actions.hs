@@ -169,7 +169,7 @@ createTableActionProvider =
 
          (columnsP, columns) <- pure . unzip $
            do columnP@
-                (TableHasColumn tblNm colNm schema
+                (TableHasColumn tblNm colNm schema _
                  :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd)) <-
                 findPostConditions
               guard (tblNm == postTblNm)
@@ -230,12 +230,12 @@ addColumnProvider =
   where
     provider :: ActionProviderFn cmd
     provider findPreConditions findPostConditions =
-      do colP@(TableHasColumn tblNm colNm colType :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableHasColumn tblNm colNm colType _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
            <- findPostConditions
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm' == tblNm)
          ensuringNot_ $ do
-           TableHasColumn tblNm' colNm' colType' :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <-
+           TableHasColumn tblNm' colNm' colType' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <-
              findPreConditions
            guard (tblNm' == tblNm && colNm == colNm') -- This column exists as a different type
 --         TableExistsPredicate tblNm' <- findPreConditions -- Make sure this table exists
@@ -255,7 +255,7 @@ dropColumnProvider = ActionProvider provider
   where
     provider :: ActionProviderFn cmd
     provider findPreConditions findPostConditions =
-      do colP@(TableHasColumn tblNm colNm colType :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableHasColumn tblNm colNm colType _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
            <- findPreConditions
 
 --         TableExistsPredicate tblNm' <- trace ("COnsider drop " <> show tblNm <> " " <> show colNm)  findPreConditions
@@ -290,7 +290,7 @@ addColumnNullProvider = ActionProvider provider
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm == tblNm')
 
-         TableHasColumn tblNm' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
+         TableHasColumn tblNm' colNm' _ _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
          guard (tblNm == tblNm' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNotNullSyntax))
@@ -311,7 +311,7 @@ dropColumnNullProvider = ActionProvider provider
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm == tblNm')
 
-         TableHasColumn tblNm' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
+         TableHasColumn tblNm' colNm' _ _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
          guard (tblNm == tblNm' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNullSyntax))
@@ -334,7 +334,7 @@ defaultActionProviders = [ createTableActionProvider
 
                          , addColumnProvider
                          , dropColumnProvider
-  
+
                          , addColumnNullProvider
                          , dropColumnNullProvider ]
 

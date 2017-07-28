@@ -287,4 +287,3 @@ class IsSql92FromSyntax from =>
   IsSql92FromOuterJoinSyntax from where
 
   outerJoin :: from -> from -> Maybe (Sql92FromExpressionSyntax from) -> from
-

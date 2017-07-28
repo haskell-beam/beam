@@ -11,12 +11,14 @@ module Database.Beam.Migrate.Types
   , Migration, MigrationF(..)
 
   , migrationStepsToMigration, runMigrationSilenced
+  , runMigrationVerbose
   , eraseMigrationType, migrationStep, upDown
   , executeMigration
 
   , migrateScript, evaluateDatabase, stepNames ) where
 
 import Database.Beam
+import Database.Beam.Backend
 import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Types.CheckedEntities
@@ -69,6 +71,16 @@ runMigrationSilenced :: Migration syntax a -> a
 runMigrationSilenced m = runF m id step
   where
     step (MigrationRunCommand _ _ next) = next
+
+runMigrationVerbose :: MonadBeam syntax be hdl m => (syntax -> String)
+                    -> Migration syntax a -> m a
+runMigrationVerbose renderSyntax steps =
+  runF steps finish step
+  where finish x = pure x
+        step (MigrationRunCommand up _ next) =
+          do liftIO (putStrLn (renderSyntax up))
+             runNoReturn up
+             next
 
 eraseMigrationType :: a -> MigrationSteps syntax a a' -> MigrationSteps syntax () ()
 eraseMigrationType a (MigrationSteps steps) = MigrationSteps (arr (const a) >>> steps >>> arr (const ()))

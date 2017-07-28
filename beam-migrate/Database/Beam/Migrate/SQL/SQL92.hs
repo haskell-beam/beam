@@ -43,7 +43,7 @@ class ( IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax synt
 
   createTableSyntax :: Maybe (Sql92CreateTableOptionsSyntax syntax)
                     -> Text
-                    -> [(Text, Sql92CreateTableColumnSchemaSyntax syntax)]
+                    -> [ (Text, Sql92CreateTableColumnSchemaSyntax syntax) ]
                     -> [ Sql92CreateTableTableConstraintSyntax syntax ]
                     -> syntax
 
