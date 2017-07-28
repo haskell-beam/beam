@@ -40,7 +40,7 @@ library
                       scientific           >=0.3  && <0.4,
                       vector               >=0.11 && <0.13,
                       optparse-applicative >=0.13 && <0.14,
-                      network-uri          >=2.6  && <2.7
+                      network-uri          >=2.6  && <2.7,
                       unordered-containers >= 0.2 && <0.3,
 
                       haskell-src-exts     >=1.18 && <1.19

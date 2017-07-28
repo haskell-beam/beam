@@ -10,7 +10,6 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Tool.Interactive
-import           Database.Beam.Migrate.Tool.Schema hiding (migration)
 import           Database.Beam.Migrate.Types ( MigrationStep(..), MigrationF(..), Migration
                                              , MigrationSteps, SomeDatabasePredicate(..)
                                              , DatabasePredicate(..)
