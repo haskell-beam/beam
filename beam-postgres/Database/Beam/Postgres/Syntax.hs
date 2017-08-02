@@ -49,6 +49,7 @@ module Database.Beam.Postgres.Syntax
 
     , insertDefaults
     , pgSimpleMatchSyntax
+
     , pgBooleanType, pgByteaType, pgSerialType, pgSmallSerialType, pgBigSerialType
 
     , IsPgInsertOnConflictSyntax(..)

@@ -79,8 +79,7 @@ sqliteUriSyntax =
   mkUriOpener "sqlite:"
     (\uri action -> do
        let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
-       withConnection sqliteName $ \conn ->
-           withDatabase conn action)
+       withConnection sqliteName action)
 
 runSqlite :: Connection -> SqliteM a -> IO a
 runSqlite = runSqliteDebug (\_ -> pure ())

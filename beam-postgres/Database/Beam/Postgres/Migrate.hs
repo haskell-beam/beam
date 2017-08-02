@@ -13,6 +13,7 @@ import           Database.Beam.Migrate.SQL.BeamExtensions
 import qualified Database.Beam.Migrate.SQL.SQL92 as Db
 import qualified Database.Beam.Migrate.Tool as Tool
 import qualified Database.Beam.Migrate.Types as Db
+
 import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.PgSpecific
 import           Database.Beam.Postgres.Syntax

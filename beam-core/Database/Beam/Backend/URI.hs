@@ -20,7 +20,10 @@ data BeamOpenURIUnsupportedScheme = BeamOpenURIUnsupportedScheme String deriving
 instance Exception BeamOpenURIUnsupportedScheme
 
 data BeamURIOpener c where
-  BeamURIOpener :: MonadBeam syntax be hdl m => c syntax be hdl m -> (forall a. URI -> m a -> IO a) -> BeamURIOpener c
+  BeamURIOpener :: MonadBeam syntax be hdl m
+                => c syntax be hdl m
+                -> (forall a. URI -> (hdl -> IO a) -> IO a)
+                -> BeamURIOpener c
 newtype BeamURIOpeners c where
   BeamURIOpeners :: M.Map String (BeamURIOpener c) -> BeamURIOpeners c
 
@@ -30,15 +33,24 @@ instance Monoid (BeamURIOpeners c) where
     BeamURIOpeners (mappend a b)
 
 mkUriOpener :: MonadBeam syntax be hdl m
-            => String -> (forall a. URI -> m a -> IO a)
+            => String -> (forall a. URI -> (hdl -> IO a) -> IO a)
             -> c syntax be hdl m
             -> BeamURIOpeners c
 mkUriOpener schemeNm opener c = BeamURIOpeners (M.singleton schemeNm (BeamURIOpener c opener))
 
+withDbFromUri :: forall c a
+               . BeamURIOpeners c
+              -> String
+              -> (forall syntax be hdl m. MonadBeam syntax be hdl m => c syntax be hdl m -> m a)
+              -> IO a
+withDbFromUri protos uri actionWithDb =
+  withDbConnection protos uri (\c hdl -> withDatabase hdl (actionWithDb c))
+
 withDbConnection :: forall c a
                   . BeamURIOpeners c
                  -> String
-                 -> (forall syntax be hdl m. MonadBeam syntax be hdl m => c syntax be hdl m -> m a)
+                 -> (forall syntax be hdl m. MonadBeam syntax be hdl m =>
+                      c syntax be hdl m -> hdl -> IO a)
                  -> IO a
 withDbConnection (BeamURIOpeners protos) uri actionWithDb =
   case parseURI uri of

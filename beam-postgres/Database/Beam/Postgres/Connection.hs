@@ -97,8 +97,7 @@ postgresUriSyntax =
     mkUriOpener "postgresql:"
         (\uri action -> do
             let pgConnStr = fromString (uriToString id uri "")
-            bracket (Pg.connectPostgreSQL pgConnStr) Pg.close $ \conn ->
-                withDatabase conn action)
+            bracket (Pg.connectPostgreSQL pgConnStr) Pg.close action)
 
 -- * Functions to query
 
