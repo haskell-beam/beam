@@ -55,7 +55,7 @@ import Data.Typeable
 --
 --   For usage examples, see
 --   <https://tathougies.github.io/beam/user-guide/queries/aggregates/ the manual>.
-aggregate_ :: forall select a r db s.
+aggregate_ :: forall select a r be db s.
               ( ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
               , Projectible (Sql92SelectExpressionSyntax select) r
               , Projectible (Sql92SelectExpressionSyntax select) a
@@ -65,8 +65,8 @@ aggregate_ :: forall select a r db s.
 
               , IsSql92SelectSyntax select )
            => (r -> a)                  -- ^ Aggregate projection
-           -> Q select db (QNested s) r -- ^ Query to aggregate over
-           -> Q select db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
+           -> Q select be db (QNested s) r -- ^ Query to aggregate over
+           -> Q select be db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
 aggregate_ mkAggregation (Q aggregating) =
   Q (liftF (QAggregate mkAggregation' aggregating (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
   where

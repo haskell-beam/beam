@@ -186,7 +186,7 @@ projOrder = execWriter . project' (Proxy @AnyType) (\_ x -> tell [x] >> pure x)
 -- from a 'Q'. Used by most backends as the default implementation of
 -- 'buildSqlQuery' in 'HasQBuilder'.
 buildSql92Query' ::
-    forall select projSyntax db s a.
+    forall select projSyntax be db s a.
     ( IsSql92SelectSyntax select
     , Eq (Sql92SelectExpressionSyntax select)
     , projSyntax ~ Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
@@ -195,7 +195,7 @@ buildSql92Query' ::
     , Sql92ProjectionExpressionSyntax projSyntax ~ Sql92SelectExpressionSyntax select
     , Projectible (Sql92ProjectionExpressionSyntax projSyntax) a ) =>
     Bool {-^ Whether this backend supports arbitrary nested UNION, INTERSECT, EXCEPT -} ->
-    Q select db s a ->
+    Q select be db s a ->
     select
 buildSql92Query' arbitrarilyNestedCombinations (Q q) =
     buildSelect (buildQuery (fromF q))

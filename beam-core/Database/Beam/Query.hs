@@ -91,7 +91,7 @@ data QueryInaccessible
 
 -- | Represents a select statement over the syntax 'select' that will return
 --   rows of type 'a'.
-newtype SqlSelect select a
+newtype SqlSelect be select a
     = SqlSelect select
 
 type QueryableSqlSyntax cmd =
@@ -100,11 +100,11 @@ type QueryableSqlSyntax cmd =
   , HasQBuilder (Sql92SelectSyntax cmd) )
 
 -- | Build a 'SqlSelect' for the given 'Q'.
-select :: forall syntax db res.
+select :: forall syntax be db res.
           ( ProjectibleInSelectSyntax syntax res
           , IsSql92SelectSyntax syntax
           , HasQBuilder syntax ) =>
-          Q syntax db QueryInaccessible res -> SqlSelect syntax (QExprToIdentity res)
+          Q syntax be db QueryInaccessible res -> SqlSelect be syntax (QExprToIdentity res)
 select q =
   SqlSelect (buildSqlQuery q)
 
@@ -121,7 +121,7 @@ lookup :: ( HasQBuilder syntax
           , Database db )
        => DatabaseEntity be db (TableEntity table)
        -> PrimaryKey table Identity
-       -> SqlSelect syntax (table Identity)
+       -> SqlSelect be syntax (table Identity)
 lookup tbl tblKey =
   select $
   filter_ (\t -> pk t ==. val_ tblKey) $
@@ -130,7 +130,7 @@ lookup tbl tblKey =
 -- | Run a 'SqlSelect' in a 'MonadBeam' and get the results as a list
 runSelectReturningList ::
   (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
-  SqlSelect (Sql92SelectSyntax cmd) a -> m [ a ]
+  SqlSelect be (Sql92SelectSyntax cmd) a -> m [ a ]
 runSelectReturningList (SqlSelect s) =
   runReturningList (selectCmd s)
 
@@ -139,14 +139,15 @@ runSelectReturningList (SqlSelect s) =
 --   'Nothing'.
 runSelectReturningOne ::
   (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
-  SqlSelect (Sql92SelectSyntax cmd) a -> m (Maybe a)
+  SqlSelect be (Sql92SelectSyntax cmd) a -> m (Maybe a)
 runSelectReturningOne (SqlSelect s) =
   runReturningOne (selectCmd s)
 
 -- | Use a special debug syntax to print out an ANSI Standard @SELECT@ statement
 --   that may be generated for a given 'Q'.
 dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
-                 Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()
+                 (forall be. Q SqlSyntaxBuilder be db QueryInaccessible res)
+              -> IO ()
 dumpSqlSelect q =
     let SqlSelect s = select q
     in putStrLn (renderSql s)
@@ -204,7 +205,7 @@ insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92
 -- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the same table
 insertFrom ::
     IsSql92InsertValuesSyntax syntax =>
-    SqlSelect (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
+    SqlSelect be (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
 insertFrom (SqlSelect s) = SqlInsertValues (insertFromSql s)
 
 -- * UPDATE
