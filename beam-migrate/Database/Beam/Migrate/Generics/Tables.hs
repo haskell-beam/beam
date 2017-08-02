@@ -5,11 +5,9 @@ module Database.Beam.Migrate.Generics.Tables where
 import Database.Beam
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.SQL.SQL92
-import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Types.Predicates
-import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.Checks
 
@@ -125,12 +123,13 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word where
   defaultSqlDataType _ _ = numericType (Just (10, Nothing))
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word
-instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word32 where
-  defaultSqlDataType _ _ = numericType (Just (10, Nothing))
-instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word32
+
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word16 where
   defaultSqlDataType _ _ = numericType (Just (5, Nothing))
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word16
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word32 where
+  defaultSqlDataType _ _ = numericType (Just (10, Nothing))
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word32
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Text where
   defaultSqlDataType _ _ = varCharType Nothing Nothing

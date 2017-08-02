@@ -4,7 +4,6 @@ import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Types (MigrationSteps, CheckedDatabaseSettings, SomeDatabasePredicate)
-import           Database.Beam.Query
 
 import qualified Data.ByteString.Lazy as BL
 import           Data.Text (Text)

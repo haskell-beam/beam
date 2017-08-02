@@ -7,11 +7,8 @@ module Database.Beam.Migrate.Checks where
 import           Database.Beam.Migrate.Types.Predicates
 import           Database.Beam.Migrate.SQL.SQL92
 
-import           Database.Beam.Haskell.Syntax
-
 import           Data.Hashable
 import           Data.Monoid
-import qualified Data.Set as S
 import           Data.Text (Text)
 import           Data.Typeable (Typeable, cast)
 
@@ -32,26 +29,24 @@ data TableHasColumn syntax where
     => Text {- Table name -}
     -> Text {- Column name -}
     -> Sql92ColumnSchemaColumnTypeSyntax syntax {- Data type -}
-    -> HaskellDataType
+--    -> HaskellDataType
     -> TableHasColumn syntax
 instance Hashable (Sql92ColumnSchemaColumnTypeSyntax syntax) => Hashable (TableHasColumn syntax) where
-  hashWithSalt salt (TableHasColumn t c s _) = hashWithSalt salt (t, c, s)
+  hashWithSalt salt (TableHasColumn t c s) = hashWithSalt salt (t, c, s)
 deriving instance Show (Sql92ColumnSchemaColumnTypeSyntax syntax) => Show (TableHasColumn syntax)
 instance Eq (Sql92ColumnSchemaColumnTypeSyntax syntax) => Eq (TableHasColumn syntax) where
-  TableHasColumn aTbl aCol aDt _ == TableHasColumn bTbl bCol bDt _ =
+  TableHasColumn aTbl aCol aDt == TableHasColumn bTbl bCol bDt =
     aTbl == bTbl && aCol == bCol && aDt == bDt
 instance ( Typeable syntax
          , Hashable (Sql92ColumnSchemaColumnTypeSyntax syntax)
          , Show (Sql92ColumnSchemaColumnTypeSyntax syntax)
          , Eq (Sql92ColumnSchemaColumnTypeSyntax syntax) ) =>
   DatabasePredicate (TableHasColumn syntax) where
-  englishDescription (TableHasColumn tbl col type_ _) =
+  englishDescription (TableHasColumn tbl col type_) =
     "Table " <> show tbl <> " must have a column " <> show col <> " of " <> show type_
-  predicateCascadesDropOn (TableHasColumn tblNm _ _ _) p'
+  predicateCascadesDropOn (TableHasColumn tblNm _ _) p'
     | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
     | otherwise = False
-  haskellPredicate (TableHasColumn tblNm colNm _ hs) =
-    Just (SomeDatabasePredicate (TableHasColumn tblNm colNm hs hs :: TableHasColumn HaskellColumnSchema))
 
 data TableColumnHasConstraint syntax
   = TableColumnHasConstraint Text {- Table name -} Text {- Column name -}
@@ -69,9 +64,9 @@ instance ( Typeable syntax
     "Column " <> show tbl <> "." <> show col <> " has constraint " <> show cns
   predicateCascadesDropOn (TableColumnHasConstraint tblNm colNm _) p'
     | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
-    | Just (TableHasColumn tblNm' colNm' _ _ :: TableHasColumn syntax) <- cast p' = tblNm' == tblNm && colNm' == colNm
+    | Just (TableHasColumn tblNm' colNm' _ :: TableHasColumn syntax) <- cast p' = tblNm' == tblNm && colNm' == colNm
     | otherwise = False
-  haskellPredicate _ = Nothing
+--  haskellPredicate _ = Nothing
 
 data TableHasPrimaryKey
   = TableHasPrimaryKey Text {- Table name -}

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Beam.Migrate.SQL.Builder where
 
 import Database.Beam.Backend.SQL.Builder
@@ -135,7 +136,7 @@ instance IsSql92ColumnConstraintDefinitionSyntax SqlSyntaxBuilder where
 
   constraintDefinitionSyntax nm c attrs =
     SqlSyntaxBuilder $
-    maybe mempty (\nm -> byteString "CONSTRAINT " <> quoteSql nm <> byteString " ") nm <>
+    maybe mempty (\nm' -> byteString "CONSTRAINT " <> quoteSql nm' <> byteString " ") nm <>
     buildSql c <>
     maybe mempty fromSqlConstraintAttributes attrs
 

@@ -53,8 +53,8 @@ module Database.Beam.Postgres.Syntax
 
     , pgSelectSetQuantifierDistinctOn
 
-    , pgBooleanType, pgByteaType, pgBigIntType
     , pgSerialType, pgSmallSerialType, pgBigSerialType
+    , pgBooleanType, pgByteaType, pgBigIntType
 
     , IsPgInsertOnConflictSyntax(..)
     , PgInsertOnConflict(..)
@@ -439,10 +439,10 @@ pgByteaType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bytea) Nothing)
 pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
 pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL")
 pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL")
-pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int64) Nothing) (emit "BIGSERIAL")
+pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL")
 
 pgBigIntType :: PgDataTypeSyntax
-pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int64) Nothing) (emit "BIGINT")
+pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT")
 
 mkNumericPrec :: Maybe (Word, Maybe Word) -> Maybe Int32
 mkNumericPrec Nothing = Nothing

@@ -12,25 +12,25 @@ class (Show p, Typeable p, Hashable p, Eq p) => DatabasePredicate p where
   predicateCascadesDropOn :: DatabasePredicate p' => p -> p' -> Bool
   predicateCascadesDropOn _ _ = False
 
-  haskellPredicate :: p -> Maybe SomeDatabasePredicate
-  haskellPredicate = Just . SomeDatabasePredicate
+--  haskellPredicate :: p -> Maybe SomeDatabasePredicate
+--  haskellPredicate = Just . SomeDatabasePredicate
 
 data SomeDatabasePredicate where
   SomeDatabasePredicate :: DatabasePredicate p =>
                            p -> SomeDatabasePredicate
 instance Show SomeDatabasePredicate where
-  showsPrec _ (SomeDatabasePredicate p) =
+  showsPrec _ (SomeDatabasePredicate p') =
     showParen True $
-    shows p .
+    shows p' .
     showString " :: " .
-    shows (typeOf p)
+    shows (typeOf p')
 instance Eq SomeDatabasePredicate where
   SomeDatabasePredicate a == SomeDatabasePredicate b =
     case cast a of
       Nothing -> False
       Just a' -> a' == b
 instance Hashable SomeDatabasePredicate where
-  hashWithSalt salt (SomeDatabasePredicate p) = hashWithSalt salt (typeOf p, p)
+  hashWithSalt salt (SomeDatabasePredicate p') = hashWithSalt salt (typeOf p', p')
 
 p :: DatabasePredicate p => p -> SomeDatabasePredicate
 p = SomeDatabasePredicate

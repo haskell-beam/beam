@@ -44,12 +44,12 @@ unCheckDatabase :: forall be db. Database db => CheckedDatabaseSettings be db ->
 unCheckDatabase db = runIdentity $ zipTables (Proxy @be) (\(CheckedDatabaseEntity x _) _ -> pure $ DatabaseEntity (unCheck x)) db db
 
 collectChecks :: forall be db. Database db => CheckedDatabaseSettings be db -> [ SomeDatabasePredicate ]
-collectChecks db = let x :: CheckedDatabaseSettings be db
-                       (x, a) = runWriter $ zipTables (Proxy @be) 
-                                  (\(CheckedDatabaseEntity entity cs :: CheckedDatabaseEntity be db entityType) b ->
-                                     do tell (collectEntityChecks entity)
-                                        tell cs
-                                        pure b) db db
+collectChecks db = let (_ :: CheckedDatabaseSettings be db, a) =
+                         runWriter $ zipTables (Proxy @be)
+                           (\(CheckedDatabaseEntity entity cs :: CheckedDatabaseEntity be db entityType) b ->
+                              do tell (collectEntityChecks entity)
+                                 tell cs
+                                 pure b) db db
                    in a
 
 instance IsCheckedDatabaseEntity be (DomainTypeEntity ty) where

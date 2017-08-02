@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeOperators #-}
@@ -15,12 +16,9 @@ import           Control.Monad
 import           Control.Parallel.Strategies
 
 import           Data.Foldable
-import qualified Data.Graph.Inductive as Gr
-import qualified Data.Graph.Inductive.Query.DFS as Gr (components)
+
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
-import           Data.Hashable (Hashable)
-import           Data.List (partition)
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.PQueue.Min as PQ
@@ -28,11 +26,7 @@ import qualified Data.Sequence as Seq
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Typeable
-import qualified Data.Vector as V
 
-import           Debug.Trace
-
-import           GHC.Conc.Sync
 import           GHC.Generics
 
 data DatabaseStateSource
@@ -51,7 +45,7 @@ data DatabaseState cmd
   } deriving Show
 
 instance NFData SomeDatabasePredicate where
-  rnf p = p `seq` ()
+  rnf p' = p' `seq` ()
 instance NFData (DatabaseState cmd) where
   rnf d@DatabaseState {..} = d `seq` () --rnf dbStateCurrentState `seq` dbStateCmdSequence `seq` ()
 
@@ -77,7 +71,7 @@ measureDb' :: HS.HashSet SomeDatabasePredicate
            -> Int
            -> DatabaseState cmd
            -> MeasuredDatabaseState cmd
-measureDb' allToFalsify post cmdLength st@(DatabaseState cur repr cmds) =
+measureDb' _ post cmdLength st@(DatabaseState _ repr _) =
   MeasuredDatabaseState cmdLength distToGoal st
   where
 
@@ -169,7 +163,7 @@ createTableActionProvider =
 
          (columnsP, columns) <- pure . unzip $
            do columnP@
-                (TableHasColumn tblNm colNm schema _
+                (TableHasColumn tblNm colNm schema
                  :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd)) <-
                 findPostConditions
               guard (tblNm == postTblNm)
@@ -177,10 +171,10 @@ createTableActionProvider =
               (constraintsP, constraints) <-
                 pure . unzip $ do
                 constraintP@
-                  (TableColumnHasConstraint tblNm colNm' c
+                  (TableColumnHasConstraint tblNm' colNm' c
                    :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd)) <-
                   findPostConditions
-                guard (tblNm == postTblNm)
+                guard (postTblNm == tblNm')
                 guard (colNm == colNm')
 
                 pure (p constraintP, c)
@@ -213,8 +207,8 @@ dropTableActionProvider =
              guard (preTblNm == postTblNm)
 
         relatedPreds <-
-          pure $ do p'@(SomeDatabasePredicate p) <- findPreConditions
-                    guard (p `predicateCascadesDropOn` tblP)
+          pure $ do p'@(SomeDatabasePredicate pred') <- findPreConditions
+                    guard (pred' `predicateCascadesDropOn` tblP)
                     pure p'
 
         -- Now, collect all preconditions that may be related to the dropped table
@@ -230,16 +224,14 @@ addColumnProvider =
   where
     provider :: ActionProviderFn cmd
     provider findPreConditions findPostConditions =
-      do colP@(TableHasColumn tblNm colNm colType _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableHasColumn tblNm colNm colType :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
            <- findPostConditions
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm' == tblNm)
          ensuringNot_ $ do
-           TableHasColumn tblNm' colNm' colType' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <-
+           TableHasColumn tblNm'' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <-
              findPreConditions
-           guard (tblNm' == tblNm && colNm == colNm') -- This column exists as a different type
---         TableExistsPredicate tblNm' <- findPreConditions -- Make sure this table exists
---         guard (tblNm' == tblNm)
+           guard (tblNm'' == tblNm && colNm == colNm') -- This column exists as a different type
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (addColumnSyntax colNm schema))
              schema = columnSchemaSyntax colType Nothing [] Nothing
@@ -254,8 +246,8 @@ dropColumnProvider :: forall cmd
 dropColumnProvider = ActionProvider provider
   where
     provider :: ActionProviderFn cmd
-    provider findPreConditions findPostConditions =
-      do colP@(TableHasColumn tblNm colNm colType _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
+    provider findPreConditions _ =
+      do colP@(TableHasColumn tblNm colNm _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
            <- findPreConditions
 
 --         TableExistsPredicate tblNm' <- trace ("COnsider drop " <> show tblNm <> " " <> show colNm)  findPreConditions
@@ -266,8 +258,8 @@ dropColumnProvider = ActionProvider provider
 --           guard (tblNm' == tblNm && colNm == colNm' && colType == colType') -- This column exists as a different type
 
          relatedPreds <- --pure []
-           pure $ do p'@(SomeDatabasePredicate p) <- findPreConditions
-                     guard (p `predicateCascadesDropOn` colP)
+           pure $ do p'@(SomeDatabasePredicate pred') <- findPreConditions
+                     guard (pred' `predicateCascadesDropOn` colP)
                      pure p'
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (dropColumnSyntax colNm))
@@ -283,15 +275,15 @@ addColumnNullProvider = ActionProvider provider
   where
     provider :: ActionProviderFn cmd
     provider findPreConditions findPostConditions =
-      do colP@(TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableColumnHasConstraint tblNm colNm _ :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd))
            <- findPostConditions
 -- TODO         guard (c == notNullConstraintSyntax)
 
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm == tblNm')
 
-         TableHasColumn tblNm' colNm' _ _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
-         guard (tblNm == tblNm' && colNm == colNm')
+         TableHasColumn tblNm'' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
+         guard (tblNm == tblNm'' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNotNullSyntax))
          pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate colP]) (Seq.singleton cmd)
@@ -303,16 +295,16 @@ dropColumnNullProvider :: forall cmd
 dropColumnNullProvider = ActionProvider provider
   where
     provider :: ActionProviderFn cmd
-    provider findPreConditions findPostConditions =
-      do colP@(TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd))
+    provider findPreConditions _ =
+      do colP@(TableColumnHasConstraint tblNm colNm _ :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd))
            <- findPreConditions
 -- TODO         guard (c == notNullConstraintSyntax)
 
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm == tblNm')
 
-         TableHasColumn tblNm' colNm' _ _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
-         guard (tblNm == tblNm' && colNm == colNm')
+         TableHasColumn tblNm'' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
+         guard (tblNm == tblNm'' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNullSyntax))
          pure (PotentialAction (HS.fromList [SomeDatabasePredicate colP]) mempty (Seq.singleton cmd)
@@ -380,7 +372,7 @@ heuristicSolver providers preConditionsL postConditionsL =
     heuristicSolver' !q visited bestRejected =
       case PQ.minView q of
         Nothing -> ProvideSolution Nothing (measuredDbState <$>  PQ.toList bestRejected)
-        Just (mdbState@(MeasuredDatabaseState _ distToGoal dbState), q')
+        Just (mdbState@(MeasuredDatabaseState _ _ dbState), q')
           | dbStateKey dbState `HS.member` visited -> heuristicSolver' q' visited bestRejected
           | solvedState postConditions (measuredDbState mdbState) ->
               ProvideSolution (Just (toList (dbStateCmdSequence dbState)))
@@ -395,8 +387,8 @@ heuristicSolver providers preConditionsL postConditionsL =
                       steps' = filter (not . (`HS.member` visited) . dbStateKey . measuredDbState . snd) $
                                --filter (\(_, MeasuredDatabaseState _ distToGoal' _) -> distToGoal' < distToGoal) $
                                withStrategy (parList rseq) $
-                               map (\step -> let dbState = applyStep step mdbState
-                                             in dbState `seq` (step, dbState)) steps
+                               map (\step -> let dbState' = applyStep step mdbState
+                                             in dbState' `seq` (step, dbState')) steps
 
                       applyStep step (MeasuredDatabaseState score _ dbState') =
                         let dbState'' = dbStateAfterAction dbState' step
@@ -409,48 +401,11 @@ heuristicSolver providers preConditionsL postConditionsL =
 
                          --error (" No steps generated (" <> show (length steps) <> " rejected.\ncur: " <> show (dbStateCurrentState dbState) <> "\npost:" <> show postConditionsL)
                          heuristicSolver' q' visited (reject mdbState bestRejected)
-                       steps ->
---                         trace ("Got steps " ++ show (map actionEnglish steps)) $
-                         --let
-                             -- groupedSteps =
-                             --   filter (not . (`HS.member` visited) . snd . snd) $
-                             --   map (\step -> let dbState = applyStep step mdbState
-                             --                 in (step, (dbState, dbStateKey (measuredDbState dbState)))) $
-                             --   independentSteps dbState steps'
---                             independentSteps steps'
-                         --in --trace ("Grouped " ++ show (map actionEnglish (independentSteps dbState steps))) $
-                            --case groupedSteps of
---                              [] -> trace "Grup fail" $ heuristicSolver' q' visited (reject mdbState bestRejected)
---                              _ ->
-                           ChooseActions dbState fst steps' $ \groupedSteps' ->
-                                let q'' = foldr (\(_, dbState') q -> PQ.insert dbState' q) q' groupedSteps'
+                       _ -> ChooseActions dbState fst steps' $ \groupedSteps' ->
+                                let q'' = foldr (\(_, dbState') -> PQ.insert dbState') q' groupedSteps'
                                     visited' = HS.insert (dbStateKey dbState) visited
                                 in -- trace ("QUEUE sive " <> show (PQ.size q'')) $
                                    withStrategy (rparWith rseq) q'' `seq` heuristicSolver' q'' visited' bestRejected
---
---                            heuristicSolver
---                             (q'', visited') = foldr (insertActionInQueue stateScore dbState) (q', visited) steps'
---                         in trace ("Steps that are idempotente in relation to one another " ++ show (fmap (fmap actionEnglish) )) $
---                            heuristicSolver' q'' visited' bestRejected
-
-    -- independentSteps :: DatabaseState cmd
-    --                  -> [ PotentialAction cmd ]
-    --                  -> [ PotentialAction cmd ]
-    -- independentSteps dbSt steps =
-    --   let stepsV = V.fromList (map (\step -> (step, dbStateAfterAction dbSt step)) steps)
-    --       deps = foldMap (\(i, (step, _)) ->
-    --                         fmap ((i,) . fst) $
-    --                         V.filter (\(j, (_, dbSt')) ->
-    --                                     actionCheck step
-    --                                       (findPredicates (HM.keys $ dbStateCurrentState dbSt'))
-    --                                       (findPredicates (HS.toList $ dbStatePostConditionsLeft dbSt')))
-    --                                  (V.indexed stepsV)
-    --                         ) (V.indexed stepsV)
-    --       gr :: Gr.Gr () ()
-    --       gr = Gr.mkGraph (map ((,()) . fst) (zip [0..] steps))
-    --                       (map (\(before, after) -> (before, after, ())) (V.toList deps))
-    --       comps = Gr.components gr
-    --   in fmap (foldMap (fst . (stepsV V.!))) comps
 
     reject :: MeasuredDatabaseState cmd -> PQ.MinQueue (MeasuredDatabaseState cmd)
            -> PQ.MinQueue (MeasuredDatabaseState cmd)
@@ -458,41 +413,16 @@ heuristicSolver providers preConditionsL postConditionsL =
       let q' = PQ.insert mdbState q
       in PQ.fromAscList (PQ.take rejectedCount q')
 
-    -- insertActionInQueue stateScore dbState action (q, visited)
-    --   | action `actionProgressesState` dbState =
-    --     let dbState' = dbStateAfterAction dbState action
-    --         stateRepr = HS.fromMap (() <$ dbStateCurrentState dbState')
-    --     in if HS.member stateRepr visited
-    --        then (q, visited)
-    --        else ( PQ.insert (MeasuredDatabaseState (stateScore + actionScore action) (HS.size (dbStatePostConditionsLeft dbState')) (HS.size (dbStatePreConditionsLeft dbState')) dbState') q
-    --             , HS.insert stateRepr visited )
-    --   | otherwise =
-    --     let stateRepr = HS.fromMap (() <$ dbStateCurrentState dbState)
-    --     in (q, HS.insert stateRepr visited)
-
     findPredicates :: forall predicate. Typeable predicate
                    => [ SomeDatabasePredicate ]
                    -> [ predicate ]
     findPredicates =
       case eqT :: Maybe (predicate :~: SomeDatabasePredicate) of
         Just Refl -> id
-        _ -> mapMaybe (\(SomeDatabasePredicate p) -> cast p)
+        _ -> mapMaybe (\(SomeDatabasePredicate p') -> cast p')
 
-    dbStateAfterAction (DatabaseState curState repr cmds) action =
+    dbStateAfterAction (DatabaseState curState _ cmds) action =
       let curState' = ((curState `HM.difference` HS.toMap (actionPreConditions action))
                      `HM.union` (DatabaseStateSourceDerived <$ HS.toMap (actionPostConditions action)))
       in DatabaseState curState' (HS.fromMap (() <$ curState'))
                        (cmds <> actionCommands action)
-
-    -- Sees if we can trivially match any current state with the post condition.
-    -- If so, return a copy of the state with the post conditions simplified.
-    -- Otherwise, return Nothing
-    -- trivialAction :: DatabaseState cmd -> Maybe (DatabaseState cmd)
-    -- trivialAction (DatabaseState postConditions origPreConditions curState cmds)
-    --   -- If there's any postcondition that is already met by curstate
-    --   | not (HS.null triviallySatisfied) = --any (\postCondition -> any ((==postCondition) . snd) curState) postConditions =
-    --       let origPreConditions' = origPreConditions `HS.difference` triviallySatisfied
-    --       in Just (DatabaseState (postConditions `HS.difference` triviallySatisfied) origPreConditions' curState cmds)
-    --   | otherwise = Nothing
-    --   where
-    --     triviallySatisfied = HS.fromMap $ HM.intersection (HS.toMap postConditions) curState

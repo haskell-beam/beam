@@ -8,14 +8,10 @@ import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Types (MigrationSteps, CheckedDatabaseSettings, SomeDatabasePredicate)
-import           Database.Beam.Query
 
 import           Control.Exception (Exception)
 
 import qualified Data.ByteString.Lazy as BL
-import           Data.Foldable
-import           Data.Monoid
-import           Data.Proxy
 import           Data.Maybe (isJust)
 import           Data.Text (Text)
 import           Data.Time (LocalTime)
@@ -92,15 +88,15 @@ data SomeBeamMigrationBackend where
 
 -- * Migrations status
 
-data MigrationsStatus
+data MigrationsStatus tbl
   = MigrationsStatus
-  { migrationsStatusApplied :: [ (MigrationTable, Bool) ]
-  , migrationsStatusFutureStatus :: MigrationsFutureStatus }
+  { migrationsStatusApplied :: [ (tbl, Bool) ]
+  , migrationsStatusFutureStatus :: MigrationsFutureStatus tbl }
   deriving Show
-data MigrationsFutureStatus
+data MigrationsFutureStatus tbl
   = MigrationsFutureStatusUpToDate
   | MigrationsFutureStatusNotYet Int [ Text ]
-  | MigrationsStatusDiverged LocalTime [ Text ] [ MigrationTable ]
+  | MigrationsStatusDiverged LocalTime [ Text ] [ tbl ]
   deriving Show
 
 data MigrationStatus
@@ -111,12 +107,18 @@ data MigrationStatus
   | MigrationDiverged
   deriving (Show, Eq, Ord, Bounded, Enum)
 
+class IsMigration migration where
+  migrationName  :: migration -> Text
+  migrationRanAt :: migration -> Maybe LocalTime
+  migrationStartedAt :: migration -> LocalTime
+
 -- | Given a list of all migrations, and the current list of migrations run,
 --   calculate an appropriate 'MigrationStatus'
-migrationStatus :: Int              {-^ Migration number of first migration -}
-                -> [Text]           {-^ All available migrations, in order -}
-                -> [MigrationTable] {-^ Migrations that have already been run -}
-                -> MigrationsStatus
+migrationStatus :: IsMigration tbl
+                => Int    {-^ Migration number of first migration -}
+                -> [Text] {-^ All available migrations, in order -}
+                -> [tbl]  {-^ Migrations that have already been run -}
+                -> MigrationsStatus tbl
 migrationStatus  _ [] [] = MigrationsStatus [] MigrationsFutureStatusUpToDate
 migrationStatus !i names [] = MigrationsStatus [] (MigrationsFutureStatusNotYet i names)
 migrationStatus  _ [] run = MigrationsStatus [] (MigrationsStatusDiverged (migrationStartedAt (head run)) [] run)
@@ -126,52 +128,3 @@ migrationStatus  i (name:names) (m:ms)
                               in sts { migrationsStatusApplied = (m, complete):migrationsStatusApplied sts }
   | otherwise = MigrationsStatus [] (MigrationsStatusDiverged (migrationStartedAt m) (name:names) (m:ms))
 
-
--- * Options parsing
-
-migrationCommandArgParser :: Parser beOptions -> Parser (BeamMigrationCommand beOptions)
-migrationCommandArgParser beOptions =
-  BeamMigrationCommand <$> strOption (long "backend" <> metavar "BACKEND" <> help "Module to load for migration backend. Must be given first")
-                       <*> optional (strOption (long "migration" <> short 'M' <> metavar "MIGRATIONMODULE" <> help "Module containing migration steps"))
-                       <*> many (strOption (long "package-path" <> short 'P' <> metavar "PACKAGEPATH" <> help "Additional GHC package paths"))
-                       <*> beOptions
-
-subcommandParser :: Parser BeamMigrationSubcommand
-subcommandParser = subparser $
-                   mconcat [ command "write-script" writeScriptCommand
-                           , command "list-migrations" listMigrationsCommand
-                           , command "init" initCommand
-                           , command "status" statusCommand
-                           , command "migrate" migrateCommand
-                           , command "diff" diffCommand]
-  where
-    writeScriptCommand =
-      info (writeScriptArgParser <**> helper) (fullDesc <> progDesc "Write a migration script for the given migrations")
-    listMigrationsCommand =
-      info (listMigrationsArgParser <**> helper) (fullDesc <> progDesc "List all discovered migrations")
-    initCommand =
-      info (initArgParser <**> helper) (fullDesc <> progDesc "Initialize the given database for running migrations")
-    statusCommand =
-      info (statusArgParser <**> helper) (fullDesc <> progDesc "Display status of applied migrations")
-    migrateCommand =
-      info (migrateArgParser <**> helper) (fullDesc <> progDesc "Run necessary migrations")
-    diffCommand = info (diffArgParser <**> helper) (fullDesc <> progDesc "Diff against the database/schema")
-
-    writeScriptArgParser    = pure WriteScript
-    listMigrationsArgParser = pure ListMigrations
-    initArgParser = pure Init
-    statusArgParser = pure Status
-    migrateArgParser = Migrate <$> optional (option auto (metavar "UNTIL" <> help "Last migration to run"))
-    diffArgParser = Diff <$> (switch (long "interactive" <> short 'i' <> help "Enable interactive mode"))
-                         <*> ((\b -> if b then DiffMigrationToDb else DiffDbToMigration) <$>
-                              switch (long "to-db" <> help "Compute the diff as though the current database schema is the target, rather than the Haskell schema"))
-
-migrationCommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions)
-migrationCommandOptions beOptions =
-  info (migrationCommandArgParser beOptions <**> helper)
-       (fullDesc <> progDesc "Beam schema migration tool" <> header "beam-migrate -- migrate database schemas for various beam backends")
-
-migrationCommandAndSubcommandOptions :: Parser beOptions -> ParserInfo (BeamMigrationCommand beOptions, Maybe BeamMigrationSubcommand)
-migrationCommandAndSubcommandOptions beOptions =
-  info (((,) <$> migrationCommandArgParser beOptions <*> optional (subcommandParser)) <**> helper)
-       (fullDesc <> progDesc "Beam schema migration tool" <> header "beam-migrate -- migrate database schemas for various beam backends")

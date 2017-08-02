@@ -11,16 +11,14 @@ import Database.Beam.Migrate.SQL.SQL92
 import Control.Applicative
 
 import Data.Text (Text)
-import Data.Proxy (Proxy(..))
 
 createTable :: ( Beamable table, Table table
                , IsSql92DdlCommandSyntax syntax ) =>
                Text -> TableSchema (Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax syntax)) table
             -> Migration syntax (CheckedDatabaseEntity be db (TableEntity table))
-createTable tblName tblSettings =
+createTable newTblName tblSettings =
   do let createTableCommand =
-           createTableSyntax Nothing
-                             tblName
+           createTableSyntax Nothing newTblName
                              (allBeamValues (\(Columnar' (TableFieldSchema name (FieldSchema schema) _)) -> (name, schema)) tblSettings)
                              [ primaryKeyConstraintSyntax (allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings)) ]
 
@@ -39,7 +37,7 @@ createTable tblName tblSettings =
              cols -> [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableHasPrimaryKey tblName cols)) ]
 
      upDown command Nothing
-     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblName tbl') tblChecks fieldChecks) [])
+     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable newTblName tbl') tblChecks fieldChecks) [])
 
 preserve :: CheckedDatabaseEntity be db e
          -> Migration syntax (CheckedDatabaseEntity be db' e)

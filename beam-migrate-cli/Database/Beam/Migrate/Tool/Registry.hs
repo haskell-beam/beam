@@ -1,12 +1,8 @@
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE CPP #-}
-
 module Database.Beam.Migrate.Tool.Registry where
 
 import           Database.Beam.Migrate.Tool.CmdLine
 
 import           Data.Aeson
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as HM
 import           Data.Monoid
 import           Data.String
@@ -17,7 +13,9 @@ import qualified Data.Yaml as Yaml
 import           Network.BSD
 
 import           System.Directory
+#if defined(mingw32_HOST_OS)
 import           System.Environment
+#endif
 import           System.FilePath
 import           System.IO
 
@@ -99,7 +97,7 @@ instance ToJSON MigrationRegistry where
 
 instance FromJSON MigrationRegistry where
   parseJSON = withObject "MigrationRegistry" $ \o -> do
-    (srcDir, name) <- (o .: "module") >>= withObject "MigrationRegistry.module" (\o -> (,) <$> o .: "src" <*> o .: "name")
+    (srcDir, name) <- (o .: "module") >>= withObject "MigrationRegistry.module" (\o' -> (,) <$> o' .: "src" <*> o' .: "name")
     MigrationRegistry <$> o .: "databases"
                       <*> (unMigrateUUID <$> o .: "head")
                       <*> o .: "migrations" <*> o .: "branches"
@@ -202,4 +200,4 @@ lookupDb MigrationRegistry { migrationRegistryDatabases = dbs } MigrateCmdLine {
 lookupDb reg MigrateCmdLine { migrateDatabase = Just db } =
   case HM.lookup db (migrationRegistryDatabases reg) of
     Nothing -> fail ("No such database: " ++ unDatabaseName db)
-    Just db -> pure db
+    Just db' -> pure db'

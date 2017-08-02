@@ -16,7 +16,7 @@ data InitCommand
   = InitCommand
   { initBackend          :: Maybe ModuleName
   , initConnectionString :: Maybe String
-  , initModule           :: Maybe ModuleName
+  , initModule           :: ModuleName
   , initModulePath       :: FilePath
 
   , initInteractive      :: Bool
@@ -30,7 +30,7 @@ data CleanCommand
 
 data DatabaseCommand
   = DatabaseCommandList
-  | DatabaseCommandRename String String
+  | DatabaseCommandRename DatabaseName DatabaseName
   deriving Show
 
 data MigrateCommand
@@ -66,14 +66,14 @@ migrationArgParser =
     initCommand = info (initParser <**> helper) (fullDesc <> progDesc "Initialize a beam-migrate registry in this directory, or in the given registration file")
     cleanCommand = info (cleanParser <**> helper) (fullDesc <> progDesc "Remove all beam-migrate tables from the database")
 
-    logCommand = info ((pure MigrateCommandLog) <**> helper) (fullDesc <> progDesc "Display migration history of the given database")
-
+    logCommand = info (pure MigrateCommandLog <**> helper) (fullDesc <> progDesc "Display migration history of the given database")
+    statusCommand = info (pure MigrateCommandStatus <**> helper) (fullDesc <> progDesc "Show status of beam migrations")
     databasesCommand = info (databasesParser <**> helper) (fullDesc <> progDesc "Create, update, list databases in the registry")
 
     initParser = MigrateCommandInit <$>
                  (InitCommand <$> optional (ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use"))
                               <*> optional (strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend"))
-                              <*> optional (ModuleName <$> strOption (long "module" <> metavar "MODULE" <> help "Module to use"))
+                              <*> (ModuleName <$> strOption (long "module" <> metavar "MODULE" <> help "Module to use"))
                               <*> strOption (long "src-dir" <> metavar "SOURCEDIR" <> help "Directory containing source files" <> value ".")
                               <*> flag True False (long "no-prompt" <> help "Do not prompt; fail instead")
                               <*> flag True False (long "no-create" <> help "Do not create the beam-migrate schema in the database"))
@@ -87,8 +87,8 @@ migrationArgParser =
       where databasesListParser = pure DatabaseCommandList
     databasesRenameCommand =
       info (databasesRenameParser <**> helper) (fullDesc <> progDesc "Rename a database from OLDNAME to NEWNAME")
-      where databasesRenameParser = DatabaseCommandRename <$> strArgument (metavar "OLDNAME" <> help "Database to rename")
-                                                          <*> strArgument (metavar "NEWNAME" <> help "New name for database")
+      where databasesRenameParser = DatabaseCommandRename <$> (DatabaseName <$> strArgument (metavar "OLDNAME" <> help "Database to rename"))
+                                                          <*> (DatabaseName <$> strArgument (metavar "NEWNAME" <> help "New name for database"))
 
 migrationCliOptions :: ParserInfo MigrateCmdLine
 migrationCliOptions =
