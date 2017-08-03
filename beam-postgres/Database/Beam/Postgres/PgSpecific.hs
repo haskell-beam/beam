@@ -377,12 +377,25 @@ pgArrayAgg (QExpr a) =
   QExpr . PgExpressionSyntax $
   emit "array_agg" <> pgParens (fromPgExpression a)
 
-pgStringAgg :: QExpr PgExpressionSyntax s T.Text
-            -> QExpr PgExpressionSyntax s T.Text
-            -> QAgg PgExpressionSyntax s T.Text
-pgStringAgg (QExpr v) (QExpr delim) =
+-- ** String aggregations
+
+pgStringAgg :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
+            => QExpr PgExpressionSyntax s str
+            -> QExpr PgExpressionSyntax s str
+            -> QAgg PgExpressionSyntax s str
+pgStringAgg = pgStringAggOver allInGroup_
+
+pgStringAggOver :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
+                => Maybe PgAggregationSetQuantifierSyntax
+                -> QExpr PgExpressionSyntax s str
+                -> QExpr PgExpressionSyntax s str
+                -> QAgg PgExpressionSyntax s str
+pgStringAggOver quantifier (QExpr v) (QExpr delim) =
   QExpr . PgExpressionSyntax $
-  emit "string_agg" <> pgParens (fromPgExpression v <> emit ", " <> fromPgExpression delim)
+  emit "string_agg" <>
+  pgParens ( maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") quantifier <>
+             fromPgExpression v <> emit ", " <>
+             fromPgExpression delim)
 
 -- * Postgresql SELECT DISTINCT ON
 

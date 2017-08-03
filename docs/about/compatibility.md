@@ -264,7 +264,7 @@ planned.
 | **F846 Octet support in regular expression operators**          | TODO     |                                                                                                                                           |
 | **F847 Nonconstant regular expression**                         | TODO     | Easy once regex support is added                                                                                                          |
 | **F850 Top-level <order by clause> in <query expression>**      | FULL     | Use `orderBy_` as usual. Beam will do the right thing behind the scenes.                                                                  |
-| **F851 <onder by clause> in subqueries**                        | FULL     | Works in backends that support it                                                                                                         |
+| **F851 <order by clause> in subqueries**                        | FULL     | Works in backends that support it                                                                                                         |
 | **F852 Top-level <order by clause> in views**                   | TODO     |                                                                                                                                           |
 | **F855 Nested <order by clause> in <query expression>**         | UNKNOWN  |                                                                                                                                           |
 | **F856 Nested <fetch first clause> in <query expression>**      | TODO     |                                                                                                                                           |

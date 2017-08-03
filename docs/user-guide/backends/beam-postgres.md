@@ -33,3 +33,31 @@ pgNubBy_ (addressPostalCode . customerAddress) $
   all_ (customer chinookDb)
 ```
 
+### Aggregates
+
+#### `string_agg`
+
+The Postgres `string_agg` aggregate combines all column values in a group
+separated by a given separator. `beam-postgres` provides `pgStringAgg` and
+`pgStringAggOver` to use the unquantified and quantified versions of the
+`string_agg` aggregate appropriately.
+
+For example, to put together a list of all cities in all the postal codes we have for customers,
+
+!beam-query
+```haskell
+!chinookpg postgres
+aggregate_ (\c -> ( group_ (addressPostalCode (customerAddress c))
+                  , pgStringAgg (coalesce_ [addressCity (customerAddress c)] "") ",") ) $
+  all_ (customer chinookDb)
+```
+
+The above will include one city multiple times if its shared by multiple customers.
+
+!beam-query
+```haskell
+!chinookpg postgres
+aggregate_ (\c -> ( group_ (addressPostalCode (customerAddress c))
+                  , pgStringAggOver distinctInGroup_ (coalesce_ [addressCity (customerAddress c)] "") ",") ) $
+  all_ (customer chinookDb)
+```

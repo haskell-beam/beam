@@ -35,6 +35,7 @@ module Database.Beam.Postgres.Syntax
     , PgProjectionSyntax(..), PgGroupingSyntax(..)
     , PgOrderingSyntax(..), PgValueSyntax(..)
     , PgTableSourceSyntax(..), PgFieldNameSyntax(..)
+    , PgAggregationSetQuantifierSyntax(..)
     , PgInsertValuesSyntax(..), PgInsertOnConflictSyntax(..)
     , PgInsertOnConflictTargetSyntax(..), PgInsertOnConflictUpdateSyntax(..)
     , PgCreateTableSyntax(..), PgTableOptionsSyntax(..), PgColumnSchemaSyntax(..)
