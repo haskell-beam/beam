@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PartialTypeSignatures #-}
@@ -8,11 +9,7 @@ module Database.Beam.Test.SQL
 import Database.Beam.Test.Schema hiding (tests)
 
 import Database.Beam
-import Database.Beam.Query
-import Database.Beam.Backend.Types
-import Database.Beam.Backend.SQL hiding (leftJoin)
 import Database.Beam.Backend.SQL.AST
-import Database.Beam.Backend.SQL.Builder
 
 import Data.Time.Clock
 import Data.Text (Text)
@@ -297,7 +294,7 @@ aggregates =
 
     aggregateOverTopLevel =
       testCase "Aggregate over top-level" $
-      do SqlSelect Select { selectTable = s@SelectTable { .. }
+      do SqlSelect Select { selectTable = SelectTable { .. }
                           , selectLimit = Nothing, selectOffset = Nothing
                           , selectOrdering = [] } <-
            pure $ select $
@@ -335,11 +332,11 @@ aggregates =
 
     filterAfterTopLevelAggregate =
       testCase "Filter after top-level aggregate" $
-      do SqlSelect Select { selectTable = s@SelectTable { .. }
+      do SqlSelect Select { selectTable = SelectTable { .. }
                           , selectLimit = Nothing, selectOffset = Nothing
                           , selectOrdering = [] } <-
            pure $ select $
-           filter_ (\(age, l) -> l <. 10 ||. l >. 20) $
+           filter_ (\(_, l) -> l <. 10 ||. l >. 20) $
            aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
            limit_ 10 (all_ (_employees employeeDbSettings))
          Just (FromTable (TableFromSubSelect subselect) (Just t0)) <- pure selectFrom
@@ -376,12 +373,12 @@ aggregates =
 
     joinTopLevelAggregate =
       testCase "Join against top-level aggregate" $
-      do SqlSelect Select { selectTable = s@SelectTable { .. }
+      do SqlSelect Select { selectTable = SelectTable { .. }
                           , selectLimit = Nothing, selectOffset = Nothing
                           , selectOrdering = [] } <-
            pure $ select $
            do (lastName, firstNameLength) <-
-                  filter_ (\(lastName, charLength) -> charLength >. 10) $
+                  filter_ (\(_, charLength) -> charLength >. 10) $
                   aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               role <- relatedBy_ (_roles employeeDbSettings) (\r -> _roleName r ==. lastName)
@@ -434,13 +431,13 @@ aggregates =
 
     joinTopLevelAggregate2 =
       testCase "Join against top-level aggregate (places reversed)" $
-      do SqlSelect s@Select { selectTable = SelectTable { .. }
-                            , selectLimit = Nothing, selectOffset = Nothing
-                            , selectOrdering = [] } <-
+      do SqlSelect Select { selectTable = SelectTable { .. }
+                          , selectLimit = Nothing, selectOffset = Nothing
+                          , selectOrdering = [] } <-
            pure $ select $
            do role <- all_ (_roles employeeDbSettings)
               (lastName, firstNameLength) <-
-                  filter_ (\(lastName, charLength) -> charLength >. 10) $
+                  filter_ (\(_, charLength) -> charLength >. 10) $
                   aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               guard_ (_roleName role ==. lastName)
@@ -519,7 +516,8 @@ orderBy =
                                 , selectFrom = Just (FromTable (TableNamed "roles") (Just "t0"))
                                 , selectWhere = Nothing
                                 , selectGrouping = Nothing
-                                , selectHaving = Nothing }
+                                , selectHaving = Nothing
+                                , selectQuantifier = Nothing }
          ordering @?= [ OrderingAsc (ExpressionFieldName (QualifiedField "t0" "started")) ]
     orderCombination =
       testCase "Order combined query" $
@@ -541,7 +539,8 @@ orderBy =
                            , selectFrom = Just (FromTable (TableNamed "roles") (Just "t0"))
                            , selectWhere = Nothing
                            , selectGrouping = Nothing
-                           , selectHaving = Nothing }
+                           , selectHaving = Nothing
+                           , selectQuantifier = Nothing }
          select @?= UnionTables True expSelect expSelect
          ordering @?= [ OrderingAsc (ExpressionFieldName (UnqualifiedField "res4")) ]
 
@@ -565,7 +564,8 @@ orderBy =
                            , selectFrom = Just (FromTable (TableNamed "roles") (Just "t0"))
                            , selectWhere = Nothing
                            , selectGrouping = Nothing
-                           , selectHaving = Nothing }
+                           , selectHaving = Nothing
+                           , selectQuantifier = Nothing }
          s @?= SelectTable { selectProjection =
                                     ProjExprs [ ( ExpressionFieldName (QualifiedField "t0" "res0"), Just "res0" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "res1"), Just "res1" )
@@ -576,7 +576,8 @@ orderBy =
                                                                                            , selectOffset = Just 5, selectOrdering = [] })) (Just "t0"))
                                 , selectWhere = Nothing
                                 , selectGrouping = Nothing
-                                , selectHaving = Nothing }
+                                , selectHaving = Nothing
+                                , selectQuantifier = Nothing }
          ordering @?= [ OrderingAsc (ExpressionFieldName (QualifiedField "t0" "res4")) ]
 
     orderJoin =
@@ -609,7 +610,8 @@ orderBy =
                                              , selectFrom = Just (FromTable (TableNamed "employees") (Just "t0"))
                                              , selectWhere = Nothing
                                              , selectGrouping = Nothing
-                                             , selectHaving = Nothing }
+                                             , selectHaving = Nothing
+                                             , selectQuantifier = Nothing }
              joinCondExp = ExpressionBinOp "AND" (ExpressionBinOp "AND" (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField "t1" "for_employee__first_name"))
                                                                                                        (ExpressionFieldName (QualifiedField "t0" "res0")))
                                                                         (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField "t1" "for_employee__last_name"))
@@ -664,7 +666,8 @@ orderBy =
                                              , selectFrom = Just (FromTable (TableNamed "employees") (Just "t0"))
                                              , selectWhere = Nothing
                                              , selectGrouping = Nothing
-                                             , selectHaving = Nothing }
+                                             , selectHaving = Nothing
+                                             , selectQuantifier = Nothing }
          selectFrom s @?= Just (InnerJoin (FromTable (TableNamed "roles") (Just "t0"))
                                           (FromTable (TableFromSubSelect subselect) (Just "t1"))
                                           Nothing)
@@ -912,7 +915,7 @@ selectCombinators =
                                 , selectHaving = Nothing
                                 , selectQuantifier = Nothing }
                           , selectLimit = Nothing, selectOffset = Nothing
-                          , selectOrdering = [] } <- pure (select (filter_ (\(type_, age, dt) -> age <. 40) (union_ hireDates leaveDates)))
+                          , selectOrdering = [] } <- pure (select (filter_ (\(_, age, _) -> age <. 40) (union_ hireDates leaveDates)))
          a @?= SelectTable Nothing
                            (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
