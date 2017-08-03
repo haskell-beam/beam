@@ -134,12 +134,12 @@ allInGroupExplicitly_ = Just setQuantifierAll
 -- ** Aggregations
 
 -- | SQL @MIN(ALL ..)@ function (but without the explicit ALL)
-min_ :: ( IsSql92AggregationExpressionSyntax expr, Num a )
+min_ :: IsSql92AggregationExpressionSyntax expr
      => QExpr expr s a -> QAgg expr s a
 min_ = minOver_ allInGroup_
 
 -- | SQL @MAX(ALL ..)@ function (but without the explicit ALL)
-max_ :: ( IsSql92AggregationExpressionSyntax expr, Num a )
+max_ :: IsSql92AggregationExpressionSyntax expr
      => QExpr expr s a -> QAgg expr s a
 max_ = maxOver_ allInGroup_
 
@@ -177,13 +177,18 @@ rank_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
       => QAgg expr s Int
 rank_ = QExpr rankAggE
 
-minOver_, maxOver_, avgOver_, sumOver_
-  :: ( IsSql92AggregationExpressionSyntax expr
-     , Num a )
+minOver_, maxOver_
+  :: IsSql92AggregationExpressionSyntax expr
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
   -> QExpr expr s a -> QAgg expr s a
 minOver_ q (QExpr a) = QExpr (minE q a)
 maxOver_ q (QExpr a) = QExpr (maxE q a)
+
+avgOver_, sumOver_
+  :: ( IsSql92AggregationExpressionSyntax expr
+     , Num a )
+  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
+  -> QExpr expr s a -> QAgg expr s a
 avgOver_ q (QExpr a) = QExpr (avgE q a)
 sumOver_ q (QExpr a) = QExpr (sumE q a)
 
