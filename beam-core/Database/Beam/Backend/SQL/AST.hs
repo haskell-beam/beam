@@ -43,7 +43,8 @@ instance IsSql92SelectSyntax Select where
 
 data SelectTable
   = SelectTable
-  { selectProjection :: Projection
+  { selectQuantifier :: Maybe SetQuantifier
+  , selectProjection :: Projection
   , selectFrom       :: Maybe From
   , selectWhere      :: Maybe Expression
   , selectGrouping   :: Maybe Grouping
@@ -59,6 +60,7 @@ instance IsSql92SelectTableSyntax SelectTable where
   type Sql92SelectTableProjectionSyntax SelectTable = Projection
   type Sql92SelectTableFromSyntax SelectTable = From
   type Sql92SelectTableGroupingSyntax SelectTable = Grouping
+  type Sql92SelectTableSetQuantifierSyntax SelectTable = SetQuantifier
 
   selectTableStmt = SelectTable
   unionTables = UnionTables

@@ -26,6 +26,8 @@ module Database.Beam.Query.Combinators
     , outerJoin_
     , subselect_, references_
 
+    , nub_
+
     , SqlJustable(..)
     , SqlDeconstructMaybe(..)
     , SqlOrderable
@@ -233,6 +235,12 @@ references_ :: ( IsSql92ExpressionSyntax expr
                , Table t )
             => PrimaryKey t (QGenExpr ctxt expr s) -> t (QGenExpr ctxt expr s) -> QGenExpr ctxt expr s Bool
 references_ fk tbl = fk ==. pk tbl
+
+-- | Only return distinct values from a query
+nub_ :: ( IsSql92SelectSyntax select
+        , Projectible (Sql92SelectExpressionSyntax select) r )
+     => Q select db s r -> Q select db s r
+nub_ (Q sub) = Q $ liftF (QDistinct (\_ -> setQuantifierDistinct) sub id)
 
 -- | Limit the number of results returned by a query.
 limit_ :: forall s a select db.

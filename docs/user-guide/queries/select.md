@@ -126,3 +126,16 @@ filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerL
         all_ (customer chinookDb)
 ```
 
+## `DISTINCT` support
+
+SQL can only return unique results from a query through the `SELECT DISTINCT`
+statement. Beam supports this using the `nub_` command. For example, to get all
+the unique postal codes where our customers live.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+nub_ $ fmap (addressPostalCode . customerAddress) $
+  all_ (customer chinookDb)
+```

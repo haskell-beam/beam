@@ -85,7 +85,7 @@ planned.
 | E021-02 Lower case identifiers                                  | TODO     |                                                                                                                                           |
 | E021-03 Trailing underscore                                     | N/A      | Beam will use whatever column names you specify                                                                                           |
 | **E051 Basic query specification**                              |          |                                                                                                                                           |
-| E051-01 SELECT DISTINCT                                         | TODO     | Use `selectDistinct_`                                                                                                                     |
+| E051-01 SELECT DISTINCT                                         | FULL     | Use `nub_`                                                                                                                  |
 | E051-02 GROUP BY clause                                         | FULL     | See `aggregate_` or read the [section on aggregates](../user-guide/queries/aggregates.md)                                                 |
 | E051-04 GROUP BY can contain columns not in SELECT              | TODO     | Unsure how this applies to beam in particular                                                                                             |
 | E051-05 Select list items can be renamed                        | N/A      | Beam uses this feature internally, the user never needs it                                                                                |

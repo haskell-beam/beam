@@ -28,6 +28,12 @@ type ProjectibleInSelectSyntax syntax a =
   , ProjectibleValue (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a)
 
 data QF select (db :: (* -> *) -> *) s next where
+  QDistinct :: Projectible (Sql92SelectExpressionSyntax select) r
+            => (r -> Sql92SelectTableSetQuantifierSyntax (Sql92SelectSelectTableSyntax select))
+            -> QM select db s r
+            -> (r -> next)
+            -> QF select db s next
+
   QAll :: Beamable table
        => T.Text -> TableSettings table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))

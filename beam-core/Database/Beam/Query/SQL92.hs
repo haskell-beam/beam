@@ -36,10 +36,14 @@ data SelectBuilder syntax (db :: (* -> *) -> *) a where
   SelectBuilderQ :: ( IsSql92SelectSyntax syntax
                     , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
                     a -> QueryBuilder syntax -> SelectBuilder syntax db a
-  SelectBuilderGrouping ::
-      ( IsSql92SelectSyntax syntax
-      , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a ) =>
-      a -> QueryBuilder syntax -> Maybe (Sql92SelectGroupingSyntax syntax) -> Maybe (Sql92SelectExpressionSyntax syntax) -> SelectBuilder syntax db a
+  SelectBuilderGrouping
+      :: ( IsSql92SelectSyntax syntax
+         , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a )
+      => a -> QueryBuilder syntax
+      -> Maybe (Sql92SelectGroupingSyntax syntax)
+      -> Maybe (Sql92SelectExpressionSyntax syntax)
+      -> Maybe (Sql92SelectTableSetQuantifierSyntax (Sql92SelectSelectTableSyntax syntax))
+      -> SelectBuilder syntax db a
   SelectBuilderSelectSyntax :: Bool {- Whether or not this contains UNION, INTERSECT, EXCEPT, etc -}
                             -> a -> Sql92SelectSelectTableSyntax syntax
                             -> SelectBuilder syntax db a
@@ -71,9 +75,9 @@ buildSelect :: ( IsSql92SelectSyntax syntax
 buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ _ table)) =
     selectStmt table ordering limit offset
 buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_))) =
-    selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ Nothing Nothing) ordering limit offset
-buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ from where_) grouping having)) =
-    selectStmt (selectTableStmt (projExprs (defaultProjection proj)) from where_ grouping having) ordering limit offset
+    selectStmt (selectTableStmt Nothing (projExprs (defaultProjection proj)) from where_ Nothing Nothing) ordering limit offset
+buildSelect (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ from where_) grouping having distinct)) =
+    selectStmt (selectTableStmt distinct (projExprs (defaultProjection proj)) from where_ grouping having) ordering limit offset
 buildSelect x = buildSelect (SelectBuilderTopLevel Nothing Nothing [] x)
 
 selectBuilderToTableSource :: ( Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
@@ -82,12 +86,12 @@ selectBuilderToTableSource :: ( Sql92TableSourceSelectSyntax (Sql92FromTableSour
                               SelectBuilder syntax db a -> Sql92SelectSelectTableSyntax syntax
 selectBuilderToTableSource (SelectBuilderSelectSyntax _ _ x) = x
 selectBuilderToTableSource (SelectBuilderQ x (QueryBuilder _ from where_)) =
-  selectTableStmt (projExprs (defaultProjection x)) from where_ Nothing Nothing
-selectBuilderToTableSource (SelectBuilderGrouping x (QueryBuilder _ from where_) grouping having) =
-  selectTableStmt (projExprs (defaultProjection x)) from where_ grouping having
+  selectTableStmt Nothing (projExprs (defaultProjection x)) from where_ Nothing Nothing
+selectBuilderToTableSource (SelectBuilderGrouping x (QueryBuilder _ from where_) grouping having distinct) =
+  selectTableStmt distinct (projExprs (defaultProjection x)) from where_ grouping having
 selectBuilderToTableSource sb =
     let (x, QueryBuilder _ from where_) = selectBuilderToQueryBuilder sb
-    in selectTableStmt (projExprs (defaultProjection x)) from where_ Nothing Nothing
+    in selectTableStmt Nothing (projExprs (defaultProjection x)) from where_ Nothing Nothing
 
 selectBuilderToQueryBuilder :: ( Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
                                , IsSql92SelectSyntax syntax
@@ -103,14 +107,14 @@ emptyQb = QueryBuilder 0 Nothing Nothing
 
 sbProj :: SelectBuilder syntax db a -> a
 sbProj (SelectBuilderQ proj _) = proj
-sbProj (SelectBuilderGrouping proj _ _ _) = proj
+sbProj (SelectBuilderGrouping proj _ _ _ _) = proj
 sbProj (SelectBuilderSelectSyntax _ proj _) = proj
 sbProj (SelectBuilderTopLevel _ _ _ sb) = sbProj sb
 
 setSelectBuilderProjection :: Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax)) b =>
                               SelectBuilder syntax db a -> b -> SelectBuilder syntax db b
 setSelectBuilderProjection (SelectBuilderQ _ q) proj = SelectBuilderQ proj q
-setSelectBuilderProjection (SelectBuilderGrouping _ q grouping having) proj = SelectBuilderGrouping proj q grouping having
+setSelectBuilderProjection (SelectBuilderGrouping _ q grouping having d) proj = SelectBuilderGrouping proj q grouping having d
 setSelectBuilderProjection (SelectBuilderSelectSyntax containsSetOp _ q) proj = SelectBuilderSelectSyntax containsSetOp proj q
 setSelectBuilderProjection (SelectBuilderTopLevel limit offset ord sb) proj =
     SelectBuilderTopLevel limit offset ord (setSelectBuilderProjection sb proj)
@@ -209,13 +213,27 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
         let sb = buildQuery (fromF q')
             (proj, qb) = selectBuilderToQueryBuilder sb
         in buildJoinedQuery (next proj) qb
+    buildQuery (Free (QDistinct nubType q' next)) =
+      let (proj, qb, gp, hv) =
+            case buildQuery (fromF q') of
+              SelectBuilderQ proj qb ->
+                ( proj, qb, Nothing, Nothing)
+              SelectBuilderGrouping proj qb gp hv Nothing ->
+                ( proj, qb, gp, hv)
+              sb ->
+                let (proj, qb) = selectBuilderToQueryBuilder sb
+                in ( proj, qb, Nothing, Nothing)
+      in case next proj of
+           Pure x -> SelectBuilderGrouping x qb gp hv (Just (nubType proj))
+           _ -> let ( proj', qb' ) = selectBuilderToQueryBuilder (SelectBuilderGrouping proj qb gp hv (Just (nubType proj)))
+                in buildJoinedQuery (next proj') qb'
     buildQuery (Free (QAggregate mkAgg q' next)) =
         let sb = buildQuery (fromF q')
             (groupingSyntax, aggProj) = mkAgg (sbProj sb)
         in case tryBuildGuardsOnly (next aggProj) Nothing of
             Just (proj, having) ->
                 case sb of
-                  SelectBuilderQ _ q'' -> SelectBuilderGrouping proj q'' groupingSyntax having
+                  SelectBuilderQ _ q'' -> SelectBuilderGrouping proj q'' groupingSyntax having Nothing
 
                   -- We'll have to generate a subselect
                   _ -> let (subProj, qb) = selectBuilderToQueryBuilder sb --(setSelectBuilderProjection sb aggProj)
@@ -223,7 +241,7 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
                        in case tryBuildGuardsOnly (next aggProj') Nothing of
                             Nothing -> error "buildQuery (Free (QAggregate ...)): Impossible"
                             Just (aggProj'', having') ->
-                              SelectBuilderGrouping aggProj'' qb groupingSyntax having'
+                              SelectBuilderGrouping aggProj'' qb groupingSyntax having' Nothing
             Nothing ->
               let (_, having) = tryCollectHaving (next aggProj') Nothing
                   (next', _) = tryCollectHaving (next x') Nothing
@@ -234,7 +252,7 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
                                (groupingSyntax', aggProj') = mkAgg proj'
                            in (groupingSyntax', aggProj', qb''')
                   (x', qb') = selectBuilderToQueryBuilder $
-                              SelectBuilderGrouping aggProj' qb groupingSyntax' having
+                              SelectBuilderGrouping aggProj' qb groupingSyntax' having Nothing
               in buildJoinedQuery next' qb'
 
     buildQuery (Free (QOrderBy mkOrdering q' next)) =
@@ -491,4 +509,6 @@ buildSql92Query' arbitrarilyNestedCombinations (Q q) =
       f (Free (QWindowOver mkWindow mkProj q' Pure)) next
     onlyQ (Free (QAggregate mkAgg q' next)) f =
       f (Free (QAggregate mkAgg q' Pure)) next
+    onlyQ (Free (QDistinct d q' next)) f =
+      f (Free (QDistinct d q' Pure)) next
     onlyQ _ _ = error "impossible"

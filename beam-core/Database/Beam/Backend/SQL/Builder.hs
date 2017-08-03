@@ -83,10 +83,13 @@ instance IsSql92SelectTableSyntax SqlSyntaxBuilder where
   type Sql92SelectTableProjectionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableFromSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableGroupingSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92SelectTableSetQuantifierSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  selectTableStmt proj from where_ grouping having =
+  selectTableStmt setQuantifier proj from where_ grouping having =
     SqlSyntaxBuilder $
-    byteString "SELECT " <> buildSql proj <>
+    byteString "SELECT " <>
+    maybe mempty (\setQuantifier' -> buildSql setQuantifier' <> byteString " ") setQuantifier <>
+    buildSql proj <>
     maybe mempty ((byteString " FROM " <>) . buildSql) from <>
     maybe mempty (\w -> byteString " WHERE " <> buildSql w) where_ <>
     maybe mempty (\g -> byteString " GROUP BY " <> buildSql g) grouping <>

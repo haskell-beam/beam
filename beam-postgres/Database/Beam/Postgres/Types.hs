@@ -17,18 +17,19 @@ import qualified Database.PostgreSQL.Simple.Types as Pg
 import qualified Database.PostgreSQL.Simple.Range as Pg (PGRange)
 import qualified Database.PostgreSQL.Simple.Time as Pg (Date, UTCTimestamp, ZonedTimestamp, LocalTimestamp)
 
-import           Data.ByteString (ByteString)
-import           Data.Text (Text)
-import qualified Data.ByteString.Lazy as BL
-import qualified Data.Text.Lazy as TL
-import           Data.Int
 import           Data.Aeson (Value)
-import           Data.UUID (UUID)
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as BL
 import           Data.CaseInsensitive (CI)
+import           Data.Int
 import           Data.Ratio (Ratio)
 import           Data.Scientific (Scientific)
-import           Data.Vector (Vector)
+import           Data.Text (Text)
+import qualified Data.Text.Lazy as TL
 import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime)
+import           Data.UUID (UUID)
+import           Data.Vector (Vector)
+import           Data.Word
 
 data Postgres
   = Postgres
@@ -50,6 +51,14 @@ instance FromBackendRow Postgres Int
 instance FromBackendRow Postgres Int16
 instance FromBackendRow Postgres Int32
 instance FromBackendRow Postgres Int64
+instance FromBackendRow Postgres Word where
+  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
+instance FromBackendRow Postgres Word16 where
+  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
+instance FromBackendRow Postgres Word32 where
+  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
+instance FromBackendRow Postgres Word64 where
+  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
 instance FromBackendRow Postgres Integer
 instance FromBackendRow Postgres ByteString
 instance FromBackendRow Postgres Scientific

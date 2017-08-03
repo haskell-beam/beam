@@ -87,6 +87,7 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
       , IsSql92ProjectionSyntax (Sql92SelectTableProjectionSyntax select)
       , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
       , IsSql92GroupingSyntax (Sql92SelectTableGroupingSyntax select)
+      , IsSql92AggregationSetQuantifierSyntax (Sql92SelectTableSetQuantifierSyntax select)
 
       , Sql92GroupingExpressionSyntax (Sql92SelectTableGroupingSyntax select) ~ Sql92SelectTableExpressionSyntax select
       , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select
@@ -99,8 +100,10 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
   type Sql92SelectTableProjectionSyntax select :: *
   type Sql92SelectTableFromSyntax select :: *
   type Sql92SelectTableGroupingSyntax select :: *
+  type Sql92SelectTableSetQuantifierSyntax select :: *
 
-  selectTableStmt :: Sql92SelectTableProjectionSyntax select
+  selectTableStmt :: Maybe (Sql92SelectTableSetQuantifierSyntax select)
+                  -> Sql92SelectTableProjectionSyntax select
                   -> Maybe (Sql92SelectTableFromSyntax select)
                   -> Maybe (Sql92SelectTableExpressionSyntax select)   {-^ Where clause -}
                   -> Maybe (Sql92SelectTableGroupingSyntax select)

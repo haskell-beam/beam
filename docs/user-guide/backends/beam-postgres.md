@@ -15,3 +15,21 @@ with these easier.
 
 The `tsvector` and `tsquery` types form the basis of full-text search in
 Postgres.
+
+## Postgres extensions
+
+### `DISTINCT ON` support
+
+Postgres supports the `DISTINCT ON` clause with selects to return distinct
+results based on a particular key. The `beam-postgres` package provides the
+`pgNubBy_` function to use this feature.
+
+For example, to get an arbitrary customer from each distinct area code
+
+!beam-query
+```haskell
+!chinookpg postgres
+pgNubBy_ (addressPostalCode . customerAddress) $ 
+  all_ (customer chinookDb)
+```
+

@@ -17,6 +17,8 @@ import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Query.Internal
 
+import           Control.Monad.Free
+
 import           Data.Aeson
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
@@ -381,3 +383,12 @@ pgStringAgg :: QExpr PgExpressionSyntax s T.Text
 pgStringAgg (QExpr v) (QExpr delim) =
   QExpr . PgExpressionSyntax $
   emit "string_agg" <> pgParens (fromPgExpression v <> emit ", " <> fromPgExpression delim)
+
+-- * Postgresql SELECT DISTINCT ON
+
+pgNubBy_ :: ( Projectible PgExpressionSyntax key
+            , Projectible PgExpressionSyntax r )
+         => (r -> key)
+         -> Q PgSelectSyntax db s r
+         -> Q PgSelectSyntax db s r
+pgNubBy_ mkKey (Q q) = Q $ liftF (QDistinct (\r -> pgSelectSetQuantifierDistinctOn (project (mkKey r))) q id)

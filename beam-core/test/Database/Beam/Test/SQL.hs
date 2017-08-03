@@ -55,6 +55,7 @@ simpleSelect =
      selectLimit @?= Nothing
      selectOffset @?= Nothing
      selectHaving @?= Nothing
+     selectQuantifier @?= Nothing
 
      Just (FromTable (TableNamed "employees") (Just tblName)) <- pure selectFrom
 
@@ -84,6 +85,7 @@ simpleWhere =
      selectLimit @?= Nothing
      selectOffset @?= Nothing
      selectHaving @?= Nothing
+     selectQuantifier @?= Nothing
 
      Just (FromTable (TableNamed "employees") (Just employees)) <- pure selectFrom
 
@@ -110,6 +112,7 @@ simpleJoin =
      selectLimit @?= Nothing
      selectOffset @?= Nothing
      selectHaving @?= Nothing
+     selectQuantifier @?= Nothing
 
      Just (InnerJoin (FromTable (TableNamed "employees") (Just employees))
                      (FromTable (TableNamed "roles") (Just roles))
@@ -138,6 +141,7 @@ selfJoin =
      selectLimit @?= Nothing
      selectOffset @?= Nothing
      selectHaving @?= Nothing
+     selectQuantifier @?= Nothing
 
      Just (InnerJoin (InnerJoin (FromTable (TableNamed "employees") (Just e1))
                                 (FromTable (TableNamed "employees") (Just e2))
@@ -804,11 +808,13 @@ selectCombinators =
                              guard_ (isJust_ (_employeeLeaveDate e))
                              pure (as_ @Text $ val_ "leave", _employeeLeaveDate e)
          SqlSelect Select { selectTable = UnionTables False a b } <- pure (select (union_ hireDates leaveDates))
-         a @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
+         a @?= SelectTable Nothing
+                           (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res1") ])
                            (Just (FromTable (TableNamed "employees") (Just "t0")))
                            Nothing Nothing Nothing
-         b @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
+         b @?= SelectTable Nothing
+                           (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res1") ])
                            (Just (FromTable (TableNamed "employees") (Just "t0")))
                            (Just (ExpressionIsNotNull (ExpressionFieldName (QualifiedField "t0" "leave_date"))))
@@ -842,11 +848,13 @@ selectCombinators =
                 , selectOrdering = []  } <-
            pure subselect
 
-         hireDatesQuery @?= SelectTable (ProjExprs [ ( ExpressionValue (Value ("hire" :: Text)), Just "res0" )
+         hireDatesQuery @?= SelectTable Nothing
+                                        (ProjExprs [ ( ExpressionValue (Value ("hire" :: Text)), Just "res0" )
                                                    , ( ExpressionFieldName (QualifiedField "t0" "age"), Just "res1" )
                                                    , ( ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res2" ) ])
                                         (Just (FromTable (TableNamed "employees") (Just "t0"))) Nothing Nothing Nothing
-         leaveDatesQuery @?= SelectTable (ProjExprs [ ( ExpressionValue (Value ("leave" :: Text)), Just "res0" )
+         leaveDatesQuery @?= SelectTable Nothing
+                                         (ProjExprs [ ( ExpressionValue (Value ("leave" :: Text)), Just "res0" )
                                                     , ( ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
                                                     , ( ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res2") ])
                                          (Just (FromTable (TableNamed "employees") (Just "t0")))
@@ -901,15 +909,18 @@ selectCombinators =
                                 , selectProjection = proj
                                 , selectWhere = Just where_
                                 , selectGrouping = Nothing
-                                , selectHaving = Nothing }
+                                , selectHaving = Nothing
+                                , selectQuantifier = Nothing }
                           , selectLimit = Nothing, selectOffset = Nothing
                           , selectOrdering = [] } <- pure (select (filter_ (\(type_, age, dt) -> age <. 40) (union_ hireDates leaveDates)))
-         a @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
+         a @?= SelectTable Nothing
+                           (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
                                       , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res2") ])
                            (Just (FromTable (TableNamed "employees") (Just "t0")))
                            Nothing Nothing Nothing
-         b @?= SelectTable (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
+         b @?= SelectTable Nothing
+                           (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
                                       , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res2") ])
                            (Just (FromTable (TableNamed "employees") (Just "t0")))

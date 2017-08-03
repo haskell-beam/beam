@@ -315,10 +315,13 @@ instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   type Sql92SelectTableProjectionSyntax SqliteSelectTableSyntax = SqliteProjectionSyntax
   type Sql92SelectTableFromSyntax SqliteSelectTableSyntax = SqliteFromSyntax
   type Sql92SelectTableGroupingSyntax SqliteSelectTableSyntax = SqliteGroupingSyntax
+  type Sql92SelectTableSetQuantifierSyntax SqliteSelectTableSyntax = SqliteAggregationSetQuantifierSyntax
 
-  selectTableStmt proj from where_ grouping having =
+  selectTableStmt setQuantifier proj from where_ grouping having =
     SqliteSelectTableSyntax $
-    emit "SELECT " <> fromSqliteProjection proj <>
+    emit "SELECT " <>
+    maybe mempty (<> emit " ") (fromSqliteAggregationSetQuantifier <$> setQuantifier) <>
+    fromSqliteProjection proj <>
     maybe mempty (emit " FROM " <>) (fromSqliteFromSyntax <$> from) <>
     maybe mempty (emit " WHERE " <>) (fromSqliteExpression <$> where_) <>
     maybe mempty (emit " GROUP BY " <>) (fromSqliteGrouping <$> grouping) <>

@@ -16,6 +16,7 @@ import Data.Proxy
 import Data.Text (Text)
 import Data.Scientific (Scientific)
 import Data.Int
+import Data.Word
 
 import GHC.Generics
 
@@ -105,6 +106,16 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Int16 where
   defaultSqlDataType _ _ = intType
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Int16
+
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word where
+  defaultSqlDataType _ _ = numericType (Just (10, Nothing))
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word32 where
+  defaultSqlDataType _ _ = numericType (Just (10, Nothing))
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word32
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word16 where
+  defaultSqlDataType _ _ = numericType (Just (5, Nothing))
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word16
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Text where
   defaultSqlDataType _ _ = varCharType Nothing Nothing

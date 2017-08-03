@@ -24,7 +24,7 @@ module Database.Beam.Postgres.Syntax
     , nextSyntaxStep
 
     , PgCommandSyntax(..), PgCommandType(..)
-    , PgSelectSyntax(..)
+    , PgSelectSyntax(..), PgSelectSetQuantifierSyntax(..)
     , PgInsertSyntax(..)
     , PgDeleteSyntax(..)
     , PgUpdateSyntax(..)
@@ -49,6 +49,8 @@ module Database.Beam.Postgres.Syntax
 
     , insertDefaults
     , pgSimpleMatchSyntax
+
+    , pgSelectSetQuantifierDistinctOn
 
     , pgBooleanType, pgByteaType, pgSerialType, pgSmallSerialType, pgBigSerialType
 
@@ -211,6 +213,7 @@ newtype PgUpdateSyntax = PgUpdateSyntax { fromPgUpdate :: PgSyntax }
 
 newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax } deriving Eq
 newtype PgAggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fromPgAggregationSetQuantifier :: PgSyntax }
+newtype PgSelectSetQuantifierSyntax = PgSelectSetQuantifierSyntax { fromPgSelectSetQuantifier :: PgSyntax }
 newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
 newtype PgComparisonQuantifierSyntax = PgComparisonQuantifierSyntax { fromPgComparisonQuantifier :: PgSyntax }
 newtype PgCastTargetSyntax = PgCastTargetSyntax { fromPgCastTarget :: PgSyntax }
@@ -323,10 +326,13 @@ instance IsSql92SelectTableSyntax PgSelectTableSyntax where
   type Sql92SelectTableProjectionSyntax PgSelectTableSyntax = PgProjectionSyntax
   type Sql92SelectTableFromSyntax PgSelectTableSyntax = PgFromSyntax
   type Sql92SelectTableGroupingSyntax PgSelectTableSyntax = PgGroupingSyntax
+  type Sql92SelectTableSetQuantifierSyntax PgSelectTableSyntax = PgSelectSetQuantifierSyntax
 
-  selectTableStmt proj from where_ grouping having =
+  selectTableStmt setQuantifier proj from where_ grouping having =
     PgSelectTableSyntax $
-    emit "SELECT " <> fromPgProjection proj <>
+    emit "SELECT " <>
+    maybe mempty (\setQuantifier' -> fromPgSelectSetQuantifier setQuantifier' <> emit " ") setQuantifier <>
+    fromPgProjection proj <>
     (maybe mempty (emit " FROM " <> ) (coerce from)) <>
     (maybe mempty (emit " WHERE " <>) (coerce where_)) <>
     (maybe mempty (emit " GROUP BY " <>) (coerce grouping)) <>
@@ -577,6 +583,15 @@ instance IsSql92AggregationExpressionSyntax PgExpressionSyntax where
 instance IsSql92AggregationSetQuantifierSyntax PgAggregationSetQuantifierSyntax where
   setQuantifierDistinct = PgAggregationSetQuantifierSyntax $ emit "DISTINCT"
   setQuantifierAll = PgAggregationSetQuantifierSyntax $ emit "ALL"
+
+instance IsSql92AggregationSetQuantifierSyntax PgSelectSetQuantifierSyntax where
+  setQuantifierDistinct = PgSelectSetQuantifierSyntax $ emit "DISTINCT"
+  setQuantifierAll = PgSelectSetQuantifierSyntax $ emit "ALL"
+
+pgSelectSetQuantifierDistinctOn :: [PgExpressionSyntax] -> PgSelectSetQuantifierSyntax
+pgSelectSetQuantifierDistinctOn exprs =
+  PgSelectSetQuantifierSyntax $
+  emit "DISTINCT ON " <> pgParens (pgSepBy (emit ", ") (fromPgExpression <$> exprs))
 
 pgUnAgg :: ByteString -> Maybe PgAggregationSetQuantifierSyntax -> PgExpressionSyntax -> PgExpressionSyntax
 pgUnAgg fn q e =
