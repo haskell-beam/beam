@@ -239,7 +239,7 @@ references_ fk tbl = fk ==. pk tbl
 -- | Only return distinct values from a query
 nub_ :: ( IsSql92SelectSyntax select
         , Projectible (Sql92SelectExpressionSyntax select) r )
-     => Q select db s r -> Q select db s r
+     => Q select be db s r -> Q select be db s r
 nub_ (Q sub) = Q $ liftF (QDistinct (\_ -> setQuantifierDistinct) sub id)
 
 -- | Limit the number of results returned by a query.

@@ -23,3 +23,14 @@ renameDatabase cmdLine from to =
       pure reg { migrationRegistryDatabases = HM.insert to db $
                                               HM.delete from  $
                                               migrationRegistryDatabases reg }
+
+showDatabase :: MigrateCmdLine -> DatabaseName -> IO ()
+showDatabase cmdLine dbName@(DatabaseName dbNameStr) = do
+  reg <- lookupRegistry cmdLine
+
+  case HM.lookup dbName (migrationRegistryDatabases reg) of
+    Nothing -> fail "No such database"
+    Just MigrationDatabase {..} -> do
+      putStrLn ("Database '" ++ dbNameStr ++ "'")
+      putStrLn ("  Backend: " ++ unModuleName migrationDbBackend)
+      putStrLn ("  Conn   : " ++ migrationDbConnString)

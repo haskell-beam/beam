@@ -102,7 +102,7 @@ postgresUriSyntax =
 -- * Functions to query
 
 runSelect :: ( MonadIO m, Functor m, FromBackendRow Postgres a ) =>
-             Pg.Connection -> SqlSelect PgSelectSyntax a -> C.Source m a
+             Pg.Connection -> SqlSelect Postgres PgSelectSyntax a -> C.Source m a
 runSelect conn (SqlSelect (PgSelectSyntax syntax)) = runQueryReturning conn syntax
 
 -- * INSERT INTO

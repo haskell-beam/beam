@@ -35,6 +35,8 @@ library
 
                        Database.Beam.Migrate.Simple
 
+                       Database.Beam.Haskell.Syntax
+
   other-modules:       Database.Beam.Migrate.Generics.Types
                        Database.Beam.Migrate.Generics.Tables
                        Database.Beam.Haskell.Syntax
@@ -61,7 +63,10 @@ library
                        hashable >= 1.2,
                        parallel >= 3.2,
                        deepseq >= 1.4,
-                       ghc-prim >= 0.5
+                       ghc-prim >= 0.5,
+                       containers >= 0.5,
+                       haskell-src-exts >= 1.18,
+                       pretty >= 1.1
   -- hs-source-dirs:      
   default-language:    Haskell2010
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,
