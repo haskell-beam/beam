@@ -695,19 +695,19 @@ instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Id
 
 -- * Nullable checking
 
-data QIfCond expr s a = QIfCond (QExpr expr s Bool) (QExpr expr s a)
-newtype QIfElse expr s a = QIfElse (QExpr expr s a)
+data QIfCond context expr s a = QIfCond (QGenExpr context expr s Bool) (QGenExpr context expr s a)
+newtype QIfElse context expr s a = QIfElse (QGenExpr context expr s a)
 
-then_ :: QExpr expr s Bool -> QExpr expr s a -> QIfCond expr s a
+then_ :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
 then_ cond res = QIfCond cond res
 
-else_ :: QExpr expr s a -> QIfElse expr s a
+else_ :: QGenExpr context expr s a -> QIfElse context expr s a
 else_ = QIfElse
 
 if_ :: IsSql92ExpressionSyntax expr =>
-       [ QIfCond expr s a ]
-    -> QIfElse expr s a
-    -> QExpr expr s a
+       [ QIfCond context expr s a ]
+    -> QIfElse context expr s a
+    -> QGenExpr context expr s a
 if_ conds (QIfElse (QExpr elseExpr)) =
   QExpr (caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond, res)) conds) elseExpr)
 
