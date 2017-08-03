@@ -68,6 +68,7 @@ module Database.Beam.Postgres.Syntax
     , insertReturning
 
     , now_
+    , ilike_
 
     , pgBinOp, pgCompOp, pgUnOp, pgPostFix
 
@@ -1026,6 +1027,12 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
 
 now_ :: QExpr PgExpressionSyntax s LocalTime
 now_ = QExpr (PgExpressionSyntax (emit "NOW()"))
+
+ilike_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
+       => QExpr PgExpressionSyntax s text
+       -> QExpr PgExpressionSyntax s text
+       -> QExpr PgExpressionSyntax s Bool
+ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" a b)
 
 -- * Testing support
 
