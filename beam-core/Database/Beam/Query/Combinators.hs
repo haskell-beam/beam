@@ -592,6 +592,32 @@ instance ( SqlOrderable syntax a
          , SqlOrderable syntax d
          , SqlOrderable syntax e ) => SqlOrderable syntax (a, b, c, d, e) where
     makeSQLOrdering (a, b, c, d, e) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <> makeSQLOrdering e
+instance ( SqlOrderable syntax a
+         , SqlOrderable syntax b
+         , SqlOrderable syntax c
+         , SqlOrderable syntax d
+         , SqlOrderable syntax e
+         , SqlOrderable syntax f ) => SqlOrderable syntax (a, b, c, d, e, f) where
+    makeSQLOrdering (a, b, c, d, e, f) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <> makeSQLOrdering e <> makeSQLOrdering f
+instance ( SqlOrderable syntax a
+         , SqlOrderable syntax b
+         , SqlOrderable syntax c
+         , SqlOrderable syntax d
+         , SqlOrderable syntax e
+         , SqlOrderable syntax f
+         , SqlOrderable syntax g ) => SqlOrderable syntax (a, b, c, d, e, f, g) where
+    makeSQLOrdering (a, b, c, d, e, f, g) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <>
+                                            makeSQLOrdering e <> makeSQLOrdering f <> makeSQLOrdering g
+instance ( SqlOrderable syntax a
+         , SqlOrderable syntax b
+         , SqlOrderable syntax c
+         , SqlOrderable syntax d
+         , SqlOrderable syntax e
+         , SqlOrderable syntax f
+         , SqlOrderable syntax g
+         , SqlOrderable syntax h) => SqlOrderable syntax (a, b, c, d, e, f, g, h) where
+    makeSQLOrdering (a, b, c, d, e, f, g, h) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <>
+                                            makeSQLOrdering e <> makeSQLOrdering f <> makeSQLOrdering g <> makeSQLOrdering h
 
 -- | Order by the given expressions. The return type of the ordering key should
 --   either be the result of 'asc_' or 'desc_' (or another ordering 'QOrd'

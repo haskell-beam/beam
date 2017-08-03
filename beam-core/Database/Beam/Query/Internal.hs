@@ -263,6 +263,9 @@ instance Beamable tbl => ThreadRewritable s (tbl (Nullable (QGenExpr ctxt syntax
 instance ThreadRewritable s (QGenExpr ctxt syntax s a) where
   type WithRewrittenThread s s' (QGenExpr ctxt syntax s a) = QGenExpr ctxt syntax s' a
   rewriteThread _ (QExpr a) = QExpr a
+instance ThreadRewritable s a => ThreadRewritable s [a] where
+  type WithRewrittenThread s s' [a] = [WithRewrittenThread s s' a]
+  rewriteThread s' qs = map (rewriteThread s') qs
 instance ( ThreadRewritable s a, ThreadRewritable s b ) =>
   ThreadRewritable s (a, b) where
   type WithRewrittenThread s s' (a, b) = (WithRewrittenThread s s' a, WithRewrittenThread s s' b)
@@ -330,6 +333,9 @@ instance Beamable tbl => ContextRewritable (tbl (Nullable (QGenExpr old syntax s
 instance ContextRewritable (QGenExpr old syntax s a) where
   type WithRewrittenContext (QGenExpr old syntax s a) ctxt = QGenExpr ctxt syntax s a
   rewriteContext _ (QExpr a) = QExpr a
+instance ContextRewritable a => ContextRewritable [a] where
+  type WithRewrittenContext [a] ctxt = [ WithRewrittenContext a ctxt ]
+  rewriteContext p as = map (rewriteContext p) as
 instance (ContextRewritable a, ContextRewritable b) => ContextRewritable (a, b) where
   type WithRewrittenContext (a, b) ctxt = (WithRewrittenContext a ctxt, WithRewrittenContext b ctxt)
   rewriteContext p (a, b) = (rewriteContext p a, rewriteContext p b)
@@ -399,6 +405,8 @@ instance ProjectibleWithPredicate WindowFrameContext syntax (QWindow syntax s) w
     QWindow <$> mutateM (Proxy @QWindowFrameContext) a
 instance contextPredicate context => ProjectibleWithPredicate contextPredicate syntax (QGenExpr context syntax s a) where
   project' _ mkE (QExpr a) = QExpr <$> mkE (Proxy @context) a
+instance ProjectibleWithPredicate contextPredicate syntax a => ProjectibleWithPredicate contextPredicate syntax [a] where
+  project' p mkE as = traverse (project' p mkE) as
 instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b ) =>
   ProjectibleWithPredicate contextPredicate syntax (a, b) where
 
