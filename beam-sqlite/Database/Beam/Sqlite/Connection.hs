@@ -25,7 +25,7 @@ import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
 
-import           Control.Exception (bracket)
+import           Control.Exception (Exception, bracket, throwIO)
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
 import           Control.Monad.Reader
@@ -42,6 +42,10 @@ import           Network.URI
 
 newtype SqliteM a = SqliteM { runSqliteM :: ReaderT (String -> IO (), Connection) IO a }
   deriving (Monad, Functor, Applicative, MonadIO)
+
+data BeamSqliteError = BeamSqliteError String
+  deriving Show
+instance Exception BeamSqliteError
 
 newtype BeamSqliteParams = BeamSqliteParams [SQLData]
 instance ToRow BeamSqliteParams where
@@ -89,6 +93,23 @@ runSqliteDebug :: (String -> IO ()) -> Connection
 runSqliteDebug printStmt conn x =
   runReaderT (runSqliteM x) (printStmt, conn)
 
+runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
+runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
+    -- If all expressions are simple expressions (no default), then just
+    -- run the INSERT normally
+  | SqliteInsertExpressions es <- vs, any (any (== SqliteExpressionDefault)) es =
+      forM_ es $ \row -> do
+        let (fields', row') = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row
+            SqliteSyntax cmd vals = formatSqliteInsert tbl fields' (SqliteInsertExpressions [ row' ])
+            cmdString = BL.unpack (toLazyByteString cmd)
+        logger (cmdString ++ "\n--With values: " ++ show (D.toList vals))
+        execute conn (fromString cmdString) (D.toList vals)
+  | otherwise = do
+      let SqliteSyntax cmd vals = formatSqliteInsert tbl fields vs
+          cmdString = BL.unpack (toLazyByteString cmd)
+      logger (cmdString ++ "\n--With values: " ++ show (D.toList vals))
+      execute conn (fromString cmdString) (D.toList vals)
+
 instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
   withDatabase = runSqlite
   withDatabaseDebug = runSqliteDebug
@@ -99,9 +120,12 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
       let cmdString = BL.unpack (toLazyByteString cmd)
       liftIO (logger (cmdString ++ "\n-- With values: " ++ show (D.toList vals)))
       liftIO (execute conn (fromString cmdString) (D.toList vals))
+  runNoReturn (SqliteCommandInsert insertStmt) =
+    SqliteM $ do
+      (logger, conn) <- ask
+      liftIO (runSqliteInsert logger conn insertStmt)
 
   runReturningMany (SqliteCommandSyntax (SqliteSyntax cmd vals)) action =
-
       SqliteM $ do
         (logger, conn) <- ask
         let cmdString = BL.unpack (toLazyByteString cmd)
@@ -114,6 +138,11 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
                                 Nothing -> pure Nothing
                                 Just (BeamSqliteRow row) -> pure row
                runReaderT (runSqliteM (action nextRow')) (logger, conn)
+  runReturningMany SqliteCommandInsert {} _ =
+      SqliteM . liftIO . throwIO . BeamSqliteError . mconcat $
+      [ "runReturningMany{Sqlite}: sqlite does not support returning "
+      , "rows from an insert, use Database.Beam.Sqlite.insertReturning "
+      , "for emulation" ]
 
 instance Beam.MonadBeamInsertReturning SqliteCommandSyntax Sqlite Connection SqliteM where
   runInsertReturningList tbl values =
@@ -134,15 +163,13 @@ insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqliteInsertReturning table
                        -> SqliteM [ table Identity ]
-runInsertReturningList (SqliteInsertReturning nm (SqliteInsertSyntax (SqliteSyntax cmd vals))) =
+runInsertReturningList (SqliteInsertReturning nm insertStmt) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $
        withTransaction conn $
          bracket (createInsertedValuesTable conn) (dropInsertedValuesTable conn) $ \() ->
          bracket (createInsertTrigger conn) (dropInsertTrigger conn) $ \() -> do
-           let cmdString = BL.unpack (toLazyByteString cmd)
-           logger (cmdString ++ "\n-- With values: " ++ show (D.toList vals))
-           execute conn (fromString cmdString) (BeamSqliteParams (D.toList vals))
+           runSqliteInsert logger conn insertStmt
            fmap (\(BeamSqliteRow r) -> r) <$> query_ conn "SELECT * FROM inserted_values"
 
   where

@@ -10,10 +10,13 @@ module Database.Beam.Sqlite.Syntax
 
   , SqliteSelectSyntax(..), SqliteInsertSyntax(..)
   , SqliteInsertValuesSyntax(..)
+  , SqliteExpressionSyntax(..)
 
   , SqliteValueSyntax(..)
 
-  , sqliteEscape ) where
+  , sqliteEscape
+
+  , formatSqliteInsert ) where
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Checks
@@ -37,8 +40,12 @@ import           Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           Data.Time
+import           Data.Word
 
 import           Database.SQLite.Simple (SQLData(..))
+
+import           GHC.Float
+import           GHC.Generics
 
 data SqliteSyntax = SqliteSyntax Builder (DL.DList SQLData)
 newtype SqliteData = SqliteData SQLData -- newtype for Hashable
@@ -83,16 +90,28 @@ emitValue v = SqliteSyntax (byteString "?") (DL.singleton v)
 
 -- * Syntax types
 
-newtype SqliteCommandSyntax = SqliteCommandSyntax { fromSqliteCommand :: SqliteSyntax }
+data SqliteCommandSyntax
+  = SqliteCommandSyntax SqliteSyntax
+  | SqliteCommandInsert SqliteInsertSyntax
+
 newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSyntax }
 instance HasQBuilder SqliteSelectSyntax where
   buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
-newtype SqliteInsertSyntax = SqliteInsertSyntax { fromSqliteInsert :: SqliteSyntax }
+data SqliteInsertSyntax
+  = SqliteInsertSyntax
+  { sqliteInsertTable :: T.Text
+  , sqliteInsertFields :: [ T.Text ]
+  , sqliteInsertValues :: SqliteInsertValuesSyntax
+  }
 newtype SqliteUpdateSyntax = SqliteUpdateSyntax { fromSqliteUpdate :: SqliteSyntax }
 newtype SqliteDeleteSyntax = SqliteDeleteSyntax { fromSqliteDelete :: SqliteSyntax }
 
 newtype SqliteSelectTableSyntax = SqliteSelectTableSyntax { fromSqliteSelectTable :: SqliteSyntax }
-newtype SqliteExpressionSyntax = SqliteExpressionSyntax { fromSqliteExpression :: SqliteSyntax } deriving (Show, Eq, Hashable)
+data SqliteExpressionSyntax
+  = SqliteExpressionSyntax SqliteSyntax
+  | SqliteExpressionDefault
+  deriving (Show, Eq, Generic)
+instance Hashable SqliteExpressionSyntax
 newtype SqliteFromSyntax = SqliteFromSyntax { fromSqliteFromSyntax :: SqliteSyntax }
 newtype SqliteComparisonQuantifierSyntax = SqliteComparisonQuantifierSyntax { fromSqliteComparisonQuantifier :: SqliteSyntax }
 newtype SqliteExtractFieldSyntax = SqliteExtractFieldSyntax { fromSqliteExtractField :: SqliteSyntax }
@@ -103,7 +122,9 @@ newtype SqliteOrderingSyntax = SqliteOrderingSyntax { fromSqliteOrdering :: Sqli
 newtype SqliteValueSyntax = SqliteValueSyntax { fromSqliteValue :: SqliteSyntax }
 newtype SqliteTableSourceSyntax = SqliteTableSourceSyntax { fromSqliteTableSource :: SqliteSyntax }
 newtype SqliteFieldNameSyntax = SqliteFieldNameSyntax { fromSqliteFieldNameSyntax :: SqliteSyntax }
-newtype SqliteInsertValuesSyntax = SqliteInsertValuesSyntax { fromSqliteInsertValues :: SqliteSyntax }
+data SqliteInsertValuesSyntax
+  = SqliteInsertExpressions [ [ SqliteExpressionSyntax ] ]
+  | SqliteInsertFromSql SqliteSelectSyntax
 newtype SqliteCreateTableSyntax = SqliteCreateTableSyntax { fromSqliteCreateTable :: SqliteSyntax }
 data SqliteTableOptionsSyntax = SqliteTableOptionsSyntax SqliteSyntax SqliteSyntax
 newtype SqliteColumnSchemaSyntax = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax } deriving (Show, Eq, Hashable)
@@ -119,6 +140,18 @@ newtype SqliteAlterTableActionSyntax = SqliteAlterTableActionSyntax { fromSqlite
 newtype SqliteAlterColumnActionSyntax = SqliteAlterColumnActionSyntax { fromSqliteAlterColumnAction :: Maybe SqliteSyntax }
 newtype SqliteDropTableSyntax = SqliteDropTableSyntax { fromSqliteDropTable :: SqliteSyntax }
 
+fromSqliteExpression :: SqliteExpressionSyntax -> SqliteSyntax
+fromSqliteExpression (SqliteExpressionSyntax s) = s
+fromSqliteExpression SqliteExpressionDefault = emit "NULL /* DEFAULT */"
+
+formatSqliteInsert :: T.Text -> [ T.Text ] -> SqliteInsertValuesSyntax -> SqliteSyntax
+formatSqliteInsert tblNm fields values =
+  emit "INSERT INTO " <> quotedIdentifier tblNm <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
+  case values of
+    SqliteInsertFromSql (SqliteSelectSyntax select) -> select
+    SqliteInsertExpressions es ->
+      emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
+
 instance IsSql92Syntax SqliteCommandSyntax where
   type Sql92SelectSyntax SqliteCommandSyntax = SqliteSelectSyntax
   type Sql92InsertSyntax SqliteCommandSyntax = SqliteInsertSyntax
@@ -126,7 +159,7 @@ instance IsSql92Syntax SqliteCommandSyntax where
   type Sql92DeleteSyntax SqliteCommandSyntax = SqliteDeleteSyntax
 
   selectCmd = SqliteCommandSyntax . fromSqliteSelect
-  insertCmd = SqliteCommandSyntax . fromSqliteInsert
+  insertCmd = SqliteCommandInsert
   updateCmd = SqliteCommandSyntax . fromSqliteUpdate
   deleteCmd = SqliteCommandSyntax . fromSqliteDelete
 
@@ -402,6 +435,18 @@ instance HasSqlValueSyntax SqliteValueSyntax Int32 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Int64 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Word where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Word16 where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Word32 where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Word64 where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Float where
+  sqlValueSyntax f = SqliteValueSyntax (emitValue (SQLFloat (float2Double f)))
+instance HasSqlValueSyntax SqliteValueSyntax Double where
+  sqlValueSyntax f = SqliteValueSyntax (emitValue (SQLFloat f))
 instance HasSqlValueSyntax SqliteValueSyntax Bool where
   sqlValueSyntax = sqlValueSyntax . (\b -> if b then 1 else 0 :: Int)
 instance HasSqlValueSyntax SqliteValueSyntax SqlNull where
@@ -492,7 +537,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
 
   currentTimestampE = SqliteExpressionSyntax (emit "CURRENT_TIMESTAMP")
 
-  defaultE = SqliteExpressionSyntax (emit "NULL")
+  defaultE = SqliteExpressionDefault
 
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
@@ -539,20 +584,14 @@ instance IsSql92AggregationSetQuantifierSyntax SqliteAggregationSetQuantifierSyn
 instance IsSql92InsertSyntax SqliteInsertSyntax where
   type Sql92InsertValuesSyntax SqliteInsertSyntax = SqliteInsertValuesSyntax
 
-  insertStmt tblName fields values =
-    SqliteInsertSyntax $
-    emit "INSERT INTO " <> quotedIdentifier tblName <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
-    fromSqliteInsertValues values
+  insertStmt = SqliteInsertSyntax
 
 instance IsSql92InsertValuesSyntax SqliteInsertValuesSyntax where
   type Sql92InsertValuesExpressionSyntax SqliteInsertValuesSyntax = SqliteExpressionSyntax
   type Sql92InsertValuesSelectSyntax SqliteInsertValuesSyntax = SqliteSelectSyntax
 
-  insertSqlExpressions es =
-    SqliteInsertValuesSyntax $
-    emit "VALUES " <>
-    commas (map (parens . commas . map fromSqliteExpression) es)
-  insertFromSql (SqliteSelectSyntax a) = SqliteInsertValuesSyntax a
+  insertSqlExpressions = SqliteInsertExpressions
+  insertFromSql = SqliteInsertFromSql
 
 instance IsSql92UpdateSyntax SqliteUpdateSyntax where
   type Sql92UpdateFieldNameSyntax SqliteUpdateSyntax = SqliteFieldNameSyntax
