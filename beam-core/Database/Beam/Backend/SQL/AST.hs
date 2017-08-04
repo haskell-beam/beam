@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | This module implements an AST type for SQL92. It allows us to realize
 --   the call structure of the builders defined in 'Database.Beam.Backend.SQL92'
 module Database.Beam.Backend.SQL.AST where
@@ -8,7 +9,11 @@ import Database.Beam.Backend.SQL.SQL92
 import Database.Beam.Backend.SQL.SQL99
 
 import Data.Text (Text)
+import Data.ByteString (ByteString)
+import Data.Time
+import Data.Word (Word16, Word32, Word64)
 import Data.Typeable
+import Data.Int
 
 data Command
   = SelectCommand Select
@@ -365,8 +370,23 @@ instance IsSql92FromSyntax From where
 data Value where
   Value :: (Show a, Eq a, Typeable a) => a -> Value
 
-instance (Show a, Eq a, Typeable a) => HasSqlValueSyntax Value a where
-  sqlValueSyntax = Value
+#define VALUE_SYNTAX_INSTANCE(ty) instance HasSqlValueSyntax Value ty where { sqlValueSyntax = Value }
+VALUE_SYNTAX_INSTANCE(Int)
+VALUE_SYNTAX_INSTANCE(Int16)
+VALUE_SYNTAX_INSTANCE(Int32)
+VALUE_SYNTAX_INSTANCE(Int64)
+VALUE_SYNTAX_INSTANCE(Word)
+VALUE_SYNTAX_INSTANCE(Word16)
+VALUE_SYNTAX_INSTANCE(Word32)
+VALUE_SYNTAX_INSTANCE(Word64)
+VALUE_SYNTAX_INSTANCE(Integer)
+VALUE_SYNTAX_INSTANCE(String)
+VALUE_SYNTAX_INSTANCE(Text)
+VALUE_SYNTAX_INSTANCE(ByteString)
+VALUE_SYNTAX_INSTANCE(LocalTime)
+VALUE_SYNTAX_INSTANCE(UTCTime)
+VALUE_SYNTAX_INSTANCE(Day)
+VALUE_SYNTAX_INSTANCE(TimeOfDay)
 
 instance Eq Value where
   Value a == Value b =
