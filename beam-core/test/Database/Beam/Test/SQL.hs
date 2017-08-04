@@ -770,11 +770,11 @@ tableEquality =
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionValue (Value ("Sales" :: Text)))
             firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
-                                (ExpressionValue (Value (Just ("Jane" :: Text))))
+                                (ExpressionValue (Value ("Jane" :: Text)))
             lastNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
-                               (ExpressionValue (Value (Just ("Smith" :: Text))))
+                               (ExpressionValue (Value ("Smith" :: Text)))
             createdCond = eqE (ExpressionFieldName (QualifiedField depts "head__created"))
-                              (ExpressionValue (Value (Just (Auto (Just now)))))
+                              (ExpressionValue (Value now))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
 -- * Ensure related_ generates the correct ON conditions

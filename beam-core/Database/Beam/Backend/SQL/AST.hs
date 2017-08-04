@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE UndecidableInstances #-}
 -- | This module implements an AST type for SQL92. It allows us to realize
 --   the call structure of the builders defined in 'Database.Beam.Backend.SQL92'
 module Database.Beam.Backend.SQL.AST where
@@ -7,6 +8,8 @@ import Prelude hiding (Ordering)
 
 import Database.Beam.Backend.SQL.SQL92
 import Database.Beam.Backend.SQL.SQL99
+import Database.Beam.Backend.SQL.Types
+import Database.Beam.Backend.Types
 
 import Data.Text (Text)
 import Data.ByteString (ByteString)
@@ -387,6 +390,16 @@ VALUE_SYNTAX_INSTANCE(LocalTime)
 VALUE_SYNTAX_INSTANCE(UTCTime)
 VALUE_SYNTAX_INSTANCE(Day)
 VALUE_SYNTAX_INSTANCE(TimeOfDay)
+VALUE_SYNTAX_INSTANCE(SqlNull)
+VALUE_SYNTAX_INSTANCE(Double)
+VALUE_SYNTAX_INSTANCE(Bool)
+
+instance HasSqlValueSyntax Value x => HasSqlValueSyntax Value (Maybe x) where
+  sqlValueSyntax (Just x) = sqlValueSyntax x
+  sqlValueSyntax Nothing = sqlValueSyntax SqlNull
+
+instance HasSqlValueSyntax Value (Maybe x) => HasSqlValueSyntax Value (Auto x) where
+  sqlValueSyntax (Auto x) = sqlValueSyntax x
 
 instance Eq Value where
   Value a == Value b =
