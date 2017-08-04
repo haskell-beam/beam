@@ -24,7 +24,6 @@ library
                        Database.Beam.Query.CustomSQL
                        Database.Beam.Query.SQL92
                        Database.Beam.Query.Types
-                       Database.Beam.Query.Unsafe
 
                        Database.Beam.Schema
                        Database.Beam.Schema.Tables
