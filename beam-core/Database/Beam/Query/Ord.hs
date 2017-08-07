@@ -16,7 +16,7 @@
 --
 --   Or, for example, @x > ALL(SELECT ..)@ can be written
 --
--- > x >*. anyOf_ ..
+-- > x >*. allOf_ ..
 module Database.Beam.Query.Ord
   ( SqlEq(..), SqlEqQuantified(..)
   , SqlOrd(..), SqlOrdQuantified(..)
