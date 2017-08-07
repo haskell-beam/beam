@@ -538,6 +538,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   currentTimestampE = SqliteExpressionSyntax (emit "CURRENT_TIMESTAMP")
 
   defaultE = SqliteExpressionDefault
+  inE e es = SqliteExpressionSyntax (parens (fromSqliteExpression e) <> emit " IN " <> parens (commas (map fromSqliteExpression es)))
 
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =

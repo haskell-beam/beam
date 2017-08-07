@@ -72,8 +72,21 @@ These are also supported using the `==*.`, `/=*.`, `<*.`, `>*.`, `<=*.`, and
 `>=*.` operators. Like their unquantified counterparts, these operators yield a
 `QGenExpr` of type `Bool`. Unlike the unquantified operators, the second
 argument of these operators is of type `QQuantified`. You can create a
-`QQuantified` from a `QGenExpr` by using the `anyOf_` or `allOf_` functions,
-which correspond to the `ANY` and `ALL` syntax respectively.
+`QQuantified` from a `QGenExpr` by using the `anyOf_/anyIn_` or `allOf_/allIn_`
+functions, which correspond to the `ANY` and `ALL` syntax respectively. `anyOf_`
+and `allOf_` take `Q` expressions (representing a query) and `anyIn_` and
+`allIn_` take lists of expressions.
+
+You can also use `in_` to use the common `IN` predicate.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+limit_ 10 $
+  filter_ (\customer -> customerFirstName customer `in_` [val_ "Joe", val_ "Sam", val_ "Elizabeth"]) $
+  all_ (customer chinookDb)
+```
 
 ## `CASE .. WHEN .. ELSE ..` statements
 

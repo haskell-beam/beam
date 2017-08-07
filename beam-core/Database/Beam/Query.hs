@@ -28,7 +28,8 @@ module Database.Beam.Query
     -- ** Quantified Comparison Operators #quantified-comparison-operator#
     , SqlEqQuantified(..), SqlOrdQuantified(..)
     , QQuantified
-    , anyOf_, allOf_
+    , anyOf_, allOf_, anyIn_, allIn_
+    , in_
 
     , module Database.Beam.Query.Aggregate
 

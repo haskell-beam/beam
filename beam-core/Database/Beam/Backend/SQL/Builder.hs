@@ -239,6 +239,8 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   currentTimestampE = SqlSyntaxBuilder (byteString "CURRENT_TIMESTAMP")
 
   defaultE = SqlSyntaxBuilder (byteString "DEFAULT")
+  inE a es = SqlSyntaxBuilder (byteString "(" <> buildSql a <> byteString ") IN (" <>
+                               buildSepBy (byteString ", ") (map buildSql es))
 
 instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
   distinctE = sqlUnOp "DISTINCT"

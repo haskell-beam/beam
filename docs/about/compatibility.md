@@ -85,7 +85,7 @@ planned.
 | E021-02 Lower case identifiers                                  | TODO     |                                                                                                                                           |
 | E021-03 Trailing underscore                                     | N/A      | Beam will use whatever column names you specify                                                                                           |
 | **E051 Basic query specification**                              |          |                                                                                                                                           |
-| E051-01 SELECT DISTINCT                                         | FULL     | Use `nub_`                                                                                                                  |
+| E051-01 SELECT DISTINCT                                         | FULL     | Use `nub_`                                                                                                                                |
 | E051-02 GROUP BY clause                                         | FULL     | See `aggregate_` or read the [section on aggregates](../user-guide/queries/aggregates.md)                                                 |
 | E051-04 GROUP BY can contain columns not in SELECT              | TODO     | Unsure how this applies to beam in particular                                                                                             |
 | E051-05 Select list items can be renamed                        | N/A      | Beam uses this feature internally, the user never needs it                                                                                |
@@ -96,7 +96,7 @@ planned.
 | **E061 Basic predicates and search conditions**                 |          |                                                                                                                                           |
 | E061-01 Comparison predicate                                    | FULL     | Use the comparison operators (see E011-05)                                                                                                |
 | E061-02 BETWEEN predicate                                       | FULL     | Use `between_`                                                                                                                            |
-| E061-03 IN predicate with list of values                        | TODO     |                                                                                                                                           |
+| E061-03 IN predicate with list of values                        | FULL     | Use `in_`                                                                                                                                  |
 | E061-04 LIKE predicate                                          | FULL     | Use `like_`                                                                                                                               |
 | E061-05 LIKE predicate ESCAPE clause                            | TODO     | Unsure how this would apply                                                                                                               |
 | E061-06 NULL predicate                                          | FULL     | Use `isNull_` and `isNotNull_`                                                                                                            |
