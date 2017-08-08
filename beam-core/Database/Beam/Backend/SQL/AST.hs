@@ -190,6 +190,8 @@ data Expression
   | ExpressionDefault
   | ExpressionRow [ Expression ]
 
+  | ExpressionIn Expression [ Expression ]
+
   | ExpressionIsNull Expression
   | ExpressionIsNotNull Expression
   | ExpressionIsTrue Expression
@@ -297,6 +299,7 @@ instance IsSql92ExpressionSyntax Expression where
   currentTimestampE = ExpressionCurrentTimestamp
 
   defaultE = ExpressionDefault
+  inE = ExpressionIn
 
 instance IsSql99ExpressionSyntax Expression where
   distinctE = ExpressionDistinct

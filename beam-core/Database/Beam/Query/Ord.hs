@@ -22,7 +22,12 @@ module Database.Beam.Query.Ord
   , SqlOrd(..), SqlOrdQuantified(..)
   , QQuantified(..)
 
-  , anyOf_, allOf_, between_ ) where
+  , anyOf_, anyIn_
+  , allOf_, allIn_
+
+  , between_
+
+  , in_ ) where
 
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Types
@@ -41,6 +46,8 @@ data QQuantified expr s r
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
+--
+--   Accepts a subquery. Use 'allIn_' for an explicit list
 allOf_
   :: forall s r select expr db.
    ( ThreadRewritable (QNested s) r
@@ -53,8 +60,22 @@ allOf_
   -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
 allOf_ s = QQuantified quantifyOverAll (subqueryE (buildSqlQuery s))
 
+-- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
+--   <#quantified-comparison-operator quantified comparison operator>
+--
+--   Accepts an explicit list of typed expressions. Use 'allOf_' for
+--   a subquery
+allIn_
+  :: forall s a expr
+   . ( IsSql92ExpressionSyntax expr )
+  => [QExpr expr s a]
+  -> QQuantified expr s a
+allIn_ es = QQuantified quantifyOverAll (rowE (map (\(QExpr e) -> e) es))
+
 -- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
+--
+--   Accepts a subquery. Use 'anyIn_' for an explicit list
 anyOf_
   :: forall s r select expr db.
    ( ThreadRewritable (QNested s) r
@@ -67,12 +88,31 @@ anyOf_
   -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
 anyOf_ s = QQuantified quantifyOverAny (subqueryE (buildSqlQuery s))
 
+-- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
+--   <#quantified-comparison-operator quantified comparison operator>
+--
+--   Accepts an explicit list of typed expressions. Use 'anyOf_' for
+--   a subquery
+anyIn_
+  :: forall s a expr
+   . ( IsSql92ExpressionSyntax expr )
+  => [QExpr expr s a]
+  -> QQuantified expr s a
+anyIn_ es = QQuantified quantifyOverAny (rowE (map (\(QExpr e) -> e) es))
+
 -- | SQL @BETWEEN@ clause
 between_ :: IsSql92ExpressionSyntax syntax
          => QGenExpr context syntax s a -> QGenExpr context syntax s a
          -> QGenExpr context syntax s a -> QGenExpr context syntax s Bool
 between_ (QExpr a) (QExpr min_) (QExpr max_) =
   QExpr (betweenE a min_ max_)
+
+-- | SQL @IN@ predicate
+in_ :: IsSql92ExpressionSyntax syntax
+    => QGenExpr context syntax s a
+    -> [ QGenExpr context syntax s a ]
+    -> QGenExpr context syntax s Bool
+in_ (QExpr row) options = QExpr (inE row (map (\(QExpr o) -> o) options))
 
 -- | Class for expression types or expression containers for which there is a
 --   notion of equality.

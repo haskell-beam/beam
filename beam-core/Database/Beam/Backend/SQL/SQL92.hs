@@ -230,6 +230,8 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
 
   defaultE :: expr
 
+  inE :: expr -> [ expr ] -> expr
+
 instance HasSqlValueSyntax syntax x => HasSqlValueSyntax syntax (SqlSerial x) where
   sqlValueSyntax (SqlSerial x) = sqlValueSyntax x
 

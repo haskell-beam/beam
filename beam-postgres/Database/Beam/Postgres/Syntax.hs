@@ -505,6 +505,9 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
 
   defaultE = PgExpressionSyntax $ emit "DEFAULT"
 
+  inE e es = PgExpressionSyntax $ pgParens (fromPgExpression e) <> emit " IN " <>
+                                  pgParens (pgSepBy (emit ", ") (map fromPgExpression es))
+
 instance IsSqlExpressionSyntaxStringType PgExpressionSyntax String
 instance IsSqlExpressionSyntaxStringType PgExpressionSyntax T.Text
 
