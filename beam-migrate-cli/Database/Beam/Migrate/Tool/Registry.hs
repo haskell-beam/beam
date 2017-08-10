@@ -33,8 +33,6 @@ import           System.Posix.User
 
 import           Text.Read hiding (String)
 
-import           Debug.Trace
-
 newtype MigrateUUID = MigrateUUID { unMigrateUUID :: UUID }
 
 data MigrationFormat = MigrationFormatHaskell | MigrationFormatBackend String
@@ -316,8 +314,7 @@ hashToUUID a =
       uuidWord3 = fromIntegral $ (uuidData `shiftR` 32) .&. 0xFFFFFFFF
       uuidWord4 = fromIntegral $ uuidData .&. 0xFFFFFFFF
 
-  in trace ("Hash" ++ show uuidData ++ " " ++ show wordsData) $
-     fromWords uuidWord1 uuidWord2 uuidWord3 uuidWord4
+  in fromWords uuidWord1 uuidWord2 uuidWord3 uuidWord4
 
 metadataComment :: String -> MigrationMetaData -> String
 metadataComment commentMarker metadata =

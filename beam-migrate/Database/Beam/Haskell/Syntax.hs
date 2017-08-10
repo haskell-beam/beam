@@ -598,6 +598,8 @@ instance IsSql92ExpressionSyntax HsExpr where
   geE q a b = hsApp (hsVar "geE")   [hsMaybe q, a, b]
   leE q a b = hsApp (hsVar "leE")   [hsMaybe q, a, b]
 
+  inE a b = hsApp (hsVar "inE") [a, hsList b]
+
 instance IsSql92QuantifierSyntax HsExpr where
   quantifyOverAll = hsVar "quantifyOverAll"
   quantifyOverAny = hsVar "quantifyOverAny"
@@ -778,7 +780,11 @@ hsDerivingInstance classNm params = Hs.DerivDecl () Nothing (Hs.IRule () Nothing
   where
     instHead = foldl (Hs.IHApp ()) (Hs.IHCon () (Hs.UnQual () (Hs.Ident () (T.unpack classNm)))) params
 
-hsTuple :: [ HsExpr ] -> HsExpr
+hsList, hsTuple :: [ HsExpr ] -> HsExpr
+hsList = foldl (combineHsExpr addList) (HsExpr (Hs.List () []) mempty mempty mempty)
+  where
+    addList (Hs.List () ts) t = Hs.List () (ts ++ [t])
+    addList _ _ = error "addList"
 hsTuple = foldl (combineHsExpr addTuple) (HsExpr (Hs.Tuple () Hs.Boxed []) mempty mempty mempty)
   where
     addTuple (Hs.Tuple () boxed ts) t = Hs.Tuple () boxed (ts ++ [t])
