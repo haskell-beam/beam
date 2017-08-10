@@ -29,7 +29,7 @@ data TableHasColumn syntax where
     => Text {- Table name -}
     -> Text {- Column name -}
     -> Sql92ColumnSchemaColumnTypeSyntax syntax {- Data type -}
---    -> HaskellDataType
+--    -> Maybe HsDataType
     -> TableHasColumn syntax
 instance Hashable (Sql92ColumnSchemaColumnTypeSyntax syntax) => Hashable (TableHasColumn syntax) where
   hashWithSalt salt (TableHasColumn t c s) = hashWithSalt salt (t, c, s)
@@ -66,7 +66,6 @@ instance ( Typeable syntax
     | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
     | Just (TableHasColumn tblNm' colNm' _ :: TableHasColumn syntax) <- cast p' = tblNm' == tblNm && colNm' == colNm
     | otherwise = False
---  haskellPredicate _ = Nothing
 
 data TableHasPrimaryKey
   = TableHasPrimaryKey Text {- Table name -}

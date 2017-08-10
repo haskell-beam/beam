@@ -130,5 +130,5 @@ instance ( Typeable syntax, Typeable (Sql92ColumnSchemaColumnTypeSyntax syntax)
                    map (\cns -> FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableColumnHasConstraint tbl field'' cns :: TableColumnHasConstraint syntax))) constraints
 
 field :: ( IsSql92ColumnSchemaSyntax syntax ) =>
-  FieldReturnType 'False 'False syntax resTy a => Text -> DataType (Sql92ColumnSchemaColumnTypeSyntax syntax) ty -> a
+  FieldReturnType 'False 'False syntax resTy a => Text -> DataType (Sql92ColumnSchemaColumnTypeSyntax syntax) resTy -> a
 field name (DataType ty) = field' (Proxy @'False) (Proxy @'False) name ty Nothing Nothing []

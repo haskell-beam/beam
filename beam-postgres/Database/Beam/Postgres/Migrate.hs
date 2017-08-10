@@ -6,19 +6,23 @@
 
 module Database.Beam.Postgres.Migrate where
 
-import           Database.Beam.Backend.Types
 import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
 import qualified Database.Beam.Migrate.SQL.SQL92 as Db
 import qualified Database.Beam.Migrate.Types as Db
 
+import           Database.Beam.Backend.SQL
+
 import           Database.Beam.Migrate.SQL.BeamExtensions
 import qualified Database.Beam.Migrate.Backend as Tool
+import           Database.Beam.Migrate.Actions (defaultActionProviders)
 
 import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.PgSpecific
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
+
+import           Database.Beam.Haskell.Syntax
 
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg
@@ -28,6 +32,8 @@ import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad
 
+import           Data.Bits
+import           Data.Maybe
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
@@ -54,13 +60,47 @@ migrationBackend = Tool.BeamMigrationBackend
                                  , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
                         (BL.concat . migrateScript)
                         (\options -> Pg.connectPostgreSQL (fromString options) >>= getDbConstraints)
-                        (BCL.unpack . pgRenderSyntaxScript . fromPgCommand)
+                        (BCL.unpack . pgRenderSyntaxScript . fromPgCommand) "sql"
+                        pgPredConverter defaultActionProviders
                         (\options action ->
                             bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
                               left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
   where
     pgToToolError (PgRowParseError err) = show err
     pgToToolError (PgInternalError err) = err
+
+pgPredConverter :: Tool.HaskellPredicateConverter
+pgPredConverter = Tool.easyHsPredicateConverter <>
+                  Tool.hsPredicateConverter pgHasColumn <>
+                  Tool.hsPredicateConverter pgHasColumnConstraint
+  where
+    pgHasColumn (Db.TableHasColumn tblNm colNm pgType :: Db.TableHasColumn PgColumnSchemaSyntax) =
+      Db.SomeDatabasePredicate <$> (Db.TableHasColumn tblNm colNm <$> pgTypeToHs pgType :: Maybe (Db.TableHasColumn HsColumnSchema))
+
+    pgHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c :: Db.TableColumnHasConstraint PgColumnSchemaSyntax)
+      | c == Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing =
+          Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) :: Db.TableColumnHasConstraint HsColumnSchema))
+      | otherwise = Nothing
+      
+
+pgTypeToHs :: PgDataTypeSyntax -> Maybe HsDataType
+pgTypeToHs (PgDataTypeSyntax tyDescr _) =
+  case tyDescr of
+    PgDataTypeDescrOid oid width
+      | Pg.typoid Pg.int2    == oid -> Just smallIntType
+      | Pg.typoid Pg.int4    == oid -> Just intType
+
+      | Pg.typoid Pg.bpchar  == oid -> Just (charType (fromIntegral <$> width) Nothing)
+      | Pg.typoid Pg.varchar == oid -> Just (varCharType (fromIntegral <$> width) Nothing)
+      -- TODO timestamp prec
+      | Pg.typoid Pg.timestamp == oid -> Just (timestampType Nothing False)
+      | Pg.typoid Pg.timestamptz == oid -> Just (timestampType Nothing True)
+
+      | Pg.typoid Pg.numeric == oid ->
+          let decimals = fromMaybe 0 width .&. 0xFFFF
+              prec     = (fromMaybe 0 width `shiftR` 16) .&. 0xFFFF
+          in Just (numericType (Just (fromIntegral prec, Just (fromIntegral decimals))))
+    _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
 migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
 migrateScript steps =
@@ -204,7 +244,7 @@ array (Just sz) (Db.DataType (PgDataTypeSyntax _ syntax)) =
 
 -- * Pseudo-data types
 
-smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax (Auto a)
+smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax (SqlSerial a)
 smallserial = Db.DataType pgSmallSerialType
 serial = Db.DataType pgSerialType
 bigserial = Db.DataType pgBigSerialType

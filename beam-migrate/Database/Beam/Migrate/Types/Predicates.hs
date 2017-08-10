@@ -12,9 +12,6 @@ class (Show p, Typeable p, Hashable p, Eq p) => DatabasePredicate p where
   predicateCascadesDropOn :: DatabasePredicate p' => p -> p' -> Bool
   predicateCascadesDropOn _ _ = False
 
---  haskellPredicate :: p -> Maybe SomeDatabasePredicate
---  haskellPredicate = Just . SomeDatabasePredicate
-
 data SomeDatabasePredicate where
   SomeDatabasePredicate :: DatabasePredicate p =>
                            p -> SomeDatabasePredicate

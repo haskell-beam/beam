@@ -19,9 +19,9 @@ initBeamMigrate _ initCmd = do
 
       let registry' = MigrationRegistry
                     { migrationRegistryDatabases = mempty
-                    , migrationRegistryHead      = headUuid
+                    , migrationRegistryHead      = MigrationHeadBranch "master"
                     , migrationRegistryMigrations = []
-                    , migrationRegistryBranches = []
+                    , migrationRegistryBranches = [ MigrationBranch "master" headUuid ]
 
                     , migrationRegistrySrcDir = initModulePath initCmd
                     , migrationRegistrySchemaModule = initModule initCmd
