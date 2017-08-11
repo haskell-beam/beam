@@ -377,6 +377,18 @@ pgArrayAgg (QExpr a) =
   QExpr . PgExpressionSyntax $
   emit "array_agg" <> pgParens (fromPgExpression a)
 
+pgBoolOr :: QExpr PgExpressionSyntax s a
+         -> QAgg PgExpressionSyntax s Bool
+pgBoolOr (QExpr a) =
+  QExpr . PgExpressionSyntax $
+  emit "bool_or" <> pgParens (fromPgExpression a)
+
+pgBoolAnd :: QExpr PgExpressionSyntax s a
+          -> QAgg PgExpressionSyntax s Bool
+pgBoolAnd (QExpr a) =
+  QExpr . PgExpressionSyntax $
+  emit "bool_and" <> pgParens (fromPgExpression a)
+
 -- ** String aggregations
 
 pgStringAgg :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
