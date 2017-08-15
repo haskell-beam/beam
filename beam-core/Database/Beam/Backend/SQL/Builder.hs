@@ -12,7 +12,8 @@
 --   Always use the provided backends to submit queries and data manipulation
 --   commands to the database.
 module Database.Beam.Backend.SQL.Builder
-  ( SqlSyntaxBuilder(..), buildSepBy
+  ( SqlSyntaxBuilder(..), SqlSyntaxBackend
+  , buildSepBy
   , quoteSql
   , renderSql ) where
 
