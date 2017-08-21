@@ -15,6 +15,7 @@ import Database.Beam.Migrate.Checks
 import Data.Proxy
 import Data.Text (Text)
 import Data.Scientific (Scientific)
+import Data.Time.Calendar (Day)
 import Data.Int
 import Data.Word
 
@@ -130,6 +131,10 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Scientific where
   defaultSqlDataType _ _ = numericType (Just (20, Just 10))
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Scientific
+
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Day where
+  defaultSqlDataType _ _ = dateType
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Day
 
 type Sql92HasDefaultDataType syntax ty =
   ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) ty
