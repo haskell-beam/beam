@@ -644,3 +644,7 @@ instance HasSqlValueSyntax SqliteValueSyntax ByteString where
 instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
     where tmStr = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S%Q")) tm
+
+instance HasSqlValueSyntax SqliteValueSyntax Day where
+  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
+    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat Nothing) tm
