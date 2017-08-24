@@ -15,7 +15,7 @@ import Data.IORef
 
 import Chinook.Schema
 
-exampleQuery :: Q SqliteSelectSyntax ChinookDb s _
+exampleQuery :: Q SqliteSelectSyntax Sqlite ChinookDb s _
 exampleQuery =
   BEAM_PLACEHOLDER
 

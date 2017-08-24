@@ -19,7 +19,7 @@ import Data.Monoid
 
 import Chinook.Schema
 
-exampleQuery :: Q PgSelectSyntax ChinookDb s _
+exampleQuery :: Q PgSelectSyntax Postgres ChinookDb s _
 exampleQuery =
   BEAM_PLACEHOLDER
 

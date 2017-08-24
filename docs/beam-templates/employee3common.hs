@@ -155,7 +155,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartLineItems     :: f (TableEntity LineItemT) }
                         deriving Generic
 
-instance Database ShoppingCartDb
+instance Database be ShoppingCartDb
 
 ShoppingCartDb (TableLens shoppingCartUsers) (TableLens shoppingCartUserAddresses)
                (TableLens shoppingCartProducts) (TableLens shoppingCartOrders)

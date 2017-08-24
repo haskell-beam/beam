@@ -65,7 +65,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartUserAddresses :: f (TableEntity AddressT) }
                         deriving Generic
 
-instance Database ShoppingCartDb
+instance Database be ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings `withDbModification`
