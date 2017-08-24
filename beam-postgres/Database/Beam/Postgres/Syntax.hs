@@ -48,6 +48,8 @@ module Database.Beam.Postgres.Syntax
 
     , PgDataTypeDescr(..)
 
+    , pgCreateExtensionSyntax, pgDropExtensionSyntax
+
     , insertDefaults
     , pgSimpleMatchSyntax
 
@@ -96,8 +98,8 @@ import           Control.Monad.Free.Church
 import           Data.Aeson (Value)
 import           Data.Bits
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as B
 import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByteString)
+import qualified Data.ByteString.Char8 as B
 import           Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy as BL
 import           Data.Coerce
@@ -108,11 +110,11 @@ import           Data.Monoid
 import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as TL
 import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
-import           Data.Word
 import           Data.UUID (UUID)
+import           Data.Word
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
@@ -538,7 +540,7 @@ instance IsSql99ExpressionSyntax PgExpressionSyntax where
 
   functionCallE name args =
     PgExpressionSyntax $
-    pgParens (fromPgExpression name) <>
+    fromPgExpression name <>
     pgParens (pgSepBy (emit ", ") (map fromPgExpression args))
 
   instanceFieldE i nm =
@@ -1031,6 +1033,14 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
          let tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
          in emit " RETURNING "<>
             pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ))))
+
+pgCreateExtensionSyntax :: T.Text -> PgCommandSyntax
+pgCreateExtensionSyntax extName =
+  PgCommandSyntax PgCommandTypeDdl $ emit "CREATE EXTENSION " <> pgQuotedIdentifier extName
+
+pgDropExtensionSyntax :: T.Text -> PgCommandSyntax
+pgDropExtensionSyntax extName =
+  PgCommandSyntax PgCommandTypeDdl $ emit "DROP EXTENSION " <> pgQuotedIdentifier extName
 
 -- -- * Pg-specific Q monad
 

@@ -21,6 +21,7 @@ import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.PgSpecific
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
+import           Database.Beam.Postgres.Extensions
 
 import           Database.Beam.Haskell.Syntax
 
@@ -32,6 +33,7 @@ import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad
 
+import           Data.Aeson
 import           Data.Bits
 import           Data.Maybe
 import           Data.ByteString (ByteString)
@@ -43,6 +45,7 @@ import           Data.Int
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
+import           Data.UUID (UUID)
 import           Data.Typeable
 
 --import qualified Language.Haskell.Exts.Syntax as Hs
@@ -59,9 +62,9 @@ migrationBackend = Tool.BeamMigrationBackend
                                  , ""
                                  , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
                         (BL.concat . migrateScript)
-                        (\options -> Pg.connectPostgreSQL (fromString options) >>= getDbConstraints)
+                        getDbConstraints
                         (BCL.unpack . pgRenderSyntaxScript . fromPgCommand) "sql"
-                        pgPredConverter defaultActionProviders
+                        pgPredConverter (defaultActionProviders <> pgExtensionActionProviders)
                         (\options action ->
                             bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
                               left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
@@ -81,7 +84,6 @@ pgPredConverter = Tool.easyHsPredicateConverter <>
       | c == Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing =
           Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) :: Db.TableColumnHasConstraint HsColumnSchema))
       | otherwise = Nothing
-      
 
 pgTypeToHs :: PgDataTypeSyntax -> Maybe HsDataType
 pgTypeToHs (PgDataTypeSyntax tyDescr _) =
@@ -241,6 +243,15 @@ array Nothing (Db.DataType (PgDataTypeSyntax _ syntax)) =
 array (Just sz) (Db.DataType (PgDataTypeSyntax _ syntax)) =
   Db.DataType (PgDataTypeSyntax (error "can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
               -- (pgArrayTypeHs (Proxy @a) hsTy)
+
+json :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSON a)
+json = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.json) Nothing) (emit "JSON"))
+
+jsonb :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSONB a)
+jsonb = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.jsonb) Nothing) (emit "JSONB"))
+
+uuid :: Db.DataType PgDataTypeSyntax UUID
+uuid = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.uuid) Nothing) (emit "UUID"))
 
 -- * Pseudo-data types
 
