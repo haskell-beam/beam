@@ -71,7 +71,7 @@ data PagilaDb f
   , store      :: f (TableEntity V0001.StoreT)
   , staff      :: f (TableEntity V0001.StaffT)
   } deriving Generic
-instance Database PagilaDb
+instance Database Postgres PagilaDb
 
 migration :: CheckedDatabaseSettings Postgres V0001.PagilaDb
           -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
