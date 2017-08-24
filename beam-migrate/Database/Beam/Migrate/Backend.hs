@@ -31,7 +31,7 @@ instance Monoid HaskellPredicateConverter where
     HaskellPredicateConverter $ \r -> a r <|> b r
 
 data SomeCheckedDatabase be where
-  SomeCheckedDatabase :: Database db
+  SomeCheckedDatabase :: Database be db
                       => CheckedDatabaseSettings be db
                       -> SomeCheckedDatabase be
 
@@ -48,7 +48,7 @@ data BeamMigrationBackend be commandSyntax where
                        { backendName, backendSqlExtension :: String
                        , backendConnStringExplanation :: String
                        , backendRenderSteps :: forall a. MigrationSteps commandSyntax () a -> BL.ByteString
-                       , backendGetDbConstraints :: String -> IO [ SomeDatabasePredicate ]
+                       , backendGetDbConstraints :: hdl -> IO [ SomeDatabasePredicate ]
                        , backendRenderSyntax :: commandSyntax -> String
                        , backendFileExtension :: String
                        , backendConvertToHaskell :: HaskellPredicateConverter

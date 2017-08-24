@@ -64,7 +64,7 @@ type OneToManyOptional be db s tbl rel =
 oneToMany_, oneToOne_
   :: ( IsSql92SelectSyntax syntax
      , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-     , Database db
+     , Database be db
      , Table tbl, Table rel )
   => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch (many) -}
   -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (QExpr (Sql92SelectExpressionSyntax syntax) s))
@@ -82,7 +82,7 @@ oneToManyOptional_, oneToMaybe_
   :: ( IsSql92SelectSyntax syntax
      , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
      , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) SqlNull
-     , Database db
+     , Database be db
      , Table tbl, Table rel )
   => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch -}
   -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
@@ -130,7 +130,7 @@ type ManyToManyThrough be db through left right =
 --   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
 --   for more indformation.
 manyToMany_
-  :: ( Database db, Table joinThrough
+  :: ( Database be db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax
@@ -152,7 +152,7 @@ manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, l, r) -> (l, r)) $
 --   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
 --   for more indformation.
 manyToManyPassthrough_
-  :: ( Database db, Table joinThrough
+  :: ( Database be db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax

@@ -76,7 +76,7 @@ import qualified Lens.Micro as Lens
 --   Entities are documented under [the corresponding
 --   section](Database.Beam.Schema#entities) and in the
 --   [manual](http://tathougies.github.io/beam/user-guide/databases/)
-class Database db where
+class Database be db where
 
     -- | Default derived function. Do not implement this yourself.
     --
@@ -136,7 +136,7 @@ newtype FieldModification f a
 --   only want to rename one table. You can do
 --
 -- > dbModification { tbl1 = modifyTable (\oldNm -> "NewTableName") tableModification }
-dbModification :: forall f be db. Database db => DatabaseModification f be  db
+dbModification :: forall f be db. Database be db => DatabaseModification f be  db
 dbModification = runIdentity $
                  zipTables (Proxy @be) (\_ _ -> pure (EntityModification id)) (undefined :: DatabaseModification f be db) (undefined :: DatabaseModification f be db)
 
@@ -166,7 +166,7 @@ tableModification = runIdentity $
 -- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
 -- >      }
 withDbModification :: forall db f be.
-                      Database db => db f -> DatabaseModification f be db -> db f
+                      Database be db => db f -> DatabaseModification f be db -> db f
 withDbModification db mods =
   runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
 
