@@ -12,6 +12,8 @@ import Control.Applicative
 
 import Data.Text (Text)
 
+-- * Table manipulation
+
 createTable :: ( Beamable table, Table table
                , IsSql92DdlCommandSyntax syntax ) =>
                Text -> TableSchema (Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax syntax)) table
@@ -39,6 +41,20 @@ createTable newTblName tblSettings =
      upDown command Nothing
      pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable newTblName tbl') tblChecks fieldChecks) [])
 
+dropTable :: IsSql92DdlCommandSyntax syntax
+          => CheckedDatabaseEntity be db (TableEntity table)
+          -> Migration syntax ()
+dropTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm _) _) _) =
+  let command = dropTableCmd (dropTableSyntax tblNm)
+  in upDown command Nothing
+
 preserve :: CheckedDatabaseEntity be db e
          -> Migration syntax (CheckedDatabaseEntity be db' e)
 preserve (CheckedDatabaseEntity desc checks) = pure (CheckedDatabaseEntity desc checks)
+
+-- * Alter table
+
+-- alterTable :: CheckedDatabaseEntity be db (TableEntity table)
+--            -> (forall f m. table f -> m (table' f))
+--            -> Migration syntax (CheckedDatabaseEntity be db' (TableEntity table'))
+-- alterTable _ _  = blah
