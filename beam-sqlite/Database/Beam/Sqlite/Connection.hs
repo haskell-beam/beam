@@ -102,12 +102,12 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
         let (fields', row') = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row
             SqliteSyntax cmd vals = formatSqliteInsert tbl fields' (SqliteInsertExpressions [ row' ])
             cmdString = BL.unpack (toLazyByteString cmd)
-        logger (cmdString ++ "\n--With values: " ++ show (D.toList vals))
+        logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
         execute conn (fromString cmdString) (D.toList vals)
   | otherwise = do
       let SqliteSyntax cmd vals = formatSqliteInsert tbl fields vs
           cmdString = BL.unpack (toLazyByteString cmd)
-      logger (cmdString ++ "\n--With values: " ++ show (D.toList vals))
+      logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
       execute conn (fromString cmdString) (D.toList vals)
 
 instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
@@ -118,7 +118,7 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
     SqliteM $ do
       (logger, conn) <- ask
       let cmdString = BL.unpack (toLazyByteString cmd)
-      liftIO (logger (cmdString ++ "\n-- With values: " ++ show (D.toList vals)))
+      liftIO (logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals)))
       liftIO (execute conn (fromString cmdString) (D.toList vals))
   runNoReturn (SqliteCommandInsert insertStmt) =
     SqliteM $ do
@@ -130,7 +130,7 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
         (logger, conn) <- ask
         let cmdString = BL.unpack (toLazyByteString cmd)
         liftIO $ do
-          logger (cmdString ++ "\n-- With values: " ++ show (D.toList vals))
+          logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
           withStatement conn (fromString cmdString) $ \stmt ->
             do bind stmt (BeamSqliteParams (D.toList vals))
                let nextRow' = liftIO (nextRow stmt) >>= \x ->

@@ -4,6 +4,8 @@
 -- ! BUILD_DIR: beam-sqlite/examples/
 module Main where
 
+import Prelude hiding (lookup)
+
 import Database.Beam
 import Database.Beam.Backend.Types
 import Database.Beam.Sqlite
@@ -20,8 +22,8 @@ data BeamDone = BeamDone
   deriving (Show)
 instance Exception BeamDone
 
-exampleQuery :: Q SqliteSelectSyntax Sqlite ChinookDb s _
-exampleQuery =
+exampleQuery :: (String -> SqliteM ()) -> SqliteM ()
+exampleQuery putStrLn = do
   BEAM_PLACEHOLDER
 
 main :: IO ()
@@ -35,7 +37,7 @@ main =
 
      handle (\BeamDone -> pure ()) $
        withTransaction chinook $ do
-         record $ runSelectReturningList $ select $ exampleQuery
+         record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
          throwIO BeamDone
 
      mkStmtList <- readIORef stmts
