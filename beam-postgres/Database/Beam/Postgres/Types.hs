@@ -23,7 +23,7 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.CaseInsensitive (CI)
 import           Data.Int
 import           Data.Ratio (Ratio)
-import           Data.Scientific (Scientific)
+import           Data.Scientific (Scientific, toBoundedInteger)
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime)
@@ -42,6 +42,16 @@ instance Pg.FromField x => Pg.FromField (Auto x) where
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 
+fromScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
+fromScientificOrIntegral = do
+  sciVal <- fmap (toBoundedInteger =<<) peekField
+  case sciVal of
+    Just sciVal' -> do
+      -- If the parse succeeded, consume the field
+      _ <- parseOneField @Postgres @Scientific
+      pure sciVal'
+    Nothing -> fromIntegral <$> fromBackendRow @Postgres @Integer
+
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
 instance FromBackendRow Postgres SqlNull
 instance FromBackendRow Postgres Bool
@@ -51,14 +61,16 @@ instance FromBackendRow Postgres Int
 instance FromBackendRow Postgres Int16
 instance FromBackendRow Postgres Int32
 instance FromBackendRow Postgres Int64
+-- Word values are serialized as SQL @NUMBER@ types to guarantee full domain coverage.
+-- However, we wan them te be serialized/deserialized as whichever type makes sense
 instance FromBackendRow Postgres Word where
-  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
+  fromBackendRow = fromScientificOrIntegral
 instance FromBackendRow Postgres Word16 where
-  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
+  fromBackendRow = fromScientificOrIntegral
 instance FromBackendRow Postgres Word32 where
-  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
+  fromBackendRow = fromScientificOrIntegral
 instance FromBackendRow Postgres Word64 where
-  fromBackendRow = fromIntegral <$> fromBackendRow @Postgres @Integer
+  fromBackendRow = fromScientificOrIntegral
 instance FromBackendRow Postgres Integer
 instance FromBackendRow Postgres ByteString
 instance FromBackendRow Postgres Scientific
