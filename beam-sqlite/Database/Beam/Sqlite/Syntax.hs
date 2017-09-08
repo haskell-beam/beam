@@ -12,6 +12,8 @@ module Database.Beam.Sqlite.Syntax
   , SqliteInsertValuesSyntax(..)
   , SqliteExpressionSyntax(..)
 
+  , SqliteCastTargetSyntax(..)
+
   , SqliteValueSyntax(..)
 
   , sqliteEscape
@@ -129,6 +131,7 @@ newtype SqliteCreateTableSyntax = SqliteCreateTableSyntax { fromSqliteCreateTabl
 data SqliteTableOptionsSyntax = SqliteTableOptionsSyntax SqliteSyntax SqliteSyntax
 newtype SqliteColumnSchemaSyntax = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax } deriving (Show, Eq, Hashable)
 newtype SqliteDataTypeSyntax = SqliteDataTypeSyntax { fromSqliteDataType :: SqliteSyntax } deriving (Show, Eq, Hashable)
+newtype SqliteCastTargetSyntax = SqliteCastTargetSyntax { fromSqliteCastTarget :: SqliteSyntax }
 newtype SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintDefinitionSyntax { fromSqliteColumnConstraintDefinition :: SqliteSyntax } deriving (Show, Eq, Hashable)
 newtype SqliteColumnConstraintSyntax = SqliteColumnConstraintSyntax { fromSqliteColumnConstraint :: SqliteConstraintAttributesSyntax -> SqliteSyntax }
 data SqliteConstraintAttributesSyntax = SqliteConstraintAttributesSyntax (Maybe Bool) (Maybe SqliteSyntax)
@@ -481,7 +484,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionSelectSyntax SqliteExpressionSyntax = SqliteSelectSyntax
   type Sql92ExpressionFieldNameSyntax SqliteExpressionSyntax = SqliteFieldNameSyntax
   type Sql92ExpressionQuantifierSyntax SqliteExpressionSyntax = SqliteComparisonQuantifierSyntax
-  type Sql92ExpressionCastTargetSyntax SqliteExpressionSyntax = SqliteDataTypeSyntax
+  type Sql92ExpressionCastTargetSyntax SqliteExpressionSyntax = SqliteCastTargetSyntax
   type Sql92ExpressionExtractFieldSyntax SqliteExpressionSyntax = SqliteExtractFieldSyntax
 
   addE = binOp "+"; subE = binOp "-"; mulE = binOp "*"; divE = binOp "/"
@@ -528,7 +531,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   extractE field from =
     SqliteExpressionSyntax $
     emit "EXTRACT" <> parens (fromSqliteExtractField field <> emit " FROM " <> parens (fromSqliteExpression from))
-  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteDataType t))
+  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteCastTarget t))
   caseE cases else_ =
     SqliteExpressionSyntax $
     emit "CASE " <>
