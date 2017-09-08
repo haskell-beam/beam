@@ -528,7 +528,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   extractE field from =
     SqliteExpressionSyntax $
     emit "EXTRACT" <> parens (fromSqliteExtractField field <> emit " FROM " <> parens (fromSqliteExpression from))
-  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " TO " <> fromSqliteDataType t))
+  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteDataType t))
   caseE cases else_ =
     SqliteExpressionSyntax $
     emit "CASE " <>

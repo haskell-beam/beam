@@ -494,7 +494,7 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   octetLengthE x = PgExpressionSyntax (emit "OCTET_LENGTH(" <> fromPgExpression x <> emit ")")
   coalesceE es = PgExpressionSyntax (emit "COALESCE(" <> pgSepBy (emit ", ") (map fromPgExpression es) <> emit ")")
   extractE field from = PgExpressionSyntax (emit "EXTRACT(" <> fromPgExtractField field <> emit " FROM (" <> fromPgExpression from <> emit "))")
-  castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") TO " <> fromPgCastTarget to <> emit ")")
+  castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") AS " <> fromPgCastTarget to <> emit ")")
   caseE cases else_ =
       PgExpressionSyntax $
       emit "CASE " <>
