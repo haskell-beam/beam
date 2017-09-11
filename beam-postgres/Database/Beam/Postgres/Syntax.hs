@@ -37,7 +37,7 @@ module Database.Beam.Postgres.Syntax
     , PgTableSourceSyntax(..), PgFieldNameSyntax(..)
     , PgAggregationSetQuantifierSyntax(..)
     , PgInsertValuesSyntax(..), PgInsertOnConflictSyntax(..)
-    , PgInsertOnConflictTargetSyntax(..), PgInsertOnConflictUpdateSyntax(..)
+    , PgInsertOnConflictTargetSyntax(..), PgConflictActionSyntax(..)
     , PgCreateTableSyntax(..), PgTableOptionsSyntax(..), PgColumnSchemaSyntax(..)
     , PgDataTypeSyntax(..), PgColumnConstraintDefinitionSyntax(..), PgColumnConstraintSyntax(..)
     , PgTableConstraintSyntax(..), PgMatchTypeSyntax(..), PgReferentialActionSyntax(..)
@@ -58,9 +58,13 @@ module Database.Beam.Postgres.Syntax
     , pgSerialType, pgSmallSerialType, pgBigSerialType
     , pgBooleanType, pgByteaType, pgBigIntType
 
-    , IsPgInsertOnConflictSyntax(..)
-    , PgInsertOnConflict(..)
-    , onConflictDefault, onConflictUpdate, onConflictDoNothing
+    , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
+    , PgConflictAction(..)
+    , onConflictDefault, onConflict
+    , conflictingFields, conflictingFieldsWhere
+    , conflictingConstraint
+
+    , onConflictDoNothing, onConflictUpdateSet, onConflictUpdateInstead
 
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
     , pgRenderSyntaxScript, pgBuildAction
@@ -233,6 +237,7 @@ newtype PgInsertValuesSyntax = PgInsertValuesSyntax { fromPgInsertValues :: PgSy
 newtype PgInsertOnConflictSyntax = PgInsertOnConflictSyntax { fromPgInsertOnConflict :: PgSyntax }
 newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPgInsertOnConflictTarget :: PgSyntax }
 newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
+newtype PgConflictActionSyntax = PgConflictActionSyntax { fromPgConflictAction :: PgSyntax }
 data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrderingNullOrdering :: Maybe PgNullOrdering }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
@@ -793,49 +798,81 @@ instance IsSql92ColumnConstraintSyntax PgColumnConstraintSyntax where
     maybe mempty (\a -> emit " ON UPDATE " <> fromPgReferentialAction a) onUpdate <>
     maybe mempty (\a -> emit " ON DELETE " <> fromPgReferentialAction a) onDelete
 
-class IsPgInsertOnConflictSyntax insertOnConflict where
-  type PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict :: *
-  type PgInsertOnConflictInsertOnConflictUpdateSyntax insertOnConflict :: *
+newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
+    PgInsertOnConflict (tbl (QField PostgresInaccessible) -> PgInsertOnConflictSyntax)
+newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
+    PgInsertOnConflictTarget (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> PgInsertOnConflictTargetSyntax)
+newtype PgConflictAction (tbl :: (* -> *) -> *) =
+    PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
 
-  onConflictDefaultSyntax :: insertOnConflict
-  onConflictUpdateSyntax :: PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
-                         -> PgInsertOnConflictInsertOnConflictUpdateSyntax insertOnConflict
-                         -> insertOnConflict
-  onConflictDoNothingSyntax :: PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
-                            -> insertOnConflict
+onConflictDefault :: PgInsertOnConflict tbl
+onConflictDefault = PgInsertOnConflict (\_ -> PgInsertOnConflictSyntax mempty)
 
-instance IsPgInsertOnConflictSyntax PgInsertOnConflictSyntax where
-    type PgInsertOnConflictInsertOnConflictTargetSyntax PgInsertOnConflictSyntax = PgInsertOnConflictTargetSyntax
-    type PgInsertOnConflictInsertOnConflictUpdateSyntax PgInsertOnConflictSyntax = PgInsertOnConflictUpdateSyntax
+onConflict :: Beamable tbl
+           => PgInsertOnConflictTarget tbl
+           -> PgConflictAction tbl 
+           -> PgInsertOnConflict tbl
+onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update) =
+  PgInsertOnConflict $ \tbl ->
+  let exprTbl = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (unqualifiedField nm)))) tbl
+  in PgInsertOnConflictSyntax $
+     emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl) <>
+                emit " " <> fromPgConflictAction (update tbl)
 
-    onConflictDefaultSyntax = PgInsertOnConflictSyntax mempty
+conflictingFields :: Projectible PgExpressionSyntax proj
+                  => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
+                  -> PgInsertOnConflictTarget tbl
+conflictingFields makeProjection =
+  PgInsertOnConflictTarget $ \tbl ->
+  PgInsertOnConflictTargetSyntax $
+  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl))))
 
-    onConflictUpdateSyntax target update =
-        PgInsertOnConflictSyntax $
-        emit "ON CONFLICT " <> fromPgInsertOnConflictTarget target <> emit " DO UPDATE " <>
-        fromPgInsertOnConflictUpdate update
+conflictingFieldsWhere :: Projectible PgExpressionSyntax proj
+                       => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
+                       -> (tbl (QExpr PgExpressionSyntax PostgresInaccessible) ->
+                           QExpr PgExpressionSyntax PostgresInaccessible Bool)
+                       -> PgInsertOnConflictTarget tbl
+conflictingFieldsWhere makeProjection makeWhere =
+  PgInsertOnConflictTarget $ \tbl ->
+  PgInsertOnConflictTargetSyntax $
+  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl)))) <>
+  emit " WHERE " <> pgParens (let QExpr (PgExpressionSyntax e) = makeWhere tbl in e)
 
-    onConflictDoNothingSyntax target =
-        PgInsertOnConflictSyntax $
-        emit "ON CONFLICT " <> fromPgInsertOnConflictTarget target <> emit " DO NOTHING"
+conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
+conflictingConstraint nm =
+  PgInsertOnConflictTarget $ \_ ->
+  PgInsertOnConflictTargetSyntax $
+  emit "ON CONSTRAINT" <> pgQuotedIdentifier nm
 
-newtype PgInsertOnConflict insertOnConflict (tbl :: (* -> *) -> *) =
-    PgInsertOnConflict insertOnConflict
+onConflictDoNothing :: PgConflictAction tbl
+onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
 
-onConflictDefault :: IsPgInsertOnConflictSyntax insertOnConflict =>
-                     PgInsertOnConflict insertOnConflict tbl
-onConflictDefault = PgInsertOnConflict onConflictDefaultSyntax
+onConflictUpdateSet :: Beamable tbl
+                    => (tbl (QField PostgresInaccessible) ->
+                        tbl (QExpr PgExpressionSyntax PostgresInaccessible)  ->
+                        [ QAssignment PgFieldNameSyntax PgExpressionSyntax PostgresInaccessible ])
+                    -> PgConflictAction tbl
+onConflictUpdateSet mkAssignments =
+  PgConflictAction $ \tbl ->
+  let assignments = mkAssignments tbl tblExcluded
+      tblExcluded = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (qualifiedField "excluded" nm)))) tbl
 
-onConflictUpdate :: IsPgInsertOnConflictSyntax insertOnConflict =>
-                    PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
-                 -> PgInsertOnConflictInsertOnConflictUpdateSyntax insertOnConflict
-                 -> PgInsertOnConflict insertOnConflict tbl
-onConflictUpdate tgt update = PgInsertOnConflict $ onConflictUpdateSyntax tgt update
+      assignmentSyntaxes = do
+        QAssignment assignments' <- assignments
+        (fieldNm, expr) <- assignments'
+        pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
+  in PgConflictActionSyntax $
+     emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
 
-onConflictDoNothing :: IsPgInsertOnConflictSyntax insertOnConflict =>
-                       PgInsertOnConflictInsertOnConflictTargetSyntax insertOnConflict
-                    -> PgInsertOnConflict insertOnConflict tbl
-onConflictDoNothing tgt = PgInsertOnConflict $ onConflictDoNothingSyntax tgt
+onConflictUpdateInstead :: (Beamable tbl, Projectible T.Text proj)
+                        => (tbl (QExpr T.Text PostgresInaccessible) -> proj)
+                        -> PgConflictAction tbl
+onConflictUpdateInstead mkProj =
+  onConflictUpdateSet $ \tbl _ ->
+  let tblFields = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr nm)) tbl
+      proj = project (mkProj tblFields)
+
+  in map (\fieldNm -> QAssignment [ (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm)) ]) proj
 
 defaultPgValueSyntax :: Pg.ToField a => a -> PgValueSyntax
 defaultPgValueSyntax =
@@ -1004,10 +1041,12 @@ pgBuildAction =
 
 insert :: DatabaseEntity Postgres db (TableEntity table)
        -> SqlInsertValues PgInsertValuesSyntax table
-       -> PgInsertOnConflict PgInsertOnConflictSyntax table
+       -> PgInsertOnConflict table
        -> SqlInsert PgInsertSyntax
 insert tbl values onConflict =
-    let PgInsertReturning a = insertReturning tbl values onConflict (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int))
+    let PgInsertReturning a =
+          insertReturning tbl values onConflict
+                          (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int))
     in SqlInsert (PgInsertSyntax a)
 
 newtype PgInsertReturning a = PgInsertReturning PgSyntax
@@ -1015,24 +1054,27 @@ newtype PgInsertReturning a = PgInsertReturning PgSyntax
 insertReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
                 -> SqlInsertValues PgInsertValuesSyntax table
-                -> PgInsertOnConflict PgInsertOnConflictSyntax table
+                -> PgInsertOnConflict table
                 -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
                 -> PgInsertReturning (QExprToIdentity a)
 
 insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
                 (SqlInsertValues (PgInsertValuesSyntax insertValues))
-                (PgInsertOnConflict (PgInsertOnConflictSyntax onConflict))
+                (PgInsertOnConflict mkOnConflict)
                 returning =
   PgInsertReturning $
   emit "INSERT INTO " <> pgQuotedIdentifier tblNm <>
   emit "(" <> pgSepBy (emit ", ") (allBeamValues (\(Columnar' f) -> pgQuotedIdentifier (_fieldName f)) tblSettings) <> emit ") " <>
-  insertValues <> emit " " <> onConflict <>
+  insertValues <> emit " " <> fromPgInsertOnConflict (mkOnConflict tblFields) <>
   (case returning of
      Nothing -> mempty
      Just mkProjection ->
-         let tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
-         in emit " RETURNING "<>
-            pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ))))
+         emit " RETURNING "<>
+         pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ))))
+   where
+     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
+     tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField tblNm (_fieldName f))) tblSettings
+
 
 pgCreateExtensionSyntax :: T.Text -> PgCommandSyntax
 pgCreateExtensionSyntax extName =
