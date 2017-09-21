@@ -92,6 +92,14 @@ migrateScript renderMigrationHeader renderSyntax (MigrationSteps steps) =
       runF steps (,)
            (\(MigrationRunCommand a _ next) x -> next (x <> renderSyntax a))
 
+-- | Execute a given migration, provided a command to execute arbitrary syntax.
+--   You usually use this with 'runNoReturn'.
+executeMigration :: Applicative m => (syntax -> m ()) -> Migration syntax a -> m a
+executeMigration runSyntax go = runF go pure doStep
+  where
+    doStep (MigrationRunCommand cmd _ next) =
+      runSyntax cmd *> next
+
 evaluateDatabase :: forall syntax a. MigrationSteps syntax () a -> a
 evaluateDatabase (MigrationSteps f) = runF (runKleisli f ()) id (\(MigrationStep _ migration next) -> next (runMigration migration))
   where
