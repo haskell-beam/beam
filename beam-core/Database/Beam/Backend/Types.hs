@@ -14,8 +14,9 @@ module Database.Beam.Backend.Types
 
   , Exposed, Nullable ) where
 
-import Control.Monad.Free.Church
-import Control.Monad.Identity
+import           Control.Monad.Free.Church
+import           Control.Monad.Identity
+import qualified Data.Aeson as Json
 
 import Data.Proxy
 
@@ -41,6 +42,11 @@ class BeamBackend be where
 --   future versions of beam.
 newtype Auto x = Auto { unAuto :: Maybe x }
   deriving (Show, Read, Eq, Ord, Generic)
+instance Json.FromJSON a => Json.FromJSON (Auto a) where
+  parseJSON a = Auto <$> Json.parseJSON a
+instance Json.ToJSON a => Json.ToJSON (Auto a) where
+  toJSON (Auto a) = Json.toJSON a
+  toEncoding (Auto a) = Json.toEncoding a
 
 data FromBackendRowF be f where
   ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
