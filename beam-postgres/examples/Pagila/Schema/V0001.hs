@@ -293,7 +293,7 @@ instance Beamable (PrimaryKey LanguageT)
 instance Beamable LanguageT
 
 lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
-lastUpdateField = field "last_update" timestamp (default_ now_) notNull
+lastUpdateField = field "last_update" timestamp (defaultTo_ now_) notNull
 
 migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
 migration () = do
@@ -323,8 +323,8 @@ migration () = do
                             (field "last_name" (varchar (Just 45)) notNull)
                             (field "email" (varchar (Just 50)))
                             (AddressId (field "address_id" smallint notNull))
-                            (field "activebool" boolean (default_ (val_ True)) notNull)
-                            (field "create_date" date (default_ now_) notNull)
+                            (field "activebool" boolean (defaultTo_ (val_ True)) notNull)
+                            (field "create_date" date (defaultTo_ now_) notNull)
                             lastUpdateField)
            <*> createTable "film"
                  (FilmT     (field "film_id" smallserial)
@@ -353,6 +353,6 @@ migration () = do
                  (StaffT (field "staff_id" smallserial) (field "first_name" (varchar (Just 45)) notNull)
                          (field "last_name" (varchar (Just 45)) notNull)
                          (AddressId (field "address_id" smallint notNull)) (field "email" (varchar (Just 50)))
-                         (StoreId (field "store_id" smallint notNull)) (field "active" boolean (default_ (val_ True)) notNull)
+                         (StoreId (field "store_id" smallint notNull)) (field "active" boolean (defaultTo_ (val_ True)) notNull)
                          (field "username" (varchar (Just 16)) notNull) (field "password" (varchar (Just 40)))
                          lastUpdateField (field "picture" bytea))
