@@ -3,7 +3,8 @@ module Database.Beam.Backend.SQL.Types where
 
 import Database.Beam.Backend.Types
 
-import Data.Bits
+import qualified Data.Aeson as Json
+import           Data.Bits
 
 class ( BeamBackend be ) =>
       BeamSqlBackend be where
@@ -17,3 +18,9 @@ newtype SqlSerial a = SqlSerial { unSerial :: a }
   deriving (Show, Read, Eq, Ord)
 instance FromBackendRow be x => FromBackendRow be (SqlSerial x) where
   fromBackendRow = SqlSerial <$> fromBackendRow
+instance Json.FromJSON a => Json.FromJSON (SqlSerial a) where
+  parseJSON a = SqlSerial <$> Json.parseJSON a
+instance Json.ToJSON a => Json.ToJSON (SqlSerial a) where
+  toJSON (SqlSerial a) = Json.toJSON a
+  toEncoding (SqlSerial a) = Json.toEncoding a
+
