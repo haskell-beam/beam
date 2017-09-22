@@ -54,6 +54,7 @@ main = do
       do putStrLn $ "Loading backend '" ++ migrationCommandBackend ++ "'..."
          putStrLn $ "Loading dirs " ++ show migrationCommandPackagePath
          let ghciArgs = foldMap (\p -> [ "-package-db " <>  p]) migrationCommandPackagePath
+             runInterpreter' :: InterpreterT IO a -> IO (Either InterpreterError a)
              runInterpreter' = unsafeRunInterpreterWithArgs ghciArgs
          res <- runInterpreter' $ do
            unsafeSetGhcOption "-v"
