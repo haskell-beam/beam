@@ -360,7 +360,9 @@ instance IsSql92FromSyntax PgFromSyntax where
       PgFromSyntax $
       coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm
 
-  innerJoin = pgJoin "INNER JOIN"
+  innerJoin a b Nothing = PgFromSyntax (fromPgFrom a <> emit " CROSS JOIN " <> fromPgFrom b)
+  innerJoin a b (Just e) = pgJoin "INNER JOIN" a b (Just e)
+
   leftJoin = pgJoin "LEFT JOIN"
   rightJoin = pgJoin "RIGHT JOIN"
 
@@ -908,10 +910,11 @@ pgUnOp op a =
 pgJoin :: ByteString -> PgFromSyntax -> PgFromSyntax -> Maybe PgExpressionSyntax -> PgFromSyntax
 pgJoin joinType a b Nothing =
   PgFromSyntax $
-  fromPgFrom a <> emit (" " <> joinType <> " ") <> fromPgFrom b
+  fromPgFrom a <> emit (" " <> joinType <> " ") <> fromPgFrom b <> emit " ON TRUE"
 pgJoin joinType a b (Just on) =
   PgFromSyntax $
-  fromPgFrom (pgJoin joinType a b Nothing) <> emit " ON " <> fromPgExpression on
+  fromPgFrom a <> emit (" " <> joinType <> " ") <> fromPgFrom b <>
+  emit " ON " <> fromPgExpression on
 
 pgSepBy :: PgSyntax -> [PgSyntax] -> PgSyntax
 pgSepBy _ [] = mempty
