@@ -4,6 +4,7 @@ module Database.Beam.Backend.SQL.SQL2003
     ( module Database.Beam.Backend.SQL.SQL99
 
     , IsSql2003FromSyntax(..)
+    , IsSql2003OrderingElementaryOLAPOperationsSyntax(..)
     , IsSql2003ExpressionSyntax(..)
     , IsSql2003ExpressionElementaryOLAPOperationsSyntax(..)
     , IsSql2003ExpressionAdvancedOLAPOperationsSyntax(..)
@@ -33,6 +34,11 @@ class IsSql92FromSyntax from =>
                     -> Maybe Integer
                     -> Maybe Text
                     -> from
+
+-- | Optional SQL2003 "Elementary OLAP operations" T611 support
+class IsSql92OrderingSyntax ord =>
+    IsSql2003OrderingElementaryOLAPOperationsSyntax ord where
+    nullsFirstOrdering, nullsLastOrdering :: ord -> ord
 
 class ( IsSql99ExpressionSyntax expr
       , IsSql2003WindowFrameSyntax (Sql2003ExpressionWindowFrameSyntax expr) ) =>

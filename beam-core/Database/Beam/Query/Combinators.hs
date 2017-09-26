@@ -55,7 +55,7 @@ module Database.Beam.Query.Combinators
     , partitionBy_, orderPartitionBy_, withWindow_
 
     -- * Ordering primitives
-    , orderBy_, asc_, desc_
+    , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
     ) where
 
 import Database.Beam.Backend.Types
@@ -633,6 +633,16 @@ orderBy_ :: forall s a ordering syntax db.
             (a -> ordering) -> Q syntax db (QNested s) a -> Q syntax db s (WithRewrittenThread (QNested s) s a)
 orderBy_ orderer (Q q) =
     Q (liftF (QOrderBy (makeSQLOrdering . orderer) q (rewriteThread (Proxy @s))))
+
+nullsFirst_ :: IsSql2003OrderingElementaryOLAPOperationsSyntax syntax
+            => QOrd syntax s a
+            -> QOrd syntax s a
+nullsFirst_ (QExpr e) = QExpr (nullsFirstOrdering e)
+
+nullsLast_ :: IsSql2003OrderingElementaryOLAPOperationsSyntax syntax
+           => QOrd syntax s a
+           -> QOrd syntax s a
+nullsLast_ (QExpr e) = QExpr (nullsLastOrdering e)
 
 -- | Produce a 'QOrd' corresponding to a SQL @ASC@ ordering
 asc_ :: forall syntax s a. IsSql92OrderingSyntax syntax

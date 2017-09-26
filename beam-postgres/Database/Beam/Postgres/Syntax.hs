@@ -222,7 +222,6 @@ newtype PgCastTargetSyntax = PgCastTargetSyntax { fromPgCastTarget :: PgSyntax }
 newtype PgExtractFieldSyntax = PgExtractFieldSyntax { fromPgExtractField :: PgSyntax }
 newtype PgProjectionSyntax = PgProjectionSyntax { fromPgProjection :: PgSyntax }
 newtype PgGroupingSyntax = PgGroupingSyntax { fromPgGrouping :: PgSyntax }
-newtype PgOrderingSyntax = PgOrderingSyntax { fromPgOrdering :: PgSyntax }
 newtype PgValueSyntax = PgValueSyntax { fromPgValue :: PgSyntax }
 newtype PgTableSourceSyntax = PgTableSourceSyntax { fromPgTableSource :: PgSyntax }
 newtype PgFieldNameSyntax = PgFieldNameSyntax { fromPgFieldName :: PgSyntax }
@@ -230,6 +229,17 @@ newtype PgInsertValuesSyntax = PgInsertValuesSyntax { fromPgInsertValues :: PgSy
 newtype PgInsertOnConflictSyntax = PgInsertOnConflictSyntax { fromPgInsertOnConflict :: PgSyntax }
 newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPgInsertOnConflictTarget :: PgSyntax }
 newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
+data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrderingNullOrdering :: Maybe PgNullOrdering }
+
+fromPgOrdering :: PgOrderingSyntax -> PgSyntax
+fromPgOrdering (PgOrderingSyntax s Nothing) = s
+fromPgOrdering (PgOrderingSyntax s (Just PgNullOrderingNullsFirst)) = s <> emit " NULLS FIRST"
+fromPgOrdering (PgOrderingSyntax s (Just PgNullOrderingNullsLast)) = s <> emit " NULLS LAST"
+
+data PgNullOrdering
+  = PgNullOrderingNullsFirst
+  | PgNullOrderingNullsLast
+  deriving (Show, Eq, Generic)
 
 data PgDataTypeDescr
   = PgDataTypeDescrOid Pg.Oid (Maybe Int32)
@@ -318,7 +328,7 @@ instance IsSql92SelectSyntax PgSelectSyntax where
     coerce tbl <>
     (case ordering of
        [] -> mempty
-       ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (coerce ordering)) <>
+       ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)) <>
     (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset)
 
@@ -370,8 +380,12 @@ instance IsSql92FromOuterJoinSyntax PgFromSyntax where
 instance IsSql92OrderingSyntax PgOrderingSyntax where
   type Sql92OrderingExpressionSyntax PgOrderingSyntax = PgExpressionSyntax
 
-  ascOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " ASC")
-  descOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " DESC")
+  ascOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " ASC") Nothing
+  descOrdering e = PgOrderingSyntax (fromPgExpression e <> emit " DESC") Nothing
+
+instance IsSql2003OrderingElementaryOLAPOperationsSyntax PgOrderingSyntax where
+  nullsFirstOrdering o = o { pgOrderingNullOrdering = Just PgNullOrderingNullsFirst }
+  nullsLastOrdering o = o { pgOrderingNullOrdering = Just PgNullOrderingNullsLast }
 
 instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   domainType nm = PgDataTypeSyntax (PgDataTypeDescrDomain nm) (pgQuotedIdentifier nm)
