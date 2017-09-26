@@ -104,6 +104,7 @@ import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -856,6 +857,7 @@ DEFAULT_SQL_SYNTAX(Pg.Date)
 DEFAULT_SQL_SYNTAX(Pg.ZonedTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.LocalTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.UTCTimestamp)
+DEFAULT_SQL_SYNTAX(Scientific)
 
 instance HasSqlValueSyntax PgValueSyntax SqlNull where
   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
