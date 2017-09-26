@@ -403,7 +403,7 @@ planned.
 | **T581 Regular expression substring function**                  | TODO     |                                                                                                                                           |
 | **T591 UNIQUE constraints of possible NULL columns**            | TODO     |                                                                                                                                           |
 | **T601 Local cursor references**                                | N/A      |                                                                                                                                           |
-| **T611 Elementary OLAP operations**                             | PARTIAL  | See `withWindow_`, [window functions](../user-guide/queries/window-functions.md). Need `nullsFirst_` and `nullsLast_`                     |
+| **T611 Elementary OLAP operations**                             | PARTIAL  | See `withWindow_`, [window functions](../user-guide/queries/window-functions.md)                                                          |
 | **T612 Advanced OLAP operations**                               | PARTIAL  | Need `percentRank_`, `cumeDist_`, no exclusions yet                                                                                       |
 | **T613 Sampling**                                               | TODO     |                                                                                                                                           |
 | **T614 NTILE function**                                         | TODO     |                                                                                                                                           |
