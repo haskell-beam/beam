@@ -12,6 +12,7 @@ module Database.Beam.Migrate.Types
 
   , migrationStepsToMigration, runMigrationSilenced
   , eraseMigrationType, migrationStep, upDown
+  , executeMigration
 
   , migrateScript, evaluateDatabase, stepNames ) where
 

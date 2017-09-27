@@ -17,7 +17,8 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Database.Beam.Migrate.Types
+  exposed-modules:     Database.Beam.Migrate
+                       Database.Beam.Migrate.Types
                        Database.Beam.Migrate.Types.Predicates
 
                        Database.Beam.Migrate.Checks
@@ -88,4 +89,5 @@ executable beam-migrate
 source-repository head
   type: git
   location: https://github.com/tathougies/beam.git
-  subdir: beam-migrate            
+  subdir: beam-migrate
+
