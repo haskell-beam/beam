@@ -37,6 +37,19 @@ This extension also provides various window functions for SQL. The only one beam
 currently implements is `RANK()` via the `rank_` function. Contributions are
 appreciated!
 
+### Null Ordering
+
+This optional SQL2003 feature allows nulls to appear before or after non-null
+values in the sort ordering.
+
+!beam-query
+```haskell
+!chinookpg postgres
+limit_ 10 $
+orderBy_ (\e -> (asc_ (addressState (employeeAddress e)), nullsLast_ (desc_ (addressCity (employeeAddress e)))) $
+all_ (employee chinookDb)
+```
+
 ## SQL2003 T612: Advanced OLAP operations
 
 This provides both the `PERCENT_RANK()` and `CUME_DIST()` functions as
