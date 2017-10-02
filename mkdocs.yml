@@ -5,9 +5,14 @@ pages:
   - Home: 'index.md'
   - Frequently Asked Questions: 'about/faq.md'
   - Tutorial:
-      - 'Part 1': 'tutorials/tutorial1.md'
-      - 'Part 2': 'tutorials/tutorial2.md'
-      - 'Part 3': 'tutorials/tutorial3.md'
+      - sqlite:
+        - 'Part 1': 'tutorials/sqlite/tutorial1.md'
+        - 'Part 2': 'tutorials/sqlite/tutorial2.md'
+        - 'Part 3': 'tutorials/sqlite/tutorial3.md'
+      - postgres:
+        - 'Part 1': 'tutorials/postgres/tutorial1.md'
+        - 'Part 2': 'tutorials/postgres/tutorial2.md'
+        - 'Part 3': 'tutorials/postgres/tutorial3.md'
   - User Guide:
       - 'Models': 'user-guide/models.md'
       - 'Databases': 'user-guide/databases.md'
