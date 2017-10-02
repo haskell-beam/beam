@@ -15,6 +15,7 @@ import Database.Beam.Backend.SQL.AST
 import Database.Beam.Backend.SQL.SQL92
 
 import Control.Monad.Identity
+import Data.Vector.Sized (Vector)
 
 type family QExprToIdentity x
 type instance QExprToIdentity (table (QGenExpr context syntax s)) = table Identity
@@ -32,6 +33,7 @@ type instance QExprToIdentity (a, b, c, d, e, f, g) =
 type instance QExprToIdentity (a, b, c, d, e, f, g, h) =
   ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
   , QExprToIdentity g, QExprToIdentity h )
+type instance QExprToIdentity (Vector n a) = Vector n (QExprToIdentity a)
 
 class IsSql92SelectSyntax selectSyntax => HasQBuilder selectSyntax where
   buildSqlQuery :: Projectible (Sql92SelectExpressionSyntax selectSyntax) a =>
