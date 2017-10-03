@@ -180,64 +180,140 @@ Fixtures
 
 Let's put some sample data into a new database.
 
-```haskell
-conn <- open "shoppingcart3.db"
+Create a new file called `tutorial-3-schema.sql`
 
-execute_ conn "CREATE TABLE cart_users (email VARCHAR NOT NULL, first_name VARCHAR NOT NULL, last_name VARCHAR NOT NULL, password VARCHAR NOT NULL, PRIMARY KEY( email ));"
-execute_ conn "CREATE TABLE addresses ( id INTEGER PRIMARY KEY AUTOINCREMENT, address1 VARCHAR NOT NULL, address2 VARCHAR, city VARCHAR NOT NULL, state VARCHAR NOT NULL, zip VARCHAR NOT NULL, for_user__email VARCHAR NOT NULL );"
-execute_ conn "CREATE TABLE products ( id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR NOT NULL, description VARCHAR NOT NULL, price INT NOT NULL );"
-execute_ conn "CREATE TABLE orders ( id INTEGER PRIMARY KEY AUTOINCREMENT, date TIMESTAMP NOT NULL, for_user__email VARCHAR NOT NULL, ship_to_address__id INT NOT NULL, shipping_info__id INT);"
-execute_ conn "CREATE TABLE shipping_info ( id INTEGER PRIMARY KEY AUTOINCREMENT, carrier VARCHAR NOT NULL, tracking_number VARCHAR NOT NULL);"
-execute_ conn "CREATE TABLE line_items (item_in_order__id INTEGER NOT NULL, item_for_product__id INTEGER NOT NULL, item_quantity INTEGER NOT NULL)"
+```sql
+create table cart_users (
+  email      varchar not null primary key,
+  first_name varchar not null,
+  last_name  varchar not null,
+  password   varchar not null
+);
+
+create table addresses (
+  id              serial primary key,
+  address1        varchar not null,
+  address2        varchar,
+  city            varchar not null,
+  state           varchar not null,
+  zip             varchar not null,
+  for_user__email varchar not null references cart_users (email)
+);
+
+create table products (
+  id          serial primary key,
+  title       varchar not null,
+  description varchar not null,
+  price       integer not null
+);
+
+create table orders (
+  id                  serial primary key,
+  date                timestamp without time zone not null,
+  for_user__email     varchar not null references cart_users (email),
+  ship_to_address__id integer not null references addresses (id),
+  shipping_info__id   integer /* this is a nullable foreign key as per the tutorial */
+);
+
+create table shipping_info (
+  id              serial primary key,
+  carrier         varchar not null,
+  tracking_number varchar not nulL
+);
+
+create table line_items (
+  item_in_order__id    integer not null references orders (id),
+  item_for_product__id integer not null references products (id),
+  item_quantity        integer not nulL
+);
+```
+
+```console
+$ createdb shoppingcart3
+$ psql -d shoppingcart3 -f `tutorial-3-schema.sql`
 ```
 
 Let's put some sample data into our database. Below, we will use the
-`beam-sqlite` functions `insertReturning` and `runInsertReturningList` to insert
+`beam-postgres` functions `insertReturning` and `runInsertReturningList` to insert
 rows *and* retrieve the inserted rows from the database. This will let us see
 what values the auto-incremented `id` columns took on, which will allow us to
 create references to these inserted rows.
 
+Let's first insert some users -- you have seen this before in the previous
+tutorials, so the explanation is skipped.
+
 ```haskell
-let users@[james, betty, sam] =
-          [ User "james@example.com" "James" "Smith"  "b4cc344d25a2efe540adbf2678e2304c" {- james -}
-          , User "betty@example.com" "Betty" "Jones"  "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
-          , User "sam@example.com"   "Sam"   "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -} ]
-    addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
+users :: [User]
+users@[james, betty, sam] = [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
+                            , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
+                            , User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"]
 
-                , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
-                , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty) ]
+insertUsers :: Connection -> IO ()
+insertUsers conn =
+  withDatabaseDebug putStrLn conn $ B.runInsert $
+    B.insert (_shoppingCartUsers shoppingCartDb) $
+    insertValues users
+```
 
-    products = [ Product (Auto Nothing) "Red Ball" "A bright red, very spherical ball" 1000
-               , Product (Auto Nothing) "Math Textbook" "Contains a lot of important math theorems and formulae" 2500
-               , Product (Auto Nothing) "Intro to Haskell" "Learn the best programming language in the world" 3000
-               , Product (Auto Nothing) "Suitcase" "A hard durable suitcase" 15000 ]
+Inserting to the rest of the tables is a little bit different -- we want to see
+the incremented id key after it is written to the database.  The other functions
+inserting into other tables will need these returned to get the proper primary
+key.
 
-(jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase) <-
-  withDatabaseDebug putStrLn conn $ do
-    runInsert $ insert (shoppingCartDb ^. shoppingCartUsers) $
-                insertValues users
-  
-    [jamesAddress1, bettyAddress1, bettyAddress2] <-
-      runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertValues addresses
-      
-    [redBall, mathTextbook, introToHaskell, suitcase] <-
-      runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertValues products
-      
-    pure ( jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase )
+Whereas with an insert with no returning values has the syntax `B.runInsert $
+B.insert <table> <values>`, inserting and returning a list of what you
+inserted has the syntax `runInsertReturningList <table> <values>`.
+
+```haskell
+addresses :: [Address]
+addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
+            , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
+            , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty)
+            ]
+
+products :: [Product]
+products = [ Product (Auto Nothing) "Red Ball" "A bright red, very spherical ball" 1000
+           , Product (Auto Nothing) "Math Textbook" "Contains a lot of important math theorems and formulae" 2500
+           , Product (Auto Nothing) "Intro to Haskell" "Learn the best programming language in the world" 3000
+           , Product (Auto Nothing) "Suitcase" "A hard durable suitcase" 15000
+           ]
+
+insertAddresses :: Connection -> IO [Address]
+insertAddresses conn =
+  withDatabaseDebug putStrLn conn $
+    runInsertReturningList (shoppingCartDb ^. shoppingCartUserAddresses) $
+    insertValues addresses
+
+insertProducts :: Connection -> IO [Product]
+insertProducts conn =
+  withDatabaseDebug putStrLn conn $
+    runInsertReturningList (shoppingCartDb ^. shoppingCartProducts) $
+    insertValues products
+```
+
+If we want to use what the insertions return we can desructure them on the left
+hand side of a do expression in our main function
+
+```haskell
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "host=localhost dbname=shoppingcart3"
+  insertUsers conn
+  addresses@[jamesAddress1, bettyAddress1, bettyAddress2] <- insertAddresses conn
+  products@[redBall, mathTextbook, introToHaskell, suitcase] <- insertProducts conn
+  [bettyShippingInfo] <- insertShippingInfos conn
 ```
 
 Now, if we take a look at one of the returned addresses, like `jamesAddress1`,
-we see it has had it's `Auto` field assigned correctly.
+we see it has had it's `Auto` field assigned correctly.  You put a `putStrLn
+jamesAddress1` you will see:
 
 ```haskell
-Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro> jamesAddress1
 Address {_addressId = Auto {unAuto = Just 1}, _addressLine1 = "123 Little Street", _addressLine2 = Nothing, _addressCity = "Boston", _addressState = "MA", _addressZip = "12345", _addressForUser = UserId "james@example.com"}
 ```
 
 !!! note "Note"
-    `insertReturning` and `runInsertReturningList` are from the `beam-sqlite`
+    `insertReturning` and `runInsertReturningList` are from the `beam-postgres`
     package. They emulate the `INSERT .. RETURNING ..` functionatily you may
     expect in other databases. Because this emulation is backend-specific it is
     part of the backend package, rather than `beam-core`.
@@ -252,136 +328,135 @@ Now we can insert shipping information. Of course, the shipping information
 contains the `ShippingCarrier` enumeration.
 
 ```haskell
-bettyShippingInfo <- 
-  withDatabaseDebug putStrLn conn $ do
-    [bettyShippingInfo] <-
-      runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
-      insertValues [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
-    pure bettyShippingInfo
+shippingInfos :: [ShippingInfo]
+shippingInfos = [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
+
+insertShippingInfos :: Connection -> IO [ShippingInfo]
+insertShippingInfos conn =
+ withDatabaseDebug putStrLn conn $
+  runInsertReturningList (shoppingCartDb ^. shoppingCartShippingInfos) $
+  insertValues shippingInfos
 ```
 
-If you run this, you'll get an error from GHCi.
+The compiler is going to yell at you when you type this function up.
 
 ```
-<interactive>:263:7: error:
-    * No instance for (Database.Beam.Backend.Types.FromBackendRow
-                         Sqlite ShippingCarrier)
-        arising from a use of 'runInsertReturningList'
-    * In a stmt of a 'do' block:
-        [bettyShippingInfo] <- runInsertReturningList
-                               $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                 $ insertValues
-                                     [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]
-      In the second argument of '($)', namely
-        'do { [bettyShippingInfo] <- runInsertReturningList
-                                     $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                       $ insertValues
-                                           [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"];
-              pure bettyShippingInfo }''
-      In the first argument of 'GHC.GHCi.ghciStepIO ::
-                                  forall a. IO a -> IO a', namely
-        'withDatabaseDebug putStrLn conn
-         $ do { [bettyShippingInfo] <- runInsertReturningList
-                                       $ insertReturning
-                                           (shoppingCartDb ^. shoppingCartShippingInfos)
-                                         $ insertValues
-                                             [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"];
-                pure bettyShippingInfo }'
-
-<interactive>:265:7: error:
-    * No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax
-                         SqliteValueSyntax ShippingCarrier)
-        arising from a use of 'insertValues'
-    * In the second argument of '($)', namely
-        'insertValues
-           [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]''
-      In the second argument of '($)', namely
-        'insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-         $ insertValues
-             [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]'
-      In a stmt of a 'do' block:
-        [bettyShippingInfo] <- runInsertReturningList
-                               $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                 $ insertValues
-                                     [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]
+error:
+• No instance for (FromBackendRow Postgres ShippingCarrier)
+    arising from a use of ‘runInsertReturningList’
+• In the expression:
+    runInsertReturningList
+      (shoppingCartDb ^. shoppingCartShippingInfos)
+      In the second argument of ‘($)’, namely
+        ‘runInsertReturningList
+          (shoppingCartDb ^. shoppingCartShippingInfos)
+        $ insertValues shippingInfos’
+      In the expression:
+        withDatabaseDebug putStrLn conn
+        $ runInsertReturningList
+            (shoppingCartDb ^. shoppingCartShippingInfos)
+          $ insertValues shippingInfos (intero)
+error:
+• No instance for (HasSqlValueSyntax PgValueSyntax ShippingCarrier)
+    arising from a use of ‘insertValues’
+• In the second argument of ‘($)’, namely
+    ‘insertValues shippingInfos’
+    In the second argument of ‘($)’, namely
+      ‘runInsertReturningList
+        (shoppingCartDb ^. shoppingCartShippingInfos)
+      $ insertValues shippingInfos’
+    In the expression:
+      withDatabaseDebug putStrLn conn
+      $ runInsertReturningList
+          (shoppingCartDb ^. shoppingCartShippingInfos)
+        $ insertValues shippingInfos (intero)
 ```
 
 These errors are because there's no way to express a `ShippingCarrier` in the
 backend syntax. We can fix this by writing instances for beam. We can re-use the
-functionality we already have for `String`.
+functionality we already have for `String`.  Let's start with
+`HasSqlValueSyntax` first.
 
 The `HasSqlValueSyntax` class tells us how to convert a Haskell value into a
 corresponding backend value.
 
-```haskell
-import Database.Beam.Backend.SQL
+We'll need a new language pragma, and another import.
 
-:set -XUndecidableInstances
+```haskell
+{-# LANGUAGE UndecidableInstances #-}
+import Database.Beam.Backend.SQL
 
 instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
   sqlValueSyntax = autoSqlValueSyntax
 ```
+
+That will take care of the value syntax error, but we still need the
+`FromBackendRow` error addressed.
 
 The `FromBackendRow` class tells us how to convert a value from the database
 into a corresponding Haskell value. Most often, it is enough to declare an empty
 instance, so long as there is a backend-specific instance for unmarshaling your
 data type.
 
-For example,
+We will need another language pragma and another import
 
 ```haskell
-Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro> import Database.Beam.Backend
-Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro Database.Beam.Backend> :set -XMultiParamTypeClasses
-Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro Database.Beam.Backend> instance FromBackendRow Sqlite ShippingCarrier
-
-<interactive>:271:10: error:
-    * No instance for (Database.SQLite.Simple.FromField.FromField
-                         ShippingCarrier)
-        arising from a use of 'Database.Beam.Backend.Types.$dmfromBackendRow'
-    * In the expression:
-        Database.Beam.Backend.Types.$dmfromBackendRow
-          @Sqlite @ShippingCarrier
-      In an equation for 'fromBackendRow':
-          fromBackendRow
-            = Database.Beam.Backend.Types.$dmfromBackendRow
-                @Sqlite @ShippingCarrier
-      In the instance declaration for
-        'FromBackendRow Sqlite ShippingCarrier'
+{-# LANGUAGE MultiParamTypeClasses #-}
+import           Database.Beam.Backend
+instance FromBackendRow Postgres ShippingCarrier
 ```
 
-Let's see if we can write `Database.SQLite.Simple.FromField.FromField` instance
-for `ShippingCarrier` and then let's try re-instantiating `FromBackendRow`.
+This gets rid of another error, but oh no! Another error has reared its ugly
+head!
 
 ```haskell
-import Database.SQLite.Simple.FromField
-import Text.Read
+error:
+  • No instance for (Database.PostgreSQL.Simple.FromField.FromField ShippingCarrier)
+      arising from a use of ‘Database.Beam.Backend.Types.$dmfromBackendRow’
+  • In the expression:
+      Database.Beam.Backend.Types.$dmfromBackendRow
+        @Postgres @ShippingCarrier
+    In an equation for ‘fromBackendRow’:
+        fromBackendRow
+          = Database.Beam.Backend.Types.$dmfromBackendRow
+              @Postgres @ShippingCarrier
+    In the instance declaration for
+      ‘FromBackendRow Postgres ShippingCarrier’
+```
+
+Let's see if we can write `Database.PostgreSQL.Simple.FromField.FromField` instance
+for `ShippingCarrier` and then let's try put our instance declaration for
+`FromBackendRow` after that.
+
+```haskell
+import           Database.PostgreSQL.Simple.FromField
+import           Text.Read
 
 instance FromField ShippingCarrier where
   fromField f = do x <- readMaybe <$> fromField f
                    case x of
                      Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
                      Just x -> pure x
-instance FromBackendRow be ShippingCarrier
+
+instance FromBackendRow Postgres ShippingCarrier
 ```
 
-Now, if we try to insert the shipping info again, it works.
+Now, we can insert shipping information in our main function!
 
 ```haskell
-bettyShippingInfo <- 
-  withDatabaseDebug putStrLn conn $ do
-    [bettyShippingInfo] <-
-      runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
-      insertValues [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
-    pure bettyShippingInfo
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "host=localhost dbname=shoppingcart3"
+  insertUsers conn
+  addresses@[jamesAddress1, bettyAddress1, bettyAddress2] <- insertAddresses conn
+  products@[redBall, mathTextbook, introToHaskell, suitcase] <- insertProducts conn
+  [bettyShippingInfo] <- insertShippingInfos conn
 ```
 
 And if we look at the value of `bettyShippingInfo`, `ShippingCarrier` has been
 stored correctly.
 
 ```haskell
-> bettyShippingInfo
 ShippingInfo {_shippingInfoId = Auto {unAuto = Just 1}, _shippingInfoCarrier = USPS, _shippingInfoTrackingNumber = "12345790ABCDEFGHI"}
 ```
 
@@ -396,18 +471,31 @@ a timestamp set by the database.
 ```haskell
 !employee3sql sql
 !employee3out console
-[ jamesOrder1, bettyOrder1, jamesOrder2 ] <-
-  withDatabaseDebug putStrLn conn $ do
-    runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartOrders) $
-      insertExpressions $
-      [ Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ 
-      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo))) 
-      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ ]
-      
-print jamesOrder1
-print bettyOrder1
-print jamesOrder2
+insertOrders :: Connection -> [Address] -> ShippingInfo -> IO [Order]
+insertOrders conn [jamesAddress1, bettyAddress1, bettyAddress2] bettyShippingInfo =
+  withDatabaseDebug putStrLn conn $
+    runInsertReturningList (shoppingCartDb ^. shoppingCartOrders) $
+    insertExpressions [ Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_
+                      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo)))
+                      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_
+                      ]
+```
+
+You can also do this with `insertValues` -- we won't need all the calls to
+`val_` and we will need to get the current utc time and make that into a `LocalTime`
+
+```haskell
+insertOrders :: Connection -> [Address] -> ShippingInfo -> IO [Order]
+insertOrders conn [jamesAddress1, bettyAddress1, bettyAddress2] bettyShippingInfo =
+  do
+    time <- getCurrentTime
+    let localtime = utcToLocalTime utc time
+    withDatabaseDebug putStrLn conn $
+      runInsertReturningList (shoppingCartDb ^. shoppingCartOrders) $
+      insertValues [ Order (Auto Nothing) localtime (pk james) (pk jamesAddress1) nothing_
+                   , Order (Auto Nothing) localtime (pk betty) (pk bettyAddress1) (just_ (pk bettyShippingInfo))
+                   , Order (Auto Nothing) localtime (pk james) (pk jamesAddress1) nothing_
+                   ]
 ```
 
 Finally, let's add some line items
@@ -415,21 +503,35 @@ Finally, let's add some line items
 !beam-query
 ```haskell
 !employee3sql-1 sql
-let lineItems = [ LineItem (pk jamesOrder1) (pk redBall) 10
-                , LineItem (pk jamesOrder1) (pk mathTextbook) 1
-                , LineItem (pk jamesOrder1) (pk introToHaskell) 4
-
-                , LineItem (pk bettyOrder1) (pk mathTextbook) 3
-                , LineItem (pk bettyOrder1) (pk introToHaskell) 3
-
-                , LineItem (pk jamesOrder2) (pk mathTextbook) 1 ]
-
-withDatabaseDebug putStrLn conn $ do
-  runInsert $ insert (shoppingCartDb ^. shoppingCartLineItems) $
-    insertValues lineItems
+insertLineItems :: Connection -> [Order] -> [Product] -> IO ()
+insertLineItems conn orders@[jamesOrder1, bettyOrder1, jamesOrder2] products@[redBall, mathTextbook, introToHaskell, suitcase] =
+  withDatabaseDebug putStrLn conn $
+  B.runInsert $ B.insert (shoppingCartDb ^. shoppingCartLineItems) $
+  insertValues [ LineItem (pk jamesOrder1) (pk redBall) 10
+               , LineItem (pk jamesOrder1) (pk mathTextbook) 1
+               , LineItem (pk jamesOrder1) (pk introToHaskell) 4
+               , LineItem (pk bettyOrder1) (pk mathTextbook) 3
+               , LineItem (pk bettyOrder1) (pk introToHaskell) 3
+               , LineItem (pk jamesOrder2) (pk mathTextbook) 1 ]
 ```
 
 Phew! Let's write some queries on this data!
+
+Our main function now looks like this:
+
+```haskell
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "host=localhost dbname=shoppingcart3"
+  insertUsers conn
+  addresses@[jamesAddress1, bettyAddress1, bettyAddress2] <- insertAddresses conn
+  products@[redBall, mathTextbook, introToHaskell, suitcase] <- insertProducts conn
+  [bettyShippingInfo] <- insertShippingInfos conn
+  orders@[jamesOrder1, bettyOrder1, jamesOrder2] <- insertOrders conn addresses bettyShippingInfo
+  insertLineItems conn orders products
+```
+
+And inserts all the data to all the tables we have defined.
 
 Would you like some left joins with that?
 ========================
@@ -443,15 +545,13 @@ orders.
 ```haskell
 !employee3sql-2 sql
 !employee3out-2 out
-usersAndOrders <-
+selectAllUsersAndOrdersLeftJoin :: Connection -> IO [(User, Maybe Order)]
+selectAllUsersAndOrdersLeftJoin conn =
   withDatabaseDebug putStrLn conn $
-    runSelectReturningList $
-    select $ do
-      user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
-      order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
-      pure (user, order)
-      
-mapM_ print usersAndOrders
+      runSelectReturningList $ select $ do
+        user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
+        order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
+        pure (user, order)
 ```
 
 Notice that sam is included in the result set, even though he doesn't have any
@@ -467,16 +567,14 @@ find users who have no associated orders.
 ```haskell
 !employee3sql-2 sql
 !employee3out-2 out
-usersWithNoOrders <-
-  withDatabaseDebug putStrLn conn $
-    runSelectReturningList $
-    select $ do
+selectUsersWithNoOrdersLeftJoin :: Connection -> IO [User]
+selectUsersWithNoOrdersLeftJoin conn =
+   withDatabaseDebug putStrLn conn $
+    runSelectReturningList $ select $ do
       user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
       order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
       guard_ (isNothing_ order)
       pure user
-      
-mapM_ print usersWithNoOrders
 ```
 
 We see that beam generates a sensible SQL `SELECT` and `WHERE` clause.
@@ -487,16 +585,40 @@ We can also use the `exists_` combinator to utilize the SQL `EXISTS` clause.
 ```haskell
 !employee3sql-2 sql
 !employee3out-2 out
-usersWithNoOrders <-
-  withDatabaseDebug putStrLn conn $
-    runSelectReturningList $
-    select $ do
+selectUsersWithNoOrdersExistsCombinator :: Connection -> IO [User]
+selectUsersWithNoOrdersExistsCombinator conn =
+   withDatabaseDebug putStrLn conn $
+    runSelectReturningList $ select $ do
       user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
       guard_ (not_ (exists_ (filter_ (\order -> _orderForUser order `references_` user) (all_ (shoppingCartDb ^. shoppingCartOrders)))))
       pure user
-      
-mapM_ print usersWithNoOrders
 ```
+
+!!! warning "TODO BUG IN SQL GENERATION"
+    This is not generating the correct sql for postgres.  It complains at us
+    with the hint: `There is a column named "email" in table "t0", but it cannot
+    be referenced from this part of the query.`
+
+If you change the sql *just* a bit, to
+
+```sql
+SELECT
+  "t0"."email" AS "res0",
+  "t0"."first_name" AS "res1",
+  "t0"."last_name" AS "res2",
+  "t0"."password" AS "res3"
+FROM "cart_users" AS "t0"
+WHERE NOT(EXISTS (SELECT
+                    "t1"."id" AS "res0",
+                    "t1"."date" AS "res1",
+                    "t1"."for_user__email" AS "res2",
+                    "t1"."ship_to_address__id" AS "res3",
+                    "t1"."shipping_info__id" AS "res4"
+                  FROM "orders" AS "t1"
+                  WHERE ("t1"."for_user__email") = ("t0"."email")))
+```
+
+Postgres is happy again :)
 
 Now suppose we wanted to do some analysis on the orders themselves. To start, we
 want to get the orders sorted by their portion of revenue. We can use
@@ -508,19 +630,18 @@ order.
 !employee3sql-2 sql
 !employee3out-2 out
 
-ordersWithCostOrdered <-
+ordersWithCostOrdered :: Connection -> IO [(Order, Int)]
+ordersWithCostOrdered conn =
   withDatabaseDebug putStrLn conn $
-    runSelectReturningList $
-    select $
-    orderBy_ (\(order, total) -> desc_ total) $
-    aggregate_ (\(order, lineItem, product) ->
-                   (group_ order, sum_ (lineItem ^. lineItemQuantity * product ^. productPrice))) $
-    do lineItem <- all_ (shoppingCartDb ^. shoppingCartLineItems)
-       order    <- related_ (shoppingCartDb ^. shoppingCartOrders) (_lineItemInOrder lineItem)
-       product  <- related_ (shoppingCartDb ^. shoppingCartProducts) (_lineItemForProduct lineItem)
-       pure (order, lineItem, product)
-       
-mapM_ print ordersWithCostOrdered
+      runSelectReturningList $ select $
+      orderBy_ (\(order, total) -> desc_ total) $
+      aggregate_ (\(order, lineItem, product) ->
+                    (group_ order, sum_ (lineItem ^. lineItemQuantity * product ^. productPrice))) $
+      do
+        lineItem <- all_ (shoppingCartDb ^. shoppingCartLineItems)
+        order    <- related_ (shoppingCartDb ^. shoppingCartOrders) (_lineItemInOrder lineItem)
+        product  <- related_ (shoppingCartDb ^. shoppingCartProducts) (_lineItemForProduct lineItem)
+        pure (order, lineItem, product)
 ```
 
 We can also get the total amount spent by each user, even including users with no orders. Notice
@@ -540,23 +661,22 @@ With that in mind, we can write the query to get the total spent by user
 !employee3sql-2 sql
 !employee3out-2 out
 
-allUsersAndTotals <-
+allUsersAndTotals :: Connection -> IO [(User, Int)]
+allUsersAndTotals conn =
   withDatabaseDebug putStrLn conn $
-    runSelectReturningList $
-    select $
-    orderBy_ (\(user, total) -> desc_ total) $
-    aggregate_ (\(user, lineItem, product) ->
-                   (group_ user, sum_ (maybe_ 0 id (_lineItemQuantity lineItem) * maybe_ 0 id (product ^. productPrice)))) $
-    do user     <- all_ (shoppingCartDb ^. shoppingCartUsers)
-       order    <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
-                             (\order -> _orderForUser order `references_` user)
-       lineItem <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartLineItems))
-                             (\lineItem -> maybe_ (val_ False) (\order -> _lineItemInOrder lineItem `references_` order) order)
-       product  <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartProducts))
-                             (\product -> maybe_ (val_ False) (\lineItem -> _lineItemForProduct lineItem `references_` product) lineItem)
-       pure (user, lineItem, product)
-       
-mapM_ print allUsersAndTotals
+      runSelectReturningList $
+      select $
+      orderBy_ (\(user, total) -> desc_ total) $
+      aggregate_ (\(user, lineItem, product) ->
+                    (group_ user, sum_ (maybe_ 0 id (_lineItemQuantity lineItem) * maybe_ 0 id (product ^. productPrice)))) $
+      do user     <- all_ (shoppingCartDb ^. shoppingCartUsers)
+         order    <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
+                              (\order -> _orderForUser order `references_` user)
+         lineItem <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartLineItems))
+                              (\lineItem -> maybe_ (val_ False) (\order -> _lineItemInOrder lineItem `references_` order) order)
+         product  <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartProducts))
+                              (\product -> maybe_ (val_ False) (\lineItem -> _lineItemForProduct lineItem `references_` product) lineItem)
+         pure (user, lineItem, product)
 ```
 
 Queries with nullable foreign keys
@@ -573,14 +693,13 @@ Suppose we want to find all orders who have not been shipped. We can do this by 
 !employee3sql-2 sql
 !employee3out-2 out
 
-allUnshippedOrders <-
+allUnshippedOrders :: Connection -> IO [Order]
+allUnshippedOrders conn =
   withDatabaseDebug putStrLn conn $
     runSelectReturningList $
     select $
     filter_ (isNothing_ . _orderShippingInfo) $
     all_ (shoppingCartDb ^. shoppingCartOrders)
-    
-mapM_ print allUnshippedOrders
 ```
 
 Let's count up all shipped and unshipped orders by user, including users who have no orders.
@@ -590,7 +709,8 @@ Let's count up all shipped and unshipped orders by user, including users who hav
 !employee3sql-2 sql
 !employee3out-2 out
 
-shippingInformationByUser <-
+shippingInformationByUser :: Connection -> IO [(User, Int, Int)]
+shippingInformationByUser conn =
   withDatabaseDebug putStrLn conn $
     runSelectReturningList $
     select $
@@ -602,8 +722,6 @@ shippingInformationByUser <-
     do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
        order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
        pure (user, order)
-       
-mapM_ print shippingInformationByUser
 ```
 
 Uh-oh! There's an error in the result set! Sam is reported as having one
@@ -627,21 +745,22 @@ One way to work around this issue in the above query is to use subselects.
 !employee3sql-2 sql
 !employee3out-2 out
 
-shippingInformationByUser <-
+shippingInformationByUserSubselect :: Connection -> IO [(User, Int, Int)]
+shippingInformationByUserSubselect conn =
   withDatabaseDebug putStrLn conn $
     runSelectReturningList $
     select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
-    
+
        (userEmail, unshippedCount) <-
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
             pure (pk user, order)
-        
+
        guard_ (userEmail `references_` user)
-       
+
        (userEmail, shippedCount) <-
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
@@ -651,8 +770,6 @@ shippingInformationByUser <-
        guard_ (userEmail `references_` user)
 
        pure (user, unshippedCount, shippedCount)
-
-mapM_ print shippingInformationByUser
 ```
 
 Notice that the `aggregate_`s embedded in the `Q` monad were automatically
@@ -666,12 +783,13 @@ generation of a sub `SELECT`.
 !employee3sql-2 sql
 !employee3out-2 out
 
-shippingInformationByUser <-
+shippingInformationByUserSubselectCombinator :: Connection -> IO [(User, Int, Int)]
+shippingInformationByUserSubselectCombinator conn =
   withDatabaseDebug putStrLn conn $
     runSelectReturningList $
     select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
-    
+
        (userEmail, unshippedCount) <-
          subselect_ $
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
@@ -679,9 +797,9 @@ shippingInformationByUser <-
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
             pure (pk user, order)
-        
+
        guard_ (userEmail `references_` user)
-       
+
        (userEmail, shippedCount) <-
          subselect_ $
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
@@ -692,8 +810,6 @@ shippingInformationByUser <-
        guard_ (userEmail `references_` user)
 
        pure (user, unshippedCount, shippedCount)
-
-mapM_ print shippingInformationByUser
 ```
 
 Conclusion
