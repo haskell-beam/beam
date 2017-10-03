@@ -11,6 +11,7 @@ import           Data.String
 import qualified Data.Text as T
 import qualified Data.DList as DList
 import           Data.Typeable
+import           Data.Vector.Sized (Vector)
 
 import           Control.Monad.Free.Church
 import           Control.Monad.State
@@ -266,6 +267,9 @@ instance ThreadRewritable s (QGenExpr ctxt syntax s a) where
 instance ThreadRewritable s a => ThreadRewritable s [a] where
   type WithRewrittenThread s s' [a] = [WithRewrittenThread s s' a]
   rewriteThread s' qs = map (rewriteThread s') qs
+instance (ThreadRewritable s a, KnownNat n) => ThreadRewritable s (Vector n a) where
+  type WithRewrittenThread s s' (Vector n a) = Vector n (WithRewrittenThread s s' a)
+  rewriteThread s' qs = fmap (rewriteThread s') qs
 instance ( ThreadRewritable s a, ThreadRewritable s b ) =>
   ThreadRewritable s (a, b) where
   type WithRewrittenThread s s' (a, b) = (WithRewrittenThread s s' a, WithRewrittenThread s s' b)
@@ -336,6 +340,9 @@ instance ContextRewritable (QGenExpr old syntax s a) where
 instance ContextRewritable a => ContextRewritable [a] where
   type WithRewrittenContext [a] ctxt = [ WithRewrittenContext a ctxt ]
   rewriteContext p as = map (rewriteContext p) as
+instance (ContextRewritable a, KnownNat n) => ContextRewritable (Vector n a) where
+  type WithRewrittenContext (Vector n a) ctxt = Vector n (WithRewrittenContext a ctxt)
+  rewriteContext p as = fmap (rewriteContext p) as
 instance (ContextRewritable a, ContextRewritable b) => ContextRewritable (a, b) where
   type WithRewrittenContext (a, b) ctxt = (WithRewrittenContext a ctxt, WithRewrittenContext b ctxt)
   rewriteContext p (a, b) = (rewriteContext p a, rewriteContext p b)
@@ -406,6 +413,8 @@ instance ProjectibleWithPredicate WindowFrameContext syntax (QWindow syntax s) w
 instance contextPredicate context => ProjectibleWithPredicate contextPredicate syntax (QGenExpr context syntax s a) where
   project' _ mkE (QExpr a) = QExpr <$> mkE (Proxy @context) a
 instance ProjectibleWithPredicate contextPredicate syntax a => ProjectibleWithPredicate contextPredicate syntax [a] where
+  project' p mkE as = traverse (project' p mkE) as
+instance (ProjectibleWithPredicate contextPredicate syntax a, KnownNat n) => ProjectibleWithPredicate contextPredicate syntax (Vector n a) where
   project' p mkE as = traverse (project' p mkE) as
 instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b ) =>
   ProjectibleWithPredicate contextPredicate syntax (a, b) where

@@ -17,10 +17,13 @@ module Database.Beam.Backend.Types
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
 import qualified Data.Aeson as Json
+import           Data.Vector.Sized (Vector)
+import qualified Data.Vector.Sized as Vector
 
 import Data.Proxy
 
 import GHC.Generics
+import GHC.TypeLits
 import GHC.Types
 
 -- | Class for all beam backends
@@ -111,6 +114,10 @@ instance FromBackendRow be (t (Nullable Identity)) => GFromBackendRow be (K1 R (
 instance BeamBackend be => FromBackendRow be () where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ()))
   valuesNeeded _ _ = 0
+
+instance ( BeamBackend be, KnownNat n, FromBackendRow be a ) => FromBackendRow be (Vector n a) where
+  fromBackendRow = Vector.replicateM fromBackendRow
+  valuesNeeded _ _ = fromIntegral (natVal (Proxy @n))
 
 instance ( BeamBackend be, FromBackendRow be a, FromBackendRow be b ) =>
   FromBackendRow be (a, b) where
