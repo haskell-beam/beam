@@ -43,8 +43,9 @@ packages:
     - <backend>
 ```
 
-NB: the commit will need to be changed to whatever the latest commit of master
-is, or whichever commit you want to build from even.
+!!! note "Note"
+    the commit will need to be changed to whatever the latest commit of master is,
+    or whichever commit you want to build from even.
 
 and add the following to your `.cabal` file, in the `build-depends` section:
 
