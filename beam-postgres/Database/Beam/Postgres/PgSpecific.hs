@@ -390,9 +390,16 @@ pgJsonbPretty (QExpr a) =
 
 pgArrayAgg :: QExpr PgExpressionSyntax s a
            -> QAgg PgExpressionSyntax s (V.Vector a)
-pgArrayAgg (QExpr a) =
+pgArrayAgg = pgArrayAggOver allInGroup_
+
+pgArrayAggOver :: Maybe PgAggregationSetQuantifierSyntax
+               -> QExpr PgExpressionSyntax s a
+               -> QAgg PgExpressionSyntax s (V.Vector a)
+pgArrayAggOver quantifier (QExpr a) =
   QExpr . PgExpressionSyntax $
-  emit "array_agg" <> pgParens (fromPgExpression a)
+  emit "array_agg" <>
+  pgParens ( maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") quantifier <>
+             fromPgExpression a)
 
 pgBoolOr :: QExpr PgExpressionSyntax s a
          -> QAgg PgExpressionSyntax s Bool
