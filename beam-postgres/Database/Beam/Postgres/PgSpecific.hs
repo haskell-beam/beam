@@ -149,6 +149,23 @@ arrayLowerUnsafe_ (QExpr v) (QExpr dim) =
   QExpr . PgExpressionSyntax $
   emit "array_lower(" <> fromPgExpression v <> emit ", " <> fromPgExpression dim <> emit ")"
 
+arrayLength_
+  :: forall (dim :: Nat) ctxt num v s.
+     (KnownNat dim, WithinBounds dim (V.Vector v), Integral num)
+  => QGenExpr ctxt PgExpressionSyntax s (V.Vector v)
+  -> QGenExpr ctxt PgExpressionSyntax s num
+arrayLength_ v =
+  unsafeRetype (arrayLengthUnsafe_ v (val_ (natVal (Proxy @dim) :: Integer)) :: QGenExpr ctxt PgExpressionSyntax s (Maybe Integer))
+
+arrayLengthUnsafe_
+  :: (Integral dim, Integral num)
+  => QGenExpr ctxt PgExpressionSyntax s (V.Vector v)
+  -> QGenExpr ctxt PgExpressionSyntax s dim
+  -> QGenExpr ctxt PgExpressionSyntax s (Maybe num)
+arrayLengthUnsafe_ (QExpr a) (QExpr dim) =
+  QExpr $ PgExpressionSyntax $
+  emit "array_length(" <> fromPgExpression a <> emit ", " <> fromPgExpression dim <> emit ")"
+
 -- * Array expressions
 
 data PgArrayValueContext
