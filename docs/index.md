@@ -27,21 +27,35 @@ Beam features
 
 ## How to install
 
-Beam is available via both [Hackage](https://hackage.haskell.org/packages/beam)
-and [Stack](https://www.stackage.org/package/beam). For most Haskell
-installations, one of the two commands should work.
+Beam **isnt** available via Hackage *or* Stack. Until a release is cut, put the
+following in your `stack.yaml` to build and use beam in your project!
 
-```bash
-cabal install beam-core beam-migrate <backend>
+```yaml
+packages:
+- .
+- location:
+    git: https://github.com/tathougies/beam.git
+    commit: a3b5e0763843fed48c7eef53fa7d08cfe710342d
+  extra-dep: true
+  subdirs:
+    - beam-core
+    - beam-migrate
+    - <backend>
 ```
 
-or
+!!! note "Note"
+    the commit will need to be changed to whatever the latest commit of master is,
+    or whichever commit you want to build from even.
 
-```
-stack install beam-core beam-migrate <backend>
+and add the following to your `.cabal` file, in the `build-depends` section:
+
+```haskell
+beam-core,
+beam-migrate,
+<backend>
 ```
 
-You will also need to install an appropriate backend. Available backends are
+Available backends are:
 
 * `beam-postgres` -- A feature-complete backend for the Postgres RDBMS.
   See [the beam-postgres documentation](user-guide/backends/beam-postgres.md)
