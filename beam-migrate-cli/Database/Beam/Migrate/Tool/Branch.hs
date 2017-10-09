@@ -30,15 +30,15 @@ listBranches cmdLine = do
 deleteBranch :: MigrateCmdLine -> T.Text -> IO ()
 deleteBranch cmdLine branchNm =
   updatingRegistry cmdLine $ \reg ->
-  pure reg { migrationRegistryBranches =
-             filter (\branch -> migrationBranchName branch /= branchNm)
-                    (migrationRegistryBranches reg) }
+  pure ((), reg { migrationRegistryBranches =
+                    filter (\branch -> migrationBranchName branch /= branchNm)
+                           (migrationRegistryBranches reg) })
 
 newBranch :: MigrateCmdLine -> Bool -> T.Text -> IO ()
 newBranch cmdLine dontSwitch branchNm =
   updatingRegistry cmdLine $ \reg ->
   case lookupBranch reg branchNm of
     Nothing ->
-      pure reg { migrationRegistryBranches = MigrationBranch branchNm (registryHeadCommit reg):migrationRegistryBranches reg
-               , migrationRegistryHead = if dontSwitch then migrationRegistryHead reg else MigrationHeadBranch branchNm }
+      pure ((), reg { migrationRegistryBranches = MigrationBranch branchNm (registryHeadCommit reg):migrationRegistryBranches reg
+                    , migrationRegistryHead = if dontSwitch then migrationRegistryHead reg else MigrationHeadBranch branchNm } )
     Just _ -> fail "Branch already exists"

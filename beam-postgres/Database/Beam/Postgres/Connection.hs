@@ -322,6 +322,7 @@ withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either PgError 
 withPgDebug dbg conn (Pg action) =
   let finish x = pure (Right x)
       step (PgLiftIO io next) = io >>= next
+      step (PgLiftWithHandle withConn next) = withConn conn >>= next
       step (PgFetchNext next) = next Nothing
       step (PgRunReturning (PgCommandSyntax PgCommandTypeQuery syntax)
                            (mkProcess :: Pg (Maybe x) -> Pg a')
@@ -358,6 +359,7 @@ withPgDebug dbg conn (Pg action) =
 
       stepReturningNone :: forall a. PgF (IO (Either PgError a)) -> IO (Either PgError a)
       stepReturningNone (PgLiftIO action' next) = action' >>= next
+      stepReturningNone (PgLiftWithHandle withConn next) = withConn conn >>= next
       stepReturningNone (PgFetchNext next) = next Nothing
       stepReturningNone (PgRunReturning _ _ _) = pure (Left (PgInternalError "Nested queries not allowed"))
 
@@ -372,6 +374,7 @@ withPgDebug dbg conn (Pg action) =
                     Left err -> pure (Left (PgRowParseError err))
                     Right r -> next (Just r) (rowIdx + 1)
       stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (PgInternalError "Nested queries not allowed"))
+      stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (PgInternalError "Nested queries not allowed"))
 
       finishProcess :: forall a. a -> Maybe PgI.Row -> IO (PgStream a)
       finishProcess x _ = pure (PgStreamDone (Right x))
@@ -393,6 +396,7 @@ withPgDebug dbg conn (Pg action) =
           Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
           Right r -> pure (PgStreamContinue (next (Just r)))
       stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
+      stepProcess (PgLiftWithHandle _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
 
       runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
       runConsumer s@(PgStreamDone {}) _ = pure s
@@ -409,6 +413,7 @@ data PgF next where
     PgFetchNext ::
         FromBackendRow Postgres x =>
         (Maybe x -> next) -> PgF next
+    PgLiftWithHandle :: (Pg.Connection -> IO a) -> (a -> next) -> PgF next
 deriving instance Functor PgF
 
 newtype Pg a = Pg { runPg :: F PgF a }

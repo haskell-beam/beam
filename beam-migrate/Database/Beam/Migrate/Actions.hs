@@ -148,7 +148,8 @@ ensureAll_ preds =
   all (`elem` preds)
 
 createTableActionProvider :: forall cmd
-                           . Sql92SaneDdlCommandSyntax cmd
+                           . ( Sql92SaneDdlCommandSyntax cmd
+                             , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                           => ActionProvider cmd
 createTableActionProvider =
   ActionProvider provider
@@ -193,7 +194,8 @@ createTableActionProvider =
          pure (PotentialAction mempty (HS.fromList postConditions) (Seq.singleton cmd) ("Create the table " <> postTblNm) createTableWeight)
 
 dropTableActionProvider :: forall cmd
-                        . Sql92SaneDdlCommandSyntax cmd
+                        . ( Sql92SaneDdlCommandSyntax cmd
+                          , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                         => ActionProvider cmd
 dropTableActionProvider =
  ActionProvider provider
@@ -217,7 +219,8 @@ dropTableActionProvider =
               PotentialAction (HS.fromList (SomeDatabasePredicate tblP:relatedPreds)) mempty (Seq.singleton cmd) ("Drop table " <> preTblNm) dropTableWeight)
 
 addColumnProvider :: forall cmd
-                   . Sql92SaneDdlCommandSyntax cmd
+                   . ( Sql92SaneDdlCommandSyntax cmd
+                     , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                    => ActionProvider cmd
 addColumnProvider =
   ActionProvider provider
@@ -241,7 +244,8 @@ addColumnProvider =
                 (addColumnWeight + fromIntegral (T.length tblNm + T.length colNm)))
 
 dropColumnProvider :: forall cmd
-                    . Sql92SaneDdlCommandSyntax cmd
+                    . ( Sql92SaneDdlCommandSyntax cmd
+                      , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                    => ActionProvider cmd
 dropColumnProvider = ActionProvider provider
   where
@@ -311,15 +315,11 @@ dropColumnNullProvider = ActionProvider provider
                                ("Drop not null constraint for " <> colNm <> " on " <> tblNm) 100)
 
 solvedState :: HS.HashSet SomeDatabasePredicate -> DatabaseState cmd -> Bool
---solvedState (DatabaseState post pre _ _)
---  | trace ("Solved state " ++ show (HS.size post, HS.size pre)) False = undefined
 solvedState goal (DatabaseState _ cur _) = goal == cur
---  all (`HM.member` curs) post
-  --post `HS.isSubsetOf` 
-  --HS.null post && HS.null pre
---solvedState _ = False
 
-defaultActionProviders :: Sql92SaneDdlCommandSyntax cmd
+defaultActionProviders ::
+                        ( Sql92SaneDdlCommandSyntax cmd
+                        , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                        => [ ActionProvider cmd ]
 defaultActionProviders = [ createTableActionProvider
                          , dropTableActionProvider
@@ -346,7 +346,8 @@ data FinalSolution cmd
 finalSolution :: Solver cmd -> FinalSolution cmd
 finalSolution (ProvideSolution Nothing sts)    = Candidates sts
 finalSolution (ProvideSolution (Just cmds) _)  = Solved cmds
-finalSolution (ChooseActions _ _ actions next) = finalSolution (next actions)
+finalSolution (ChooseActions _ _ actions next) =
+  finalSolution (next actions)
 
 {-# INLINE heuristicSolver #-}
 heuristicSolver :: [ ActionProvider cmd ]

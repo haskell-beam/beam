@@ -11,12 +11,21 @@ author:              Travis Athougies
 maintainer:          travis@athougies.net
 category:            Database
 build-type:          Simple
-extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 executable beam-migrate
   main-is:             BeamMigrate.hs
   other-modules:       Database.Beam.Migrate.Tool.CmdLine
+                       Database.Beam.Migrate.Tool.Registry
+                       Database.Beam.Migrate.Tool.Backend
+                       Database.Beam.Migrate.Tool.Schema
+                       Database.Beam.Migrate.Tool.SchemaCmd
+                       Database.Beam.Migrate.Tool.Branch
+                       Database.Beam.Migrate.Tool.Database
+                       Database.Beam.Migrate.Tool.Init
+                       Database.Beam.Migrate.Tool.Status
+                       Database.Beam.Migrate.Tool.Diff
+                       Database.Beam.Migrate.Tool.Log
   build-depends:       base >=4.9 && <4.10,
                        beam-core >=0.5.0.0,
                        beam-migrate >=0.1.0.0,
@@ -48,7 +57,7 @@ executable beam-migrate
                        StandaloneDeriving, GADTs, DeriveFunctor, RankNTypes, ScopedTypeVariables,
                        FlexibleInstances, TypeOperators, TypeApplications, MultiParamTypeClasses,
                        DataKinds, DeriveGeneric, CPP, LambdaCase, RecordWildCards, TupleSections
-  ghc-options:         -O2 -Wall -Werror
+  ghc-options:         -O2 -Wall -Werror -g
 
 source-repository head
   type: git

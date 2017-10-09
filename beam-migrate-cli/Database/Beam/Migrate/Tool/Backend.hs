@@ -12,13 +12,13 @@ import           Language.Haskell.Interpreter.Unsafe
 
 loadBackend :: MigrateCmdLine -> MigrationRegistry
             -> DatabaseName
-            -> IO (String, MigrationFormat, SomeBeamMigrationBackend)
+            -> IO (MigrationDatabase, MigrationFormat, SomeBeamMigrationBackend)
 loadBackend cmdLine reg dbName =
   case HM.lookup dbName (migrationRegistryDatabases reg) of
     Nothing -> fail "No such database"
-    Just (MigrationDatabase backend connString ) -> do
+    Just db@(MigrationDatabase backend _) -> do
       be <- loadBackend' cmdLine backend
-      pure (connString, MigrationFormatBackend (unModuleName backend), be)
+      pure (db, MigrationFormatBackend (unModuleName backend), be)
 
 loadBackend' :: MigrateCmdLine -> ModuleName -> IO SomeBeamMigrationBackend
 loadBackend' cmdLine (ModuleName backend) = do

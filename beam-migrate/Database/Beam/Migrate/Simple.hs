@@ -13,8 +13,6 @@ import Database.Beam.Migrate.Actions
 
 import qualified Data.Text as T
 
-import Unsafe.Coerce
-
 simpleSchema :: Database be db
              => [ ActionProvider cmd ]
              -> CheckedDatabaseSettings be db
@@ -28,15 +26,17 @@ simpleSchema providers settings =
 
 simpleMigration :: ( MonadBeam cmd be handle m
                  ,   Database be db )
-                => BeamMigrationBackend be cmd
+                => BeamMigrationBackend be cmd handle
                 -> handle
                 -> CheckedDatabaseSettings be db
                 -> IO (Maybe [cmd])
-simpleMigration (BeamMigrationBackend { backendGetDbConstraints = getCs, backendActionProviders = actions }) hdl db = do
-  pre <- getCs (unsafeCoerce hdl)
+simpleMigration BeamMigrationBackend { backendGetDbConstraints = getCs
+                                     , backendActionProviders = actions } hdl db = do
+  pre <- withDatabase hdl getCs
 
   let post = collectChecks db
-  let solver = heuristicSolver actions pre post
+      solver = heuristicSolver actions pre post
+
   case finalSolution solver of
     Solved cmds -> pure (Just cmds)
     Candidates {} -> pure Nothing

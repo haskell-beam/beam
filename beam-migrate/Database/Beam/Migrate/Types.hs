@@ -11,7 +11,7 @@ module Database.Beam.Migrate.Types
   , Migration, MigrationF(..)
 
   , migrationStepsToMigration, runMigrationSilenced
-  , runMigrationVerbose
+  , runMigrationVerbose, executeMigration
   , eraseMigrationType, migrationStep, upDown
   , executeMigration
 

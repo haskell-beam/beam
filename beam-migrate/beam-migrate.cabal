@@ -47,6 +47,7 @@ library
   build-depends:       base >=4.9 && <4.11,
                        beam-core >=0.5.0.0,
                        text >= 1.2,
+                       aeson >= 0.11,
                        bytestring >= 0.10,
                        free >= 4.12,
                        time >= 1.6,
@@ -66,7 +67,9 @@ library
                        ghc-prim >= 0.5,
                        containers >= 0.5,
                        haskell-src-exts >= 1.18,
-                       pretty >= 1.1
+                       pretty >= 1.1,
+                       dependent-map,
+                       dependent-sum
   -- hs-source-dirs:      
   default-language:    Haskell2010
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,

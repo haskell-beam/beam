@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-unused-imports -fno-warn-unused-matches #-}
+
 module Database.Beam.Migrate.SQL.Tables where
 
 import Database.Beam
@@ -9,6 +11,7 @@ import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.SQL.SQL92
 
 import Control.Applicative
+import Control.Monad (forM_)
 
 import Data.Text (Text)
 
@@ -54,7 +57,35 @@ preserve (CheckedDatabaseEntity desc checks) = pure (CheckedDatabaseEntity desc 
 
 -- * Alter table
 
--- alterTable :: CheckedDatabaseEntity be db (TableEntity table)
---            -> (forall f m. table f -> m (table' f))
---            -> Migration syntax (CheckedDatabaseEntity be db' (TableEntity table'))
--- alterTable _ _  = blah
+data ColumnMigration syntax a
+  = ColumnMigration
+  { columnMigrationMaintainsPredicate :: SomeDatabasePredicate -> Bool
+  , columnMigrationIntroducesPredicates :: [FieldCheck]
+  , columnMigrationStmt :: [ Sql92DdlCommandAlterTableSyntax syntax ] }
+
+alterTable :: forall be db db' table table' syntax
+            . (Beamable table', IsSql92DdlCommandSyntax syntax)
+           => CheckedDatabaseEntity be db (TableEntity table)
+           -> (table (ColumnMigration syntax) -> table' (ColumnMigration syntax))
+           -> Migration syntax (CheckedDatabaseEntity be db' (TableEntity table'))
+alterTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm tbl) tblChecks) entityChecks) alterColumns =
+  let initialTbl = changeBeamRep (\(Columnar' _ :: Columnar' (TableField table) x) ->
+                                    Columnar' (ColumnMigration (\_ -> True) [] [])
+                                       :: Columnar' (ColumnMigration syntax) x) tbl
+      alteredTbl = alterColumns initialTbl
+
+      allCommands = mconcat $
+                    allBeamValues (\(Columnar' (ColumnMigration _ _ stmts)) -> map alterTableCmd stmts) alteredTbl
+
+      -- doModifyColumn :: forall a. TableField table a -> 
+
+      -- alteredCheckedTbl' =
+      --   runIdentity $
+      --   zipBeamFieldsM (\(Columnar' oldColumn) (Columnar' mod) ->
+      --                     pure (Columnar' (doModifyColumn oldColumn mod)))
+      --                  tbl alteredTbl
+  in do
+    forM_ allCommands $ \cmd ->
+      upDown cmd Nothing
+    fail "Test"
+

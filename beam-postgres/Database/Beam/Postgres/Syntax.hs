@@ -55,8 +55,12 @@ module Database.Beam.Postgres.Syntax
 
     , pgSelectSetQuantifierDistinctOn
 
+    , pgDataTypeJSON
     , pgSerialType, pgSmallSerialType, pgBigSerialType
-    , pgBooleanType, pgByteaType, pgBigIntType
+    , pgByteaType, pgBigIntType
+    , pgTsQueryType, pgTsVectorType, pgTextType
+    , pgJsonType, pgJsonbType, pgUuidType
+    , pgTsQueryTypeInfo, pgTsVectorTypeInfo
 
     , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
     , PgConflictAction(..)
@@ -91,6 +95,7 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
 
+import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 
@@ -104,8 +109,8 @@ import           Data.Bits
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByteString)
 import qualified Data.ByteString.Char8 as B
-import           Data.ByteString.Lazy (toStrict)
-import qualified Data.ByteString.Lazy as BL
+import           Data.ByteString.Lazy.Char8 (toStrict)
+import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Coerce
 import           Data.Hashable
 import           Data.Int
@@ -160,6 +165,9 @@ instance Hashable PgSyntax where
       step (EscapeString  b hashRest)  salt = hashRest (hashWithSalt salt (2 :: Int, b))
       step (EscapeBytea  b hashRest)   salt = hashRest (hashWithSalt salt (3 :: Int, b))
       step (EscapeIdentifier b hashRest) salt = hashRest (hashWithSalt salt (4 :: Int, b))
+
+instance Sql92DisplaySyntax PgSyntax where
+  displaySyntax = BL.unpack . pgRenderSyntaxScript
 
 type PgSyntaxM = F PgSyntaxF
 newtype PgSyntax
@@ -263,16 +271,42 @@ instance Hashable PgDataTypeDescr where
 newtype PgCreateTableSyntax = PgCreateTableSyntax { fromPgCreateTable :: PgSyntax }
 data PgTableOptionsSyntax = PgTableOptionsSyntax PgSyntax PgSyntax
 newtype PgColumnSchemaSyntax = PgColumnSchemaSyntax { fromPgColumnSchema :: PgSyntax } deriving (Show, Eq)
+instance Sql92DisplaySyntax PgColumnSchemaSyntax where
+  displaySyntax = displaySyntax . fromPgColumnSchema
+
 data PgDataTypeSyntax
   = PgDataTypeSyntax
   { pgDataTypeDescr :: PgDataTypeDescr
-  , fromPgDataType :: PgSyntax } deriving (Show)
-newtype PgColumnConstraintDefinitionSyntax = PgColumnConstraintDefinitionSyntax { fromPgColumnConstraintDefinition :: PgSyntax }
-  deriving (Show, Eq)
-newtype PgColumnConstraintSyntax = PgColumnConstraintSyntax { fromPgColumnConstraint :: PgSyntax }
+  , fromPgDataType :: PgSyntax
+  , pgDataTypeSerialized :: BeamSerializedDataType
+  } deriving Show
+instance Sql92DisplaySyntax PgDataTypeSyntax where
+  displaySyntax = displaySyntax . fromPgDataType
+
+data PgColumnConstraintDefinitionSyntax
+  = PgColumnConstraintDefinitionSyntax
+  { fromPgColumnConstraintDefinition :: PgSyntax
+  , pgColumnConstraintDefinitionSerialized :: BeamSerializedConstraintDefinition
+  } deriving Show
+instance Sql92DisplaySyntax PgColumnConstraintDefinitionSyntax where
+  displaySyntax = displaySyntax . fromPgColumnConstraintDefinition
+
+data PgColumnConstraintSyntax
+  = PgColumnConstraintSyntax
+  { fromPgColumnConstraint :: PgSyntax
+  , pgColumnConstraintSerialized :: BeamSerializedConstraint
+  }
 newtype PgTableConstraintSyntax = PgTableConstraintSyntax { fromPgTableConstraint :: PgSyntax }
-newtype PgMatchTypeSyntax = PgMatchTypeSyntax { fromPgMatchType :: PgSyntax }
-newtype PgReferentialActionSyntax = PgReferentialActionSyntax { fromPgReferentialAction :: PgSyntax }
+data PgMatchTypeSyntax
+  = PgMatchTypeSyntax
+  { fromPgMatchType :: PgSyntax
+  , pgMatchTypeSerialized :: BeamSerializedMatchType
+  }
+data PgReferentialActionSyntax
+  = PgReferentialActionSyntax
+  { fromPgReferentialAction :: PgSyntax
+  , pgReferentialActionSerialized :: BeamSerializedReferentialAction
+  }
 newtype PgDropTableSyntax = PgDropTableSyntax { fromPgDropTable :: PgSyntax }
 newtype PgAlterTableSyntax = PgAlterTableSyntax { fromPgAlterTable :: PgSyntax }
 newtype PgAlterTableActionSyntax = PgAlterTableActionSyntax { fromPgAlterTableAction :: PgSyntax }
@@ -282,9 +316,14 @@ newtype PgWindowFrameBoundsSyntax = PgWindowFrameBoundsSyntax { fromPgWindowFram
 newtype PgWindowFrameBoundSyntax = PgWindowFrameBoundSyntax { fromPgWindowFrameBound :: ByteString -> PgSyntax }
 
 instance Hashable PgDataTypeSyntax where
-  hashWithSalt salt (PgDataTypeSyntax a _) = hashWithSalt salt a
+  hashWithSalt salt (PgDataTypeSyntax a _ _) = hashWithSalt salt a
 instance Eq PgDataTypeSyntax where
-  PgDataTypeSyntax a _ == PgDataTypeSyntax b _ = a == b
+  PgDataTypeSyntax a _ _ == PgDataTypeSyntax b _ _ = a == b
+
+instance Eq PgColumnConstraintDefinitionSyntax where
+  PgColumnConstraintDefinitionSyntax a _ ==
+    PgColumnConstraintDefinitionSyntax b _ =
+      a == b
 
 instance IsSql92Syntax PgCommandSyntax where
   type Sql92SelectSyntax PgCommandSyntax = PgSelectSyntax
@@ -400,29 +439,63 @@ instance IsSql2003OrderingElementaryOLAPOperationsSyntax PgOrderingSyntax where
 
 instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   domainType nm = PgDataTypeSyntax (PgDataTypeDescrDomain nm) (pgQuotedIdentifier nm)
+                                   (domainType nm)
 
-  charType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (fmap fromIntegral prec)) (emit "CHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
-  varCharType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varchar) (fmap fromIntegral prec)) (emit "VARCHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
-  nationalCharType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (fmap fromIntegral prec)) (emit "NATIONAL CHAR" <> pgOptPrec prec)
-  nationalVarCharType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varchar) (fmap fromIntegral prec)) (emit "NATIONAL CHARACTER VARYING" <> pgOptPrec prec)
+  charType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (fmap fromIntegral prec))
+                                           (emit "CHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
+                                           (charType prec charSet)
+  varCharType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varchar) (fmap fromIntegral prec))
+                                              (emit "VARCHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
+                                              (varCharType prec charSet)
+  nationalCharType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (fmap fromIntegral prec))
+                                           (emit "NATIONAL CHAR" <> pgOptPrec prec)
+                                           (nationalCharType prec)
+  nationalVarCharType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varchar) (fmap fromIntegral prec))
+                                              (emit "NATIONAL CHARACTER VARYING" <> pgOptPrec prec)
+                                              (nationalVarCharType prec)
 
-  bitType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bit) (fmap fromIntegral prec)) (emit "BIT" <> pgOptPrec prec)
-  varBitType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varbit) (fmap fromIntegral prec)) (emit "BIT VARYING" <> pgOptPrec prec)
+  bitType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bit) (fmap fromIntegral prec))
+                                  (emit "BIT" <> pgOptPrec prec)
+                                  (bitType prec)
+  varBitType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varbit) (fmap fromIntegral prec))
+                                     (emit "BIT VARYING" <> pgOptPrec prec)
+                                     (varBitType prec)
 
-  numericType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.numeric) (mkNumericPrec prec)) (emit "NUMERIC" <> pgOptNumericPrec prec)
-  decimalType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.numeric) (mkNumericPrec prec)) (emit "DOUBLE" <> pgOptNumericPrec prec)
+  numericType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.numeric) (mkNumericPrec prec))
+                                      (emit "NUMERIC" <> pgOptNumericPrec prec)
+                                      (numericType prec)
+  decimalType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.numeric) (mkNumericPrec prec))
+                                      (emit "DOUBLE" <> pgOptNumericPrec prec)
+                                      (decimalType prec)
 
-  intType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int4) Nothing) (emit "INT")
-  smallIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int2) Nothing) (emit "SMALLINT")
+  intType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int4) Nothing) (emit "INT") intType
+  smallIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int2) Nothing) (emit "SMALLINT") smallIntType
 
   floatType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.float4) Nothing) (emit "FLOAT" <> pgOptPrec prec)
-  doubleType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.float8) Nothing) (emit "DOUBLE PRECISION")
-  realType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.float4) Nothing) (emit "REAL")
-  dateType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.date) Nothing) (emit "DATE")
-  timeType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.time) Nothing) (emit "TIME" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
-  timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.timestamp) Nothing) (emit "TIMESTAMP" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
+                                    (floatType prec)
+  doubleType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.float8) Nothing) (emit "DOUBLE PRECISION") doubleType
+  realType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.float4) Nothing) (emit "REAL") realType
+  dateType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.date) Nothing) (emit "DATE") dateType
+  timeType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.time) Nothing)
+                                          (emit "TIME" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
+                                          (timeType prec withTz)
+  timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.timestamp) Nothing)
+                                               (emit "TIMESTAMP" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
+                                               (timestampType prec withTz)
 
+instance IsSql99DataTypeSyntax PgDataTypeSyntax where
+  characterLargeObjectType = pgTextType { pgDataTypeSerialized = characterLargeObjectType }
+  binaryLargeObjectType = pgByteaType { pgDataTypeSerialized = binaryLargeObjectType }
+  booleanType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bool) Nothing) (emit "BOOLEAN")
+                                 booleanType
+  arrayType (PgDataTypeSyntax _ syntax serialized) sz =
+    PgDataTypeSyntax (error "TODO: array migrations")
+                     (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]")
+                     (arrayType serialized sz)
+  rowType = error "rowType"
 
+instance Sql92SerializableDataTypeSyntax PgDataTypeSyntax where
+  serializeDataType = fromBeamSerializedDataType . pgDataTypeSerialized
 
 pgOptPrec :: Maybe Word -> PgSyntax
 pgOptPrec Nothing = mempty
@@ -437,19 +510,45 @@ pgOptNumericPrec Nothing = mempty
 pgOptNumericPrec (Just (prec, Nothing)) = pgOptPrec (Just prec)
 pgOptNumericPrec (Just (prec, Just dec)) = emit "(" <> emit (fromString (show prec)) <> emit ", " <> emit (fromString (show dec)) <> emit ")"
 
-pgBooleanType :: PgDataTypeSyntax
-pgBooleanType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bool) Nothing) (emit "BOOLEAN")
+pgDataTypeJSON :: Value -> BeamSerializedDataType
+pgDataTypeJSON v = BeamSerializedDataType (beamSerializeJSON "postgres" v)
 
 pgByteaType :: PgDataTypeSyntax
 pgByteaType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bytea) Nothing) (emit "BYTEA")
+                               (pgDataTypeJSON "bytea")
 
 pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
-pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL")
-pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL")
-pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL")
+pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL") (pgDataTypeJSON "smallserial")
+pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL") (pgDataTypeJSON "serial")
+pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL") (pgDataTypeJSON "bigserial")
 
 pgBigIntType :: PgDataTypeSyntax
-pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT")
+pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT") (pgDataTypeJSON "bigint")
+
+pgTsQueryTypeInfo :: Pg.TypeInfo
+pgTsQueryTypeInfo = Pg.Basic (Pg.Oid 3615) 'U' ',' "tsquery"
+
+pgTsQueryType :: PgDataTypeSyntax
+pgTsQueryType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid pgTsQueryTypeInfo) Nothing) (emit "tsquery") (pgDataTypeJSON "tsquery")
+
+-- | Postgres TypeInfo for tsvector
+-- TODO Is the Oid stable from postgres instance to postgres instance?
+pgTsVectorTypeInfo :: Pg.TypeInfo
+pgTsVectorTypeInfo = Pg.Basic (Pg.Oid 3614) 'U' ',' "tsvector"
+
+pgTsVectorType :: PgDataTypeSyntax
+pgTsVectorType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid pgTsVectorTypeInfo) Nothing) (emit "tsvector") (pgDataTypeJSON "tsvector")
+
+pgTextType :: PgDataTypeSyntax
+pgTextType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.text) Nothing) (emit "TEXT")
+                              (pgDataTypeJSON "text")
+
+pgJsonType, pgJsonbType :: PgDataTypeSyntax
+pgJsonType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.json) Nothing) (emit "JSON") (pgDataTypeJSON "json")
+pgJsonbType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.jsonb) Nothing) (emit "JSONB") (pgDataTypeJSON "jsonb")
+
+pgUuidType :: PgDataTypeSyntax
+pgUuidType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.uuid) Nothing) (emit "UUID") (pgDataTypeJSON "uuid")
 
 mkNumericPrec :: Maybe (Word, Maybe Word) -> Maybe Int32
 mkNumericPrec Nothing = Nothing
@@ -740,26 +839,31 @@ instance IsSql92ColumnSchemaSyntax PgColumnSchemaSyntax where
   type Sql92ColumnSchemaColumnConstraintDefinitionSyntax PgColumnSchemaSyntax = PgColumnConstraintDefinitionSyntax
 
   columnSchemaSyntax colType defaultClause constraints collation =
-    PgColumnSchemaSyntax $
-    fromPgDataType colType <>
-    maybe mempty (\d -> emit " DEFAULT " <> fromPgExpression d) defaultClause <>
-    (case constraints of
-       [] -> mempty
-       _ -> foldMap (\c -> emit " " <> fromPgColumnConstraintDefinition c) constraints) <>
-    maybe mempty (\nm -> emit " COLLATE " <> pgQuotedIdentifier nm) collation
+    PgColumnSchemaSyntax syntax
+    where
+      syntax =
+        fromPgDataType colType <>
+        maybe mempty (\d -> emit " DEFAULT " <> fromPgExpression d) defaultClause <>
+        (case constraints of
+           [] -> mempty
+           _ -> foldMap (\c -> emit " " <> fromPgColumnConstraintDefinition c) constraints) <>
+        maybe mempty (\nm -> emit " COLLATE " <> pgQuotedIdentifier nm) collation
 
 instance IsSql92MatchTypeSyntax PgMatchTypeSyntax where
-  fullMatchSyntax = PgMatchTypeSyntax (emit "FULL")
-  partialMatchSyntax = PgMatchTypeSyntax (emit "PARTIAL")
+  fullMatchSyntax = PgMatchTypeSyntax (emit "FULL") fullMatchSyntax
+  partialMatchSyntax = PgMatchTypeSyntax (emit "PARTIAL") partialMatchSyntax
+
+pgMatchTypeJSON :: Value -> BeamSerializedMatchType
+pgMatchTypeJSON v = BeamSerializedMatchType (beamSerializeJSON "postgres" v)
 
 pgSimpleMatchSyntax :: PgMatchTypeSyntax
-pgSimpleMatchSyntax = PgMatchTypeSyntax (emit "SIMPLE")
+pgSimpleMatchSyntax = PgMatchTypeSyntax (emit "SIMPLE") (pgMatchTypeJSON "simple")
 
 instance IsSql92ReferentialActionSyntax PgReferentialActionSyntax where
-  referentialActionCascadeSyntax = PgReferentialActionSyntax (emit "CASCADE")
-  referentialActionNoActionSyntax = PgReferentialActionSyntax (emit "NO ACTION")
-  referentialActionSetDefaultSyntax = PgReferentialActionSyntax (emit "SET DEFAULT")
-  referentialActionSetNullSyntax = PgReferentialActionSyntax (emit "SET NULL")
+  referentialActionCascadeSyntax = PgReferentialActionSyntax (emit "CASCADE") referentialActionCascadeSyntax
+  referentialActionNoActionSyntax = PgReferentialActionSyntax (emit "NO ACTION") referentialActionNoActionSyntax
+  referentialActionSetDefaultSyntax = PgReferentialActionSyntax (emit "SET DEFAULT") referentialActionSetDefaultSyntax
+  referentialActionSetNullSyntax = PgReferentialActionSyntax (emit "SET NULL") referentialActionSetNullSyntax
 
 fromSqlConstraintAttributes :: SqlConstraintAttributesBuilder -> PgSyntax
 fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
@@ -771,32 +875,47 @@ fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
 
 instance Hashable PgColumnConstraintDefinitionSyntax where
   hashWithSalt salt = hashWithSalt salt . fromPgColumnConstraintDefinition
+
 instance IsSql92ColumnConstraintDefinitionSyntax PgColumnConstraintDefinitionSyntax where
   type Sql92ColumnConstraintDefinitionConstraintSyntax PgColumnConstraintDefinitionSyntax = PgColumnConstraintSyntax
   type Sql92ColumnConstraintDefinitionAttributesSyntax PgColumnConstraintDefinitionSyntax = SqlConstraintAttributesBuilder
 
   constraintDefinitionSyntax nm constraint attrs =
-    PgColumnConstraintDefinitionSyntax $
-    maybe mempty (\nm -> emit "CONSTRAINT " <> pgQuotedIdentifier nm <> emit " " ) nm <>
-    fromPgColumnConstraint constraint <>
-    maybe mempty (\a -> emit " " <> fromSqlConstraintAttributes a) attrs
+    PgColumnConstraintDefinitionSyntax syntax
+      (constraintDefinitionSyntax nm (pgColumnConstraintSerialized constraint) (fmap sqlConstraintAttributesSerialized attrs))
+    where
+      syntax =
+        maybe mempty (\nm -> emit "CONSTRAINT " <> pgQuotedIdentifier nm <> emit " " ) nm <>
+        fromPgColumnConstraint constraint <>
+        maybe mempty (\a -> emit " " <> fromSqlConstraintAttributes a) attrs
+
+instance Sql92SerializableConstraintDefinitionSyntax PgColumnConstraintDefinitionSyntax where
+  serializeConstraint = fromBeamSerializedConstraintDefinition . pgColumnConstraintDefinitionSerialized
 
 instance IsSql92ColumnConstraintSyntax PgColumnConstraintSyntax where
   type Sql92ColumnConstraintMatchTypeSyntax PgColumnConstraintSyntax = PgMatchTypeSyntax
   type Sql92ColumnConstraintReferentialActionSyntax PgColumnConstraintSyntax = PgReferentialActionSyntax
   type Sql92ColumnConstraintExpressionSyntax PgColumnConstraintSyntax = PgExpressionSyntax
 
-  notNullConstraintSyntax = PgColumnConstraintSyntax (emit "NOT NULL")
-  uniqueColumnConstraintSyntax = PgColumnConstraintSyntax (emit "UNIQUE")
-  primaryKeyColumnConstraintSyntax = PgColumnConstraintSyntax (emit "PRIMARY KEY")
-  checkColumnConstraintSyntax expr = PgColumnConstraintSyntax (emit "CHECK(" <> fromPgExpression expr <> emit ")")
+  notNullConstraintSyntax = PgColumnConstraintSyntax (emit "NOT NULL") notNullConstraintSyntax
+  uniqueColumnConstraintSyntax = PgColumnConstraintSyntax (emit "UNIQUE") uniqueColumnConstraintSyntax
+  primaryKeyColumnConstraintSyntax = PgColumnConstraintSyntax (emit "PRIMARY KEY") primaryKeyColumnConstraintSyntax
+  checkColumnConstraintSyntax expr =
+    PgColumnConstraintSyntax (emit "CHECK(" <> fromPgExpression expr <> emit ")")
+                             (checkColumnConstraintSyntax . BeamSerializedExpression . TE.decodeUtf8 .
+                              toStrict . pgRenderSyntaxScript . fromPgExpression $ expr)
   referencesConstraintSyntax tbl fields matchType onUpdate onDelete =
-    PgColumnConstraintSyntax $
-    emit "REFERENCES " <> pgQuotedIdentifier tbl <> emit "("
-    <> pgSepBy (emit ", ") (map pgQuotedIdentifier fields) <> emit ")" <>
-    maybe mempty (\m -> emit " " <> fromPgMatchType m) matchType <>
-    maybe mempty (\a -> emit " ON UPDATE " <> fromPgReferentialAction a) onUpdate <>
-    maybe mempty (\a -> emit " ON DELETE " <> fromPgReferentialAction a) onDelete
+    PgColumnConstraintSyntax syntax
+      (referencesConstraintSyntax tbl fields (fmap pgMatchTypeSerialized matchType)
+                                  (fmap pgReferentialActionSerialized onUpdate)
+                                  (fmap pgReferentialActionSerialized onDelete))
+    where
+      syntax =
+        emit "REFERENCES " <> pgQuotedIdentifier tbl <> emit "("
+        <> pgSepBy (emit ", ") (map pgQuotedIdentifier fields) <> emit ")" <>
+        maybe mempty (\m -> emit " " <> fromPgMatchType m) matchType <>
+        maybe mempty (\a -> emit " ON UPDATE " <> fromPgReferentialAction a) onUpdate <>
+        maybe mempty (\a -> emit " ON DELETE " <> fromPgReferentialAction a) onDelete
 
 newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
     PgInsertOnConflict (tbl (QField PostgresInaccessible) -> PgInsertOnConflictSyntax)

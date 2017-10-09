@@ -3,12 +3,13 @@
 -- | Finally tagless encoding of SQL92 syntax
 module Database.Beam.Backend.SQL.SQL92 where
 
-import           Database.Beam.Backend.Types
-import           Database.Beam.Backend.SQL.Types
+import Database.Beam.Backend.Types
+import Database.Beam.Backend.SQL.Types
 
-import           Data.Int
-import           Data.Text (Text)
-import           Data.Time (LocalTime)
+import Data.Int
+import Data.Text (Text)
+import Data.Time (LocalTime)
+import Data.Typeable
 
 class ( BeamSqlBackend be ) =>
       BeamSql92Backend be where
@@ -182,7 +183,8 @@ class IsSql92DataTypeSyntax dataType where
 
 class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
-      , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr) ) =>
+      , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr)
+      , Typeable expr ) =>
     IsSql92ExpressionSyntax expr where
   type Sql92ExpressionQuantifierSyntax expr :: *
   type Sql92ExpressionValueSyntax expr :: *

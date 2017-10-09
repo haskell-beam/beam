@@ -12,6 +12,7 @@ import           Database.Beam.Migrate
 
 import           Control.Monad
 
+import           Data.Aeson
 import qualified Data.HashSet as HS
 import           Data.Hashable (Hashable)
 import           Data.Monoid
@@ -79,6 +80,10 @@ newtype PgHasExtension = PgHasExtension Text {- Extension Name -}
 instance DatabasePredicate PgHasExtension where
   englishDescription (PgHasExtension extName) =
     "Postgres extension " ++ show extName ++ " is loaded"
+
+  predicateSource _ = PredicateSourceBackend "postgres"
+  serializePredicate (PgHasExtension nm) =
+    object [ "has-postgres-extension" .= nm ]
 
 pgExtensionActionProviders :: [ ActionProvider PgCommandSyntax ]
 pgExtensionActionProviders = [ pgCreateExtensionProvider, pgDropExtensionProvider ]

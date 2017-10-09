@@ -5,8 +5,9 @@ module Database.Beam.Haskell.Syntax where
 
 import           Database.Beam hiding (lookup)
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Backend.SQL.Builder
+import           Database.Beam.Migrate.Checks
+import           Database.Beam.Migrate.SQL.SQL92
 
 import           Data.Char (toLower, toUpper)
 import           Data.Hashable
@@ -29,6 +30,8 @@ data HsConstraintDefinition
   { hsConstraintDefinitionConstraint :: HsExpr }
   deriving (Show, Eq, Generic)
 instance Hashable HsConstraintDefinition
+instance Sql92DisplaySyntax HsConstraintDefinition where
+  displaySyntax = show
 
 newtype HsEntityName = HsEntityName { getHsEntityName :: String } deriving (Show, Eq, Ord, IsString)
 
@@ -65,8 +68,12 @@ data HsDataType
   = HsDataType
   { hsDataTypeMigration :: HsExpr
   , hsDataTypeType :: HsType
+  , hsDataTypeSerialized :: BeamSerializedDataType
   } deriving (Eq, Show, Generic)
-instance Hashable HsDataType
+instance Hashable HsDataType where
+  hashWithSalt salt (HsDataType mig ty _) = hashWithSalt salt (mig, ty)
+instance Sql92DisplaySyntax HsDataType where
+  displaySyntax = show
 
 data HsType
   = HsType
@@ -95,6 +102,8 @@ instance Eq HsColumnSchema where
   HsColumnSchema a aTy == HsColumnSchema b bTy = a "fieldNm" == b "fieldNm" && aTy == bTy
 instance Hashable HsColumnSchema where
   hashWithSalt s (HsColumnSchema mk ty) = hashWithSalt s (mk "fieldNm", ty)
+instance Sql92DisplaySyntax HsColumnSchema where
+  displaySyntax = show
 
 data HsDecl
   = HsDecl
@@ -526,6 +535,9 @@ instance IsSql92ColumnConstraintDefinitionSyntax HsConstraintDefinition where
   constraintDefinitionSyntax Nothing expr Nothing = HsConstraintDefinition expr
   constraintDefinitionSyntax _ _ _ = error "constraintDefinitionSyntax{HsExpr}"
 
+instance Sql92SerializableConstraintDefinitionSyntax HsConstraintDefinition where
+  serializeConstraint _ = "unknown-constrainst"
+
 instance IsSql92MatchTypeSyntax HsNone where
   fullMatchSyntax = HsNone
   partialMatchSyntax = HsNone
@@ -630,63 +642,77 @@ instance IsSql92FieldNameSyntax HsExpr where
 
 hsErrorType :: String -> HsDataType
 hsErrorType msg =
-  HsDataType (hsApp (hsVar "error") [ hsStr ("Unknown type: " <> fromString msg) ]) (HsType (tyConNamed "Void") (importSome "Data.Void" [ importTyNamed "Void" ]))
+  HsDataType (hsApp (hsVar "error") [ hsStr ("Unknown type: " <> fromString msg) ]) (HsType (tyConNamed "Void") (importSome "Data.Void" [ importTyNamed "Void" ])) (error "hsErrorType")
 
 instance IsSql92DataTypeSyntax HsDataType where
-  intType = HsDataType (hsVarFrom "int" "Database.Beam.Migrate") (HsType (tyConNamed "Int") mempty)
-  smallIntType = HsDataType (hsVarFrom "smallint" "Database.Beam.Migrate") (HsType (tyConNamed "Int16") (importSome "Data.Int" [ importTyNamed "Int16" ]))
-  doubleType = HsDataType (hsVarFrom "double" "Database.Beam.Migrate") (HsType (tyConNamed "Double") mempty)
+  intType = HsDataType (hsVarFrom "int" "Database.Beam.Migrate") (HsType (tyConNamed "Int") mempty) intType
+  smallIntType = HsDataType (hsVarFrom "smallint" "Database.Beam.Migrate") (HsType (tyConNamed "Int16") (importSome "Data.Int" [ importTyNamed "Int16" ])) intType
+  doubleType = HsDataType (hsVarFrom "double" "Database.Beam.Migrate") (HsType (tyConNamed "Double") mempty) doubleType
 
   floatType width = HsDataType (hsApp (hsVarFrom "float" "Database.Beam.Migrate")
                                       [ hsMaybe (hsInt <$> width) ])
                                (HsType (tyConNamed "Scientific") (importSome "Data.Scientific" [ importTyNamed "Scientific" ]))
+                               (floatType width)
 
-  realType = HsDataType (hsVarFrom "real" "Database.Beam.Migrate") (HsType (tyConNamed "Double") mempty)
+  realType = HsDataType (hsVarFrom "real" "Database.Beam.Migrate") (HsType (tyConNamed "Double") mempty) realType
 
   charType _ Just {} = error "char collation"
   charType width Nothing = HsDataType (hsApp (hsVarFrom "char" "Database.Beam.Migrate")
                                              [ hsMaybe (hsInt <$> width) ])
                                       (HsType (tyConNamed "Text") (importSome "Data.Text" [ importTyNamed "Text" ]))
+                                      (charType width Nothing)
 
   varCharType _ Just {} = error "varchar collation"
   varCharType width Nothing = HsDataType (hsApp (hsVarFrom "varchar" "Database.Beam.Migrate")
                                                 [ hsMaybe (hsInt <$> width) ])
                                          (HsType (tyConNamed "Text") (importSome "Data.Text" [ importTyNamed "Text" ]))
+                                         (varCharType width Nothing)
 
   nationalCharType width = HsDataType (hsApp (hsVarFrom "nationalChar" "Database.Beam.Migrate")
                                              [ hsMaybe (hsInt <$> width) ])
                                       (HsType (tyConNamed "Text") (importSome "Data.Text" [ importTyNamed "Text" ]))
+                                      (nationalCharType width)
 
   nationalVarCharType width = HsDataType (hsApp (hsVarFrom "nationalVarchar" "Database.Beam.Migrate")
                                                 [ hsMaybe (hsInt <$> width) ])
                                          (HsType (tyConNamed "Text") (importSome "Data.Text" [ importTyNamed "Text" ]))
+                                         (nationalVarCharType width)
 
   bitType width = HsDataType (hsApp (hsVarFrom "bit" "Database.Beam.Migrate")
                                     [ hsMaybe (hsInt <$> width) ])
                              (HsType (tyConNamed "SqlBits") mempty)
+                             (bitType width)
+
   varBitType width = HsDataType (hsApp (hsVarFrom "varbit" "Database.Beam.Migrate")
                                        [ hsMaybe (hsInt <$> width) ])
                                 (HsType (tyConNamed "SqlBits") mempty)
+                                (varBitType width)
 
-  dateType = HsDataType (hsVarFrom "date" "Database.Beam.Migrate") (HsType (tyConNamed "Day") (importSome "Data.Time" [ importTyNamed "Day" ]))
+  dateType = HsDataType (hsVarFrom "date" "Database.Beam.Migrate") (HsType (tyConNamed "Day") (importSome "Data.Time" [ importTyNamed "Day" ])) dateType
 
   timeType _ _ = error "timeType"
   domainType _ = error "domainType"
   timestampType Nothing True =
     HsDataType (hsVarFrom "timestamptz" "Database.Beam.Migrate")
                (HsType (tyConNamed "LocalTime") (importSome "Data.Time" [ importTyNamed "LocalTime" ]))
+               (timestampType Nothing True)
   timestampType Nothing False =
     HsDataType (hsVarFrom "timestamp" "Database.Beam.Migrate")
                (HsType (tyConNamed "LocalTime") (importSome "Data.Time" [ importTyNamed "LocalTime" ]))
+               (timestampType Nothing False)
   timestampType _ _ = error "timestampType with prec"
 
   numericType (Just (prec, Just dec)) =
     HsDataType (hsApp (hsVarFrom "numeric" "Database.Beam.Migrate")
                       [ hsMaybe (Just (hsTuple [ hsInt prec, hsMaybe (Just (hsInt dec)) ])) ])
                (HsType (tyConNamed "Scientific") (importSome "Data.Scientific" [ importTyNamed "Scientific" ]))
+               (numericType (Just (prec, Just dec)))
   numericType _ = error "numericType"
 
   decimalType _ = error "decimalType"
+
+instance Sql92SerializableDataTypeSyntax HsDataType where
+  serializeDataType = fromBeamSerializedDataType . hsDataTypeSerialized
 
 -- * HsSyntax utilities
 

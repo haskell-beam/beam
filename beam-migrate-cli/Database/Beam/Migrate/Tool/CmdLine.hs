@@ -32,6 +32,7 @@ data CleanCommand
 
 data DatabaseCommand
   = DatabaseCommandList
+  | DatabaseCommandAdd DatabaseName ModuleName String
   | DatabaseCommandShow DatabaseName
   | DatabaseCommandRename DatabaseName DatabaseName
   deriving Show
@@ -46,6 +47,11 @@ data BranchCommand
   | BranchCommandNew    Bool {-^ Don't switch -} Text
   deriving Show
 
+data SchemaCommand
+  = SchemaCommandImport !Bool DatabaseName (Maybe Text) !Bool {-^ Commit in database -} !Bool {-^ Do auto migrate -}
+    -- ^ Create a haskell migration for the given database
+  deriving Show
+
 data MigrateCommand
   = MigrateCommandInit InitCommand   -- ^ Initialize a new beam migrate registry
   | MigrateCommandClean CleanCommand -- ^ Remove beam-migrate tables from a database
@@ -56,8 +62,11 @@ data MigrateCommand
   | MigrateCommandDatabases DatabaseCommand
   | MigrateCommandBranch    BranchCommand
 
-  | MigrateCommandImport !Bool DatabaseName Text
-    -- ^ Create a haskell migration for the given database
+  | MigrateCommandSchema SchemaCommand
+
+  | MigrateCommandDiff Bool (Maybe (Text, Maybe Text))
+
+  | MigrateCommandMigrate
 
   | MigrateCommandSimple SimpleCommand
   deriving Show
@@ -80,26 +89,27 @@ migrationArgParser =
 
                                           , command "log" logCommand, command "status" statusCommand
 
+                                          , command "diff" diffCommand
+
                                           , command "database" databaseCommand
                                           , command "branch" branchCommand
                                           , command "simple" simpleCommand
 
-                                          , command "import" importCommand ])
+                                          , command "schema" schemaCommand
+
+                                          , command "migrate" migrateCommand ])
   where
     initCommand = info (initParser <**> helper) (fullDesc <> progDesc "Initialize a beam-migrate registry in this directory, or in the given registration file")
     cleanCommand = info (cleanParser <**> helper) (fullDesc <> progDesc "Remove all beam-migrate tables from the database")
 
     logCommand = info (pure MigrateCommandLog <**> helper) (fullDesc <> progDesc "Display migration history of the given database")
     statusCommand = info (pure MigrateCommandStatus <**> helper) (fullDesc <> progDesc "Show status of beam migrations")
+    diffCommand = info (diffParser <**> helper) (fullDesc <> progDesc "Show diff between revisions")
     databaseCommand = info (databasesParser <**> helper) (fullDesc <> progDesc "Create, update, list databases in the registry")
     branchCommand = info (branchParser <**> helper) (fullDesc <> progDesc "Create, update, list branches in the registry")
+    schemaCommand = info (schemaParser <**> helper) (fullDesc <> progDesc "Create, update, import, and list schemas")
     simpleCommand = info (simpleParser <**> helper) (fullDesc <> progDesc "Simple utilities that do not require a full beam-migrate setup")
-
-    importCommand = info (importParser <**> helper) (fullDesc <> progDesc "Import a database schema into haskell")
-
-    importParser = MigrateCommandImport <$> flag True False (long "interactive" <> short 'i' <> help "Run in interactive mode")
-                                        <*> (DatabaseName <$> strArgument (metavar "DATABASE" <> help "Database to import from"))
-                                        <*> (fromString <$> strArgument (metavar "BRANCHNAME" <> help "Branch to import into"))
+    migrateCommand = info (migrateParser <**> helper) (fullDesc <> progDesc "Bring the given database up-to-date with the current branch")
 
     initParser = MigrateCommandInit <$>
                  (InitCommand <$> optional (ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use"))
@@ -111,9 +121,19 @@ migrationArgParser =
 
     cleanParser = MigrateCommandClean <$> (CleanCommand <$> switch (long "force" <> short 'f' <> help "Do not prompt"))
 
-    databasesParser = MigrateCommandDatabases <$> subparser (mconcat [ command "list"   databasesListCommand
+    diffParser = MigrateCommandDiff <$> flag False True (long "auto-script" <> help "Display migration as an auto-generated script, if possible")
+                                    <*> optional ((,) <$> (fromString <$> strArgument (metavar "ACTUAL" <> help "Reference to use as actual predicate source (default: DB!)"))
+                                                      <*> optional (fromString <$> strArgument (metavar "EXPECTED" <> help "Reference to use as correct predicate source (default: HEAD)")))
+
+    databasesParser = MigrateCommandDatabases <$> subparser (mconcat [ command "add"    databasesAddCommand
+                                                                     , command "list"   databasesListCommand
                                                                      , command "show"   databasesShowCommand
                                                                      , command "rename" databasesRenameCommand ])
+    databasesAddCommand =
+      info (databasesAddParser <**> helper) (fullDesc <> progDesc "Add a new database to the registry")
+      where databasesAddParser = DatabaseCommandAdd <$> (DatabaseName <$> strArgument (metavar "NAME" <> help "Name of new database"))
+                                                    <*> (ModuleName <$> strArgument (metavar "BACKEND" <> help "Backend Haskell module"))
+                                                    <*> strArgument (metavar "CONN" <> help "Connection string")
     databasesListCommand =
       info (databasesListParser <**> helper) (fullDesc <> progDesc "List databases in the registry")
       where databasesListParser = pure DatabaseCommandList
@@ -140,12 +160,25 @@ migrationArgParser =
       where branchNewParser = BranchCommandNew <$> flag False True (long "dont-switch" <> help "Do not switch to the new branch")
                                                <*> (fromString <$> strArgument (metavar "BRANCH" <> help "Name of new branch"))
 
+    schemaParser = MigrateCommandSchema <$> subparser (mconcat [ command "import" schemaImportCommand ])
+
+    schemaImportCommand = info (importParser <**> helper) (fullDesc <> progDesc "Import a database schema into haskell")
+      where
+        importParser = SchemaCommandImport <$> flag True False (long "interactive" <> short 'i' <> help "Run in interactive mode")
+                                           <*> (DatabaseName <$> strArgument (metavar "DATABASE" <> help "Database to import from"))
+                                           <*> optional (fromString <$> strArgument (metavar "BRANCHNAME" <> help "Branch to import into"))
+                                           <*> flag True False (long "no-commit" <> help "Do not record commit in local change log")
+                                           <*> flag True False (long "no-migrate" <> help "Do not generate an automatic migration")
+
+
     simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand ])
 
     simpleSchemaCommand =
       info (simpleSchemaParser <**> helper) (fullDesc <> progDesc "Extract a haskell schema from the given database")
       where simpleSchemaParser = SimpleCommandHsSchema <$> (ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use"))
                                                        <*> strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend")
+
+    migrateParser = pure MigrateCommandMigrate
 
 migrationCliOptions :: ParserInfo MigrateCmdLine
 migrationCliOptions =

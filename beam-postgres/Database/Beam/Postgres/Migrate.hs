@@ -32,6 +32,7 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad
+import           Control.Monad.Free.Church (liftF)
 
 import           Data.Aeson
 import           Data.Bits
@@ -50,7 +51,7 @@ import           Data.Typeable
 
 --import qualified Language.Haskell.Exts.Syntax as Hs
 
-migrationBackend :: Tool.BeamMigrationBackend Postgres PgCommandSyntax
+migrationBackend :: Tool.BeamMigrationBackend Postgres PgCommandSyntax Pg.Connection
 migrationBackend = Tool.BeamMigrationBackend
                         "postgres" "sql"
                         (unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"
@@ -62,8 +63,10 @@ migrationBackend = Tool.BeamMigrationBackend
                                  , ""
                                  , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
                         (BL.concat . migrateScript)
-                        getDbConstraints
-                        (BCL.unpack . pgRenderSyntaxScript . fromPgCommand) "sql"
+                        (liftF (PgLiftWithHandle getDbConstraints id))
+                        (Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
+                         Db.beamCheckDeserializers)
+                        (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand) "postgres.sql"
                         pgPredConverter (defaultActionProviders <> pgExtensionActionProviders)
                         (\options action ->
                             bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
@@ -86,7 +89,7 @@ pgPredConverter = Tool.easyHsPredicateConverter <>
       | otherwise = Nothing
 
 pgTypeToHs :: PgDataTypeSyntax -> Maybe HsDataType
-pgTypeToHs (PgDataTypeSyntax tyDescr _) =
+pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
   case tyDescr of
     PgDataTypeDescrOid oid width
       | Pg.typoid Pg.int2    == oid -> Just smallIntType
@@ -110,7 +113,7 @@ migrateScript steps =
   "--          haphazardly when generating scripts (but not when generating commands)\n"            :
   "--          This is due to technical limitations in libPq that require a Postgres\n"             :
   "--          Connection in order to correctly escape strings. Please verify that the\n"           :
-  "--          Generated migration script is correct before running it on your database.\n"         :
+  "--          generated migration script is correct before running it on your database.\n"         :
   "--          If you feel so called, please contribute better escaping support to beam-postgres\n" :
   "\n"                                                                                              :
   "-- Set connection encoding to UTF-8\n"                                                           :
@@ -133,8 +136,8 @@ pgExpandDataType (Db.DataType pg) = pg
 
 pgDataTypeFromAtt :: ByteString -> Pg.Oid -> Maybe Int32 -> PgDataTypeSyntax
 pgDataTypeFromAtt _ oid pgMod
-  | Pg.typoid Pg.bool == oid = pgExpandDataType (boolean :: Db.DataType PgDataTypeSyntax Bool)
-  | Pg.typoid Pg.bytea == oid = pgExpandDataType bytea
+  | Pg.typoid Pg.bool == oid = pgExpandDataType Db.boolean
+  | Pg.typoid Pg.bytea == oid = pgExpandDataType Db.binaryLargeObject
   | Pg.typoid Pg.char == oid = pgExpandDataType (Db.char Nothing) -- TODO length
   -- TODO Pg.name
   | Pg.typoid Pg.int8 == oid = pgExpandDataType (bigint :: Db.DataType PgDataTypeSyntax Int64)
@@ -142,7 +145,19 @@ pgDataTypeFromAtt _ oid pgMod
   | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType PgDataTypeSyntax Int16)
   | Pg.typoid Pg.varchar == oid = pgExpandDataType (Db.varchar Nothing)
   | Pg.typoid Pg.timestamp == oid = pgExpandDataType Db.timestamp
+  | Pg.typoid Pg.numeric == oid =
+      let precAndDecimal =
+            case pgMod of
+              Nothing -> Nothing
+              Just pgMod' ->
+                let prec = fromIntegral (pgMod' `shiftR` 16)
+                    dec = fromIntegral (pgMod' .&. 0xFFFF)
+                in Just (prec, if dec == 0 then Nothing else Just dec)
+      in pgExpandDataType (Db.numeric precAndDecimal)
   | otherwise = PgDataTypeSyntax (PgDataTypeDescrOid oid pgMod) (emit "{- UNKNOWN -}")
+                                 (pgDataTypeJSON (object [ "oid" .= (fromIntegral oid' :: Word), "mod" .= pgMod ]))
+  where
+    Pg.Oid oid' = oid
   -- , \_ _ -> errorTypeHs (show fallback))
 
 -- * Create constraints from a connection
@@ -159,7 +174,7 @@ getDbConstraints conn =
           let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: ByteString) ->
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
                                         pgDataType = pgDataTypeFromAtt typ typId typmod'
-                                        -- (PgDataTypeSyntax (PgDataTypeDescrOid typId typmod') (emit typ)) (errorTypeHs (show typ))
+
                                     in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm pgDataType :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
               notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
                                            if isNotNull then
@@ -171,10 +186,10 @@ getDbConstraints conn =
 
      primaryKeys <-
        map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey relnm (V.toList cols))) <$>
-       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname ORDER BY k.n ASC)"
+       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname order by k.n asc)"
                                            , "FROM pg_index i"
-                                           , "CROSS JOIN unnest(i.indkey) WITH ORDINALITY k(attid, n)"
-                                           , "JOIN pg_attribute a ON a.attnum=k.attid AND a.attrelid=i.indrelid"
+                                           , "CROSS JOIN unnest(i.indkey) with ordinality k(attid, n)"
+                                           , "JOIN pg_attribute a ON a.attnum=k.attid and a.attrelid=i.indrelid"
                                            , "JOIN pg_class c ON c.oid=i.indrelid"
                                            , "WHERE c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
 
@@ -215,43 +230,35 @@ getDbConstraints conn =
 --   in HaskellDataType typeExp typeType
 
 tsquery :: Db.DataType PgDataTypeSyntax TsQuery
-tsquery = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsqueryType) Nothing) (emit "tsquery"))
---                      (pgStdTypeHs "tsquery" (Proxy @TsQuery))
+tsquery = Db.DataType pgTsQueryType
 
 tsvector :: Db.DataType PgDataTypeSyntax TsVector
-tsvector = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsvectorType) Nothing) (emit "tsvector"))
---                       (pgStdTypeHs "tsvector" (Proxy @TsVector))
+tsvector = Db.DataType pgTsVectorType
 
 text :: Db.DataType PgDataTypeSyntax T.Text
-text = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.text) Nothing) (emit "TEXT"))
---                   (pgStdTypeHs "text" (Proxy @T.Text))
-
-boolean :: forall a. Typeable a => Db.DataType PgDataTypeSyntax a
-boolean = Db.DataType pgBooleanType -- (pgStdTypeHs "bool" (Proxy @a))
+text = Db.DataType pgTextType
 
 bytea :: Db.DataType PgDataTypeSyntax ByteString
-bytea = Db.DataType pgByteaType -- (pgStdTypeHs "bytea" (Proxy @ByteString))
+bytea = Db.DataType pgByteaType
 
 bigint :: Db.DataType PgDataTypeSyntax Int64
-bigint = Db.DataType pgBigIntType -- (pgStdTypeHs "bigint" (Proxy @Int64))
+bigint = Db.DataType pgBigIntType
 
-array :: forall a. Typeable a => Maybe Int -> Db.DataType PgDataTypeSyntax a
-      -> Db.DataType PgDataTypeSyntax (V.Vector a)
-array Nothing (Db.DataType (PgDataTypeSyntax _ syntax)) =
-  Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]"))
-              -- (pgArrayTypeHs (Proxy @a) hsTy)
-array (Just sz) (Db.DataType (PgDataTypeSyntax _ syntax)) =
-  Db.DataType (PgDataTypeSyntax (error "can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
-              -- (pgArrayTypeHs (Proxy @a) hsTy)
+unboundedArray :: forall a. Typeable a
+               => Db.DataType PgDataTypeSyntax a
+               -> Db.DataType PgDataTypeSyntax (V.Vector a)
+unboundedArray (Db.DataType (PgDataTypeSyntax _ syntax serialized)) =
+  Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]")
+                                (pgDataTypeJSON (object [ "unbounded-array" .= Db.fromBeamSerializedDataType serialized])))
 
 json :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSON a)
-json = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.json) Nothing) (emit "JSON"))
+json = Db.DataType pgJsonType
 
 jsonb :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSONB a)
-jsonb = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.jsonb) Nothing) (emit "JSONB"))
+jsonb = Db.DataType pgJsonbType
 
 uuid :: Db.DataType PgDataTypeSyntax UUID
-uuid = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.uuid) Nothing) (emit "UUID"))
+uuid = Db.DataType pgUuidType
 
 -- * Pseudo-data types
 

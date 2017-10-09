@@ -1,21 +1,25 @@
 module Database.Beam.Migrate.Tool.Registry where
 
+import           Database.Beam.Migrate
 import           Database.Beam.Migrate.Tool.CmdLine
 
 import           Control.Applicative
+import           Control.Exception
 
 import           Data.Aeson
-import           Data.Bits
-import qualified Data.HashMap.Strict as HM
+import           Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Char8 as BS
-import           Data.Hashable
-import           Data.List (find)
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
+import           Data.List (find, intercalate, sort)
+import           Data.Maybe
 import           Data.Monoid
 import           Data.String
 import           Data.Text (Text, unpack)
 import qualified Data.Text as T
 import           Data.Time
-import           Data.UUID (UUID, fromWords)
+import           Data.UUID (UUID)
+import qualified Data.UUID.V4 as UUID (nextRandom)
 import qualified Data.Yaml as Yaml
 
 import           Network.BSD
@@ -33,16 +37,33 @@ import           System.Posix.User
 
 import           Text.Read hiding (String)
 
+data InvalidCommitId = InvalidCommitId T.Text
+  deriving Show
+instance Exception InvalidCommitId
+
 newtype MigrateUUID = MigrateUUID { unMigrateUUID :: UUID }
 
+data PredicateFetchSource
+  = PredicateFetchSourceCommit     !(Maybe ModuleName) !UUID
+  | PredicateFetchSourceDbHead     !MigrationDatabase !(Maybe Int)
+  | PredicateFetchSourceEmpty
+  deriving Show
+
 data MigrationFormat = MigrationFormatHaskell | MigrationFormatBackend String
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
+
+data RegisteredSchemaInfo
+  = RegisteredSchemaInfo
+  { registeredSchemaInfoHash    :: UUID
+  , registeredSchemaInfoCommitter :: UserInfo
+  , registeredSchemaInfoMessage :: Text
+  , registeredSchemaInfoFormats :: [ MigrationFormat ]
+  } deriving Show
 
 data RegisteredMigrationInfo
   = RegisteredMigrationInfo
-  { registeredMigrationInfoHash    :: UUID
-  , registeredMigrationInfoMessage :: Text
-  , registeredMigrationInfoInputs  :: [ UUID ]
+  { registeredMigrationInfoResult :: UUID
+  , registeredMigrationInfoSource :: UUID
   , registeredMigrationInfoFormats :: [ MigrationFormat ]
   } deriving Show
 
@@ -73,6 +94,7 @@ data MigrationRegistry
   = MigrationRegistry
   { migrationRegistryDatabases      :: HM.HashMap DatabaseName MigrationDatabase
   , migrationRegistryHead           :: MigrationHead
+  , migrationRegistrySchemas        :: [ RegisteredSchemaInfo ]
   , migrationRegistryMigrations     :: [ RegisteredMigrationInfo ]
   , migrationRegistryBranches       :: [ MigrationBranch ]
 
@@ -82,24 +104,44 @@ data MigrationRegistry
   , migrationRegistryUserInfo       :: Maybe UserInfo
   } deriving Show
 
-data MigrationMetaData
-  = MigrationMetaData
-  { migrationMetaDataCommit    :: UUID
-  , migrationMetaDataFormats   :: [ (MigrationFormat, UUID) ]
-  , migrationMetaDataCreatedOn :: UTCTime
+data Schema
+  = Schema
+  { schemaPredicates :: [ (HS.HashSet PredicateSource, SomeDatabasePredicate) ]
   } deriving Show
 
-instance ToJSON MigrationMetaData where
-  toJSON (MigrationMetaData commit formats timestamp) =
+data SchemaMetaData
+  = SchemaMetaData
+  { schemaMetaDataCommit    :: UUID
+  , schemaMetaDataFormats   :: [ MigrationFormat ]
+  , schemaMetaDataCreatedOn :: UTCTime
+  , schemaMetaDataSchema    :: Schema
+  } deriving Show
+
+instance ToJSON SchemaMetaData where
+  toJSON (SchemaMetaData commit formats timestamp' schema) =
     object [ "commit"    .= commit
-           , "formats"   .= map (\(fmt, hash') -> object [ "format" .= fmt, "commit" .= hash' ]) formats
-           , "createdOn" .= timestamp ]
-instance FromJSON MigrationMetaData where
-  parseJSON = withObject "MigrationMetaData" $ \o ->
-              MigrationMetaData <$> o .: "commit" <*> (mapM parseFormats =<< o .: "formats") <*> o .: "createdOn"
-    where
-      parseFormats = withObject "MigrationMetaData.formats[]" $ \o ->
-                     (,) <$> o .: "format" <*> o .: "commit"
+           , "formats"   .= formats
+           , "createdOn" .= timestamp'
+           , "schema"    .= schema ]
+-- instance FromJSON SchemaMetaData where
+--   parseJSON = withObject "SchemaMetaData" $ \o ->
+--               SchemaMetaData <$> o .: "commit" <*> o .: "formats" <*> o .: "createdOn"
+--                              <*> o .: "schema"
+
+instance ToJSON Schema where
+  toJSON (Schema predicates) =
+    let grouped = HM.fromListWith mappend (map (fmap pure) predicates)
+    in toJSON (map (\(specificity, predicates') ->
+                       object [ "specificity" .= specificity
+                              , "predicates" .= map (\(SomeDatabasePredicate predicate) -> serializePredicate predicate) predicates' ])
+                   (HM.toList grouped))
+-- instance FromJSON Schema where
+--   parseJSON = withArray "Schema" $ \a ->
+--               foldlM (\done -> withObject "Schema[]" $ \o ->
+--                                do specificity <- o .: "specificity"
+--                                   predicates <- o .: "predicates"
+--                                   pure (map (specifity,) predicates ++ done))
+--                      [] a
 
 instance ToJSON MigrationDatabase where
   toJSON (MigrationDatabase backend connString) =
@@ -132,6 +174,7 @@ instance ToJSON MigrationRegistry where
   toJSON MigrationRegistry {..} =
     object ( [ "databases"  .= migrationRegistryDatabases
              , "head"       .= migrationRegistryHead
+             , "schemas"    .= migrationRegistrySchemas
              , "migrations" .= migrationRegistryMigrations
              , "branches"   .= migrationRegistryBranches
              , "module"     .= object [ "src" .= migrationRegistrySrcDir, "name" .= migrationRegistrySchemaModule ] ] ++
@@ -144,7 +187,9 @@ instance FromJSON MigrationRegistry where
     (srcDir, name) <- (o .: "module") >>= withObject "MigrationRegistry.module" (\o' -> (,) <$> o' .: "src" <*> o' .: "name")
     MigrationRegistry <$> o .: "databases"
                       <*> o .: "head"
-                      <*> o .: "migrations" <*> o .: "branches"
+                      <*> fmap (fromMaybe []) (o .:? "schemas")
+                      <*> fmap (fromMaybe []) (o .:? "migrations")
+                      <*> o .: "branches"
                       <*> pure srcDir <*> pure name
                       <*> o .:? "user"
 
@@ -164,17 +209,28 @@ instance FromJSON MigrationBranch where
   parseJSON = withObject "MigrationBranch" $ \o ->
               MigrationBranch <$> o .: "name" <*> (unMigrateUUID <$> o .: "commit")
 
+instance ToJSON RegisteredSchemaInfo where
+  toJSON RegisteredSchemaInfo {..} =
+    object [ "hash"    .= MigrateUUID registeredSchemaInfoHash
+           , "message" .= registeredSchemaInfoMessage
+           , "formats" .= registeredSchemaInfoFormats
+           , "committer" .= registeredSchemaInfoCommitter ]
+instance FromJSON RegisteredSchemaInfo where
+  parseJSON = withObject "RegisteredSchemaInfo" $ \o ->
+              RegisteredSchemaInfo <$> (unMigrateUUID <$> o .: "hash")
+                                   <*> o .: "committer"
+                                   <*> o .: "message"
+                                   <*> o .: "formats"
+
 instance ToJSON RegisteredMigrationInfo where
   toJSON RegisteredMigrationInfo {..} =
-    object [ "hash"    .= MigrateUUID registeredMigrationInfoHash
-           , "message" .= registeredMigrationInfoMessage
-           , "inputs"  .= (MigrateUUID <$> registeredMigrationInfoInputs)
+    object [ "result" .= registeredMigrationInfoResult
+           , "source" .= registeredMigrationInfoSource
            , "formats" .= registeredMigrationInfoFormats ]
 instance FromJSON RegisteredMigrationInfo where
   parseJSON = withObject "RegisteredMigrationInfo" $ \o ->
-              RegisteredMigrationInfo <$> (unMigrateUUID <$> o .: "hash")
-                                      <*> o .: "message"
-                                      <*> (fmap unMigrateUUID <$> o .: "inputs")
+              RegisteredMigrationInfo <$> o .: "result"
+                                      <*> o .: "source"
                                       <*> o .: "formats"
 
 instance ToJSON MigrationFormat where
@@ -184,6 +240,13 @@ instance FromJSON MigrationFormat where
   parseJSON "haskell" = pure MigrationFormatHaskell
   parseJSON (String be) = pure (MigrationFormatBackend (unpack be))
   parseJSON _ = fail "Cannot parse MigrationFormat"
+
+registeredSchemaInfoShortMessage :: RegisteredSchemaInfo -> Text
+registeredSchemaInfoShortMessage sch =
+  let fullMsg = registeredSchemaInfoMessage sch
+  in case T.lines fullMsg of
+       [] -> "(No message)"
+       x:_ -> x
 
 -- | Attempt to read a registry from the common lookup paths
 --
@@ -225,14 +288,21 @@ lookupUserInfo _ = do
   hPutStrLn stderr ("WARNING: defaulting user info to " ++ show userInfo)
   pure userInfo
 
+showMigrationFormats :: [ MigrationFormat ] -> String
+showMigrationFormats = intercalate ", ". map showFormat . sort
+  where
+    showFormat MigrationFormatHaskell = "Haskell"
+    showFormat (MigrationFormatBackend be) = be
+
 userInfoCommitter :: UserInfo -> Text
 userInfoCommitter ui = "\"" <> userInfoEmail ui <> "\"<" <> userInfoEmail ui <> ">"
 
-updatingRegistry :: MigrateCmdLine -> (MigrationRegistry -> IO MigrationRegistry) -> IO ()
+updatingRegistry :: MigrateCmdLine -> (MigrationRegistry -> IO (a, MigrationRegistry)) -> IO a
 updatingRegistry cmdLine action =
   do (registryPath, registry) <- lookupRegistry' cmdLine
-     registry' <- action registry
+     (x, registry') <- action registry
      Yaml.encodeFile registryPath registry'
+     pure x
 
 lookupDb :: MigrationRegistry -> MigrateCmdLine -> IO MigrationDatabase
 lookupDb MigrationRegistry { migrationRegistryDatabases = dbs } MigrateCmdLine { migrateDatabase = Nothing }
@@ -250,10 +320,17 @@ lookupBranch :: MigrationRegistry -> Text -> Maybe MigrationBranch
 lookupBranch reg branchNm =
   find ((==branchNm) . migrationBranchName) (migrationRegistryBranches reg)
 
-lookupMigration :: UUID -> MigrationFormat -> MigrationRegistry -> Maybe RegisteredMigrationInfo
-lookupMigration commitId fmt reg =
-  find (\mig -> registeredMigrationInfoHash mig == commitId &&
-                any (==fmt) (registeredMigrationInfoFormats mig))
+lookupSchema :: UUID -> [MigrationFormat] -> MigrationRegistry -> Maybe RegisteredSchemaInfo
+lookupSchema commitId fmts reg =
+  find (\sch -> registeredSchemaInfoHash sch == commitId &&
+                all (`elem` registeredSchemaInfoFormats sch) fmts)
+       (migrationRegistrySchemas reg)
+
+lookupMigration :: UUID -> UUID -> [MigrationFormat] -> MigrationRegistry -> Maybe RegisteredMigrationInfo
+lookupMigration from dest fmts reg =
+  find (\mig -> registeredMigrationInfoSource mig == from &&
+                registeredMigrationInfoResult mig == dest &&
+                all (`elem` registeredMigrationInfoFormats mig) fmts)
        (migrationRegistryMigrations reg)
 
 newBaseBranch :: Text -> UUID -> MigrationRegistry -> IO MigrationRegistry
@@ -266,29 +343,68 @@ newBaseBranch branchName commit reg =
 
       pure reg { migrationRegistryBranches = branch:migrationRegistryBranches reg }
 
-newMigration :: UUID -> MigrationFormat -> Text -> [UUID] -> MigrationRegistry -> IO MigrationRegistry
-newMigration commitId fmt msg inputs reg =
-  case lookupMigration commitId fmt reg of
-    Just {} -> fail "Migration already exists"
+updateBranch :: Text -> MigrationBranch -> MigrationRegistry -> IO MigrationRegistry
+updateBranch branchNm newBranch reg =
+  case lookupBranch reg branchNm of
+    Nothing -> fail ("Cannot update branch " ++ T.unpack branchNm)
+    Just {} ->
+      pure reg { migrationRegistryBranches =
+                   map (\br -> if migrationBranchName br == branchNm
+                               then newBranch else br)
+                       (migrationRegistryBranches reg) }
+
+newSchema :: UUID -> [MigrationFormat] -> Text -> MigrationRegistry -> IO MigrationRegistry
+newSchema commitId fmts msg reg =
+  case lookupSchema commitId [] reg of
+    Just {} -> fail "Schema already exists"
+    Nothing -> do
+      userInfo <- lookupUserInfo reg
+      let schema = RegisteredSchemaInfo commitId userInfo msg fmts
+      pure reg { migrationRegistrySchemas = schema:migrationRegistrySchemas reg }
+
+newMigration :: UUID -> UUID -> [MigrationFormat] -> MigrationRegistry -> IO MigrationRegistry
+newMigration from dest fmts reg =
+  case lookupMigration from dest [] reg of
+    Just {} -> fail "Migration alread exists"
     Nothing ->
-      let migration = RegisteredMigrationInfo commitId msg inputs [fmt]
-      in pure reg { migrationRegistryMigrations = migration:migrationRegistryMigrations reg }
+      let mig = RegisteredMigrationInfo from dest fmts
+      in pure reg { migrationRegistryMigrations = mig:migrationRegistryMigrations reg}
 
-commitScriptName, commitModuleName :: UUID -> String
-commitScriptName commitId =
-  "mig_" <> map (\c -> if c == '-' then '_' else c) (show commitId)
-commitModuleName commitId =
-  "Schema_" <> map (\c -> if c == '-' then '_' else c) (show commitId)
+uuidToFileName :: UUID -> String
+uuidToFileName = map (\c -> if c == '-' then '_' else c) . show
 
-writeMigrationFile :: MigrateCmdLine -> MigrationRegistry -> String -> String -> String -> IO FilePath
-writeMigrationFile _ reg extension fileNm content = do
+schemaScriptName, schemaModuleName :: UUID -> String
+schemaScriptName commitId =
+  "schema_" <> uuidToFileName commitId
+schemaModuleName commitId =
+  "Schema_" <> uuidToFileName commitId
+
+migrationScriptName, migrationModuleName :: UUID -> UUID -> String
+migrationScriptName fromId toId =
+  "migration_" <> uuidToFileName fromId <> "_to_" <> uuidToFileName toId
+migrationModuleName fromId toId =
+  "Migration_" <> uuidToFileName fromId <> "_To_" <> uuidToFileName toId
+
+writeSchemaFile :: MigrateCmdLine -> MigrationRegistry -> String -> String -> String -> IO FilePath
+writeSchemaFile _ reg extension fileNm content = do
   let path = migrationRegistrySrcDir reg </> (fileNm <.> extension)
 
-  putStrLn ("Writing migration to " ++ path ++ "...")
+  putStrLn ("Writing schema to " ++ path ++ "...")
   createDirectoryIfMissing True (migrationRegistrySrcDir reg)
   writeFile path content
 
   pure path
+
+schemaFilePath :: MigrationRegistry -> UUID -> FilePath
+schemaFilePath reg commitId =
+  migrationRegistrySrcDir reg </> schemaModuleName commitId <.> "hs"
+
+registryNewCommitId :: MigrationRegistry -> IO UUID
+registryNewCommitId reg = do
+  newCommitId <- UUID.nextRandom
+  case lookupSchema newCommitId [] reg of
+    Just {} -> registryNewCommitId reg
+    Nothing -> pure newCommitId
 
 registryHeadCommit :: MigrationRegistry -> UUID
 registryHeadCommit reg =
@@ -299,26 +415,124 @@ registryHeadCommit reg =
         Nothing -> error "Cannot find branch"
         Just branch -> migrationBranchCommit branch
 
-hashToUUID :: Hashable a => a -> UUID
-hashToUUID a =
-  let intSize = finiteBitSize (undefined :: Int)
-      wordsNeeded = (128 + intSize - 1) `div` intSize
+-- hashToUUID :: Hashable a => a -> UUID
+-- hashToUUID a =
+--   let intSize = finiteBitSize (undefined :: Int)
+--       wordsNeeded = (128 + intSize - 1) `div` intSize
 
-      wordsData = take wordsNeeded (tail (iterate (\seed -> hashWithSalt seed a) 0))
+--       wordsData = take wordsNeeded (tail (iterate (\seed -> hashWithSalt seed a) 0))
 
-      uuidData :: Integer
-      uuidData = foldr (\w a' -> a' `shiftL` intSize .|. fromIntegral (fromIntegral w :: Word)) 0 wordsData
+--       uuidData :: Integer
+--       uuidData = foldr (\w a' -> a' `shiftL` intSize .|. fromIntegral (fromIntegral w :: Word)) 0 wordsData
 
-      uuidWord1 = fromIntegral $ (uuidData `shiftR` 96) .&. 0xFFFFFFFF
-      uuidWord2 = fromIntegral $ (uuidData `shiftR` 64) .&. 0xFFFFFFFF
-      uuidWord3 = fromIntegral $ (uuidData `shiftR` 32) .&. 0xFFFFFFFF
-      uuidWord4 = fromIntegral $ uuidData .&. 0xFFFFFFFF
+--       uuidWord1 = fromIntegral $ (uuidData `shiftR` 96) .&. 0xFFFFFFFF
+--       uuidWord2 = fromIntegral $ (uuidData `shiftR` 64) .&. 0xFFFFFFFF
+--       uuidWord3 = fromIntegral $ (uuidData `shiftR` 32) .&. 0xFFFFFFFF
+--       uuidWord4 = fromIntegral $ uuidData .&. 0xFFFFFFFF
 
-  in fromWords uuidWord1 uuidWord2 uuidWord3 uuidWord4
+--   in fromWords uuidWord1 uuidWord2 uuidWord3 uuidWord4
 
-metadataComment :: String -> MigrationMetaData -> String
+metadataComment :: String -> SchemaMetaData -> String
 metadataComment commentMarker metadata =
   let encoded = map BS.unpack (BS.lines (Yaml.encode metadata))
   in unlines ( [commentMarker <> " + BEAM-MIGRATE"] <>
                map ((commentMarker <> " + ") <>) encoded <>
                [commentMarker <> " + END-BEAM-MIGRATE"])
+
+parseMetaData :: BeamDeserializers cmd -> Value -> Parser SchemaMetaData
+parseMetaData d =
+  withObject "SchemaMetaData" $ \o ->
+  SchemaMetaData <$> o .: "commit" <*> o .: "formats" <*> o .: "createdOn"
+                 <*> (Schema <$> (parseSchema =<< o .: "schema"))
+  where
+    parseSchema =
+      fmap mconcat .
+      mapM (withObject "SchemaMetaData.schema" $ \o ->
+            do specificity <- o .: "specificity"
+               predicates <- o .: "predicates"
+               -- TODO parse dummy if we can't parse
+               fmap (fmap (specificity,)) (mapM (beamDeserialize d) predicates))
+
+readSchemaMetaData :: MigrationRegistry
+                   -> BeamMigrationBackend be cmd hdl
+                   -> UUID
+                   -> IO SchemaMetaData
+readSchemaMetaData reg BeamMigrationBackend { backendPredicateParsers = parsers } commitId = do
+  d <-
+    takeWhile (/="-- + END-BEAM-MIGRATE") .
+    dropWhile (/="-- + BEAM-MIGRATE") .
+    BS.lines <$>
+    BS.readFile (schemaFilePath reg commitId)
+  case d of
+    [] -> fail "Invalid data in schema"
+    _:d' | Just realData <- BS.unlines <$> traverse (BS.stripPrefix "-- + ") d'
+         , Just metadataV <- Yaml.decode realData
+         -> case Yaml.parseEither (parseMetaData parsers) metadataV of
+             Left err -> fail ("Could not parse metadata: " ++ show err)
+             Right metadata -> pure metadata
+         | otherwise -> fail "Invalid data in schema"
+
+predicateFetchSourceBackend :: PredicateFetchSource -> Maybe ModuleName
+predicateFetchSourceBackend (PredicateFetchSourceCommit be _) = be
+predicateFetchSourceBackend (PredicateFetchSourceDbHead (MigrationDatabase be _) _) = Just be
+predicateFetchSourceBackend PredicateFetchSourceEmpty = Nothing
+
+predicateSourceWithBackend :: ModuleName -> PredicateFetchSource -> PredicateFetchSource
+predicateSourceWithBackend nm (PredicateFetchSourceCommit _ c) = PredicateFetchSourceCommit (Just nm) c
+predicateSourceWithBackend nm (PredicateFetchSourceDbHead (MigrationDatabase _ conn) ref) =
+  PredicateFetchSourceDbHead (MigrationDatabase nm conn) ref
+predicateSourceWithBackend _ PredicateFetchSourceEmpty = PredicateFetchSourceEmpty
+
+parsePredicateFetchSourceSpec :: MigrateCmdLine -> MigrationRegistry -> Text
+                              -> IO PredicateFetchSource
+parsePredicateFetchSourceSpec cmdLine reg t
+  | t == "0" = pure PredicateFetchSourceEmpty
+  | Just t' <- T.stripPrefix "HEAD" t =
+      let mod' = parsePredicateFetchSourceModulePart t'
+      in pure (PredicateFetchSourceCommit mod' (registryHeadCommit reg))
+  | Just t' <- T.stripPrefix "DB" t = do
+      let (t'', db) = parsePredicateFetchSourceDbName t'
+          ref = parsePredicateFetchSourceDbRef t''
+      db' <-
+        case db of
+          Nothing ->
+            case migrateDatabase cmdLine of
+              Nothing -> fail "Ambiguous database: DB given with no -d option or database specified"
+              Just cmdLineDb -> pure cmdLineDb
+          Just explicitDb -> pure explicitDb
+
+      dbInfo <- lookupDb reg cmdLine { migrateDatabase = Just db' }
+
+      pure (PredicateFetchSourceDbHead dbInfo ref)
+  | Just branchNm <- T.stripPrefix "branch/" t = do
+      let (branchNm', dbModNm) = T.breakOn "/" branchNm
+      case lookupBranch reg branchNm' of
+        Nothing -> fail ("No such branch: " ++ T.unpack branchNm')
+        Just branch -> do
+          let dbMod = if dbModNm == "" then Nothing else Just (ModuleName (T.unpack dbModNm))
+          pure (PredicateFetchSourceCommit dbMod (migrationBranchCommit branch))
+  | (commitIdTxt, dbModNm) <- T.breakOn "/" t
+  , Just commitId <- readMaybe (T.unpack commitIdTxt) = do
+      let dbMod = if T.null dbModNm then Nothing else Just (ModuleName (T.unpack (T.tail dbModNm)))
+      pure (PredicateFetchSourceCommit dbMod commitId)
+  | (t', rest) <- T.break (\c -> c == '/' || c == '!') t
+  , Just dbInfo <- HM.lookup (DatabaseName (T.unpack t')) (migrationRegistryDatabases reg) =
+      pure (PredicateFetchSourceDbHead dbInfo (parsePredicateFetchSourceDbRef rest))
+  | otherwise = fail "Invalid predicate source spec"
+
+  where
+    parsePredicateFetchSourceModulePart t'
+      | Just mod' <- T.stripPrefix "/" t' = Just (ModuleName (T.unpack mod'))
+      | otherwise = Nothing
+    parsePredicateFetchSourceDbName t'
+      | Just dbName <- T.stripPrefix "/" t' =
+          let (dbName', t'') = T.break (\c -> c == '/' || c == '!') dbName
+          in (t'', Just (DatabaseName (T.unpack dbName')))
+      | otherwise = (t', Nothing)
+    parsePredicateFetchSourceDbRef "!" = Nothing
+    parsePredicateFetchSourceDbRef "" = Just 0
+    parsePredicateFetchSourceDbRef dbRef
+      | (dbRef', "") <- T.span (=='^') dbRef =
+          Just (T.length dbRef')
+      | otherwise = error "Invalid dbref"
+

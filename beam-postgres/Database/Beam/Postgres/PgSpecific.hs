@@ -46,14 +46,9 @@ newtype TsVectorConfig = TsVectorConfig ByteString
 newtype TsVector = TsVector ByteString
   deriving (Show, Eq, Ord)
 
--- | Postgres TypeInfo for tsvector
--- TODO Is the Oid stable from postgres instance to postgres instance?
-tsvectorType :: Pg.TypeInfo
-tsvectorType = Pg.Basic (Pg.Oid 3614) 'U' ',' "tsvector"
-
 instance Pg.FromField TsVector where
   fromField field d =
-    if Pg.typeOid field /= Pg.typoid tsvectorType
+    if Pg.typeOid field /= Pg.typoid pgTsVectorTypeInfo
     then Pg.returnError Pg.Incompatible field ""
     else case d of
            Just d' -> pure (TsVector d')
@@ -89,12 +84,9 @@ QExpr vec @@ QExpr q =
 newtype TsQuery = TsQuery ByteString
   deriving (Show, Eq, Ord)
 
-tsqueryType :: Pg.TypeInfo
-tsqueryType = Pg.Basic (Pg.Oid 3615) 'U' ',' "tsquery"
-
 instance Pg.FromField TsQuery where
   fromField field d =
-    if Pg.typeOid field /= Pg.typoid tsqueryType
+    if Pg.typeOid field /= Pg.typoid pgTsQueryTypeInfo
     then Pg.returnError Pg.Incompatible field ""
     else case d of
            Just d' -> pure (TsQuery d')

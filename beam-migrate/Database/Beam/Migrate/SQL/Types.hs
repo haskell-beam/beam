@@ -12,7 +12,8 @@ module Database.Beam.Migrate.SQL.Types
 
   , defaultTo_, notNull
   , int, smallint, char, varchar, double
-  , numeric, date
+  , characterLargeObject, binaryLargeObject, array
+  , boolean, numeric, date
   , timestamp, timestamptz
 
   , maybeType, autoType ) where
@@ -26,6 +27,8 @@ import Database.Beam.Migrate.SQL.SQL92
 -- import Database.Beam.Migrate.SQL.Internal
 
 import Data.Text (Text)
+import Data.Vector (Vector)
+import Data.ByteString (ByteString)
 import Data.Typeable
 -- import Data.Proxy
 import Data.Time (LocalTime)
@@ -44,8 +47,8 @@ newtype FieldSchema syntax a = FieldSchema syntax
 newtype DefaultValue syntax a = DefaultValue (Sql92ColumnSchemaExpressionSyntax syntax)
 newtype Constraint syntax = Constraint (Sql92ColumnConstraintDefinitionConstraintSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax))
 data DataType syntax a = DataType syntax
-instance Show syntax => Show (DataType syntax a) where
-  show (DataType syntax) = "DataType (" ++ show syntax ++ ")"
+instance Sql92DisplaySyntax syntax => Show (DataType syntax a) where
+  show (DataType syntax) = "DataType (" ++ displaySyntax syntax ++ ")"
 
 instance Eq syntax => Eq (DataType syntax a) where
   DataType a == DataType b = a == b
@@ -80,6 +83,20 @@ numeric x = DataType (numericType x)
 timestamp, timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
 timestamptz = DataType (timestampType Nothing True)
 timestamp = DataType (timestampType Nothing False)
+
+boolean :: IsSql99DataTypeSyntax syntax => DataType syntax Bool
+boolean = DataType booleanType
+
+characterLargeObject :: IsSql99DataTypeSyntax syntax => DataType syntax Text
+characterLargeObject = DataType characterLargeObjectType
+
+binaryLargeObject :: IsSql99DataTypeSyntax syntax => DataType syntax ByteString
+binaryLargeObject = DataType binaryLargeObjectType
+
+array :: (Typeable a, IsSql99DataTypeSyntax syntax)
+      => DataType syntax a -> Int
+      -> DataType syntax (Vector a)
+array (DataType ty) sz = DataType (arrayType ty sz)
 
 maybeType :: DataType syntax a -> DataType syntax (Maybe a)
 maybeType (DataType sqlTy) = DataType sqlTy
@@ -120,9 +137,11 @@ instance ( FieldReturnType defaultGiven collationGiven syntax resTy a
   field' = error "Unreachable because of GHC Custom Type Errors"
 
 instance ( Typeable syntax, Typeable (Sql92ColumnSchemaColumnTypeSyntax syntax)
-         , Show (Sql92ColumnSchemaColumnTypeSyntax syntax), Eq (Sql92ColumnSchemaColumnTypeSyntax syntax)
-         , Show (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax), Eq (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
-         , IsSql92ColumnSchemaSyntax syntax ) =>
+         , Sql92DisplaySyntax (Sql92ColumnSchemaColumnTypeSyntax syntax), Eq (Sql92ColumnSchemaColumnTypeSyntax syntax)
+         , Sql92DisplaySyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax), Eq (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
+         , IsSql92ColumnSchemaSyntax syntax
+         , Sql92SerializableConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
+         , Sql92SerializableDataTypeSyntax (Sql92ColumnSchemaColumnTypeSyntax syntax) ) =>
   FieldReturnType defaultGiven collationGiven syntax resTy (TableFieldSchema syntax resTy) where
   field' _ _ nm ty default_' collation constraints =
     TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_' constraints collation)) checks

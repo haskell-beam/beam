@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Migrate.Generics.Tables where
 
@@ -42,7 +43,9 @@ instance ( IsSql92DdlCommandSyntax syntax
 instance ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) haskTy
          , HasDefaultSqlDataTypeConstraints (Sql92DdlCommandColumnSchemaSyntax syntax) haskTy
          , HasNullableConstraint (NullableStatus haskTy) (Sql92DdlCommandColumnSchemaSyntax syntax)
-         , IsSql92DdlCommandSyntax syntax ) =>
+
+         , IsSql92DdlCommandSyntax syntax
+         , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax syntax) ) =>
   GMigratableTableSettings syntax (Rec0 haskTy) (Rec0 (Const [FieldCheck] haskTy)) where
 
   gDefaultTblSettingsChecks _ _ embedded =
@@ -67,7 +70,9 @@ type family NullableStatus (x :: *) :: Bool where
 
 class IsSql92ColumnSchemaSyntax syntax => HasNullableConstraint (x :: Bool) syntax where
   nullableConstraint :: Proxy x -> Proxy syntax -> [ FieldCheck ]
-instance IsSql92ColumnSchemaSyntax syntax =>
+
+instance ( IsSql92ColumnSchemaSyntax syntax
+         , Sql92SerializableConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax) ) =>
   HasNullableConstraint 'False syntax where
   nullableConstraint _ _ =
     let c = constraintDefinitionSyntax Nothing notNullConstraintSyntax Nothing

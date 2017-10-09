@@ -2,14 +2,17 @@
 
 module Main where
 
-import Database.Beam.Haskell.Syntax
-import Database.Beam.Backend.SQL
-import Database.Beam.Migrate.SQL.SQL92
+import Database.Beam.Migrate.Tool.Branch
 import Database.Beam.Migrate.Tool.CmdLine
 import Database.Beam.Migrate.Tool.Database
+import Database.Beam.Migrate.Tool.Diff
 import Database.Beam.Migrate.Tool.Init
-import Database.Beam.Migrate.Tool.Import
-import Database.Beam.Migrate.Tool.Branch
+import Database.Beam.Migrate.Tool.Log
+import Database.Beam.Migrate.Tool.Migrate
+import Database.Beam.Migrate.Tool.SchemaCmd
+import Database.Beam.Migrate.Tool.Status
+
+import Data.Maybe
 
 import Options.Applicative
 
@@ -20,6 +23,8 @@ main = do
   case migrateSubcommand of
     MigrateCommandDatabases DatabaseCommandList ->
       listDatabases cmdLine
+    MigrateCommandDatabases (DatabaseCommandAdd dbName beName url) ->
+      initDatabase cmdLine dbName beName url
     MigrateCommandDatabases (DatabaseCommandRename from to) ->
       renameDatabase cmdLine from to
     MigrateCommandDatabases (DatabaseCommandShow dbName) ->
@@ -28,14 +33,20 @@ main = do
     MigrateCommandInit initCommand ->
       initBeamMigrate cmdLine initCommand
 
---    MigrateCommandClean cleanCommand ->
+    MigrateCommandClean _ -> fail "Unimplemented"
 --      cleanBeamMigrate cmdLine cleanCommand
 
---    MigrateCommandLog ->
---      displayLog cmdLine
+    MigrateCommandLog ->
+      displayLog cmdLine
 
---    MigrateCommandStatus ->
---      displayStatus cmdLine
+    MigrateCommandStatus ->
+      displayStatus cmdLine
+
+    MigrateCommandDiff autogen expActual ->
+      let (actual, expected) =
+            maybe ("HEAD", "DB!")
+                  (\(actualSrc, expSrc) -> (actualSrc,) . fromMaybe "HEAD" $ expSrc) expActual
+      in displayDiff cmdLine expected actual autogen
 
     MigrateCommandBranch BranchCommandList ->
       listBranches cmdLine
@@ -44,16 +55,11 @@ main = do
     MigrateCommandBranch (BranchCommandNew dontSwitch branchNm) ->
       newBranch cmdLine dontSwitch branchNm
 
-    MigrateCommandImport _ dbName branchName ->
-      importDb cmdLine dbName branchName
+    MigrateCommandSchema (SchemaCommandImport _ dbName branchName doCommit doAutoMigrate) ->
+      importDb cmdLine dbName branchName doCommit doAutoMigrate
 
     MigrateCommandSimple (SimpleCommandHsSchema backend connStr) ->
       showSimpleSchema cmdLine backend connStr
 
-    _ -> let actions = [ createTableCmd (createTableSyntax mempty "testTbl" [("testField", fieldTy), ("field2", field2Ty)] []) ]
-             fieldTy = columnSchemaSyntax intType Nothing [c] Nothing
-             field2Ty = columnSchemaSyntax (varCharType (Just 128) Nothing) Nothing [c] Nothing
-             c = constraintDefinitionSyntax Nothing notNullConstraintSyntax Nothing
-         in case renderHsSchema (hsActionsToModule "Test" actions) of
-              Left  err -> fail err
-              Right sch -> putStrLn sch
+    MigrateCommandMigrate ->
+      doMigrateDatabase cmdLine
