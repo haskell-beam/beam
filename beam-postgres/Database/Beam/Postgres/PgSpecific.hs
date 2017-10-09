@@ -149,6 +149,23 @@ arrayLowerUnsafe_ (QExpr v) (QExpr dim) =
   QExpr . PgExpressionSyntax $
   emit "array_lower(" <> fromPgExpression v <> emit ", " <> fromPgExpression dim <> emit ")"
 
+arrayLength_
+  :: forall (dim :: Nat) ctxt num v s.
+     (KnownNat dim, WithinBounds dim (V.Vector v), Integral num)
+  => QGenExpr ctxt PgExpressionSyntax s (V.Vector v)
+  -> QGenExpr ctxt PgExpressionSyntax s num
+arrayLength_ v =
+  unsafeRetype (arrayLengthUnsafe_ v (val_ (natVal (Proxy @dim) :: Integer)) :: QGenExpr ctxt PgExpressionSyntax s (Maybe Integer))
+
+arrayLengthUnsafe_
+  :: (Integral dim, Integral num)
+  => QGenExpr ctxt PgExpressionSyntax s (V.Vector v)
+  -> QGenExpr ctxt PgExpressionSyntax s dim
+  -> QGenExpr ctxt PgExpressionSyntax s (Maybe num)
+arrayLengthUnsafe_ (QExpr a) (QExpr dim) =
+  QExpr $ PgExpressionSyntax $
+  emit "array_length(" <> fromPgExpression a <> emit ", " <> fromPgExpression dim <> emit ")"
+
 -- * Array expressions
 
 data PgArrayValueContext
@@ -373,9 +390,16 @@ pgJsonbPretty (QExpr a) =
 
 pgArrayAgg :: QExpr PgExpressionSyntax s a
            -> QAgg PgExpressionSyntax s (V.Vector a)
-pgArrayAgg (QExpr a) =
+pgArrayAgg = pgArrayAggOver allInGroup_
+
+pgArrayAggOver :: Maybe PgAggregationSetQuantifierSyntax
+               -> QExpr PgExpressionSyntax s a
+               -> QAgg PgExpressionSyntax s (V.Vector a)
+pgArrayAggOver quantifier (QExpr a) =
   QExpr . PgExpressionSyntax $
-  emit "array_agg" <> pgParens (fromPgExpression a)
+  emit "array_agg" <>
+  pgParens ( maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") quantifier <>
+             fromPgExpression a)
 
 pgBoolOr :: QExpr PgExpressionSyntax s a
          -> QAgg PgExpressionSyntax s Bool
