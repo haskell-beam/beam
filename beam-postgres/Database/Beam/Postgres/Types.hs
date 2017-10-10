@@ -96,7 +96,12 @@ instance FromBackendRow Postgres [Char]
 instance FromBackendRow Postgres (Ratio Integer)
 instance FromBackendRow Postgres (CI Text)
 instance FromBackendRow Postgres (CI TL.Text)
-instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a)
+instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a) where
+    fromBackendRow = do
+      isNull <- peekField
+      case isNull of
+        Just SqlNull -> pure mempty
+        Nothing -> parseOneField @Postgres @(Vector a)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGArray a)
 instance FromBackendRow Postgres (Pg.Binary ByteString)
 instance FromBackendRow Postgres (Pg.Binary BL.ByteString)
