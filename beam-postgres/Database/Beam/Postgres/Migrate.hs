@@ -122,10 +122,12 @@ getDbConstraints conn =
 
      primaryKeys <-
        map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey relnm (V.toList cols))) <$>
-       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname) FROM pg_index i "
-                                           , "JOIN pg_attribute a ON  a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey) "
-                                           , "JOIN pg_class c     ON  c.oid=i.indrelid "
-                                           , "WHERE c.relkind='r' AND i.indisprimary GROUP BY c.relname, i.indrelid" ]))
+       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname order by k.n asc)"
+                                           , "FROM pg_index i"
+                                           , "CROSS JOIN unnest(i.indkey) with ordinality k(attid, n)"
+                                           , "JOIN pg_attribute a ON a.attnum=k.attid and a.attrelid=i.indrelid"
+                                           , "JOIN pg_class c ON c.oid=i.indrelid"
+                                           , "WHERE c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
 
      pure (tblsExist ++ columnChecks ++ primaryKeys)
 
