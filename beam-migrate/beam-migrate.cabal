@@ -45,7 +45,7 @@ library
                        Database.Beam.Migrate.Generics.Tables
                        Database.Beam.Migrate.Types.CheckedEntities
   -- other-extensions:    
-  build-depends:       base >=4.9 && <4.10,
+  build-depends:       base >=4.9 && <4.11,
                        beam-core >=0.5.0.0,
                        text >= 1.2,
                        bytestring >= 0.10,
