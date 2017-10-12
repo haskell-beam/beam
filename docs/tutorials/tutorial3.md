@@ -1,7 +1,7 @@
 Introduction
 =======
 
-In teh last part, we extended our shopping cart database to let users add
+In the last part, we extended our shopping cart database to let users add
 multiple addresses. We saw how to establish one-to-many relations between two
 tables, and how to use the monadic query interface to write SQL JOINs. In this
 installment, we'll be adding support for products and orders to our database
