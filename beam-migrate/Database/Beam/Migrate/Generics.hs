@@ -20,3 +20,4 @@ defaultMigratableDbSettings
   => CheckedDatabaseSettings be db
 defaultMigratableDbSettings =
   to (defaultMigratableDbSettings' (Proxy @syntax) :: Rep (CheckedDatabaseSettings be db) ())
+

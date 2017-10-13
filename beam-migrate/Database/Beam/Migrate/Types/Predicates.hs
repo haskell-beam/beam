@@ -1,5 +1,7 @@
 module Database.Beam.Migrate.Types.Predicates where
 
+import Database.Beam
+
 import Data.Text (Text)
 import Data.Hashable
 import Data.Typeable
@@ -31,6 +33,6 @@ instance Hashable SomeDatabasePredicate where
 p :: DatabasePredicate p => p -> SomeDatabasePredicate
 p = SomeDatabasePredicate
 
-newtype TableCheck = TableCheck (Text -> SomeDatabasePredicate)
+newtype TableCheck tbl = TableCheck (Text -> tbl (TableField tbl) -> SomeDatabasePredicate)
 newtype DomainCheck = DomainCheck (Text -> SomeDatabasePredicate)
 newtype FieldCheck = FieldCheck (Text -> Text -> SomeDatabasePredicate)

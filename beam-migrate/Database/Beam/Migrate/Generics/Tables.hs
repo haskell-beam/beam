@@ -12,6 +12,8 @@ import Database.Beam.Migrate.Types.Predicates
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.Checks
 
+import Control.Applicative (Const(..))
+
 import Data.Proxy
 import Data.Text (Text)
 import Data.Scientific (Scientific)
@@ -21,40 +23,41 @@ import Data.Word
 
 import GHC.Generics
 
-class IsSql92DdlCommandSyntax syntax => GMigratableTableSettings syntax s (i :: * -> *) where
-  gDefaultTblSettingsChecks :: Proxy syntax -> Proxy i -> Bool -> s () -> [TableCheck]
+class IsSql92DdlCommandSyntax syntax => GMigratableTableSettings syntax (i :: * -> *) fieldCheck where
+  gDefaultTblSettingsChecks :: Proxy syntax -> Proxy i -> Bool -> fieldCheck ()
 
-instance (IsSql92DdlCommandSyntax syntax, GMigratableTableSettings syntax xStgs xId) =>
-  GMigratableTableSettings syntax (M1 t s xStgs) (M1 t s xId) where
-  gDefaultTblSettingsChecks syntax Proxy embedded (M1 x) =
-    gDefaultTblSettingsChecks syntax (Proxy @xId) embedded x
+instance (IsSql92DdlCommandSyntax syntax, GMigratableTableSettings syntax xId fieldCheckId) =>
+  GMigratableTableSettings syntax (M1 t s xId) (M1 t s fieldCheckId) where
+  gDefaultTblSettingsChecks syntax Proxy embedded =
+    M1 (gDefaultTblSettingsChecks syntax (Proxy @xId) embedded)
 
 instance ( IsSql92DdlCommandSyntax syntax
-         , GMigratableTableSettings syntax aStgs aId
-         , GMigratableTableSettings syntax bStgs bId ) =>
-  GMigratableTableSettings syntax (aStgs :*: bStgs) (aId :*: bId) where
-  gDefaultTblSettingsChecks syntax Proxy embedded (a :*: b) =
-    gDefaultTblSettingsChecks syntax (Proxy @aId) embedded a ++
-    gDefaultTblSettingsChecks syntax (Proxy @bId) embedded b
+         , GMigratableTableSettings syntax aId aFieldCheck
+         , GMigratableTableSettings syntax bId bFieldCheck ) =>
+  GMigratableTableSettings syntax (aId :*: bId) (aFieldCheck :*: bFieldCheck) where
+  gDefaultTblSettingsChecks syntax Proxy embedded =
+    gDefaultTblSettingsChecks syntax (Proxy @aId) embedded :*:
+    gDefaultTblSettingsChecks syntax (Proxy @bId) embedded
 
 instance ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) haskTy
          , HasDefaultSqlDataTypeConstraints (Sql92DdlCommandColumnSchemaSyntax syntax) haskTy
          , HasNullableConstraint (NullableStatus haskTy) (Sql92DdlCommandColumnSchemaSyntax syntax)
          , IsSql92DdlCommandSyntax syntax ) =>
-  GMigratableTableSettings syntax (Rec0 (TableField tbl x)) (Rec0 haskTy) where
+  GMigratableTableSettings syntax (Rec0 haskTy) (Rec0 (Const [FieldCheck] haskTy)) where
 
-  gDefaultTblSettingsChecks _ _ embedded (K1 (TableField nm)) =
-    nullableConstraint nm (Proxy @(NullableStatus haskTy)) (Proxy @(Sql92DdlCommandColumnSchemaSyntax syntax)) ++
-    defaultSqlDataTypeConstraints (Proxy @haskTy) (Proxy @(Sql92DdlCommandColumnSchemaSyntax syntax)) nm embedded ++
-    [ TableCheck (\tblNm -> p (TableHasColumn tblNm nm (defaultSqlDataType (Proxy @haskTy) embedded) :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax syntax))) ]
+  gDefaultTblSettingsChecks _ _ embedded =
+    K1 (Const (nullableConstraint (Proxy @(NullableStatus haskTy)) (Proxy @(Sql92DdlCommandColumnSchemaSyntax syntax)) ++
+               defaultSqlDataTypeConstraints (Proxy @haskTy) (Proxy @(Sql92DdlCommandColumnSchemaSyntax syntax)) embedded ++
+               [ FieldCheck (\tblNm nm -> p (TableHasColumn tblNm nm (defaultSqlDataType (Proxy @haskTy) embedded)
+                                              :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax syntax))) ]))
 
-instance ( Generic (embeddedTbl (TableField tbl))
+instance ( Generic (embeddedTbl (Const [FieldCheck]))
          , IsSql92DdlCommandSyntax syntax
-         , GMigratableTableSettings syntax (Rep (embeddedTbl (TableField tbl))) (Rep (embeddedTbl Identity)) ) =>
-  GMigratableTableSettings syntax (Rec0 (embeddedTbl (TableField tbl))) (Rec0 (embeddedTbl Identity)) where
+         , GMigratableTableSettings syntax (Rep (embeddedTbl Identity)) (Rep (embeddedTbl (Const [FieldCheck]))) ) =>
+  GMigratableTableSettings syntax (Rec0 (embeddedTbl Identity)) (Rec0 (embeddedTbl (Const [FieldCheck]))) where
 
-  gDefaultTblSettingsChecks syntax _ _   (K1 embeddedTbl) =
-    gDefaultTblSettingsChecks syntax (Proxy :: Proxy (Rep (embeddedTbl Identity))) True (from embeddedTbl)
+  gDefaultTblSettingsChecks syntax _ _ =
+    K1 (to (gDefaultTblSettingsChecks syntax (Proxy :: Proxy (Rep (embeddedTbl Identity))) True))
 
 -- * Nullability check
 
@@ -63,21 +66,21 @@ type family NullableStatus (x :: *) :: Bool where
   NullableStatus x = 'False
 
 class IsSql92ColumnSchemaSyntax syntax => HasNullableConstraint (x :: Bool) syntax where
-  nullableConstraint :: Text -> Proxy x -> Proxy syntax -> [ TableCheck ]
+  nullableConstraint :: Proxy x -> Proxy syntax -> [ FieldCheck ]
 instance IsSql92ColumnSchemaSyntax syntax =>
   HasNullableConstraint 'False syntax where
-  nullableConstraint colNm _ _ =
+  nullableConstraint _ _ =
     let c = constraintDefinitionSyntax Nothing notNullConstraintSyntax Nothing
-    in [ TableCheck $ \tblNm -> p (TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint syntax) ]
+    in [ FieldCheck $ \tblNm colNm -> p (TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint syntax) ]
 instance IsSql92ColumnSchemaSyntax syntax =>
   HasNullableConstraint 'True syntax where
-  nullableConstraint _ _ _ = []
+  nullableConstraint _ _ = []
 
 -- * Default data types
 
 class IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty where
-  defaultSqlDataTypeConstraints :: Proxy ty -> Proxy columnSchemaSyntax -> Text -> Bool {-^ Embedded -} -> [ TableCheck ]
-  defaultSqlDataTypeConstraints _ _ _ _ = []
+  defaultSqlDataTypeConstraints :: Proxy ty -> Proxy columnSchemaSyntax -> Bool {-^ Embedded -} -> [ FieldCheck ]
+  defaultSqlDataTypeConstraints _ _ _ = []
 
 class IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax ty where
   defaultSqlDataType :: Proxy ty -> Bool {-^ Embedded -} -> dataTypeSyntax
