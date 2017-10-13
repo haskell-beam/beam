@@ -8,6 +8,8 @@ import Database.Beam.Migrate.Checks
 import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.SQL.SQL92
 
+import Control.Applicative
+
 import Data.Text (Text)
 import Data.Proxy (Proxy(..))
 
@@ -26,18 +28,18 @@ createTable tblName tblSettings =
 
          tbl' = changeBeamRep (\(Columnar' (TableFieldSchema name _ _)) -> Columnar' (TableField name)) tblSettings
 
-         fieldChecks = mconcat $
-                       allBeamValues (\(Columnar' (TableFieldSchema nm _ cs)) -> map (\(FieldCheck mkCheck) -> TableCheck (\tblName -> mkCheck tblName nm)) cs) tblSettings
-         tblChecks = [ TableCheck (\tblName -> SomeDatabasePredicate (TableExistsPredicate tblName)) ] ++
-                     primaryKeyCheck ++
-                     fieldChecks
+         fieldChecks = changeBeamRep (\(Columnar' (TableFieldSchema _ _ cs)) -> Columnar' (Const cs)) tblSettings
+
+         tblChecks = [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableExistsPredicate tblName)) ] ++
+                     primaryKeyCheck
+
          primaryKeyCheck =
            case allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings) of
              [] -> []
-             cols -> [ TableCheck (\tblName -> SomeDatabasePredicate (TableHasPrimaryKey tblName cols)) ]
+             cols -> [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableHasPrimaryKey tblName cols)) ]
 
      upDown command Nothing
-     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblName tbl') tblChecks) [])
+     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblName tbl') tblChecks fieldChecks) [])
 
 preserve :: CheckedDatabaseEntity be db e
          -> Migration syntax (CheckedDatabaseEntity be db' e)

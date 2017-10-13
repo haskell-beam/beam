@@ -630,9 +630,9 @@ commas (x:xs) = x <> foldMap (emit ", " <>) xs
 instance HasDefaultSqlDataType SqliteDataTypeSyntax (SqlSerial Int) where
   defaultSqlDataType _ _ = intType
 instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax (SqlSerial Int) where
-  defaultSqlDataTypeConstraints _ _ colNm False = [ TableCheck $ \tblNm -> p (TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint SqliteColumnSchemaSyntax) ]
+  defaultSqlDataTypeConstraints _ _ False = [ FieldCheck $ \tblNm colNm -> p (TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint SqliteColumnSchemaSyntax) ]
     where c = constraintDefinitionSyntax Nothing (SqliteColumnConstraintSyntax (\_ -> emit "DEFAULT ROWID")) Nothing
-  defaultSqlDataTypeConstraints _ _ _ _ = []
+  defaultSqlDataTypeConstraints _ _ _ = []
 
 instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where
   defaultSqlDataType _ _ = SqliteDataTypeSyntax (emit "VARBINARY")
