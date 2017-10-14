@@ -166,6 +166,21 @@ arrayLengthUnsafe_ (QExpr a) (QExpr dim) =
   QExpr $ PgExpressionSyntax $
   emit "array_length(" <> fromPgExpression a <> emit ", " <> fromPgExpression dim <> emit ")"
 
+isSupersetOf_, isSubsetOf_ :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+                           -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+                           -> QGenExpr ctxt PgExpressionSyntax s Bool
+isSupersetOf_ (QExpr haystack) (QExpr needles) =
+  QExpr $ pgBinOp "@>" haystack needles
+isSubsetOf_ (QExpr needles) (QExpr haystack) =
+  QExpr $ pgBinOp "<@" needles haystack
+
+-- Postgres @||@ operator
+(++.) :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+      -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+      -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+QExpr a ++. QExpr b =
+  QExpr $ pgBinOp "||" a b
+
 -- * Array expressions
 
 data PgArrayValueContext
