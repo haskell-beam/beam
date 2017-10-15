@@ -201,7 +201,7 @@ insertValues ::
     [ table Identity ] -> SqlInsertValues syntax table
 insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ])
 
--- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the samae table
+-- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the same table
 insertFrom ::
     IsSql92InsertValuesSyntax syntax =>
     SqlSelect (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
