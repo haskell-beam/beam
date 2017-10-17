@@ -439,7 +439,7 @@ instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg wher
     runUpdateReturningList tbl mkAssignments mkWhere = do
         let PgUpdateReturning updateReturningCmd =
                 updateReturning tbl mkAssignments mkWhere
-                                (Just (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
-                                                              Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty)))
+                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
+                                                        Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty))
 
         runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
