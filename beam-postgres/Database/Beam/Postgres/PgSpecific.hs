@@ -221,7 +221,7 @@ instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSON a)
 instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
   sqlValueSyntax (PgJSON a) =
     PgValueSyntax $
-    escapeString (BL.toStrict (encode a)) <> emit "::json"
+    emit "'" <> escapeString (BL.toStrict (encode a)) <> emit "'::json"
 
 newtype PgJSONB a = PgJSONB a
   deriving ( Show, Eq, Ord, Hashable, Monoid )
@@ -238,7 +238,7 @@ instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSONB a)
 instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
   sqlValueSyntax (PgJSONB a) =
     PgValueSyntax $
-    escapeString (BL.toStrict (encode a)) <> emit "::jsonb"
+    emit "'" <> escapeString (BL.toStrict (encode a)) <> emit "'::jsonb"
 
 class IsPgJSON (json :: * -> *) where
 --  pgJsonEach     :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONTable (QGenExpr ctxt PgExpressionSyntax s))
