@@ -31,7 +31,7 @@ module Database.Beam.Postgres.Syntax
 
     , PgExpressionSyntax(..), PgFromSyntax(..)
     , PgComparisonQuantifierSyntax(..)
-    , PgCastTargetSyntax(..), PgExtractFieldSyntax(..)
+    , PgExtractFieldSyntax(..)
     , PgProjectionSyntax(..), PgGroupingSyntax(..)
     , PgOrderingSyntax(..), PgValueSyntax(..)
     , PgTableSourceSyntax(..), PgFieldNameSyntax(..)
@@ -234,7 +234,6 @@ newtype PgAggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fr
 newtype PgSelectSetQuantifierSyntax = PgSelectSetQuantifierSyntax { fromPgSelectSetQuantifier :: PgSyntax }
 newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
 newtype PgComparisonQuantifierSyntax = PgComparisonQuantifierSyntax { fromPgComparisonQuantifier :: PgSyntax }
-newtype PgCastTargetSyntax = PgCastTargetSyntax { fromPgCastTarget :: PgSyntax }
 newtype PgExtractFieldSyntax = PgExtractFieldSyntax { fromPgExtractField :: PgSyntax }
 newtype PgProjectionSyntax = PgProjectionSyntax { fromPgProjection :: PgSyntax }
 newtype PgGroupingSyntax = PgGroupingSyntax { fromPgGrouping :: PgSyntax }
@@ -572,7 +571,7 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionSelectSyntax PgExpressionSyntax = PgSelectSyntax
   type Sql92ExpressionFieldNameSyntax PgExpressionSyntax = PgFieldNameSyntax
   type Sql92ExpressionQuantifierSyntax PgExpressionSyntax = PgComparisonQuantifierSyntax
-  type Sql92ExpressionCastTargetSyntax PgExpressionSyntax = PgCastTargetSyntax
+  type Sql92ExpressionCastTargetSyntax PgExpressionSyntax = PgDataTypeSyntax
   type Sql92ExpressionExtractFieldSyntax PgExpressionSyntax = PgExtractFieldSyntax
 
   addE = pgBinOp "+"
@@ -621,7 +620,7 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   octetLengthE x = PgExpressionSyntax (emit "OCTET_LENGTH(" <> fromPgExpression x <> emit ")")
   coalesceE es = PgExpressionSyntax (emit "COALESCE(" <> pgSepBy (emit ", ") (map fromPgExpression es) <> emit ")")
   extractE field from = PgExpressionSyntax (emit "EXTRACT(" <> fromPgExtractField field <> emit " FROM (" <> fromPgExpression from <> emit "))")
-  castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") AS " <> fromPgCastTarget to <> emit ")")
+  castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") AS " <> fromPgDataType to <> emit ")")
   caseE cases else_ =
       PgExpressionSyntax $
       emit "CASE " <>

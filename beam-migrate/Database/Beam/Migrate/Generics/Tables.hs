@@ -6,14 +6,12 @@ module Database.Beam.Migrate.Generics.Tables where
 import Database.Beam
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.SQL.SQL92
-import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Types.Predicates
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.Checks
 
 import Control.Applicative (Const(..))
-import Database.Beam.Haskell.Syntax
 
 import Data.Proxy
 import Data.Text (Text)
@@ -89,7 +87,6 @@ class IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConst
 
 class IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax ty where
   defaultSqlDataType :: Proxy ty -> Bool {-^ Embedded -} -> dataTypeSyntax
-  defaultHaskellDataType :: Proxy ty -> Proxy dataTypeSyntax -> Text -> Text -> HaskellSyntax
 
 instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
   HasDefaultSqlDataType dataTypeSyntax (Auto ty) where
@@ -104,14 +101,6 @@ instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSy
 instance (IsSql92ColumnSchemaSyntax columnSchemaSyntax, HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty) =>
   HasDefaultSqlDataTypeConstraints columnSchemaSyntax (Maybe ty) where
   defaultSqlDataTypeConstraints _ = defaultSqlDataTypeConstraints (Proxy @ty)
-
-instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
-  HasDefaultSqlDataType dataTypeSyntax (Auto ty) where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
-
-instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
-  HasDefaultSqlDataType dataTypeSyntax (Maybe ty) where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
 
 -- TODO Not sure if individual databases will want to customize these types
 

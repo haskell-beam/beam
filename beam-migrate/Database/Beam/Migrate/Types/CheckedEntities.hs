@@ -81,19 +81,19 @@ instance IsCheckedDatabaseEntity be (TableEntity tbl) where
 
   unCheck (CheckedDatabaseTable x _ _) = x
 
-  collectEntityChecks (CheckedDatabaseTable (DatabaseTable tbl tblFields) tblChecks fieldChecks) =
+  collectEntityChecks (CheckedDatabaseTable (DatabaseTable tbl tblFields) tblChecks tblFieldChecks) =
     map (\(TableCheck mkCheck) -> mkCheck tbl tblFields) tblChecks <>
     execWriter (zipBeamFieldsM (\(Columnar' (TableField fieldNm)) c@(Columnar' (Const fieldChecks)) ->
                                     tell (map (\(FieldCheck mkCheck) -> mkCheck tbl fieldNm) fieldChecks) >>
                                     pure c)
-                               tblFields fieldChecks)
+                               tblFields tblFieldChecks)
 
   checkedDbEntityAuto syntax tblTypeName =
     let tblChecks =
           [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableExistsPredicate tblName))
           , TableCheck (\tblName tblFields ->
-                           let pk = allBeamValues (\(Columnar' (TableField x)) -> x) (primaryKey tblFields)
-                           in SomeDatabasePredicate (TableHasPrimaryKey tblName pk)) ]
+                           let pkFields = allBeamValues (\(Columnar' (TableField x)) -> x) (primaryKey tblFields)
+                           in SomeDatabasePredicate (TableHasPrimaryKey tblName pkFields)) ]
 
         fieldChecks = to (gDefaultTblSettingsChecks syntax (Proxy @(Rep (tbl Identity))) False)
     in CheckedDatabaseTable (dbEntityAuto tblTypeName) tblChecks fieldChecks
@@ -113,11 +113,11 @@ modifyCheckedTable
 modifyCheckedTable renamer modFields =
   EntityModification (\(CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable nm fields) tblChecks fieldChecks) extraChecks) ->
                           let fields' = runIdentity $
-                                        zipBeamFieldsM (\(Columnar' (CheckedFieldModification mod _)) (Columnar' field) ->
-                                                           pure $ Columnar' (mod field))
+                                        zipBeamFieldsM (\(Columnar' (CheckedFieldModification fieldMod _)) (Columnar' field) ->
+                                                           pure $ Columnar' (fieldMod field))
                                                        modFields fields
                               fieldChecks' = runIdentity $
-                                             zipBeamFieldsM (\(Columnar' (CheckedFieldModification _ mod)) (Columnar' (Const cs)) ->
-                                                                pure $ Columnar' (Const (mod cs)))
+                                             zipBeamFieldsM (\(Columnar' (CheckedFieldModification _ csMod)) (Columnar' (Const cs)) ->
+                                                                pure $ Columnar' (Const (csMod cs)))
                                                             modFields fieldChecks
                           in CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable (renamer nm) fields') tblChecks fieldChecks') extraChecks)

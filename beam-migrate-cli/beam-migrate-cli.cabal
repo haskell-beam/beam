@@ -26,6 +26,7 @@ executable beam-migrate
                        Database.Beam.Migrate.Tool.Status
                        Database.Beam.Migrate.Tool.Diff
                        Database.Beam.Migrate.Tool.Log
+                       Database.Beam.Migrate.Tool.Migrate
   build-depends:       base >=4.9 && <4.10,
                        beam-core >=0.5.0.0,
                        beam-migrate >=0.1.0.0,

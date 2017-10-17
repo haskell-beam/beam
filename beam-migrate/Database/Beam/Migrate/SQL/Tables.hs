@@ -47,7 +47,7 @@ createTable newTblName tblSettings =
 dropTable :: IsSql92DdlCommandSyntax syntax
           => CheckedDatabaseEntity be db (TableEntity table)
           -> Migration syntax ()
-dropTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm _) _) _) =
+dropTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm _) _ _) _) =
   let command = dropTableCmd (dropTableSyntax tblNm)
   in upDown command Nothing
 
@@ -68,7 +68,7 @@ alterTable :: forall be db db' table table' syntax
            => CheckedDatabaseEntity be db (TableEntity table)
            -> (table (ColumnMigration syntax) -> table' (ColumnMigration syntax))
            -> Migration syntax (CheckedDatabaseEntity be db' (TableEntity table'))
-alterTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm tbl) tblChecks) entityChecks) alterColumns =
+alterTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm tbl) tblChecks tblFieldChecks) entityChecks) alterColumns =
   let initialTbl = changeBeamRep (\(Columnar' _ :: Columnar' (TableField table) x) ->
                                     Columnar' (ColumnMigration (\_ -> True) [] [])
                                        :: Columnar' (ColumnMigration syntax) x) tbl

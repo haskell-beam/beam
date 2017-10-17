@@ -7,8 +7,6 @@ import Data.Text (Text)
 import Data.Hashable
 import Data.Typeable
 
-import GHC.Generics
-
 data PredicateSource
   = PredicateSourceBackend String
   | PredicateSourceCurBackend

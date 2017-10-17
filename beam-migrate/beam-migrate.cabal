@@ -39,8 +39,7 @@ library
 
   other-modules:       Database.Beam.Migrate.Generics.Types
                        Database.Beam.Migrate.Generics.Tables
-                       Database.Beam.Haskell.Syntax
-                       Database.Beam.Haskell.Orphans
+--                       Database.Beam.Haskell.Orphans
                        Database.Beam.Migrate.Types.CheckedEntities
                        Database.Beam.Migrate.Types.Predicates
   -- other-extensions:    

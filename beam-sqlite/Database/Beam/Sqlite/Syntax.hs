@@ -12,7 +12,6 @@ module Database.Beam.Sqlite.Syntax
   , SqliteInsertValuesSyntax(..)
   , SqliteExpressionSyntax(..)
 
-  , SqliteCastTargetSyntax(..)
 
   , SqliteValueSyntax(..)
 
@@ -24,7 +23,7 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL.SQL92
-import           Database.Beam.Migrate.Types.Predicates
+import           Database.Beam.Migrate.Types
 import           Database.Beam.Query
 import           Database.Beam.Query.SQL92
 
@@ -528,7 +527,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionSelectSyntax SqliteExpressionSyntax = SqliteSelectSyntax
   type Sql92ExpressionFieldNameSyntax SqliteExpressionSyntax = SqliteFieldNameSyntax
   type Sql92ExpressionQuantifierSyntax SqliteExpressionSyntax = SqliteComparisonQuantifierSyntax
-  type Sql92ExpressionCastTargetSyntax SqliteExpressionSyntax = SqliteCastTargetSyntax
+  type Sql92ExpressionCastTargetSyntax SqliteExpressionSyntax = SqliteDataTypeSyntax
   type Sql92ExpressionExtractFieldSyntax SqliteExpressionSyntax = SqliteExtractFieldSyntax
 
   addE = binOp "+"; subE = binOp "-"; mulE = binOp "*"; divE = binOp "/"
@@ -575,7 +574,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   extractE field from =
     SqliteExpressionSyntax $
     emit "EXTRACT" <> parens (fromSqliteExtractField field <> emit " FROM " <> parens (fromSqliteExpression from))
-  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteCastTarget t))
+  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteDataType t))
   caseE cases else_ =
     SqliteExpressionSyntax $
     emit "CASE " <>

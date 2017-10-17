@@ -445,6 +445,6 @@ pgStringAggOver quantifier (QExpr v) (QExpr delim) =
 pgNubBy_ :: ( Projectible PgExpressionSyntax key
             , Projectible PgExpressionSyntax r )
          => (r -> key)
-         -> Q PgSelectSyntax db s r
-         -> Q PgSelectSyntax db s r
+         -> Q PgSelectSyntax be db s r
+         -> Q PgSelectSyntax be db s r
 pgNubBy_ mkKey (Q q) = Q $ liftF (QDistinct (\r -> pgSelectSetQuantifierDistinctOn (project (mkKey r))) q id)
