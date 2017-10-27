@@ -36,7 +36,9 @@ tests = testGroup "SQL generation tests"
                   , selectCombinators
                   , limitOffset
 
-                  , updateCurrent ]
+                  , updateCurrent
+
+                  , noEmptyIns ]
 
 -- * Ensure simple select selects the right fields
 
@@ -1021,3 +1023,16 @@ updateCurrent =
      updateTable @?= "employees"
      updateFields @?= [ (UnqualifiedField "age", ExpressionBinOp "+" (ExpressionFieldName (UnqualifiedField "age")) (ExpressionValue (Value (1 :: Int)))) ]
      updateWhere @?= Just (ExpressionCompOp "==" Nothing (ExpressionFieldName (UnqualifiedField "first_name")) (ExpressionValue (Value ("Joe" :: String))))
+
+-- * Ensure empty IN operators transform into FALSE
+
+noEmptyIns :: TestTree
+noEmptyIns =
+  testCase "Empty INs are transformed to FALSE" $
+  do  SqlSelect Select { selectTable = SelectTable {..} } <-
+        pure $ select $ do
+          e <- all_ (_employees employeeDbSettings)
+          guard_ (_employeeFirstName e `in_` [])
+          pure e
+
+      selectWhere @?= Just (ExpressionValue (Value False))
