@@ -67,6 +67,9 @@ module Database.Beam.Postgres.Syntax
     , PgInsertReturning(..)
     , insertReturning
 
+    , PgUpdateReturning(..)
+    , updateReturning
+
     , now_
     , ilike_
 
@@ -1027,6 +1030,26 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
          let tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
          in emit " RETURNING "<>
             pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ))))
+
+newtype PgUpdateReturning a = PgUpdateReturning PgSyntax
+
+updateReturning :: Projectible PgExpressionSyntax a
+                => DatabaseEntity Postgres be (TableEntity table)
+                -> (forall s. table (QField s) -> [ QAssignment PgFieldNameSyntax PgExpressionSyntax s ])
+                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
+                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+                -> PgUpdateReturning (QExprToIdentity a)
+updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
+                mkAssignments
+                mkWhere
+                mkProjection =
+  PgUpdateReturning $
+  fromPgUpdate pgUpdate <>
+  emit " RETURNING " <>
+  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ)))
+  where
+    SqlUpdate pgUpdate = update table mkAssignments mkWhere
+    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
 
 -- -- * Pg-specific Q monad
 
