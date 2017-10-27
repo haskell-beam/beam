@@ -35,7 +35,10 @@ tests = testGroup "Schema Tests"
 --                  , dbSchemaModification ]
 
 data DummyBackend
-instance BeamBackend DummyBackend
+
+instance BeamBackend DummyBackend where
+  -- Pretty much everything we can shove in a database satisfies show
+  type BackendFromField DummyBackend = Show
 
 data EmployeeT f
   = EmployeeT

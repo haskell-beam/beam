@@ -108,10 +108,12 @@ between_ (QExpr a) (QExpr min_) (QExpr max_) =
   QExpr (betweenE a min_ max_)
 
 -- | SQL @IN@ predicate
-in_ :: IsSql92ExpressionSyntax syntax
+in_ :: ( IsSql92ExpressionSyntax syntax
+       , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool )
     => QGenExpr context syntax s a
     -> [ QGenExpr context syntax s a ]
     -> QGenExpr context syntax s Bool
+in_ _ [] = QExpr (valueE (sqlValueSyntax False))
 in_ (QExpr row) options = QExpr (inE row (map (\(QExpr o) -> o) options))
 
 -- | Class for expression types or expression containers for which there is a
