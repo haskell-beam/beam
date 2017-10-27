@@ -9,6 +9,8 @@ import           Control.Exception
 import           Data.Aeson
 import           Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.PatriciaTree
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import           Data.List (find, intercalate, sort)
@@ -536,3 +538,14 @@ parsePredicateFetchSourceSpec cmdLine reg t
           Just (T.length dbRef')
       | otherwise = error "Invalid dbref"
 
+registryMigrationGraph :: MigrationRegistry -> Gr RegisteredSchemaInfo RegisteredMigrationInfo
+registryMigrationGraph reg =
+  let schemaIdxs = zip [0..] (migrationRegistrySchemas reg)
+      schemaIdToIdxMap = HM.fromList (map (\(i, schema) -> (registeredSchemaInfoHash schema, i)) schemaIdxs)
+      schemaIdToIdx = flip HM.lookup schemaIdToIdxMap
+
+      migrations = mapMaybe (\mig -> (,,mig) <$> schemaIdToIdx (registeredMigrationInfoSource mig)
+                                             <*> schemaIdToIdx (registeredMigrationInfoResult mig))
+                            (migrationRegistryMigrations reg)
+
+  in mkGraph schemaIdxs migrations
