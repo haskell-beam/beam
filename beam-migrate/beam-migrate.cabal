@@ -23,6 +23,7 @@ library
 
                        Database.Beam.Migrate.Checks
                        Database.Beam.Migrate.Actions
+                       Database.Beam.Migrate.Backend
 
                        Database.Beam.Migrate.SQL
                        Database.Beam.Migrate.SQL.Types
