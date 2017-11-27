@@ -99,7 +99,7 @@ planned.
 | E061-03 IN predicate with list of values                        | FULL     | Use `in_`                                                                                                                                  |
 | E061-04 LIKE predicate                                          | FULL     | Use `like_`                                                                                                                               |
 | E061-05 LIKE predicate ESCAPE clause                            | TODO     | Unsure how this would apply                                                                                                               |
-| E061-06 NULL predicate                                          | FULL     | Use `isNull_` and `isNotNull_`                                                                                                            |
+| E061-06 NULL predicate                                          | FULL     | Use `isNothing_` and `isJust_`                                                                                                            |
 | E061-07 Quantified comparison predicate                         | FULL     | Use one of the *quantified comparison operators* (`==*.`, `/=*.`, `<*.`, `>*.`, `<=*.`, `>=*.`)                                           |
 | E051-08 EXISTS predicate                                        | FULL     | Use `exists_`                                                                                                                             |
 | E061-09 Subqueries in comparison predicate                      | FULL     | Use `subquery_` as usual                                                                                                                  |
