@@ -364,6 +364,13 @@ instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s
     runIdentity $
     zipBeamFieldsM (\(Columnar' (QField _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
                        pure (Columnar' (Const (unqualifiedField f, e)) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
+instance Beamable tbl => SqlUpdatable expr s (tbl (Nullable (QField s))) (tbl (Nullable (QExpr expr s))) where
+  lhs <-. rhs =
+    let lhs' = changeBeamRep (\(Columnar' (QField tblName fieldName) :: Columnar' (Nullable (QField s)) a) ->
+                                Columnar' (QField tblName fieldName) :: Columnar' (QField s)  a) lhs
+        rhs' = changeBeamRep (\(Columnar' (QExpr e) :: Columnar' (Nullable (QExpr expr s)) a) ->
+                                Columnar' (QExpr e) :: Columnar' (QExpr expr s) a)
+    in lhs' <-. rhs'
 
 -- | SQL @UNION@ operator
 union_ :: forall select be db s a.
