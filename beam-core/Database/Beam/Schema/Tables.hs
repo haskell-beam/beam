@@ -33,7 +33,9 @@ module Database.Beam.Schema.Tables
     , fieldName
 
     , TableSettings, TableSkeleton, Ignored(..)
-    , GFieldsFulfillConstraint(..), FieldsFulfillConstraint, WithConstraint(..)
+    , GFieldsFulfillConstraint(..), FieldsFulfillConstraint
+    , FieldsFulfillConstraintNullable
+    , WithConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
 
     -- * Tables

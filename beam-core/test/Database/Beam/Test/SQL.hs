@@ -37,6 +37,7 @@ tests = testGroup "SQL generation tests"
                   , limitOffset
 
                   , updateCurrent
+                  , updateNullable
 
                   , noEmptyIns ]
 
@@ -1023,6 +1024,27 @@ updateCurrent =
      updateTable @?= "employees"
      updateFields @?= [ (UnqualifiedField "age", ExpressionBinOp "+" (ExpressionFieldName (UnqualifiedField "age")) (ExpressionValue (Value (1 :: Int)))) ]
      updateWhere @?= Just (ExpressionCompOp "==" Nothing (ExpressionFieldName (UnqualifiedField "first_name")) (ExpressionValue (Value ("Joe" :: String))))
+
+updateNullable :: TestTree
+updateNullable =
+  testCase "UPDATE can correctly set a nullable field" $
+  do curTime <- getCurrentTime
+
+     let employeeKey :: PrimaryKey EmployeeT (Nullable Identity)
+         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just (Auto (Just curTime)))
+
+     SqlUpdate Update { .. } <-
+       pure $ update (_departments employeeDbSettings)
+                     (\department -> [ _departmentHead department <-. val_ employeeKey ])
+                     (\department -> _departmentName department ==. "Sales")
+
+     updateTable @?= "departments"
+     updateFields @?= [ (UnqualifiedField "head__first_name", ExpressionValue (Value ("John" :: Text)))
+                      , (UnqualifiedField "head__last_name", ExpressionValue (Value ("Smith" :: Text)))
+                      , (UnqualifiedField "head__created", ExpressionValue (Value curTime)) ]
+     updateWhere @?= Just (ExpressionCompOp "==" Nothing
+                             (ExpressionFieldName (UnqualifiedField "name"))
+                             (ExpressionValue (Value ("Sales" :: String))))
 
 -- * Ensure empty IN operators transform into FALSE
 

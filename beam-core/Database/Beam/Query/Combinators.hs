@@ -364,6 +364,13 @@ instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s
     runIdentity $
     zipBeamFieldsM (\(Columnar' (QField _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
                        pure (Columnar' (Const (unqualifiedField f, e)) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
+instance Beamable tbl => SqlUpdatable expr s (tbl (Nullable (QField s))) (tbl (Nullable (QExpr expr s))) where
+  lhs <-. rhs =
+    let lhs' = changeBeamRep (\(Columnar' (QField tblName fieldName') :: Columnar' (Nullable (QField s)) a) ->
+                                Columnar' (QField tblName fieldName') :: Columnar' (QField s)  a) lhs
+        rhs' = changeBeamRep (\(Columnar' (QExpr e) :: Columnar' (Nullable (QExpr expr s)) a) ->
+                                Columnar' (QExpr e) :: Columnar' (QExpr expr s) a) rhs
+    in lhs' <-. rhs'
 
 -- | SQL @UNION@ operator
 union_ :: forall select db s a.
@@ -449,6 +456,10 @@ as_ = id
 type family HaskellLiteralForQExpr x = a
 type instance HaskellLiteralForQExpr (QGenExpr context syntax s a) = a
 type instance HaskellLiteralForQExpr (table (QGenExpr context syntax s)) = table Identity
+type instance HaskellLiteralForQExpr (table (Nullable f)) = HaskellLiteralForQExpr_AddNullable (HaskellLiteralForQExpr (table f))
+
+type family HaskellLiteralForQExpr_AddNullable x = a
+type instance HaskellLiteralForQExpr_AddNullable (tbl f) = tbl (Nullable f)
 
 type family QExprSyntax x where
   QExprSyntax (QGenExpr ctxt syntax s a) = syntax
@@ -474,6 +485,19 @@ instance ( Beamable table
         fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
                                             (Proxy @(Rep (table Exposed))) (from tbl))
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) x)) ->
+                         Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
+instance ( Beamable table
+         , IsSql92ExpressionSyntax syntax
+
+         , FieldsFulfillConstraintNullable (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
+
+         SqlValable (table (Nullable (QGenExpr ctxt syntax s))) where
+
+  val_ tbl =
+    let fields :: table (Nullable (WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax))))
+        fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
+                                            (Proxy @(Rep (table (Nullable Exposed)))) (from tbl))
+    in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) (Maybe x))) ->
                          Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
 
 default_ :: IsSql92ExpressionSyntax expr
