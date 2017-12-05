@@ -16,7 +16,8 @@
 module Database.Beam.Query.CustomSQL
   (
   -- * The 'customExpr_' function
-    customExpr_
+    IsCustomExprFn(..)
+
   -- ** Type-inference help
   , valueExpr_, agg_
 
