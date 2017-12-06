@@ -24,6 +24,7 @@ tests = testGroup "SQL generation tests"
                   , simpleJoin
                   , selfJoin
                   , leftJoin
+                  , leftJoinSingle
                   , aggregates
                   , orderBy
 
@@ -41,7 +42,7 @@ tests = testGroup "SQL generation tests"
 
                   , noEmptyIns ]
 
--- * Ensure simple select selects the right fields
+-- | Ensure simple select selects the right fields
 
 simpleSelect :: TestTree
 simpleSelect =
@@ -68,7 +69,7 @@ simpleSelect =
                                     , (ExpressionFieldName (QualifiedField tblName "leave_date"), Just "res6")
                                     , (ExpressionFieldName (QualifiedField tblName "created"), Just "res7") ]
 
--- * Simple select with WHERE clause
+-- | Simple select with WHERE clause
 
 simpleWhere :: TestTree
 simpleWhere =
@@ -95,7 +96,7 @@ simpleWhere =
 
      selectWhere @?= Just (ExpressionBinOp "AND" salaryCond (ExpressionBinOp "AND" ageCond nameCond))
 
--- * Ensure that multiple tables are correctly joined
+-- | Ensure that multiple tables are correctly joined
 
 simpleJoin :: TestTree
 simpleJoin =
@@ -121,7 +122,7 @@ simpleJoin =
      selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField employees "phone_number"), Just "res0" )
                                     , ( ExpressionFieldName (QualifiedField roles "name"), Just "res1") ]
 
--- * Ensure that multiple joins on the same table are correctly referenced
+-- | Ensure that multiple joins on the same table are correctly referenced
 
 selfJoin :: TestTree
 selfJoin =
@@ -156,7 +157,7 @@ selfJoin =
                                                   (ExpressionFieldName (QualifiedField e3 "last_name")))
                             (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField e3 "phone_number")) (ExpressionFieldName (QualifiedField e2 "first_name")))
 
--- * Ensure that right joins are properly generated
+-- | Ensure that left joins are properly generated
 
 leftJoin :: TestTree
 leftJoin =
@@ -183,7 +184,38 @@ leftJoin =
 
      cond @?= andE (andE firstNameCond lastNameCond) createdCond
 
--- * Ensure that aggregations cause the correct GROUP BY clause to be generated
+-- | Ensure that left joins which return a single column are properly typed. The
+--   point of this test is to test for compile-time errors. The same query
+--   should be generated as above.
+
+leftJoinSingle :: TestTree
+leftJoinSingle =
+  testCase "leftJoin_ generates the right join (single return value)" $
+  do SqlSelect Select { selectTable = SelectTable { selectWhere = Nothing, selectFrom } } <-
+       pure $ select $
+       do r <- all_ (_roles employeeDbSettings)
+          e <- leftJoin_ (do e <- all_ (_employees employeeDbSettings)
+                             pure (primaryKey e, _employeeAge e))
+                         (\(key, _) -> key ==. _roleForEmployee r)
+          pure (e, r)
+
+     Just (LeftJoin (FromTable (TableNamed "roles") (Just roles))
+                    (FromTable (TableNamed "employees") (Just employees))
+                    (Just cond)) <- pure selectFrom
+
+     let andE = ExpressionBinOp "AND"
+         eqE = ExpressionCompOp "==" Nothing
+
+         firstNameCond = eqE (ExpressionFieldName (QualifiedField employees "first_name"))
+                             (ExpressionFieldName (QualifiedField roles "for_employee__first_name"))
+         lastNameCond = eqE (ExpressionFieldName (QualifiedField employees "last_name"))
+                            (ExpressionFieldName (QualifiedField roles "for_employee__last_name"))
+         createdCond = eqE (ExpressionFieldName (QualifiedField employees "created"))
+                           (ExpressionFieldName (QualifiedField roles "for_employee__created"))
+
+     cond @?= andE (andE firstNameCond lastNameCond) createdCond
+
+-- | Ensure that aggregations cause the correct GROUP BY clause to be generated
 
 aggregates :: TestTree
 aggregates =
@@ -490,7 +522,7 @@ aggregates =
                                         , ( ExpressionFieldName (QualifiedField t0'' "leave_date"), Just "res6" )
                                         , ( ExpressionFieldName (QualifiedField t0'' "created"), Just "res7" ) ]
 
--- * ORDER BY
+-- | ORDER BY
 
 orderBy :: TestTree
 orderBy =
@@ -675,7 +707,7 @@ orderBy =
                                           (FromTable (TableFromSubSelect subselect) (Just "t1"))
                                           Nothing)
 
--- * HAVING clause should not be floated out of a join
+-- | HAVING clause should not be floated out of a join
 
 joinHaving :: TestTree
 joinHaving =
@@ -711,7 +743,7 @@ joinHaving =
      selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
      selectHaving @?= Just (ExpressionCompOp ">=" Nothing (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))]) (ExpressionValue (Value (20 :: Int))))
 
--- * Ensure that isJustE and isNothingE work correctly for simple types
+-- | Ensure that isJustE and isNothingE work correctly for simple types
 
 maybeFieldTypes :: TestTree
 maybeFieldTypes =
@@ -724,11 +756,11 @@ maybeFieldTypes =
      Just (FromTable (TableNamed "employees") (Just employees)) <- pure selectFrom
      selectWhere @?= ExpressionIsNull (ExpressionFieldName (QualifiedField employees "leave_date"))
 
--- * Ensure isJustE and isNothingE work correctly for table and composite types
+-- | Ensure isJustE and isNothingE work correctly for table and composite types
 
--- * Ensure maybeE works for simple types
+-- | Ensure maybeE works for simple types
 
--- * Ensure equality works for tables
+-- | Ensure equality works for tables
 
 tableEquality :: TestTree
 tableEquality =
@@ -780,7 +812,7 @@ tableEquality =
                               (ExpressionValue (Value now))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
--- * Ensure related_ generates the correct ON conditions
+-- | Ensure related_ generates the correct ON conditions
 
 related :: TestTree
 related =
@@ -793,7 +825,7 @@ related =
 
      pure ()
 
--- * Ensure select can be joined with UNION, INTERSECT, and EXCEPT
+-- | Ensure select can be joined with UNION, INTERSECT, and EXCEPT
 
 selectCombinators :: TestTree
 selectCombinators =
@@ -940,7 +972,7 @@ selectCombinators =
          pure ()
 
 
--- * Ensure simple selects can be used with limit_ and offset_
+-- | Ensure simple selects can be used with limit_ and offset_
 
 limitOffset :: TestTree
 limitOffset =
@@ -1007,11 +1039,7 @@ limitOffset =
          selectGrouping b @?= Nothing
          selectHaving b @?= Nothing
 
--- * Ensure exists_ generates the correct sub-select
-
--- * Ensure results can be correctly sorted with orderBy
-
--- * UPDATE can correctly get the current value
+-- | UPDATE can correctly get the current value
 
 updateCurrent :: TestTree
 updateCurrent =
@@ -1046,7 +1074,7 @@ updateNullable =
                              (ExpressionFieldName (UnqualifiedField "name"))
                              (ExpressionValue (Value ("Sales" :: String))))
 
--- * Ensure empty IN operators transform into FALSE
+-- | Ensure empty IN operators transform into FALSE
 
 noEmptyIns :: TestTree
 noEmptyIns =
