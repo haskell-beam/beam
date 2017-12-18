@@ -24,7 +24,7 @@ module Database.Beam.Schema.Tables
     , withTableModification, modifyTable, fieldNamed
     , defaultDbSettings
 
-    , RenamableWithRule(..), Renamablefield(..)
+    , RenamableWithRule(..), RenamableField(..)
     , FieldRenamer(..)
 
     , Lenses, LensFor(..)
@@ -170,8 +170,11 @@ tableModification = runIdentity $
 -- >        -- Change default name "table1" to "Table_1". Change the name of "table1Field1" to "first_name"
 -- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
 -- >      }
-withDbModification :: forall db f be.
-                      Database db => db f -> DatabaseModification f be db -> db f
+withDbModification :: forall db be
+                    . Database db
+                   => DatabaseSettings be db
+                   -> DatabaseModification (DatabaseEntity be db) be db
+                   -> DatabaseSettings be db
 withDbModification db mods =
   runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
 
