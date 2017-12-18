@@ -24,6 +24,9 @@ module Database.Beam.Schema.Tables
     , withTableModification, modifyTable, fieldNamed
     , defaultDbSettings
 
+    , RenamableWithRule(..), RenamableField(..)
+    , FieldRenamer(..)
+
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
@@ -167,8 +170,11 @@ tableModification = runIdentity $
 -- >        -- Change default name "table1" to "Table_1". Change the name of "table1Field1" to "first_name"
 -- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
 -- >      }
-withDbModification :: forall db f be.
-                      Database db => db f -> DatabaseModification f be db -> db f
+withDbModification :: forall db be
+                    . Database db
+                   => DatabaseSettings be db
+                   -> DatabaseModification (DatabaseEntity be db) be db
+                   -> DatabaseSettings be db
 withDbModification db mods =
   runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
 
@@ -195,6 +201,32 @@ modifyTable modTblNm modFields =
 fieldNamed :: Text -> FieldModification (TableField tbl) a
 fieldNamed newName = FieldModification (\_ -> TableField newName)
 
+newtype FieldRenamer entity = FieldRenamer { withFieldRenamer :: entity -> entity }
+
+class RenamableField f where
+  renameField :: Proxy f -> Proxy a -> (Text -> Text) -> Columnar f a -> Columnar f a
+instance RenamableField (TableField tbl) where
+  renameField _ _ f (TableField nm) = TableField (f nm)
+
+class RenamableWithRule mod where
+  renamingFields :: (Text -> Text) -> mod
+instance Database db => RenamableWithRule (db (EntityModification (DatabaseEntity be db) be)) where
+  renamingFields renamer =
+    runIdentity $
+    zipTables (Proxy @be) (\_ _ -> pure (renamingFields renamer))
+              (undefined :: DatabaseModification f be db)
+              (undefined :: DatabaseModification f be db)
+instance IsDatabaseEntity be entity => RenamableWithRule (EntityModification (DatabaseEntity be db) be entity) where
+  renamingFields renamer =
+    EntityModification (\(DatabaseEntity tbl) -> DatabaseEntity (withFieldRenamer (renamingFields renamer) tbl))
+instance (Beamable tbl, RenamableField f) => RenamableWithRule (tbl (FieldModification f)) where
+  renamingFields renamer =
+    runIdentity $
+    zipBeamFieldsM (\(Columnar' _ :: Columnar' Ignored x) (Columnar' _ :: Columnar' Ignored x) ->
+                       pure (Columnar' (FieldModification (renameField (Proxy @f) (Proxy @x) renamer) :: FieldModification f x) ::
+                               Columnar' (FieldModification f) x))
+                   (undefined :: TableSkeleton tbl) (undefined :: TableSkeleton tbl)
+
 instance IsString (FieldModification (TableField tbl) a) where
   fromString = fieldNamed . fromString
 
@@ -211,7 +243,8 @@ data DomainTypeEntity (ty :: *)
 --data TranslationEntity
 --data AssertionEntity
 
-class IsDatabaseEntity be entityType where
+class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) =>
+    IsDatabaseEntity be entityType where
   data DatabaseEntityDescriptor be entityType :: *
   type DatabaseEntityDefaultRequirements be entityType :: Constraint
   type DatabaseEntityRegularRequirements be entityType :: Constraint
@@ -220,7 +253,15 @@ class IsDatabaseEntity be entityType where
   dbEntityAuto :: DatabaseEntityDefaultRequirements be entityType =>
                   Text -> DatabaseEntityDescriptor be entityType
 
-instance IsDatabaseEntity be (TableEntity tbl) where
+instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (TableEntity tbl))) where
+  renamingFields renamer =
+    FieldRenamer $ \(DatabaseTable tblName fields) ->
+    DatabaseTable tblName $
+    changeBeamRep (\(Columnar' tblField :: Columnar' (TableField tbl) a) ->
+                     Columnar' (renameField (Proxy @(TableField tbl)) (Proxy @a) renamer tblField) :: Columnar' (TableField tbl) a) $
+    fields
+
+instance Beamable tbl => IsDatabaseEntity be (TableEntity tbl) where
   data DatabaseEntityDescriptor be (TableEntity tbl) where
     DatabaseTable :: Table tbl => Text -> TableSettings tbl -> DatabaseEntityDescriptor be (TableEntity tbl)
   type DatabaseEntityDefaultRequirements be (TableEntity tbl) =
@@ -233,7 +274,15 @@ instance IsDatabaseEntity be (TableEntity tbl) where
   dbEntityAuto nm =
     DatabaseTable (unCamelCaseSel nm) defTblFieldSettings
 
-instance IsDatabaseEntity be (ViewEntity tbl) where
+instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (ViewEntity tbl))) where
+  renamingFields renamer =
+    FieldRenamer $ \(DatabaseView tblName fields) ->
+    DatabaseView tblName $
+    changeBeamRep (\(Columnar' tblField :: Columnar' (TableField tbl) a) ->
+                     Columnar' (renameField (Proxy @(TableField tbl)) (Proxy @a) renamer tblField) :: Columnar' (TableField tbl) a) $
+    fields
+
+instance Beamable tbl => IsDatabaseEntity be (ViewEntity tbl) where
   data DatabaseEntityDescriptor be (ViewEntity tbl) where
     DatabaseView :: Text -> TableSettings tbl -> DatabaseEntityDescriptor be (ViewEntity tbl)
   type DatabaseEntityDefaultRequirements be (ViewEntity tbl) =
@@ -245,6 +294,9 @@ instance IsDatabaseEntity be (ViewEntity tbl) where
   dbEntityName f (DatabaseView t s) = fmap (\t' -> DatabaseView t' s) (f t)
   dbEntityAuto nm =
     DatabaseView (unCamelCaseSel nm) defTblFieldSettings
+
+instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (DomainTypeEntity ty))) where
+  renamingFields _ = FieldRenamer id
 
 instance IsDatabaseEntity be (DomainTypeEntity ty) where
   data DatabaseEntityDescriptor be (DomainTypeEntity ty)
