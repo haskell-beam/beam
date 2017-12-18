@@ -65,7 +65,7 @@ instance IsCheckedDatabaseEntity be (DomainTypeEntity ty) where
   checkedDbEntityAuto _ domTypeName =
     CheckedDatabaseDomainType (dbEntityAuto domTypeName) []
 
-instance IsCheckedDatabaseEntity be (TableEntity tbl) where
+instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
   data CheckedDatabaseEntityDescriptor be (TableEntity tbl) where
     CheckedDatabaseTable :: Table tbl
                          => DatabaseEntityDescriptor be (TableEntity tbl)
