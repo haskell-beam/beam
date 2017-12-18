@@ -24,6 +24,9 @@ module Database.Beam.Schema.Tables
     , withTableModification, modifyTable, fieldNamed
     , defaultDbSettings
 
+    , RenamableWithRule(..), Renamablefield(..)
+    , FieldRenamer(..)
+
     , Lenses, LensFor(..)
 
     -- * Columnar and Column Tags
