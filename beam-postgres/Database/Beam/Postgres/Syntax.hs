@@ -53,7 +53,8 @@ module Database.Beam.Postgres.Syntax
 
     , pgSelectSetQuantifierDistinctOn
 
-    , pgBooleanType, pgByteaType, pgSerialType, pgSmallSerialType, pgBigSerialType
+    , pgBooleanType, pgByteaType, pgBigIntType
+    , pgSerialType, pgSmallSerialType, pgBigSerialType
 
     , IsPgInsertOnConflictSyntax(..)
     , PgInsertOnConflict(..)
@@ -437,6 +438,9 @@ pgBooleanType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bool) Nothing
 
 pgByteaType :: PgDataTypeSyntax
 pgByteaType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bytea) Nothing) (emit "BYTEA")
+
+pgBigIntType :: PgDataTypeSyntax
+pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT")
 
 pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
 pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL")
@@ -849,6 +853,7 @@ DEFAULT_SQL_SYNTAX(Int)
 DEFAULT_SQL_SYNTAX(Int8)
 DEFAULT_SQL_SYNTAX(Int16)
 DEFAULT_SQL_SYNTAX(Int32)
+DEFAULT_SQL_SYNTAX(Int64)
 DEFAULT_SQL_SYNTAX(Integer)
 DEFAULT_SQL_SYNTAX(Word)
 DEFAULT_SQL_SYNTAX(Word8)
@@ -1142,3 +1147,7 @@ instance HasDefaultSqlDataType PgDataTypeSyntax (SqlSerial Int) where
   defaultSqlDataType _ False = pgSerialType
   defaultSqlDataType _ _ = intType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (SqlSerial Int)
+
+instance HasDefaultSqlDataType PgDataTypeSyntax Int64 where
+  defaultSqlDataType _ _ = pgBigIntType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax Int64
