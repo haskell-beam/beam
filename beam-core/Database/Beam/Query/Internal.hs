@@ -141,6 +141,11 @@ type QGroupExpr = QGenExpr QGroupingContext
 deriving instance Show syntax => Show (QGenExpr context syntax s t)
 deriving instance Eq syntax => Eq (QGenExpr context syntax s t)
 
+instance Retaggable (QGenExpr ctxt expr s) (QGenExpr ctxt expr s t) where
+  type Retag tag (QGenExpr ctxt expr s t) = Columnar (tag (QGenExpr ctxt expr s)) t
+  retag f e = case f (Columnar' e) of
+                Columnar' a -> a
+
 newtype QWindow syntax s = QWindow syntax
 newtype QFrameBounds syntax = QFrameBounds (Maybe syntax)
 newtype QFrameBound syntax = QFrameBound syntax
