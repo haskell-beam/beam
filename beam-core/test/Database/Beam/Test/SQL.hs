@@ -37,6 +37,8 @@ tests = testGroup "SQL generation tests"
                   , selectCombinators
                   , limitOffset
 
+                  , existsTest
+
                   , updateCurrent
                   , updateNullable
 
@@ -1038,6 +1040,44 @@ limitOffset =
          selectWhere b @?= Just (ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField "t0" "age")) (ExpressionValue (Value (50 :: Int))))
          selectGrouping b @?= Nothing
          selectHaving b @?= Nothing
+
+-- | Ensures exists predicates generate table names that do not overlap
+
+existsTest :: TestTree
+existsTest =
+  testGroup "EXISTS() tests"
+  [ existsInWhere ]
+  where
+    existsInWhere =
+      testCase "EXISTS() in WHERE" $
+      do SqlSelect Select { selectOffset = Nothing, selectLimit = Nothing
+                          , selectOrdering = []
+                          , selectTable = SelectTable { .. } } <-
+           pure  $ select $ do
+             role <- all_ (_roles employeeDbSettings)
+             guard_ (not_ (exists_ (do dept <- all_ (_departments employeeDbSettings)
+                                       guard_ (_departmentName dept ==. _roleName role)
+                                       pure (as_ @Int 1))))
+             pure role
+
+         let existsQuery = Select
+                         { selectOffset = Nothing, selectLimit = Nothing
+                         , selectOrdering = []
+                         , selectTable = SelectTable
+                                       { selectQuantifier = Nothing
+                                       , selectProjection = ProjExprs [ (ExpressionValue (Value (1 :: Int)), Just "res0") ]
+                                       , selectGrouping = Nothing
+                                       , selectHaving = Nothing
+                                       , selectWhere = Just joinExpr
+                                       , selectFrom = Just (FromTable (TableNamed "departments") (Just "sub_t0")) } }
+             joinExpr = ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField "sub_t0" "name"))
+                                                      (ExpressionFieldName (QualifiedField "t0" "name"))
+
+         selectGrouping @?= Nothing
+         selectWhere @?= Just (ExpressionUnOp "NOT" (ExpressionExists existsQuery))
+         selectHaving @?= Nothing
+         selectQuantifier @?= Nothing
+         selectFrom @?= Just (FromTable (TableNamed "roles") (Just "t0"))
 
 -- | UPDATE can correctly get the current value
 
