@@ -107,7 +107,7 @@ select :: forall syntax db res.
           , HasQBuilder syntax ) =>
           Q syntax db QueryInaccessible res -> SqlSelect syntax (QExprToIdentity res)
 select q =
-  SqlSelect (buildSqlQuery q)
+  SqlSelect (buildSqlQuery "t" q)
 
 -- | Convenience function to generate a 'SqlSelect' that looks up a table row
 --   given a primary key.
@@ -191,7 +191,7 @@ insertExpressions tbls =
     insertSqlExpressions (map mkSqlExprs tbls)
     where
       mkSqlExprs :: forall s. table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) -> [Sql92InsertValuesExpressionSyntax syntax]
-      mkSqlExprs = allBeamValues (\(Columnar' (QExpr x)) -> x)
+      mkSqlExprs = allBeamValues (\(Columnar' (QExpr x)) -> x "t")
 
 -- | Build a 'SqlInsertValues' from concrete table values
 insertValues ::
@@ -231,13 +231,13 @@ update :: ( Beamable table
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlUpdate syntax table
 update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere =
-  SqlUpdate (updateStmt tblNm assignments (Just where_))
+  SqlUpdate (updateStmt tblNm assignments (Just (where_ "t")))
   where
     assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
     QExpr where_ = mkWhere tblFieldExprs
 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField tblNm name)) tblSettings
-    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (unqualifiedField nm)))) tblFields
+    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
 
 -- | Generate a 'SqlUpdate' that will update the given table with the given value.
 --
@@ -292,9 +292,9 @@ delete :: IsSql92DeleteSyntax delete
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete delete table
 delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
-  SqlDelete (deleteStmt tblNm (Just where_))
+  SqlDelete (deleteStmt tblNm (Just (where_ "t")))
   where
-    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (fieldE (unqualifiedField name)))) tblSettings)
+    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField name))))) tblSettings)
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
 runDelete :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)

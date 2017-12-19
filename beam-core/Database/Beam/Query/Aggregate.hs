@@ -32,6 +32,7 @@ import Database.Beam.Query.Internal
 import Database.Beam.Backend.SQL
 import Database.Beam.Schema.Tables
 
+import Control.Applicative
 import Control.Monad.Writer
 import Control.Monad.Free
 
@@ -70,10 +71,11 @@ aggregate_ :: forall select a r db s.
 aggregate_ mkAggregation (Q aggregating) =
   Q (liftF (QAggregate mkAggregation' aggregating (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
   where
-    mkAggregation' x =
+    mkAggregation' x tblPfx =
       let agg = mkAggregation x
-          doProject :: AggregateContext c => Proxy c -> Sql92SelectExpressionSyntax select
-                    -> Writer [Sql92SelectExpressionSyntax select] (Sql92SelectExpressionSyntax select)
+          doProject :: AggregateContext c => Proxy c -> WithExprContext (Sql92SelectExpressionSyntax select)
+                    -> Writer [WithExprContext (Sql92SelectExpressionSyntax select)]
+                              (WithExprContext (Sql92SelectExpressionSyntax select))
           doProject p expr =
             case cast p of
               Just (Proxy :: Proxy QGroupingContext) ->
@@ -87,7 +89,7 @@ aggregate_ mkAggregation (Q aggregating) =
           groupingExprs = execWriter (project' (Proxy @AggregateContext) doProject agg)
       in case groupingExprs of
            [] -> (Nothing, agg)
-           _ -> (Just (groupByExpressions groupingExprs), agg)
+           _ -> (Just (groupByExpressions (sequenceA groupingExprs tblPfx)), agg)
 
 -- | Type class for grouping keys. 'expr' is the type of the grouping key after
 --   projection. 'grouped' is the type of the grouping key in the aggregate
@@ -155,63 +157,63 @@ sum_ = sumOver_ allInGroup_
 
 -- | SQL @COUNT(*)@ function
 countAll_ :: IsSql92AggregationExpressionSyntax expr => QAgg expr s Int
-countAll_ = QExpr countAllE
+countAll_ = QExpr (pure countAllE)
 
 -- | SQL @COUNT(ALL ..)@ function (but without the explicit ALL)
 count_ :: ( IsSql92AggregationExpressionSyntax expr
           , Integral b ) => QExpr expr s a -> QAgg expr s b
-count_ (QExpr over) = QExpr (countE Nothing over)
+count_ (QExpr over) = QExpr (countE Nothing <$> over)
 
 -- | SQL2003 @CUME_DIST@ function (Requires T612 Advanced OLAP operations support)
 cumeDist_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
           => QAgg expr s Double
-cumeDist_ = QExpr cumeDistAggE
+cumeDist_ = QExpr (pure cumeDistAggE)
 
 -- | SQL2003 @PERCENT_RANK@ function (Requires T612 Advanced OLAP operations support)
 percentRank_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
              => QAgg expr s Double
-percentRank_ = QExpr percentRankAggE
+percentRank_ = QExpr (pure percentRankAggE)
 
 -- | SQL2003 @RANK@ function (Requires T611 Elementary OLAP operations support)
 rank_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
       => QAgg expr s Int
-rank_ = QExpr rankAggE
+rank_ = QExpr (pure rankAggE)
 
 minOver_, maxOver_
   :: IsSql92AggregationExpressionSyntax expr
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
   -> QExpr expr s a -> QAgg expr s a
-minOver_ q (QExpr a) = QExpr (minE q a)
-maxOver_ q (QExpr a) = QExpr (maxE q a)
+minOver_ q (QExpr a) = QExpr (minE q <$> a)
+maxOver_ q (QExpr a) = QExpr (maxE q <$> a)
 
 avgOver_, sumOver_
   :: ( IsSql92AggregationExpressionSyntax expr
      , Num a )
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
   -> QExpr expr s a -> QAgg expr s a
-avgOver_ q (QExpr a) = QExpr (avgE q a)
-sumOver_ q (QExpr a) = QExpr (sumE q a)
+avgOver_ q (QExpr a) = QExpr (avgE q <$> a)
+sumOver_ q (QExpr a) = QExpr (sumE q <$> a)
 
 countOver_
   :: ( IsSql92AggregationExpressionSyntax expr
      , Integral b )
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
   -> QExpr expr s a -> QAgg expr s b
-countOver_ q (QExpr a) = QExpr (countE q a)
+countOver_ q (QExpr a) = QExpr (countE q <$> a)
 
 everyOver_, someOver_, anyOver_
   :: IsSql99AggregationExpressionSyntax expr
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
   -> QExpr expr s Bool -> QAgg expr s Bool
-everyOver_ q (QExpr a) = QExpr (everyE q a)
-someOver_  q (QExpr a) = QExpr (someE q a)
-anyOver_   q (QExpr a) = QExpr (anyE  q a)
+everyOver_ q (QExpr a) = QExpr (everyE q <$> a)
+someOver_  q (QExpr a) = QExpr (someE  q <$> a)
+anyOver_   q (QExpr a) = QExpr (anyE   q <$> a)
 
 -- | Support for FILTER (WHERE ...) syntax for aggregates.
 --   Part of SQL2003 Advanced OLAP operations feature (T612)
 filterWhere_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
              => QAgg expr s a -> QExpr expr s Bool -> QAgg expr s a
-filterWhere_ (QExpr agg) (QExpr cond) = QExpr (filterAggE agg cond)
+filterWhere_ (QExpr agg) (QExpr cond) = QExpr (liftA2 filterAggE agg cond)
 
 -- | SQL99 @EVERY(ALL ..)@ function (but without the explicit ALL)
 every_ :: IsSql99AggregationExpressionSyntax expr

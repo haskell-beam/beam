@@ -16,10 +16,10 @@
 module Database.Beam.Query.CustomSQL
   (
   -- * The 'customExpr_' function
-    IsCustomExprFn(..)
+--    IsCustomExprFn(..)
 
   -- ** Type-inference help
-  , valueExpr_, agg_
+   valueExpr_, agg_
 
   -- * For backends
   , IsCustomSqlSyntax(..) ) where
@@ -53,13 +53,15 @@ instance IsCustomSqlSyntax SqlSyntaxBuilder where
   customExprSyntax (SqlSyntaxBuilderCustom bs) = SqlSyntaxBuilder (byteString bs)
   renderSyntax = SqlSyntaxBuilderCustom . toStrict . toLazyByteString . buildSql
 
-class IsCustomExprFn fn res | res -> fn where
-  customExpr_ :: fn -> res
+-- class IsCustomExprFn fn res | res -> fn where
+--   customExpr' :: fn -> TablePrefix -> res
 
-instance IsCustomSqlSyntax syntax => IsCustomExprFn (CustomSqlSyntax syntax) (QGenExpr ctxt syntax s a) where
-  customExpr_ = QExpr . customExprSyntax
-instance (IsCustomExprFn a res, IsCustomSqlSyntax syntax) => IsCustomExprFn (CustomSqlSyntax syntax -> a) (QGenExpr ctxt syntax s r -> res) where
-  customExpr_ fn (QExpr e) = customExpr_ $ fn (renderSyntax e)
+-- instance IsCustomSqlSyntax syntax => IsCustomExprFn (CustomSqlSyntax syntax) (TablePrefix -> syntax) where
+--   customExpr' syntax _ = customExprSyntax syntax
+-- instance (IsCustomExprFn a res, IsCustomSqlSyntax syntax) => IsCustomExprFn (CustomSqlSyntax syntax -> a) (QGenExpr ctxt syntax s r -> res) where
+--   customExpr' fn pfx (QExpr e) = customExpr_ $ fn (renderSyntax (e pfx))
+
+-- customExpr :: IsCustomExprFn 
 
 -- | Force a 'QGenExpr' to be typed as a value expression (a 'QExpr'). Useful
 --   for getting around type-inference errors with supplying the entire type.
