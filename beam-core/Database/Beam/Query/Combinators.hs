@@ -15,7 +15,7 @@ module Database.Beam.Query.Combinators
     -- * Project Haskell values to 'QGenExpr's
     , HaskellLiteralForQExpr
     , SqlValable(..), SqlValableTable
-    , default_
+    , default_, auto_
 
     -- * General query combinators
 
@@ -503,6 +503,9 @@ instance ( Beamable table
 default_ :: IsSql92ExpressionSyntax expr
          => QGenExpr ctxt expr s a
 default_ = QExpr defaultE
+
+auto_ :: QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s (Auto a)
+auto_ = unsafeRetype
 
 -- * Window functions
 
