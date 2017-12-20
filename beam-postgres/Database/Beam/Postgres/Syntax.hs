@@ -552,6 +552,13 @@ instance IsSql99ExpressionSyntax PgExpressionSyntax where
     PgExpressionSyntax $
     pgParens (fromPgExpression i) <> emit "->" <> escapeIdentifier (TE.encodeUtf8 nm)
 
+instance IsSql99ConcatExpressionSyntax PgExpressionSyntax where
+  concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
+  concatE [x] = x
+  concatE es =
+    PgExpressionSyntax $
+    emit "CONCAT" <> pgParens (pgSepBy (emit ", ") (map fromPgExpression es))
+
 instance IsSql2003ExpressionSyntax PgExpressionSyntax where
   type Sql2003ExpressionWindowFrameSyntax PgExpressionSyntax =
     PgWindowFrameSyntax

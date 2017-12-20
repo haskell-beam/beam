@@ -543,6 +543,12 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   defaultE = SqliteExpressionDefault
   inE e es = SqliteExpressionSyntax (parens (fromSqliteExpression e) <> emit " IN " <> parens (commas (map fromSqliteExpression es)))
 
+instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
+  concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
+  concatE (x:xs) =
+    SqliteExpressionSyntax $ parens $
+    foldr (\a b -> parens (fromSqliteExpression a) <> emit " || " <> parens b) (fromSqliteExpression x) xs
+
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
   SqliteExpressionSyntax $

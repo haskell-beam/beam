@@ -7,13 +7,17 @@ module Database.Beam.Query.Operator
   , isTrue_, isNotTrue_
   , isFalse_, isNotFalse_
   , isUnknown_, isNotUnknown_
+
+  , concat_
   ) where
 
-import Database.Beam.Backend.SQL
+import           Database.Beam.Backend.SQL
 
-import Database.Beam.Query.Internal
+import           Database.Beam.Query.Internal
 
-import Control.Applicative
+import           Control.Applicative
+
+import qualified Data.Text as T
 
 -- | SQL @AND@ operator
 (&&.) :: IsSql92ExpressionSyntax syntax
@@ -97,3 +101,7 @@ isNotUnknown_ :: IsSql92ExpressionSyntax syntax
               => QGenExpr context syntax s a -> QGenExpr context syntax s Bool
 isNotUnknown_ (QExpr s) = QExpr (fmap isNotUnknownE s)
 
+-- | SQL @CONCAT@ function
+concat_ :: IsSql99ConcatExpressionSyntax syntax
+        => [ QGenExpr context syntax s T.Text ] -> QGenExpr context syntax s T.Text
+concat_ es = QExpr (concatE <$> mapM (\(QExpr e) -> e) es)
