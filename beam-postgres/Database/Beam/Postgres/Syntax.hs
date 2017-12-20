@@ -442,6 +442,9 @@ pgByteaType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bytea) Nothing)
 pgBigIntType :: PgDataTypeSyntax
 pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT")
 
+pgUuidType :: PgDataTypeSyntax
+pgUuidType = PgDataTypeSyntax(PgDataTypeDescrOid (Pg.typoid Pg.uuid) Nothing) (emit "uuid")
+
 pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
 pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL")
 pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL")
@@ -457,6 +460,7 @@ instance IsCustomSqlSyntax PgExpressionSyntax where
     deriving Monoid
   customExprSyntax = PgExpressionSyntax . fromPgCustomExpression
   renderSyntax = PgCustomExpressionSyntax . pgParens . fromPgExpression
+
 instance IsString (CustomSqlSyntax PgExpressionSyntax) where
   fromString = PgCustomExpressionSyntax . emit . fromString
 
@@ -962,15 +966,18 @@ DEFAULT_SQL_SYNTAX(Scientific)
 
 instance HasSqlValueSyntax PgValueSyntax SqlNull where
   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
+
 instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Auto x) where
   sqlValueSyntax (Auto Nothing) = PgValueSyntax (emit "DEFAULT")
   sqlValueSyntax (Auto (Just x)) = sqlValueSyntax x
+
 instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Maybe x) where
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
   sqlValueSyntax (Just x) = sqlValueSyntax x
 
 instance HasSqlValueSyntax PgValueSyntax B.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
+
 instance HasSqlValueSyntax PgValueSyntax BL.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
 
@@ -1219,9 +1226,11 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
 instance HasDefaultSqlDataType PgDataTypeSyntax ByteString where
   defaultSqlDataType _ _ = pgByteaType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax ByteString
+
 instance HasDefaultSqlDataType PgDataTypeSyntax LocalTime where
   defaultSqlDataType _ _ = timestampType Nothing False
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax LocalTime
+
 instance HasDefaultSqlDataType PgDataTypeSyntax (SqlSerial Int) where
   defaultSqlDataType _ False = pgSerialType
   defaultSqlDataType _ _ = intType
@@ -1230,3 +1239,7 @@ instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (SqlSerial Int)
 instance HasDefaultSqlDataType PgDataTypeSyntax Int64 where
   defaultSqlDataType _ _ = pgBigIntType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax Int64
+
+instance HasDefaultSqlDataType PgDataTypeSyntax UUID where
+  defaultSqlDataType _ _ = pgUuidType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UUID
