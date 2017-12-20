@@ -287,6 +287,7 @@ instance IsSql2003ExpressionElementaryOLAPOperationsSyntax SqlSyntaxBuilder wher
   rankAggE = SqlSyntaxBuilder "RANK()"
 
 instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax SqlSyntaxBuilder where
+  denseRankAggE = SqlSyntaxBuilder "DENSE_RANK()"
   percentRankAggE = SqlSyntaxBuilder "PERCENT_RANK()"
   cumeDistAggE = SqlSyntaxBuilder "CUME_DIST()"
 

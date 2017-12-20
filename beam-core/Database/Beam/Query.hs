@@ -16,6 +16,7 @@ module Database.Beam.Query
     , QueryableSqlSyntax
 
     , module Database.Beam.Query.Combinators
+    , module Database.Beam.Query.Extensions
 
     , module Database.Beam.Query.Relationships
 
@@ -69,12 +70,13 @@ import Prelude hiding (lookup)
 import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.CustomSQL
+import Database.Beam.Query.Extensions
 import Database.Beam.Query.Internal
+import Database.Beam.Query.Operator
 import Database.Beam.Query.Ord
 import Database.Beam.Query.Relationships
-import Database.Beam.Query.Operator
-import Database.Beam.Query.Types hiding (QGenExpr)
 import Database.Beam.Query.Types (QGenExpr) -- hide QGenExpr constructor
+import Database.Beam.Query.Types hiding (QGenExpr)
 
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
