@@ -560,7 +560,16 @@ instance IsSql2003ExpressionSyntax PgExpressionSyntax where
     PgExpressionSyntax $
     fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
 
+instance IsSql2003EnhancedNumericFunctionsExpressionSyntax PgExpressionSyntax where
+  lnE    x = PgExpressionSyntax (emit "LN("    <> fromPgExpression x <> emit ")")
+  expE   x = PgExpressionSyntax (emit "EXP("   <> fromPgExpression x <> emit ")")
+  sqrtE  x = PgExpressionSyntax (emit "SQRT("  <> fromPgExpression x <> emit ")")
+  ceilE  x = PgExpressionSyntax (emit "CEIL("  <> fromPgExpression x <> emit ")")
+  floorE x = PgExpressionSyntax (emit "FLOOR(" <> fromPgExpression x <> emit ")")
+  powerE x y = PgExpressionSyntax (emit "POWER(" <> fromPgExpression x <> emit ", " <> fromPgExpression y <> emit ")")
+
 instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax PgExpressionSyntax where
+  denseRankAggE = PgExpressionSyntax $ emit "DENSE_RANK()"
   percentRankAggE = PgExpressionSyntax $ emit "PERCENT_RANK()"
   cumeDistAggE = PgExpressionSyntax $ emit "CUME_DIST()"
 
@@ -569,6 +578,54 @@ instance IsSql2003ExpressionElementaryOLAPOperationsSyntax PgExpressionSyntax wh
   filterAggE agg filter =
     PgExpressionSyntax $
     fromPgExpression agg <> emit " FILTER (WHERE " <> fromPgExpression filter <> emit ")"
+
+instance IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax PgExpressionSyntax where
+  stddevPopE = pgUnAgg "STDDEV_POP"
+  stddevSampE = pgUnAgg "STDDEV_SAMP"
+  varPopE = pgUnAgg "VAR_POP"
+  varSampE = pgUnAgg "VAR_SAMP"
+
+  covarPopE = pgBinAgg "COVAR_POP"
+  covarSampE = pgBinAgg "COVAR_SAMP"
+  corrE = pgBinAgg "CORR"
+  regrSlopeE = pgBinAgg "REGR_SLOPE"
+  regrInterceptE = pgBinAgg "REGR_INTERCEPT"
+  regrCountE = pgBinAgg "REGR_COUNT"
+  regrRSquaredE = pgBinAgg "REGR_R2"
+  regrAvgXE = pgBinAgg "REGR_AVGX"
+  regrAvgYE = pgBinAgg "REGR_AVGY"
+  regrSXXE = pgBinAgg "REGR_SXX"
+  regrSYYE = pgBinAgg "REGR_SYY"
+  regrSXYE = pgBinAgg "REGR_SXY"
+
+instance IsSql2003NtileExpressionSyntax PgExpressionSyntax where
+  ntileE x = PgExpressionSyntax (emit "NTILE(" <> fromPgExpression x <> emit ")")
+
+instance IsSql2003LeadAndLagExpressionSyntax PgExpressionSyntax where
+  leadE x Nothing Nothing =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ")")
+  leadE x (Just n) Nothing =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ")")
+  leadE x (Just n) (Just def) =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ", " <> fromPgExpression def <> emit ")")
+  leadE x Nothing (Just def) =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ", 1, " <> fromPgExpression def <> emit ")")
+
+  lagE x Nothing Nothing =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ")")
+  lagE x (Just n) Nothing =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ")")
+  lagE x (Just n) (Just def) =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ", " <> fromPgExpression def <> emit ")")
+  lagE x Nothing (Just def) =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ", 1, " <> fromPgExpression def <> emit ")")
+
+instance IsSql2003FirstValueAndLastValueExpressionSyntax PgExpressionSyntax where
+  firstValueE x = PgExpressionSyntax (emit "FIRST_VALUE(" <> fromPgExpression x <> emit ")")
+  lastValueE x = PgExpressionSyntax (emit "LAST_VALUE(" <> fromPgExpression x <> emit ")")
+
+instance IsSql2003NthValueExpressionSyntax PgExpressionSyntax where
+  nthValueE x n = PgExpressionSyntax (emit "NTH_VALUE(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ")")
 
 instance IsSql2003WindowFrameSyntax PgWindowFrameSyntax where
   type Sql2003WindowFrameExpressionSyntax PgWindowFrameSyntax = PgExpressionSyntax
@@ -609,6 +666,14 @@ instance IsSql92AggregationExpressionSyntax PgExpressionSyntax where
   minE = pgUnAgg "MIN"
   maxE = pgUnAgg "MAX"
 
+instance IsSql99AggregationExpressionSyntax PgExpressionSyntax where
+  everyE = pgUnAgg "EVERY"
+
+  -- According to the note at <https://www.postgresql.org/docs/9.2/static/functions-aggregate.html>
+  -- the following functions are equivalent.
+  someE = pgUnAgg "BOOL_ANY"
+  anyE = pgUnAgg "BOOL_ANY"
+
 instance IsSql92AggregationSetQuantifierSyntax PgAggregationSetQuantifierSyntax where
   setQuantifierDistinct = PgAggregationSetQuantifierSyntax $ emit "DISTINCT"
   setQuantifierAll = PgAggregationSetQuantifierSyntax $ emit "ALL"
@@ -626,6 +691,13 @@ pgUnAgg :: ByteString -> Maybe PgAggregationSetQuantifierSyntax -> PgExpressionS
 pgUnAgg fn q e =
   PgExpressionSyntax $
   emit fn <> emit "(" <> maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") q <> fromPgExpression e <> emit ")"
+
+pgBinAgg :: ByteString -> Maybe PgAggregationSetQuantifierSyntax -> PgExpressionSyntax -> PgExpressionSyntax
+         -> PgExpressionSyntax
+pgBinAgg fn q x y =
+  PgExpressionSyntax $
+  emit fn <> emit "(" <> maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") q
+          <> fromPgExpression x <> emit ", " <> fromPgExpression y <> emit ")"
 
 instance IsSql92FieldNameSyntax PgFieldNameSyntax where
   qualifiedField a b =

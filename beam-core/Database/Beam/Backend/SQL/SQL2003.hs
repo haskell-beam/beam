@@ -12,6 +12,12 @@ module Database.Beam.Backend.SQL.SQL2003
     , IsSql2003WindowFrameSyntax(..)
     , IsSql2003WindowFrameBoundsSyntax(..)
     , IsSql2003WindowFrameBoundSyntax(..)
+    , IsSql2003EnhancedNumericFunctionsExpressionSyntax(..)
+    , IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax(..)
+    , IsSql2003FirstValueAndLastValueExpressionSyntax(..)
+    , IsSql2003NtileExpressionSyntax(..)
+    , IsSql2003NthValueExpressionSyntax(..)
+    , IsSql2003LeadAndLagExpressionSyntax(..)
 
     , Sql2003ExpressionSanityCheck
     ) where
@@ -54,6 +60,7 @@ class ( IsSql99ExpressionSyntax expr
 class IsSql2003ExpressionSyntax expr =>
   IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr where
   percentRankAggE :: expr
+  denseRankAggE :: expr
   cumeDistAggE :: expr
 
 -- | Optional SQL2003 "Elementary OLAP operations" T611 support
@@ -90,3 +97,40 @@ class IsSql2003WindowFrameBoundSyntax (Sql2003WindowFrameBoundsBoundSyntax bound
 class IsSql2003WindowFrameBoundSyntax bound where
     unboundedSyntax :: bound
     nrowsBoundSyntax :: Int -> bound
+
+-- | Optional SQL2003 "Enhanced numeric functions" T621 support
+class IsSql99ExpressionSyntax expr =>
+   IsSql2003EnhancedNumericFunctionsExpressionSyntax expr where
+
+  lnE, expE, sqrtE, ceilE, floorE :: expr -> expr
+  powerE :: expr -> expr -> expr
+
+class IsSql99AggregationExpressionSyntax agg =>
+   IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax agg where
+
+  stddevPopE, stddevSampE, varPopE, varSampE
+    :: Maybe (Sql92AggregationSetQuantifierSyntax agg) -> agg -> agg
+
+  covarPopE, covarSampE, corrE, regrSlopeE, regrInterceptE, regrCountE,
+    regrRSquaredE, regrAvgXE, regrAvgYE, regrSXXE, regrSXYE, regrSYYE ::
+    Maybe (Sql92AggregationSetQuantifierSyntax agg) -> agg -> agg -> agg
+
+-- | Optional SQL2003 "NTILE function" T614 support
+class IsSql99AggregationExpressionSyntax agg =>
+   IsSql2003NtileExpressionSyntax agg where
+  ntileE :: agg -> agg
+
+-- | Optional SQL2003 "LEAD and LAG function" T615 support
+class IsSql99AggregationExpressionSyntax agg =>
+   IsSql2003LeadAndLagExpressionSyntax agg where
+  leadE, lagE :: agg -> Maybe agg -> Maybe agg -> agg
+
+-- | Optional SQL2003 "FIRST_VALUE and LAST_VALUE function" T616 support
+class IsSql99AggregationExpressionSyntax agg =>
+   IsSql2003FirstValueAndLastValueExpressionSyntax agg where
+  firstValueE, lastValueE :: agg -> agg
+
+-- | Optional SQL2003 "NTH_VALUE function" T618 support
+class IsSql99AggregationExpressionSyntax agg =>
+   IsSql2003NthValueExpressionSyntax agg where
+  nthValueE :: agg -> agg -> agg

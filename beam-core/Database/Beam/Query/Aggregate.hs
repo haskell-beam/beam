@@ -11,7 +11,7 @@ module Database.Beam.Query.Aggregate
 
     -- ** General-purpose aggregate functions #gp-agg-funcs#
   , sum_, avg_, min_, max_, count_, countAll_
-  , rank_, cumeDist_, percentRank_
+  , rank_, cumeDist_, percentRank_, denseRank_
 
   , every_, any_, some_
 
@@ -173,6 +173,10 @@ cumeDist_ = QExpr (pure cumeDistAggE)
 percentRank_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
              => QAgg expr s Double
 percentRank_ = QExpr (pure percentRankAggE)
+
+denseRank_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
+           => QAgg expr s Int
+denseRank_ = QExpr (pure denseRankAggE)
 
 -- | SQL2003 @RANK@ function (Requires T611 Elementary OLAP operations support)
 rank_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
