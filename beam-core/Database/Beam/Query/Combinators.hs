@@ -240,7 +240,7 @@ references_ fk tbl = fk ==. pk tbl
 nub_ :: ( IsSql92SelectSyntax select
         , Projectible (Sql92SelectExpressionSyntax select) r )
      => Q select db s r -> Q select db s r
-nub_ (Q sub) = Q $ liftF (QDistinct (\_ -> setQuantifierDistinct) sub id)
+nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
 
 -- | Limit the number of results returned by a query.
 limit_ :: forall s a select db.
@@ -265,7 +265,7 @@ exists_ :: ( IsSql92SelectSyntax select
            , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select)
         => Q select db s a
         -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
-exists_ = QExpr . existsE . buildSqlQuery
+exists_ q = QExpr (\tbl -> existsE (buildSqlQuery tbl q))
 
 -- | Use the SQL @UNIQUE@ operator to determine if the given query produces a unique result
 unique_ :: ( IsSql92SelectSyntax select
@@ -274,7 +274,7 @@ unique_ :: ( IsSql92SelectSyntax select
            , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select)
         => Q select db s a
         -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
-unique_ = QExpr . uniqueE . buildSqlQuery
+unique_ q = QExpr (\tbl -> uniqueE (buildSqlQuery tbl q))
 
 -- | Use the SQL99 @DISTINCT@ operator to determine if the given query produces a distinct result
 distinct_ :: ( IsSql99ExpressionSyntax (Sql92SelectExpressionSyntax select)
@@ -283,7 +283,7 @@ distinct_ :: ( IsSql99ExpressionSyntax (Sql92SelectExpressionSyntax select)
              , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
              Q select db s a
           -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
-distinct_ = QExpr . distinctE . buildSqlQuery
+distinct_ q = QExpr (\tbl -> distinctE (buildSqlQuery tbl q))
 
 -- | Project the (presumably) singular result of the given query as an expression
 subquery_ ::
@@ -293,30 +293,30 @@ subquery_ ::
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   Q select (db :: (* -> *) -> *) s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
   -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
-subquery_ =
-  QExpr . subqueryE . buildSqlQuery
+subquery_ q =
+  QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
 -- | SQL @CHAR_LENGTH@ function
 charLength_ :: ( IsSqlExpressionSyntaxStringType syntax text
                , IsSql92ExpressionSyntax syntax )
             => QGenExpr context syntax s text -> QGenExpr context syntax s Int
-charLength_ (QExpr s) = QExpr (charLengthE s)
+charLength_ (QExpr s) = QExpr (charLengthE <$> s)
 
 -- | SQL @OCTET_LENGTH@ function
 octetLength_ :: ( IsSqlExpressionSyntaxStringType syntax text
                 , IsSql92ExpressionSyntax syntax )
              => QGenExpr context syntax s text -> QGenExpr context syntax s Int
-octetLength_ (QExpr s) = QExpr (octetLengthE s)
+octetLength_ (QExpr s) = QExpr (octetLengthE <$> s)
 
 -- | SQL @BIT_LENGTH@ function
 bitLength_ ::
   IsSql92ExpressionSyntax syntax =>
   QGenExpr context syntax s SqlBitString -> QGenExpr context syntax s Int
-bitLength_ (QExpr x) = QExpr (bitLengthE x)
+bitLength_ (QExpr x) = QExpr (bitLengthE <$> x)
 
 -- | SQL @CURRENT_TIMESTAMP@ function
 currentTimestamp_ :: IsSql92ExpressionSyntax syntax => QGenExpr ctxt syntax s LocalTime
-currentTimestamp_ = QExpr currentTimestampE
+currentTimestamp_ = QExpr (pure currentTimestampE)
 
 -- | SQL @POSITION(.. IN ..)@ function
 position_ ::
@@ -324,12 +324,12 @@ position_ ::
   , IsSql92ExpressionSyntax syntax, Integral b ) =>
   QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s b
 position_ (QExpr needle) (QExpr haystack) =
-  QExpr (likeE needle haystack)
+  QExpr (liftA2 likeE needle haystack)
 
 -- | Combine all the given boolean value 'QGenExpr's with the '&&.' operator.
 allE :: ( IsSql92ExpressionSyntax syntax, HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool) =>
         [ QGenExpr context syntax s Bool ] -> QGenExpr context syntax s Bool
-allE es = fromMaybe (QExpr (valueE (sqlValueSyntax True))) $
+allE es = fromMaybe (QExpr (pure (valueE (sqlValueSyntax True)))) $
           foldl (\expr x ->
                    Just $ maybe x (\e -> e &&. x) expr)
                 Nothing es
@@ -339,7 +339,7 @@ allE es = fromMaybe (QExpr (valueE (sqlValueSyntax True))) $
 -- | Extract an expression representing the current (non-UPDATEd) value of a 'QField'
 current_ :: IsSql92ExpressionSyntax expr
          => QField s ty -> QExpr expr s ty
-current_ (QField _ nm) = QExpr (fieldE (unqualifiedField nm))
+current_ (QField _ nm) = QExpr (pure (fieldE (unqualifiedField nm)))
 
 infix 4 <-.
 class SqlUpdatable expr s lhs rhs | rhs -> expr, lhs -> s, rhs -> s, lhs s expr -> rhs, rhs -> lhs where
@@ -352,7 +352,7 @@ class SqlUpdatable expr s lhs rhs | rhs -> expr, lhs -> s, rhs -> s, lhs s expr 
         -> QAssignment fieldName expr s
 instance SqlUpdatable expr s (QField s a) (QExpr expr s a) where
   QField _ fieldNm <-. QExpr expr =
-    QAssignment [(unqualifiedField fieldNm, expr)]
+    QAssignment [(unqualifiedField fieldNm, expr "t")]
 instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s)) where
   (<-.) :: forall fieldName.
            IsSql92FieldNameSyntax fieldName
@@ -363,7 +363,7 @@ instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s
     allBeamValues (\(Columnar' (Const assignments)) -> assignments) $
     runIdentity $
     zipBeamFieldsM (\(Columnar' (QField _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
-                       pure (Columnar' (Const (unqualifiedField f, e)) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
+                       pure (Columnar' (Const (unqualifiedField f, e "t")) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
 instance Beamable tbl => SqlUpdatable expr s (tbl (Nullable (QField s))) (tbl (Nullable (QExpr expr s))) where
   lhs <-. rhs =
     let lhs' = changeBeamRep (\(Columnar' (QField tblName fieldName') :: Columnar' (Nullable (QField s)) a) ->
@@ -475,7 +475,7 @@ class SqlValable a where
 instance (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a, IsSql92ExpressionSyntax syntax) =>
   SqlValable (QGenExpr ctxt syntax s a) where
 
-  val_ = QExpr . valueE . sqlValueSyntax
+  val_ = QExpr . pure . valueE . sqlValueSyntax
 instance ( Beamable table
          , IsSql92ExpressionSyntax syntax
          , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
@@ -485,7 +485,7 @@ instance ( Beamable table
         fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
                                             (Proxy @(Rep (table Exposed))) (from tbl))
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) x)) ->
-                         Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
+                         Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
 instance ( Beamable table
          , IsSql92ExpressionSyntax syntax
 
@@ -498,11 +498,11 @@ instance ( Beamable table
         fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
                                             (Proxy @(Rep (table (Nullable Exposed)))) (from tbl))
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) (Maybe x))) ->
-                         Columnar' (QExpr (valueE (sqlValueSyntax x)))) fields
+                         Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
 
 default_ :: IsSql92ExpressionSyntax expr
          => QGenExpr ctxt expr s a
-default_ = QExpr defaultE
+default_ = QExpr (pure defaultE)
 
 auto_ :: QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s (Auto a)
 auto_ = unsafeRetype
@@ -552,20 +552,20 @@ frame_ :: ( IsSql2003ExpressionSyntax syntax
        -> QFrameBounds (Sql2003WindowFrameBoundsSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) {-^ RANGE / ROWS -}
        -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s
 frame_ partition_ ordering_ (QFrameBounds bounds) =
-    QWindow $
-    frameSyntax (case maybe [] project partition_ of
+    QWindow $ \tblPfx ->
+    frameSyntax (case maybe [] (flip project tblPfx) partition_ of
                    [] -> Nothing
                    xs -> Just xs)
                 (case fmap makeSQLOrdering ordering_ of
                    Nothing -> Nothing
                    Just [] -> Nothing
-                   Just xs -> Just xs)
+                   Just xs -> Just (sequenceA xs tblPfx))
                 bounds
 
 -- | Produce a window expression given an aggregate function and a window.
 over_ :: IsSql2003ExpressionSyntax syntax =>
          QAgg syntax s a -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s -> QWindowExpr syntax s a
-over_ (QExpr a) (QWindow frame) = QExpr (overE a frame)
+over_ (QExpr a) (QWindow frame) = QExpr (overE <$> a <*> frame)
 
 -- | Compute a query over windows.
 --
@@ -596,7 +596,7 @@ withWindow_ mkWindow mkProjection (Q windowOver)=
 -- * Order bys
 
 class SqlOrderable syntax a | a -> syntax where
-    makeSQLOrdering :: a -> [ syntax ]
+    makeSQLOrdering :: a -> [ WithExprContext syntax ]
 instance SqlOrderable syntax (QOrd syntax s a) where
     makeSQLOrdering (QExpr x) = [x]
 instance SqlOrderable syntax a => SqlOrderable syntax [a] where
@@ -659,29 +659,29 @@ orderBy_ :: forall s a ordering syntax db.
             , ThreadRewritable (QNested s) a) =>
             (a -> ordering) -> Q syntax db (QNested s) a -> Q syntax db s (WithRewrittenThread (QNested s) s a)
 orderBy_ orderer (Q q) =
-    Q (liftF (QOrderBy (makeSQLOrdering . orderer) q (rewriteThread (Proxy @s))))
+    Q (liftF (QOrderBy (sequenceA . makeSQLOrdering . orderer) q (rewriteThread (Proxy @s))))
 
 nullsFirst_ :: IsSql2003OrderingElementaryOLAPOperationsSyntax syntax
             => QOrd syntax s a
             -> QOrd syntax s a
-nullsFirst_ (QExpr e) = QExpr (nullsFirstOrdering e)
+nullsFirst_ (QExpr e) = QExpr (nullsFirstOrdering <$> e)
 
 nullsLast_ :: IsSql2003OrderingElementaryOLAPOperationsSyntax syntax
            => QOrd syntax s a
            -> QOrd syntax s a
-nullsLast_ (QExpr e) = QExpr (nullsLastOrdering e)
+nullsLast_ (QExpr e) = QExpr (nullsLastOrdering <$> e)
 
 -- | Produce a 'QOrd' corresponding to a SQL @ASC@ ordering
 asc_ :: forall syntax s a. IsSql92OrderingSyntax syntax
      => QExpr (Sql92OrderingExpressionSyntax syntax) s a
      -> QOrd syntax s a
-asc_ (QExpr e) = QExpr (ascOrdering e)
+asc_ (QExpr e) = QExpr (ascOrdering <$> e)
 
 -- | Produce a 'QOrd' corresponding to a SQL @DESC@ ordering
 desc_ :: forall syntax s a. IsSql92OrderingSyntax syntax
       => QExpr (Sql92OrderingExpressionSyntax syntax) s a
       -> QOrd syntax s a
-desc_ (QExpr e) = QExpr (descOrdering e)
+desc_ (QExpr e) = QExpr (descOrdering <$> e)
 
 -- * Subqueries
 
@@ -706,7 +706,7 @@ instance ( IsSql92ExpressionSyntax syntax
     SqlJustable (QExpr syntax s a) (QExpr syntax s (Maybe a)) where
 
     just_ (QExpr e) = QExpr e
-    nothing_ = QExpr (valueE (sqlValueSyntax SqlNull))
+    nothing_ = QExpr (pure (valueE (sqlValueSyntax SqlNull)))
 
 instance {-# OVERLAPPING #-} ( Table t
                              , IsSql92ExpressionSyntax syntax
@@ -746,13 +746,15 @@ if_ :: IsSql92ExpressionSyntax expr =>
     -> QIfElse context expr s a
     -> QGenExpr context expr s a
 if_ conds (QIfElse (QExpr elseExpr)) =
-  QExpr (caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond, res)) conds) elseExpr)
+  QExpr (\tbl -> caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond tbl, res tbl)) conds) (elseExpr tbl))
 
 -- | SQL @COALESCE@ support
 coalesce_ :: IsSql92ExpressionSyntax expr =>
              [ QExpr expr s (Maybe a) ] -> QExpr expr s a -> QExpr expr s a
 coalesce_ qs (QExpr onNull) =
-  QExpr (coalesceE (map (\(QExpr q) -> q) qs <> [ onNull ]))
+  QExpr $ do
+    onNull' <- onNull
+    coalesceE . (<> [onNull']) <$> mapM (\(QExpr q) -> q) qs
 
 -- | Type class for anything which can be checked for null-ness. This includes 'QExpr (Maybe a)' as
 -- well as 'Table's or 'PrimaryKey's over 'Nullable QExpr'.
@@ -769,11 +771,11 @@ class IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax a nonNullA s 
     maybe_ :: QExpr syntax s y -> (nonNullA -> QExpr syntax s y) -> a -> QExpr syntax s y
 
 instance IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax (QExpr syntax s (Maybe x)) (QExpr syntax s x) s where
-    isJust_ (QExpr x) = QExpr (isNotNullE x)
-    isNothing_ (QExpr x) = QExpr (isNullE x)
+    isJust_ (QExpr x) = QExpr (isNotNullE <$> x)
+    isNothing_ (QExpr x) = QExpr (isNullE <$> x)
 
     maybe_ (QExpr onNothing) onJust (QExpr e) = let QExpr onJust' = onJust (QExpr e)
-                                                in QExpr (caseE [(isNotNullE e, onJust')] onNothing)
+                                                in QExpr (\tbl -> caseE [(isNotNullE (e tbl), onJust' tbl)] (onNothing tbl))
 
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
@@ -784,4 +786,4 @@ instance ( IsSql92ExpressionSyntax syntax
     maybe_ (QExpr onNothing) onJust tbl =
       let QExpr onJust' = onJust (changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (QExpr e)) tbl)
           QExpr cond = isJust_ tbl
-      in QExpr (caseE [(cond, onJust')] onNothing)
+      in QExpr (\tblPfx -> caseE [(cond tblPfx, onJust' tblPfx)] (onNothing tblPfx))

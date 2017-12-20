@@ -46,7 +46,7 @@ defaultTo_ :: IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax syntax)
               (forall s. QExpr (Sql92ColumnSchemaExpressionSyntax syntax) s a)
            -> DefaultValue syntax a
 defaultTo_ (QExpr e) =
-  DefaultValue e
+  DefaultValue (e "t")
 
 notNull :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
 notNull = Constraint notNullConstraintSyntax

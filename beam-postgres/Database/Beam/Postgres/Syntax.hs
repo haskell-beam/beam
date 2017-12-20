@@ -1032,9 +1032,9 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
   (case returning of
      Nothing -> mempty
      Just mkProjection ->
-         let tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
+         let tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
          in emit " RETURNING "<>
-            pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ))))
+            pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t")))
 
 newtype PgUpdateReturning a = PgUpdateReturning PgSyntax
 
@@ -1051,10 +1051,10 @@ updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
   PgUpdateReturning $
   fromPgUpdate pgUpdate <>
   emit " RETURNING " <>
-  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ)))
+  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
   where
     SqlUpdate pgUpdate = update table mkAssignments mkWhere
-    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
+    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 -- -- * Pg-specific Q monad
 
@@ -1076,13 +1076,13 @@ updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
 --      buildJoinFrom tbl newSource Nothing
 
 now_ :: QExpr PgExpressionSyntax s LocalTime
-now_ = QExpr (PgExpressionSyntax (emit "NOW()"))
+now_ = QExpr (\_ -> PgExpressionSyntax (emit "NOW()"))
 
 ilike_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
        => QExpr PgExpressionSyntax s text
        -> QExpr PgExpressionSyntax s text
        -> QExpr PgExpressionSyntax s Bool
-ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" a b)
+ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" <$> a <*> b)
 
 -- * Testing support
 
