@@ -170,11 +170,11 @@ tableModification = runIdentity $
 -- >        -- Change default name "table1" to "Table_1". Change the name of "table1Field1" to "first_name"
 -- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
 -- >      }
-withDbModification :: forall db be
+withDbModification :: forall db be entity
                     . Database db
-                   => DatabaseSettings be db
-                   -> DatabaseModification (DatabaseEntity be db) be db
-                   -> DatabaseSettings be db
+                   => db (entity be db)
+                   -> DatabaseModification (entity be db) be db
+                   -> db (entity be db)
 withDbModification db mods =
   runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
 
