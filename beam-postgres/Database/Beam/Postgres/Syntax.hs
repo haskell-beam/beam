@@ -53,7 +53,7 @@ module Database.Beam.Postgres.Syntax
 
     , pgSelectSetQuantifierDistinctOn
 
-    , pgBooleanType, pgByteaType, pgBigIntType
+    , pgByteaType, pgTextType
     , pgSerialType, pgSmallSerialType, pgBigSerialType
 
     , IsPgInsertOnConflictSyntax(..)
@@ -418,7 +418,17 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   timeType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.time) Nothing) (emit "TIME" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
   timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.timestamp) Nothing) (emit "TIMESTAMP" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
 
+instance IsSql99DataTypeSyntax PgDataTypeSyntax where
+  characterLargeObjectType = pgTextType
+  binaryLargeObjectType = pgByteaType
+  booleanType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bool) Nothing) (emit "BOOLEAN")
+  arrayType (PgDataTypeSyntax _ syntax) sz =
+    PgDataTypeSyntax (error "TODO: array migrations")
+                     (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]")
+  rowType = error "rowType"
 
+instance IsSql2008BigIntDataTypeSyntax PgDataTypeSyntax where
+  bigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT")
 
 pgOptPrec :: Maybe Word -> PgSyntax
 pgOptPrec Nothing = mempty
@@ -433,14 +443,11 @@ pgOptNumericPrec Nothing = mempty
 pgOptNumericPrec (Just (prec, Nothing)) = pgOptPrec (Just prec)
 pgOptNumericPrec (Just (prec, Just dec)) = emit "(" <> emit (fromString (show prec)) <> emit ", " <> emit (fromString (show dec)) <> emit ")"
 
-pgBooleanType :: PgDataTypeSyntax
-pgBooleanType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bool) Nothing) (emit "BOOLEAN")
-
 pgByteaType :: PgDataTypeSyntax
 pgByteaType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bytea) Nothing) (emit "BYTEA")
 
-pgBigIntType :: PgDataTypeSyntax
-pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT")
+pgTextType :: PgDataTypeSyntax
+pgTextType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.text) Nothing) (emit "TEXT")
 
 pgUuidType :: PgDataTypeSyntax
 pgUuidType = PgDataTypeSyntax(PgDataTypeDescrOid (Pg.typoid Pg.uuid) Nothing) (emit "uuid")
@@ -1236,10 +1243,7 @@ instance HasDefaultSqlDataType PgDataTypeSyntax (SqlSerial Int) where
   defaultSqlDataType _ _ = intType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (SqlSerial Int)
 
-instance HasDefaultSqlDataType PgDataTypeSyntax Int64 where
-  defaultSqlDataType _ _ = pgBigIntType
-instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax Int64
-
 instance HasDefaultSqlDataType PgDataTypeSyntax UUID where
   defaultSqlDataType _ _ = pgUuidType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UUID
+

@@ -22,6 +22,7 @@ import Database.Beam.Migrate.Checks
 import Database.Beam.Migrate.Types
 import Database.Beam.Migrate.SQL.SQL92
 
+import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Proxy
 import Data.Time (LocalTime)
@@ -55,6 +56,15 @@ smallint, int :: (IsSql92DataTypeSyntax syntax, Integral a) => DataType syntax a
 int = DataType intType
 smallint = DataType smallIntType
 
+bigint :: (IsSql2008BigIntDataTypeSyntax syntax, Integral a) => DataType syntax a
+bigint = DataType bigIntType
+
+blob :: IsSql99DataTypeSyntax syntax => DataType syntax ByteString
+blob = DataType binaryLargeObjectType
+
+clob :: IsSql99DataTypeSyntax syntax => DataType syntax Text
+clob = DataType characterLargeObjectType
+
 -- TODO should this be Day or something?
 date :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
 date = DataType dateType
@@ -68,6 +78,9 @@ double = DataType doubleType
 
 numeric :: IsSql92DataTypeSyntax syntax => Maybe (Word, Maybe Word) -> DataType syntax Scientific
 numeric = DataType . numericType
+
+boolean :: IsSql99DataTypeSyntax syntax => DataType syntax Bool
+boolean = DataType booleanType
 
 timestamp, timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
 timestamptz = DataType (timestampType Nothing True)

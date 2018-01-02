@@ -15,6 +15,8 @@ module Database.Beam.Query
 
     , QueryableSqlSyntax
 
+    , QGenExprTable, QExprTable
+
     , module Database.Beam.Query.Combinators
     , module Database.Beam.Query.Extensions
 
@@ -89,6 +91,11 @@ import Control.Monad.Writer
 -- * Query
 
 data QueryInaccessible
+
+-- | A version of the table where each field is a 'QGenExpr'
+type QGenExprTable ctxt syntax tbl = forall s. tbl (QGenExpr ctxt syntax s)
+
+type QExprTable syntax tbl = QGenExprTable QValueContext syntax tbl
 
 -- * SELECT
 
