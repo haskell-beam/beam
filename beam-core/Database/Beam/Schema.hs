@@ -24,7 +24,7 @@ module Database.Beam.Schema
     , Columnar, C, Columnar', Nullable
     , TableField, fieldName
 
-    , TableSettings
+    , TableSettings, HaskellTable
 
     -- * 'Generic'-deriving mechanisms
     , defaultDbSettings

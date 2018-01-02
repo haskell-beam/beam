@@ -35,7 +35,8 @@ module Database.Beam.Schema.Tables
     , Exposed
     , fieldName
 
-    , TableSettings, TableSkeleton, Ignored(..)
+    , TableSettings, HaskellTable
+    , TableSkeleton, Ignored(..)
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint
     , FieldsFulfillConstraintNullable
     , WithConstraint(..)
@@ -449,6 +450,9 @@ fieldName f (TableField name) = TableField <$> f name
 --   each field of type 'Columnar f a' is transformed into 'TableField table a'.
 --   You can get or update the name of each field by using the 'fieldName' lens.
 type TableSettings table = table (TableField table)
+
+-- | The regular Haskell version of the table. Equivalent to 'tbl Identity'
+type HaskellTable table = table Identity
 
 -- | Column tag that ignores the type.
 data Ignored x = Ignored
