@@ -50,6 +50,9 @@ data BranchCommand
 data SchemaCommand
   = SchemaCommandImport !Bool DatabaseName (Maybe Text) !Bool {-^ Commit in database -} !Bool {-^ Do auto migrate -}
     -- ^ Create a haskell migration for the given database
+
+  | SchemaCommandNew Text {-^ The schema to iterate on -}
+                     FilePath     {-^ The temporary file to use -}
   deriving Show
 
 data MigrateCommand
@@ -63,6 +66,8 @@ data MigrateCommand
   | MigrateCommandBranch    BranchCommand
 
   | MigrateCommandSchema SchemaCommand
+
+  | MigrateCommandAbort !Bool
 
   | MigrateCommandDiff Bool (Maybe (Text, Maybe Text))
 
@@ -96,6 +101,7 @@ migrationArgParser =
                                           , command "simple" simpleCommand
 
                                           , command "schema" schemaCommand
+                                          , command "abort" abortCommand
 
                                           , command "migrate" migrateCommand ])
   where
@@ -110,6 +116,7 @@ migrationArgParser =
     schemaCommand = info (schemaParser <**> helper) (fullDesc <> progDesc "Create, update, import, and list schemas")
     simpleCommand = info (simpleParser <**> helper) (fullDesc <> progDesc "Simple utilities that do not require a full beam-migrate setup")
     migrateCommand = info (migrateParser <**> helper) (fullDesc <> progDesc "Bring the given database up-to-date with the current branch")
+    abortCommand = info (abortParser <**> helper) (fullDesc <> progDesc "Abort any edits taking place")
 
     initParser = MigrateCommandInit <$>
                  (InitCommand <$> optional (ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use"))
@@ -160,7 +167,8 @@ migrationArgParser =
       where branchNewParser = BranchCommandNew <$> flag False True (long "dont-switch" <> help "Do not switch to the new branch")
                                                <*> (fromString <$> strArgument (metavar "BRANCH" <> help "Name of new branch"))
 
-    schemaParser = MigrateCommandSchema <$> subparser (mconcat [ command "import" schemaImportCommand ])
+    schemaParser = MigrateCommandSchema <$> subparser (mconcat [ command "import" schemaImportCommand
+                                                               , command "new" schemaNewCommand ])
 
     schemaImportCommand = info (importParser <**> helper) (fullDesc <> progDesc "Import a database schema into haskell")
       where
@@ -170,6 +178,10 @@ migrationArgParser =
                                            <*> flag True False (long "no-commit" <> help "Do not record commit in local change log")
                                            <*> flag True False (long "no-migrate" <> help "Do not generate an automatic migration")
 
+    schemaNewCommand = info (newParser <**> helper) (fullDesc <> progDesc "Create a new schema")
+      where
+        newParser = SchemaCommandNew <$> (fromString <$> strArgument (metavar "FROM" <> help "Schema to iterate on" <> value "HEAD"))
+                                     <*> strOption (long "tmp-file" <> metavar "TMPFILE" <> help "Temporary file to edit schema" <> value "BeamMigrateSchema.hs")
 
     simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand ])
 
@@ -179,6 +191,8 @@ migrationArgParser =
                                                        <*> strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend")
 
     migrateParser = pure MigrateCommandMigrate
+
+    abortParser = MigrateCommandAbort <$> flag False True (long "force" <> short 'f' <> help "Force this abort, even if the file has local changes")
 
 migrationCliOptions :: ParserInfo MigrateCmdLine
 migrationCliOptions =

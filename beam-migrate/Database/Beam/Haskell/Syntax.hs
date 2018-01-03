@@ -50,7 +50,7 @@ importSome modNm names = HsImports (M.singleton (Hs.ModuleName () (T.unpack modN
                                                 (HsImportSome (S.fromList names)))
 
 importTyNamed :: T.Text -> Hs.ImportSpec ()
-importTyNamed nm = Hs.IAbs () (Hs.TypeNamespace ()) (Hs.Ident () (T.unpack nm))
+importTyNamed = importVarNamed -- nm = Hs.IAbs () (Hs.TypeNamespace ()) (Hs.Ident () (T.unpack nm))
 
 importVarNamed :: T.Text -> Hs.ImportSpec ()
 importVarNamed nm = Hs.IVar () (Hs.Ident () (T.unpack nm))
@@ -322,7 +322,8 @@ renderHsSchema (HsModule modNm entities migrations) =
                                           , Hs.Ident () "FlexibleContexts"
                                           , Hs.Ident () "FlexibleInstances"
                                           , Hs.Ident () "DeriveGeneric"
-                                          , Hs.Ident () "TypeSynonymInstances" ] ]
+                                          , Hs.Ident () "TypeSynonymInstances"
+                                          , Hs.Ident () "ExplicitNamespaces "] ]
 
       HsImports importedModules = foldMap (\e -> foldMap hsDeclImports (hsEntityDecls e) <>
                                                  hsExprImports (hsEntityExp e)) entities <>

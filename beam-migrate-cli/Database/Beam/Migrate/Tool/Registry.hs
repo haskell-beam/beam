@@ -6,6 +6,8 @@ import           Database.Beam.Migrate.Tool.CmdLine
 import           Control.Applicative
 import           Control.Exception
 
+import qualified Crypto.Hash as Crypto
+
 import           Data.Aeson
 import           Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Char8 as BS
@@ -13,6 +15,7 @@ import           Data.Graph.Inductive.Graph
 import           Data.Graph.Inductive.PatriciaTree
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
+import           Data.LargeWord (Word256)
 import           Data.List (find, intercalate, sort)
 import           Data.Maybe
 import           Data.Monoid
@@ -25,6 +28,8 @@ import qualified Data.UUID.V4 as UUID (nextRandom)
 import qualified Data.Yaml as Yaml
 
 import           Network.BSD
+
+import           Numeric (showHex, readHex)
 
 import           System.Directory
 #if defined(mingw32_HOST_OS)
@@ -44,6 +49,12 @@ data InvalidCommitId = InvalidCommitId T.Text
 instance Exception InvalidCommitId
 
 newtype MigrateUUID = MigrateUUID { unMigrateUUID :: UUID }
+
+data BeamMigrateMode
+  = BeamMigrateReady
+  | BeamMigrateCreatingSchema !FilePath !(Maybe UUID) !Word256 -- ^ currently editing a schema, with SHA256 hash of file
+  | BeamMigrateEditingMigration !FilePath !UUID !UUID !Word256 -- ^ currently editing a migration, with SHA256 hash of file
+  deriving Show
 
 data PredicateFetchSource
   = PredicateFetchSourceCommit     !(Maybe ModuleName) !UUID
@@ -104,6 +115,8 @@ data MigrationRegistry
   , migrationRegistrySchemaModule   :: ModuleName
 
   , migrationRegistryUserInfo       :: Maybe UserInfo
+
+  , migrationRegistryMode           :: BeamMigrateMode
   } deriving Show
 
 data Schema
@@ -172,9 +185,36 @@ instance FromJSON MigrationHead where
                   then pure (MigrationHeadBranch (T.drop (T.length "ref/branch/") ref))
                   else fail "Cannot read head"
 
+instance ToJSON BeamMigrateMode where
+  toJSON BeamMigrateReady = "ready"
+  toJSON (BeamMigrateCreatingSchema schemaFl src hash) =
+    object [ "tmpFile" .= schemaFl
+           , "src" .= src
+           , "hash" .= showHex hash "" ]
+  toJSON (BeamMigrateEditingMigration migrationFl from to hash) =
+    object [ "tmpFile" .= migrationFl
+           , "from" .= from, "to" .= to
+           , "hash" .= showHex hash "" ]
+instance FromJSON BeamMigrateMode where
+  parseJSON "ready" = pure BeamMigrateReady
+  parseJSON o = withObject "BeamMigrateMode"
+                (\v -> BeamMigrateCreatingSchema <$> v .: "tmpFile"
+                                                 <*> v .: "src"
+                                                 <*> (rdHash =<< v .: "hash") <|>
+                       BeamMigrateEditingMigration <$> v .: "tmpFile"
+                                                   <*> v .: "from" <*> v .: "to"
+                                                   <*> (rdHash =<< v .: "hash")) o
+    where
+      rdHash h = case filter (null . snd) (readHex h) of
+                   [(x, _)] -> pure x
+                   _ -> fail "Invalid hash"
+
 instance ToJSON MigrationRegistry where
   toJSON MigrationRegistry {..} =
-    object ( [ "databases"  .= migrationRegistryDatabases
+    object ( (case migrationRegistryMode of
+                BeamMigrateReady -> []
+                mode -> [ "mode" .= mode ]) ++
+             [ "databases"  .= migrationRegistryDatabases
              , "head"       .= migrationRegistryHead
              , "schemas"    .= migrationRegistrySchemas
              , "migrations" .= migrationRegistryMigrations
@@ -194,6 +234,7 @@ instance FromJSON MigrationRegistry where
                       <*> o .: "branches"
                       <*> pure srcDir <*> pure name
                       <*> o .:? "user"
+                      <*> (fromMaybe BeamMigrateReady <$> o .:? "mode")
 
 instance ToJSON UserInfo where
   toJSON UserInfo {..} =
@@ -298,6 +339,10 @@ showMigrationFormats = intercalate ", ". map showFormat . sort
 
 userInfoCommitter :: UserInfo -> Text
 userInfoCommitter ui = "\"" <> userInfoEmail ui <> "\"<" <> userInfoEmail ui <> ">"
+
+assertRegistryReady :: MigrationRegistry -> IO ()
+assertRegistryReady MigrationRegistry { migrationRegistryMode = BeamMigrateReady } = pure ()
+assertRegistryReady _ = fail "There is an edit in progress. Use 'beam-migrate abort' to cancel"
 
 updatingRegistry :: MigrateCmdLine -> (MigrationRegistry -> IO (a, MigrationRegistry)) -> IO a
 updatingRegistry cmdLine action =
@@ -455,16 +500,21 @@ parseMetaData d =
                -- TODO parse dummy if we can't parse
                fmap (fmap (specificity,)) (mapM (beamDeserialize d) predicates))
 
+withMetadata, withoutMetadata :: (Eq a, IsString a) => [a] -> [a]
+withMetadata =
+    takeWhile (/="-- + END-BEAM-MIGRATE") .
+    dropWhile (/="-- + BEAM-MIGRATE")
+withoutMetadata =
+    takeWhile (/="-- + BEAM-MIGRATE")
+
 readSchemaMetaData :: MigrationRegistry
                    -> BeamMigrationBackend be cmd hdl
                    -> UUID
                    -> IO SchemaMetaData
 readSchemaMetaData reg BeamMigrationBackend { backendPredicateParsers = parsers } commitId = do
-  d <-
-    takeWhile (/="-- + END-BEAM-MIGRATE") .
-    dropWhile (/="-- + BEAM-MIGRATE") .
-    BS.lines <$>
-    BS.readFile (schemaFilePath reg commitId)
+  d <- withMetadata .
+       BS.lines <$>
+       BS.readFile (schemaFilePath reg commitId)
   case d of
     [] -> fail "Invalid data in schema"
     _:d' | Just realData <- BS.unlines <$> traverse (BS.stripPrefix "-- + ") d'
@@ -549,3 +599,40 @@ registryMigrationGraph reg =
                             (migrationRegistryMigrations reg)
 
   in mkGraph schemaIdxs migrations
+
+sha256' :: BS.ByteString -> Word256
+sha256' d = let digest :: Crypto.Digest Crypto.SHA256
+                digest = Crypto.hash d
+            in case filter (null . snd) (readHex (show digest)) of
+                 [(x, _)] -> x
+                 _ -> error "Can't parse digest"
+
+sha256 :: String -> Word256
+sha256 = sha256' . BS.pack
+
+abortEdits :: MigrateCmdLine -> Bool -> IO ()
+abortEdits cmdLine force =
+  updatingRegistry cmdLine $ \reg ->
+  let reg' = reg { migrationRegistryMode = BeamMigrateReady }
+
+      tryAbort flNm flHash = do
+        flExists <- doesFileExist flNm
+        if flExists
+          then do
+            doDelete <- if force
+                        then pure True
+                        else do
+                          flContents <- BS.readFile flNm
+                          let actualHash = sha256' flContents
+                          return (actualHash == flHash)
+
+            if doDelete
+              then do
+                removeFile flNm
+                pure ((), reg')
+              else fail "WARNING: the editing files have been modified use '--force' to force abort"
+          else pure ((), reg')
+  in case migrationRegistryMode reg of
+       BeamMigrateReady -> pure ((), reg)
+       BeamMigrateEditingMigration tmpFile _ _ hash -> tryAbort tmpFile hash
+       BeamMigrateCreatingSchema tmpFile _ hash -> tryAbort tmpFile hash

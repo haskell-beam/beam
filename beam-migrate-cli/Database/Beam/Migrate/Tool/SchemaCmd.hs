@@ -18,6 +18,7 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.State
 
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as HS
 import           Data.Maybe
@@ -28,6 +29,12 @@ import           Data.String (fromString)
 import           Data.Text (Text)
 import           Data.Time
 import           Data.UUID (UUID)
+import qualified Data.UUID as UUID (nil)
+
+import qualified Language.Haskell.Exts as Hs
+
+import           System.Directory
+import           System.FilePath
 
 finalSolutionIO :: Solver HsAction -> IO (FinalSolution HsAction)
 finalSolutionIO (ProvideSolution Nothing sts)    = pure $ Candidates sts
@@ -198,3 +205,68 @@ writeMigration cmdLine reg be fromId toId cmds =
                          , backendFileExtension = fileExtension } ->
       writeSchemaFile cmdLine reg fileExtension (migrationScriptName fromId toId) $
       unlines (map renderCmd cmds)
+
+-- * Schema new command
+
+renameModule :: String -> Hs.Module a -> Hs.Module a
+renameModule modName (Hs.Module l (Just (Hs.ModuleHead l' (Hs.ModuleName l'' _) warning exports))
+                                  pragmas imports decls) =
+  Hs.Module l (Just (Hs.ModuleHead l' (Hs.ModuleName l'' modName) warning exports))
+            pragmas imports decls
+renameModule _ _ = error "Could not rename module"
+
+beginNewSchema :: MigrateCmdLine -> Text -> FilePath -> IO ()
+beginNewSchema cmdLine tmplSrc tmpFile = do
+  updatingRegistry cmdLine $ \reg -> do
+    assertRegistryReady reg
+
+    tmpFileExists <- doesFileExist tmpFile
+    when tmpFileExists (fail (tmpFile ++ ": already exists... aborting"))
+
+    predSrc <- parsePredicateFetchSourceSpec cmdLine reg tmplSrc
+    src <- case predSrc of
+             PredicateFetchSourceDbHead {} -> fail "Cannot base schema off database. Import the database first"
+             PredicateFetchSourceCommit _ schema -> pure (Just schema)
+             PredicateFetchSourceEmpty -> pure Nothing
+
+    let modName = unModuleName (migrationRegistrySchemaModule reg) <> "." <>
+                  schemaModuleName UUID.nil
+
+    hsModSrc <-
+      case src of
+        Nothing ->
+          case renderHsSchema (hsActionsToModule modName []) of
+            Left err -> fail ("Could not render empty schema: " ++ err)
+            Right sch -> pure (BS.pack sch)
+        Just srcSchema ->
+          case lookupSchema srcSchema [MigrationFormatHaskell] reg of
+            Nothing -> fail "Specified schema does not exist"
+            Just {} -> do
+              let srcSchemaFilePath = migrationRegistrySrcDir reg </> schemaModuleName srcSchema <.> "hs"
+              schemaExists <- doesFileExist srcSchemaFilePath
+              when (not schemaExists) (fail (show srcSchemaFilePath ++ ": could not find haskell source"))
+
+              -- read schema module
+              BS.readFile srcSchemaFilePath
+
+    let noMetadata = BS.unpack (BS.unlines (withoutMetadata (BS.lines hsModSrc)))
+        parseMode = Hs.defaultParseMode { Hs.parseFilename = tmpFile
+                                        , Hs.extensions = map Hs.EnableExtension $
+                                          [ Hs.ExplicitNamespaces, Hs.StandaloneDeriving
+                                          , Hs.TypeFamilies, Hs.ExplicitForAll
+                                          , Hs.MultiParamTypeClasses, Hs.TypeApplications ] }
+
+    case Hs.parseModuleWithComments parseMode noMetadata of
+      Hs.ParseFailed loc err -> fail ("Could not parse schema module: " ++ show loc ++ ": " ++ err)
+      Hs.ParseOk (srcMod, comments) -> do
+        let srcMod' = renameModule modName srcMod
+            modStr = Hs.exactPrint srcMod' comments
+
+            hash = sha256 modStr
+
+        writeFile tmpFile modStr
+
+        putStrLn ("You can now edit the schema at " ++ tmpFile)
+        putStrLn "When you are done, run 'beam-migrate schema commit' to commit the schema to the registry."
+
+        pure ((), reg { migrationRegistryMode = BeamMigrateCreatingSchema tmpFile src hash })

@@ -83,6 +83,23 @@ displayStatus cmdLine@(MigrateCmdLine { migrateDatabase = Just dbName }) = do
   reg <- lookupRegistry cmdLine
   (db, _, SomeBeamMigrationBackend be) <- loadBackend cmdLine reg dbName
 
+  case migrationRegistryMode reg of
+    BeamMigrateReady ->
+      putStrLn (setSGRCode [ SetColor Foreground Dull Green ] ++
+                "(ready to perform migrations)")
+    BeamMigrateCreatingSchema {} ->
+      putStrLn (setSGRCode [ SetColor Foreground Dull Red ] ++
+                "beam-migrate is currently in the process of creating a schema.\n" ++
+                "Use 'beam-migrate abort' to abort the schema creation process.\n" ++
+                "Some commands will not proceed with a pending schema edit.")
+    BeamMigrateEditingMigration {} ->
+      putStrLn (setSGRCode [ SetColor Foreground Dull Red ] ++
+                "beam-migrate is currently in the process of editing a migration.\n" ++
+                "Use 'beam-migrate abort' to abort the migration editing process.\n" ++
+                "Some commands will not proceed with a pending migration edit.")
+
+  putStrLn (setSGRCode [Reset])
+
   hasSchema <- hasBackendTables (migrationDbConnString db) be
   migrateStatus <-
     if not hasSchema

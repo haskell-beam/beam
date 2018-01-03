@@ -29,7 +29,9 @@ initBeamMigrate _ initCmd = do
                     , migrationRegistrySrcDir = initModulePath initCmd
                     , migrationRegistrySchemaModule = initModule initCmd
 
-                    , migrationRegistryUserInfo = Nothing }
+                    , migrationRegistryUserInfo = Nothing
+
+                    , migrationRegistryMode = BeamMigrateReady }
 
       Yaml.encodeFile ".beam-migrate" registry'
       putStrLn ("Beam migrations initialized in " ++ curDir)

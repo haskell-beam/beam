@@ -9,6 +9,7 @@ import Database.Beam.Migrate.Tool.Diff
 import Database.Beam.Migrate.Tool.Init
 import Database.Beam.Migrate.Tool.Log
 import Database.Beam.Migrate.Tool.Migrate
+import Database.Beam.Migrate.Tool.Registry
 import Database.Beam.Migrate.Tool.SchemaCmd
 import Database.Beam.Migrate.Tool.Status
 
@@ -57,6 +58,11 @@ main = do
 
     MigrateCommandSchema (SchemaCommandImport _ dbName branchName doCommit doAutoMigrate) ->
       importDb cmdLine dbName branchName doCommit doAutoMigrate
+    MigrateCommandSchema (SchemaCommandNew tmplSrc tmpFile) ->
+      beginNewSchema cmdLine tmplSrc tmpFile
+
+    MigrateCommandAbort force ->
+      abortEdits cmdLine force
 
     MigrateCommandSimple (SimpleCommandHsSchema backend connStr) ->
       showSimpleSchema cmdLine backend connStr
