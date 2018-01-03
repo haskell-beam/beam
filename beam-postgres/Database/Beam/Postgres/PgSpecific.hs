@@ -12,6 +12,8 @@
 module Database.Beam.Postgres.PgSpecific where
 
 import           Database.Beam
+import           Database.Beam.Migrate ( HasDefaultSqlDataType(..)
+                                       , HasDefaultSqlDataTypeConstraints(..) )
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
@@ -21,6 +23,7 @@ import           Control.Monad.Free
 
 import           Data.Aeson
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BC
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
@@ -28,6 +31,7 @@ import           Data.Hashable
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
+import           Data.Scientific (Scientific, formatScientific, FPFormat(Fixed))
 import           Data.Type.Bool
 import qualified Data.Vector as V
 import qualified Data.Text as T
@@ -65,6 +69,8 @@ instance Pg.ToField TsVector where
             , Pg.Plain (byteString d)
             , Pg.Plain "$$::tsvector)" ]
 
+instance FromBackendRow Postgres TsVector
+
 english :: TsVectorConfig
 english = TsVectorConfig "english"
 
@@ -100,6 +106,8 @@ instance Pg.FromField TsQuery where
     else case d of
            Just d' -> pure (TsQuery d')
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
+
+instance FromBackendRow Postgres TsQuery
 
 -- * Array operators
 
@@ -467,3 +475,100 @@ pgNubBy_ :: ( Projectible PgExpressionSyntax key
          -> Q PgSelectSyntax db s r
          -> Q PgSelectSyntax db s r
 pgNubBy_ mkKey (Q q) = Q $ liftF (QDistinct (\r pfx -> pgSelectSetQuantifierDistinctOn (project (mkKey r) pfx)) q id)
+
+-- * PostgreSql money data type
+
+-- | Postgres @MONEY@ data type. A simple wrapper over 'ByteString', because
+--   Postgres money format is locale-dependent.
+--
+--   The 'pgMoney' function can be used to convert a number to 'PgMoney'.
+newtype PgMoney = PgMoney { fromPgMoney :: ByteString }
+  deriving (Show, Read, Eq, Ord)
+
+instance Pg.FromField PgMoney where
+ fromField field Nothing = Pg.returnError Pg.UnexpectedNull field ""
+ fromField field (Just d) =
+   if Pg.typeOid field /= Pg.typoid Pg.money
+   then Pg.returnError Pg.Incompatible field ""
+   else pure (PgMoney d)
+instance Pg.ToField PgMoney where
+  toField (PgMoney a) = Pg.toField a
+
+instance FromBackendRow Postgres PgMoney
+instance HasSqlValueSyntax PgValueSyntax PgMoney where
+  sqlValueSyntax (PgMoney a) = sqlValueSyntax a
+
+pgMoney :: Real a => a -> PgMoney
+pgMoney val = PgMoney (BC.pack (formatScientific Fixed Nothing exactVal))
+  where
+    exactVal = fromRational (toRational val) :: Scientific
+
+pgScaleMoney_ :: Num a
+              => QGenExpr context PgExpressionSyntax s a
+              -> QGenExpr context PgExpressionSyntax s PgMoney
+              -> QGenExpr context PgExpressionSyntax s PgMoney
+pgScaleMoney_ (QExpr scale) (QExpr v) =
+  QExpr (pgBinOp "*" <$> scale <*> v)
+
+pgDivideMoney_ :: Num a
+               => QGenExpr context PgExpressionSyntax s PgMoney
+               -> QGenExpr context PgExpressionSyntax s a
+               -> QGenExpr context PgExpressionSyntax s PgMoney
+pgDivideMoney_ (QExpr v) (QExpr scale) =
+  QExpr (pgBinOp "/" <$> v <*> scale)
+
+pgDivideMoneys_ :: Num a
+                => QGenExpr context PgExpressionSyntax s PgMoney
+                -> QGenExpr context PgExpressionSyntax s PgMoney
+                -> QGenExpr context PgExpressionSyntax s a
+pgDivideMoneys_ (QExpr a) (QExpr b) =
+  QExpr (pgBinOp "/" <$> a <*> b)
+
+pgAddMoney_, pgSubtractMoney_
+  :: QGenExpr context PgExpressionSyntax s PgMoney
+  -> QGenExpr context PgExpressionSyntax s PgMoney
+  -> QGenExpr context PgExpressionSyntax s PgMoney
+pgAddMoney_ (QExpr a) (QExpr b) =
+  QExpr (pgBinOp "+" <$> a <*> b)
+pgSubtractMoney_ (QExpr a) (QExpr b) =
+  QExpr (pgBinOp "-" <$> a <*> b)
+
+pgSumMoneyOver_, pgAvgMoneyOver_
+  :: Maybe PgAggregationSetQuantifierSyntax
+  -> QExpr PgExpressionSyntax s PgMoney -> QExpr PgExpressionSyntax s PgMoney
+pgSumMoneyOver_ q (QExpr a) = QExpr (sumE q <$> a)
+pgAvgMoneyOver_ q (QExpr a) = QExpr (avgE q <$> a)
+
+pgSumMoney_, pgAvgMoney_ :: QExpr PgExpressionSyntax s PgMoney
+                         -> QExpr PgExpressionSyntax s PgMoney
+pgSumMoney_ = pgSumMoneyOver_ allInGroup_
+pgAvgMoney_ = pgAvgMoneyOver_ allInGroup_
+
+-- * data types
+
+pgTsQueryType, pgTsVectorType, pgJsonType, pgJsonBType, pgMoneyType :: PgDataTypeSyntax
+pgTsQueryType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsqueryType) Nothing) (emit "TSQUERY")
+pgTsVectorType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsvectorType) Nothing) (emit "TSVECTOR")
+pgJsonType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.json) Nothing) (emit "JSON")
+pgJsonBType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.jsonb) Nothing) (emit "JSONB")
+pgMoneyType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.money) Nothing) (emit "MONEY")
+
+instance HasDefaultSqlDataType PgDataTypeSyntax TsQuery where
+  defaultSqlDataType _ _ = pgTsQueryType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax TsQuery
+
+instance HasDefaultSqlDataType PgDataTypeSyntax TsVector where
+  defaultSqlDataType _ _ = pgTsVectorType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax TsVector
+
+instance HasDefaultSqlDataType PgDataTypeSyntax (PgJSON a) where
+  defaultSqlDataType _ _ = pgJsonType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSON a)
+
+instance HasDefaultSqlDataType PgDataTypeSyntax (PgJSONB a) where
+  defaultSqlDataType _ _ = pgJsonBType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSONB a)
+
+instance HasDefaultSqlDataType PgDataTypeSyntax PgMoney where
+  defaultSqlDataType _ _ = pgMoneyType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax PgMoney

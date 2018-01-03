@@ -35,7 +35,8 @@ class IsSql92AggregationExpressionSyntax expr =>
   IsSql99AggregationExpressionSyntax expr where
   everyE, someE, anyE :: Maybe (Sql92AggregationSetQuantifierSyntax expr) -> expr -> expr
 
-class IsSql99DataTypeSyntax dataType where
+class IsSql92DataTypeSyntax dataType =>
+  IsSql99DataTypeSyntax dataType where
   characterLargeObjectType :: dataType
   binaryLargeObjectType :: dataType
   booleanType :: dataType

@@ -18,6 +18,7 @@ module Database.Beam.Backend.SQL.SQL2003
     , IsSql2003NtileExpressionSyntax(..)
     , IsSql2003NthValueExpressionSyntax(..)
     , IsSql2003LeadAndLagExpressionSyntax(..)
+    , IsSql2008BigIntDataTypeSyntax(..)
 
     , Sql2003ExpressionSanityCheck
     ) where
@@ -134,3 +135,8 @@ class IsSql99AggregationExpressionSyntax agg =>
 class IsSql99AggregationExpressionSyntax agg =>
    IsSql2003NthValueExpressionSyntax agg where
   nthValueE :: agg -> agg -> agg
+
+-- | Optional SQL2008 "BIGINT data type" T071 support
+class IsSql99DataTypeSyntax dataType =>
+  IsSql2008BigIntDataTypeSyntax dataType where
+  bigIntType :: dataType

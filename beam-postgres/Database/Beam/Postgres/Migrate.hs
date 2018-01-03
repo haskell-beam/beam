@@ -21,7 +21,6 @@ import           Database.Beam.Postgres.Types
 
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg
-import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 
 import           Control.Arrow
 import           Control.Exception (bracket)
@@ -134,16 +133,13 @@ getDbConstraints conn =
 -- * Data types
 
 tsquery :: Db.DataType PgDataTypeSyntax TsQuery
-tsquery = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsqueryType) Nothing) (emit "tsquery"))
+tsquery = Db.DataType pgTsQueryType
 
 tsvector :: Db.DataType PgDataTypeSyntax TsVector
-tsvector = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsvectorType) Nothing) (emit "tsvector"))
+tsvector = Db.DataType pgTsVectorType
 
 text :: Db.DataType PgDataTypeSyntax T.Text
-text = Db.DataType (PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.text) Nothing) (emit "TEXT"))
-
-boolean :: Db.DataType PgDataTypeSyntax a
-boolean = Db.DataType pgBooleanType
+text = Db.DataType pgTextType
 
 bytea :: Db.DataType PgDataTypeSyntax ByteString
 bytea = Db.DataType pgByteaType
@@ -152,6 +148,12 @@ array :: Maybe Int -> Db.DataType PgDataTypeSyntax a
       -> Db.DataType PgDataTypeSyntax (V.Vector a)
 array Nothing (Db.DataType (PgDataTypeSyntax _ syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]"))
 array (Just sz) (Db.DataType (PgDataTypeSyntax _ syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
+
+json :: Db.DataType PgDataTypeSyntax (PgJSON a)
+json = Db.DataType pgJsonType
+
+jsonb :: Db.DataType PgDataTypeSyntax (PgJSONB a)
+jsonb = Db.DataType pgJsonBType
 
 -- * Pseudo-data types
 
