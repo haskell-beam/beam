@@ -342,8 +342,12 @@ instance IsSql92SelectSyntax SqliteSelectSyntax where
     (case ordering of
        [] -> mempty
        _ -> emit " ORDER BY " <> commas (coerce ordering)) <>
-    maybe mempty ((emit " LIMIT " <>) . emit') limit <>
-    maybe mempty ((emit " OFFSET " <>) . emit') offset
+    case (limit, offset) of
+      (Nothing, Nothing) -> mempty
+      (Just limit, Nothing) -> emit " LIMIT " <> emit' limit
+      (Nothing, Just offset) -> emit " LIMIT -1 OFFSET " <> emit' offset
+      (Just limit, Just offset) -> emit " LIMIT " <> emit' limit <>
+                                   emit " OFFSET " <> emit' offset
 
 instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   type Sql92SelectTableSelectSyntax SqliteSelectTableSyntax = SqliteSelectSyntax
