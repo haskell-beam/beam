@@ -140,7 +140,7 @@ planned.
 | E141-10 Names in a foreign key can be specified in any order    | N/A      |                                                                                                                                            |
 | **E151 Transaction support**                                    | None     | Use the backend functions explicitly                                                                                                       |
 | **E152 SET TRANSACTION statement**                              | N/A      |                                                                                                                                            |
-| **E153 Updatable queries with subqueries**                      | TODO     |                                                                                                                                            |
+| **E153 Updatable queries with subqueries**                      | TODO     | Not a common feature, but would be trivial to support                                                                                      |
 | **E161 SQL comments with double minus**                         | N/A      |                                                                                                                                            |
 | **E171 SQLSTATE support**                                       | N/A      |                                                                                                                                            |
 | **E182 Host language binding**                                  | N/A      |                                                                                                                                            |
@@ -195,7 +195,7 @@ planned.
 | **F262 Extended CASE expression**                               | WONTFIX  | Beam allows any expression in a `WHEN` condition                                                                                           |
 | **F263 Comma-separater predicates in simple CASE expression**   | WONTFIX  | Unnecessary                                                                                                                                |
 | **F271 Compound character literals**                            | N/A      | This is syntactic sugar                                                                                                                    |
-| **F281 LIKE enhancements**                                      | PARTIAL  | Supported in backends that support this                                                                                                    |
+| **F281 LIKE enhancements**                                      | FULL     | Supported in backends that support this                                                                                                    |
 | **F291 UNIQUE predicate**                                       | FULL     | Use `unique_`                                                                                                                              |
 | **F301 CORRESPONDING in query expressions**                     | N/A      | Beam set functions work based off the query result type, not the column name                                                               |
 | **F302 INTERSECT table operator**                               | FULL     | Use `intersect_`                                                                                                                           |
@@ -213,7 +213,7 @@ planned.
 | **F384 Drop identity property clause**                          | TODO     |                                                                                                                                            |
 | **F385 Drop column generation expression clause**               | TODO     |                                                                                                                                            |
 | **F386 Set identity column generation clause**                  | TODO     |                                                                                                                                            |
-| **F391 Long identifiers**                                       | PARTIAL  | Supported in backends that support it                                                                                                      |
+| **F391 Long identifiers**                                       | FULL     | Supported in backends that support it                                                                                                      |
 | **F392 Unicode escapes in identifiers**                         | TODO     | Unsure how this applies                                                                                                                    |
 | **F393 Unicode escapes in literals**                            | TODO     | Unsure how this applies                                                                                                                    |
 | **F394 Optional normal form specification**                     | N/A      |                                                                                                                                            |
