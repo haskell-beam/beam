@@ -126,6 +126,23 @@ filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerL
         all_ (customer chinookDb)
 ```
 
+Backends often differ as to how they implement LIMIT/OFFSET. For example, SQLite
+requires that `LIMIT` always be given if an `OFFSET` is provided. Beam correctly
+handles this behavior.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+offset_ 100 $
+filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
+                      (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
+        all_ (customer chinookDb)
+```
+
+Notice that the SQLite query output has provided a dummy `LIMIT -1` clause,
+while the Postgres query has not.
+
 ## `DISTINCT` support
 
 SQL can only return unique results from a query through the `SELECT DISTINCT`
