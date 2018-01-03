@@ -314,7 +314,9 @@ renderHsSchema (HsModule modNm entities migrations) =
       modHead = Hs.ModuleHead () (Hs.ModuleName () modNm) Nothing (Just modExports)
       modExports = Hs.ExportSpecList () (commonExports ++ foldMap (foldMap hsDeclExports . hsEntityDecls) entities)
       commonExports = [ Hs.EVar () (unqual "db")
-                      , Hs.EVar () (unqual "migration") ]
+                      , Hs.EVar () (unqual "migration")
+                      , Hs.EThingWith () (Hs.EWildcard () 0)
+                                      (unqual "Db") [] ]
 
       modPragmas = [ Hs.LanguagePragma () [ Hs.Ident () "StandaloneDeriving"
                                           , Hs.Ident () "GADTs"
@@ -437,10 +439,11 @@ instance IsSql92CreateTableSyntax HsAction where
              , hsEntitySyntax = HsBeamBackendConstrained [ sql92SaneDdlCommandSyntax ]
 
              , hsEntityName    = HsEntityName varName
-             , hsEntityDecls   = [ HsDecl tblDecl imports []
+             , hsEntityDecls   = [ HsDecl tblDecl imports
+                                          [ Hs.EThingWith () (Hs.EWildcard () 0) (unqual tyName) [] ]
                                  , HsDecl tblBeamable imports []
 
-                                 , HsDecl tblPun imports []
+                                 , HsDecl tblPun imports [ Hs.EVar () (unqual tyName) ]
 
                                  , HsDecl tblShowInstance imports []
                                  , HsDecl tblEqInstance imports []
@@ -523,8 +526,8 @@ instance IsSql92TableConstraintSyntax HsTableConstraint where
 
     in HsTableConstraintDecls [ primaryKeyDataDecl
                               , primaryKeyFunDecl ]
-                              (map decl [ primaryKeyTypeDecl
-                                        , hsInstance "Beamable" [ tyParens (tyApp (tyConNamed "PrimaryKey") [ tyConNamed (T.unpack tableTypeNm)  ]) ] []
+                              (HsDecl primaryKeyTypeDecl mempty [ Hs.EVar () (unqual (T.unpack tableTypeKeyNm)) ]:
+                               map decl [ hsInstance "Beamable" [ tyParens (tyApp (tyConNamed "PrimaryKey") [ tyConNamed (T.unpack tableTypeNm)  ]) ] []
                                         , hsDerivingInstance "Eq" [ tyConNamed (T.unpack tableTypeKeyNm) ]
                                         , hsDerivingInstance "Show" [ tyConNamed (T.unpack tableTypeKeyNm) ]
                                         ])
