@@ -31,7 +31,7 @@ instance Monoid HaskellPredicateConverter where
     HaskellPredicateConverter $ \r -> a r <|> b r
 
 data SomeCheckedDatabase be where
-  SomeCheckedDatabase :: Database be db
+  SomeCheckedDatabase :: Database db
                       => CheckedDatabaseSettings be db
                       -> SomeCheckedDatabase be
 

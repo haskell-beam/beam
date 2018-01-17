@@ -13,7 +13,7 @@ import Database.Beam.Migrate.Actions
 
 import qualified Data.Text as T
 
-simpleSchema :: Database be db
+simpleSchema :: Database db
              => [ ActionProvider cmd ]
              -> CheckedDatabaseSettings be db
              -> Maybe [cmd]
@@ -25,7 +25,7 @@ simpleSchema providers settings =
        Candidates {} -> Nothing
 
 simpleMigration :: ( MonadBeam cmd be handle m
-                 ,   Database be db )
+                 ,   Database db )
                 => BeamMigrationBackend be cmd handle
                 -> handle
                 -> CheckedDatabaseSettings be db

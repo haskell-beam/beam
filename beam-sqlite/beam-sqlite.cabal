@@ -1,5 +1,5 @@
 name:                beam-sqlite
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Connection layer between beam and sqlite
 description:
 homepage:            https://github.com/githubuser/beam-sqlite#readme
@@ -20,8 +20,8 @@ library
                       Database.Beam.Sqlite.Connection
   build-depends:      base          >=4.7  && <5,
 
-                      beam-core     ==0.5.0.0,
-                      beam-migrate  ==0.1.0.0,
+                      beam-core     ==0.6.0.0,
+                      beam-migrate  ==0.2.0.0,
 
                       sqlite-simple >=0.4  && <0.5,
                       text          >=1.0  && <1.3,

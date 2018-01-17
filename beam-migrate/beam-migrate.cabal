@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                beam-migrate
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Database migrations library for Beam
 -- description:         
 homepage:            https://travis.athougies.net/projects/beam.html
@@ -39,12 +39,11 @@ library
 
   other-modules:       Database.Beam.Migrate.Generics.Types
                        Database.Beam.Migrate.Generics.Tables
---                       Database.Beam.Haskell.Orphans
                        Database.Beam.Migrate.Types.CheckedEntities
                        Database.Beam.Migrate.Types.Predicates
   -- other-extensions:    
   build-depends:       base >=4.9 && <4.11,
-                       beam-core >=0.5.0.0,
+                       beam-core >=0.6.0.0,
                        text >= 1.2,
                        aeson >= 0.11,
                        bytestring >= 0.10,
