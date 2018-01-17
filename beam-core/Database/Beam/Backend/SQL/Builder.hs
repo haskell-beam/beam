@@ -12,14 +12,14 @@
 --   Always use the provided backends to submit queries and data manipulation
 --   commands to the database.
 module Database.Beam.Backend.SQL.Builder
-  ( SqlSyntaxBuilder(..), buildSepBy
+  ( SqlSyntaxBuilder(..), SqlSyntaxBackend
+  , buildSepBy
   , quoteSql
   , renderSql ) where
 
-import           Database.Beam.Backend.SQL.Types
-import           Database.Beam.Backend.SQL.SQL92
-import           Database.Beam.Backend.SQL.SQL99
-import           Database.Beam.Backend.SQL.SQL2003
+import           Database.Beam.Backend.SQL
+
+import           Control.Monad.IO.Class
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
@@ -55,6 +55,17 @@ instance Monoid SqlSyntaxBuilder where
   mempty = SqlSyntaxBuilder mempty
   mappend (SqlSyntaxBuilder a) (SqlSyntaxBuilder b) =
     SqlSyntaxBuilder (mappend a b)
+
+instance IsSql92Syntax SqlSyntaxBuilder where
+  type Sql92SelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92InsertSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92DeleteSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92UpdateSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  selectCmd = id
+  insertCmd = id
+  updateCmd = id
+  deleteCmd = id
 
 instance IsSql92SelectSyntax SqlSyntaxBuilder where
   type Sql92SelectSelectTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
@@ -472,3 +483,20 @@ sqlFuncOp :: ByteString -> SqlSyntaxBuilder -> SqlSyntaxBuilder
 sqlFuncOp fun a =
   SqlSyntaxBuilder $
   byteString fun <> byteString "(" <> buildSql a <> byteString")"
+
+-- * Fake 'MonadBeam' instance (for using 'SqlSyntaxBuilder' with migrations mainly)
+
+data SqlSyntaxBackend
+
+class Trivial a
+instance Trivial a
+
+instance BeamBackend SqlSyntaxBackend where
+  type BackendFromField SqlSyntaxBackend = Trivial
+
+newtype SqlSyntaxM a = SqlSyntaxM (IO a)
+  deriving (Applicative, Functor, Monad, MonadIO)
+
+instance MonadBeam SqlSyntaxBuilder SqlSyntaxBackend SqlSyntaxBackend SqlSyntaxM where
+  withDatabaseDebug _ _ _ = fail "absurd"
+  runReturningMany _ _ = fail "absurd"

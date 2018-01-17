@@ -1,12 +1,15 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Beam.Migrate.SQL.Builder where
 
-import Database.Beam.Backend.SQL.Builder
-import Database.Beam.Migrate.SQL
+import           Database.Beam.Backend.SQL.Builder
+import           Database.Beam.Migrate.SQL
+import           Database.Beam.Migrate.Checks
 
-import Control.Applicative
+import           Control.Applicative
 
-import Data.ByteString.Builder (Builder, byteString)
-import Data.Monoid
+import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
+import qualified Data.ByteString.Lazy.Char8 as BCL
+import           Data.Monoid
 
 data SqlSyntaxBuilderCreateTableOptions
     = SqlSyntaxBuilderCreateTableOptions
@@ -109,6 +112,18 @@ fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
         deferrableBuilder False = byteString "NOT DEFERRABLE"
         deferrableBuilder True = byteString "DEFERRABLE"
 
+sqlConstraintAttributesSerialized :: SqlConstraintAttributesBuilder -> BeamSerializedConstraintAttributes
+sqlConstraintAttributesSerialized (SqlConstraintAttributesBuilder timing deferrable) =
+  mconcat [ maybe mempty serializeTiming timing
+          , maybe mempty serializeDeferrable deferrable ]
+
+  where
+    serializeTiming InitiallyDeferred = initiallyDeferredAttributeSyntax
+    serializeTiming InitiallyImmediate = initiallyImmediateAttributeSyntax
+
+    serializeDeferrable True = deferrableAttributeSyntax
+    serializeDeferrable False = notDeferrableAttributeSyntax
+
 instance IsSql92ConstraintAttributesSyntax SqlConstraintAttributesBuilder where
   initiallyDeferredAttributeSyntax = SqlConstraintAttributesBuilder (Just InitiallyDeferred) Nothing
   initiallyImmediateAttributeSyntax = SqlConstraintAttributesBuilder (Just InitiallyImmediate) Nothing
@@ -135,7 +150,7 @@ instance IsSql92ColumnConstraintDefinitionSyntax SqlSyntaxBuilder where
 
   constraintDefinitionSyntax nm c attrs =
     SqlSyntaxBuilder $
-    maybe mempty (\nm -> byteString "CONSTRAINT " <> quoteSql nm <> byteString " ") nm <>
+    maybe mempty (\nm' -> byteString "CONSTRAINT " <> quoteSql nm' <> byteString " ") nm <>
     buildSql c <>
     maybe mempty fromSqlConstraintAttributes attrs
 
@@ -165,3 +180,6 @@ instance IsSql92ReferentialActionSyntax SqlSyntaxBuilder where
   referentialActionNoActionSyntax = SqlSyntaxBuilder "NO ACTION"
   referentialActionSetDefaultSyntax = SqlSyntaxBuilder "SET DEFAULT"
   referentialActionSetNullSyntax = SqlSyntaxBuilder "SET NULL"
+
+instance Sql92DisplaySyntax SqlSyntaxBuilder where
+  displaySyntax = BCL.unpack . toLazyByteString . buildSql

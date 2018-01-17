@@ -6,6 +6,8 @@
 
 module Main where
 
+import Prelude hiding (lookup)
+
 import Database.Beam
 import Database.Beam.Backend.Types
 import Database.Beam.Postgres
@@ -23,22 +25,22 @@ data BeamDone = BeamDone
   deriving (Show)
 instance Exception BeamDone
 
-exampleQuery :: Q PgSelectSyntax ChinookDb s _
-exampleQuery =
+exampleQuery :: (String -> Pg ()) -> Pg ()
+exampleQuery putStrLn = do
   BEAM_PLACEHOLDER
 
 main :: IO ()
 main =
-  do chinook <- connectPostgreSQL "dbname=template1"
+  do chinook <- connectPostgreSQL "dbname=chinook"
 
      stmts <- newIORef id
 
      let onStmt s = modifyIORef stmts (. (s:))
-         record a = withDatabaseDebug onStmt chinook a `catch` (\(SomeException e) -> pure [])
+         record a = withDatabaseDebug (onStmt . (++ ";")) chinook a
 
      handle (\BeamDone -> pure ()) $
        withTransaction chinook $ do
-         record $ runSelectReturningList $ select $ exampleQuery
+         record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
          throwIO BeamDone
 
      mkStmtList <- readIORef stmts

@@ -6,72 +6,141 @@
 
 module Database.Beam.Postgres.Migrate where
 
-import           Database.Beam.Backend.Types
 import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL.Types as Db
-import           Database.Beam.Migrate.SQL.BeamExtensions
 import qualified Database.Beam.Migrate.SQL.SQL92 as Db
-import qualified Database.Beam.Migrate.Tool as Tool
 import qualified Database.Beam.Migrate.Types as Db
+
+import           Database.Beam.Backend.SQL
+
+import           Database.Beam.Migrate.SQL.BeamExtensions
+import qualified Database.Beam.Migrate.Backend as Tool
+import           Database.Beam.Migrate.Actions (defaultActionProviders)
 
 import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.PgSpecific
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
+import           Database.Beam.Postgres.Extensions
+
+import           Database.Beam.Haskell.Syntax
 
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg
+import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 
 import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad
+import           Control.Monad.Free.Church (liftF)
 
+import           Data.Aeson
+import           Data.Bits
+import           Data.Maybe
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
 import           Data.Monoid
 import           Data.String
+import           Data.Int
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
-import           Data.Word (Word16)
+import           Data.UUID (UUID)
+import           Data.Typeable
 
-import           Options.Applicative hiding (action, command, columns)
+--import qualified Language.Haskell.Exts.Syntax as Hs
 
-data PgMigrateOpts
-  = PgMigrateOpts
-  { pgMigrateHost :: String
-  , pgMigrateDatabase :: String
-  , pgMigratePort :: Word16
-  , pgMigrateUser :: String
-  , pgMigratePromptPassword :: Bool
-  } deriving Show
-
-parsePgMigrateOpts :: Parser PgMigrateOpts
-parsePgMigrateOpts =
-  PgMigrateOpts <$> strOption (long "host" <> metavar "HOST" <> help "Postgres host to connect to" <> value "localhost")
-                <*> strOption (long "database" <> metavar "DATABASE" <> help "Name of postgres database")
-                <*> option auto (long "port" <> metavar "PORT" <> help "Port number to connect to " <> value 5432)
-                <*> strOption (long "user" <> metavar "USER" <> help "Name of postgres user")
-                <*> pure True
-
-beConnectInfo :: PgMigrateOpts -> Pg.ConnectInfo
-beConnectInfo opts = Pg.defaultConnectInfo { connectHost = pgMigrateHost opts
-                                           , connectPort = pgMigratePort opts
-                                           , connectUser = pgMigrateUser opts
-                                           , connectDatabase = pgMigrateDatabase opts }
-
-migrationBackend :: Tool.BeamMigrationBackend Postgres PgCommandSyntax PgMigrateOpts
-migrationBackend = Tool.BeamMigrationBackend parsePgMigrateOpts
+migrationBackend :: Tool.BeamMigrationBackend Postgres PgCommandSyntax Pg.Connection
+migrationBackend = Tool.BeamMigrationBackend
+                        "postgres" "sql"
+                        (unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"
+                                 , ""
+                                 , "For example, 'host=localhost port=5432 dbname=mydb connect_timeout=10' or 'dbname=mydb'"
+                                 , ""
+                                 , "Or use URIs, for which the general form is:"
+                                 , "  postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]"
+                                 , ""
+                                 , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
                         (BL.concat . migrateScript)
-                        (\options -> Pg.connect (beConnectInfo options) >>= getDbConstraints)
-                        (BCL.unpack . pgRenderSyntaxScript . fromPgCommand)
-                        (\beOptions action ->
-                            bracket (Pg.connect (beConnectInfo beOptions)) Pg.close $ \conn ->
+                        (liftF (PgLiftWithHandle getDbConstraints id))
+                        (Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
+                         Db.sql2008BigIntDataTypeDeserializers <>
+                         postgresDataTypeDeserializers <>
+                         Db.beamCheckDeserializers)
+                        (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand) "postgres.sql"
+                        pgPredConverter (defaultActionProviders <> pgExtensionActionProviders)
+                        (\options action ->
+                            bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
                               left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
   where
-    pgToToolError (PgRowParseError err) = Tool.DdlCustomError (show err)
-    pgToToolError (PgInternalError err) = Tool.DdlCustomError err
+    pgToToolError (PgRowParseError err) = show err
+    pgToToolError (PgInternalError err) = err
+
+postgresDataTypeDeserializers
+  :: Db.BeamDeserializers PgCommandSyntax
+postgresDataTypeDeserializers =
+  Db.beamDeserializer $ \_ v ->
+  case v of
+    "bytea"       ->  pure pgByteaType
+    "smallserial" ->  pure pgSmallSerialType
+    "serial"      ->  pure pgSerialType
+    "bigserial"   ->  pure pgBigSerialType
+    "tsquery"     ->  pure pgTsQueryType
+    "tsvector"    ->  pure pgTsVectorType
+    "text"        ->  pure pgTextType
+    "json"        ->  pure pgJsonType
+    "jsonb"       ->  pure pgJsonbType
+    "uuid"        ->  pure pgUuidType
+    "money"       ->  pure pgMoneyType
+    _             -> fail "Postgres data type"
+
+pgPredConverter :: Tool.HaskellPredicateConverter
+pgPredConverter = Tool.easyHsPredicateConverter <>
+                  Tool.hsPredicateConverter pgHasColumn <>
+                  Tool.hsPredicateConverter pgHasColumnConstraint
+  where
+    pgHasColumn (Db.TableHasColumn tblNm colNm pgType :: Db.TableHasColumn PgColumnSchemaSyntax) =
+      Db.SomeDatabasePredicate <$> (Db.TableHasColumn tblNm colNm <$> pgTypeToHs pgType :: Maybe (Db.TableHasColumn HsColumnSchema))
+
+    pgHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c :: Db.TableColumnHasConstraint PgColumnSchemaSyntax)
+      | c == Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing =
+          Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) :: Db.TableColumnHasConstraint HsColumnSchema))
+      | otherwise = Nothing
+
+pgTypeToHs :: PgDataTypeSyntax -> Maybe HsDataType
+pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
+  case tyDescr of
+    PgDataTypeDescrOid oid width
+      | Pg.typoid Pg.int2    == oid -> Just smallIntType
+      | Pg.typoid Pg.int4    == oid -> Just intType
+      | Pg.typoid Pg.int8    == oid -> Just bigIntType
+
+      | Pg.typoid Pg.bpchar  == oid -> Just (charType (fromIntegral <$> width) Nothing)
+      | Pg.typoid Pg.varchar == oid -> Just (varCharType (fromIntegral <$> width) Nothing)
+      | Pg.typoid Pg.bit     == oid -> Just (bitType (fromIntegral <$> width))
+      | Pg.typoid Pg.varbit  == oid -> Just (varBitType (fromIntegral <$> width))
+
+      | Pg.typoid Pg.numeric == oid ->
+          let decimals = fromMaybe 0 width .&. 0xFFFF
+              prec     = (fromMaybe 0 width `shiftR` 16) .&. 0xFFFF
+          in Just (numericType (Just (fromIntegral prec, Just (fromIntegral decimals))))
+
+      | Pg.typoid Pg.float4  == oid -> Just (floatType (fromIntegral <$> width))
+      | Pg.typoid Pg.float8  == oid -> Just doubleType
+
+      | Pg.typoid Pg.date    == oid -> Just dateType
+
+      -- We prefer using the standard beam names
+      | Pg.typoid Pg.text    == oid -> Just characterLargeObjectType
+      | Pg.typoid Pg.bytea   == oid -> Just binaryLargeObjectType
+      | Pg.typoid Pg.bool    == oid -> Just booleanType
+
+      -- TODO timestamp prec
+      | Pg.typoid Pg.time        == oid -> Just (timeType Nothing False)
+      | Pg.typoid Pg.timestamp   == oid -> Just (timestampType Nothing False)
+      | Pg.typoid Pg.timestamptz == oid -> Just (timestampType Nothing True)
+    _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
 migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
 migrateScript steps =
@@ -79,7 +148,7 @@ migrateScript steps =
   "--          haphazardly when generating scripts (but not when generating commands)\n"            :
   "--          This is due to technical limitations in libPq that require a Postgres\n"             :
   "--          Connection in order to correctly escape strings. Please verify that the\n"           :
-  "--          Generated migration script is correct before running it on your database.\n"         :
+  "--          generated migration script is correct before running it on your database.\n"         :
   "--          If you feel so called, please contribute better escaping support to beam-postgres\n" :
   "\n"                                                                                              :
   "-- Set connection encoding to UTF-8\n"                                                           :
@@ -97,6 +166,35 @@ writeMigrationScript fp steps =
   let stepBs = migrateScript steps
   in BL.writeFile fp (BL.concat stepBs)
 
+pgExpandDataType :: Db.DataType PgDataTypeSyntax a -> PgDataTypeSyntax
+pgExpandDataType (Db.DataType pg) = pg
+
+pgDataTypeFromAtt :: ByteString -> Pg.Oid -> Maybe Int32 -> PgDataTypeSyntax
+pgDataTypeFromAtt _ oid pgMod
+  | Pg.typoid Pg.bool == oid = pgExpandDataType Db.boolean
+  | Pg.typoid Pg.bytea == oid = pgExpandDataType Db.binaryLargeObject
+  | Pg.typoid Pg.char == oid = pgExpandDataType (Db.char Nothing) -- TODO length
+  -- TODO Pg.name
+  | Pg.typoid Pg.int8 == oid = pgExpandDataType (Db.bigint :: Db.DataType PgDataTypeSyntax Int64)
+  | Pg.typoid Pg.int4 == oid = pgExpandDataType (Db.int :: Db.DataType PgDataTypeSyntax Int32)
+  | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType PgDataTypeSyntax Int16)
+  | Pg.typoid Pg.varchar == oid = pgExpandDataType (Db.varchar Nothing)
+  | Pg.typoid Pg.timestamp == oid = pgExpandDataType Db.timestamp
+  | Pg.typoid Pg.numeric == oid =
+      let precAndDecimal =
+            case pgMod of
+              Nothing -> Nothing
+              Just pgMod' ->
+                let prec = fromIntegral (pgMod' `shiftR` 16)
+                    dec = fromIntegral (pgMod' .&. 0xFFFF)
+                in Just (prec, if dec == 0 then Nothing else Just dec)
+      in pgExpandDataType (Db.numeric precAndDecimal)
+  | otherwise = PgDataTypeSyntax (PgDataTypeDescrOid oid pgMod) (emit "{- UNKNOWN -}")
+                                 (pgDataTypeJSON (object [ "oid" .= (fromIntegral oid' :: Word), "mod" .= pgMod ]))
+  where
+    Pg.Oid oid' = oid
+  -- , \_ _ -> errorTypeHs (show fallback))
+
 -- * Create constraints from a connection
 
 getDbConstraints :: Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
@@ -110,7 +208,9 @@ getDbConstraints conn =
                        (Pg.Only (oid :: Pg.Oid))
           let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: ByteString) ->
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
-                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm (PgDataTypeSyntax (PgDataTypeDescrOid typId typmod') (emit typ)) :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
+                                        pgDataType = pgDataTypeFromAtt typ typId typmod'
+
+                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm pgDataType :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
               notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
                                            if isNotNull then
                                             [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tbl nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
@@ -130,7 +230,7 @@ getDbConstraints conn =
 
      pure (tblsExist ++ columnChecks ++ primaryKeys)
 
--- * Data types
+-- * Postgres-specific data types
 
 tsquery :: Db.DataType PgDataTypeSyntax TsQuery
 tsquery = Db.DataType pgTsQueryType
@@ -144,20 +244,25 @@ text = Db.DataType pgTextType
 bytea :: Db.DataType PgDataTypeSyntax ByteString
 bytea = Db.DataType pgByteaType
 
-array :: Maybe Int -> Db.DataType PgDataTypeSyntax a
-      -> Db.DataType PgDataTypeSyntax (V.Vector a)
-array Nothing (Db.DataType (PgDataTypeSyntax _ syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]"))
-array (Just sz) (Db.DataType (PgDataTypeSyntax _ syntax)) = Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]"))
+unboundedArray :: forall a. Typeable a
+               => Db.DataType PgDataTypeSyntax a
+               -> Db.DataType PgDataTypeSyntax (V.Vector a)
+unboundedArray (Db.DataType (PgDataTypeSyntax _ syntax serialized)) =
+  Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]")
+                                (pgDataTypeJSON (object [ "unbounded-array" .= Db.fromBeamSerializedDataType serialized])))
 
-json :: Db.DataType PgDataTypeSyntax (PgJSON a)
+json :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSON a)
 json = Db.DataType pgJsonType
 
-jsonb :: Db.DataType PgDataTypeSyntax (PgJSONB a)
-jsonb = Db.DataType pgJsonBType
+jsonb :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSONB a)
+jsonb = Db.DataType pgJsonbType
+
+uuid :: Db.DataType PgDataTypeSyntax UUID
+uuid = Db.DataType pgUuidType
 
 -- * Pseudo-data types
 
-smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax (Auto a)
+smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax (SqlSerial a)
 smallserial = Db.DataType pgSmallSerialType
 serial = Db.DataType pgSerialType
 bigserial = Db.DataType pgBigSerialType

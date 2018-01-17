@@ -50,14 +50,9 @@ newtype TsVectorConfig = TsVectorConfig ByteString
 newtype TsVector = TsVector ByteString
   deriving (Show, Eq, Ord)
 
--- | Postgres TypeInfo for tsvector
--- TODO Is the Oid stable from postgres instance to postgres instance?
-tsvectorType :: Pg.TypeInfo
-tsvectorType = Pg.Basic (Pg.Oid 3614) 'U' ',' "tsvector"
-
 instance Pg.FromField TsVector where
   fromField field d =
-    if Pg.typeOid field /= Pg.typoid tsvectorType
+    if Pg.typeOid field /= Pg.typoid pgTsVectorTypeInfo
     then Pg.returnError Pg.Incompatible field ""
     else case d of
            Just d' -> pure (TsVector d')
@@ -96,12 +91,9 @@ QExpr vec @@ QExpr q =
 newtype TsQuery = TsQuery ByteString
   deriving (Show, Eq, Ord)
 
-tsqueryType :: Pg.TypeInfo
-tsqueryType = Pg.Basic (Pg.Oid 3615) 'U' ',' "tsquery"
-
 instance Pg.FromField TsQuery where
   fromField field d =
-    if Pg.typeOid field /= Pg.typoid tsqueryType
+    if Pg.typeOid field /= Pg.typoid pgTsQueryTypeInfo
     then Pg.returnError Pg.Incompatible field ""
     else case d of
            Just d' -> pure (TsQuery d')
@@ -546,13 +538,6 @@ pgAvgMoney_ = pgAvgMoneyOver_ allInGroup_
 
 -- * data types
 
-pgTsQueryType, pgTsVectorType, pgJsonType, pgJsonBType, pgMoneyType :: PgDataTypeSyntax
-pgTsQueryType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsqueryType) Nothing) (emit "TSQUERY")
-pgTsVectorType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid tsvectorType) Nothing) (emit "TSVECTOR")
-pgJsonType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.json) Nothing) (emit "JSON")
-pgJsonBType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.jsonb) Nothing) (emit "JSONB")
-pgMoneyType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.money) Nothing) (emit "MONEY")
-
 instance HasDefaultSqlDataType PgDataTypeSyntax TsQuery where
   defaultSqlDataType _ _ = pgTsQueryType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax TsQuery
@@ -566,7 +551,7 @@ instance HasDefaultSqlDataType PgDataTypeSyntax (PgJSON a) where
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSON a)
 
 instance HasDefaultSqlDataType PgDataTypeSyntax (PgJSONB a) where
-  defaultSqlDataType _ _ = pgJsonBType
+  defaultSqlDataType _ _ = pgJsonbType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSONB a)
 
 instance HasDefaultSqlDataType PgDataTypeSyntax PgMoney where

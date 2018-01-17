@@ -4,3 +4,4 @@ packages:
   - beam-postgres
   - beam-core
   - beam-migrate
+  - beam-migrate-cli

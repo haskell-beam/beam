@@ -3,6 +3,7 @@ module Database.Beam.Migrate.SQL.SQL92 where
 
 import Database.Beam.Backend.SQL.SQL92
 
+import Data.Aeson (Value)
 import Data.Hashable
 import Data.Text (Text)
 import Data.Typeable
@@ -10,17 +11,30 @@ import Data.Typeable
 type Sql92DdlCommandDataTypeSyntax syntax =
   Sql92ColumnSchemaColumnTypeSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
 type Sql92DdlCommandColumnSchemaSyntax syntax = Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax syntax)
+type Sql92DdlCommandConstraintDefinitionSyntax syntax =
+  Sql92ColumnSchemaColumnConstraintDefinitionSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
 type Sql92DdlColumnSchemaConstraintSyntax syntax =
   Sql92ColumnConstraintDefinitionConstraintSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
 type Sql92DdlCommandColumnConstraintSyntax syntax =
   Sql92DdlColumnSchemaConstraintSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
+type Sql92DdlCommandMatchTypeSyntax syntax =
+  Sql92ColumnConstraintMatchTypeSyntax (Sql92DdlCommandColumnConstraintSyntax syntax)
+type Sql92DdlCommandReferentialActionSyntax syntax =
+  Sql92ColumnConstraintReferentialActionSyntax (Sql92DdlCommandColumnConstraintSyntax syntax)
+type Sql92DdlCommandConstraintAttributesSyntax syntax =
+  Sql92ColumnConstraintDefinitionAttributesSyntax (Sql92DdlCommandConstraintDefinitionSyntax syntax)
 
 type Sql92SaneDdlCommandSyntax cmd =
   ( IsSql92DdlCommandSyntax cmd
+  , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
+  , Sql92SerializableConstraintDefinitionSyntax (Sql92DdlCommandConstraintDefinitionSyntax cmd)
   , Typeable (Sql92DdlCommandColumnSchemaSyntax cmd)
   , Sql92AlterTableColumnSchemaSyntax
       (Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax cmd)) ~
       Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd) )
+
+class Sql92DisplaySyntax syntax where
+  displaySyntax :: syntax -> String
 
 class ( IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
       , IsSql92DropTableSyntax (Sql92DdlCommandDropTableSyntax syntax)
@@ -43,7 +57,7 @@ class ( IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax synt
 
   createTableSyntax :: Maybe (Sql92CreateTableOptionsSyntax syntax)
                     -> Text
-                    -> [(Text, Sql92CreateTableColumnSchemaSyntax syntax)]
+                    -> [ (Text, Sql92CreateTableColumnSchemaSyntax syntax) ]
                     -> [ Sql92CreateTableTableConstraintSyntax syntax ]
                     -> syntax
 
@@ -72,14 +86,14 @@ class IsSql92AlterColumnActionSyntax syntax where
 class ( IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
       , IsSql92DataTypeSyntax (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
       , Typeable (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
-      , Show (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
+      , Sql92DisplaySyntax (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
       , Hashable (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
       , Eq (Sql92ColumnSchemaColumnTypeSyntax columnSchema)
-      , Show (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
+      , Sql92DisplaySyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
       , Eq (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
       , Hashable (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
       , IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax columnSchema)
-      , Typeable columnSchema, Show columnSchema, Eq columnSchema, Hashable columnSchema ) =>
+      , Typeable columnSchema, Sql92DisplaySyntax columnSchema, Eq columnSchema, Hashable columnSchema ) =>
   IsSql92ColumnSchemaSyntax columnSchema where
   type Sql92ColumnSchemaColumnTypeSyntax columnSchema :: *
   type Sql92ColumnSchemaExpressionSyntax columnSchema :: *
@@ -91,21 +105,22 @@ class ( IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstrai
                      -> Maybe Text {-^ Default collation -}
                      -> columnSchema
 
-class IsSql92TableConstraintSyntax constraint where
+class Typeable constraint => IsSql92TableConstraintSyntax constraint where
   primaryKeyConstraintSyntax :: [ Text ] -> constraint
 
-class IsSql92MatchTypeSyntax match where
+class Typeable match => IsSql92MatchTypeSyntax match where
   fullMatchSyntax :: match
   partialMatchSyntax :: match
 
-class IsSql92ReferentialActionSyntax refAction where
+class Typeable refAction => IsSql92ReferentialActionSyntax refAction where
   referentialActionCascadeSyntax :: refAction
   referentialActionSetNullSyntax :: refAction
   referentialActionSetDefaultSyntax :: refAction
   referentialActionNoActionSyntax :: refAction
 
 class ( IsSql92ColumnConstraintSyntax (Sql92ColumnConstraintDefinitionConstraintSyntax constraint)
-      , IsSql92ConstraintAttributesSyntax (Sql92ColumnConstraintDefinitionAttributesSyntax constraint)) =>
+      , IsSql92ConstraintAttributesSyntax (Sql92ColumnConstraintDefinitionAttributesSyntax constraint)
+      , Typeable constraint ) =>
       IsSql92ColumnConstraintDefinitionSyntax constraint where
   type Sql92ColumnConstraintDefinitionConstraintSyntax constraint :: *
   type Sql92ColumnConstraintDefinitionAttributesSyntax constraint :: *
@@ -114,14 +129,16 @@ class ( IsSql92ColumnConstraintSyntax (Sql92ColumnConstraintDefinitionConstraint
                              -> Maybe (Sql92ColumnConstraintDefinitionAttributesSyntax constraint)
                              -> constraint
 
-class Monoid attrs => IsSql92ConstraintAttributesSyntax attrs where
+class (Monoid attrs, Typeable attrs) => IsSql92ConstraintAttributesSyntax attrs where
   initiallyDeferredAttributeSyntax :: attrs
   initiallyImmediateAttributeSyntax :: attrs
   notDeferrableAttributeSyntax :: attrs
   deferrableAttributeSyntax :: attrs
 
 class ( IsSql92MatchTypeSyntax (Sql92ColumnConstraintMatchTypeSyntax constraint)
-      , IsSql92ReferentialActionSyntax (Sql92ColumnConstraintReferentialActionSyntax constraint) )=>
+      , IsSql92ReferentialActionSyntax (Sql92ColumnConstraintReferentialActionSyntax constraint)
+      , Typeable (Sql92ColumnConstraintExpressionSyntax constraint)
+      , Typeable constraint ) =>
   IsSql92ColumnConstraintSyntax constraint where
   type Sql92ColumnConstraintMatchTypeSyntax constraint :: *
   type Sql92ColumnConstraintReferentialActionSyntax constraint :: *
@@ -136,3 +153,9 @@ class ( IsSql92MatchTypeSyntax (Sql92ColumnConstraintMatchTypeSyntax constraint)
                              -> Maybe (Sql92ColumnConstraintReferentialActionSyntax constraint) {-^ On update -}
                              -> Maybe (Sql92ColumnConstraintReferentialActionSyntax constraint) {-^ On delete -}
                              -> constraint
+
+class Sql92SerializableDataTypeSyntax dataType where
+  serializeDataType :: dataType -> Value
+
+class Sql92SerializableConstraintDefinitionSyntax constraint where
+  serializeConstraint :: constraint -> Value

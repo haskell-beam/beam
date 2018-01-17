@@ -3,12 +3,13 @@
 -- | Finally tagless encoding of SQL92 syntax
 module Database.Beam.Backend.SQL.SQL92 where
 
-import           Database.Beam.Backend.Types
-import           Database.Beam.Backend.SQL.Types
+import Database.Beam.Backend.SQL.Types
+import Database.Beam.Backend.Types
 
-import           Data.Int
-import           Data.Text (Text)
-import           Data.Time (LocalTime)
+import Data.Int
+import Data.Text (Text)
+import Data.Time (LocalTime)
+import Data.Typeable
 
 class ( BeamSqlBackend be ) =>
       BeamSql92Backend be where
@@ -45,6 +46,7 @@ type Sql92SelectSanityCheck select =
 type Sql92SanityCheck cmd = ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd)
                             , Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd))) ~ Sql92ValueSyntax cmd
                             , Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)) ~ Sql92ValueSyntax cmd
+                            , Sql92ExpressionValueSyntax (Sql92DeleteExpressionSyntax (Sql92DeleteSyntax cmd)) ~ Sql92ValueSyntax cmd
                             , Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax (Sql92SelectSyntax cmd)) ~
                               Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd)) )
 
@@ -181,7 +183,8 @@ class IsSql92DataTypeSyntax dataType where
 
 class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
-      , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr) ) =>
+      , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr)
+      , Typeable expr ) =>
     IsSql92ExpressionSyntax expr where
   type Sql92ExpressionQuantifierSyntax expr :: *
   type Sql92ExpressionValueSyntax expr :: *
@@ -287,4 +290,3 @@ class IsSql92FromSyntax from =>
   IsSql92FromOuterJoinSyntax from where
 
   outerJoin :: from -> from -> Maybe (Sql92FromExpressionSyntax from) -> from
-

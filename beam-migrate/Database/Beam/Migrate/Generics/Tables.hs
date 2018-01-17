@@ -1,12 +1,11 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Migrate.Generics.Tables where
 
 import Database.Beam
 import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.SQL.SQL92
 import Database.Beam.Backend.SQL.SQL2003
-import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Types.Predicates
 import Database.Beam.Migrate.SQL.SQL92
@@ -42,7 +41,9 @@ instance ( IsSql92DdlCommandSyntax syntax
 instance ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) haskTy
          , HasDefaultSqlDataTypeConstraints (Sql92DdlCommandColumnSchemaSyntax syntax) haskTy
          , HasNullableConstraint (NullableStatus haskTy) (Sql92DdlCommandColumnSchemaSyntax syntax)
-         , IsSql92DdlCommandSyntax syntax ) =>
+
+         , IsSql92DdlCommandSyntax syntax
+         , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax syntax) ) =>
   GMigratableTableSettings syntax (Rec0 haskTy) (Rec0 (Const [FieldCheck] haskTy)) where
 
   gDefaultTblSettingsChecks _ _ embedded =
@@ -67,7 +68,9 @@ type family NullableStatus (x :: *) :: Bool where
 
 class IsSql92ColumnSchemaSyntax syntax => HasNullableConstraint (x :: Bool) syntax where
   nullableConstraint :: Proxy x -> Proxy syntax -> [ FieldCheck ]
-instance IsSql92ColumnSchemaSyntax syntax =>
+
+instance ( IsSql92ColumnSchemaSyntax syntax
+         , Sql92SerializableConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax) ) =>
   HasNullableConstraint 'False syntax where
   nullableConstraint _ _ =
     let c = constraintDefinitionSyntax Nothing notNullConstraintSyntax Nothing
@@ -117,12 +120,13 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word where
   defaultSqlDataType _ _ = numericType (Just (10, Nothing))
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word
-instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word32 where
-  defaultSqlDataType _ _ = numericType (Just (10, Nothing))
-instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word32
+
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word16 where
   defaultSqlDataType _ _ = numericType (Just (5, Nothing))
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word16
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word32 where
+  defaultSqlDataType _ _ = numericType (Just (10, Nothing))
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word32
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word64 where
   defaultSqlDataType _ _ = numericType (Just (20, Nothing))
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word64

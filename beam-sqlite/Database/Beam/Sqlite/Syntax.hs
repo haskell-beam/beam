@@ -12,7 +12,6 @@ module Database.Beam.Sqlite.Syntax
   , SqliteInsertValuesSyntax(..)
   , SqliteExpressionSyntax(..)
 
-  , SqliteCastTargetSyntax(..)
 
   , SqliteValueSyntax(..)
 
@@ -24,14 +23,16 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL.SQL92
-import           Database.Beam.Migrate.Types.Predicates
+import           Database.Beam.Migrate.Types
 import           Database.Beam.Query
 import           Database.Beam.Query.SQL92
 
 import           Control.Applicative
 
+import           Data.Aeson
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
+import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Hashable
@@ -55,6 +56,13 @@ newtype SqliteData = SqliteData SQLData -- newtype for Hashable
 instance Show SqliteSyntax where
   show (SqliteSyntax s d) =
     "SqliteSyntax (" <> show (toLazyByteString s) <> ") " <> show d
+
+instance Sql92DisplaySyntax SqliteSyntax where
+  displaySyntax (SqliteSyntax s d) =
+    BL.unpack (toLazyByteString s) <>
+    let dl = DL.toList d
+    in if null dl then mempty
+       else " with values " <> show dl
 
 instance Monoid SqliteSyntax where
   mempty = SqliteSyntax mempty mempty
@@ -129,10 +137,32 @@ data SqliteInsertValuesSyntax
   | SqliteInsertFromSql SqliteSelectSyntax
 newtype SqliteCreateTableSyntax = SqliteCreateTableSyntax { fromSqliteCreateTable :: SqliteSyntax }
 data SqliteTableOptionsSyntax = SqliteTableOptionsSyntax SqliteSyntax SqliteSyntax
+
 newtype SqliteColumnSchemaSyntax = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax } deriving (Show, Eq, Hashable)
-newtype SqliteDataTypeSyntax = SqliteDataTypeSyntax { fromSqliteDataType :: SqliteSyntax } deriving (Show, Eq, Hashable)
-newtype SqliteCastTargetSyntax = SqliteCastTargetSyntax { fromSqliteCastTarget :: SqliteSyntax }
-newtype SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintDefinitionSyntax { fromSqliteColumnConstraintDefinition :: SqliteSyntax } deriving (Show, Eq, Hashable)
+
+instance Sql92DisplaySyntax SqliteColumnSchemaSyntax where
+  displaySyntax = displaySyntax . fromSqliteColumnSchema
+
+data SqliteDataTypeSyntax
+  = SqliteDataTypeSyntax
+  { fromSqliteDataType :: SqliteSyntax
+  , sqliteDataTypeSerialized :: BeamSerializedDataType
+  } deriving (Show, Eq, Generic)
+instance Hashable SqliteDataTypeSyntax where
+  hashWithSalt salt (SqliteDataTypeSyntax s _) = hashWithSalt salt s
+instance Sql92DisplaySyntax SqliteDataTypeSyntax where
+  displaySyntax = displaySyntax . fromSqliteDataType
+
+data SqliteColumnConstraintDefinitionSyntax
+  = SqliteColumnConstraintDefinitionSyntax
+  { fromSqliteColumnConstraintDefinition :: SqliteSyntax
+  , sqliteColumnConstraintDefinitionSerialized :: BeamSerializedConstraintDefinition
+  } deriving (Show, Eq)
+instance Hashable SqliteColumnConstraintDefinitionSyntax where
+  hashWithSalt salt (SqliteColumnConstraintDefinitionSyntax s _) = hashWithSalt salt s
+instance Sql92DisplaySyntax SqliteColumnConstraintDefinitionSyntax where
+  displaySyntax = displaySyntax . fromSqliteColumnConstraintDefinition
+
 newtype SqliteColumnConstraintSyntax = SqliteColumnConstraintSyntax { fromSqliteColumnConstraint :: SqliteConstraintAttributesSyntax -> SqliteSyntax }
 data SqliteConstraintAttributesSyntax = SqliteConstraintAttributesSyntax (Maybe Bool) (Maybe SqliteSyntax)
 newtype SqliteTableConstraintSyntax = SqliteTableConstraintSyntax { fromSqliteTableConstraint :: SqliteSyntax }
@@ -225,9 +255,13 @@ instance IsSql92ColumnConstraintDefinitionSyntax SqliteColumnConstraintDefinitio
   type Sql92ColumnConstraintDefinitionAttributesSyntax SqliteColumnConstraintDefinitionSyntax = SqliteConstraintAttributesSyntax
 
   constraintDefinitionSyntax nm def attrs =
-    SqliteColumnConstraintDefinitionSyntax $
-    maybe mempty (\nm' -> emit "CONSTRAINT " <> quotedIdentifier nm') nm <>
-    fromSqliteColumnConstraint def (fromMaybe mempty attrs)
+    SqliteColumnConstraintDefinitionSyntax
+      (maybe mempty (\nm' -> emit "CONSTRAINT " <> quotedIdentifier nm') nm <>
+       fromSqliteColumnConstraint def (fromMaybe mempty attrs))
+      (BeamSerializedConstraintDefinition (object [])) -- TODO
+
+instance Sql92SerializableConstraintDefinitionSyntax SqliteColumnConstraintDefinitionSyntax where
+  serializeConstraint = fromBeamSerializedConstraintDefinition . sqliteColumnConstraintDefinitionSerialized
 
 instance IsSql92ColumnConstraintSyntax SqliteColumnConstraintSyntax where
   type Sql92ColumnConstraintMatchTypeSyntax SqliteColumnConstraintSyntax = SqliteMatchTypeSyntax
@@ -297,27 +331,36 @@ instance IsSql92ConstraintAttributesSyntax SqliteConstraintAttributesSyntax wher
   deferrableAttributeSyntax = SqliteConstraintAttributesSyntax (Just True) Nothing
 
 instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
-  domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm)
-  charType prec charSet = SqliteDataTypeSyntax $ emit "CHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet
-  varCharType prec charSet = SqliteDataTypeSyntax $ emit "VARCHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet
-  nationalCharType prec = SqliteDataTypeSyntax $ emit "NATIONAL CHAR" <> sqliteOptPrec prec
-  nationalVarCharType prec = SqliteDataTypeSyntax $ emit "NATIONAL CHARACTER VARYING" <> sqliteOptPrec prec
+  domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm) (domainType nm)
+  charType prec charSet = SqliteDataTypeSyntax (emit "CHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet)
+                                               (charType prec charSet)
+  varCharType prec charSet = SqliteDataTypeSyntax (emit "VARCHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet)
+                                                  (varCharType prec charSet)
+  nationalCharType prec = SqliteDataTypeSyntax (emit "NATIONAL CHAR" <> sqliteOptPrec prec)
+                                               (nationalCharType prec)
+  nationalVarCharType prec = SqliteDataTypeSyntax (emit "NATIONAL CHARACTER VARYING" <> sqliteOptPrec prec)
+                                                  (nationalVarCharType prec)
 
-  bitType prec = SqliteDataTypeSyntax $ emit "BIT" <> sqliteOptPrec prec
-  varBitType prec = SqliteDataTypeSyntax $ emit "BIT VARYING" <> sqliteOptPrec prec
+  bitType prec = SqliteDataTypeSyntax (emit "BIT" <> sqliteOptPrec prec) (bitType prec)
+  varBitType prec = SqliteDataTypeSyntax (emit "BIT VARYING" <> sqliteOptPrec prec) (varBitType prec)
 
-  numericType prec = SqliteDataTypeSyntax $ emit "NUMERIC" <> sqliteOptNumericPrec prec
-  decimalType prec = SqliteDataTypeSyntax $ emit "DOUBLE" <> sqliteOptNumericPrec prec
+  numericType prec = SqliteDataTypeSyntax (emit "NUMERIC" <> sqliteOptNumericPrec prec) (numericType prec)
+  decimalType prec = SqliteDataTypeSyntax (emit "DOUBLE" <> sqliteOptNumericPrec prec) (decimalType prec)
 
-  intType = SqliteDataTypeSyntax (emit "INTEGER")
-  smallIntType = SqliteDataTypeSyntax (emit "SMALLINT")
+  intType = SqliteDataTypeSyntax (emit "INTEGER") intType
+  smallIntType = SqliteDataTypeSyntax (emit "SMALLINT") smallIntType
 
-  floatType prec = SqliteDataTypeSyntax (emit "FLOAT" <> sqliteOptPrec prec)
-  doubleType = SqliteDataTypeSyntax (emit "DOUBLE PRECISION")
-  realType = SqliteDataTypeSyntax (emit "REAL")
-  dateType = SqliteDataTypeSyntax (emit "DATE")
-  timeType prec withTz = SqliteDataTypeSyntax $ emit "TIME" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty
-  timestampType prec withTz = SqliteDataTypeSyntax $ emit "TIMESTAMP" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty
+  floatType prec = SqliteDataTypeSyntax (emit "FLOAT" <> sqliteOptPrec prec) (floatType prec)
+  doubleType = SqliteDataTypeSyntax (emit "DOUBLE PRECISION") doubleType
+  realType = SqliteDataTypeSyntax (emit "REAL") realType
+  dateType = SqliteDataTypeSyntax (emit "DATE") dateType
+  timeType prec withTz = SqliteDataTypeSyntax (emit "TIME" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
+                                              (timeType prec withTz)
+  timestampType prec withTz = SqliteDataTypeSyntax (emit "TIMESTAMP" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
+                                                   (timestampType prec withTz)
+
+instance Sql92SerializableDataTypeSyntax SqliteDataTypeSyntax where
+  serializeDataType = fromBeamSerializedDataType . sqliteDataTypeSerialized
 
 sqliteOptPrec :: Maybe Word -> SqliteSyntax
 sqliteOptPrec Nothing = mempty
@@ -488,7 +531,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionSelectSyntax SqliteExpressionSyntax = SqliteSelectSyntax
   type Sql92ExpressionFieldNameSyntax SqliteExpressionSyntax = SqliteFieldNameSyntax
   type Sql92ExpressionQuantifierSyntax SqliteExpressionSyntax = SqliteComparisonQuantifierSyntax
-  type Sql92ExpressionCastTargetSyntax SqliteExpressionSyntax = SqliteCastTargetSyntax
+  type Sql92ExpressionCastTargetSyntax SqliteExpressionSyntax = SqliteDataTypeSyntax
   type Sql92ExpressionExtractFieldSyntax SqliteExpressionSyntax = SqliteExtractFieldSyntax
 
   addE = binOp "+"; subE = binOp "-"; mulE = binOp "*"; divE = binOp "/"
@@ -535,7 +578,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   extractE field from =
     SqliteExpressionSyntax $
     emit "EXTRACT" <> parens (fromSqliteExtractField field <> emit " FROM " <> parens (fromSqliteExpression from))
-  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteCastTarget t))
+  castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteDataType t))
   caseE cases else_ =
     SqliteExpressionSyntax $
     emit "CASE " <>
@@ -645,7 +688,8 @@ instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax (SqlSerial In
   defaultSqlDataTypeConstraints _ _ _ = []
 
 instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where
-  defaultSqlDataType _ _ = SqliteDataTypeSyntax (emit "VARBINARY")
+  -- TODO we should somehow allow contsraints based on backend
+  defaultSqlDataType _ _ = SqliteDataTypeSyntax (emit "VARBINARY") binaryLargeObjectType
 instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax ByteString
 
 instance HasDefaultSqlDataType SqliteDataTypeSyntax LocalTime where

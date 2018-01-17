@@ -32,7 +32,7 @@ instance Beamable (PrimaryKey SimpleTbl)
 
 data MyDb f =
   MyDb { mydbSimpleTbl :: f (TableEntity SimpleTbl) } deriving Generic
-instance Database MyDb
+instance Database be MyDb
 
 myDbMigratable :: forall syntax be
                 . IsSql92DdlCommandSyntax syntax

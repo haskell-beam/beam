@@ -1,5 +1,5 @@
 name:                 beam-postgres
-version:              0.1.0.0
+version:              0.2.0.0
 synopsis:             Connection layer between beam and postgres
 description:          
 homepage:             http://travis.athougies.net/projects/beam.html
@@ -15,13 +15,17 @@ bug-reports:          https://github.com/tathougies/issues
 library
   exposed-modules:    Database.Beam.Postgres
                       Database.Beam.Postgres.Migrate
+
+                      Database.Beam.Postgres.PgCrypto
+
   other-modules:      Database.Beam.Postgres.Syntax
                       Database.Beam.Postgres.Types
                       Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.PgSpecific
+                      Database.Beam.Postgres.Extensions
   build-depends:      base                 >=4.7  && <5.0,
-                      beam-core            ==0.5.0.0,
-                      beam-migrate         ==0.1.0.0,
+                      beam-core            ==0.6.0.0,
+                      beam-migrate         ==0.2.0.0,
 
                       postgresql-libpq     >=0.8  && <0.10,
                       postgresql-simple    >=0.5  && <0.6,
@@ -40,7 +44,10 @@ library
                       scientific           >=0.3  && <0.4,
                       vector               >=0.11 && <0.13,
                       optparse-applicative >=0.13 && <0.14,
-                      network-uri          >=2.6  && <2.7
+                      network-uri          >=2.6  && <2.7,
+                      unordered-containers >= 0.2 && <0.3,
+
+                      haskell-src-exts     >=1.18 && <1.19
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,

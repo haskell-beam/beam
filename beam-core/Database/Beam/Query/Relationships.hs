@@ -166,7 +166,7 @@ manyToManyPassthrough_
   -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s))
   -> Q syntax db s ( joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s)
                    , left (QExpr (Sql92SelectExpressionSyntax syntax) s)
-                   , right (QExpr (Sql92SelectExpressionSyntax syntax) s))
+                  , right (QExpr (Sql92SelectExpressionSyntax syntax) s))
 manyToManyPassthrough_ joinTbl leftKey rightKey left right =
   do left_ <- left
      right_ <- right
