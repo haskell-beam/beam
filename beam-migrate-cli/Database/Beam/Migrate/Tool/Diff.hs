@@ -104,7 +104,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
                   runSelectReturningOne $ select $
                   limit_ 1 $ offset_ (fromIntegral fromHead) $
                   orderBy_ (desc_ . _logEntryId) $
-                  all_ (_beamMigrateLogEntries (beamMigrateDb @cmd @be))
+                  all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
 
       case logEntry of
         Left err -> throwIO (CouldNotFetchLog err)

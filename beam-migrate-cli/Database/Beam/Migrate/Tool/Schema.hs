@@ -65,7 +65,7 @@ beamMigratableDb :: forall cmd be hdl m
                  => CheckedDatabaseSettings be BeamMigrateDb
 beamMigratableDb = runMigrationSilenced beamMigrateDbMigration
 
-beamMigrateDb :: forall cmd be hdl m
+beamMigrateDb :: forall be cmd hdl m
                . ( Sql92SaneDdlCommandSyntax cmd
                  , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
                  , MonadBeam cmd be hdl m )
@@ -87,7 +87,7 @@ beamMigrateDbMigration =
 beamMigrateSchemaVersion :: Int
 beamMigrateSchemaVersion = 1
 
-getLatestLogEntry :: forall cmd be hdl m
+getLatestLogEntry :: forall be cmd hdl m
                    . ( IsSql92Syntax cmd
                      , HasQBuilder (Sql92SelectSyntax cmd)
                      , Sql92ReasonableMarshaller be
@@ -100,9 +100,9 @@ getLatestLogEntry =
   runSelectReturningOne (select $
                          limit_ 1 $
                          orderBy_ (desc_ . _logEntryId) $
-                         all_ (_beamMigrateLogEntries (beamMigrateDb @cmd @be)))
+                         all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd)))
 
-updateSchemaToCurrent :: forall cmd be hdl m
+updateSchemaToCurrent :: forall be cmd hdl m
                        . ( IsSql92Syntax cmd
                          , Sql92SanityCheck cmd
                          , Sql92ReasonableMarshaller be
@@ -111,9 +111,9 @@ updateSchemaToCurrent :: forall cmd be hdl m
                          , MonadBeam cmd be hdl m )
                       => m ()
 updateSchemaToCurrent =
-  runInsert (insert (_beamMigrateVersionTbl (beamMigrateDb @cmd @be)) (insertValues [BeamMigrateVersion beamMigrateSchemaVersion]))
+  runInsert (insert (_beamMigrateVersionTbl (beamMigrateDb @be @cmd)) (insertValues [BeamMigrateVersion beamMigrateSchemaVersion]))
 
-recordCommit :: forall cmd be hdl m
+recordCommit :: forall be cmd hdl m
              . ( IsSql92Syntax cmd
                , Sql92SanityCheck cmd
                , Sql92SaneDdlCommandSyntax cmd
@@ -129,7 +129,7 @@ recordCommit commitId = do
   logEntry <- getLatestLogEntry
   let nextLogEntryId = maybe 0 (succ . _logEntryId) logEntry
 
-  runInsert (insert (_beamMigrateLogEntries (beamMigrateDb @cmd @be))
+  runInsert (insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
                     (insertExpressions
                      [ LogEntry (val_ nextLogEntryId)
                                 (val_ commitIdTxt)

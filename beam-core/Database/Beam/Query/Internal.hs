@@ -92,7 +92,7 @@ type QM select db s = F (QF select db s)
 -- | The type of queries over the database `db` returning results of type `a`.
 -- The `s` argument is a threading argument meant to restrict cross-usage of
 -- `QExpr`s. 'syntax' represents the SQL syntax that this query is building.
-newtype Q syntax be (db :: (* -> *) -> *) s a
+newtype Q syntax (db :: (* -> *) -> *) s a
   = Q { runQ :: QM syntax db s a }
     deriving (Monad, Applicative, Functor)
 

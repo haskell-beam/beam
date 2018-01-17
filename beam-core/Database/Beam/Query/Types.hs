@@ -37,7 +37,7 @@ type instance QExprToIdentity (Vector n a) = Vector n (QExprToIdentity a)
 
 class IsSql92SelectSyntax selectSyntax => HasQBuilder selectSyntax where
   buildSqlQuery :: Projectible (Sql92SelectExpressionSyntax selectSyntax) a =>
-                   TablePrefix -> Q selectSyntax be db s a -> selectSyntax
+                   TablePrefix -> Q selectSyntax db s a -> selectSyntax
 instance HasQBuilder SqlSyntaxBuilder where
   buildSqlQuery = buildSql92Query' True
 instance HasQBuilder Select where

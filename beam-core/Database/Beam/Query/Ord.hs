@@ -50,14 +50,14 @@ data QQuantified expr s r
 --
 --   Accepts a subquery. Use 'allIn_' for an explicit list
 allOf_
-  :: forall s r select expr be db.
+  :: forall s r select expr db.
    ( ThreadRewritable (QNested s) r
    , ProjectibleInSelectSyntax select r
    , IsSql92SelectSyntax select
    , IsSql92ExpressionSyntax expr
    , HasQBuilder select
    , Sql92ExpressionSelectSyntax expr ~ select )
-  => Q select be db (QNested s) r
+  => Q select db (QNested s) r
   -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
 allOf_ s = QQuantified quantifyOverAll (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
@@ -78,14 +78,14 @@ allIn_ es = QQuantified quantifyOverAll (rowE <$> mapM (\(QExpr e) -> e) es)
 --
 --   Accepts a subquery. Use 'anyIn_' for an explicit list
 anyOf_
-  :: forall s r select expr be db.
+  :: forall s r select expr db.
    ( ThreadRewritable (QNested s) r
    , ProjectibleInSelectSyntax select r
    , IsSql92SelectSyntax select
    , IsSql92ExpressionSyntax expr
    , HasQBuilder select
    , Sql92ExpressionSelectSyntax expr ~ select )
-  => Q select be db (QNested s) r
+  => Q select db (QNested s) r
   -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
 anyOf_ s = QQuantified quantifyOverAny (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
