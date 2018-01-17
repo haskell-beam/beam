@@ -65,6 +65,8 @@ migrationBackend = Tool.BeamMigrationBackend
                         (BL.concat . migrateScript)
                         (liftF (PgLiftWithHandle getDbConstraints id))
                         (Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
+                         Db.sql2008BigIntDataTypeDeserializers <>
+                         postgresDataTypeDeserializers <>
                          Db.beamCheckDeserializers)
                         (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand) "postgres.sql"
                         pgPredConverter (defaultActionProviders <> pgExtensionActionProviders)
@@ -74,6 +76,24 @@ migrationBackend = Tool.BeamMigrationBackend
   where
     pgToToolError (PgRowParseError err) = show err
     pgToToolError (PgInternalError err) = err
+
+postgresDataTypeDeserializers
+  :: Db.BeamDeserializers PgCommandSyntax
+postgresDataTypeDeserializers =
+  Db.beamDeserializer $ \_ v ->
+  case v of
+    "bytea"       ->  pure pgByteaType
+    "smallserial" ->  pure pgSmallSerialType
+    "serial"      ->  pure pgSerialType
+    "bigserial"   ->  pure pgBigSerialType
+    "tsquery"     ->  pure pgTsQueryType
+    "tsvector"    ->  pure pgTsVectorType
+    "text"        ->  pure pgTextType
+    "json"        ->  pure pgJsonType
+    "jsonb"       ->  pure pgJsonbType
+    "uuid"        ->  pure pgUuidType
+    "money"       ->  pure pgMoneyType
+    _             -> fail "Postgres data type"
 
 pgPredConverter :: Tool.HaskellPredicateConverter
 pgPredConverter = Tool.easyHsPredicateConverter <>
@@ -94,17 +114,32 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
     PgDataTypeDescrOid oid width
       | Pg.typoid Pg.int2    == oid -> Just smallIntType
       | Pg.typoid Pg.int4    == oid -> Just intType
+      | Pg.typoid Pg.int8    == oid -> Just bigIntType
 
       | Pg.typoid Pg.bpchar  == oid -> Just (charType (fromIntegral <$> width) Nothing)
       | Pg.typoid Pg.varchar == oid -> Just (varCharType (fromIntegral <$> width) Nothing)
-      -- TODO timestamp prec
-      | Pg.typoid Pg.timestamp == oid -> Just (timestampType Nothing False)
-      | Pg.typoid Pg.timestamptz == oid -> Just (timestampType Nothing True)
+      | Pg.typoid Pg.bit     == oid -> Just (bitType (fromIntegral <$> width))
+      | Pg.typoid Pg.varbit  == oid -> Just (varBitType (fromIntegral <$> width))
 
       | Pg.typoid Pg.numeric == oid ->
           let decimals = fromMaybe 0 width .&. 0xFFFF
               prec     = (fromMaybe 0 width `shiftR` 16) .&. 0xFFFF
           in Just (numericType (Just (fromIntegral prec, Just (fromIntegral decimals))))
+
+      | Pg.typoid Pg.float4  == oid -> Just (floatType (fromIntegral <$> width))
+      | Pg.typoid Pg.float8  == oid -> Just doubleType
+
+      | Pg.typoid Pg.date    == oid -> Just dateType
+
+      -- We prefer using the standard beam names
+      | Pg.typoid Pg.text    == oid -> Just characterLargeObjectType
+      | Pg.typoid Pg.bytea   == oid -> Just binaryLargeObjectType
+      | Pg.typoid Pg.bool    == oid -> Just booleanType
+
+      -- TODO timestamp prec
+      | Pg.typoid Pg.time        == oid -> Just (timeType Nothing False)
+      | Pg.typoid Pg.timestamp   == oid -> Just (timestampType Nothing False)
+      | Pg.typoid Pg.timestamptz == oid -> Just (timestampType Nothing True)
     _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
 migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
@@ -140,7 +175,7 @@ pgDataTypeFromAtt _ oid pgMod
   | Pg.typoid Pg.bytea == oid = pgExpandDataType Db.binaryLargeObject
   | Pg.typoid Pg.char == oid = pgExpandDataType (Db.char Nothing) -- TODO length
   -- TODO Pg.name
-  | Pg.typoid Pg.int8 == oid = pgExpandDataType (bigint :: Db.DataType PgDataTypeSyntax Int64)
+  | Pg.typoid Pg.int8 == oid = pgExpandDataType (Db.bigint :: Db.DataType PgDataTypeSyntax Int64)
   | Pg.typoid Pg.int4 == oid = pgExpandDataType (Db.int :: Db.DataType PgDataTypeSyntax Int32)
   | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType PgDataTypeSyntax Int16)
   | Pg.typoid Pg.varchar == oid = pgExpandDataType (Db.varchar Nothing)
@@ -195,39 +230,7 @@ getDbConstraints conn =
 
      pure (tblsExist ++ columnChecks ++ primaryKeys)
 
--- * Data types
-
--- pgContext :: TyCon -> HaskellSyntaxContext
--- pgContext con =
---   HaskellSyntaxContext False []
---                        (HM.fromList [ ("be", postgresTy), ("syntax", postgresSyntaxTy) ])
---                        (HM.fromList [ (("Database.Beam.Postgres", Nothing, False), [])
---                                     , (("Database.Beam.Postgres.Migrate", Nothing, False), [])
---                                     , ((tyConModule con, Just (tyConModule con), True), [tyConName con]) ])
---                        mempty []
---   where postgresTy = Hs.TyCon () (Hs.UnQual () (Hs.Ident () "Postgres"))
---         postgresSyntaxTy = Hs.TyCon () (Hs.UnQual () (Hs.Ident () "PgSyntax"))
-
--- pgArrayTypeHs :: forall a. Typeable a => Proxy a -> (T.Text -> T.Text -> HaskellDataType) -> T.Text -> T.Text -> HaskellDataType
--- pgArrayTypeHs a mkHsTy tbl col =
---   let HaskellDataType (HaskellSyntax expCtxt exp) (HaskellSyntax tyCtxt ty) = mkHsTy tbl col
-
---       con = typeRepTyCon (typeRep (Proxy @(V.Vector a)))
---       ctxt' = pgContext con
---       expCtxt' = expCtxt <> ctxt'
---       tyCtxt' = tyCtxt <> ctxt'
-
---       typeExp = HaskellSyntax expCtxt' (Hs.App () (Hs.Var () (Hs.UnQual () (Hs.Ident () "array"))) exp)
---       typeType = HaskellSyntax tyCtxt' (Hs.TyApp () (Hs.TyCon () (Hs.Qual () (Hs.ModuleName () (tyConModule con)) (Hs.Ident () (tyConName con))))
---                                                     (Hs.TyCon () (Hs.UnQual () (Hs.Ident () (show (typeRep a))))))
---   in HaskellDataType typeExp typeType
-
--- pgStdTypeHs :: Typeable a => String -> Proxy a -> T.Text -> T.Text -> HaskellDataType
--- pgStdTypeHs typeFunc a tblNm colNm =
---   let con = typeRepTyCon (typeRep a)
---       typeExp = HaskellSyntax (pgContext con) (Hs.Var () (Hs.UnQual () (Hs.Ident () typeFunc)))
---       typeType = HaskellSyntax (pgContext con) (Hs.TyCon () (Hs.Qual () (Hs.ModuleName () (tyConModule con)) (Hs.Ident () (tyConName con))))
---   in HaskellDataType typeExp typeType
+-- * Postgres-specific data types
 
 tsquery :: Db.DataType PgDataTypeSyntax TsQuery
 tsquery = Db.DataType pgTsQueryType
@@ -240,9 +243,6 @@ text = Db.DataType pgTextType
 
 bytea :: Db.DataType PgDataTypeSyntax ByteString
 bytea = Db.DataType pgByteaType
-
-bigint :: Db.DataType PgDataTypeSyntax Int64
-bigint = Db.DataType pgBigIntType
 
 unboundedArray :: forall a. Typeable a
                => Db.DataType PgDataTypeSyntax a

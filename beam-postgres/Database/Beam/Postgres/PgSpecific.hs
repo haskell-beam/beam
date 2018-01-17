@@ -12,6 +12,8 @@
 module Database.Beam.Postgres.PgSpecific where
 
 import           Database.Beam
+import           Database.Beam.Migrate ( HasDefaultSqlDataType(..)
+                                       , HasDefaultSqlDataTypeConstraints(..) )
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
@@ -21,6 +23,7 @@ import           Control.Monad.Free
 
 import           Data.Aeson
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BC
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
@@ -28,6 +31,7 @@ import           Data.Hashable
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
+import           Data.Scientific (Scientific, formatScientific, FPFormat(Fixed))
 import           Data.Type.Bool
 import qualified Data.Vector as V
 import qualified Data.Text as T
@@ -60,24 +64,27 @@ instance Pg.ToField TsVector where
             , Pg.Plain (byteString d)
             , Pg.Plain "$$::tsvector)" ]
 
+instance FromBackendRow Postgres TsVector
+
 english :: TsVectorConfig
 english = TsVectorConfig "english"
 
 toTsVector :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
            => Maybe TsVectorConfig -> QGenExpr context PgExpressionSyntax s str
            -> QGenExpr context PgExpressionSyntax s TsVector
-toTsVector Nothing (QExpr (PgExpressionSyntax x)) =
-  QExpr . PgExpressionSyntax $
-  emit "to_tsquery(" <> x <> emit ")"
-toTsVector (Just (TsVectorConfig configNm)) (QExpr (PgExpressionSyntax x)) =
-  QExpr . PgExpressionSyntax $
-  emit "to_tsquery('" <> escapeString configNm <> emit "', " <> x <> emit ")"
+toTsVector Nothing (QExpr x) =
+  QExpr (fmap (\(PgExpressionSyntax x') ->
+                 PgExpressionSyntax $
+                 emit "to_tsquery(" <> x' <> emit ")") x)
+toTsVector (Just (TsVectorConfig configNm)) (QExpr x) =
+  QExpr (fmap (\(PgExpressionSyntax x') -> PgExpressionSyntax $
+                 emit "to_tsquery('" <> escapeString configNm <> emit "', " <> x' <> emit ")") x)
 
 (@@) :: QGenExpr context PgExpressionSyntax s TsVector
      -> QGenExpr context PgExpressionSyntax s TsQuery
      -> QGenExpr context PgExpressionSyntax s Bool
 QExpr vec @@ QExpr q =
-  QExpr (pgBinOp "@@" vec q)
+  QExpr (pgBinOp "@@" <$> vec <*> q)
 
 -- * TsQuery type
 
@@ -92,6 +99,8 @@ instance Pg.FromField TsQuery where
            Just d' -> pure (TsQuery d')
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
 
+instance FromBackendRow Postgres TsQuery
+
 -- * Array operators
 
 -- TODO this should be robust to slices
@@ -99,14 +108,16 @@ instance Pg.FromField TsQuery where
      => QGenExpr context PgExpressionSyntax s ix
      -> QGenExpr context PgExpressionSyntax s (V.Vector a)
      -> QGenExpr context PgExpressionSyntax s a
-QExpr (PgExpressionSyntax v) !. QExpr (PgExpressionSyntax ix) =
-  QExpr . PgExpressionSyntax $
-  emit "(" <> v <> emit ")[" <> ix <> emit "]"
+QExpr v !. QExpr ix =
+  QExpr (index <$> v <*> ix)
+  where
+    index (PgExpressionSyntax v') (PgExpressionSyntax ix') =
+      PgExpressionSyntax (emit "(" <> v' <> emit ")[" <> ix' <> emit "]")
 
 arrayDims_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
            => QGenExpr context PgExpressionSyntax s (V.Vector a)
            -> QGenExpr context PgExpressionSyntax s text
-arrayDims_ (QExpr (PgExpressionSyntax v)) = QExpr (PgExpressionSyntax (emit "array_dims(" <> v <> emit ")"))
+arrayDims_ (QExpr v) = QExpr (fmap (\(PgExpressionSyntax v') -> PgExpressionSyntax (emit "array_dims(" <> v' <> emit ")")) v)
 
 type family CountDims (v :: *) :: Nat where
   CountDims (V.Vector a) = 1 + CountDims a
@@ -135,11 +146,19 @@ arrayUpperUnsafe_, arrayLowerUnsafe_
   -> QGenExpr context PgExpressionSyntax s dim
   -> QGenExpr context PgExpressionSyntax s (Maybe length)
 arrayUpperUnsafe_ (QExpr v) (QExpr dim) =
-  QExpr . PgExpressionSyntax $
-  emit "array_upper(" <> fromPgExpression v <> emit ", " <> fromPgExpression dim <> emit ")"
+  QExpr (fmap (PgExpressionSyntax . mconcat) . sequenceA $
+         [ pure (emit "array_upper(")
+         , fromPgExpression <$> v
+         , pure (emit ", ")
+         , fromPgExpression <$> dim
+         , pure (emit ")") ])
 arrayLowerUnsafe_ (QExpr v) (QExpr dim) =
-  QExpr . PgExpressionSyntax $
-  emit "array_lower(" <> fromPgExpression v <> emit ", " <> fromPgExpression dim <> emit ")"
+  QExpr (fmap (PgExpressionSyntax . mconcat) . sequenceA $
+         [ pure (emit "array_lower(")
+         , fromPgExpression <$> v
+         , pure (emit ", ")
+         , fromPgExpression <$> dim
+         , pure (emit ")") ])
 
 arrayLength_
   :: forall (dim :: Nat) ctxt num v s.
@@ -155,23 +174,27 @@ arrayLengthUnsafe_
   -> QGenExpr ctxt PgExpressionSyntax s dim
   -> QGenExpr ctxt PgExpressionSyntax s (Maybe num)
 arrayLengthUnsafe_ (QExpr a) (QExpr dim) =
-  QExpr $ PgExpressionSyntax $
-  emit "array_length(" <> fromPgExpression a <> emit ", " <> fromPgExpression dim <> emit ")"
+  QExpr $ fmap (PgExpressionSyntax . mconcat) $ sequenceA $
+  [ pure (emit "array_length(")
+  , fromPgExpression <$> a
+  , pure (emit ", ")
+  , fromPgExpression <$> dim
+  , pure (emit ")") ]
 
 isSupersetOf_, isSubsetOf_ :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
                            -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
                            -> QGenExpr ctxt PgExpressionSyntax s Bool
 isSupersetOf_ (QExpr haystack) (QExpr needles) =
-  QExpr $ pgBinOp "@>" haystack needles
+  QExpr (pgBinOp "@>" <$> haystack <*> needles)
 isSubsetOf_ (QExpr needles) (QExpr haystack) =
-  QExpr $ pgBinOp "<@" needles haystack
+  QExpr (pgBinOp "<@" <$> needles <*> haystack)
 
 -- Postgres @||@ operator
 (++.) :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
       -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
       -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
 QExpr a ++. QExpr b =
-  QExpr $ pgBinOp "||" a b
+  QExpr (pgBinOp "||" <$> a <*> b)
 
 -- * Array expressions
 
@@ -191,10 +214,10 @@ array_ :: forall context f s a.
        => f (QGenExpr PgArrayValueContext PgExpressionSyntax s a)
        -> QGenExpr context PgExpressionSyntax s (V.Vector a)
 array_ vs =
-  QExpr . PgExpressionSyntax . mkArraySyntax (Proxy @context) $
-  emit "[" <>
-  pgSepBy (emit ", ") (map (\(QExpr e) -> fromPgExpression e) (toList vs)) <>
-  emit "]"
+  QExpr $ fmap (PgExpressionSyntax . mkArraySyntax (Proxy @context) . mconcat) $
+  sequenceA $ [ pure (emit "[")
+              , pgSepBy (emit ", ") <$> mapM (\(QExpr e) -> fromPgExpression <$> e) (toList vs)
+              , pure (emit "]") ]
 
 -- * JSON
 
@@ -249,131 +272,127 @@ class IsPgJSON (json :: * -> *) where
 
 instance IsPgJSON PgJSON where
   pgJsonTypeOf (QExpr a) =
-    QExpr . PgExpressionSyntax $
-    emit "json_typeof" <> pgParens (fromPgExpression a)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_typeof") . pgParens . fromPgExpression) a
 
   pgJsonStripNulls (QExpr a) =
-    QExpr . PgExpressionSyntax $
-    emit "json_strip_nulls" <> pgParens (fromPgExpression a)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_strip_nulls") . pgParens . fromPgExpression) a
 
   pgJsonAgg (QExpr a) =
-    QExpr . PgExpressionSyntax $
-    emit "json_agg" <> pgParens (fromPgExpression a)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_agg") . pgParens . fromPgExpression) a
 
   pgJsonObjectAgg (QExpr keys) (QExpr values) =
-    QExpr . PgExpressionSyntax $
-    emit "json_object_agg" <> pgParens (fromPgExpression keys <> emit ", " <> fromPgExpression values)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_object_agg") . pgParens . mconcat) $
+    sequenceA $ [ fromPgExpression <$> keys, pure (emit ", ")
+                , fromPgExpression <$> values ]
 
 instance IsPgJSON PgJSONB where
   pgJsonTypeOf (QExpr a) =
-    QExpr . PgExpressionSyntax $
-    emit "jsonb_typeof" <> pgParens (fromPgExpression a)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_typeof") . pgParens . fromPgExpression) a
 
   pgJsonStripNulls (QExpr a) =
-    QExpr . PgExpressionSyntax $
-    emit "jsonb_strip_nulls" <> pgParens (fromPgExpression a)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_strip_nulls") . pgParens . fromPgExpression) a
 
   pgJsonAgg (QExpr a) =
-    QExpr . PgExpressionSyntax $
-    emit "jsonb_agg" <> pgParens (fromPgExpression a)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_agg") . pgParens . fromPgExpression) a
 
   pgJsonObjectAgg (QExpr keys) (QExpr values) =
-    QExpr . PgExpressionSyntax $
-    emit "jsonb_object_agg" <> pgParens (fromPgExpression keys <> emit ", " <> fromPgExpression values)
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_object_agg") . pgParens . mconcat) $
+    sequenceA $ [ fromPgExpression <$> keys, pure (emit ", ")
+                , fromPgExpression <$> values ]
 
 (@>), (<@) :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s (json b)
            -> QGenExpr ctxt PgExpressionSyntax s Bool
 QExpr a @> QExpr b =
-  QExpr (pgBinOp "@>" a b)
+  QExpr (pgBinOp "@>" <$> a <*> b)
 QExpr a <@ QExpr b =
-  QExpr (pgBinOp "<@" a b)
+  QExpr (pgBinOp "<@" <$> a <*> b)
 
 (->#) :: IsPgJSON json
       => QGenExpr ctxt PgExpressionSyntax s (json a)
       -> QGenExpr ctxt PgExpressionSyntax s Int
       -> QGenExpr ctxt PgExpressionSyntax s (json b)
 QExpr a -># QExpr b =
-  QExpr (pgBinOp "->" a b)
+  QExpr (pgBinOp "->" <$> a <*> b)
 
 (->$) :: IsPgJSON json
       => QGenExpr ctxt PgExpressionSyntax s (json a)
       -> QGenExpr ctxt PgExpressionSyntax s T.Text
       -> QGenExpr ctxt PgExpressionSyntax s (json b)
 QExpr a ->$ QExpr b =
-  QExpr (pgBinOp "->" a b)
+  QExpr (pgBinOp "->" <$> a <*> b)
 
 (->>#) :: IsPgJSON json
        => QGenExpr ctxt PgExpressionSyntax s (json a)
        -> QGenExpr ctxt PgExpressionSyntax s Int
        -> QGenExpr ctxt PgExpressionSyntax s T.Text
 QExpr a ->># QExpr b =
-  QExpr (pgBinOp "->>" a b)
+  QExpr (pgBinOp "->>" <$> a <*> b)
 
 (->>$) :: IsPgJSON json
        => QGenExpr ctxt PgExpressionSyntax s (json a)
        -> QGenExpr ctxt PgExpressionSyntax s T.Text
        -> QGenExpr ctxt PgExpressionSyntax s T.Text
 QExpr a ->>$ QExpr b =
-  QExpr (pgBinOp "->>" a b)
+  QExpr (pgBinOp "->>" <$> a <*> b)
 
 (#>) :: IsPgJSON json
      => QGenExpr ctxt PgExpressionSyntax s (json a)
      -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
      -> QGenExpr ctxt PgExpressionSyntax s (json b)
 QExpr a #> QExpr b =
-  QExpr (pgBinOp "#>" a b)
+  QExpr (pgBinOp "#>" <$> a <*> b)
 
 (#>>) :: IsPgJSON json
       => QGenExpr ctxt PgExpressionSyntax s (json a)
       -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
       -> QGenExpr ctxt PgExpressionSyntax s T.Text
 QExpr a #>> QExpr b =
-  QExpr (pgBinOp "#>" a b)
+  QExpr (pgBinOp "#>" <$> a <*> b)
 
 (?) :: IsPgJSON json
     => QGenExpr ctxt PgExpressionSyntax s (json a)
     -> QGenExpr ctxt PgExpressionSyntax s T.Text
     -> QGenExpr ctxt PgExpressionSyntax s Bool
 QExpr a ? QExpr b =
-  QExpr (pgBinOp "?" a b)
+  QExpr (pgBinOp "?" <$> a <*> b)
 
 (?|), (?&) :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
            -> QGenExpr ctxt PgExpressionSyntax s Bool
 QExpr a ?| QExpr b =
-  QExpr (pgBinOp "?|" a b)
+  QExpr (pgBinOp "?|" <$> a <*> b)
 QExpr a ?& QExpr b =
-  QExpr (pgBinOp "?&" a b)
+  QExpr (pgBinOp "?&" <$> a <*> b)
 
 withoutKey :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s T.Text
            -> QGenExpr ctxt PgExpressionSyntax s (json b)
 QExpr a `withoutKey` QExpr b =
-  QExpr (pgBinOp "-" a b)
+  QExpr (pgBinOp "-" <$> a <*> b)
 
 withoutIdx :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s Int
            -> QGenExpr ctxt PgExpressionSyntax s (json b)
 QExpr a `withoutIdx` QExpr b =
-  QExpr (pgBinOp "-" a b)
+  QExpr (pgBinOp "-" <$> a <*> b)
 
 withoutKeys :: IsPgJSON json
             => QGenExpr ctxt PgExpressionSyntax s (json a)
             -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
             -> QGenExpr ctxt PgExpressionSyntax s (json b)
 QExpr a `withoutKeys` QExpr b =
-  QExpr (pgBinOp "#-" a b)
+  QExpr (pgBinOp "#-" <$> a <*> b)
 
 pgJsonArrayLength :: IsPgJSON json => QGenExpr ctxt PgExpressionSyntax s (json a)
                   -> QGenExpr ctxt PgExpressionSyntax s Int
 pgJsonArrayLength (QExpr a) =
-  QExpr . PgExpressionSyntax $
-  emit "json_array_length(" <> fromPgExpression a <> emit ")"
+  QExpr $ \tbl ->
+  PgExpressionSyntax (emit "json_array_length(" <> fromPgExpression (a tbl) <> emit ")")
 
 pgJsonbUpdate, pgJsonbSet
   :: QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
@@ -381,17 +400,16 @@ pgJsonbUpdate, pgJsonbSet
   -> QGenExpr ctxt PgExpressionSyntax s (PgJSONB b)
   -> QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
 pgJsonbUpdate (QExpr a) (QExpr path) (QExpr newVal) =
-  QExpr . PgExpressionSyntax $
-  emit "jsonb_set" <> pgParens (fromPgExpression a <> emit ", " <> fromPgExpression path <> emit ", " <> fromPgExpression newVal)
+  QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_set") . pgParens . mconcat) $ sequenceA $
+  [ fromPgExpression <$> a, pure (emit ", "), fromPgExpression <$> path, pure (emit ", "), fromPgExpression <$> newVal ]
 pgJsonbSet (QExpr a) (QExpr path) (QExpr newVal) =
-  QExpr . PgExpressionSyntax $
-  emit "jsonb_set" <> pgParens (fromPgExpression a <> emit ", " <> fromPgExpression path <> emit ", " <> fromPgExpression newVal <> emit ", true")
+  QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_set") . pgParens . mconcat) $ sequenceA $
+  [ fromPgExpression <$> a, pure (emit ", "), fromPgExpression <$> path, pure (emit ", "), fromPgExpression <$> newVal, pure (emit ", true") ]
 
 pgJsonbPretty :: QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
               -> QGenExpr ctxt PgExpressionSyntax s T.Text
 pgJsonbPretty (QExpr a) =
-  QExpr . PgExpressionSyntax $
-  emit "jsonb_pretty" <> pgParens (fromPgExpression a)
+  QExpr (\tbl -> PgExpressionSyntax (emit "jsonb_pretty" <> pgParens (fromPgExpression (a tbl))))
 
 -- * Postgresql aggregates
 
@@ -403,22 +421,23 @@ pgArrayAggOver :: Maybe PgAggregationSetQuantifierSyntax
                -> QExpr PgExpressionSyntax s a
                -> QAgg PgExpressionSyntax s (V.Vector a)
 pgArrayAggOver quantifier (QExpr a) =
-  QExpr . PgExpressionSyntax $
-  emit "array_agg" <>
-  pgParens ( maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") quantifier <>
-             fromPgExpression a)
+  QExpr $ \tbl ->
+  PgExpressionSyntax $
+    emit "array_agg" <>
+    pgParens ( maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") quantifier <>
+               fromPgExpression (a tbl))
 
 pgBoolOr :: QExpr PgExpressionSyntax s a
          -> QAgg PgExpressionSyntax s Bool
 pgBoolOr (QExpr a) =
-  QExpr . PgExpressionSyntax $
-  emit "bool_or" <> pgParens (fromPgExpression a)
+  QExpr $ \tbl -> PgExpressionSyntax $
+  emit "bool_or" <> pgParens (fromPgExpression (a tbl))
 
 pgBoolAnd :: QExpr PgExpressionSyntax s a
           -> QAgg PgExpressionSyntax s Bool
 pgBoolAnd (QExpr a) =
-  QExpr . PgExpressionSyntax $
-  emit "bool_and" <> pgParens (fromPgExpression a)
+  QExpr $ \tbl -> PgExpressionSyntax $
+  emit "bool_and" <> pgParens (fromPgExpression (a tbl))
 
 -- ** String aggregations
 
@@ -434,11 +453,11 @@ pgStringAggOver :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
                 -> QExpr PgExpressionSyntax s str
                 -> QAgg PgExpressionSyntax s str
 pgStringAggOver quantifier (QExpr v) (QExpr delim) =
-  QExpr . PgExpressionSyntax $
+  QExpr $ \tbl -> PgExpressionSyntax $
   emit "string_agg" <>
   pgParens ( maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") quantifier <>
-             fromPgExpression v <> emit ", " <>
-             fromPgExpression delim)
+             fromPgExpression (v tbl) <> emit ", " <>
+             fromPgExpression (delim tbl))
 
 -- * Postgresql SELECT DISTINCT ON
 
@@ -447,4 +466,94 @@ pgNubBy_ :: ( Projectible PgExpressionSyntax key
          => (r -> key)
          -> Q PgSelectSyntax be db s r
          -> Q PgSelectSyntax be db s r
-pgNubBy_ mkKey (Q q) = Q $ liftF (QDistinct (\r -> pgSelectSetQuantifierDistinctOn (project (mkKey r))) q id)
+pgNubBy_ mkKey (Q q) = Q $ liftF (QDistinct (\r pfx -> pgSelectSetQuantifierDistinctOn (project (mkKey r) pfx)) q id)
+
+-- * PostgreSql money data type
+
+-- | Postgres @MONEY@ data type. A simple wrapper over 'ByteString', because
+--   Postgres money format is locale-dependent.
+--
+--   The 'pgMoney' function can be used to convert a number to 'PgMoney'.
+newtype PgMoney = PgMoney { fromPgMoney :: ByteString }
+  deriving (Show, Read, Eq, Ord)
+
+instance Pg.FromField PgMoney where
+ fromField field Nothing = Pg.returnError Pg.UnexpectedNull field ""
+ fromField field (Just d) =
+   if Pg.typeOid field /= Pg.typoid Pg.money
+   then Pg.returnError Pg.Incompatible field ""
+   else pure (PgMoney d)
+instance Pg.ToField PgMoney where
+  toField (PgMoney a) = Pg.toField a
+
+instance FromBackendRow Postgres PgMoney
+instance HasSqlValueSyntax PgValueSyntax PgMoney where
+  sqlValueSyntax (PgMoney a) = sqlValueSyntax a
+
+pgMoney :: Real a => a -> PgMoney
+pgMoney val = PgMoney (BC.pack (formatScientific Fixed Nothing exactVal))
+  where
+    exactVal = fromRational (toRational val) :: Scientific
+
+pgScaleMoney_ :: Num a
+              => QGenExpr context PgExpressionSyntax s a
+              -> QGenExpr context PgExpressionSyntax s PgMoney
+              -> QGenExpr context PgExpressionSyntax s PgMoney
+pgScaleMoney_ (QExpr scale) (QExpr v) =
+  QExpr (pgBinOp "*" <$> scale <*> v)
+
+pgDivideMoney_ :: Num a
+               => QGenExpr context PgExpressionSyntax s PgMoney
+               -> QGenExpr context PgExpressionSyntax s a
+               -> QGenExpr context PgExpressionSyntax s PgMoney
+pgDivideMoney_ (QExpr v) (QExpr scale) =
+  QExpr (pgBinOp "/" <$> v <*> scale)
+
+pgDivideMoneys_ :: Num a
+                => QGenExpr context PgExpressionSyntax s PgMoney
+                -> QGenExpr context PgExpressionSyntax s PgMoney
+                -> QGenExpr context PgExpressionSyntax s a
+pgDivideMoneys_ (QExpr a) (QExpr b) =
+  QExpr (pgBinOp "/" <$> a <*> b)
+
+pgAddMoney_, pgSubtractMoney_
+  :: QGenExpr context PgExpressionSyntax s PgMoney
+  -> QGenExpr context PgExpressionSyntax s PgMoney
+  -> QGenExpr context PgExpressionSyntax s PgMoney
+pgAddMoney_ (QExpr a) (QExpr b) =
+  QExpr (pgBinOp "+" <$> a <*> b)
+pgSubtractMoney_ (QExpr a) (QExpr b) =
+  QExpr (pgBinOp "-" <$> a <*> b)
+
+pgSumMoneyOver_, pgAvgMoneyOver_
+  :: Maybe PgAggregationSetQuantifierSyntax
+  -> QExpr PgExpressionSyntax s PgMoney -> QExpr PgExpressionSyntax s PgMoney
+pgSumMoneyOver_ q (QExpr a) = QExpr (sumE q <$> a)
+pgAvgMoneyOver_ q (QExpr a) = QExpr (avgE q <$> a)
+
+pgSumMoney_, pgAvgMoney_ :: QExpr PgExpressionSyntax s PgMoney
+                         -> QExpr PgExpressionSyntax s PgMoney
+pgSumMoney_ = pgSumMoneyOver_ allInGroup_
+pgAvgMoney_ = pgAvgMoneyOver_ allInGroup_
+
+-- * data types
+
+instance HasDefaultSqlDataType PgDataTypeSyntax TsQuery where
+  defaultSqlDataType _ _ = pgTsQueryType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax TsQuery
+
+instance HasDefaultSqlDataType PgDataTypeSyntax TsVector where
+  defaultSqlDataType _ _ = pgTsVectorType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax TsVector
+
+instance HasDefaultSqlDataType PgDataTypeSyntax (PgJSON a) where
+  defaultSqlDataType _ _ = pgJsonType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSON a)
+
+instance HasDefaultSqlDataType PgDataTypeSyntax (PgJSONB a) where
+  defaultSqlDataType _ _ = pgJsonbType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSONB a)
+
+instance HasDefaultSqlDataType PgDataTypeSyntax PgMoney where
+  defaultSqlDataType _ _ = pgMoneyType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax PgMoney

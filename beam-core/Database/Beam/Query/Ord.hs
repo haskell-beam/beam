@@ -36,13 +36,14 @@ import Database.Beam.Query.Operator
 import Database.Beam.Schema.Tables
 import Database.Beam.Backend.SQL
 
+import Control.Applicative
 import Control.Monad.State
 
 import Data.Maybe
 
 -- | A data structure representing the set to quantify a comparison operator over.
 data QQuantified expr s r
-  = QQuantified (Sql92ExpressionQuantifierSyntax expr) expr
+  = QQuantified (Sql92ExpressionQuantifierSyntax expr) (WithExprContext expr)
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
@@ -58,7 +59,7 @@ allOf_
    , Sql92ExpressionSelectSyntax expr ~ select )
   => Q select be db (QNested s) r
   -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
-allOf_ s = QQuantified quantifyOverAll (subqueryE (buildSqlQuery s))
+allOf_ s = QQuantified quantifyOverAll (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
@@ -70,7 +71,7 @@ allIn_
    . ( IsSql92ExpressionSyntax expr )
   => [QExpr expr s a]
   -> QQuantified expr s a
-allIn_ es = QQuantified quantifyOverAll (rowE (map (\(QExpr e) -> e) es))
+allIn_ es = QQuantified quantifyOverAll (rowE <$> mapM (\(QExpr e) -> e) es)
 
 -- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
@@ -86,7 +87,7 @@ anyOf_
    , Sql92ExpressionSelectSyntax expr ~ select )
   => Q select be db (QNested s) r
   -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
-anyOf_ s = QQuantified quantifyOverAny (subqueryE (buildSqlQuery s))
+anyOf_ s = QQuantified quantifyOverAny (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
 -- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
@@ -98,21 +99,23 @@ anyIn_
    . ( IsSql92ExpressionSyntax expr )
   => [QExpr expr s a]
   -> QQuantified expr s a
-anyIn_ es = QQuantified quantifyOverAny (rowE (map (\(QExpr e) -> e) es))
+anyIn_ es = QQuantified quantifyOverAny (rowE <$> mapM (\(QExpr e) -> e) es)
 
 -- | SQL @BETWEEN@ clause
 between_ :: IsSql92ExpressionSyntax syntax
          => QGenExpr context syntax s a -> QGenExpr context syntax s a
          -> QGenExpr context syntax s a -> QGenExpr context syntax s Bool
 between_ (QExpr a) (QExpr min_) (QExpr max_) =
-  QExpr (betweenE a min_ max_)
+  QExpr (liftA3 betweenE a min_ max_)
 
 -- | SQL @IN@ predicate
-in_ :: IsSql92ExpressionSyntax syntax
+in_ :: ( IsSql92ExpressionSyntax syntax
+       , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool )
     => QGenExpr context syntax s a
     -> [ QGenExpr context syntax s a ]
     -> QGenExpr context syntax s Bool
-in_ (QExpr row) options = QExpr (inE row (map (\(QExpr o) -> o) options))
+in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
+in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
 
 -- | Class for expression types or expression containers for which there is a
 --   notion of equality.
@@ -162,7 +165,7 @@ instance ( IsSql92ExpressionSyntax syntax
                                                       Nothing -> Just $ x ==. y
                                                       Just expr' -> Just $ expr' &&. x ==. y)
                                           return x') a b) Nothing
-            in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
 
 instance ( IsSql92ExpressionSyntax syntax
@@ -177,7 +180,7 @@ instance ( IsSql92ExpressionSyntax syntax
                                                       Nothing -> Just $ x ==. y
                                                       Just expr' -> Just $ expr' &&. x ==. y)
                                           return x') a b) Nothing
-            in fromMaybe (QExpr (valueE (sqlValueSyntax True))) e
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
 
 -- * Comparisons

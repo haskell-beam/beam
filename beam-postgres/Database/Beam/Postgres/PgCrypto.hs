@@ -82,89 +82,88 @@ instance IsPgExtension PgCrypto where
   pgExtensionName _ = "pgcrypto"
   pgExtensionBuild = PgCrypto {
     pgCryptoDigestText  =
-        \(QExpr data_) (QExpr type_) -> QExpr $ funcE "digest" [data_, type_],
+        \(QExpr data_) (QExpr type_) -> QExpr (funcE "digest" <$> sequenceA [data_, type_]),
     pgCryptoDigestBytes =
-        \(QExpr data_) (QExpr type_) -> QExpr $ funcE "digest" [data_, type_],
+        \(QExpr data_) (QExpr type_) -> QExpr (funcE "digest" <$> sequenceA [data_, type_]),
     pgCryptoHmacText =
-        \(QExpr data_) (QExpr key) (QExpr type_) -> QExpr $ funcE "hmac" [data_, key, type_],
+        \(QExpr data_) (QExpr key) (QExpr type_) -> QExpr (funcE "hmac" <$> sequenceA [data_, key, type_]),
     pgCryptoHmacBytes =
-        \(QExpr data_) (QExpr key) (QExpr type_) -> QExpr $ funcE "hmac" [data_, key, type_],
+        \(QExpr data_) (QExpr key) (QExpr type_) -> QExpr (funcE "hmac" <$> sequenceA [data_, key, type_]),
 
     pgCryptoCrypt =
         \(QExpr pw) (QExpr salt) ->
-           QExpr $funcE "crypt" [pw, salt],
+           QExpr (funcE "crypt" <$> sequenceA [pw, salt]),
     pgCryptoGenSalt =
         \(QExpr text) iterCount ->
-           QExpr $
-           funcE "gen_salt" ([text] ++ maybe [] (\(QExpr iterCount') -> [iterCount']) iterCount),
+           QExpr (funcE "gen_salt" <$> sequenceA ([text] ++ maybe [] (\(QExpr iterCount') -> [iterCount']) iterCount)),
 
     pgCryptoPgpSymEncrypt =
         \(QExpr data_) (QExpr pw) options ->
-           QExpr $
-           funcE "pgp_sym_encrypt" ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options),
+           QExpr (funcE "pgp_sym_encrypt" <$> sequenceA ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options)),
     pgCryptoPgpSymEncryptBytea =
         \(QExpr data_) (QExpr pw) options ->
-           QExpr $
-           funcE "pgp_sym_encrypt_bytea" ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options),
+           QExpr (funcE "pgp_sym_encrypt_bytea" <$> sequenceA ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options)),
 
     pgCryptoPgpSymDecrypt =
         \(QExpr data_) (QExpr pw) options ->
-             QExpr $
-             funcE "pgp_sym_decrypt" ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options),
+             QExpr
+             (funcE "pgp_sym_decrypt" <$> sequenceA ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options)),
     pgCryptoPgpSymDecryptBytea =
         \(QExpr data_) (QExpr pw) options ->
-             QExpr $
-             funcE "pgp_sym_decrypt_bytea" ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options),
+             QExpr
+             (funcE "pgp_sym_decrypt_bytea" <$> sequenceA ([data_, pw] ++ maybe [] (\(QExpr options') -> [options']) options)),
 
     pgCryptoPgpPubEncrypt =
         \(QExpr data_) (QExpr key) options ->
-             QExpr $
-             funcE "pgp_pub_encrypt" ([data_, key] ++ maybe [] (\(QExpr options') -> [options']) options),
+             QExpr
+             (funcE "pgp_pub_encrypt" <$> sequenceA ([data_, key] ++ maybe [] (\(QExpr options') -> [options']) options)),
     pgCryptoPgpPubEncryptBytea =
         \(QExpr data_) (QExpr key) options ->
-             QExpr $
-             funcE "pgp_pub_encrypt_bytea" ([data_, key] ++ maybe [] (\(QExpr options') -> [options']) options),
+             QExpr
+             (funcE "pgp_pub_encrypt_bytea" <$> sequenceA ([data_, key] ++ maybe [] (\(QExpr options') -> [options']) options)),
 
     pgCryptoPgpPubDecrypt =
         \(QExpr msg) (QExpr key) pw options ->
-              QExpr $
-              funcE "pgp_pub_decrypt"
-                  ( [msg, key] ++
-                    case (pw, options) of
-                      (Nothing, Nothing) -> []
-                      (Just (QExpr pw'), Nothing) -> [pw']
-                      (Nothing, Just (QExpr options')) -> [ valueE (sqlValueSyntax ("" :: String))
-                                                          , options' ]
-                      (Just (QExpr pw'), Just (QExpr options')) -> [pw', options'] ),
+              QExpr
+              (funcE "pgp_pub_decrypt" <$>
+                   sequenceA
+                   ( [msg, key] ++
+                     case (pw, options) of
+                       (Nothing, Nothing) -> []
+                       (Just (QExpr pw'), Nothing) -> [pw']
+                       (Nothing, Just (QExpr options')) -> [ \_ -> valueE (sqlValueSyntax ("" :: String))
+                                                           , options' ]
+                       (Just (QExpr pw'), Just (QExpr options')) -> [pw', options'] )),
     pgCryptoPgpPubDecryptBytea =
         \(QExpr msg) (QExpr key) pw options ->
               QExpr $
-              funcE "pgp_pub_decrypt_bytea"
-                  ( [msg, key] ++
-                    case (pw, options) of
-                      (Nothing, Nothing) -> []
-                      (Just (QExpr pw'), Nothing) -> [pw']
-                      (Nothing, Just (QExpr options')) -> [ valueE (sqlValueSyntax ("" :: String))
-                                                          , options' ]
-                      (Just (QExpr pw'), Just (QExpr options')) -> [pw', options'] ),
+              (funcE "pgp_pub_decrypt_bytea" <$>
+                   sequenceA
+                   ( [msg, key] ++
+                     case (pw, options) of
+                       (Nothing, Nothing) -> []
+                       (Just (QExpr pw'), Nothing) -> [pw']
+                       (Nothing, Just (QExpr options')) -> [ \_ -> valueE (sqlValueSyntax ("" :: String))
+                                                           , options' ]
+                       (Just (QExpr pw'), Just (QExpr options')) -> [pw', options'] )),
 
     pgCryptoPgpKeyId =
-        \(QExpr data_) -> QExpr $ funcE "pgp_key_id" [data_],
+        \(QExpr data_) -> QExpr (funcE "pgp_key_id" <$> sequenceA [data_]),
 
     pgCryptoArmor =
         \(QExpr data_) keysData ->
-            QExpr $ funcE "armor" $
-            [data_] ++
-            case keysData of
-              Nothing -> []
-              Just (QExpr keys, QExpr values) ->
-                [keys, values],
+            QExpr (funcE "armor" <$> sequenceA
+                     ([data_] ++
+                      case keysData of
+                        Nothing -> []
+                        Just (QExpr keys, QExpr values) ->
+                          [keys, values])),
     pgCryptoDearmor =
-        \(QExpr data_) -> QExpr $ funcE "dearmor" [data_],
+        \(QExpr data_) -> QExpr (funcE "dearmor" <$> sequenceA [data_]),
 
     pgCryptoGenRandomBytes =
         \(QExpr count) ->
-            QExpr $ funcE "gen_random_bytes" [count],
+            QExpr (funcE "gen_random_bytes" <$> sequenceA [count]),
     pgCryptoGenRandomUUID =
-         QExpr $ funcE "gen_random_uuid" []
+         QExpr (\_ -> funcE "gen_random_uuid" [])
     }

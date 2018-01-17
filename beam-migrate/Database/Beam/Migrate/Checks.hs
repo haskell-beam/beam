@@ -181,6 +181,13 @@ instance IsSql99DataTypeSyntax BeamSerializedDataType where
                                                                           , "count" .= count ]])
   rowType tys = BeamSerializedDataType (object [ "row" .= tys ])
 
+instance IsSql2003BinaryAndVarBinaryDataTypeSyntax BeamSerializedDataType where
+  binaryType sz = BeamSerializedDataType (object [ "binary" .= sz ])
+  varBinaryType sz = BeamSerializedDataType (object [ "varbinary" .= sz ])
+
+instance IsSql2008BigIntDataTypeSyntax BeamSerializedDataType where
+  bigIntType = BeamSerializedDataType "bigint"
+
 instance ToJSON BeamSerializedDataType where
   toJSON = fromBeamSerializedDataType
 
@@ -455,6 +462,31 @@ sql99DataTypeDeserializers =
                             (nm, a'') <- parseJSON a'
                             (nm,) <$> beamDeserialize d a''
                       withArray "Sql99DataType.rowType" parseArray rowTypes)
+
+sql2003BinaryAndVarBinaryDataTypeDeserializers
+  :: forall cmd
+   . ( IsSql92DdlCommandSyntax cmd
+     , IsSql2003BinaryAndVarBinaryDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
+  => BeamDeserializers cmd
+sql2003BinaryAndVarBinaryDataTypeDeserializers =
+  beamDeserializer $ \_ v ->
+  fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+  withObject "Sql2003DataType"
+    (\o -> (binaryType <$> o .: "binary") <|>
+           (varBinaryType <$> o .: "varbinary"))
+    v
+
+sql2008BigIntDataTypeDeserializers
+  :: forall cmd
+   . ( IsSql92DdlCommandSyntax cmd
+     , IsSql2008BigIntDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
+  => BeamDeserializers cmd
+sql2008BigIntDataTypeDeserializers =
+  beamDeserializer $ \_ v ->
+  fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+  case v of
+    "bigint" -> pure bigIntType
+    _ -> fail "Sql2008DataType.bigint: expected 'bigint'"
 
 beamCheckDeserializers
   :: forall cmd

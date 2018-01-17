@@ -13,21 +13,24 @@ module Database.Beam.Test.Schema
 
   , tests ) where
 
-import Database.Beam
-import Database.Beam.Schema.Tables
-import Database.Beam.Backend
-import Database.Beam.Backend.SQL.AST
+import           Database.Beam
+import           Database.Beam.Schema.Tables
+import           Database.Beam.Backend
+import           Database.Beam.Backend.SQL.AST
 
-import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
-import Data.Proxy
+import           Data.Monoid
+import           Data.Proxy
+import           Data.Text (Text)
+import qualified Data.Text as T
+import           Data.Time.Clock (UTCTime)
 
-import Test.Tasty
-import Test.Tasty.HUnit
+import           Test.Tasty
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "Schema Tests"
                   [ basicSchemaGeneration
+                  , ruleBasedRenaming
 --                  , automaticNestedFieldsAreUnset
 --                  , nullableForeignKeysGivenMaybeType
                   , underscoresAreHandledGracefully ]
@@ -35,7 +38,10 @@ tests = testGroup "Schema Tests"
 --                  , dbSchemaModification ]
 
 data DummyBackend
-instance BeamBackend DummyBackend
+
+instance BeamBackend DummyBackend where
+  -- Pretty much everything we can shove in a database satisfies show
+  type BackendFromField DummyBackend = Show
 
 data EmployeeT f
   = EmployeeT
@@ -176,6 +182,24 @@ underscoresAreHandledGracefully =
                     , "funny_middle_Name"
                     , "___" ]
 
+ruleBasedRenaming :: TestTree
+ruleBasedRenaming =
+  testCase "Rule based renaming works correctly" $
+  do let (DatabaseEntity (DatabaseTable _ funny)) = _funny employeeDbSettingsRuleMods
+         (DatabaseEntity (DatabaseTable _ departments)) = _departments employeeDbSettingsRuleMods
+
+         funnyFieldNames = allBeamValues (\(Columnar' f) -> _fieldName f) funny
+         deptFieldNames = allBeamValues (\(Columnar' f) -> _fieldName f) departments
+
+     funnyFieldNames @?= [ "pfx_funny_field1"
+                         , "pfx_funny_field_2"
+                         , "pfx_funny_first_name"
+                         , "pfx_funny_lastName"
+                         , "pfx_funny_middle_Name"
+                         , "___" ]
+
+     deptFieldNames @?= [ "name", "head__first_name", "head__last_name", "head__created" ]
+
 -- * Database schema is derived correctly
 
 data EmployeeDb f
@@ -189,6 +213,13 @@ instance Database be EmployeeDb
 
 employeeDbSettings :: DatabaseSettings be EmployeeDb
 employeeDbSettings = defaultDbSettings
+
+employeeDbSettingsRuleMods :: DatabaseSettings be EmployeeDb
+employeeDbSettingsRuleMods = defaultDbSettings `withDbModification`
+                             renamingFields (\field ->
+                                                case T.stripPrefix "funny" field of
+                                                  Nothing -> field
+                                                  Just fieldNm -> "pfx_" <> field)
 
 -- employeeDbSettingsModified :: DatabaseSettings EmployeeDb
 -- employeeDbSettingsModified =

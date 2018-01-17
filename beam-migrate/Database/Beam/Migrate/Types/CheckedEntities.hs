@@ -65,7 +65,7 @@ instance IsCheckedDatabaseEntity be (DomainTypeEntity ty) where
   checkedDbEntityAuto _ domTypeName =
     CheckedDatabaseDomainType (dbEntityAuto domTypeName) []
 
-instance IsCheckedDatabaseEntity be (TableEntity tbl) where
+instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
   data CheckedDatabaseEntityDescriptor be (TableEntity tbl) where
     CheckedDatabaseTable :: Table tbl
                          => DatabaseEntityDescriptor be (TableEntity tbl)
@@ -106,6 +106,14 @@ data CheckedFieldModification tbl a
 instance IsString (CheckedFieldModification tbl a) where
   fromString s = CheckedFieldModification (const . TableField . fromString $ s) id
 
+instance Beamable tbl => RenamableWithRule (tbl (CheckedFieldModification tbl)) where
+  renamingFields renamer =
+    runIdentity $
+    zipBeamFieldsM (\(Columnar' _ :: Columnar' Ignored x) (Columnar' _ :: Columnar' Ignored x) ->
+                       pure (Columnar' (CheckedFieldModification (renameField (Proxy @(TableField tbl)) (Proxy @x) renamer) id :: CheckedFieldModification tbl x) ::
+                               Columnar' (CheckedFieldModification tbl) x))
+                   (undefined :: TableSkeleton tbl) (undefined :: TableSkeleton tbl)
+
 modifyCheckedTable
   :: ( Text -> Text )
   -> tbl (CheckedFieldModification tbl)
@@ -121,3 +129,10 @@ modifyCheckedTable renamer modFields =
                                                                 pure $ Columnar' (Const (csMod cs)))
                                                             modFields fieldChecks
                           in CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable (renamer nm) fields') tblChecks fieldChecks') extraChecks)
+
+checkedTableModification :: forall tbl. Beamable tbl => tbl (CheckedFieldModification tbl)
+checkedTableModification =
+  runIdentity $
+  zipBeamFieldsM (\(Columnar' _ :: Columnar' Ignored x) (Columnar' _ :: Columnar' Ignored x) ->
+                    pure (Columnar' (CheckedFieldModification id id :: CheckedFieldModification tbl x)))
+                 (undefined :: TableSkeleton tbl) (undefined :: TableSkeleton tbl)

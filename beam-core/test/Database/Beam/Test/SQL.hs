@@ -24,6 +24,7 @@ tests = testGroup "SQL generation tests"
                   , simpleJoin
                   , selfJoin
                   , leftJoin
+                  , leftJoinSingle
                   , aggregates
                   , orderBy
 
@@ -36,9 +37,14 @@ tests = testGroup "SQL generation tests"
                   , selectCombinators
                   , limitOffset
 
-                  , updateCurrent ]
+                  , existsTest
 
--- * Ensure simple select selects the right fields
+                  , updateCurrent
+                  , updateNullable
+
+                  , noEmptyIns ]
+
+-- | Ensure simple select selects the right fields
 
 simpleSelect :: TestTree
 simpleSelect =
@@ -65,7 +71,7 @@ simpleSelect =
                                     , (ExpressionFieldName (QualifiedField tblName "leave_date"), Just "res6")
                                     , (ExpressionFieldName (QualifiedField tblName "created"), Just "res7") ]
 
--- * Simple select with WHERE clause
+-- | Simple select with WHERE clause
 
 simpleWhere :: TestTree
 simpleWhere =
@@ -92,7 +98,7 @@ simpleWhere =
 
      selectWhere @?= Just (ExpressionBinOp "AND" salaryCond (ExpressionBinOp "AND" ageCond nameCond))
 
--- * Ensure that multiple tables are correctly joined
+-- | Ensure that multiple tables are correctly joined
 
 simpleJoin :: TestTree
 simpleJoin =
@@ -118,7 +124,7 @@ simpleJoin =
      selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField employees "phone_number"), Just "res0" )
                                     , ( ExpressionFieldName (QualifiedField roles "name"), Just "res1") ]
 
--- * Ensure that multiple joins on the same table are correctly referenced
+-- | Ensure that multiple joins on the same table are correctly referenced
 
 selfJoin :: TestTree
 selfJoin =
@@ -153,7 +159,7 @@ selfJoin =
                                                   (ExpressionFieldName (QualifiedField e3 "last_name")))
                             (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField e3 "phone_number")) (ExpressionFieldName (QualifiedField e2 "first_name")))
 
--- * Ensure that right joins are properly generated
+-- | Ensure that left joins are properly generated
 
 leftJoin :: TestTree
 leftJoin =
@@ -180,7 +186,38 @@ leftJoin =
 
      cond @?= andE (andE firstNameCond lastNameCond) createdCond
 
--- * Ensure that aggregations cause the correct GROUP BY clause to be generated
+-- | Ensure that left joins which return a single column are properly typed. The
+--   point of this test is to test for compile-time errors. The same query
+--   should be generated as above.
+
+leftJoinSingle :: TestTree
+leftJoinSingle =
+  testCase "leftJoin_ generates the right join (single return value)" $
+  do SqlSelect Select { selectTable = SelectTable { selectWhere = Nothing, selectFrom } } <-
+       pure $ select $
+       do r <- all_ (_roles employeeDbSettings)
+          e <- leftJoin_ (do e <- all_ (_employees employeeDbSettings)
+                             pure (primaryKey e, _employeeAge e))
+                         (\(key, _) -> key ==. _roleForEmployee r)
+          pure (e, r)
+
+     Just (LeftJoin (FromTable (TableNamed "roles") (Just roles))
+                    (FromTable (TableNamed "employees") (Just employees))
+                    (Just cond)) <- pure selectFrom
+
+     let andE = ExpressionBinOp "AND"
+         eqE = ExpressionCompOp "==" Nothing
+
+         firstNameCond = eqE (ExpressionFieldName (QualifiedField employees "first_name"))
+                             (ExpressionFieldName (QualifiedField roles "for_employee__first_name"))
+         lastNameCond = eqE (ExpressionFieldName (QualifiedField employees "last_name"))
+                            (ExpressionFieldName (QualifiedField roles "for_employee__last_name"))
+         createdCond = eqE (ExpressionFieldName (QualifiedField employees "created"))
+                           (ExpressionFieldName (QualifiedField roles "for_employee__created"))
+
+     cond @?= andE (andE firstNameCond lastNameCond) createdCond
+
+-- | Ensure that aggregations cause the correct GROUP BY clause to be generated
 
 aggregates :: TestTree
 aggregates =
@@ -487,7 +524,7 @@ aggregates =
                                         , ( ExpressionFieldName (QualifiedField t0'' "leave_date"), Just "res6" )
                                         , ( ExpressionFieldName (QualifiedField t0'' "created"), Just "res7" ) ]
 
--- * ORDER BY
+-- | ORDER BY
 
 orderBy :: TestTree
 orderBy =
@@ -672,7 +709,7 @@ orderBy =
                                           (FromTable (TableFromSubSelect subselect) (Just "t1"))
                                           Nothing)
 
--- * HAVING clause should not be floated out of a join
+-- | HAVING clause should not be floated out of a join
 
 joinHaving :: TestTree
 joinHaving =
@@ -708,7 +745,7 @@ joinHaving =
      selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
      selectHaving @?= Just (ExpressionCompOp ">=" Nothing (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))]) (ExpressionValue (Value (20 :: Int))))
 
--- * Ensure that isJustE and isNothingE work correctly for simple types
+-- | Ensure that isJustE and isNothingE work correctly for simple types
 
 maybeFieldTypes :: TestTree
 maybeFieldTypes =
@@ -721,11 +758,11 @@ maybeFieldTypes =
      Just (FromTable (TableNamed "employees") (Just employees)) <- pure selectFrom
      selectWhere @?= ExpressionIsNull (ExpressionFieldName (QualifiedField employees "leave_date"))
 
--- * Ensure isJustE and isNothingE work correctly for table and composite types
+-- | Ensure isJustE and isNothingE work correctly for table and composite types
 
--- * Ensure maybeE works for simple types
+-- | Ensure maybeE works for simple types
 
--- * Ensure equality works for tables
+-- | Ensure equality works for tables
 
 tableEquality :: TestTree
 tableEquality =
@@ -777,7 +814,7 @@ tableEquality =
                               (ExpressionValue (Value now))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
--- * Ensure related_ generates the correct ON conditions
+-- | Ensure related_ generates the correct ON conditions
 
 related :: TestTree
 related =
@@ -790,7 +827,7 @@ related =
 
      pure ()
 
--- * Ensure select can be joined with UNION, INTERSECT, and EXCEPT
+-- | Ensure select can be joined with UNION, INTERSECT, and EXCEPT
 
 selectCombinators :: TestTree
 selectCombinators =
@@ -937,7 +974,7 @@ selectCombinators =
          pure ()
 
 
--- * Ensure simple selects can be used with limit_ and offset_
+-- | Ensure simple selects can be used with limit_ and offset_
 
 limitOffset :: TestTree
 limitOffset =
@@ -1004,11 +1041,45 @@ limitOffset =
          selectGrouping b @?= Nothing
          selectHaving b @?= Nothing
 
--- * Ensure exists_ generates the correct sub-select
+-- | Ensures exists predicates generate table names that do not overlap
 
--- * Ensure results can be correctly sorted with orderBy
+existsTest :: TestTree
+existsTest =
+  testGroup "EXISTS() tests"
+  [ existsInWhere ]
+  where
+    existsInWhere =
+      testCase "EXISTS() in WHERE" $
+      do SqlSelect Select { selectOffset = Nothing, selectLimit = Nothing
+                          , selectOrdering = []
+                          , selectTable = SelectTable { .. } } <-
+           pure  $ select $ do
+             role <- all_ (_roles employeeDbSettings)
+             guard_ (not_ (exists_ (do dept <- all_ (_departments employeeDbSettings)
+                                       guard_ (_departmentName dept ==. _roleName role)
+                                       pure (as_ @Int 1))))
+             pure role
 
--- * UPDATE can correctly get the current value
+         let existsQuery = Select
+                         { selectOffset = Nothing, selectLimit = Nothing
+                         , selectOrdering = []
+                         , selectTable = SelectTable
+                                       { selectQuantifier = Nothing
+                                       , selectProjection = ProjExprs [ (ExpressionValue (Value (1 :: Int)), Just "res0") ]
+                                       , selectGrouping = Nothing
+                                       , selectHaving = Nothing
+                                       , selectWhere = Just joinExpr
+                                       , selectFrom = Just (FromTable (TableNamed "departments") (Just "sub_t0")) } }
+             joinExpr = ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField "sub_t0" "name"))
+                                                      (ExpressionFieldName (QualifiedField "t0" "name"))
+
+         selectGrouping @?= Nothing
+         selectWhere @?= Just (ExpressionUnOp "NOT" (ExpressionExists existsQuery))
+         selectHaving @?= Nothing
+         selectQuantifier @?= Nothing
+         selectFrom @?= Just (FromTable (TableNamed "roles") (Just "t0"))
+
+-- | UPDATE can correctly get the current value
 
 updateCurrent :: TestTree
 updateCurrent =
@@ -1021,3 +1092,37 @@ updateCurrent =
      updateTable @?= "employees"
      updateFields @?= [ (UnqualifiedField "age", ExpressionBinOp "+" (ExpressionFieldName (UnqualifiedField "age")) (ExpressionValue (Value (1 :: Int)))) ]
      updateWhere @?= Just (ExpressionCompOp "==" Nothing (ExpressionFieldName (UnqualifiedField "first_name")) (ExpressionValue (Value ("Joe" :: String))))
+
+updateNullable :: TestTree
+updateNullable =
+  testCase "UPDATE can correctly set a nullable field" $
+  do curTime <- getCurrentTime
+
+     let employeeKey :: PrimaryKey EmployeeT (Nullable Identity)
+         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just (Auto (Just curTime)))
+
+     SqlUpdate Update { .. } <-
+       pure $ update (_departments employeeDbSettings)
+                     (\department -> [ _departmentHead department <-. val_ employeeKey ])
+                     (\department -> _departmentName department ==. "Sales")
+
+     updateTable @?= "departments"
+     updateFields @?= [ (UnqualifiedField "head__first_name", ExpressionValue (Value ("John" :: Text)))
+                      , (UnqualifiedField "head__last_name", ExpressionValue (Value ("Smith" :: Text)))
+                      , (UnqualifiedField "head__created", ExpressionValue (Value curTime)) ]
+     updateWhere @?= Just (ExpressionCompOp "==" Nothing
+                             (ExpressionFieldName (UnqualifiedField "name"))
+                             (ExpressionValue (Value ("Sales" :: String))))
+
+-- | Ensure empty IN operators transform into FALSE
+
+noEmptyIns :: TestTree
+noEmptyIns =
+  testCase "Empty INs are transformed to FALSE" $
+  do  SqlSelect Select { selectTable = SelectTable {..} } <-
+        pure $ select $ do
+          e <- all_ (_employees employeeDbSettings)
+          guard_ (_employeeFirstName e `in_` [])
+          pure e
+
+      selectWhere @?= Just (ExpressionValue (Value False))

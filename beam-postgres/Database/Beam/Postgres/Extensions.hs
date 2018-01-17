@@ -25,6 +25,10 @@ class IsPgExtension extension where
   pgExtensionName :: Proxy extension -> Text
   pgExtensionBuild :: extension
 
+-- | There are no fields to rename when defining entities
+instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor Postgres (PgExtensionEntity e))) where
+  renamingFields _ = FieldRenamer id
+
 instance IsDatabaseEntity Postgres (PgExtensionEntity extension) where
 
   data DatabaseEntityDescriptor Postgres (PgExtensionEntity extension) where

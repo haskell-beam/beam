@@ -11,27 +11,26 @@ module Database.Beam.Migrate.SQL.Types
   , field
 
   , defaultTo_, notNull
-  , int, smallint, char, varchar, double
+  , int, smallint, bigint
+  , char, varchar, double
   , characterLargeObject, binaryLargeObject, array
-  , boolean, numeric, date
+  , boolean, numeric, date, time
   , timestamp, timestamptz
+  , binary, varbinary
 
   , maybeType, autoType ) where
 
 import Database.Beam
--- import Database.Beam.Query.Internal
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate.Checks
 import Database.Beam.Migrate.Types.Predicates
 import Database.Beam.Migrate.SQL.SQL92
--- import Database.Beam.Migrate.SQL.Internal
 
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.ByteString (ByteString)
 import Data.Typeable
--- import Data.Proxy
-import Data.Time (LocalTime)
+import Data.Time (LocalTime, TimeOfDay)
 import Data.Scientific (Scientific)
 
 import GHC.TypeLits
@@ -46,7 +45,7 @@ newtype FieldSchema syntax a = FieldSchema syntax
   deriving (Show, Eq)
 newtype DefaultValue syntax a = DefaultValue (Sql92ColumnSchemaExpressionSyntax syntax)
 newtype Constraint syntax = Constraint (Sql92ColumnConstraintDefinitionConstraintSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax))
-data DataType syntax a = DataType syntax
+newtype DataType syntax a = DataType syntax
 instance Sql92DisplaySyntax syntax => Show (DataType syntax a) where
   show (DataType syntax) = "DataType (" ++ displaySyntax syntax ++ ")"
 
@@ -57,14 +56,24 @@ defaultTo_ :: IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax syntax)
               (forall s. QExpr (Sql92ColumnSchemaExpressionSyntax syntax) s a)
            -> DefaultValue syntax a
 defaultTo_ (QExpr e) =
-  DefaultValue e
+  DefaultValue (e "t")
 
 notNull :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
 notNull = Constraint notNullConstraintSyntax
 
-smallint, int :: forall a syntax. (IsSql92DataTypeSyntax syntax, Integral a, Typeable a) => DataType syntax a
+smallint, int :: (IsSql92DataTypeSyntax syntax, Integral a) => DataType syntax a
 int = DataType intType
 smallint = DataType smallIntType
+
+bigint :: (IsSql2008BigIntDataTypeSyntax syntax, Integral a) => DataType syntax a
+bigint = DataType bigIntType
+
+-- TODO is Integer the right type to use here?
+binary, varbinary
+  :: IsSql2003BinaryAndVarBinaryDataTypeSyntax syntax
+  => Maybe Word -> DataType syntax Integer
+binary prec = DataType (binaryType prec)
+varbinary prec = DataType (varBinaryType prec)
 
 -- TODO should this be Day or something?
 date :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
@@ -83,6 +92,9 @@ numeric x = DataType (numericType x)
 timestamp, timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
 timestamptz = DataType (timestampType Nothing True)
 timestamp = DataType (timestampType Nothing False)
+
+time :: IsSql92DataTypeSyntax syntax => Maybe Word -> DataType syntax TimeOfDay
+time prec = DataType (timeType prec False)
 
 boolean :: IsSql99DataTypeSyntax syntax => DataType syntax Bool
 boolean = DataType booleanType

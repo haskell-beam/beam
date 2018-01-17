@@ -28,16 +28,18 @@ type ProjectibleInSelectSyntax syntax a =
   , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a
   , ProjectibleValue (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a)
 
+type TablePrefix = T.Text
+
 data QF select (db :: (* -> *) -> *) s next where
   QDistinct :: Projectible (Sql92SelectExpressionSyntax select) r
-            => (r -> Sql92SelectTableSetQuantifierSyntax (Sql92SelectSelectTableSyntax select))
+            => (r -> WithExprContext (Sql92SelectTableSetQuantifierSyntax (Sql92SelectSelectTableSyntax select)))
             -> QM select db s r
             -> (r -> next)
             -> QF select db s next
 
   QAll :: Beamable table
        => T.Text -> TableSettings table
-       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (Sql92SelectExpressionSyntax select))
+       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
 
   QArbitraryJoin :: Projectible (Sql92SelectExpressionSyntax select) r
@@ -45,7 +47,7 @@ data QF select (db :: (* -> *) -> *) s next where
                  -> (Sql92SelectFromSyntax select -> Sql92SelectFromSyntax select ->
                      Maybe (Sql92FromExpressionSyntax (Sql92SelectFromSyntax select)) ->
                      Sql92SelectFromSyntax select)
-                 -> (r -> Maybe (Sql92SelectExpressionSyntax select))
+                 -> (r -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
                  -> (r -> next)
                  -> QF select db s next
   QTwoWayJoin :: ( Projectible (Sql92SelectExpressionSyntax select) a
@@ -55,13 +57,13 @@ data QF select (db :: (* -> *) -> *) s next where
               -> (Sql92SelectFromSyntax select -> Sql92SelectFromSyntax select ->
                    Maybe (Sql92FromExpressionSyntax (Sql92SelectFromSyntax select)) ->
                    Sql92SelectFromSyntax select)
-              -> ((a, b) -> Maybe (Sql92SelectExpressionSyntax select))
+              -> ((a, b) -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
               -> ((a, b) -> next)
               -> QF select db s next
 
   QSubSelect :: Projectible (Sql92SelectExpressionSyntax select) r =>
                 QM select db (QNested s) r -> (r -> next) -> QF select db s next
-  QGuard :: Sql92SelectExpressionSyntax select -> next -> QF select db s next
+  QGuard :: WithExprContext (Sql92SelectExpressionSyntax select) -> next -> QF select db s next
 
   QLimit :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
   QOffset :: Projectible (Sql92SelectExpressionSyntax select) r => Integer -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
@@ -70,7 +72,7 @@ data QF select (db :: (* -> *) -> *) s next where
   QIntersect :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db (QNested s) r -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
   QExcept :: Projectible (Sql92SelectExpressionSyntax select) r => Bool -> QM select db (QNested s) r -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
   QOrderBy :: Projectible (Sql92SelectExpressionSyntax select) r =>
-              (r -> [ Sql92SelectOrderingSyntax select ])
+              (r -> WithExprContext [ Sql92SelectOrderingSyntax select ])
            -> QM select db (QNested s) r -> (r -> next) -> QF select db s next
 
   QWindowOver :: ( ProjectibleWithPredicate WindowFrameContext (Sql2003ExpressionWindowFrameSyntax (Sql92SelectExpressionSyntax select)) window
@@ -80,7 +82,7 @@ data QF select (db :: (* -> *) -> *) s next where
               -> QM select db (QNested s) r -> (a -> next) -> QF select db s next
   QAggregate :: ( Projectible (Sql92SelectExpressionSyntax select) grouping
                 , Projectible (Sql92SelectExpressionSyntax select) a ) =>
-                (a -> (Maybe (Sql92SelectGroupingSyntax select), grouping)) ->
+                (a -> TablePrefix -> (Maybe (Sql92SelectGroupingSyntax select), grouping)) ->
                 QM select db (QNested s) a ->
                 (grouping -> next) -> QF select db s next
 deriving instance Functor (QF select db s)
@@ -129,7 +131,8 @@ data QWindowFrameContext
 --   's' is a state threading parameter that prevents 'QExpr's from incompatible
 --   sources to be combined. For example, this is used to prevent monadic joins
 --   from depending on the result of previous joins (so-called @LATERAL@ joins).
-newtype QGenExpr context syntax s t = QExpr syntax
+newtype QGenExpr context syntax s t = QExpr (TablePrefix -> syntax)
+type WithExprContext a = TablePrefix -> a
 
 -- | 'QExpr's represent expressions not containing aggregates.
 type QExpr = QGenExpr QValueContext
@@ -138,10 +141,16 @@ type QOrd = QGenExpr QOrderingContext
 type QWindowExpr = QGenExpr QWindowingContext
 type QWindowFrame = QGenExpr QWindowFrameContext
 type QGroupExpr = QGenExpr QGroupingContext
-deriving instance Show syntax => Show (QGenExpr context syntax s t)
-deriving instance Eq syntax => Eq (QGenExpr context syntax s t)
+--deriving instance Show syntax => Show (QGenExpr context syntax s t)
+instance Eq syntax => Eq (QGenExpr context syntax s t) where
+  QExpr a == QExpr b = a "" == b ""
 
-newtype QWindow syntax s = QWindow syntax
+instance Retaggable (QGenExpr ctxt expr s) (QGenExpr ctxt expr s t) where
+  type Retag tag (QGenExpr ctxt expr s t) = Columnar (tag (QGenExpr ctxt expr s)) t
+  retag f e = case f (Columnar' e) of
+                Columnar' a -> a
+
+newtype QWindow syntax s = QWindow (WithExprContext syntax)
 newtype QFrameBounds syntax = QFrameBounds (Maybe syntax)
 newtype QFrameBound syntax = QFrameBound syntax
 
@@ -149,7 +158,7 @@ qBinOpE :: forall syntax context s a b c. IsSql92ExpressionSyntax syntax =>
            (syntax -> syntax -> syntax)
         -> QGenExpr context syntax s a -> QGenExpr context syntax s b
         -> QGenExpr context syntax s c
-qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE a b)
+qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE <$> a <*> b)
 
 unsafeRetype :: QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a'
 unsafeRetype (QExpr v) = QExpr v
@@ -157,19 +166,19 @@ unsafeRetype (QExpr v) = QExpr v
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) [Char] ) =>
     IsString (QGenExpr context syntax s T.Text) where
-    fromString = QExpr . valueE . sqlValueSyntax
+    fromString = QExpr . pure . valueE . sqlValueSyntax
 instance (Num a
          , IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a) =>
     Num (QGenExpr context syntax s a) where
     fromInteger x = let res :: QGenExpr context syntax s a
-                        res = QExpr (valueE (sqlValueSyntax (fromIntegral x :: a)))
+                        res = QExpr (pure (valueE (sqlValueSyntax (fromIntegral x :: a))))
                     in res
-    QExpr a + QExpr b = QExpr (addE a b)
-    QExpr a - QExpr b = QExpr (subE a b)
-    QExpr a * QExpr b = QExpr (mulE a b)
-    negate (QExpr a) = QExpr (negateE a)
-    abs (QExpr x) = QExpr (absE x)
+    QExpr a + QExpr b = QExpr (addE <$> a <*> b)
+    QExpr a - QExpr b = QExpr (subE <$> a <*> b)
+    QExpr a * QExpr b = QExpr (mulE <$> a <*> b)
+    negate (QExpr a) = QExpr (negateE <$> a)
+    abs (QExpr x) = QExpr (absE <$> x)
     signum _ = error "signum: not defined for QExpr. Use CASE...WHEN"
 
 instance ( Fractional a
@@ -177,10 +186,10 @@ instance ( Fractional a
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a ) =>
   Fractional (QGenExpr context syntax s a) where
 
-  QExpr a / QExpr b = QExpr (divE a b)
+  QExpr a / QExpr b = QExpr (divE <$> a <*> b)
   recip = (1.0 /)
 
-  fromRational = QExpr . valueE . sqlValueSyntax . (id :: a -> a) . fromRational
+  fromRational = QExpr . pure . valueE . sqlValueSyntax . (id :: a -> a) . fromRational
 
 -- * Aggregations
 
@@ -398,7 +407,9 @@ instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
     , rewriteContext p g, rewriteContext p h )
 
 class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) syntax a | a -> syntax where
-  project' :: Monad m => Proxy contextPredicate -> (forall context. contextPredicate context => Proxy context -> syntax -> m syntax) -> a -> m a
+  project' :: Monad m => Proxy contextPredicate
+           -> (forall context. contextPredicate context => Proxy context -> WithExprContext syntax -> m (WithExprContext syntax))
+           -> a -> m a
 instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate syntax (t (QGenExpr context syntax s)) where
   project' _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
@@ -461,9 +472,10 @@ instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPr
               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
               <*> project' p mkE g <*> project' p mkE h
 
-project :: Projectible syntax a => a -> [ syntax ]
-project = DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)
+project :: Projectible syntax a => a -> WithExprContext [ syntax ]
+project = sequenceA . DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)
+
 reproject :: (IsSql92ExpressionSyntax syntax, Projectible syntax a) =>
              (Int -> syntax) -> a -> a
 reproject mkField a =
-  evalState (project' (Proxy @AnyType) (\_ _ -> state (\i -> (i, i + 1)) >>= pure . mkField) a) 0
+  evalState (project' (Proxy @AnyType) (\_ _ -> state (\i -> (i, i + 1)) >>= pure . pure . mkField) a) 0

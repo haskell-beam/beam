@@ -385,8 +385,12 @@ instance IsSql92SelectSyntax SqliteSelectSyntax where
     (case ordering of
        [] -> mempty
        _ -> emit " ORDER BY " <> commas (coerce ordering)) <>
-    maybe mempty ((emit " LIMIT " <>) . emit') limit <>
-    maybe mempty ((emit " OFFSET " <>) . emit') offset
+    case (limit, offset) of
+      (Nothing, Nothing) -> mempty
+      (Just limit, Nothing) -> emit " LIMIT " <> emit' limit
+      (Nothing, Just offset) -> emit " LIMIT -1 OFFSET " <> emit' offset
+      (Just limit, Just offset) -> emit " LIMIT " <> emit' limit <>
+                                   emit " OFFSET " <> emit' offset
 
 instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   type Sql92SelectTableSelectSyntax SqliteSelectTableSyntax = SqliteSelectSyntax
@@ -586,6 +590,12 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   defaultE = SqliteExpressionDefault
   inE e es = SqliteExpressionSyntax (parens (fromSqliteExpression e) <> emit " IN " <> parens (commas (map fromSqliteExpression es)))
 
+instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
+  concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
+  concatE (x:xs) =
+    SqliteExpressionSyntax $ parens $
+    foldr (\a b -> parens (fromSqliteExpression a) <> emit " || " <> parens b) (fromSqliteExpression x) xs
+
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
   SqliteExpressionSyntax $
@@ -688,6 +698,7 @@ instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax LocalTime
 
 instance HasSqlValueSyntax SqliteValueSyntax ByteString where
   sqlValueSyntax bs = SqliteValueSyntax (emitValue (SQLBlob bs))
+
 instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
     where tmStr = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S%Q")) tm

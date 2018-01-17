@@ -56,11 +56,14 @@ module Database.Beam.Postgres.Syntax
     , pgSelectSetQuantifierDistinctOn
 
     , pgDataTypeJSON
-    , pgSerialType, pgSmallSerialType, pgBigSerialType
-    , pgByteaType, pgBigIntType
-    , pgTsQueryType, pgTsVectorType, pgTextType
+
+    , pgTsQueryType, pgTsVectorType
     , pgJsonType, pgJsonbType, pgUuidType
+    , pgMoneyType
     , pgTsQueryTypeInfo, pgTsVectorTypeInfo
+
+    , pgByteaType, pgTextType
+    , pgSerialType, pgSmallSerialType, pgBigSerialType
 
     , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
     , PgConflictAction(..)
@@ -77,6 +80,9 @@ module Database.Beam.Postgres.Syntax
 
     , PgInsertReturning(..)
     , insertReturning
+
+    , PgUpdateReturning(..)
+    , updateReturning
 
     , now_
     , ilike_
@@ -493,6 +499,9 @@ instance IsSql99DataTypeSyntax PgDataTypeSyntax where
                      (arrayType serialized sz)
   rowType = error "rowType"
 
+instance IsSql2008BigIntDataTypeSyntax PgDataTypeSyntax where
+  bigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT") bigIntType
+
 instance Sql92SerializableDataTypeSyntax PgDataTypeSyntax where
   serializeDataType = fromBeamSerializedDataType . pgDataTypeSerialized
 
@@ -521,14 +530,12 @@ pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALL
 pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL") (pgDataTypeJSON "serial")
 pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL") (pgDataTypeJSON "bigserial")
 
-pgBigIntType :: PgDataTypeSyntax
-pgBigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT") (pgDataTypeJSON "bigint")
-
 pgTsQueryTypeInfo :: Pg.TypeInfo
 pgTsQueryTypeInfo = Pg.Basic (Pg.Oid 3615) 'U' ',' "tsquery"
 
 pgTsQueryType :: PgDataTypeSyntax
-pgTsQueryType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid pgTsQueryTypeInfo) Nothing) (emit "tsquery") (pgDataTypeJSON "tsquery")
+pgTsQueryType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid pgTsQueryTypeInfo) Nothing)
+                                 (emit "TSQUERY") (pgDataTypeJSON "tsquery")
 
 -- | Postgres TypeInfo for tsvector
 -- TODO Is the Oid stable from postgres instance to postgres instance?
@@ -536,7 +543,9 @@ pgTsVectorTypeInfo :: Pg.TypeInfo
 pgTsVectorTypeInfo = Pg.Basic (Pg.Oid 3614) 'U' ',' "tsvector"
 
 pgTsVectorType :: PgDataTypeSyntax
-pgTsVectorType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid pgTsVectorTypeInfo) Nothing) (emit "tsvector") (pgDataTypeJSON "tsvector")
+pgTsVectorType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid pgTsVectorTypeInfo) Nothing)
+                                  (emit "TSVECTOR")
+                                  (pgDataTypeJSON "tsvector")
 
 pgTextType :: PgDataTypeSyntax
 pgTextType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.text) Nothing) (emit "TEXT")
@@ -549,6 +558,9 @@ pgJsonbType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.jsonb) Nothing)
 pgUuidType :: PgDataTypeSyntax
 pgUuidType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.uuid) Nothing) (emit "UUID") (pgDataTypeJSON "uuid")
 
+pgMoneyType :: PgDataTypeSyntax
+pgMoneyType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.money) Nothing) (emit "MONEY") (pgDataTypeJSON "money")
+
 mkNumericPrec :: Maybe (Word, Maybe Word) -> Maybe Int32
 mkNumericPrec Nothing = Nothing
 mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. (fromIntegral (fromMaybe 0 dec) .&. 0xFFFF)
@@ -559,6 +571,7 @@ instance IsCustomSqlSyntax PgExpressionSyntax where
     deriving Monoid
   customExprSyntax = PgExpressionSyntax . fromPgCustomExpression
   renderSyntax = PgCustomExpressionSyntax . pgParens . fromPgExpression
+
 instance IsString (CustomSqlSyntax PgExpressionSyntax) where
   fromString = PgCustomExpressionSyntax . emit . fromString
 
@@ -654,6 +667,13 @@ instance IsSql99ExpressionSyntax PgExpressionSyntax where
     PgExpressionSyntax $
     pgParens (fromPgExpression i) <> emit "->" <> escapeIdentifier (TE.encodeUtf8 nm)
 
+instance IsSql99ConcatExpressionSyntax PgExpressionSyntax where
+  concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
+  concatE [x] = x
+  concatE es =
+    PgExpressionSyntax $
+    emit "CONCAT" <> pgParens (pgSepBy (emit ", ") (map fromPgExpression es))
+
 instance IsSql2003ExpressionSyntax PgExpressionSyntax where
   type Sql2003ExpressionWindowFrameSyntax PgExpressionSyntax =
     PgWindowFrameSyntax
@@ -662,7 +682,16 @@ instance IsSql2003ExpressionSyntax PgExpressionSyntax where
     PgExpressionSyntax $
     fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
 
+instance IsSql2003EnhancedNumericFunctionsExpressionSyntax PgExpressionSyntax where
+  lnE    x = PgExpressionSyntax (emit "LN("    <> fromPgExpression x <> emit ")")
+  expE   x = PgExpressionSyntax (emit "EXP("   <> fromPgExpression x <> emit ")")
+  sqrtE  x = PgExpressionSyntax (emit "SQRT("  <> fromPgExpression x <> emit ")")
+  ceilE  x = PgExpressionSyntax (emit "CEIL("  <> fromPgExpression x <> emit ")")
+  floorE x = PgExpressionSyntax (emit "FLOOR(" <> fromPgExpression x <> emit ")")
+  powerE x y = PgExpressionSyntax (emit "POWER(" <> fromPgExpression x <> emit ", " <> fromPgExpression y <> emit ")")
+
 instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax PgExpressionSyntax where
+  denseRankAggE = PgExpressionSyntax $ emit "DENSE_RANK()"
   percentRankAggE = PgExpressionSyntax $ emit "PERCENT_RANK()"
   cumeDistAggE = PgExpressionSyntax $ emit "CUME_DIST()"
 
@@ -671,6 +700,54 @@ instance IsSql2003ExpressionElementaryOLAPOperationsSyntax PgExpressionSyntax wh
   filterAggE agg filter =
     PgExpressionSyntax $
     fromPgExpression agg <> emit " FILTER (WHERE " <> fromPgExpression filter <> emit ")"
+
+instance IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax PgExpressionSyntax where
+  stddevPopE = pgUnAgg "STDDEV_POP"
+  stddevSampE = pgUnAgg "STDDEV_SAMP"
+  varPopE = pgUnAgg "VAR_POP"
+  varSampE = pgUnAgg "VAR_SAMP"
+
+  covarPopE = pgBinAgg "COVAR_POP"
+  covarSampE = pgBinAgg "COVAR_SAMP"
+  corrE = pgBinAgg "CORR"
+  regrSlopeE = pgBinAgg "REGR_SLOPE"
+  regrInterceptE = pgBinAgg "REGR_INTERCEPT"
+  regrCountE = pgBinAgg "REGR_COUNT"
+  regrRSquaredE = pgBinAgg "REGR_R2"
+  regrAvgXE = pgBinAgg "REGR_AVGX"
+  regrAvgYE = pgBinAgg "REGR_AVGY"
+  regrSXXE = pgBinAgg "REGR_SXX"
+  regrSYYE = pgBinAgg "REGR_SYY"
+  regrSXYE = pgBinAgg "REGR_SXY"
+
+instance IsSql2003NtileExpressionSyntax PgExpressionSyntax where
+  ntileE x = PgExpressionSyntax (emit "NTILE(" <> fromPgExpression x <> emit ")")
+
+instance IsSql2003LeadAndLagExpressionSyntax PgExpressionSyntax where
+  leadE x Nothing Nothing =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ")")
+  leadE x (Just n) Nothing =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ")")
+  leadE x (Just n) (Just def) =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ", " <> fromPgExpression def <> emit ")")
+  leadE x Nothing (Just def) =
+    PgExpressionSyntax (emit "LEAD(" <> fromPgExpression x <> emit ", 1, " <> fromPgExpression def <> emit ")")
+
+  lagE x Nothing Nothing =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ")")
+  lagE x (Just n) Nothing =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ")")
+  lagE x (Just n) (Just def) =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ", " <> fromPgExpression def <> emit ")")
+  lagE x Nothing (Just def) =
+    PgExpressionSyntax (emit "LAG(" <> fromPgExpression x <> emit ", 1, " <> fromPgExpression def <> emit ")")
+
+instance IsSql2003FirstValueAndLastValueExpressionSyntax PgExpressionSyntax where
+  firstValueE x = PgExpressionSyntax (emit "FIRST_VALUE(" <> fromPgExpression x <> emit ")")
+  lastValueE x = PgExpressionSyntax (emit "LAST_VALUE(" <> fromPgExpression x <> emit ")")
+
+instance IsSql2003NthValueExpressionSyntax PgExpressionSyntax where
+  nthValueE x n = PgExpressionSyntax (emit "NTH_VALUE(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ")")
 
 instance IsSql2003WindowFrameSyntax PgWindowFrameSyntax where
   type Sql2003WindowFrameExpressionSyntax PgWindowFrameSyntax = PgExpressionSyntax
@@ -711,6 +788,14 @@ instance IsSql92AggregationExpressionSyntax PgExpressionSyntax where
   minE = pgUnAgg "MIN"
   maxE = pgUnAgg "MAX"
 
+instance IsSql99AggregationExpressionSyntax PgExpressionSyntax where
+  everyE = pgUnAgg "EVERY"
+
+  -- According to the note at <https://www.postgresql.org/docs/9.2/static/functions-aggregate.html>
+  -- the following functions are equivalent.
+  someE = pgUnAgg "BOOL_ANY"
+  anyE = pgUnAgg "BOOL_ANY"
+
 instance IsSql92AggregationSetQuantifierSyntax PgAggregationSetQuantifierSyntax where
   setQuantifierDistinct = PgAggregationSetQuantifierSyntax $ emit "DISTINCT"
   setQuantifierAll = PgAggregationSetQuantifierSyntax $ emit "ALL"
@@ -728,6 +813,13 @@ pgUnAgg :: ByteString -> Maybe PgAggregationSetQuantifierSyntax -> PgExpressionS
 pgUnAgg fn q e =
   PgExpressionSyntax $
   emit fn <> emit "(" <> maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") q <> fromPgExpression e <> emit ")"
+
+pgBinAgg :: ByteString -> Maybe PgAggregationSetQuantifierSyntax -> PgExpressionSyntax -> PgExpressionSyntax
+         -> PgExpressionSyntax
+pgBinAgg fn q x y =
+  PgExpressionSyntax $
+  emit fn <> emit "(" <> maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") q
+          <> fromPgExpression x <> emit ", " <> fromPgExpression y <> emit ")"
 
 instance IsSql92FieldNameSyntax PgFieldNameSyntax where
   qualifiedField a b =
@@ -932,7 +1024,7 @@ onConflict :: Beamable tbl
            -> PgInsertOnConflict tbl
 onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update) =
   PgInsertOnConflict $ \tbl ->
-  let exprTbl = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (unqualifiedField nm)))) tbl
+  let exprTbl = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField nm)))) tbl
   in PgInsertOnConflictSyntax $
      emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl) <>
                 emit " " <> fromPgConflictAction (update tbl)
@@ -943,7 +1035,7 @@ conflictingFields :: Projectible PgExpressionSyntax proj
 conflictingFields makeProjection =
   PgInsertOnConflictTarget $ \tbl ->
   PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl))))
+  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t")))
 
 conflictingFieldsWhere :: Projectible PgExpressionSyntax proj
                        => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
@@ -953,8 +1045,11 @@ conflictingFieldsWhere :: Projectible PgExpressionSyntax proj
 conflictingFieldsWhere makeProjection makeWhere =
   PgInsertOnConflictTarget $ \tbl ->
   PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl)))) <>
-  emit " WHERE " <> pgParens (let QExpr (PgExpressionSyntax e) = makeWhere tbl in e)
+  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t"))) <>
+  emit " WHERE " <>
+  pgParens (let QExpr mkE = makeWhere tbl
+                PgExpressionSyntax e = mkE "t"
+            in e)
 
 conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
 conflictingConstraint nm =
@@ -973,7 +1068,7 @@ onConflictUpdateSet :: Beamable tbl
 onConflictUpdateSet mkAssignments =
   PgConflictAction $ \tbl ->
   let assignments = mkAssignments tbl tblExcluded
-      tblExcluded = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (fieldE (qualifiedField "excluded" nm)))) tbl
+      tblExcluded = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
 
       assignmentSyntaxes = do
         QAssignment assignments' <- assignments
@@ -987,8 +1082,8 @@ onConflictUpdateInstead :: (Beamable tbl, Projectible T.Text proj)
                         -> PgConflictAction tbl
 onConflictUpdateInstead mkProj =
   onConflictUpdateSet $ \tbl _ ->
-  let tblFields = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr nm)) tbl
-      proj = project (mkProj tblFields)
+  let tblFields = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> nm))) tbl
+      proj = project (mkProj tblFields) "t"
 
   in map (\fieldNm -> QAssignment [ (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm)) ]) proj
 
@@ -1007,6 +1102,7 @@ DEFAULT_SQL_SYNTAX(Int)
 DEFAULT_SQL_SYNTAX(Int8)
 DEFAULT_SQL_SYNTAX(Int16)
 DEFAULT_SQL_SYNTAX(Int32)
+DEFAULT_SQL_SYNTAX(Int64)
 DEFAULT_SQL_SYNTAX(Integer)
 DEFAULT_SQL_SYNTAX(Word)
 DEFAULT_SQL_SYNTAX(Word8)
@@ -1036,15 +1132,18 @@ DEFAULT_SQL_SYNTAX(Scientific)
 
 instance HasSqlValueSyntax PgValueSyntax SqlNull where
   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
+
 instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Auto x) where
   sqlValueSyntax (Auto Nothing) = PgValueSyntax (emit "DEFAULT")
   sqlValueSyntax (Auto (Just x)) = sqlValueSyntax x
+
 instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Maybe x) where
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
   sqlValueSyntax (Just x) = sqlValueSyntax x
 
 instance HasSqlValueSyntax PgValueSyntax B.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
+
 instance HasSqlValueSyntax PgValueSyntax BL.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
 
@@ -1188,11 +1287,30 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
      Nothing -> mempty
      Just mkProjection ->
          emit " RETURNING "<>
-         pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ))))
+         pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t")))
    where
-     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (fieldE (unqualifiedField (_fieldName f))))) tblSettings
+     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
      tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField tblNm (_fieldName f))) tblSettings
 
+newtype PgUpdateReturning a = PgUpdateReturning PgSyntax
+
+updateReturning :: Projectible PgExpressionSyntax a
+                => DatabaseEntity Postgres be (TableEntity table)
+                -> (forall s. table (QField s) -> [ QAssignment PgFieldNameSyntax PgExpressionSyntax s ])
+                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
+                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+                -> PgUpdateReturning (QExprToIdentity a)
+updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
+                mkAssignments
+                mkWhere
+                mkProjection =
+  PgUpdateReturning $
+  fromPgUpdate pgUpdate <>
+  emit " RETURNING " <>
+  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
+  where
+    SqlUpdate pgUpdate = update table mkAssignments mkWhere
+    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 pgCreateExtensionSyntax :: T.Text -> PgCommandSyntax
 pgCreateExtensionSyntax extName =
@@ -1222,13 +1340,13 @@ pgDropExtensionSyntax extName =
 --      buildJoinFrom tbl newSource Nothing
 
 now_ :: QExpr PgExpressionSyntax s LocalTime
-now_ = QExpr (PgExpressionSyntax (emit "NOW()"))
+now_ = QExpr (\_ -> PgExpressionSyntax (emit "NOW()"))
 
 ilike_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
        => QExpr PgExpressionSyntax s text
        -> QExpr PgExpressionSyntax s text
        -> QExpr PgExpressionSyntax s Bool
-ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" a b)
+ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" <$> a <*> b)
 
 -- * Testing support
 
@@ -1286,10 +1404,17 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
 instance HasDefaultSqlDataType PgDataTypeSyntax ByteString where
   defaultSqlDataType _ _ = pgByteaType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax ByteString
+
 instance HasDefaultSqlDataType PgDataTypeSyntax LocalTime where
   defaultSqlDataType _ _ = timestampType Nothing False
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax LocalTime
+
 instance HasDefaultSqlDataType PgDataTypeSyntax (SqlSerial Int) where
   defaultSqlDataType _ False = pgSerialType
   defaultSqlDataType _ _ = intType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (SqlSerial Int)
+
+instance HasDefaultSqlDataType PgDataTypeSyntax UUID where
+  defaultSqlDataType _ _ = pgUuidType
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UUID
+

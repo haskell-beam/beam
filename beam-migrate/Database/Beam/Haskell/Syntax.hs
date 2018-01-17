@@ -646,7 +646,8 @@ instance IsSql92FieldNameSyntax HsExpr where
 
 hsErrorType :: String -> HsDataType
 hsErrorType msg =
-  HsDataType (hsApp (hsVar "error") [ hsStr ("Unknown type: " <> fromString msg) ]) (HsType (tyConNamed "Void") (importSome "Data.Void" [ importTyNamed "Void" ])) (error "hsErrorType")
+  HsDataType (hsApp (hsVar "error") [ hsStr ("Unknown type: " <> fromString msg) ]) (HsType (tyConNamed "Void") (importSome "Data.Void" [ importTyNamed "Void" ]))
+             (BeamSerializedDataType "hsErrorType")
 
 instance IsSql92DataTypeSyntax HsDataType where
   intType = HsDataType (hsVarFrom "int" "Database.Beam.Migrate") (HsType (tyConNamed "Int") mempty) intType
@@ -692,8 +693,12 @@ instance IsSql92DataTypeSyntax HsDataType where
                                 (HsType (tyConNamed "SqlBits") mempty)
                                 (varBitType width)
 
-  dateType = HsDataType (hsVarFrom "date" "Database.Beam.Migrate") (HsType (tyConNamed "Day") (importSome "Data.Time" [ importTyNamed "Day" ])) dateType
+  dateType = HsDataType (hsVarFrom "date" "Database.Beam.Migrate")
+                        (HsType (tyConNamed "Day") (importSome "Data.Time" [ importTyNamed "Day" ])) dateType
 
+  timeType p False = HsDataType (hsVarFrom "time" "Database.Beam.Migrate")
+                                (HsType (tyConNamed "TimeOfDay") (importSome "Data.Time" [ importTyNamed "TimeOfDay" ]))
+                                (timeType p False)
   timeType _ _ = error "timeType"
   domainType _ = error "domainType"
   timestampType Nothing True =
@@ -706,14 +711,49 @@ instance IsSql92DataTypeSyntax HsDataType where
                (timestampType Nothing False)
   timestampType _ _ = error "timestampType with prec"
 
-  numericType (Just (prec, Just dec)) =
+  numericType precDec =
     HsDataType (hsApp (hsVarFrom "numeric" "Database.Beam.Migrate")
-                      [ hsMaybe (Just (hsTuple [ hsInt prec, hsMaybe (Just (hsInt dec)) ])) ])
+                      [ hsMaybe (fmap (\(prec, dec) -> hsTuple [ hsInt prec, hsMaybe (fmap hsInt dec) ]) precDec) ])
                (HsType (tyConNamed "Scientific") (importSome "Data.Scientific" [ importTyNamed "Scientific" ]))
-               (numericType (Just (prec, Just dec)))
-  numericType _ = error "numericType"
+               (numericType precDec)
 
-  decimalType _ = error "decimalType"
+  decimalType = numericType
+
+instance IsSql99DataTypeSyntax HsDataType where
+  characterLargeObjectType =
+    HsDataType (hsVarFrom "characterLargeObject" "Database.Beam.Migrate")
+               (HsType (tyConNamed "Text") (importSome "Data.Text" [ importTyNamed "Text" ]))
+               characterLargeObjectType
+  binaryLargeObjectType =
+    HsDataType (hsVarFrom "binaryLargeObject" "Database.Beam.Migrate")
+               (HsType (tyConNamed "ByteString") (importSome "Data.ByteString" [ importTyNamed "ByteString" ]))
+               binaryLargeObjectType
+  booleanType =
+    HsDataType (hsVarFrom "boolean" "Database.Beam.Migrate")
+               (HsType (tyConNamed "Bool") mempty)
+               booleanType
+  arrayType (HsDataType migType (HsType typeExpr typeImports) serialized) len =
+    HsDataType (hsApp (hsVarFrom "array" "Database.Beam.Migrate") [ migType, hsInt len ])
+               (HsType (tyApp (tyConNamed "Vector") [typeExpr])
+                       (typeImports <> importSome "Data.Vector" [ importTyNamed "Vector" ]))
+               (arrayType serialized len)
+  rowType _ = error "row types"
+
+instance IsSql2003BinaryAndVarBinaryDataTypeSyntax HsDataType where
+  binaryType prec =
+    HsDataType (hsApp (hsVarFrom "binary" "Database.Beam.Migrate") [ hsMaybe (hsInt <$> prec) ])
+               (HsType (tyConNamed "Integer") mempty)
+               (binaryType prec)
+  varBinaryType prec =
+    HsDataType (hsApp (hsVarFrom "varbinary" "Database.Beam.Migrate") [ hsMaybe (hsInt <$> prec) ])
+               (HsType (tyConNamed "Integer") mempty)
+               (varBinaryType prec)
+
+instance IsSql2008BigIntDataTypeSyntax HsDataType where
+  bigIntType =
+    HsDataType (hsVarFrom "bigint" "Database.Beam.Migrate")
+               (HsType (tyConNamed "Int64") (importSome "Data.Int" [ importTyNamed "Int64" ]))
+               bigIntType
 
 instance Sql92SerializableDataTypeSyntax HsDataType where
   serializeDataType = fromBeamSerializedDataType . hsDataTypeSerialized

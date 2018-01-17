@@ -5,7 +5,7 @@ module Database.Beam.Migrate.Generics.Tables where
 
 import Database.Beam
 import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.SQL.SQL92
+import Database.Beam.Backend.SQL.SQL2003
 
 import Database.Beam.Migrate.Types.Predicates
 import Database.Beam.Migrate.SQL.SQL92
@@ -113,6 +113,9 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Int16 where
   defaultSqlDataType _ _ = intType
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Int16
+instance IsSql2008BigIntDataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Int64 where
+    defaultSqlDataType _ _ = bigIntType
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Int64
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word where
   defaultSqlDataType _ _ = numericType (Just (10, Nothing))
@@ -124,6 +127,9 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word32 where
   defaultSqlDataType _ _ = numericType (Just (10, Nothing))
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word32
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Word64 where
+  defaultSqlDataType _ _ = numericType (Just (20, Nothing))
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Word64
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Text where
   defaultSqlDataType _ _ = varCharType Nothing Nothing
@@ -142,6 +148,10 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Day where
   defaultSqlDataType _ _ = dateType
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Day
+
+instance IsSql99DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Bool where
+  defaultSqlDataType _ _ = booleanType
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Bool
 
 type Sql92HasDefaultDataType syntax ty =
   ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) ty
