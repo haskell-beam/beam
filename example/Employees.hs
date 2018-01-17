@@ -262,7 +262,7 @@ deriving instance Show DepartmentId
 deriving instance Show Order
 deriving instance Show OrderId
 
-instance Database be EmployeeDatabase
+instance Database EmployeeDatabase
 
 EmployeeDatabase { _departments = TableLens departmentsC } = dbLenses
 employeeDb :: DatabaseSettings Postgres EmployeeDatabase

@@ -155,7 +155,7 @@ type `PersonT`. As expected, the `SqlSelect` will return us concrete `Person`
 values (recall that `Person` is equivalent to `PersonT Identity`).
 
 ```haskell
-select (all_ (persons exampleDb)) :: (...) => SqlSelect be syntax Person
+select (all_ (persons exampleDb)) :: (...) => SqlSelect syntax Person
 ```
 
 The `...` in the context represents a bunch of requirements for `syntax` that

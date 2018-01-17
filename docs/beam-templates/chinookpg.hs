@@ -23,7 +23,7 @@ data BeamDone = BeamDone
   deriving (Show)
 instance Exception BeamDone
 
-exampleQuery :: Q PgSelectSyntax Postgres ChinookDb s _
+exampleQuery :: Q PgSelectSyntax ChinookDb s _
 exampleQuery =
   BEAM_PLACEHOLDER
 

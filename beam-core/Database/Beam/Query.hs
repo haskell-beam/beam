@@ -156,8 +156,7 @@ runSelectReturningOne (SqlSelect s) =
 -- | Use a special debug syntax to print out an ANSI Standard @SELECT@ statement
 --   that may be generated for a given 'Q'.
 dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
-                 Q SqlSyntaxBuilder db QueryInaccessible res
-              -> IO ()
+                 Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()
 dumpSqlSelect q =
     let SqlSelect s = select q
     in putStrLn (renderSql s)

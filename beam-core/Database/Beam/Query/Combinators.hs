@@ -150,7 +150,7 @@ outerJoin_ :: forall s a b select db.
            -> Q select db (QNested s) b
            -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr (Sql92SelectExpressionSyntax select) s Bool )
            -> Q select db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
-                               , Retag Nullable (WithRewrittenThread (QNested s) s b) )
+                            , Retag Nullable (WithRewrittenThread (QNested s) s b) )
 outerJoin_ (Q a) (Q b) on_ =
   Q $ liftF (QTwoWayJoin a b outerJoin
               (\(a', b') ->
@@ -207,7 +207,7 @@ filter_ :: forall r select db s.
 filter_ mkExpr clause = clause >>= \x -> guard_ (mkExpr x) >> pure x
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
-related_ :: forall db rel be select s.
+related_ :: forall be db rel select s.
             ( IsSql92SelectSyntax select
             , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
             , Database db, Table rel ) =>
@@ -368,7 +368,6 @@ instance Beamable tbl => SqlUpdatable expr s (tbl (Nullable (QField s))) (tbl (N
   lhs <-. rhs =
     let lhs' = changeBeamRep (\(Columnar' (QField tblName fieldName') :: Columnar' (Nullable (QField s)) a) ->
                                 Columnar' (QField tblName fieldName') :: Columnar' (QField s)  a) lhs
-
         rhs' = changeBeamRep (\(Columnar' (QExpr e) :: Columnar' (Nullable (QExpr expr s)) a) ->
                                 Columnar' (QExpr e) :: Columnar' (QExpr expr s) a) rhs
     in lhs' <-. rhs'

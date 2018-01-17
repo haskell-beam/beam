@@ -209,7 +209,7 @@ data EmployeeDb f
     , _roles       :: f (TableEntity RoleT)
     , _funny       :: f (TableEntity FunnyT) }
     deriving Generic
-instance Database be EmployeeDb
+instance Database EmployeeDb
 
 employeeDbSettings :: DatabaseSettings be EmployeeDb
 employeeDbSettings = defaultDbSettings

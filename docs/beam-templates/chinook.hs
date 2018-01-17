@@ -20,7 +20,7 @@ data BeamDone = BeamDone
   deriving (Show)
 instance Exception BeamDone
 
-exampleQuery :: Q SqliteSelectSyntax Sqlite ChinookDb s _
+exampleQuery :: Q SqliteSelectSyntax ChinookDb s _
 exampleQuery =
   BEAM_PLACEHOLDER
 

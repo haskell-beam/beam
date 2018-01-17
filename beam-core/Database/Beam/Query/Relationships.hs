@@ -120,8 +120,8 @@ type ManyToManyThrough db through left right =
   , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s)) ) =>
   Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s)) -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s)) ->
   Q syntax db s ( through (QExpr (Sql92SelectExpressionSyntax syntax) s)
-                   , left (QExpr (Sql92SelectExpressionSyntax syntax) s)
-                   , right (QExpr (Sql92SelectExpressionSyntax syntax) s) )
+                , left (QExpr (Sql92SelectExpressionSyntax syntax) s)
+                , right (QExpr (Sql92SelectExpressionSyntax syntax) s) )
 
 -- | Used to define many-to-many relationships without any additional data.
 --   Takes the join table and two key extraction functions from that table to the

@@ -94,7 +94,7 @@ many-to-many relationship.
 
 ```haskell
 manyToMany_
-  :: ( Database be db, Table joinThrough
+  :: ( Database db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax
@@ -140,7 +140,7 @@ Sometimes you want to have additional data for each relationship. For this, use
 
 ```haskell
 manyToManyPassthrough_
-  :: ( Database be db, Table joinThrough
+  :: ( Database db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax

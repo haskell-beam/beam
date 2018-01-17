@@ -66,7 +66,7 @@ data ShoppingCartDb f = ShoppingCartDb
                         deriving Generic
 
 
-instance Database be ShoppingCartDb
+instance Database ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings `withDbModification`

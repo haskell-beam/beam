@@ -62,7 +62,7 @@ instance Beamable (PrimaryKey AlbumT)
 type AlbumId = PrimaryKey AlbumT Identity; deriving instance Show AlbumId
 deriving instance Show (PrimaryKey AlbumT (Nullable Identity))
 
-artistAlbums :: OneToMany be ChinookDb s ArtistT AlbumT
+artistAlbums :: OneToMany ChinookDb s ArtistT AlbumT
 artistAlbums = oneToMany_ (album chinookDb) albumArtist
 
 -- * Employee
@@ -153,7 +153,7 @@ instance Table InvoiceT where
 instance Beamable (PrimaryKey InvoiceT)
 type InvoiceId = PrimaryKey InvoiceT Identity; deriving instance Show InvoiceId
 
-invoiceLines :: OneToMany be ChinookDb s InvoiceT InvoiceLineT
+invoiceLines :: OneToMany ChinookDb s InvoiceT InvoiceLineT
 invoiceLines = oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice
 
 -- * InvoiceLine
@@ -224,7 +224,7 @@ instance Table PlaylistTrackT where
 instance Beamable (PrimaryKey PlaylistTrackT)
 type PlaylistTrackId = PrimaryKey PlaylistTrackT Identity; deriving instance Show PlaylistTrackId
 
-playlistTrackRelationship :: ManyToMany be ChinookDb PlaylistT TrackT
+playlistTrackRelationship :: ManyToMany ChinookDb PlaylistT TrackT
 playlistTrackRelationship =
  manyToMany_ (playlistTrack chinookDb)
              playlistTrackPlaylistId
@@ -253,13 +253,13 @@ instance Table TrackT where
 instance Beamable (PrimaryKey TrackT)
 type TrackId = PrimaryKey TrackT Identity; deriving instance Show TrackId
 
-genreTracks :: OneToManyOptional be ChinookDb s GenreT TrackT
+genreTracks :: OneToManyOptional ChinookDb s GenreT TrackT
 genreTracks = oneToManyOptional_ (track chinookDb) trackGenreId
 
-mediaTypeTracks :: OneToMany be ChinookDb s MediaTypeT TrackT
+mediaTypeTracks :: OneToMany ChinookDb s MediaTypeT TrackT
 mediaTypeTracks = oneToMany_ (track chinookDb) trackMediaTypeId
 
-albumTracks :: OneToManyOptional be ChinookDb s AlbumT TrackT
+albumTracks :: OneToManyOptional ChinookDb s AlbumT TrackT
 albumTracks = oneToManyOptional_ (track chinookDb) trackAlbumId
 
 -- * database
@@ -278,7 +278,7 @@ data ChinookDb entity
   , playlistTrack :: entity (TableEntity PlaylistTrackT)
   , track         :: entity (TableEntity TrackT)
   } deriving Generic
-instance Database be  ChinookDb
+instance Database ChinookDb
 
 addressFields b = Address (fromString (b <> "Address"))
                           (fromString (b <> "City"))

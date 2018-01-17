@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE PolyKinds #-}
 
 -- | Provides a syntax 'SqlSyntaxBuilder' that uses a

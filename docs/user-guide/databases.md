@@ -16,7 +16,7 @@ data ExampleDb f
     { persons :: f (TableEntity PersonT)
     , posts   :: f (TableEntity PersonT)
     } deriving Generic
-instance Database be ExampleDb
+instance Database ExampleDb
 
 exampleDb :: DatabaseSettings be ExampleDb
 exampleDb = defaultDbSettings
