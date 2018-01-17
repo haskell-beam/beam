@@ -36,10 +36,10 @@ instance IsDatabaseEntity Postgres (PgExtensionEntity extension) where
                         => Text
                         -> extension
                         -> DatabaseEntityDescriptor Postgres (PgExtensionEntity extension)
-  type DatabaseEntityDefaultRequirements Postgres (PgExtensionEntity entity) =
-    ( IsPgExtension entity )
-  type DatabaseEntityRegularRequirements Postgres (PgExtensionEntity entity) =
-    ( IsPgExtension entity )
+  type DatabaseEntityDefaultRequirements Postgres (PgExtensionEntity extension) =
+    ( IsPgExtension extension )
+  type DatabaseEntityRegularRequirements Postgres (PgExtensionEntity extension) =
+    ( IsPgExtension extension )
 
   dbEntityName f (PgDatabaseExtension nm ext) = fmap (\nm' -> PgDatabaseExtension nm' ext) (f nm)
   dbEntityAuto _ = PgDatabaseExtension (pgExtensionName (Proxy @extension)) pgExtensionBuild
