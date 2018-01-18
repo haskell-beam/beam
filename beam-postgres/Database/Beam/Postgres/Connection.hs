@@ -60,7 +60,7 @@ import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.Internal as Pg
   ( Field(..), RowParser(..)
   , withConnection, escapeStringConn, escapeIdentifier, escapeByteaConn
-  , exec )
+  , exec, throwResultError )
 import qualified Database.PostgreSQL.Simple.Internal as PgI
 import qualified Database.PostgreSQL.Simple.Ok as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..))
@@ -346,9 +346,13 @@ withPgDebug dbg conn (Pg action) =
            dbg (BS.unpack query)
 
            res <- Pg.exec conn query
-
-           let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-           runF process (\x _ -> Pg.unsafeFreeResult res >> next x) (stepReturningList res) 0
+           sts <- Pg.resultStatus res
+           case sts of
+             Pg.TuplesOk -> do
+               let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
+               runF process (\x _ -> Pg.unsafeFreeResult res >> next x) (stepReturningList res) 0
+             _ -> Pg.throwResultError "No tuples returned to Postgres update/insert returning"
+                                      res sts
       step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
            dbg (BS.unpack query)
@@ -438,6 +442,7 @@ instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg.Connection Pg wher
                                 (Just (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
                                                               Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty)))
 
+        -- Make savepoint
         runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
 
 instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg where
