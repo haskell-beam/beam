@@ -35,7 +35,8 @@ library
                       scientific    >=0.3  && <0.4,
                       network-uri   >=2.6  && <2.7,
                       aeson         >=0.11 && <1.3,
-                      attoparsec
+                      attoparsec,
+                      direct-sqlite >= 2.3
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,

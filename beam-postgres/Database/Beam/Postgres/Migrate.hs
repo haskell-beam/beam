@@ -96,13 +96,9 @@ postgresDataTypeDeserializers =
     _             -> fail "Postgres data type"
 
 pgPredConverter :: Tool.HaskellPredicateConverter
-pgPredConverter = Tool.easyHsPredicateConverter <>
-                  Tool.hsPredicateConverter pgHasColumn <>
+pgPredConverter = Tool.easyHsPredicateConverter @PgColumnSchemaSyntax pgTypeToHs <>
                   Tool.hsPredicateConverter pgHasColumnConstraint
   where
-    pgHasColumn (Db.TableHasColumn tblNm colNm pgType :: Db.TableHasColumn PgColumnSchemaSyntax) =
-      Db.SomeDatabasePredicate <$> (Db.TableHasColumn tblNm colNm <$> pgTypeToHs pgType :: Maybe (Db.TableHasColumn HsColumnSchema))
-
     pgHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c :: Db.TableColumnHasConstraint PgColumnSchemaSyntax)
       | c == Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing =
           Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) :: Db.TableColumnHasConstraint HsColumnSchema))

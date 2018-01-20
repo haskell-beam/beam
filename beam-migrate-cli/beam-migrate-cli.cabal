@@ -57,7 +57,7 @@ executable beam-migrate
                        StandaloneDeriving, GADTs, DeriveFunctor, RankNTypes, ScopedTypeVariables,
                        FlexibleInstances, TypeOperators, TypeApplications, MultiParamTypeClasses,
                        DataKinds, DeriveGeneric, CPP, LambdaCase, RecordWildCards, TupleSections
-  ghc-options:         -Wall
+  ghc-options:         -Wall -dynamic
   if flag(werror)
     ghc-options:       -Werror
 

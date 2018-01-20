@@ -28,6 +28,7 @@ module Database.Beam.Sqlite.Syntax
   , formatSqliteInsert ) where
 
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Haskell.Syntax
 import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL.SQL92
@@ -173,10 +174,11 @@ instance Sql92DisplaySyntax SqliteColumnSchemaSyntax where
 data SqliteDataTypeSyntax
   = SqliteDataTypeSyntax
   { fromSqliteDataType :: SqliteSyntax
+  , sqliteDataTypeToHs :: HsDataType
   , sqliteDataTypeSerialized :: BeamSerializedDataType
   } deriving (Show, Eq, Generic)
 instance Hashable SqliteDataTypeSyntax where
-  hashWithSalt salt (SqliteDataTypeSyntax s _) = hashWithSalt salt s
+  hashWithSalt salt (SqliteDataTypeSyntax s _ _) = hashWithSalt salt s
 instance Sql92DisplaySyntax SqliteDataTypeSyntax where
   displaySyntax = displaySyntax . fromSqliteDataType
 
@@ -358,38 +360,57 @@ instance IsSql92ConstraintAttributesSyntax SqliteConstraintAttributesSyntax wher
   deferrableAttributeSyntax = SqliteConstraintAttributesSyntax (Just True) Nothing
 
 instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
-  domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm) (domainType nm)
+  domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm) (domainType nm) (domainType nm)
   charType prec charSet = SqliteDataTypeSyntax (emit "CHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet)
+                                               (charType prec charSet)
                                                (charType prec charSet)
   varCharType prec charSet = SqliteDataTypeSyntax (emit "VARCHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet)
                                                   (varCharType prec charSet)
+                                                  (varCharType prec charSet)
   nationalCharType prec = SqliteDataTypeSyntax (emit "NATIONAL CHAR" <> sqliteOptPrec prec)
+                                               (nationalCharType prec)
                                                (nationalCharType prec)
   nationalVarCharType prec = SqliteDataTypeSyntax (emit "NATIONAL CHARACTER VARYING" <> sqliteOptPrec prec)
                                                   (nationalVarCharType prec)
+                                                  (nationalVarCharType prec)
 
-  bitType prec = SqliteDataTypeSyntax (emit "BIT" <> sqliteOptPrec prec) (bitType prec)
-  varBitType prec = SqliteDataTypeSyntax (emit "BIT VARYING" <> sqliteOptPrec prec) (varBitType prec)
+  bitType prec = SqliteDataTypeSyntax (emit "BIT" <> sqliteOptPrec prec) (bitType prec) (bitType prec)
+  varBitType prec = SqliteDataTypeSyntax (emit "BIT VARYING" <> sqliteOptPrec prec) (varBitType prec) (varBitType prec)
 
-  numericType prec = SqliteDataTypeSyntax (emit "NUMERIC" <> sqliteOptNumericPrec prec) (numericType prec)
-  decimalType prec = SqliteDataTypeSyntax (emit "DOUBLE" <> sqliteOptNumericPrec prec) (decimalType prec)
+  numericType prec = SqliteDataTypeSyntax (emit "NUMERIC" <> sqliteOptNumericPrec prec) (numericType prec) (numericType prec)
+  decimalType prec = SqliteDataTypeSyntax (emit "DOUBLE" <> sqliteOptNumericPrec prec) (decimalType prec) (decimalType prec)
 
-  intType = SqliteDataTypeSyntax (emit "INTEGER") intType
-  smallIntType = SqliteDataTypeSyntax (emit "SMALLINT") smallIntType
+  intType = SqliteDataTypeSyntax (emit "INTEGER") intType intType
+  smallIntType = SqliteDataTypeSyntax (emit "SMALLINT") smallIntType smallIntType
 
-  floatType prec = SqliteDataTypeSyntax (emit "FLOAT" <> sqliteOptPrec prec) (floatType prec)
-  doubleType = SqliteDataTypeSyntax (emit "DOUBLE PRECISION") doubleType
-  realType = SqliteDataTypeSyntax (emit "REAL") realType
-  dateType = SqliteDataTypeSyntax (emit "DATE") dateType
+  floatType prec = SqliteDataTypeSyntax (emit "FLOAT" <> sqliteOptPrec prec) (floatType prec) (floatType prec)
+  doubleType = SqliteDataTypeSyntax (emit "DOUBLE PRECISION") doubleType doubleType
+  realType = SqliteDataTypeSyntax (emit "REAL") realType realType
+  dateType = SqliteDataTypeSyntax (emit "DATE") dateType dateType
   timeType prec withTz = SqliteDataTypeSyntax (emit "TIME" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
-                                              (timeType prec withTz)
+                                              (timeType prec withTz) (timeType prec withTz)
   timestampType prec withTz = SqliteDataTypeSyntax (emit "TIMESTAMP" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
-                                                   (timestampType prec withTz)
+                                                   (timestampType prec withTz) (timestampType prec withTz)
 
 sqliteTextType, sqliteBlobType, sqliteBigIntType :: SqliteDataTypeSyntax
-sqliteTextType = SqliteDataTypeSyntax (emit "TEXT") characterLargeObjectType
-sqliteBlobType = SqliteDataTypeSyntax (emit "BLOB") binaryLargeObjectType
-sqliteBigIntType = SqliteDataTypeSyntax (emit "BIGINT") bigIntType
+sqliteTextType = SqliteDataTypeSyntax (emit "TEXT")
+                                      (HsDataType (hsVarFrom "sqliteText" "Database.Beam.Sqlite")
+                                                  (HsType (tyConNamed "Text")
+                                                          (importSome "Data.Text" [importTyNamed "Text"]))
+                                                  characterLargeObjectType)
+                                     characterLargeObjectType
+sqliteBlobType = SqliteDataTypeSyntax (emit "BLOB")
+                                      (HsDataType (hsVarFrom "sqliteBlob" "Database.Beam.Sqlite")
+                                                  (HsType (tyConNamed "ByteString")
+                                                          (importSome "Data.ByteString" [importTyNamed "ByteString"]))
+                                                  binaryLargeObjectType)
+                                     binaryLargeObjectType
+sqliteBigIntType = SqliteDataTypeSyntax (emit "BIGINT")
+                                      (HsDataType (hsVarFrom "sqliteBigInt" "Database.Beam.Sqlite")
+                                                  (HsType (tyConNamed "Int64")
+                                                          (importSome "Data.Int" [importTyNamed "Int64"]))
+                                                  bigIntType)
+                                     bigIntType
 
 instance Sql92SerializableDataTypeSyntax SqliteDataTypeSyntax where
   serializeDataType = fromBeamSerializedDataType . sqliteDataTypeSerialized
@@ -721,7 +742,7 @@ instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax (SqlSerial In
 
 instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where
   -- TODO we should somehow allow contsraints based on backend
-  defaultSqlDataType _ _ = SqliteDataTypeSyntax (emit "VARBINARY") binaryLargeObjectType
+  defaultSqlDataType _ _ = sqliteBlobType
 instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax ByteString
 
 instance HasDefaultSqlDataType SqliteDataTypeSyntax LocalTime where

@@ -10,7 +10,10 @@ import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Types ( SomeDatabasePredicate(..), MigrationSteps
                                              , CheckedDatabaseSettings, SomeDatabasePredicate)
 
+import           Database.Beam.Haskell.Syntax
+
 import           Control.Applicative
+
 
 import qualified Data.ByteString.Lazy as BL
 import           Data.Monoid
@@ -68,9 +71,23 @@ data SomeBeamMigrationBackend where
                               BeamMigrationBackend be commandSyntax hdl
                            -> SomeBeamMigrationBackend
 
-easyHsPredicateConverter :: HaskellPredicateConverter
-easyHsPredicateConverter = simpleHsConverter @TableExistsPredicate <>
-                           simpleHsConverter @TableHasPrimaryKey
+easyHsPredicateConverter :: forall columnSchemaSyntax
+                          . Typeable columnSchemaSyntax
+                         => (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax -> Maybe HsDataType)
+                         -> HaskellPredicateConverter
+easyHsPredicateConverter convType =
+  simpleHsConverter @TableExistsPredicate <>
+  simpleHsConverter @TableHasPrimaryKey   <>
+  hasColumnConverter @columnSchemaSyntax convType
+
+hasColumnConverter :: forall columnSchemaSyntax
+                    . Typeable columnSchemaSyntax
+                   => (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax -> Maybe HsDataType)
+                   -> HaskellPredicateConverter
+hasColumnConverter convType =
+  hsPredicateConverter $
+  \(TableHasColumn tbl col ty :: TableHasColumn columnSchemaSyntax) ->
+    fmap SomeDatabasePredicate (TableHasColumn tbl col <$> convType ty :: Maybe (TableHasColumn HsColumnSchema))
 
 simpleHsConverter :: forall pred. Typeable pred => HaskellPredicateConverter
 simpleHsConverter =
@@ -85,3 +102,4 @@ hsPredicateConverter f =
   case cast p' of
     Nothing -> Nothing
     Just p'' -> f p''
+

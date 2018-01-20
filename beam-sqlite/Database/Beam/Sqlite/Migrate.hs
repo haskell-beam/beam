@@ -1,10 +1,12 @@
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+{-# LANGUAGE TupleSections #-}
 module Database.Beam.Sqlite.Migrate where
 
 import qualified Database.Beam.Migrate as Db
 import qualified Database.Beam.Migrate.Backend as Tool
 
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Haskell.Syntax
 import           Database.Beam.Sqlite.Connection
 import           Database.Beam.Sqlite.Syntax
 import           Database.Beam.Sqlite.Types
@@ -16,14 +18,20 @@ import           Control.Monad.Reader
 import           Database.SQLite.Simple
                     ( Connection, Only(..)
                     , open, close, query, query_ )
+import qualified Database.SQLite3 as LL
 
 import           Data.Aeson
 import           Data.Attoparsec.Text (asciiCI, skipSpace)
 import qualified Data.Attoparsec.Text as A
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char (isSpace)
-import           Data.Maybe
+import           Data.Int (Int64)
+import           Data.List (sortBy)
+import           Data.Maybe (mapMaybe)
 import           Data.Monoid (Endo(..), (<>))
+import           Data.Ord (comparing)
+import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 
@@ -76,13 +84,25 @@ writeMigrationScript fp steps =
   in BL.writeFile fp (BL.concat stepBs)
 
 sqlitePredConverter :: Tool.HaskellPredicateConverter
-sqlitePredConverter = Tool.easyHsPredicateConverter
-                      -- TODO more predicates (tablehascolumn and hasconstraint)
+sqlitePredConverter = Tool.easyHsPredicateConverter @SqliteColumnSchemaSyntax sqliteTypeToHs <>
+                      Tool.hsPredicateConverter sqliteHasColumnConstraint
+  where
+    sqliteHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c ::
+                                  Db.TableColumnHasConstraint SqliteColumnSchemaSyntax)
+      | c == Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing =
+        Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) ::
+                                           Db.TableColumnHasConstraint HsColumnSchema))
+      | otherwise = Nothing
+
+sqliteTypeToHs :: SqliteDataTypeSyntax
+               -> Maybe HsDataType
+sqliteTypeToHs = Just . sqliteDataTypeToHs
 
 parseSqliteDataType :: T.Text -> SqliteDataTypeSyntax
 parseSqliteDataType txt =
   case A.parseOnly dtParser txt of
     Left {} -> SqliteDataTypeSyntax (emit (TE.encodeUtf8 txt))
+                                    (hsErrorType ("Unknown SQLite datatype '" ++ T.unpack txt ++ "'"))
                                     (Db.BeamSerializedDataType $
                                      Db.beamSerializeJSON "sqlite"
                                        (toJSON txt))
@@ -176,18 +196,19 @@ parseSqliteDataType txt =
                          asciiCI "SET" *> ws *>
                          A.takeWhile (not . isSpace))
 
--- TODO implement this
+-- TODO constraints and foreign keys
 getDbConstraints :: SqliteM [Db.SomeDatabasePredicate]
 getDbConstraints =
   SqliteM . ReaderT $ \(_, conn) -> do
     tblNames <- query_ conn "SELECT name from sqlite_master where type='table'"
     tblPreds <-
       fmap mconcat . forM tblNames $ \(Only tblName) -> do
-        columns <- query conn "SELECT * FROM pragma_table_info(?) ORDER BY cid ASC" (Only tblName)
+        columns <- fmap (sortBy (comparing (\(cid, _, _, _, _, _) -> cid :: Int))) $
+                   query_ conn (fromString ("PRAGMA table_info('" <> T.unpack tblName <> "')"))
 
         let columnPreds =
               foldMap
-                (\(_ :: Int, nm, typStr, notNull, _, _) ->
+                (\(_ ::Int, nm, typStr, notNull, _, _) ->
                      let dtType = parseSqliteDataType typStr
 
                          notNullPred =
@@ -204,8 +225,9 @@ getDbConstraints =
                 )
                 columns
 
-            pkColumns = mapMaybe (\(_, nm, _, _, _ :: T.Text, pk) ->
-                                      nm <$ guard pk) columns
+            pkColumns = map fst $ sortBy (comparing snd) $
+                        mapMaybe (\(_, nm, _, _, _ :: Maybe T.Text, pk) ->
+                                      (nm,) <$> (pk <$ guard (pk > (0 :: Int)))) columns
             pkPred = case pkColumns of
                        [] -> []
                        _  -> [ Db.SomeDatabasePredicate (Db.TableHasPrimaryKey tblName pkColumns) ]
@@ -213,3 +235,13 @@ getDbConstraints =
              ++ pkPred ++ columnPreds )
 
     pure tblPreds
+
+sqliteText :: Db.DataType SqliteDataTypeSyntax T.Text
+sqliteText = Db.DataType sqliteTextType
+
+sqliteBlob :: Db.DataType SqliteDataTypeSyntax ByteString
+sqliteBlob = Db.DataType sqliteBlobType
+
+sqliteBigInt :: Db.DataType SqliteDataTypeSyntax Int64
+sqliteBigInt = Db.DataType sqliteBigIntType
+
