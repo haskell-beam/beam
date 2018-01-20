@@ -3,19 +3,24 @@
 
 name:                beam-core
 version:             0.6.0.0
-synopsis:            A type-safe SQL mapper for Haskell that doesn't use Template Haskell
-description:         See the documentation on <http://travis.athougies.net/tags/beam.html my blog> and on <https://github.com/tathougies/beam/tree/master/Doc GitHub>.
+synopsis:            Type-safe, feature-complete SQL query and manipulation interface for Haskell
+description:         Beam is a Haskell library for type-safe querying and manipulation of SQL databases.
+                     Beam is modular and supports various backends. In order to use beam, you will need to use
+                     @beam-core@ along with a specific backend (such as @beam-postgres@ or @beam-sqlite@) as
+                     well as the corresponding backend.
+
+                     For more information, see the user manual and tutorial on
+                     <https://tathougies.github.io/beam GitHub pages>.
 homepage:            http://travis.athougies.net/projects/beam.html
 license:             MIT
 license-file:        LICENSE
 author:              Travis Athougies
 maintainer:          travis@athougies.net
--- copyright:
 category:            Database
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.18
 bug-reports:         https://github.com/tathougies/beam/issues
+extra-doc-files:     ChangeLog.md
 
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
@@ -65,7 +70,14 @@ library
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
-  ghc-options:         -O2 -Wall -Werror
+  ghc-options:         -Wall
+  if flag(werror)
+    ghc-options:       -Werror
+
+flag werror
+  description: Enable -Werror during development
+  default:     False
+  manual:      True
 
 test-suite beam-core-tests
   type: exitcode-stdio-1.0

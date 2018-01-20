@@ -57,7 +57,14 @@ executable beam-migrate
                        StandaloneDeriving, GADTs, DeriveFunctor, RankNTypes, ScopedTypeVariables,
                        FlexibleInstances, TypeOperators, TypeApplications, MultiParamTypeClasses,
                        DataKinds, DeriveGeneric, CPP, LambdaCase, RecordWildCards, TupleSections
-  ghc-options:         -O2 -Wall -Werror -g
+  ghc-options:         -Wall
+  if flag(werror)
+    ghc-options:       -Werror
+
+flag werror
+  description: Enable -Werror during development
+  default:     False
+  manual:      True
 
 source-repository head
   type: git

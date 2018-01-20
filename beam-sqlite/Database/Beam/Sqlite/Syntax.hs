@@ -2,6 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Database.Beam.Sqlite.Syntax
   ( SqliteSyntax(..)
@@ -12,10 +13,17 @@ module Database.Beam.Sqlite.Syntax
   , SqliteInsertValuesSyntax(..)
   , SqliteExpressionSyntax(..)
 
+  , SqliteDataTypeSyntax(..), SqliteValueSyntax(..)
+  , SqliteColumnSchemaSyntax(..)
 
-  , SqliteValueSyntax(..)
+  , fromSqliteCommand, emit
 
   , sqliteEscape
+  , sqliteRenderSyntaxScript
+  , withPlaceholders
+
+  , sqliteTextType, sqliteBlobType
+  , sqliteBigIntType
 
   , formatSqliteInsert ) where
 
@@ -33,6 +41,7 @@ import           Data.Aeson
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString as B
 import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Hashable
@@ -50,32 +59,31 @@ import           Database.SQLite.Simple (SQLData(..))
 import           GHC.Float
 import           GHC.Generics
 
-data SqliteSyntax = SqliteSyntax Builder (DL.DList SQLData)
+data SqliteSyntax = SqliteSyntax ((SQLData -> Builder) -> Builder) (DL.DList SQLData)
 newtype SqliteData = SqliteData SQLData -- newtype for Hashable
 
 instance Show SqliteSyntax where
   show (SqliteSyntax s d) =
-    "SqliteSyntax (" <> show (toLazyByteString s) <> ") " <> show d
+    "SqliteSyntax (" <> show (toLazyByteString (withPlaceholders s)) <> ") " <> show d
 
 instance Sql92DisplaySyntax SqliteSyntax where
-  displaySyntax (SqliteSyntax s d) =
-    BL.unpack (toLazyByteString s) <>
-    let dl = DL.toList d
-    in if null dl then mempty
-       else " with values " <> show dl
+  displaySyntax = BL.unpack . sqliteRenderSyntaxScript
 
 instance Monoid SqliteSyntax where
-  mempty = SqliteSyntax mempty mempty
+  mempty = SqliteSyntax (\_ -> mempty) mempty
   mappend (SqliteSyntax ab av) (SqliteSyntax bb bv) =
-    SqliteSyntax (ab <> bb) (av <> bv)
+    SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
 
 instance Eq SqliteSyntax where
   SqliteSyntax ab av == SqliteSyntax bb bv =
-    toLazyByteString ab == toLazyByteString bb &&
+    toLazyByteString (withPlaceholders ab) ==
+      toLazyByteString (withPlaceholders bb) &&
     av == bv
 
 instance Hashable SqliteSyntax where
-  hashWithSalt salt (SqliteSyntax s d) = hashWithSalt salt (toLazyByteString s, map SqliteData (DL.toList d))
+  hashWithSalt salt (SqliteSyntax s d) =
+      hashWithSalt salt ( toLazyByteString (withPlaceholders s)
+                        , map SqliteData (DL.toList d) )
 instance Hashable SqliteData where
   hashWithSalt salt (SqliteData (SQLInteger i)) = hashWithSalt salt (0 :: Int, i)
   hashWithSalt salt (SqliteData (SQLFloat d))   = hashWithSalt salt (1 :: Int, d)
@@ -83,26 +91,45 @@ instance Hashable SqliteData where
   hashWithSalt salt (SqliteData (SQLBlob b))    = hashWithSalt salt (3 :: Int, b)
   hashWithSalt salt (SqliteData SQLNull)        = hashWithSalt salt (4 :: Int)
 
+withPlaceholders :: ((SQLData -> Builder) -> Builder) -> Builder
+withPlaceholders build = build (\_ -> "?")
+
 emit :: ByteString -> SqliteSyntax
-emit b = SqliteSyntax (byteString b) mempty
+emit b = SqliteSyntax (\_ -> byteString b) mempty
 
 emit' :: Show a => a -> SqliteSyntax
-emit' x = SqliteSyntax (byteString (fromString (show x))) mempty
+emit' x = SqliteSyntax (\_ -> byteString (fromString (show x))) mempty
 
 quotedIdentifier :: T.Text -> SqliteSyntax
-quotedIdentifier txt = emit "\"" <> SqliteSyntax (stringUtf8 (T.unpack (sqliteEscape txt))) mempty <> emit "\""
+quotedIdentifier txt = emit "\"" <> SqliteSyntax (\_ -> stringUtf8 (T.unpack (sqliteEscape txt))) mempty <> emit "\""
 
 sqliteEscape :: T.Text -> T.Text
 sqliteEscape = T.concatMap (\c -> if c == '"' then "\"\"" else T.singleton c)
 
-emitValue :: SQLData -> SqliteSyntax
-emitValue v = SqliteSyntax (byteString "?") (DL.singleton v)
+emitValue ::  SQLData -> SqliteSyntax
+emitValue v = SqliteSyntax ($ v) (DL.singleton v)
+
+sqliteRenderSyntaxScript :: SqliteSyntax -> BL.ByteString
+sqliteRenderSyntaxScript (SqliteSyntax s _) =
+    toLazyByteString . s $ \case
+      SQLInteger i -> int64Dec i
+      SQLFloat   d -> doubleDec d
+      SQLText    t -> TE.encodeUtf8Builder (sqliteEscape t)
+      SQLBlob    b -> char8 'X' <> char8 '\'' <>
+                      foldMap word8Hex (B.unpack b) <>
+                      char8 '\''
+      SQLNull      -> "NULL"
 
 -- * Syntax types
 
 data SqliteCommandSyntax
   = SqliteCommandSyntax SqliteSyntax
   | SqliteCommandInsert SqliteInsertSyntax
+
+fromSqliteCommand :: SqliteCommandSyntax -> SqliteSyntax
+fromSqliteCommand (SqliteCommandSyntax s) = s
+fromSqliteCommand (SqliteCommandInsert (SqliteInsertSyntax tbl fields values)) =
+    formatSqliteInsert tbl fields values
 
 newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSyntax }
 instance HasQBuilder SqliteSelectSyntax where
@@ -358,6 +385,11 @@ instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
                                               (timeType prec withTz)
   timestampType prec withTz = SqliteDataTypeSyntax (emit "TIMESTAMP" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
                                                    (timestampType prec withTz)
+
+sqliteTextType, sqliteBlobType, sqliteBigIntType :: SqliteDataTypeSyntax
+sqliteTextType = SqliteDataTypeSyntax (emit "TEXT") characterLargeObjectType
+sqliteBlobType = SqliteDataTypeSyntax (emit "BLOB") binaryLargeObjectType
+sqliteBigIntType = SqliteDataTypeSyntax (emit "BIGINT") bigIntType
 
 instance Sql92SerializableDataTypeSyntax SqliteDataTypeSyntax where
   serializeDataType = fromBeamSerializedDataType . sqliteDataTypeSerialized

@@ -53,7 +53,7 @@ import           Data.Typeable
 
 migrationBackend :: Tool.BeamMigrationBackend Postgres PgCommandSyntax Pg.Connection
 migrationBackend = Tool.BeamMigrationBackend
-                        "postgres" "sql"
+                        "postgres"
                         (unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"
                                  , ""
                                  , "For example, 'host=localhost port=5432 dbname=mydb connect_timeout=10' or 'dbname=mydb'"
@@ -140,6 +140,40 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
       | Pg.typoid Pg.time        == oid -> Just (timeType Nothing False)
       | Pg.typoid Pg.timestamp   == oid -> Just (timestampType Nothing False)
       | Pg.typoid Pg.timestamptz == oid -> Just (timestampType Nothing True)
+
+      -- Postgres specific datatypes, haskell versions
+      | Pg.typoid Pg.uuid        == oid ->
+          Just $ HsDataType (hsVarFrom "uuid" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "UUID")
+                                    (importSome "Data.UUID" [importTyNamed "UUID"]))
+                            (pgDataTypeSerialized pgUuidType)
+      | Pg.typoid Pg.money       == oid ->
+          Just $ HsDataType (hsVarFrom "money" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "PgMoney")
+                                    (importSome "Database.Beam.Postgres" [importTyNamed "PgMoney"]))
+                            (pgDataTypeSerialized pgMoneyType)
+      | Pg.typoid Pg.json        == oid ->
+          Just $ HsDataType (hsVarFrom "json" "Database.Beam.Postgres")
+                            (HsType (tyApp (tyConNamed "PgJSON") [ tyConNamed "Value" ])
+                                    (importSome "Data.Aeson" [importTyNamed "Value"] <>
+                                     importSome "Database.Beam.Postgres" [importTyNamed "PgJSON"]))
+                            (pgDataTypeSerialized pgJsonType)
+      | Pg.typoid Pg.jsonb       == oid ->
+          Just $ HsDataType (hsVarFrom "jsonb" "Database.Beam.Postgres")
+                            (HsType (tyApp (tyConNamed "PgJSONB") [ tyConNamed "Value" ])
+                                    (importSome "Data.Aeson" [importTyNamed "Value"] <>
+                                     importSome "Database.Beam.Postgres" [importTyNamed "PgJSONB"]))
+                            (pgDataTypeSerialized pgJsonType)
+      | Pg.typoid pgTsVectorTypeInfo == oid ->
+          Just $ HsDataType (hsVarFrom "tsvector" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "TsVector")
+                                    (importSome "Database.Beam.Postgres" [importTyNamed "TsVector"]))
+                            (pgDataTypeSerialized pgTsVectorType)
+      | Pg.typoid pgTsQueryTypeInfo == oid ->
+          Just $ HsDataType (hsVarFrom "tsquery" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "TsQuery")
+                                    (importSome "Database.Beam.Postgres" [importTyNamed "TsQuery"]))
+                            (pgDataTypeSerialized pgTsQueryType)
     _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
 migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
@@ -259,6 +293,9 @@ jsonb = Db.DataType pgJsonbType
 
 uuid :: Db.DataType PgDataTypeSyntax UUID
 uuid = Db.DataType pgUuidType
+
+money :: Db.DataType PgDataTypeSyntax PgMoney
+money = Db.DataType pgMoneyType
 
 -- * Pseudo-data types
 

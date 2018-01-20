@@ -50,6 +50,15 @@ instance FromBackendRow Sqlite TL.Text
 instance FromBackendRow Sqlite UTCTime
 instance FromBackendRow Sqlite Day
 instance FromBackendRow Sqlite Sql.Null
+instance FromBackendRow Sqlite Char where
+  fromBackendRow = do
+    t <- fromBackendRow
+    case T.uncons t of
+      Just (c, _) -> pure c
+      _ -> fail "Need string of size one to parse Char"
+instance FromBackendRow Sqlite SqlNull where
+  fromBackendRow =
+    SqlNull <$ (fromBackendRow :: FromBackendRowM Sqlite Sql.Null)
 instance FromBackendRow Sqlite LocalTime where
   fromBackendRow = utcToLocalTime utc <$> fromBackendRow
 instance FromBackendRow Sqlite Scientific where

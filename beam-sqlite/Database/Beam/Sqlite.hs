@@ -4,5 +4,5 @@ module Database.Beam.Sqlite
   , module Database.Beam.Sqlite.Syntax ) where
 
 import Database.Beam.Sqlite.Types
-import Database.Beam.Sqlite.Syntax
+import Database.Beam.Sqlite.Syntax hiding (withPlaceholders, emit)
 import Database.Beam.Sqlite.Connection

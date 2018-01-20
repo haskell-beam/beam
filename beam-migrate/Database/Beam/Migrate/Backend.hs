@@ -48,7 +48,7 @@ data BeamMigrationBackend be commandSyntax hdl where
     , Sql92SanityCheck commandSyntax, Sql92SaneDdlCommandSyntax commandSyntax
     , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax commandSyntax)
     , Sql92ReasonableMarshaller be ) =>
-    { backendName, backendSqlExtension :: String
+    { backendName :: String
     , backendConnStringExplanation :: String
     , backendRenderSteps :: forall a. MigrationSteps commandSyntax () a -> BL.ByteString
     , backendGetDbConstraints :: m [ SomeDatabasePredicate ]
