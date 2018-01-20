@@ -31,14 +31,12 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Haskell.Syntax
 import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Generics
+import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.Types
 import           Database.Beam.Query
 import           Database.Beam.Query.SQL92
 
-import           Control.Applicative
-
-import           Data.Aeson
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -192,11 +190,19 @@ instance Hashable SqliteColumnConstraintDefinitionSyntax where
 instance Sql92DisplaySyntax SqliteColumnConstraintDefinitionSyntax where
   displaySyntax = displaySyntax . fromSqliteColumnConstraintDefinition
 
-newtype SqliteColumnConstraintSyntax = SqliteColumnConstraintSyntax { fromSqliteColumnConstraint :: SqliteConstraintAttributesSyntax -> SqliteSyntax }
-data SqliteConstraintAttributesSyntax = SqliteConstraintAttributesSyntax (Maybe Bool) (Maybe SqliteSyntax)
+data SqliteColumnConstraintSyntax
+    = SqliteColumnConstraintSyntax
+    { fromSqliteColumnConstraint :: SqlConstraintAttributesBuilder -> SqliteSyntax
+    , sqliteColumnConstraintSerialized :: BeamSerializedConstraint }
 newtype SqliteTableConstraintSyntax = SqliteTableConstraintSyntax { fromSqliteTableConstraint :: SqliteSyntax }
-newtype SqliteMatchTypeSyntax = SqliteMatchTypeSyntax { fromSqliteMatchType :: SqliteSyntax }
-newtype SqliteReferentialActionSyntax = SqliteReferentialActionSyntax { fromSqliteReferentialAction :: SqliteSyntax }
+data SqliteMatchTypeSyntax
+    = SqliteMatchTypeSyntax
+    { fromSqliteMatchType :: SqliteSyntax
+    , sqliteMatchTypeSerialized :: BeamSerializedMatchType }
+data SqliteReferentialActionSyntax
+    = SqliteReferentialActionSyntax
+    { fromSqliteReferentialAction :: SqliteSyntax
+    , sqliteReferentialActionSerialized :: BeamSerializedReferentialAction }
 newtype SqliteAlterTableSyntax = SqliteAlterTableSyntax { fromSqliteAlterTable :: SqliteSyntax }
 newtype SqliteAlterTableActionSyntax = SqliteAlterTableActionSyntax { fromSqliteAlterTableAction :: Maybe SqliteSyntax }
 newtype SqliteAlterColumnActionSyntax = SqliteAlterColumnActionSyntax { fromSqliteAlterColumnAction :: Maybe SqliteSyntax }
@@ -205,6 +211,10 @@ newtype SqliteDropTableSyntax = SqliteDropTableSyntax { fromSqliteDropTable :: S
 fromSqliteExpression :: SqliteExpressionSyntax -> SqliteSyntax
 fromSqliteExpression (SqliteExpressionSyntax s) = s
 fromSqliteExpression SqliteExpressionDefault = emit "NULL /* DEFAULT */"
+
+sqliteExpressionSerialized :: SqliteExpressionSyntax -> BeamSerializedExpression
+sqliteExpressionSerialized = BeamSerializedExpression . TE.decodeUtf8 . BL.toStrict .
+                             sqliteRenderSyntaxScript . fromSqliteExpression
 
 formatSqliteInsert :: T.Text -> [ T.Text ] -> SqliteInsertValuesSyntax -> SqliteSyntax
 formatSqliteInsert tblNm fields values =
@@ -281,13 +291,14 @@ instance IsSql92ColumnSchemaSyntax SqliteColumnSchemaSyntax where
 
 instance IsSql92ColumnConstraintDefinitionSyntax SqliteColumnConstraintDefinitionSyntax where
   type Sql92ColumnConstraintDefinitionConstraintSyntax SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintSyntax
-  type Sql92ColumnConstraintDefinitionAttributesSyntax SqliteColumnConstraintDefinitionSyntax = SqliteConstraintAttributesSyntax
+  type Sql92ColumnConstraintDefinitionAttributesSyntax SqliteColumnConstraintDefinitionSyntax = SqlConstraintAttributesBuilder
 
   constraintDefinitionSyntax nm def attrs =
     SqliteColumnConstraintDefinitionSyntax
       (maybe mempty (\nm' -> emit "CONSTRAINT " <> quotedIdentifier nm') nm <>
        fromSqliteColumnConstraint def (fromMaybe mempty attrs))
-      (BeamSerializedConstraintDefinition (object [])) -- TODO
+      (constraintDefinitionSyntax nm (sqliteColumnConstraintSerialized def)
+                                     (fmap sqlConstraintAttributesSerialized attrs))
 
 instance Sql92SerializableConstraintDefinitionSyntax SqliteColumnConstraintDefinitionSyntax where
   serializeConstraint = fromBeamSerializedConstraintDefinition . sqliteColumnConstraintDefinitionSerialized
@@ -297,36 +308,43 @@ instance IsSql92ColumnConstraintSyntax SqliteColumnConstraintSyntax where
   type Sql92ColumnConstraintReferentialActionSyntax SqliteColumnConstraintSyntax = SqliteReferentialActionSyntax
   type Sql92ColumnConstraintExpressionSyntax SqliteColumnConstraintSyntax = SqliteExpressionSyntax
 
-  notNullConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "NOT NULL")
-  uniqueColumnConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "UNIQUE")
-  primaryKeyColumnConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "PRIMARY KEY")
+  notNullConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "NOT NULL") notNullConstraintSyntax
+  uniqueColumnConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "UNIQUE") uniqueColumnConstraintSyntax
+  primaryKeyColumnConstraintSyntax = SqliteColumnConstraintSyntax (\_ -> emit "PRIMARY KEY") primaryKeyColumnConstraintSyntax
   checkColumnConstraintSyntax expr =
-    SqliteColumnConstraintSyntax $ \_ ->
-    emit "CHECK " <> parens (fromSqliteExpression expr)
+    SqliteColumnConstraintSyntax (\_ -> emit "CHECK " <> parens (fromSqliteExpression expr))
+                                 (checkColumnConstraintSyntax (sqliteExpressionSerialized expr))
   referencesConstraintSyntax tbl fields matchType onUpdate onDelete =
-    SqliteColumnConstraintSyntax $ \(SqliteConstraintAttributesSyntax deferrable atTime) ->
-    emit "REFERENCES " <> quotedIdentifier tbl <> parens (commas (map quotedIdentifier fields)) <>
-    maybe mempty (\matchType' -> emit " MATCH " <> fromSqliteMatchType matchType') matchType <>
-    maybe mempty (\onUpdate' -> emit " ON UPDATE " <> fromSqliteReferentialAction onUpdate') onUpdate <>
-    maybe mempty (\onDelete' -> emit " ON DELETE " <> fromSqliteReferentialAction onDelete') onDelete <>
-    case (deferrable, atTime) of
-      (_, Just atTime) ->
-        let deferrable' = fromMaybe False deferrable
-        in (if deferrable' then emit " DEFERRABLE " else emit " NOT DEFERRABLE ") <>
-           atTime
-      (Just deferrable', _) ->
-        if deferrable' then emit " DEFERRABLE" else emit " NOT DEFERRABLE"
-      _ -> mempty
+    SqliteColumnConstraintSyntax sqliteConstraint
+                                 (referencesConstraintSyntax tbl fields (fmap sqliteMatchTypeSerialized matchType)
+                                                             (fmap sqliteReferentialActionSerialized onUpdate)
+                                                             (fmap sqliteReferentialActionSerialized onDelete))
+    where
+      sqliteConstraint (SqlConstraintAttributesBuilder atTime deferrable) =
+        emit "REFERENCES " <> quotedIdentifier tbl <> parens (commas (map quotedIdentifier fields)) <>
+        maybe mempty (\matchType' -> emit " MATCH " <> fromSqliteMatchType matchType') matchType <>
+        maybe mempty (\onUpdate' -> emit " ON UPDATE " <> fromSqliteReferentialAction onUpdate') onUpdate <>
+        maybe mempty (\onDelete' -> emit " ON DELETE " <> fromSqliteReferentialAction onDelete') onDelete <>
+        case (deferrable, atTime) of
+          (_, Just atTime) ->
+            let deferrable' = fromMaybe False deferrable
+            in (if deferrable' then emit " DEFERRABLE " else emit " NOT DEFERRABLE ") <>
+               case atTime of
+                 InitiallyDeferred -> emit "INITIALLY DEFERRED"
+                 InitiallyImmediate -> emit "INITIALLY IMMEDIATE"
+          (Just deferrable', _) ->
+            if deferrable' then emit " DEFERRABLE" else emit " NOT DEFERRABLE"
+          _ -> mempty
 
 instance IsSql92MatchTypeSyntax SqliteMatchTypeSyntax where
-  fullMatchSyntax = SqliteMatchTypeSyntax (emit "FULL")
-  partialMatchSyntax = SqliteMatchTypeSyntax (emit "PARTIAL")
+  fullMatchSyntax = SqliteMatchTypeSyntax (emit "FULL") fullMatchSyntax
+  partialMatchSyntax = SqliteMatchTypeSyntax (emit "PARTIAL") partialMatchSyntax
 
 instance IsSql92ReferentialActionSyntax SqliteReferentialActionSyntax where
-  referentialActionCascadeSyntax = SqliteReferentialActionSyntax (emit "CASCADE")
-  referentialActionSetNullSyntax = SqliteReferentialActionSyntax (emit "SET NULL")
-  referentialActionSetDefaultSyntax = SqliteReferentialActionSyntax (emit "SET DEFAULT")
-  referentialActionNoActionSyntax = SqliteReferentialActionSyntax (emit "NO ACTION")
+  referentialActionCascadeSyntax = SqliteReferentialActionSyntax (emit "CASCADE") referentialActionCascadeSyntax
+  referentialActionSetNullSyntax = SqliteReferentialActionSyntax (emit "SET NULL") referentialActionSetNullSyntax
+  referentialActionSetDefaultSyntax = SqliteReferentialActionSyntax (emit "SET DEFAULT") referentialActionSetDefaultSyntax
+  referentialActionNoActionSyntax = SqliteReferentialActionSyntax (emit "NO ACTION") referentialActionNoActionSyntax
 
 instance IsSql92TableConstraintSyntax SqliteTableConstraintSyntax where
   primaryKeyConstraintSyntax fields =
@@ -347,17 +365,6 @@ instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
 
     in SqliteCreateTableSyntax $
        emit "CREATE TABLE " <> quotedIdentifier nm <> parens (commas (fieldDefs <> constraintDefs))
-
-instance Monoid SqliteConstraintAttributesSyntax where
-  mempty = SqliteConstraintAttributesSyntax Nothing Nothing
-  mappend (SqliteConstraintAttributesSyntax aDef aAtTime) (SqliteConstraintAttributesSyntax bDef bAtTime) =
-    SqliteConstraintAttributesSyntax (bDef <|> aDef) (bAtTime <|> aAtTime)
-
-instance IsSql92ConstraintAttributesSyntax SqliteConstraintAttributesSyntax where
-  initiallyDeferredAttributeSyntax = SqliteConstraintAttributesSyntax Nothing (Just (emit "INITIALLY DEFERRED"))
-  initiallyImmediateAttributeSyntax = SqliteConstraintAttributesSyntax Nothing (Just (emit "INITIALLY IMMEDIATE"))
-  notDeferrableAttributeSyntax = SqliteConstraintAttributesSyntax (Just False) Nothing
-  deferrableAttributeSyntax = SqliteConstraintAttributesSyntax (Just True) Nothing
 
 instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
   domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm) (domainType nm) (domainType nm)
@@ -737,7 +744,8 @@ instance HasDefaultSqlDataType SqliteDataTypeSyntax (SqlSerial Int) where
   defaultSqlDataType _ _ = intType
 instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax (SqlSerial Int) where
   defaultSqlDataTypeConstraints _ _ False = [ FieldCheck $ \tblNm colNm -> p (TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint SqliteColumnSchemaSyntax) ]
-    where c = constraintDefinitionSyntax Nothing (SqliteColumnConstraintSyntax (\_ -> emit "DEFAULT ROWID")) Nothing
+    where c = constraintDefinitionSyntax Nothing (SqliteColumnConstraintSyntax (\_ -> emit "DEFAULT ROWID")
+                                                                               (BeamSerializedConstraint (beamSerializeJSON "sqlite" "serial"))) Nothing
   defaultSqlDataTypeConstraints _ _ _ = []
 
 instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where

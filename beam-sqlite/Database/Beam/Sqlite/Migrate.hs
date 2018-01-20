@@ -17,8 +17,7 @@ import           Control.Monad.Reader
 
 import           Database.SQLite.Simple
                     ( Connection, Only(..)
-                    , open, close, query, query_ )
-import qualified Database.SQLite3 as LL
+                    , open, close, query_ )
 
 import           Data.Aeson
 import           Data.Attoparsec.Text (asciiCI, skipSpace)

@@ -8,7 +8,9 @@ import           Database.Beam.Migrate.Tool.Diff
 import           Database.Beam.Migrate.Tool.Registry
 import           Database.Beam.Migrate.Tool.Schema
 
-import           Database.Beam.Migrate (SomeDatabasePredicate(..), DatabasePredicate(..))
+import           Database.Beam.Migrate ( SomeDatabasePredicate(..)
+                                       , DatabasePredicate(..)
+                                       , PredicateSource(..) )
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.Backend
 
@@ -30,6 +32,7 @@ import           Data.Text (Text)
 import           Data.Time
 import           Data.UUID (UUID)
 import qualified Data.UUID as UUID (nil)
+import qualified Data.Yaml as Yaml
 
 import qualified Language.Haskell.Exts as Hs
 
@@ -132,6 +135,23 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
                          newBaseBranch branchName' hsHash registry
                        Just branch ->
                          updateBranch branchName' (branch { migrationBranchCommit = hsHash }) registry)
+
+dumpSchema :: MigrateCmdLine
+           -> ModuleName
+           -> String
+           -> IO ()
+dumpSchema cmdLine backend connStr = do
+  backend' <- loadBackend' cmdLine backend
+  case backend' of
+    SomeBeamMigrationBackend (BeamMigrationBackend { backendGetDbConstraints = getConstraints
+                                                   , backendTransact = transact }) -> do
+      cs <- transact connStr getConstraints
+      case cs of
+        Left err -> fail ("Error getting constraints: " ++ show err)
+        Right cs' ->
+          let sch = Schema (map (\c -> (HS.singleton predSrc, c)) cs')
+              predSrc = PredicateSourceBackend (unModuleName backend)
+          in BS.putStrLn (Yaml.encode sch)
 
 showSimpleSchema :: MigrateCmdLine
                  -> ModuleName

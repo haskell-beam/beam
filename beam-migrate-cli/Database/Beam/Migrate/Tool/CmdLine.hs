@@ -39,6 +39,7 @@ data DatabaseCommand
 
 data SimpleCommand
   = SimpleCommandHsSchema ModuleName String
+  | SimpleCommandDumpSchema ModuleName String
   deriving Show
 
 data BranchCommand
@@ -183,12 +184,20 @@ migrationArgParser =
         newParser = SchemaCommandNew <$> (fromString <$> strArgument (metavar "FROM" <> help "Schema to iterate on" <> value "HEAD"))
                                      <*> strOption (long "tmp-file" <> metavar "TMPFILE" <> help "Temporary file to edit schema" <> value "BeamMigrateSchema.hs")
 
-    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand ])
+    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand
+                                                               , command "dump"   dumpSchemaCommand ])
+
+    backendOption = ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use")
+    connectionOption = strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend")
 
     simpleSchemaCommand =
       info (simpleSchemaParser <**> helper) (fullDesc <> progDesc "Extract a haskell schema from the given database")
-      where simpleSchemaParser = SimpleCommandHsSchema <$> (ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use"))
-                                                       <*> strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend")
+      where simpleSchemaParser = SimpleCommandHsSchema <$> backendOption
+                                                       <*> connectionOption
+    dumpSchemaCommand =
+      info (dumpSchemaParser <**> helper) (fullDesc <> progDesc "Dump the given database schema in machine-readable format")
+      where dumpSchemaParser = SimpleCommandDumpSchema <$> backendOption
+                                                       <*> connectionOption
 
     migrateParser = pure MigrateCommandMigrate
 
