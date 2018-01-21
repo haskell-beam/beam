@@ -70,7 +70,14 @@ library
                        StandaloneDeriving, GADTs, DeriveFunctor, RankNTypes, ScopedTypeVariables,
                        FlexibleInstances, TypeOperators, TypeApplications, MultiParamTypeClasses,
                        DataKinds, DeriveGeneric
-  ghc-options:         -O2 -Wall -Werror
+  ghc-options:         -Wall
+  if flag(werror)
+    ghc-options:       -Werror
+
+flag werror
+  description: Enable -Werror during development
+  default:     False
+  manual:      True
 
 source-repository head
   type: git
