@@ -52,15 +52,38 @@ fromScientificOrIntegral = do
       pure sciVal'
     Nothing -> fromIntegral <$> fromBackendRow @Postgres @Integer
 
+-- | Deserialize integral fields, possibly downcasting from a larger integral
+-- type, but only if we won't lose data
+fromPgIntegral :: forall a
+                . (Pg.FromField a, Integral a)
+               => FromBackendRowM Postgres a
+fromPgIntegral = do
+  val <- peekField
+  case val of
+    Just val' -> do
+      _ <- parseOneField @Postgres @a
+      pure val'
+    Nothing -> do
+      val' <- parseOneField @Postgres @Integer
+      let val'' = fromIntegral val'
+      if fromIntegral val'' == val'
+        then pure val''
+        else fail (concat [ "Data loss while downsizing Integral type. "
+                          , "Make sure your Haskell types are wide enough for your data" ])
+
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
 instance FromBackendRow Postgres SqlNull
 instance FromBackendRow Postgres Bool
 instance FromBackendRow Postgres Char
 instance FromBackendRow Postgres Double
-instance FromBackendRow Postgres Int
-instance FromBackendRow Postgres Int16
-instance FromBackendRow Postgres Int32
-instance FromBackendRow Postgres Int64
+instance FromBackendRow Postgres Int where
+  fromBackendRow = fromPgIntegral
+instance FromBackendRow Postgres Int16 where
+  fromBackendRow = fromPgIntegral
+instance FromBackendRow Postgres Int32 where
+  fromBackendRow = fromPgIntegral
+instance FromBackendRow Postgres Int64 where
+  fromBackendRow = fromPgIntegral
 -- Word values are serialized as SQL @NUMBER@ types to guarantee full domain coverage.
 -- However, we wan them te be serialized/deserialized as whichever type makes sense
 instance FromBackendRow Postgres Word where
