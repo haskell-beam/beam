@@ -46,7 +46,7 @@ values in the sort ordering.
 ```haskell
 !chinookpg postgres
 limit_ 10 $
-orderBy_ (\e -> (asc_ (addressState (employeeAddress e)), nullsLast_ (desc_ (addressCity (employeeAddress e)))) $
+orderBy_ (\e -> (asc_ (addressState (employeeAddress e)), nullsLast_ (desc_ (addressCity (employeeAddress e))))) $
 all_ (employee chinookDb)
 ```
 

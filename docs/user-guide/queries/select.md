@@ -51,6 +51,71 @@ sqlite and postgres.
 all_ (track chinookDb)
 ```
 
+## Returning a subset of columns
+
+Oftentimes we only care about the value of a few columns, rather than every
+column in the table. Beam fully supports taking projections of tables. As said
+before, `Q` is a `Monad`. Thus, we can use monadic `do` notation to only select a
+certain subset of columns. For example, to fetch *only* the name of every track:
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do tracks <- all_ (track chinookDb)
+   pure (trackName tracks)
+```
+
+Notice that beam has properly written the `SELECT` projection to only include
+the `Name` field.
+
+We can also return multiple fields, by returning a tuple. Perhaps we would also
+like to know the composer:
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do tracks <- all_ (track chinookDb)
+   pure (trackName tracks, trackComposer tracks)
+```
+
+You can also return arbitrary expressions in the projection. For example to
+return the name, composer, unit price, and length in seconds (where the database stores it in milliseconds):
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do tracks <- all_ (track chinookDb)
+   pure (trackName tracks, trackComposer tracks, trackMilliseconds tracks `div_` 1000)
+```
+
+Beam includes instances to support returning up to 6-tuples. To return more,
+feel free to nest tuples. As an example, we can write the above query as
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do tracks <- all_ (track chinookDb)
+   pure ((trackName tracks, trackComposer tracks), trackMilliseconds tracks `div_` 1000)
+```
+
+Notice that the nesting of tuples does not affect the generated SQL projection.
+The tuple structure is only used when reading back the row from the database.
+
+The `Q` monad is perfectly rule-abiding, which means it also implements a valid
+`Functor` instance. Thus the above could more easily be written.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+fmap (\tracks -> (trackName tracks, trackComposer tracks, trackMilliseconds tracks `div_` 1000)) $
+all_ (track chinookDb)
+```
+
 ## `WHERE` clause
 
 We've seen how to use `all_` to select all rows of a table. Sometimes, you would

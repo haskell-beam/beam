@@ -107,7 +107,7 @@ Just totalLineItems <-
   runSelectReturningOne $ select $
   aggregate_ (\ln -> sum_ (invoiceLineQuantity ln)) $
   all_ (invoiceLine chinookDb)
-putStrLn ("Before, we had " ++ show totalLineItems ++ " total products sold")
+putStrLn ("Before, we had " ++ show totalLineItems ++ " total products sold\n")
 
 runUpdate $ update (invoiceLine chinookDb)
                    (\ln -> [ invoiceLineQuantity ln <-. current_ (invoiceLineQuantity ln) * 2 ])

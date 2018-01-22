@@ -27,6 +27,78 @@ Prelude Chinook.Schema> let withConnectionTutorial = withDatabaseDebug putStrLn 
 This function prints each of our queries to standard output before running them.
 Using this function will let us see what SQL is executing.
 
+## Full inner joins
+
+Recall that the `Q` type is a monad. In many respects, `Q` operates like the
+list monad. For those unfamiliar, the monadic bind operator for `[]` is defined
+as `concatMap`. Thus,
+
+```haskell
+do a <- [1,2,3]
+   b <- [4,5,6]
+   return (a, b)
+```
+
+is equivalent to `[(1,4),(1,5),(1,6),(2,4),(2,5),(2,6),(3,4),(3,5),(3,6)]`.
+
+This operation is similar to the cartesian product from set theory or the *inner
+join* from relational algebra. The `Q` monad fully supports this notion of join,
+and in fact, every other join is built off of this primitive.
+
+For example, to get every row from the invoice table and every row from the
+invoice line table, with no attention paid to any relationship between the two:
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do i <- all_ (invoice chinookDb)
+   ln <- all_ (invoiceLine chinookDb)
+   pure (i, ln)
+```
+
+Of course, most of the time you only want to fetch relevant rows. Going back to
+the list monad example, suppose we only want to fetch pairs where the second
+number is less than or equal to twice the first. In Haskell, we'd use the
+`guard` function.
+
+```haskell
+do a <- [1,2,3]
+   b <- [4,5,6]
+   guard (b <= a * 2)
+   return (a, b)
+```
+
+This would return `[(2,4),(3,4),(3,5)]`.
+
+Beam offers a similar function for the `Q` monad, named `guard_`. Note that
+whereas the `Q` bind operator is the same as the Haskell monadic bind, the
+corresponding `guard` function is not from `MonadZero`, as it is in Haskell. The
+technical reason is that the argument to `guard_` in `Q` represents a SQL
+expression returning a boolean, rather than a Haskell boolean itself.
+
+Going back to our invoice line example above, we can fetch every invoice along
+with only those invoice lines corresponding to that invoice.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+do i <- all_ (invoice chinookDb)
+   ln <- all_ (invoiceLine chinookDb)
+   guard_ (invoiceLineInvoice ln `references_` i)
+   pure (i, ln)
+```
+
+Note that beam has floated the `guard_` expression into the `WHERE` clause,
+rather than the `ON` clause, This is fine for most inner joins on most database
+engines, as the query optimizer will execute both queries similarly. However,
+some backends are more temperamental, so Beam offers several more idiomatic ways
+to express joins which more closely reflect the underlying SQL. In practice,
+most users will use the methods below to express JOINs, but it is nevertheless
+important to understand that joining is fundamental to the structure of the `Q`
+moand.
+
 ## One-to-many
 
 Beam supports querying for one-to-many joins. For example, to get every
@@ -68,6 +140,10 @@ and
 ```haskell
 invoiceLines (val_ i)
 ```
+
+Notice that, instead of floating the join condition to the `WHERE` clause, beam
+generates an `INNER JOIN ... ON` expression. These statements are equivalent,
+although the `ON` expression is more idiomatic.
 
 ### Nullable columns
 

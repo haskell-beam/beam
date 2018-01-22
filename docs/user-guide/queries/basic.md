@@ -29,6 +29,13 @@ In this definition
   
 * `a` is the type of the result of the query.
 
+`Q` is a monad, which means you can use your favorite `Monad`, `Applicative`,
+and `Functor` functions. The `Functor` instance can be used to create
+projections
+as [explained in the next section](./select.md#returning-a-subset-of-columns).
+The `Monad` and `Applicative` instances can be used
+to [create JOINs](./relationships.md#full-inner-joins).
+
 ### The `QGenExpr` type
 
 While `Q` represents the result of whole queries (entire `SELECT`s for example),
