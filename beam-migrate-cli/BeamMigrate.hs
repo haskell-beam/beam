@@ -66,6 +66,8 @@ main = do
 
     MigrateCommandSimple (SimpleCommandHsSchema backend connStr) ->
       showSimpleSchema cmdLine backend connStr
+    MigrateCommandSimple (SimpleCommandDumpSchema backend connStr) ->
+      dumpSchema cmdLine backend connStr
 
     MigrateCommandMigrate ->
       doMigrateDatabase cmdLine

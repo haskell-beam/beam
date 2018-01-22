@@ -22,7 +22,7 @@ loadBackend cmdLine reg dbName =
 
 loadBackend' :: MigrateCmdLine -> ModuleName -> IO SomeBeamMigrationBackend
 loadBackend' cmdLine (ModuleName backend) = do
-  let ghciArgs = map (\p -> "--package-db " <> p) (migratePackagePath cmdLine)
+  let ghciArgs = map (\p -> "-package-db " <> p) (migratePackagePath cmdLine) <> [ "-v", "-fno-code" ]
       runInterpreter' = unsafeRunInterpreterWithArgs ghciArgs
 
   res <- runInterpreter' $ do
