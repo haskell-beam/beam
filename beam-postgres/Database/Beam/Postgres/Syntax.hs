@@ -484,7 +484,7 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   timeType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.time) Nothing)
                                           (emit "TIME" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
                                           (timeType prec withTz)
-  timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.timestamp) Nothing)
+  timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid (if withTz then Pg.timestamptz else Pg.timestamp)) Nothing)
                                                (emit "TIMESTAMP" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
                                                (timestampType prec withTz)
 
