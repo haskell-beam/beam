@@ -4,9 +4,35 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Migrate.Types
-  ( module Database.Beam.Migrate.Types.CheckedEntities
-  , module Database.Beam.Migrate.Types.Predicates
+  ( -- * Checked database entities
+    CheckedDatabaseSettings
 
+  , IsCheckedDatabaseEntity(..)
+  , CheckedDatabaseEntityDescriptor(..)
+  , CheckedDatabaseEntity(..)
+
+  , unCheckDatabase, collectChecks
+
+    -- ** Modifyinging checked entities
+    --
+    --    The functions in this section can be used to modify 'CheckedDatabaseSettings' objects.
+  , CheckedFieldModification
+
+  , modifyCheckedTable
+  , checkedTableModification
+
+    -- * Predicates
+  , DatabasePredicate(..)
+  , SomeDatabasePredicate(..)
+  , PredicateSpecificity(..)
+
+  , p
+
+    -- * Entity checks
+  , TableCheck(..), DomainCheck(..)
+  , FieldCheck(..)
+
+    -- * Migrations
   , MigrationStep(..), MigrationSteps(..)
   , Migration, MigrationF(..)
 

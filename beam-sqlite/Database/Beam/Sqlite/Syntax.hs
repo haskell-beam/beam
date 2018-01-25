@@ -33,6 +33,7 @@ import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
+import           Database.Beam.Migrate.Serialization
 import           Database.Beam.Migrate.Types
 import           Database.Beam.Query
 import           Database.Beam.Query.SQL92
@@ -272,6 +273,15 @@ instance IsSql92AlterTableActionSyntax SqliteAlterTableActionSyntax where
     SqliteAlterTableActionSyntax . Just $
     emit "ADD COLUMN " <> quotedIdentifier columnNm <> emit " " <> fromSqliteColumnSchema schema
   dropColumnSyntax _ = SqliteAlterTableActionSyntax Nothing
+
+  renameTableToSyntax newNm =
+    SqliteAlterTableActionSyntax . Just $
+    emit "RENAME TO " <> quotedIdentifier newNm
+
+  renameColumnToSyntax oldNm newNm =
+    SqliteAlterTableActionSyntax . Just $
+    emit "RENAME COLUMN " <> quotedIdentifier oldNm <>
+    emit " TO "           <> quotedIdentifier newNm
 
 instance IsSql92AlterColumnActionSyntax SqliteAlterColumnActionSyntax where
   setNotNullSyntax = SqliteAlterColumnActionSyntax Nothing

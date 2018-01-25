@@ -1,6 +1,8 @@
 module Database.Beam.Migrate.Tool.Registry where
 
 import           Database.Beam.Migrate
+import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Serialization
 import           Database.Beam.Migrate.Tool.CmdLine
 
 import           Control.Applicative
@@ -121,7 +123,7 @@ data MigrationRegistry
 
 data Schema
   = Schema
-  { schemaPredicates :: [ (HS.HashSet PredicateSource, SomeDatabasePredicate) ]
+  { schemaPredicates :: [ (HS.HashSet PredicateSpecificity, SomeDatabasePredicate) ]
   } deriving Show
 
 data SchemaMetaData

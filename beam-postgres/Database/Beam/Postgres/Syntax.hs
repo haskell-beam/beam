@@ -101,9 +101,9 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
 
-import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
+import           Database.Beam.Migrate.Serialization
 
 import           Database.Beam.Migrate.Generics
 
@@ -484,7 +484,7 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   timeType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.time) Nothing)
                                           (emit "TIME" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
                                           (timeType prec withTz)
-  timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.timestamp) Nothing)
+  timestampType prec withTz = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid (if withTz then Pg.timestamptz else Pg.timestamp)) Nothing)
                                                (emit "TIMESTAMP" <> pgOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
                                                (timestampType prec withTz)
 
@@ -892,6 +892,14 @@ instance IsSql92AlterTableActionSyntax PgAlterTableActionSyntax where
   dropColumnSyntax colNm =
     PgAlterTableActionSyntax $
     emit "DROP COLUMN " <> pgQuotedIdentifier colNm
+
+  renameTableToSyntax newNm =
+    PgAlterTableActionSyntax $
+    emit "RENAME TO " <> pgQuotedIdentifier newNm
+
+  renameColumnToSyntax oldNm newNm =
+    PgAlterTableActionSyntax $
+    emit "RENAME COLUMN " <> pgQuotedIdentifier oldNm <> emit " TO " <> pgQuotedIdentifier newNm
 
 instance IsSql92AlterColumnActionSyntax PgAlterColumnActionSyntax where
   setNullSyntax = PgAlterColumnActionSyntax (emit "DROP NOT NULL")

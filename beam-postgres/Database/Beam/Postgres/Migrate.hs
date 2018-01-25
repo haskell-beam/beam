@@ -6,16 +6,14 @@
 
 module Database.Beam.Postgres.Migrate where
 
-import qualified Database.Beam.Migrate.Checks as Db
-import qualified Database.Beam.Migrate.SQL.Types as Db
-import qualified Database.Beam.Migrate.SQL.SQL92 as Db
-import qualified Database.Beam.Migrate.Types as Db
-
 import           Database.Beam.Backend.SQL
-
-import           Database.Beam.Migrate.SQL.BeamExtensions
+import           Database.Beam.Migrate.Actions (defaultActionProvider)
 import qualified Database.Beam.Migrate.Backend as Tool
-import           Database.Beam.Migrate.Actions (defaultActionProviders)
+import qualified Database.Beam.Migrate.Checks as Db
+import           Database.Beam.Migrate.SQL.BeamExtensions
+import qualified Database.Beam.Migrate.SQL as Db
+import qualified Database.Beam.Migrate.Serialization as Db
+import qualified Database.Beam.Migrate.Types as Db
 
 import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.PgSpecific
@@ -69,7 +67,7 @@ migrationBackend = Tool.BeamMigrationBackend
                          postgresDataTypeDeserializers <>
                          Db.beamCheckDeserializers)
                         (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand) "postgres.sql"
-                        pgPredConverter (defaultActionProviders <> pgExtensionActionProviders)
+                        pgPredConverter (defaultActionProvider <> pgExtensionActionProvider)
                         (\options action ->
                             bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
                               left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
@@ -96,7 +94,7 @@ postgresDataTypeDeserializers =
     _             -> fail "Postgres data type"
 
 pgPredConverter :: Tool.HaskellPredicateConverter
-pgPredConverter = Tool.easyHsPredicateConverter @PgColumnSchemaSyntax pgTypeToHs <>
+pgPredConverter = Tool.sql92HsPredicateConverters @PgColumnSchemaSyntax pgTypeToHs <>
                   Tool.hsPredicateConverter pgHasColumnConstraint
   where
     pgHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c :: Db.TableColumnHasConstraint PgColumnSchemaSyntax)

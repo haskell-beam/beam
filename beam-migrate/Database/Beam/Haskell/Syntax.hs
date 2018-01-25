@@ -6,8 +6,8 @@ module Database.Beam.Haskell.Syntax where
 import           Database.Beam hiding (lookup)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.Builder
-import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.SQL.SQL92
+import           Database.Beam.Migrate.Serialization
 
 import           Data.Char (toLower, toUpper)
 import           Data.Hashable
@@ -393,6 +393,8 @@ instance IsSql92AlterTableActionSyntax HsNone where
   alterColumnSyntax _ _ = HsNone
   addColumnSyntax _ _ = HsNone
   dropColumnSyntax _ = HsNone
+  renameTableToSyntax _ = HsNone
+  renameColumnToSyntax _ _ = HsNone
 
 instance IsSql92AlterColumnActionSyntax HsNone where
   setNullSyntax = HsNone
