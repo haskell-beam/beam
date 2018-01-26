@@ -1143,7 +1143,6 @@ gh70OrderByInFirstJoinCausesIncorrectProjection =
     , testCase "Grouping" grouping
     , testCase "Top-level OFFSET 0" topLevelOffs0
     ]
---    , testCase "Top-level"]
   where
     employees = "t0"; roles = "t1"
 
