@@ -4,28 +4,35 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 
+-- | SQLite implementations of the Beam SQL syntax classes
+--
+-- The SQLite command syntax is implemented by 'SQLiteCommandSyntax'.
 module Database.Beam.Sqlite.Syntax
-  ( SqliteSyntax(..)
+  (  -- * SQLite syntaxes
+    SqliteSyntax(..)
 
   , SqliteCommandSyntax(..)
 
   , SqliteSelectSyntax(..), SqliteInsertSyntax(..)
+  , SqliteUpdateSyntax(..), SqliteDeleteSyntax(..)
+
   , SqliteInsertValuesSyntax(..)
-  , SqliteExpressionSyntax(..)
-
-  , SqliteDataTypeSyntax(..), SqliteValueSyntax(..)
   , SqliteColumnSchemaSyntax(..)
+  , SqliteExpressionSyntax(..), SqliteValueSyntax(..)
 
-  , fromSqliteCommand, emit
-
-  , sqliteEscape
-  , sqliteRenderSyntaxScript
-  , withPlaceholders
-
+    -- * SQLite data type syntax
+  , SqliteDataTypeSyntax(..)
   , sqliteTextType, sqliteBlobType
   , sqliteBigIntType
 
-  , formatSqliteInsert ) where
+    -- * Building and consuming 'SqliteSyntax'
+  , fromSqliteCommand, formatSqliteInsert
+
+  , emit, emitValue
+
+  , sqliteEscape, withPlaceholders
+  , sqliteRenderSyntaxScript
+  ) where
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Haskell.Syntax
@@ -59,6 +66,19 @@ import           Database.SQLite.Simple (SQLData(..))
 import           GHC.Float
 import           GHC.Generics
 
+-- | The syntax for SQLite is stored as a 'Builder' along with a list of data
+-- that hasn't been serialized yet.
+--
+-- The first argument is a function that receives a builder for 'SQLData' and
+-- returns the concrete syntax to embed into the query. For queries sent to the
+-- backend, this is simply a function that returns @"?"@. Thus, the syntax sent
+-- to the backend includes proper placeholders. The list of data is sent to the
+-- SQLite library for proper escaping.
+--
+-- When the syntax is being serialized for display (for use in beam migrate for
+-- example), the data builder attempts to properly format and escape the data.
+-- This returns syntax suitable for inclusion in scripts. In this case, the
+-- value list is ignored.
 data SqliteSyntax = SqliteSyntax ((SQLData -> Builder) -> Builder) (DL.DList SQLData)
 newtype SqliteData = SqliteData SQLData -- newtype for Hashable
 
@@ -91,9 +111,12 @@ instance Hashable SqliteData where
   hashWithSalt salt (SqliteData (SQLBlob b))    = hashWithSalt salt (3 :: Int, b)
   hashWithSalt salt (SqliteData SQLNull)        = hashWithSalt salt (4 :: Int)
 
+-- | Convert the first argument of 'SQLiteSyntax' to a 'ByteString' 'Builder',
+-- where all the data has been replaced by @"?"@ placeholders.
 withPlaceholders :: ((SQLData -> Builder) -> Builder) -> Builder
 withPlaceholders build = build (\_ -> "?")
 
+-- | Embed a 'ByteString' directly in the syntax
 emit :: ByteString -> SqliteSyntax
 emit b = SqliteSyntax (\_ -> byteString b) mempty
 
@@ -103,12 +126,21 @@ emit' x = SqliteSyntax (\_ -> byteString (fromString (show x))) mempty
 quotedIdentifier :: T.Text -> SqliteSyntax
 quotedIdentifier txt = emit "\"" <> SqliteSyntax (\_ -> stringUtf8 (T.unpack (sqliteEscape txt))) mempty <> emit "\""
 
+-- | A best effort attempt to implement the escaping rules of SQLite. This is
+-- never used to escape data sent to the database; only for emitting scripts or
+-- displaying syntax to the user.
 sqliteEscape :: T.Text -> T.Text
 sqliteEscape = T.concatMap (\c -> if c == '"' then "\"\"" else T.singleton c)
 
+-- | Emit a properly escaped value into the syntax
+--
+-- This causes a literal @?@ 3
 emitValue ::  SQLData -> SqliteSyntax
 emitValue v = SqliteSyntax ($ v) (DL.singleton v)
 
+-- | Render a 'SqliteSyntax' as a lazy 'BL.ByteString', for purposes of
+-- displaying to a user. Embedded 'SQLData' is directly embedded into the
+-- concrete syntax, with a best effort made to escape strings.
 sqliteRenderSyntaxScript :: SqliteSyntax -> BL.ByteString
 sqliteRenderSyntaxScript (SqliteSyntax s _) =
     toLazyByteString . s $ \case
@@ -122,28 +154,44 @@ sqliteRenderSyntaxScript (SqliteSyntax s _) =
 
 -- * Syntax types
 
+-- | A SQLite command. @INSERT@ is special cased to handle @AUTO INCREMENT@
+-- columns. The 'fromSqliteCommand' function will take an 'SqliteCommandSyntax'
+-- and convert it into the correct 'SqliteSyntax'.
 data SqliteCommandSyntax
   = SqliteCommandSyntax SqliteSyntax
   | SqliteCommandInsert SqliteInsertSyntax
 
+-- | Convert a 'SqliteCommandSyntax' into a renderable 'SqliteSyntax'
 fromSqliteCommand :: SqliteCommandSyntax -> SqliteSyntax
 fromSqliteCommand (SqliteCommandSyntax s) = s
 fromSqliteCommand (SqliteCommandInsert (SqliteInsertSyntax tbl fields values)) =
     formatSqliteInsert tbl fields values
 
+-- | SQLite @SELECT@ syntax
 newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSyntax }
 instance HasQBuilder SqliteSelectSyntax where
   buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
+
+
+-- | SQLite @INSERT@ syntax. This doesn't directly wrap 'SqliteSyntax' because
+-- we need to do some processing on @INSERT@ statements to deal with @AUTO
+-- INCREMENT@ columns. Use 'formatSqliteInsert' to turn 'SqliteInsertSyntax'
+-- into 'SqliteSyntax'.
 data SqliteInsertSyntax
   = SqliteInsertSyntax
   { sqliteInsertTable :: T.Text
   , sqliteInsertFields :: [ T.Text ]
   , sqliteInsertValues :: SqliteInsertValuesSyntax
   }
+
+-- | SQLite @UPDATE@ syntax
 newtype SqliteUpdateSyntax = SqliteUpdateSyntax { fromSqliteUpdate :: SqliteSyntax }
+-- | SQLite @DELETE@ syntax
 newtype SqliteDeleteSyntax = SqliteDeleteSyntax { fromSqliteDelete :: SqliteSyntax }
 
 newtype SqliteSelectTableSyntax = SqliteSelectTableSyntax { fromSqliteSelectTable :: SqliteSyntax }
+
+-- | Implements beam SQL expression syntaxes
 data SqliteExpressionSyntax
   = SqliteExpressionSyntax SqliteSyntax
   | SqliteExpressionDefault
@@ -156,20 +204,31 @@ newtype SqliteAggregationSetQuantifierSyntax = SqliteAggregationSetQuantifierSyn
 newtype SqliteProjectionSyntax = SqliteProjectionSyntax { fromSqliteProjection :: SqliteSyntax }
 newtype SqliteGroupingSyntax = SqliteGroupingSyntax { fromSqliteGrouping :: SqliteSyntax }
 newtype SqliteOrderingSyntax = SqliteOrderingSyntax { fromSqliteOrdering :: SqliteSyntax }
+-- | SQLite syntax for values that can be embedded in 'SqliteSyntax'
 newtype SqliteValueSyntax = SqliteValueSyntax { fromSqliteValue :: SqliteSyntax }
 newtype SqliteTableSourceSyntax = SqliteTableSourceSyntax { fromSqliteTableSource :: SqliteSyntax }
 newtype SqliteFieldNameSyntax = SqliteFieldNameSyntax { fromSqliteFieldNameSyntax :: SqliteSyntax }
+
+-- | SQLite @VALUES@ clause in @INSERT@. Expressions need to be handled
+-- explicitly in order to deal with @DEFAULT@ values and @AUTO INCREMENT@
+-- columns.
 data SqliteInsertValuesSyntax
   = SqliteInsertExpressions [ [ SqliteExpressionSyntax ] ]
   | SqliteInsertFromSql SqliteSelectSyntax
 newtype SqliteCreateTableSyntax = SqliteCreateTableSyntax { fromSqliteCreateTable :: SqliteSyntax }
 data SqliteTableOptionsSyntax = SqliteTableOptionsSyntax SqliteSyntax SqliteSyntax
 
-newtype SqliteColumnSchemaSyntax = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax } deriving (Show, Eq, Hashable)
+-- | SQLite syntax for column schemas in @CREATE TABLE@ or @ALTER COLUMN ... ADD
+-- COLUMN@ statements
+newtype SqliteColumnSchemaSyntax
+  = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax }
+  deriving (Show, Eq, Hashable)
 
 instance Sql92DisplaySyntax SqliteColumnSchemaSyntax where
   displaySyntax = displaySyntax . fromSqliteColumnSchema
 
+-- | SQLite syntax that implements 'IsSql92DataTypeSyntax' and a good portion of
+-- 'IsSql99DataTypeSyntax', except for array and row types.
 data SqliteDataTypeSyntax
   = SqliteDataTypeSyntax
   { fromSqliteDataType :: SqliteSyntax
@@ -217,6 +276,7 @@ sqliteExpressionSerialized :: SqliteExpressionSyntax -> BeamSerializedExpression
 sqliteExpressionSerialized = BeamSerializedExpression . TE.decodeUtf8 . BL.toStrict .
                              sqliteRenderSyntaxScript . fromSqliteExpression
 
+-- | Format a SQLite @INSERT@ expression for the given table name, fields, and values.
 formatSqliteInsert :: T.Text -> [ T.Text ] -> SqliteInsertValuesSyntax -> SqliteSyntax
 formatSqliteInsert tblNm fields values =
   emit "INSERT INTO " <> quotedIdentifier tblNm <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
@@ -408,6 +468,16 @@ instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
                                               (timeType prec withTz) (timeType prec withTz)
   timestampType prec withTz = SqliteDataTypeSyntax (emit "TIMESTAMP" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
                                                    (timestampType prec withTz) (timestampType prec withTz)
+
+instance IsSql99DataTypeSyntax SqliteDataTypeSyntax where
+  characterLargeObjectType = sqliteTextType
+  binaryLargeObjectType = sqliteBlobType
+  booleanType = SqliteDataTypeSyntax (emit "BOOLEAN") booleanType booleanType
+  arrayType _ _ = error "SQLite does not support arrayType"
+  rowType _ = error "SQLite does not support rowType"
+
+instance IsSql2008BigIntDataTypeSyntax SqliteDataTypeSyntax where
+  bigIntType = sqliteBigIntType
 
 sqliteTextType, sqliteBlobType, sqliteBigIntType :: SqliteDataTypeSyntax
 sqliteTextType = SqliteDataTypeSyntax (emit "TEXT")

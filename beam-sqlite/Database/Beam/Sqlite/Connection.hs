@@ -2,9 +2,12 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Database.Beam.Sqlite.Connection where
+module Database.Beam.Sqlite.Connection
+  ( Sqlite(..), SqliteM(..)
+  , sqliteUriSyntax ) where
 
 import           Database.Beam.Backend
+import           Database.Beam.Backend.SQL
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import           Database.Beam.Backend.URI
 import           Database.Beam.Query (SqlInsert(..), SqlInsertValues(..), insert)
@@ -12,40 +15,121 @@ import           Database.Beam.Schema.Tables ( DatabaseEntity(..)
                                              , DatabaseEntityDescriptor(..)
                                              , TableEntity)
 import           Database.Beam.Sqlite.Syntax
-import           Database.Beam.Sqlite.Types
 
 import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
-                                        , Query(..)
-                                        , SQLData, field
+                                        , Query(..), SQLData(..), field
                                         , execute, execute_
                                         , withStatement, bind, nextRow
                                         , withTransaction, query_
                                         , withConnection )
+import           Database.SQLite.Simple.FromField ( FromField(..), ResultError(..)
+                                                  , returnError, fieldData)
 import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
 
-import           Control.Exception (Exception, bracket, throwIO)
+import           Control.Exception (bracket)
+import           Control.Monad (forM_, replicateM_)
 import           Control.Monad.Free.Church
-import           Control.Monad.Identity
-import           Control.Monad.Reader
-import           Control.Monad.State.Strict
+import           Control.Monad.IO.Class (MonadIO(..))
+import           Control.Monad.Identity (Identity)
+import           Control.Monad.Reader (ReaderT, MonadReader(..), runReaderT)
+import           Control.Monad.State.Strict (MonadState(..), runStateT)
 
+import qualified Data.ByteString.Char8 as BS
 import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
+import           Data.Int
 import           Data.Monoid
-import           Data.String
-import           Data.Text (Text)
+import           Data.Scientific (Scientific)
+import           Data.String (fromString)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import           Data.Time ( LocalTime, UTCTime, Day
+                           , utc, utcToLocalTime )
+import           Data.Word
 
 import           Network.URI
 
-newtype SqliteM a = SqliteM { runSqliteM :: ReaderT (String -> IO (), Connection) IO a }
-  deriving (Monad, Functor, Applicative, MonadIO)
+import           Text.Read (readMaybe)
 
-data BeamSqliteError = BeamSqliteError String
-  deriving Show
-instance Exception BeamSqliteError
+-- | The SQLite backend. Used to parameterize 'MonadBeam' and 'FromBackendRow'
+-- to provide support for SQLite databases. See the documentation for
+-- 'MonadBeam' and the <https://tathougies.github.io/beam/ user guide> for more
+-- information on how to use this backend.
+data Sqlite = Sqlite
+
+instance BeamBackend Sqlite where
+  type BackendFromField Sqlite = FromField
+
+instance FromBackendRow Sqlite Bool
+instance FromBackendRow Sqlite Double
+instance FromBackendRow Sqlite Float
+instance FromBackendRow Sqlite Int
+instance FromBackendRow Sqlite Int8
+instance FromBackendRow Sqlite Int16
+instance FromBackendRow Sqlite Int32
+instance FromBackendRow Sqlite Int64
+instance FromBackendRow Sqlite Integer
+instance FromBackendRow Sqlite Word
+instance FromBackendRow Sqlite Word8
+instance FromBackendRow Sqlite Word16
+instance FromBackendRow Sqlite Word32
+instance FromBackendRow Sqlite Word64
+instance FromBackendRow Sqlite BS.ByteString
+instance FromBackendRow Sqlite BL.ByteString
+instance FromBackendRow Sqlite T.Text
+instance FromBackendRow Sqlite TL.Text
+instance FromBackendRow Sqlite UTCTime
+instance FromBackendRow Sqlite Day
+instance FromBackendRow Sqlite Null
+instance FromBackendRow Sqlite Char where
+  fromBackendRow = do
+    t <- fromBackendRow
+    case T.uncons t of
+      Just (c, _) -> pure c
+      _ -> fail "Need string of size one to parse Char"
+instance FromBackendRow Sqlite SqlNull where
+  fromBackendRow =
+    SqlNull <$ (fromBackendRow :: FromBackendRowM Sqlite Null)
+instance FromBackendRow Sqlite LocalTime where
+  fromBackendRow = utcToLocalTime utc <$> fromBackendRow
+instance FromBackendRow Sqlite Scientific where
+  fromBackendRow = unSqliteScientific <$> fromBackendRow
+instance FromBackendRow Sqlite SqliteScientific
+
+instance FromField x => FromField (Auto x) where
+  fromField = fmap (Auto . Just) . fromField
+
+newtype SqliteScientific = SqliteScientific { unSqliteScientific :: Scientific }
+instance FromField SqliteScientific where
+  fromField f =
+    SqliteScientific <$>
+    case fieldData f of
+      SQLInteger i -> pure (fromIntegral i)
+      SQLFloat d -> pure . fromRational . toRational $ d
+      SQLText t -> tryRead (T.unpack t)
+      SQLBlob b -> tryRead (BS.unpack b)
+      SQLNull -> returnError UnexpectedNull f "null"
+    where
+      tryRead s =
+        case readMaybe s of
+          Nothing -> returnError ConversionFailed f $
+                     "No conversion to Scientific for '" <> s <> "'"
+          Just s'  -> pure s'
+
+instance BeamSqlBackend Sqlite
+instance BeamSql92Backend Sqlite
+
+-- | 'MonadBeam' instance inside whiche SQLite queries are run. See the
+-- <https://tathougies.github.io/beam/ user guide> for more information
+newtype SqliteM a
+  = SqliteM
+  { runSqliteM :: ReaderT (String -> IO (), Connection) IO a
+    -- ^ Run an IO action with access to a SQLite connection and a debug logging
+    -- function, called or each query submitted on the connection.
+  } deriving (Monad, Functor, Applicative, MonadIO)
 
 newtype BeamSqliteParams = BeamSqliteParams [SQLData]
 instance ToRow BeamSqliteParams where
@@ -77,6 +161,7 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
                      unRP (next True)
                 _ -> unRP (next False)
 
+-- | URI syntax or use with 'withDbConnection'.
 sqliteUriSyntax :: c SqliteCommandSyntax Sqlite Connection SqliteM
                 -> BeamURIOpeners c
 sqliteUriSyntax =
@@ -85,13 +170,43 @@ sqliteUriSyntax =
        let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
        withConnection sqliteName action)
 
-runSqlite :: Connection -> SqliteM a -> IO a
-runSqlite = runSqliteDebug (\_ -> pure ())
+instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
+  withDatabase = withDatabaseDebug (\_ -> pure ())
+  withDatabaseDebug printStmt conn x = runReaderT (runSqliteM x) (printStmt, conn)
 
-runSqliteDebug :: (String -> IO ()) -> Connection
-               -> SqliteM a -> IO a
-runSqliteDebug printStmt conn x =
-  runReaderT (runSqliteM x) (printStmt, conn)
+  runNoReturn (SqliteCommandSyntax (SqliteSyntax cmd vals)) =
+    SqliteM $ do
+      (logger, conn) <- ask
+      let cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
+      liftIO (logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals)))
+      liftIO (execute conn (fromString cmdString) (D.toList vals))
+  runNoReturn (SqliteCommandInsert insertStmt_) =
+    SqliteM $ do
+      (logger, conn) <- ask
+      liftIO (runSqliteInsert logger conn insertStmt_)
+
+  runReturningMany (SqliteCommandSyntax (SqliteSyntax cmd vals)) action =
+      SqliteM $ do
+        (logger, conn) <- ask
+        let cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
+        liftIO $ do
+          logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
+          withStatement conn (fromString cmdString) $ \stmt ->
+            do bind stmt (BeamSqliteParams (D.toList vals))
+               let nextRow' = liftIO (nextRow stmt) >>= \x ->
+                              case x of
+                                Nothing -> pure Nothing
+                                Just (BeamSqliteRow row) -> pure row
+               runReaderT (runSqliteM (action nextRow')) (logger, conn)
+  runReturningMany SqliteCommandInsert {} _ =
+      fail . mconcat $
+      [ "runReturningMany{Sqlite}: sqlite does not support returning "
+      , "rows from an insert, use Database.Beam.Sqlite.insertReturning "
+      , "for emulation" ]
+
+instance Beam.MonadBeamInsertReturning SqliteCommandSyntax Sqlite Connection SqliteM where
+  runInsertReturningList tbl values =
+    runInsertReturningList (insertReturning tbl values)
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
 runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
@@ -110,48 +225,10 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
       logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
       execute conn (fromString cmdString) (D.toList vals)
 
-instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
-  withDatabase = runSqlite
-  withDatabaseDebug = runSqliteDebug
-
-  runNoReturn (SqliteCommandSyntax (SqliteSyntax cmd vals)) =
-    SqliteM $ do
-      (logger, conn) <- ask
-      let cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
-      liftIO (logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals)))
-      liftIO (execute conn (fromString cmdString) (D.toList vals))
-  runNoReturn (SqliteCommandInsert insertStmt) =
-    SqliteM $ do
-      (logger, conn) <- ask
-      liftIO (runSqliteInsert logger conn insertStmt)
-
-  runReturningMany (SqliteCommandSyntax (SqliteSyntax cmd vals)) action =
-      SqliteM $ do
-        (logger, conn) <- ask
-        let cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
-        liftIO $ do
-          logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
-          withStatement conn (fromString cmdString) $ \stmt ->
-            do bind stmt (BeamSqliteParams (D.toList vals))
-               let nextRow' = liftIO (nextRow stmt) >>= \x ->
-                              case x of
-                                Nothing -> pure Nothing
-                                Just (BeamSqliteRow row) -> pure row
-               runReaderT (runSqliteM (action nextRow')) (logger, conn)
-  runReturningMany SqliteCommandInsert {} _ =
-      SqliteM . liftIO . throwIO . BeamSqliteError . mconcat $
-      [ "runReturningMany{Sqlite}: sqlite does not support returning "
-      , "rows from an insert, use Database.Beam.Sqlite.insertReturning "
-      , "for emulation" ]
-
-instance Beam.MonadBeamInsertReturning SqliteCommandSyntax Sqlite Connection SqliteM where
-  runInsertReturningList tbl values =
-    runInsertReturningList (insertReturning tbl values)
-
 -- * emulated INSERT returning support
 
 data SqliteInsertReturning (table :: (* -> *) -> *) =
-  SqliteInsertReturning Text SqliteInsertSyntax
+  SqliteInsertReturning T.Text SqliteInsertSyntax
 
 insertReturning :: DatabaseEntity be db (TableEntity table)
                 -> SqlInsertValues SqliteInsertValuesSyntax table
@@ -163,13 +240,13 @@ insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqliteInsertReturning table
                        -> SqliteM [ table Identity ]
-runInsertReturningList (SqliteInsertReturning nm insertStmt) =
+runInsertReturningList (SqliteInsertReturning nm insertStmt_) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $
        withTransaction conn $
          bracket (createInsertedValuesTable conn) (dropInsertedValuesTable conn) $ \() ->
          bracket (createInsertTrigger conn) (dropInsertTrigger conn) $ \() -> do
-           runSqliteInsert logger conn insertStmt
+           runSqliteInsert logger conn insertStmt_
            fmap (\(BeamSqliteRow r) -> r) <$> query_ conn "SELECT * FROM inserted_values"
 
   where

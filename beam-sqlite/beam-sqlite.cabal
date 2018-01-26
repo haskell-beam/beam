@@ -17,7 +17,6 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:    Database.Beam.Sqlite
-                      Database.Beam.Sqlite.Types
                       Database.Beam.Sqlite.Syntax
                       Database.Beam.Sqlite.Connection
                       Database.Beam.Sqlite.Migrate
