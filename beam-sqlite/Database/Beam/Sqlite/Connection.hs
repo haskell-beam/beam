@@ -4,7 +4,12 @@
 
 module Database.Beam.Sqlite.Connection
   ( Sqlite(..), SqliteM(..)
-  , sqliteUriSyntax ) where
+  , sqliteUriSyntax
+
+    -- * Emulated @INSERT RETURNING@ support
+  , SqliteInsertReturning
+  , insertReturning, runInsertReturningList
+  , ) where
 
 import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL
@@ -227,9 +232,15 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
 
 -- * emulated INSERT returning support
 
+-- | Represents an @INSERT@ statement, from which we can retrieve inserted rows.
+-- Beam also offers a backend-agnostic way of using this functionality in the
+-- 'MonadBeamInsertReturning' extension. This functionality is emulated in
+-- SQLite using a temporary table and a trigger.
 data SqliteInsertReturning (table :: (* -> *) -> *) =
   SqliteInsertReturning T.Text SqliteInsertSyntax
 
+-- | Build a 'SqliteInsertReturning' representing inserting the given values
+-- into the given table. Use 'runInsertReturningList'
 insertReturning :: DatabaseEntity be db (TableEntity table)
                 -> SqlInsertValues SqliteInsertValuesSyntax table
                 -> SqliteInsertReturning table
@@ -237,6 +248,9 @@ insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
   let SqlInsert s = insert tbl vs
   in SqliteInsertReturning tblNm s
 
+-- | Runs a 'SqliteInsertReturning' statement and returns a result for each
+-- inserted row. Unfilled 'Auto' values in the table will have been filled in in
+-- the output.
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqliteInsertReturning table
                        -> SqliteM [ table Identity ]

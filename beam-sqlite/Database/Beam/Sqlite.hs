@@ -4,6 +4,10 @@ module Database.Beam.Sqlite
 
     -- * SQLite syntaxes
   , SqliteCommandSyntax(..), SqliteSyntax
+
+  , SqliteSelectSyntax, SqliteInsertSyntax
+  , SqliteUpdateSyntax, SqliteDeleteSyntax
+
   , fromSqliteCommand, sqliteRenderSyntaxScript
   ) where
 
