@@ -13,7 +13,8 @@ copyright:           (C) 2017-2018 Travis Athougies
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md
-cabal-version:       >=1.10
+extra-doc-files:     ChangeLog.md
+cabal-version:       >=1.18
 
 library
   exposed-modules:    Database.Beam.Sqlite
