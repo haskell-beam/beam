@@ -1,6 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+-- | Instances that allow us to use Haskell as a backend syntax. This allows us
+-- to use migrations defined a la 'Database.Beam.Migrate.SQL' to generate a beam
+-- schema.
+--
+-- Mainly of interest to backends.
+--
+-- Unfortunately, we define some orphan 'Hashable' instances that aren't defined
+-- for us in @haskell-src-exts@.
 module Database.Beam.Haskell.Syntax where
 
 import           Database.Beam hiding (lookup)
