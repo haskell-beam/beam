@@ -4,6 +4,7 @@ module Database.Beam.Sqlite.Migrate where
 
 import qualified Database.Beam.Migrate as Db
 import qualified Database.Beam.Migrate.Backend as Tool
+import qualified Database.Beam.Migrate.Serialization as Db
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Haskell.Syntax
@@ -45,7 +46,7 @@ migrationBackend = Tool.BeamMigrationBackend
                         Db.beamCheckDeserializers)
                        (BL.unpack . (<> ";") . sqliteRenderSyntaxScript . fromSqliteCommand)
                        "sqlite.sql"
-                       sqlitePredConverter Db.defaultActionProviders
+                       sqlitePredConverter Db.defaultActionProvider
                        (\fp action ->
                             bracket (open fp) close $ \conn ->
                               catch (Right <$> runReaderT (runSqliteM action)
@@ -83,7 +84,7 @@ writeMigrationScript fp steps =
   in BL.writeFile fp (BL.concat stepBs)
 
 sqlitePredConverter :: Tool.HaskellPredicateConverter
-sqlitePredConverter = Tool.easyHsPredicateConverter @SqliteColumnSchemaSyntax sqliteTypeToHs <>
+sqlitePredConverter = Tool.sql92HsPredicateConverters @SqliteColumnSchemaSyntax sqliteTypeToHs <>
                       Tool.hsPredicateConverter sqliteHasColumnConstraint
   where
     sqliteHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c ::

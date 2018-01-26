@@ -1,9 +1,11 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+
+-- | DDL syntax instances for 'SqlSyntaxBuilder'
 module Database.Beam.Migrate.SQL.Builder where
 
 import           Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Migrate.SQL
-import           Database.Beam.Migrate.Checks
+import           Database.Beam.Migrate.Serialization
 
 import           Control.Applicative
 
@@ -11,6 +13,10 @@ import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BCL
 import           Data.Monoid
 
+-- | Options for @CREATE TABLE@. Given as a separate ADT because the options may
+-- go in different places syntactically.
+--
+-- You never really need to use this type directly.
 data SqlSyntaxBuilderCreateTableOptions
     = SqlSyntaxBuilderCreateTableOptions
         SqlSyntaxBuilder
@@ -52,6 +58,13 @@ instance IsSql92AlterTableActionSyntax SqlSyntaxBuilder where
     SqlSyntaxBuilder $
     byteString "DROP COLUMN " <> quoteSql colNm
 
+  renameColumnToSyntax oldNm newNm =
+    SqlSyntaxBuilder $
+    byteString "RENAME COLUMN " <> quoteSql oldNm <> " TO " <> quoteSql newNm
+  renameTableToSyntax newNm =
+    SqlSyntaxBuilder $
+    byteString "RENAME TO " <> quoteSql newNm
+
 instance IsSql92AlterColumnActionSyntax SqlSyntaxBuilder where
   setNotNullSyntax = SqlSyntaxBuilder (byteString "SET NOT NULL")
   setNullSyntax = SqlSyntaxBuilder (byteString "DROP NOT NULL")
@@ -88,9 +101,12 @@ instance IsSql92TableConstraintSyntax SqlSyntaxBuilder where
     SqlSyntaxBuilder $
     byteString "PRIMARY KEY(" <> buildSepBy (byteString ", ") (map quoteSql fs) <> byteString ")"
 
+-- | Some backends use this to represent their constraint attributes. Does not
+-- need to be used in practice.
 data ConstraintAttributeTiming = InitiallyDeferred | InitiallyImmediate
   deriving (Show, Eq, Ord, Enum, Bounded)
 
+-- | Valid 'IsSql92ConstraintAttributesSyntax' shared among some backends.
 data SqlConstraintAttributesBuilder
   = SqlConstraintAttributesBuilder
   { _sqlConstraintAttributeTiming :: Maybe ConstraintAttributeTiming
@@ -104,6 +120,8 @@ instance Monoid SqlConstraintAttributesBuilder where
       (_sqlConstraintAttributeTiming b <|> _sqlConstraintAttributeTiming a)
       (_sqlConstraintAttributeDeferrable b <|> _sqlConstraintAttributeDeferrable a)
 
+-- | Convert a 'SqlConstraintAttributesBuilder' to its @SQL92@ representation in
+-- the returned 'ByteString' 'Builder'.
 fromSqlConstraintAttributes :: SqlConstraintAttributesBuilder -> Builder
 fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
   maybe mempty timingBuilder timing <> maybe mempty deferrableBuilder deferrable
@@ -112,6 +130,7 @@ fromSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
         deferrableBuilder False = byteString "NOT DEFERRABLE"
         deferrableBuilder True = byteString "DEFERRABLE"
 
+-- | Serialize a 'SqlConstraintAttributesBuilder'
 sqlConstraintAttributesSerialized :: SqlConstraintAttributesBuilder -> BeamSerializedConstraintAttributes
 sqlConstraintAttributesSerialized (SqlConstraintAttributesBuilder timing deferrable) =
   mconcat [ maybe mempty serializeTiming timing

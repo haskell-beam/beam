@@ -2,6 +2,7 @@ module Database.Beam.Migrate.Tool.Diff where
 
 import           Database.Beam
 import           Database.Beam.Migrate hiding (timestamp)
+import           Database.Beam.Migrate.Backend
 import           Database.Beam.Migrate.Tool.Backend
 import           Database.Beam.Migrate.Tool.CmdLine
 import           Database.Beam.Migrate.Tool.Registry
@@ -83,7 +84,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceCommit (Just modName) com
 
   SchemaMetaData _ _ _ (Schema preds) <- readSchemaMetaData reg be commitId
 
-  let ourSources = HS.fromList [ PredicateSourceCurBackend, PredicateSourceBackend (backendName be) ]
+  let ourSources = HS.fromList [ PredicateSpecificityAllBackends, PredicateSpecificityOnlyBackend (backendName be) ]
       applicablePreds = map snd (filter (not . HS.null . HS.intersection ourSources . fst) preds)
   pure (Just commitId, applicablePreds)
 getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase modName connStr) ref) = do
@@ -145,10 +146,10 @@ displayDiff cmdLine expected actual autogen = do
 displayScript :: MigrateCmdLine -> ModuleName -> PredicateDiff -> IO ()
 displayScript cmdLine modName (PredicateDiff dest from) = do
   SomeBeamMigrationBackend BeamMigrationBackend
-    { backendActionProviders = actionProviders
+    { backendActionProvider = actionProvider
     , backendRenderSyntax = renderCmd } <- loadBackend' cmdLine modName
 
-  let solver = heuristicSolver actionProviders (HS.toList from) (HS.toList dest)
+  let solver = heuristicSolver actionProvider (HS.toList from) (HS.toList dest)
 
   case finalSolution solver of
     Candidates {} -> fail "Could not find appropriate migration between schemas."

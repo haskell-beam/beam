@@ -1,8 +1,10 @@
 name:                beam-sqlite
 version:             0.2.0.0
-synopsis:            Connection layer between beam and sqlite
-description:
-homepage:            https://github.com/githubuser/beam-sqlite#readme
+synopsis:            Beam driver for SQLite
+description:         Beam driver for the <https://sqlite.org/ SQLite> embedded database.
+                     See <http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/ here>
+                     for more information
+homepage:            http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/
 license:             BSD3
 license-file:        LICENSE
 author:              Travis Athougies

@@ -10,7 +10,7 @@ import           Database.Beam.Migrate.Tool.Schema
 
 import           Database.Beam.Migrate ( SomeDatabasePredicate(..)
                                        , DatabasePredicate(..)
-                                       , PredicateSource(..) )
+                                       , PredicateSpecificity(..) )
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.Backend
 
@@ -26,7 +26,6 @@ import qualified Data.HashSet as HS
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
-import qualified Data.Sequence as Seq
 import           Data.String (fromString)
 import           Data.Text (Text)
 import           Data.Time
@@ -38,15 +37,6 @@ import qualified Language.Haskell.Exts as Hs
 
 import           System.Directory
 import           System.FilePath
-
-finalSolutionIO :: Solver HsAction -> IO (FinalSolution HsAction)
-finalSolutionIO (ProvideSolution Nothing sts)    = pure $ Candidates sts
-finalSolutionIO (ProvideSolution (Just cmds) _)  = pure $ Solved cmds
-finalSolutionIO (ChooseActions (DatabaseState st _ cmds) _ actions next) = do
-  putStrLn ("Have " ++ show (Seq.length cmds) ++ " commands")
-  putStrLn ("Have " ++ show (Map.size st) ++ " left")
-
-  finalSolutionIO (next actions)
 
 modifyM :: Functor m => (s -> m s) -> StateT s m ()
 modifyM f = StateT $ fmap ((),) . f
@@ -71,7 +61,7 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
     SomeBeamMigrationBackend be@(BeamMigrationBackend { backendGetDbConstraints = getConstraints
                                                       , backendConvertToHaskell = HaskellPredicateConverter convDbPred
                                                       , backendTransact = transact
-                                                      , backendActionProviders = actionProviders }) -> do
+                                                      , backendActionProvider = actionProvider }) -> do
       newCommit <- withRegistry $ \registry -> lift (registryNewCommitId registry)
       let backendHash = newCommit
           hsHash = newCommit
@@ -93,7 +83,7 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
               Nothing -> liftIO $ putStrLn "Skipping migration generation, since this is an initial import"
               Just (Nothing, _) -> fail "No commit for DB^"
               Just (Just oldCommitId, oldPreds') ->
-                let solver = heuristicSolver actionProviders oldPreds' cs'
+                let solver = heuristicSolver actionProvider oldPreds' cs'
                 in case finalSolution solver of
                      Candidates {} -> fail "Could not find migration in backend"
                      Solved [] -> fail "Schemas are equivalent, not importing"
@@ -102,7 +92,7 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
                        modifyM (newMigration oldCommitId hsHash [MigrationFormatHaskell, backendMigFmt])
 
           -- TODO factor out
-          let schema = Schema (map (\pred@(SomeDatabasePredicate (_ :: pred)) -> ( HS.singleton (predicateSource (Proxy @pred)), pred)) cs')
+          let schema = Schema (map (\pred@(SomeDatabasePredicate (_ :: pred)) -> ( HS.singleton (predicateSpecificity (Proxy @pred)), pred)) cs')
 
           liftIO $ putStrLn "Exporting migration for backend..."
           backendFileName <- withRegistry $ \registry -> liftIO (writeSchema cmdLine registry backendHash be cs')
@@ -150,7 +140,7 @@ dumpSchema cmdLine backend connStr = do
         Left err -> fail ("Error getting constraints: " ++ show err)
         Right cs' ->
           let sch = Schema (map (\c -> (HS.singleton predSrc, c)) cs')
-              predSrc = PredicateSourceBackend (unModuleName backend)
+              predSrc = PredicateSpecificityOnlyBackend (unModuleName backend)
           in BS.putStrLn (Yaml.encode sch)
 
 showSimpleSchema :: MigrateCmdLine
@@ -174,7 +164,7 @@ showSimpleSchema cmdLine backend connStr = do
                      Nothing -> putStrLn ("Tossing constraint " ++ show c)
                      Just {} -> pure ()
                    pure c'
-          case finalSolution $ heuristicSolver (defaultActionProviders @HsAction) [] cs'' of
+          case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs'' of
             Candidates {} -> fail "Could not form haskell schema"
             Solved actions ->
               case renderHsSchema (hsActionsToModule "Schema" actions) of
@@ -186,7 +176,7 @@ writeSchema :: MigrateCmdLine -> MigrationRegistry
              -> [SomeDatabasePredicate]
              -> IO FilePath
 writeSchema cmdLine registry commitId be cs = do
-  case finalSolution $ heuristicSolver (backendActionProviders be) [] cs of
+  case finalSolution $ heuristicSolver (backendActionProvider be) [] cs of
     Candidates {} -> fail "Could not form backend schema"
     Solved actions ->
       writeSchemaFile cmdLine registry (backendFileExtension be) (schemaScriptName commitId) $
@@ -198,7 +188,7 @@ writeHsSchema :: MigrateCmdLine -> MigrationRegistry
               -> Schema
               -> [MigrationFormat] -> IO FilePath
 writeHsSchema cmdLine registry commitId cs dbSchema fmts =
-  case finalSolution $ heuristicSolver (defaultActionProviders @HsAction) [] cs of
+  case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs of
     Candidates [] -> fail "Could not form haskell schema"
     Candidates (x:_) ->
       let allSolved = dbStateCurrentState x

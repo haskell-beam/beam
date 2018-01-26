@@ -1,4 +1,9 @@
 {-# LANGUAGE ConstraintKinds #-}
+-- | Finally-tagless encoding of SQL92 DDL commands.
+--
+--  If you're writing a beam backend driver and you want to support migrations,
+--  making an instance of your command syntax for 'IsSql92DdlCommandSyntax' and
+--  making it satisfy 'Sql92SaneDdlCommandSyntax'.
 module Database.Beam.Migrate.SQL.SQL92 where
 
 import Database.Beam.Backend.SQL.SQL92
@@ -7,6 +12,19 @@ import Data.Aeson (Value)
 import Data.Hashable
 import Data.Text (Text)
 import Data.Typeable
+
+-- * Convenience type synonyms
+
+-- | Command syntaxes that can be used to issue DDL commands.
+type Sql92SaneDdlCommandSyntax cmd =
+  ( IsSql92DdlCommandSyntax cmd
+  , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
+  , Sql92SerializableConstraintDefinitionSyntax (Sql92DdlCommandConstraintDefinitionSyntax cmd)
+  , Typeable (Sql92DdlCommandColumnSchemaSyntax cmd)
+  , Sql92AlterTableColumnSchemaSyntax
+      (Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax cmd)) ~
+      Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd) )
+
 
 type Sql92DdlCommandDataTypeSyntax syntax =
   Sql92ColumnSchemaColumnTypeSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
@@ -23,17 +41,14 @@ type Sql92DdlCommandReferentialActionSyntax syntax =
   Sql92ColumnConstraintReferentialActionSyntax (Sql92DdlCommandColumnConstraintSyntax syntax)
 type Sql92DdlCommandConstraintAttributesSyntax syntax =
   Sql92ColumnConstraintDefinitionAttributesSyntax (Sql92DdlCommandConstraintDefinitionSyntax syntax)
+type Sql92DdlCommandAlterTableActionSyntax syntax =
+  Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax syntax)
 
-type Sql92SaneDdlCommandSyntax cmd =
-  ( IsSql92DdlCommandSyntax cmd
-  , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
-  , Sql92SerializableConstraintDefinitionSyntax (Sql92DdlCommandConstraintDefinitionSyntax cmd)
-  , Typeable (Sql92DdlCommandColumnSchemaSyntax cmd)
-  , Sql92AlterTableColumnSchemaSyntax
-      (Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax cmd)) ~
-      Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd) )
-
+-- | Type classes for syntaxes which can be displayed
 class Sql92DisplaySyntax syntax where
+
+  -- | Render the syntax as a 'String', representing the SQL expression it
+  -- stands for
   displaySyntax :: syntax -> String
 
 class ( IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
@@ -79,6 +94,8 @@ class ( IsSql92ColumnSchemaSyntax (Sql92AlterTableColumnSchemaSyntax syntax)
                     -> syntax
   addColumnSyntax :: Text -> Sql92AlterTableColumnSchemaSyntax syntax -> syntax
   dropColumnSyntax :: Text -> syntax
+  renameTableToSyntax :: Text -> syntax
+  renameColumnToSyntax :: Text -> Text -> syntax
 
 class IsSql92AlterColumnActionSyntax syntax where
   setNotNullSyntax, setNullSyntax :: syntax
@@ -154,8 +171,10 @@ class ( IsSql92MatchTypeSyntax (Sql92ColumnConstraintMatchTypeSyntax constraint)
                              -> Maybe (Sql92ColumnConstraintReferentialActionSyntax constraint) {-^ On delete -}
                              -> constraint
 
+-- | 'IsSql92DataTypeSyntax'es that can be serialized to JSON
 class Sql92SerializableDataTypeSyntax dataType where
   serializeDataType :: dataType -> Value
 
+-- | 'IsSql92ColumnConstraintDefinitionSyntax'es that can be serialized to JSON
 class Sql92SerializableConstraintDefinitionSyntax constraint where
   serializeConstraint :: constraint -> Value

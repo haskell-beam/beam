@@ -85,12 +85,12 @@ instance DatabasePredicate PgHasExtension where
   englishDescription (PgHasExtension extName) =
     "Postgres extension " ++ show extName ++ " is loaded"
 
-  predicateSource _ = PredicateSourceBackend "postgres"
+  predicateSpecificity _ = PredicateSpecificityOnlyBackend "postgres"
   serializePredicate (PgHasExtension nm) =
     object [ "has-postgres-extension" .= nm ]
 
-pgExtensionActionProviders :: [ ActionProvider PgCommandSyntax ]
-pgExtensionActionProviders = [ pgCreateExtensionProvider, pgDropExtensionProvider ]
+pgExtensionActionProvider :: ActionProvider PgCommandSyntax
+pgExtensionActionProvider = pgCreateExtensionProvider <> pgDropExtensionProvider
 
 pgCreateExtensionProvider, pgDropExtensionProvider :: ActionProvider PgCommandSyntax
 

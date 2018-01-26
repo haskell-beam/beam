@@ -3,6 +3,7 @@ module Database.Beam.Migrate.Tool.Schema where
 import Database.Beam
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate
+import Database.Beam.Migrate.Backend
 
 import Data.String (fromString)
 import Data.Text (Text)

@@ -1,7 +1,16 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Database.Beam.Migrate.Generics.Tables where
+-- | Support for defaulting checked tables
+module Database.Beam.Migrate.Generics.Tables
+  ( -- * Field data type defaulting
+    HasDefaultSqlDataType(..)
+  , HasDefaultSqlDataTypeConstraints(..)
+  , Sql92HasDefaultDataType
+
+  -- * Internal
+  , GMigratableTableSettings(..)
+  ) where
 
 import Database.Beam
 import Database.Beam.Backend.SQL.Types
@@ -81,12 +90,43 @@ instance IsSql92ColumnSchemaSyntax syntax =>
 
 -- * Default data types
 
-class IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty where
-  defaultSqlDataTypeConstraints :: Proxy ty -> Proxy columnSchemaSyntax -> Bool {-^ Embedded -} -> [ FieldCheck ]
+-- | Certain data types also come along with constraints. For example, @SERIAL@
+-- types in Postgres generate an automatic @DEFAULT@ constraint.
+--
+-- You need an instance of this class for any type for which you want beam to be
+-- able to infer the SQL data type. If your data type does not have any
+-- constraint requirements, you can just declare an empty instance
+class IsSql92ColumnSchemaSyntax columnSchemaSyntax =>
+  HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty where
+
+  -- | Provide arbitrary constraints on a field of the requested type. See
+  -- 'FieldCheck' for more information on the formatting of constraints.
+  defaultSqlDataTypeConstraints
+    :: Proxy ty                 -- ^ Concrete representation of the type
+    -> Proxy columnSchemaSyntax -- ^ Concrete representation of the syntax
+    -> Bool                     -- ^ 'True' if this field is embedded in a
+                                --   foreign key, 'False' otherwise. For
+                                --   example, @SERIAL@ types in postgres get a
+                                --   @DEFAULT@ constraint, but @SERIAL@ types in
+                                --   a foreign key do not.
+    -> [ FieldCheck ]
   defaultSqlDataTypeConstraints _ _ _ = []
 
+-- | Used to define a default SQL data type for a haskell type in a particular
+-- data type syntax.
+--
+-- Beam defines instances for several standard SQL types, which are polymorphic
+-- over any standard data type syntax. Backends or extensions which provide
+-- custom types should instantiate instances of this class and
+-- 'HasDefaultSqlDataTypeConstraints' for any types they provide for which they
+-- would like checked schema migrations
 class IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax ty where
-  defaultSqlDataType :: Proxy ty -> Bool {-^ Embedded -} -> dataTypeSyntax
+
+  -- | Provide a data type for the given type
+  defaultSqlDataType :: Proxy ty       -- ^ Concrete representation of the type
+                     -> Bool           -- ^ 'True' if this field is in an embedded
+                                       --   key or table, 'False' otherwise
+                     -> dataTypeSyntax
 
 instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
   HasDefaultSqlDataType dataTypeSyntax (Auto ty) where
@@ -153,6 +193,8 @@ instance IsSql99DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeS
   defaultSqlDataType _ _ = booleanType
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Bool
 
+-- | Constraint synonym to use if you want to assert that a particular
+-- 'IsSql92Syntax' syntax supports defaulting for a particular data type
 type Sql92HasDefaultDataType syntax ty =
   ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) ty
   , HasDefaultSqlDataTypeConstraints (Sql92DdlCommandColumnSchemaSyntax syntax) ty )

@@ -1,11 +1,11 @@
 module Database.Beam.Migrate.Tool.Status where
 
-import           Database.Beam.Migrate hiding (timestamp)
+import           Database.Beam.Migrate.Backend
 import           Database.Beam.Migrate.Tool.Backend
 import           Database.Beam.Migrate.Tool.CmdLine
+import           Database.Beam.Migrate.Tool.Diff
 import           Database.Beam.Migrate.Tool.Registry
 import           Database.Beam.Migrate.Tool.Schema
-import           Database.Beam.Migrate.Tool.Diff
 
 import           Data.Monoid
 import           Data.Text (unpack)
