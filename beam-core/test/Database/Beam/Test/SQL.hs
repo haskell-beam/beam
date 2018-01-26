@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Database.Beam.Test.SQL
   ( tests ) where
@@ -42,7 +43,13 @@ tests = testGroup "SQL generation tests"
                   , updateCurrent
                   , updateNullable
 
-                  , noEmptyIns ]
+                  , noEmptyIns
+
+                  -- Regressions for github issues
+                  , testGroup "Regression tests"
+                    [ gh70OrderByInFirstJoinCausesIncorrectProjection
+                    ]
+                  ]
 
 -- | Ensure simple select selects the right fields
 
@@ -1126,3 +1133,82 @@ noEmptyIns =
           pure e
 
       selectWhere @?= Just (ExpressionValue (Value False))
+
+-- | ORDER BY in first join causes incorrect projection in subquery
+
+gh70OrderByInFirstJoinCausesIncorrectProjection :: TestTree
+gh70OrderByInFirstJoinCausesIncorrectProjection =
+  testCase "#70: ORDER BY as first join causes incorrect projection" $
+  do let employeesMakingSixFigures =
+           orderBy_ (\e -> desc_ (_employeeAge e)) $
+           filter_ (\e -> _employeeSalary e >=. 100000) $
+           all_ (_employees employeeDbSettings)
+
+         richEmployeesAndRoles = do
+           employee <- employeesMakingSixFigures
+           role <- all_ (_roles employeeDbSettings)
+           guard_ (_roleForEmployee role `references_` employee)
+           pure (_roleName role, employee)
+
+     SqlSelect Select { selectTable = SelectTable { .. }
+                      , .. } <-
+       pure $ select richEmployeesAndRoles
+
+     let employees = "t0"
+         roles = "t1"
+
+     selectProjection @?= ProjExprs
+         [ (ExpressionFieldName (QualifiedField roles "name")    , Just "res0")
+         , (ExpressionFieldName (QualifiedField employees "res0"), Just "res1")
+         , (ExpressionFieldName (QualifiedField employees "res1"), Just "res2")
+         , (ExpressionFieldName (QualifiedField employees "res2"), Just "res3")
+         , (ExpressionFieldName (QualifiedField employees "res3"), Just "res4")
+         , (ExpressionFieldName (QualifiedField employees "res4"), Just "res5")
+         , (ExpressionFieldName (QualifiedField employees "res5"), Just "res6")
+         , (ExpressionFieldName (QualifiedField employees "res6"), Just "res7")
+         , (ExpressionFieldName (QualifiedField employees "res7"), Just "res8")
+         ]
+     selectGrouping @?= Nothing
+     selectOrdering @?= []
+     selectLimit @?= Nothing
+     selectOffset @?= Nothing
+     selectHaving @?= Nothing
+
+     let eqE = ExpressionCompOp "==" Nothing
+         andE = ExpressionBinOp "AND"
+
+         firstNameCond = eqE (ExpressionFieldName (QualifiedField roles "for_employee__first_name"))
+                             (ExpressionFieldName (QualifiedField employees "res0"))
+         lastNameCond = eqE (ExpressionFieldName (QualifiedField roles "for_employee__last_name"))
+                            (ExpressionFieldName (QualifiedField employees "res1"))
+         createdCond = eqE (ExpressionFieldName (QualifiedField roles "for_employee__created"))
+                           (ExpressionFieldName (QualifiedField employees "res7"))
+
+     selectWhere @?= Just (andE (andE firstNameCond lastNameCond) createdCond)
+
+     Just (InnerJoin (FromTable (TableFromSubSelect subselect) (Just "t0"))
+                     (FromTable (TableNamed "roles") (Just "t1"))
+                     Nothing) <- pure selectFrom
+
+     Select { selectTable = SelectTable { .. }
+            , .. } <- pure subselect
+
+     selectGrouping @?= Nothing
+     selectLimit @?= Nothing
+     selectOffset @?= Nothing
+     selectHaving @?= Nothing
+     selectOrdering @?= [ OrderingDesc (ExpressionFieldName (QualifiedField "t0" "age")) ]
+     selectWhere @?= Just (ExpressionCompOp ">=" Nothing
+                             (ExpressionFieldName (QualifiedField "t0" "salary"))
+                             (ExpressionValue (Value (100000 :: Double))))
+
+     selectProjection @?= ProjExprs
+       [ (ExpressionFieldName (QualifiedField "t0" "first_name")   , Just "res0")
+       , (ExpressionFieldName (QualifiedField "t0" "last_name")    , Just "res1")
+       , (ExpressionFieldName (QualifiedField "t0" "phone_number") , Just "res2")
+       , (ExpressionFieldName (QualifiedField "t0" "age")          , Just "res3")
+       , (ExpressionFieldName (QualifiedField "t0" "salary")       , Just "res4")
+       , (ExpressionFieldName (QualifiedField "t0" "hire_date")    , Just "res5")
+       , (ExpressionFieldName (QualifiedField "t0" "leave_date")   , Just "res6")
+       , (ExpressionFieldName (QualifiedField "t0" "created")      , Just "res7")
+       ]

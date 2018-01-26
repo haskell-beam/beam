@@ -270,7 +270,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
             doJoined =
                 let sb' = case sb of
                             SelectBuilderQ {} ->
-                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb reproj)
+                                SelectBuilderTopLevel Nothing Nothing ordering sb --(setSelectBuilderProjection sb reproj)
                             SelectBuilderGrouping {} ->
                                 SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb reproj)
                             SelectBuilderSelectSyntax {} ->
