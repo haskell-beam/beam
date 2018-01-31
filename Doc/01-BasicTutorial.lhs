@@ -170,7 +170,8 @@ Beam automatically converted our `UserT` table in the `_shoppingCartUsers` selec
 `cart_users`. As we stated above, this comes from un-CamelCase-ing the selector name and dropping
 the first component. Beam followed the same rule to derive the column names.
 
-Now let's add a few users. We'll give each user an MD5 encoded password too.
+Now let's add a few users. We'll give each user a correctly salted and hashed password too.
+(Don't forget to use current best practices if you want to store passwords in your database!)
 
 >
 >           beamTxn beam $ \(ShoppingCartDb usersT) ->
