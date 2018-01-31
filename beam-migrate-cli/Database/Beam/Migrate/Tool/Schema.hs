@@ -57,7 +57,7 @@ data BeamMigrateDb entity
   , _beamMigrateLogEntries :: entity (TableEntity LogEntryT)
   } deriving Generic
 
-instance Database BeamMigrateDb
+instance Database be BeamMigrateDb
 
 beamMigratableDb :: forall cmd be hdl m
                   . ( Sql92SaneDdlCommandSyntax cmd

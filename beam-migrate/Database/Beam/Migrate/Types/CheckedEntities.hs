@@ -63,13 +63,13 @@ type CheckedDatabaseSettings be db = db (CheckedDatabaseEntity be db)
 
 -- | Convert a 'CheckedDatabaseSettings' to a regular 'DatabaseSettings'. The
 -- return value is suitable for use in any regular beam query or DML statement.
-unCheckDatabase :: forall be db. Database db => CheckedDatabaseSettings be db -> DatabaseSettings be db
+unCheckDatabase :: forall be db. Database be db => CheckedDatabaseSettings be db -> DatabaseSettings be db
 unCheckDatabase db = runIdentity $ zipTables (Proxy @be) (\(CheckedDatabaseEntity x _) _ -> pure $ DatabaseEntity (unCheck x)) db db
 
 -- | A @beam-migrate@ database schema is defined completely by the set of
 -- predicates that apply to it. This function allows you to access this
 -- definition for a 'CheckedDatabaseSettings' object.
-collectChecks :: forall be db. Database db => CheckedDatabaseSettings be db -> [ SomeDatabasePredicate ]
+collectChecks :: forall be db. Database be  db => CheckedDatabaseSettings be db -> [ SomeDatabasePredicate ]
 collectChecks db = let (_ :: CheckedDatabaseSettings be db, a) =
                          runWriter $ zipTables (Proxy @be)
                            (\(CheckedDatabaseEntity entity cs :: CheckedDatabaseEntity be db entityType) b ->

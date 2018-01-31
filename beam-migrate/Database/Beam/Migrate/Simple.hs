@@ -19,7 +19,7 @@ import qualified Data.Text as T
 -- database. Returns 'Nothing' if no schema could be found, which usually means
 -- you have chosen the wrong 'ActionProvider', or the backend you're using is
 -- buggy.
-simpleSchema :: Database db
+simpleSchema :: Database be db
              => ActionProvider cmd
              -> CheckedDatabaseSettings be db
              -> Maybe [cmd]
@@ -37,7 +37,7 @@ simpleSchema provider settings =
 -- 'BeamMigrationBackend's can usually be found in a module named
 -- @Database.Beam.<Backend>.Migrate@ with the name@migrationBackend@
 simpleMigration :: ( MonadBeam cmd be handle m
-                 ,   Database db )
+                 ,   Database be db )
                 => BeamMigrationBackend be cmd handle
                 -> handle
                 -> CheckedDatabaseSettings be db

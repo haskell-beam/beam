@@ -199,7 +199,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers :: f (TableEntity UserT) }
                         deriving Generic
 
-instance Database ShoppingCartDb
+instance Database be ShoppingCartDb
 ```
 
 The next step is to create a description of the particular database we'd like to create. This

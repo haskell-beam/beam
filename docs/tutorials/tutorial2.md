@@ -90,7 +90,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartUserAddresses :: f (TableEntity AddressT) }
                         deriving Generic
 
-instance Database ShoppingCartDb
+instance Database be ShoppingCartDb
 ```
 
 Modifying the default naming choices

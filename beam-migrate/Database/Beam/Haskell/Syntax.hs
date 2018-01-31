@@ -358,13 +358,18 @@ renderHsSchema (HsModule modNm entities migrations) =
       backend = foldMap hsEntityBackend entities
       syntax  = foldMap hsEntitySyntax entities
 
+      backendHs = case backend of
+                    HsBeamBackendNone -> error "Can't instantiate Database instance: No backend matches"
+                    HsBeamBackendSingle ty _ -> hsTypeSyntax ty
+                    HsBeamBackendConstrained cs -> tyVarNamed "be" -- TODO constraints
+
       decls = foldMap (map hsDeclSyntax . hsEntityDecls) entities ++
               [ databaseTypeDecl entities
 
               , migrationTypeDecl backend syntax []
               , migrationDecl backend [] migrations entities
 
-              , hsInstance "Database" [ tyConNamed "Db" ] []
+              , hsInstance "Database" [ backendHs, tyConNamed "Db" ] []
 
               , dbTypeDecl backend syntax
               , dbDecl backend syntax [] ]
