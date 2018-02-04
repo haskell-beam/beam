@@ -32,5 +32,13 @@ loadBackend' cmdLine (ModuleName backend) = do
     interpret "SomeBeamMigrationBackend migrationBackend" (undefined :: SomeBeamMigrationBackend)
 
   case res of
-    Left err -> fail ("Plugin load error: " ++ show err)
     Right be -> pure be
+    Left e -> fail $ case e of
+      WontCompile errs ->
+        "Plugin load error: " ++ unlines (map errMsg errs)
+      UnknownError err ->
+        "Unknown interpeter error: " ++ err
+      NotAllowed err ->
+        "Not allowed: " ++ err
+      GhcException err ->
+        "GHC exception: " ++ err
