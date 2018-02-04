@@ -23,7 +23,7 @@ module Database.Beam.Migrate.SQL.Tables
 
   , field
 
-  , defaultTo_, notNull, uniqueColumn
+  , defaultTo_, notNull, unique
   , int, smallint, bigint
   , char, varchar, double
   , characterLargeObject, binaryLargeObject, array
@@ -272,8 +272,8 @@ newtype Constraint syntax
 notNull :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
 notNull = Constraint notNullConstraintSyntax
 
-uniqueColumn :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
-uniqueColumn = Constraint uniqueColumnConstraintSyntax
+unique :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
+unique = Constraint uniqueColumnConstraintSyntax
 
 -- ** Data types
 
