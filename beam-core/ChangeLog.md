@@ -1,3 +1,7 @@
+# 0.7.0.0
+
+* Re-introduce backend parameter to `Database` class
+
 # 0.6.0.0
 
 * Mostly complete SQL92, SQL99 support

@@ -233,7 +233,7 @@ manyToManyPassthrough_
                    , right (QExpr (Sql92SelectExpressionSyntax syntax) s))
 ```
 
-Under the hood `manyToMany_` is defined simply as 
+Under the hood `manyToMany_` is defined simply as
 
 ```haskell
 manyToMany_ = fmap (\(_, left, right) -> (left, right)) manyToManyPassthrough_
