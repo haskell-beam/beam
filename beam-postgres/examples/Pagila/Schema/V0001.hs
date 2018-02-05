@@ -13,7 +13,7 @@ import Database.Beam.Postgres.Migrate
 import Database.Beam.Migrate.Types hiding (migrateScript)
 import Database.Beam.Migrate.SQL.Tables
 import Database.Beam.Migrate.SQL.Types
-
+import Database.Beam.Backend.SQL.Types (SqlSerial)
 import qualified Database.PostgreSQL.Simple as Pg
 
 import qualified Control.Exception as E
@@ -28,7 +28,7 @@ import Data.Scientific (Scientific)
 
 data AddressT f
   = AddressT
-  { addressId         :: Columnar f Int
+  { addressId         :: Columnar f (SqlSerial Int)
   , addressAddress1   :: Columnar f Text
   , addressAddress2   :: Columnar f (Maybe Text)
   , addressDistrict   :: Columnar f Text
@@ -42,7 +42,7 @@ deriving instance Show Address
 deriving instance Eq Address
 
 instance Table AddressT where
-  data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
+  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int)) deriving Generic
   primaryKey = AddressId . addressId
 type AddressId = PrimaryKey AddressT Identity
 deriving instance Show AddressId
@@ -304,7 +304,7 @@ migration () = do
                          (field "last_name" (varchar (Just 45)) notNull)
                          lastUpdateField)
            <*> createTable "address"
-                 (AddressT (field "address_id" int)
+                 (AddressT (field "address_id" serial)
                            (field "address" (varchar (Just 50)) notNull)
                            (field "address2" (maybeType $ varchar (Just 50)))
                            (field "district" (varchar (Just 20)) notNull)
@@ -330,7 +330,7 @@ migration () = do
                             (field "first_name" (varchar (Just 45)) notNull)
                             (field "last_name" (varchar (Just 45)) notNull)
                             (field "email" (varchar (Just 50)))
-                            (AddressId (field "address_id" smallint notNull))
+                            (AddressId (field "address_id" serial notNull))
                             (field "activebool" boolean (defaultTo_ (val_ True)) notNull)
                             (field "create_date" date (defaultTo_ now_) notNull)
                             lastUpdateField)
@@ -358,13 +358,13 @@ migration () = do
            <*> createTable "store"
                  (StoreT (field "store_id" smallint)
                          (StaffId (field "manager_staff_id" smallint notNull))
-                         (AddressId (field "address_id" smallint notNull))
+                         (AddressId (field "address_id" serial notNull))
                          lastUpdateField)
            <*> createTable "staff"
                  (StaffT (field "staff_id" smallint)
                          (field "first_name" (varchar (Just 45)) notNull)
                          (field "last_name" (varchar (Just 45)) notNull)
-                         (AddressId (field "address_id" smallint notNull))
+                         (AddressId (field "address_id" serial notNull))
                          (field "email" (varchar (Just 50)))
                          (StoreId (field "store_id" smallint notNull))
                          (field "active" boolean (defaultTo_ (val_ True)) notNull)
