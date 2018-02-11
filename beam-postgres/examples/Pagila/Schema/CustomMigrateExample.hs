@@ -31,7 +31,7 @@ import Text.Read
 import Database.Beam.Backend.SQL.Builder
 
 data ShippingCarrier = USPS | FedEx | UPS | DHL
-deriving (Show, Read, Eq, Ord, Enum)
+  deriving (Show, Read, Eq, Ord, Enum)
 
 instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
   sqlValueSyntax = autoSqlValueSyntax
