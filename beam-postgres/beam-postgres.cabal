@@ -15,11 +15,10 @@ bug-reports:          https://github.com/tathougies/issues
 library
   exposed-modules:    Database.Beam.Postgres
                       Database.Beam.Postgres.Migrate
-
                       Database.Beam.Postgres.PgCrypto
+                      Database.Beam.Postgres.Syntax
 
-  other-modules:      Database.Beam.Postgres.Syntax
-                      Database.Beam.Postgres.Types
+  other-modules:      Database.Beam.Postgres.Types
                       Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.PgSpecific
                       Database.Beam.Postgres.Extensions
