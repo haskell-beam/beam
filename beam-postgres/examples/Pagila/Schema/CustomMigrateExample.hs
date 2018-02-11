@@ -15,7 +15,6 @@ import Database.Beam.Postgres.Migrate
 import Database.Beam.Migrate.Types hiding (migrateScript)
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate.SQL.Tables
--- import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.SQL.Types (TableFieldSchema(..), DataType(..))
 import Database.Beam.Backend.SQL.Types (SqlSerial)
 import qualified Database.PostgreSQL.Simple as Pg
@@ -31,9 +30,8 @@ import Database.PostgreSQL.Simple.FromField
 import Text.Read
 import Database.Beam.Backend.SQL.Builder
 
--- Address table
 data ShippingCarrier = USPS | FedEx | UPS | DHL
-                       deriving (Show, Read, Eq, Ord, Enum)
+deriving (Show, Read, Eq, Ord, Enum)
 
 instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
   sqlValueSyntax = autoSqlValueSyntax
@@ -51,6 +49,7 @@ instance (BeamBackend be) => FromBackendRow be ShippingCarrier
 shippingCarrierType :: DataType PgDataTypeSyntax ShippingCarrier
 shippingCarrierType = DataType pgTextType
 
+-- Address table
 
 data AddressT f
   = AddressT
@@ -78,7 +77,8 @@ deriving instance Eq AddressId
 
 data PagilaDb f
   = PagilaDb
-  { address    :: f (TableEntity AddressT)
+  {
+    address    :: f (TableEntity AddressT)
   } deriving Generic
 instance Database PagilaDb
 
@@ -94,10 +94,11 @@ migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres P
 migration () = do
 --  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "address"
-                 (AddressT (field "address_id" smallserial)
-                           (field "address" (varchar (Just 50)) notNull)
-                           (field "address2" (maybeType $ varchar (Just 50)))
-                           (field "district" (varchar (Just 20)) notNull)
-                           (field "shipper" shippingCarrierType)
-                           (field "postal_code" (varchar (Just 10)))
-                           (field "phone" (varchar (Just 20)) notNull) lastUpdateField)
+                 (AddressT
+                    (field "address_id" smallserial)
+                    (field "address" (varchar (Just 50)) notNull)
+                    (field "address2" (maybeType $ varchar (Just 50)))
+                    (field "district" (varchar (Just 20)) notNull)
+                    (field "shipper" shippingCarrierType)
+                    (field "postal_code" (varchar (Just 10)))
+                    (field "phone" (varchar (Just 20)) notNull) lastUpdateField)
