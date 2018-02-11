@@ -305,7 +305,7 @@ migration () = do
   PagilaDb <$> createTable "actor"
                  (ActorT (field "actor_id" serial)
                          (field "first_name" (varchar (Just 45)) notNull)
-                         (field "last_name" (varchar (Just 45)) notNull)
+                         (field "last_name" (varchar (Just 45)) notNull unique)
                          lastUpdateField)
            <*> createTable "address"
                  (AddressT (field "address_id" smallserial)
