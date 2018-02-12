@@ -164,6 +164,53 @@ instance ( BeamBackend be
   valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
                       valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g) + valuesNeeded be (Proxy @h)
 
+instance ( BeamBackend be
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
+         , FromBackendRow be g, FromBackendRow be h, FromBackendRow be i ) =>
+  FromBackendRow be (a, b, c, d, e, f, g, h, i) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ( Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g, Exposed h
+                                                       , Exposed i)))
+  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
+                      valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g) + valuesNeeded be (Proxy @h) +
+                      valuesNeeded be (Proxy @i)
+
+instance ( BeamBackend be
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
+         , FromBackendRow be g, FromBackendRow be h, FromBackendRow be i
+         , FromBackendRow be j ) =>
+  FromBackendRow be (a, b, c, d, e, f, g, h, i, j) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ( Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g, Exposed h
+                                                       , Exposed i, Exposed j)))
+  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
+                      valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g) + valuesNeeded be (Proxy @h) +
+                      valuesNeeded be (Proxy @i) + valuesNeeded be (Proxy @j)
+
+instance ( BeamBackend be
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
+         , FromBackendRow be g, FromBackendRow be h, FromBackendRow be i
+         , FromBackendRow be j, FromBackendRow be k) =>
+  FromBackendRow be (a, b, c, d, e, f, g, h, i, j, k) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ( Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g, Exposed h
+                                                       , Exposed i, Exposed j, Exposed k)))
+  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
+                      valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g) + valuesNeeded be (Proxy @h) +
+                      valuesNeeded be (Proxy @i) + valuesNeeded be (Proxy @j) + valuesNeeded be (Proxy @k)
+
+instance ( BeamBackend be
+         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
+         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
+         , FromBackendRow be g, FromBackendRow be h, FromBackendRow be i
+         , FromBackendRow be j, FromBackendRow be k, FromBackendRow be l ) =>
+  FromBackendRow be (a, b, c, d, e, f, g, h, i, j, k, l) where
+  fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ( Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g, Exposed h
+                                                       , Exposed i, Exposed j, Exposed k, Exposed l)))
+  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
+                      valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g) + valuesNeeded be (Proxy @h) +
+                      valuesNeeded be (Proxy @i) + valuesNeeded be (Proxy @j) + valuesNeeded be (Proxy @k) + valuesNeeded be (Proxy @l)
+
 instance ( BeamBackend be, Generic (tbl Identity), Generic (tbl Exposed)
          , GFromBackendRow be (Rep (tbl Exposed)) (Rep (tbl Identity))) =>
 
@@ -187,3 +234,7 @@ instance (BeamBackend be, FromBackendRow be (Maybe x)) => FromBackendRow be (Aut
   valuesNeeded be _ = valuesNeeded be (Proxy @(Maybe x))
 
 deriving instance Generic (a, b, c, d, e, f, g, h)
+deriving instance Generic (a, b, c, d, e, f, g, h, i)
+deriving instance Generic (a, b, c, d, e, f, g, h, i, j)
+deriving instance Generic (a, b, c, d, e, f, g, h, i, j, k)
+deriving instance Generic (a, b, c, d, e, f, g, h, i, j, k, l)

@@ -33,6 +33,18 @@ type instance QExprToIdentity (a, b, c, d, e, f, g) =
 type instance QExprToIdentity (a, b, c, d, e, f, g, h) =
   ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
   , QExprToIdentity g, QExprToIdentity h )
+type instance QExprToIdentity (a, b, c, d, e, f, g, h, i) =
+  ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
+  , QExprToIdentity g, QExprToIdentity h, QExprToIdentity i )
+type instance QExprToIdentity (a, b, c, d, e, f, g, h, i, j) =
+  ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
+  , QExprToIdentity g, QExprToIdentity h, QExprToIdentity i, QExprToIdentity j)
+type instance QExprToIdentity (a, b, c, d, e, f, g, h, i, j, k) =
+  ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
+  , QExprToIdentity g, QExprToIdentity h, QExprToIdentity i, QExprToIdentity j, QExprToIdentity k)
+type instance QExprToIdentity (a, b, c, d, e, f, g, h, i, j, k, l) =
+  ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
+  , QExprToIdentity g, QExprToIdentity h, QExprToIdentity i, QExprToIdentity j, QExprToIdentity k, QExprToIdentity l )
 type instance QExprToIdentity (Vector n a) = Vector n (QExprToIdentity a)
 
 class IsSql92SelectSyntax selectSyntax => HasQBuilder selectSyntax where

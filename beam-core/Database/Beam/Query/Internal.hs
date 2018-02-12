@@ -471,6 +471,50 @@ instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPr
     (,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
               <*> project' p mkE g <*> project' p mkE h
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e, ProjectibleWithPredicate contextPredicate syntax f
+         , ProjectibleWithPredicate contextPredicate syntax g, ProjectibleWithPredicate contextPredicate syntax h, ProjectibleWithPredicate contextPredicate syntax i ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e, f, g, h, i) where
+
+  project' p mkE (a, b, c, d, e, f, g, h, i) =
+    (,,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+               <*> project' p mkE g <*> project' p mkE h <*> project' p mkE i
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e, ProjectibleWithPredicate contextPredicate syntax f
+         , ProjectibleWithPredicate contextPredicate syntax g, ProjectibleWithPredicate contextPredicate syntax h, ProjectibleWithPredicate contextPredicate syntax i
+         , ProjectibleWithPredicate contextPredicate syntax j ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e, f, g, h, i, j) where
+
+  project' p mkE (a, b, c, d, e, f, g, h, i, j) =
+    (,,,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+                <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+                <*> project' p mkE g <*> project' p mkE h <*> project' p mkE i
+                <*> project' p mkE j
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e, ProjectibleWithPredicate contextPredicate syntax f
+         , ProjectibleWithPredicate contextPredicate syntax g, ProjectibleWithPredicate contextPredicate syntax h, ProjectibleWithPredicate contextPredicate syntax i
+         , ProjectibleWithPredicate contextPredicate syntax j, ProjectibleWithPredicate contextPredicate syntax k ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e, f, g, h, i, j, k) where
+
+  project' p mkE (a, b, c, d, e, f, g, h, i, j, k) =
+    (,,,,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+                 <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+                 <*> project' p mkE g <*> project' p mkE h <*> project' p mkE i
+                 <*> project' p mkE j <*> project' p mkE k
+instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPredicate contextPredicate syntax b, ProjectibleWithPredicate contextPredicate syntax c
+         , ProjectibleWithPredicate contextPredicate syntax d, ProjectibleWithPredicate contextPredicate syntax e, ProjectibleWithPredicate contextPredicate syntax f
+         , ProjectibleWithPredicate contextPredicate syntax g, ProjectibleWithPredicate contextPredicate syntax h, ProjectibleWithPredicate contextPredicate syntax i
+         , ProjectibleWithPredicate contextPredicate syntax j, ProjectibleWithPredicate contextPredicate syntax k, ProjectibleWithPredicate contextPredicate syntax l ) =>
+  ProjectibleWithPredicate contextPredicate syntax (a, b, c, d, e, f, g, h, i, j, k, l) where
+
+  project' p mkE (a, b, c, d, e, f, g, h, i, j, k, l) =
+    (,,,,,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+                  <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+                  <*> project' p mkE g <*> project' p mkE h <*> project' p mkE i
+                  <*> project' p mkE j <*> project' p mkE k <*> project' p mkE l
+
+
 
 project :: Projectible syntax a => a -> WithExprContext [ syntax ]
 project = sequenceA . DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)
