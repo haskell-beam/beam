@@ -13,7 +13,7 @@ import Database.Beam.Postgres.Migrate
 import Database.Beam.Migrate.Types hiding (migrateScript)
 import Database.Beam.Migrate.SQL.Tables
 import Database.Beam.Migrate.SQL.Types
-
+import Database.Beam.Backend.SQL.Types (SqlSerial)
 import qualified Database.PostgreSQL.Simple as Pg
 
 import qualified Control.Exception as E
@@ -28,7 +28,7 @@ import Data.Scientific (Scientific)
 
 data AddressT f
   = AddressT
-  { addressId         :: Columnar f Int
+  { addressId         :: Columnar f (SqlSerial Int)
   , addressAddress1   :: Columnar f Text
   , addressAddress2   :: Columnar f (Maybe Text)
   , addressDistrict   :: Columnar f Text
@@ -42,7 +42,7 @@ deriving instance Show Address
 deriving instance Eq Address
 
 instance Table AddressT where
-  data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
+  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int)) deriving Generic
   primaryKey = AddressId . addressId
 type AddressId = PrimaryKey AddressT Identity
 deriving instance Show AddressId
@@ -91,7 +91,7 @@ deriving instance Eq CountryId
 
 data ActorT f
   = ActorT
-  { actorId :: Columnar f Int
+  { actorId :: Columnar f (SqlSerial Int)
   , actorFirstName :: Columnar f Text
   , actorLastName :: Columnar f Text
   , actorLastUpdate :: Columnar f LocalTime
@@ -100,7 +100,8 @@ type Actor = ActorT Identity
 deriving instance Show Actor; deriving instance Eq Actor
 
 instance Table ActorT where
-  data PrimaryKey ActorT f = ActorId (Columnar f Int) deriving Generic
+  data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int))
+                             deriving Generic
   primaryKey = ActorId . actorId
 type ActorId = PrimaryKey ActorT Identity
 deriving instance Show ActorId; deriving instance Eq ActorId
@@ -126,7 +127,7 @@ deriving instance Show CategoryId; deriving instance Eq CategoryId
 
 data CustomerT f
   = CustomerT
-  { customerId        :: Columnar f Int
+  { customerId        :: Columnar f (SqlSerial Int)
   , customerStore     :: PrimaryKey StoreT f
   , customerFirstName :: Columnar f Text
   , customerLastName  :: Columnar f Text
@@ -140,7 +141,8 @@ type Customer = CustomerT Identity
 deriving instance Show Customer; deriving instance Eq Customer
 
 instance Table CustomerT where
-  data PrimaryKey CustomerT f = CustomerId (Columnar f Int) deriving Generic
+  data PrimaryKey CustomerT f = CustomerId (Columnar f (SqlSerial Int))
+                                deriving Generic
   primaryKey = CustomerId . customerId
 type CustomerId = PrimaryKey CustomerT Identity
 deriving instance Show CustomerId; deriving instance Eq CustomerId
@@ -192,7 +194,7 @@ deriving instance Eq StaffId; deriving instance Show StaffId
 
 data FilmT f
   = FilmT
-  { filmId             :: Columnar f Int
+  { filmId             :: Columnar f (SqlSerial Int)
   , filmTitle          :: Columnar f Text
   , filmDescription    :: Columnar f Text
   , filmReleaseYear    :: Columnar f Int
@@ -209,7 +211,8 @@ type Film = FilmT Identity
 deriving instance Eq Film; deriving instance Show Film
 
 instance Table FilmT where
-  data PrimaryKey FilmT f = FilmId (Columnar f Int) deriving Generic
+  data PrimaryKey FilmT f = FilmId (Columnar f (SqlSerial Int))
+                            deriving Generic
   primaryKey = FilmId . filmId
 type FilmId = PrimaryKey FilmT Identity
 deriving instance Eq FilmId; deriving instance Show FilmId
@@ -236,7 +239,7 @@ deriving instance Eq FilmCategoryId; deriving instance Show FilmCategoryId
 
 data LanguageT f
   = LanguageT
-  { languageId   :: Columnar f Int
+  { languageId   :: Columnar f (SqlSerial Int)
   , languageName :: Columnar f Text
   , languageLastUpdate :: Columnar f LocalTime
   }  deriving Generic
@@ -244,7 +247,8 @@ type Language = LanguageT Identity
 deriving instance Eq Language; deriving instance Show Language
 
 instance Table LanguageT where
-  data PrimaryKey LanguageT f = LanguageId (Columnar f Int) deriving Generic
+  data PrimaryKey LanguageT f = LanguageId (Columnar f (SqlSerial Int))
+                                deriving Generic
   primaryKey = LanguageId . languageId
 type LanguageId = PrimaryKey LanguageT Identity
 deriving instance Eq LanguageId; deriving instance Show LanguageId
@@ -299,22 +303,30 @@ migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres P
 migration () = do
 --  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "actor"
-                 (ActorT (field "actor_id" serial) (field "first_name" (varchar (Just 45)) notNull)
-                         (field "last_name" (varchar (Just 45)) notNull)
+                 (ActorT (field "actor_id" serial)
+                         (field "first_name" (varchar (Just 45)) notNull)
+                         (field "last_name" (varchar (Just 45)) notNull unique)
                          lastUpdateField)
            <*> createTable "address"
-                 (AddressT (field "address_id" smallserial) (field "address" (varchar (Just 50)) notNull)
-                           (field "address2" (varchar (Just 50))) (field "district" (varchar (Just 20)) notNull)
-                           (CityId (field "city_id" smallint notNull)) (field "postal_code" (varchar (Just 10)))
+                 (AddressT (field "address_id" smallserial)
+                           (field "address" (varchar (Just 50)) notNull)
+                           (field "address2" (maybeType $ varchar (Just 50)))
+                           (field "district" (varchar (Just 20)) notNull)
+                           (CityId (field "city_id" smallint notNull))
+                           (field "postal_code" (varchar (Just 10)))
                            (field "phone" (varchar (Just 20)) notNull) lastUpdateField)
            <*> createTable "city"
-                 (CityT (field "city_id" smallserial) (field "city" (varchar (Just 50)) notNull)
-                        (CountryId (field "country_id" smallint notNull)) lastUpdateField)
+                 (CityT (field "city_id" smallint)
+                        (field "city" (varchar (Just 50)) notNull)
+                        (CountryId (field "country_id" smallint notNull))
+                        lastUpdateField)
            <*> createTable "country"
-                 (CountryT (field "country_id" smallserial) (field "country" (varchar (Just 50)) notNull)
+                 (CountryT (field "country_id" smallint)
+                           (field "country" (varchar (Just 50)) notNull)
                            lastUpdateField)
            <*> createTable "category"
-                 (CategoryT (field "category_id" smallserial) (field "name" (varchar (Just 25)) notNull)
+                 (CategoryT (field "category_id" smallint)
+                            (field "name" (varchar (Just 25)) notNull)
                             lastUpdateField)
            <*> createTable "customer"
                  (CustomerT (field "customer_id" serial)
@@ -322,7 +334,7 @@ migration () = do
                             (field "first_name" (varchar (Just 45)) notNull)
                             (field "last_name" (varchar (Just 45)) notNull)
                             (field "email" (varchar (Just 50)))
-                            (AddressId (field "address_id" smallint notNull))
+                            (AddressId (field "address_id" serial notNull))
                             (field "activebool" boolean (defaultTo_ (val_ True)) notNull)
                             (field "create_date" date (defaultTo_ now_) notNull)
                             lastUpdateField)
@@ -331,8 +343,8 @@ migration () = do
                             (field "title" (varchar (Just 255)) notNull)
                             (field "description" text)
                             (field "release_year" smallint {- TODO year -})
-                            (LanguageId (field "language_id" smallint notNull))
-                            (LanguageId (field "original_language_id" smallint))
+                            (LanguageId (field "language_id" smallserial notNull))
+                            (LanguageId (field "original_language_id" smallserial))
                             (field "rental_duration" smallint notNull)
                             (field "rental_rate" (numeric (Just (4, Just 2))))
                             (field "length" smallint)
@@ -340,19 +352,27 @@ migration () = do
                             (field "rating_text" text)
                             lastUpdateField)
            <*> createTable "film_category"
-                 (FilmCategoryT (FilmId (field "film_id" smallint notNull))
-                                (CategoryId (field "category_id" smallint)) lastUpdateField)
+                 (FilmCategoryT (FilmId (field "film_id" smallserial notNull))
+                                (CategoryId (field "category_id" smallint))
+                                lastUpdateField)
            <*> createTable "language"
                  (LanguageT (field "language_id" smallserial)
                             (field "name" (char (Just 20)) notNull)
                             lastUpdateField)
            <*> createTable "store"
-                 (StoreT (field "store_id" smallserial) (StaffId (field "manager_staff_id" smallint notNull))
-                         (AddressId (field "address_id" smallint notNull)) lastUpdateField)
+                 (StoreT (field "store_id" smallint)
+                         (StaffId (field "manager_staff_id" smallint notNull))
+                         (AddressId (field "address_id" serial notNull))
+                         lastUpdateField)
            <*> createTable "staff"
-                 (StaffT (field "staff_id" smallserial) (field "first_name" (varchar (Just 45)) notNull)
+                 (StaffT (field "staff_id" smallint)
+                         (field "first_name" (varchar (Just 45)) notNull)
                          (field "last_name" (varchar (Just 45)) notNull)
-                         (AddressId (field "address_id" smallint notNull)) (field "email" (varchar (Just 50)))
-                         (StoreId (field "store_id" smallint notNull)) (field "active" boolean (defaultTo_ (val_ True)) notNull)
-                         (field "username" (varchar (Just 16)) notNull) (field "password" (varchar (Just 40)))
-                         lastUpdateField (field "picture" bytea))
+                         (AddressId (field "address_id" serial notNull))
+                         (field "email" (varchar (Just 50)))
+                         (StoreId (field "store_id" smallint notNull))
+                         (field "active" boolean (defaultTo_ (val_ True)) notNull)
+                         (field "username" (varchar (Just 16)) notNull)
+                         (field "password" binaryLargeObject)
+                         lastUpdateField
+                         (field "picture" (maybeType bytea)))
