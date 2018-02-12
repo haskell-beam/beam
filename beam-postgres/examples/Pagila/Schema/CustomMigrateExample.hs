@@ -3,32 +3,22 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Pagila.Schema.CustomMigrateExample where
 
-import Database.Beam
-import Database.Beam.Postgres
-import Database.Beam.Postgres (PgSyntax(..))
-import Database.Beam.Migrate
-import Database.Beam.Postgres.Migrate
-import Database.Beam.Migrate.Types hiding (migrateScript)
-import Database.Beam.Backend.SQL
-import Database.Beam.Migrate.SQL.Tables
-import Database.Beam.Migrate.SQL.Types (TableFieldSchema(..), DataType(..))
-import Database.Beam.Backend.SQL.Types (SqlSerial)
-import qualified Database.PostgreSQL.Simple as Pg
+import           Database.Beam
+import           Database.Beam.Postgres
+import           Database.Beam.Migrate
+import           Database.Beam.Postgres.Migrate
+import           Database.Beam.Backend.SQL
+import           Database.Beam.Migrate.SQL.Types (TableFieldSchema(..), DataType(..))
+import           Database.Beam.Backend.SQL.Types (SqlSerial)
 
-import qualified Control.Exception as E
-
-import Data.Text (Text)
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as BL
-import Data.Time.LocalTime (LocalTime)
-import Data.Scientific (Scientific)
-import Database.PostgreSQL.Simple.FromField
-import Text.Read
-import Database.Beam.Backend.SQL.Builder
+import qualified Data.Text as T
+import           Data.Time.LocalTime (LocalTime)
+import           Database.PostgreSQL.Simple.FromField
+import           Text.Read
 
 data ShippingCarrier = USPS | FedEx | UPS | DHL
   deriving (Show, Read, Eq, Ord, Enum)
