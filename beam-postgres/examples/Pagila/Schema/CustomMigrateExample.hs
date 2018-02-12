@@ -52,12 +52,12 @@ shippingCarrierType = DataType pgTextType
 data AddressT f
   = AddressT
   { addressId         :: Columnar f (SqlSerial Int)
-  , addressAddress1   :: Columnar f Text
-  , addressAddress2   :: Columnar f (Maybe Text)
-  , addressDistrict   :: Columnar f Text
+  , addressAddress1   :: Columnar f T.Text
+  , addressAddress2   :: Columnar f (Maybe T.Text)
+  , addressDistrict   :: Columnar f T.Text
   , addressShipper    :: C f ShippingCarrier
-  , addressPostalCode :: Columnar f Text
-  , addressPhone      :: Columnar f Text
+  , addressPostalCode :: Columnar f T.Text
+  , addressPhone      :: Columnar f T.Text
   , addressLastUpdate :: Columnar f LocalTime
   } deriving Generic
 type Address = AddressT Identity
