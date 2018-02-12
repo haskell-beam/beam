@@ -5,6 +5,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | This module contains a minimal example of how to use
+-- a custom data type (``ShippingCarrier`` in this example) in migration
+-- Other than the use of ``ShippingCarrier`` as a part of ``AddressT``,
+-- this is just a stripped down version of Pagila.Schema.V0001
 module Pagila.Schema.CustomMigrateExample where
 
 import           Database.Beam
@@ -34,6 +38,7 @@ instance FromField ShippingCarrier where
       Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
       Just x -> pure x
 
+-- | An explicit definition of ``fromBackendRow`` is required for each custom type
 instance (BeamBackend be, FromBackendRow be T.Text) => FromBackendRow be ShippingCarrier where
   fromBackendRow = do
     val <- fromBackendRow
@@ -44,11 +49,15 @@ instance (BeamBackend be, FromBackendRow be T.Text) => FromBackendRow be Shippin
       "dhl"  -> pure DHL
       _ -> fail ("Invalid value for ShippingCarrier: " ++ T.unpack val)
 
+-- | The shipping carrier type that is used in migration
+-- In this case, we want to store it as the postgres type ``text``
+-- Look into the module Database.Beam.Postgres.Syntax for a list of other
+-- postgres types that your custom type can take
 shippingCarrierType :: DataType PgDataTypeSyntax ShippingCarrier
 shippingCarrierType = DataType pgTextType
 
--- Address table
 
+-- | Address table
 data AddressT f
   = AddressT
   { addressId         :: Columnar f (SqlSerial Int)
@@ -71,8 +80,8 @@ type AddressId = PrimaryKey AddressT Identity
 deriving instance Show AddressId
 deriving instance Eq AddressId
 
--- Pagila db
 
+-- | Pagila db
 data PagilaDb f
   = PagilaDb
   {
