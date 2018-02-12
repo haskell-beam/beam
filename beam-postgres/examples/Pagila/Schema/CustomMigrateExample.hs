@@ -29,12 +29,20 @@ instance (IsSql92ColumnSchemaSyntax be) => HasDefaultSqlDataTypeConstraints be S
 
 instance FromField ShippingCarrier where
   fromField f bs = do
-    x <- readMaybe <$> fromField f bs
-    case x of
+    mCarrier <- readMaybe <$> fromField f bs
+    case mCarrier of
       Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
       Just x -> pure x
 
-instance (BeamBackend be) => FromBackendRow be ShippingCarrier
+instance (BeamBackend be, FromBackendRow be T.Text) => FromBackendRow be ShippingCarrier where
+  fromBackendRow = do
+    val <- fromBackendRow
+    case val :: T.Text of
+      "usps" -> pure USPS
+      "fedex" -> pure FedEx
+      "ups"  -> pure UPS
+      "dhl"  -> pure DHL
+      _ -> fail ("Invalid value for ShippingCarrier: " ++ T.unpack val)
 
 shippingCarrierType :: DataType PgDataTypeSyntax ShippingCarrier
 shippingCarrierType = DataType pgTextType
