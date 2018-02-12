@@ -216,6 +216,8 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   charLengthE = sqlFuncOp "CHAR_LENGTH"
   bitLengthE = sqlFuncOp "BIT_LENGTH"
   octetLengthE = sqlFuncOp "OCTET_LENGTH"
+  lowerE = sqlFuncOp "LOWER"
+  upperE = sqlFuncOp "UPPER"
 
   addE = sqlBinOp "+"
   likeE = sqlBinOp "LIKE"
