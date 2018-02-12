@@ -64,7 +64,7 @@ data AddressT f
   , addressAddress1   :: Columnar f T.Text
   , addressAddress2   :: Columnar f (Maybe T.Text)
   , addressDistrict   :: Columnar f T.Text
-  , addressShipper    :: C f ShippingCarrier
+  , addressShipper    :: Columnar f ShippingCarrier
   , addressPostalCode :: Columnar f T.Text
   , addressPhone      :: Columnar f T.Text
   , addressLastUpdate :: Columnar f LocalTime
