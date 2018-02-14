@@ -63,14 +63,13 @@ import qualified Database.PostgreSQL.Simple.Internal as Pg
   , exec, throwResultError )
 import qualified Database.PostgreSQL.Simple.Internal as PgI
 import qualified Database.PostgreSQL.Simple.Ok as Pg
-import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..))
+import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..), Query(..))
 
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Exception (bracket)
 
 import           Data.ByteString.Builder (toLazyByteString, byteString)
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Conduit as C
 import qualified Data.Conduit.List as C
@@ -78,6 +77,8 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
+import qualified Data.Text as T
+import           Data.Text.Encoding (decodeUtf8)
 
 import           Foreign.C.Types
 
@@ -329,10 +330,10 @@ withPgDebug dbg conn (Pg action) =
                            next) =
         do query <- pgRenderSyntax conn syntax
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-           dbg (BS.unpack query)
+           dbg (T.unpack (decodeUtf8 query))
            action' <- runF process finishProcess stepProcess Nothing
            case action' of
-             PgStreamDone (Right x) -> Pg.execute_ conn (fromString (BS.unpack query)) >> next x
+             PgStreamDone (Right x) -> Pg.execute_ conn (Pg.Query query) >> next x
              PgStreamDone (Left err) -> pure (Left err)
              PgStreamContinue nextStream ->
                let finishUp (PgStreamDone (Right x)) = next x
@@ -340,10 +341,10 @@ withPgDebug dbg conn (Pg action) =
                    finishUp (PgStreamContinue next') = next' Nothing >>= finishUp
 
                    columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
-               in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (fromString (BS.unpack query)) (PgStreamContinue nextStream) runConsumer >>= finishUp
+               in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query) (PgStreamContinue nextStream) runConsumer >>= finishUp
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (BS.unpack query)
+           dbg (T.unpack (decodeUtf8 query))
 
            res <- Pg.exec conn query
            sts <- Pg.resultStatus res
@@ -355,8 +356,8 @@ withPgDebug dbg conn (Pg action) =
                                       res sts
       step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (BS.unpack query)
-           _ <- Pg.execute_ conn (fromString (BS.unpack query))
+           dbg (T.unpack (decodeUtf8 query))
+           _ <- Pg.execute_ conn (Pg.Query query)
 
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
            runF process next stepReturningNone

@@ -61,3 +61,4 @@ aggregate_ (\c -> ( group_ (addressPostalCode (customerAddress c))
                   , pgStringAggOver distinctInGroup_ (coalesce_ [addressCity (customerAddress c)] "") ",") ) $
   all_ (customer chinookDb)
 ```
+

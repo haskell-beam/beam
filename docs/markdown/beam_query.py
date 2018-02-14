@@ -34,7 +34,7 @@ def run_example(template_path, cache_dir, example_lines):
     extra_deps = options.get('EXTRA_DEPS', "").split()
 
     lines_hash = md5.md5("$$TEMPLATEPATH$$" + template_path +
-                         "".join(example_lines))
+                         u"".join(example_lines).encode('ascii', 'xmlcharrefreplace'))
     with open(template_path) as f:
         for line in f:
             lines_hash.update(line)
@@ -49,24 +49,25 @@ def run_example(template_path, cache_dir, example_lines):
     lines_hash = lines_hash.hexdigest()
     if os.path.exists(os.path.join(cache_dir, lines_hash)):
         with open(os.path.join(cache_dir, lines_hash)) as cached:
-            return [x.rstrip() for x in cached]
+            return [x.rstrip().decode('utf-8') for x in cached]
 
-    print "run_example", template_path, example_lines
     if build_command is None:
         return ["No BUILD_COMMAND specified"] + example_lines
 
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(build_dir), close_fds=True,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    (out, err) = proc.communicate("\n".join(template_data))
+    (out, err) = proc.communicate(u"\n".join(template_data).encode('utf-8'))
+    out = unicode(out, 'utf-8')
 
     retcode = proc.wait()
 
     print out, err
     if retcode == 0:
         out = sqlparse.format(out, reindent=True)
+#        out = out.encode('utf-8')
         with open(os.path.join(cache_dir, lines_hash), 'wt') as f:
-            f.write(out)
+            f.write(out.encode('utf-8'))
         return out.split("\n")
     else:
         return err.split()
@@ -92,7 +93,7 @@ class BeamQueryBlockProcessor(Preprocessor):
         def do_consume(line):
             if line.startswith("```"):
                 output.append("```haskell")
-                output.extend(cur_query)
+                output.extend([q for q in cur_query])
                 output.append("```")
 
                 for (template, syntax) in beam_templates:
