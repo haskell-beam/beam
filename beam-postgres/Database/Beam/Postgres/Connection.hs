@@ -487,3 +487,12 @@ instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg wher
                                                         Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty))
 
         runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
+
+instance MonadBeamDeleteReturning PgCommandSyntax Postgres Pg.Connection Pg where
+    runDeleteReturningList tbl mkWhere = do
+        let PgDeleteReturning deleteReturningCmd =
+                deleteReturning tbl mkWhere
+                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
+                                                        Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty))
+
+        runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning deleteReturningCmd)

@@ -270,21 +270,20 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
             doJoined =
                 let sb' = case sb of
                             SelectBuilderQ {} ->
-                                SelectBuilderTopLevel Nothing Nothing ordering sb --(setSelectBuilderProjection sb reproj)
+                                SelectBuilderTopLevel Nothing Nothing ordering sb
                             SelectBuilderGrouping {} ->
-                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb reproj)
+                                SelectBuilderTopLevel Nothing Nothing ordering sb
                             SelectBuilderSelectSyntax {} ->
-                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb reproj)
+                                SelectBuilderTopLevel Nothing Nothing ordering sb
                             SelectBuilderTopLevel Nothing Nothing [] sb' ->
-                                SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb' reproj)
-                            SelectBuilderTopLevel (Just 0) (Just 0) [] sb' ->
-                                SelectBuilderTopLevel (Just 0) (Just 0) ordering (setSelectBuilderProjection sb' reproj)
+                                SelectBuilderTopLevel Nothing Nothing ordering sb'
+                            SelectBuilderTopLevel Nothing (Just 0) [] sb' ->
+                                SelectBuilderTopLevel Nothing (Just 0) ordering sb'
                             SelectBuilderTopLevel {}
                                 | (proj'', qb) <- selectBuilderToQueryBuilder tblPfx sb ->
                                     SelectBuilderTopLevel Nothing Nothing (exprWithContext tblPfx (mkOrdering proj'')) (SelectBuilderQ proj'' qb)
                                 | otherwise -> error "buildQuery (Free (QOrderBy ...)): query inspected expression"
 
-                    (reproj, _) = selectBuilderToQueryBuilder tblPfx sb
                     (joinedProj, qb) = selectBuilderToQueryBuilder tblPfx sb'
                 in buildJoinedQuery (next joinedProj) qb
         in case next proj of

@@ -597,6 +597,8 @@ instance IsSql92ExpressionSyntax HsExpr where
   charLengthE = hsApp (hsVar "charLengthE") . pure
   octetLengthE = hsApp (hsVar "octetLengthE") . pure
   bitLengthE = hsApp (hsVar "bitLengthE") . pure
+  lowerE = hsApp (hsVar "lowerE") . pure
+  upperE = hsApp (hsVar "upperE") . pure
 
   existsE = error "existsE"
   uniqueE = error "uniqueE"
