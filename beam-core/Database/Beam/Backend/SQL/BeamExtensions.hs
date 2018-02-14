@@ -35,3 +35,13 @@ class MonadBeam syntax be handle m =>
     -> (forall s. table (QField s) -> [ QAssignment (Sql92UpdateFieldNameSyntax (Sql92UpdateSyntax syntax)) (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s ])
     -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s) -> QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s Bool)
     -> m [table Identity]
+
+class MonadBeam syntax be handle m =>
+  MonadBeamDeleteReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+  runDeleteReturningList
+    :: ( Beamable table
+       , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
+       , FromBackendRow be (table Identity) )
+    => DatabaseEntity be db (TableEntity table)
+    -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s) -> QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s Bool)
+    -> m [table Identity]

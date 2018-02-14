@@ -219,6 +219,8 @@ data Expression
   | ExpressionOctetLength Expression
   | ExpressionBitLength Expression
   | ExpressionAbs Expression
+  | ExpressionLower Expression
+  | ExpressionUpper Expression
 
   | ExpressionFunctionCall Expression [ Expression ]
   | ExpressionInstanceField Expression Text
@@ -291,6 +293,8 @@ instance IsSql92ExpressionSyntax Expression where
   octetLengthE = ExpressionOctetLength
   bitLengthE = ExpressionBitLength
   absE = ExpressionAbs
+  lowerE = ExpressionLower
+  upperE = ExpressionUpper
 
   subqueryE = ExpressionSubquery
   uniqueE = ExpressionUnique

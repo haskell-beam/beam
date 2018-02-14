@@ -84,6 +84,9 @@ module Database.Beam.Postgres.Syntax
     , PgUpdateReturning(..)
     , updateReturning
 
+    , PgDeleteReturning(..)
+    , deleteReturning
+
     , now_
     , ilike_
 
@@ -631,6 +634,8 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   bitLengthE x = PgExpressionSyntax (emit "BIT_LENGTH(" <> fromPgExpression x <> emit ")")
   charLengthE x = PgExpressionSyntax (emit "CHAR_LENGTH(" <> fromPgExpression x <> emit ")")
   octetLengthE x = PgExpressionSyntax (emit "OCTET_LENGTH(" <> fromPgExpression x <> emit ")")
+  lowerE x = PgExpressionSyntax (emit "LOWER(" <> fromPgExpression x <> emit ")")
+  upperE x = PgExpressionSyntax (emit "UPPER(" <> fromPgExpression x <> emit ")")
   coalesceE es = PgExpressionSyntax (emit "COALESCE(" <> pgSepBy (emit ", ") (map fromPgExpression es) <> emit ")")
   extractE field from = PgExpressionSyntax (emit "EXTRACT(" <> fromPgExtractField field <> emit " FROM (" <> fromPgExpression from <> emit "))")
   castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") AS " <> fromPgDataType to <> emit ")")
@@ -1318,6 +1323,24 @@ updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
   pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
   where
     SqlUpdate pgUpdate = update table mkAssignments mkWhere
+    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
+
+newtype PgDeleteReturning a = PgDeleteReturning PgSyntax
+
+deleteReturning :: Projectible PgExpressionSyntax a
+                => DatabaseEntity Postgres be (TableEntity table)
+                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
+                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+                -> PgDeleteReturning (QExprToIdentity a)
+deleteReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
+                mkWhere
+                mkProjection =
+  PgDeleteReturning $
+  fromPgDelete pgDelete <>
+  emit " RETURNING " <>
+  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
+  where
+    SqlDelete pgDelete = delete table mkWhere
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 pgCreateExtensionSyntax :: T.Text -> PgCommandSyntax
