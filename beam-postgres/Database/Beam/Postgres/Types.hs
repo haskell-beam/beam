@@ -6,7 +6,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Database.Beam.Postgres.Types where
+module Database.Beam.Postgres.Types
+  ( Postgres(..) ) where
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
@@ -31,6 +32,9 @@ import           Data.UUID (UUID)
 import           Data.Vector (Vector)
 import           Data.Word
 
+-- | The Postgres backend type, used to parameterize 'MonadBeam'. See the
+-- definitions there for more information. The corresponding query monad is
+-- 'Pg'.
 data Postgres
   = Postgres
 
@@ -134,12 +138,12 @@ instance (Pg.FromField a, Pg.FromField b) => FromBackendRow Postgres (Either a b
 instance BeamSqlBackend Postgres
 instance BeamSql92Backend Postgres
 
--- * Types for postgres specific extensions
+-- -- * Types for postgres specific extensions
 
-newtype PgTableSamplingMethod
-  = PgTableSamplingMethod { pgTableSamplingMethodAsText :: Text }
-  deriving (Show, Eq, Ord)
+-- newtype PgTableSamplingMethod
+--   = PgTableSamplingMethod { pgTableSamplingMethodAsText :: Text }
+--   deriving (Show, Eq, Ord)
 
-pgBernoulliSamplingMethod, pgSystemSamplingMethod :: PgTableSamplingMethod
-pgBernoulliSamplingMethod = PgTableSamplingMethod "BERNOULLI"
-pgSystemSamplingMethod = PgTableSamplingMethod "SYSTEM"
+-- pgBernoulliSamplingMethod, pgSystemSamplingMethod :: PgTableSamplingMethod
+-- pgBernoulliSamplingMethod = PgTableSamplingMethod "BERNOULLI"
+-- pgSystemSamplingMethod = PgTableSamplingMethod "SYSTEM"

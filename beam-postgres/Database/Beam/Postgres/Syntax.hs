@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -13,6 +12,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
 
+-- | Data types for Postgres syntax. Access is given mainly for extension
+-- modules. The types and definitions here are likely to change.
 module Database.Beam.Postgres.Syntax
     ( PgSyntaxF(..), PgSyntaxM
     , PgSyntax(..)
@@ -67,11 +68,12 @@ module Database.Beam.Postgres.Syntax
 
     , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
     , PgConflictAction(..)
-    , onConflictDefault, onConflict
+    , onConflictDefault, onConflict, anyConflict
     , conflictingFields, conflictingFieldsWhere
     , conflictingConstraint
 
-    , onConflictDoNothing, onConflictUpdateSet, onConflictUpdateInstead
+    , onConflictDoNothing, onConflictUpdateInstead
+    , onConflictUpdateSet, onConflictUpdateSetWhere
 
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
     , pgRenderSyntaxScript, pgBuildAction
@@ -176,6 +178,10 @@ instance Sql92DisplaySyntax PgSyntax where
   displaySyntax = BL.unpack . pgRenderSyntaxScript
 
 type PgSyntaxM = F PgSyntaxF
+
+-- | A piece of Postgres SQL syntax, which may contain embedded escaped byte and
+-- text sequences. 'PgSyntax' composes monoidally, and may be created with
+-- 'emit', 'emitBuilder', 'escapeString', 'escapBytea', and 'escapeIdentifier'.
 newtype PgSyntax
   = PgSyntax { buildPgSyntax :: PgSyntaxM () }
 
@@ -219,20 +225,30 @@ data PgCommandType
     | PgCommandTypeDataUpdate
     | PgCommandTypeDataUpdateReturning
       deriving Show
+
+-- | Representation of an arbitrary Postgres command. This is the combination of
+-- the command syntax (repesented by 'PgSyntax'), as well as the type of command
+-- (represented by 'PgCommandType'). The command type is necessary for us to
+-- know how to retrieve results from the database.
 data PgCommandSyntax
     = PgCommandSyntax
     { pgCommandType :: PgCommandType
     , fromPgCommand :: PgSyntax }
+
+-- | 'IsSql92SelectSyntax' for Postgres
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
 instance HasQBuilder PgSelectSyntax where
   buildSqlQuery = buildSql92Query' True
 
 newtype PgSelectTableSyntax = PgSelectTableSyntax { fromPgSelectTable :: PgSyntax }
 
+-- | 'IsSql92InsertSyntax' for Postgres
 newtype PgInsertSyntax = PgInsertSyntax { fromPgInsert :: PgSyntax }
 
+-- | 'IsSql92DeleteSyntax' for Postgres
 newtype PgDeleteSyntax = PgDeleteSyntax { fromPgDelete :: PgSyntax }
 
+-- | 'IsSql92UpdateSyntax' for Postgres
 newtype PgUpdateSyntax = PgUpdateSyntax { fromPgUpdate :: PgSyntax }
 
 newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax } deriving Eq
@@ -1016,19 +1032,37 @@ instance IsSql92ColumnConstraintSyntax PgColumnConstraintSyntax where
         maybe mempty (\a -> emit " ON UPDATE " <> fromPgReferentialAction a) onUpdate <>
         maybe mempty (\a -> emit " ON DELETE " <> fromPgReferentialAction a) onDelete
 
+-- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
+-- that violates a constraint.
 newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
     PgInsertOnConflict (tbl (QField PostgresInaccessible) -> PgInsertOnConflictSyntax)
+
+-- | Specifies the kind of constraint that must be violated for the action to occur
 newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
     PgInsertOnConflictTarget (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> PgInsertOnConflictTargetSyntax)
+
+-- | A description of what to do when a constraint or index is violated.
 newtype PgConflictAction (tbl :: (* -> *) -> *) =
     PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
 
+-- | By default, Postgres will throw an error when a conflict is detected. This
+-- preserves that functionality.
 onConflictDefault :: PgInsertOnConflict tbl
 onConflictDefault = PgInsertOnConflict (\_ -> PgInsertOnConflictSyntax mempty)
 
+-- | Tells postgres what to do on an @INSERT@ conflict. The first argument is
+-- the type of conflict to provide an action for. For example, to only provide
+-- an action for certain fields, use 'conflictingFields'. Or to only provide an
+-- action over certain fields where a particular condition is met, use
+-- 'conflictingFields'. If you have a particular constraint violation in mind,
+-- use 'conflictingConstraint'. To perform an action on any conflict, use
+-- 'anyConflict'.
+--
+-- See the
+-- <https://www.postgresql.org/docs/current/static/sql-insert.html Postgres documentation>.
 onConflict :: Beamable tbl
            => PgInsertOnConflictTarget tbl
-           -> PgConflictAction tbl 
+           -> PgConflictAction tbl
            -> PgInsertOnConflict tbl
 onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update) =
   PgInsertOnConflict $ \tbl ->
@@ -1037,6 +1071,14 @@ onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update) =
      emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl) <>
                 emit " " <> fromPgConflictAction (update tbl)
 
+-- | Perform the conflict action when any constraint or index conflict occurs.
+-- Syntactically, this is the @ON CONFLICT@ clause, without any /conflict target/.
+anyConflict :: PgInsertOnConflictTarget tbl
+anyConflict = PgInsertOnConflictTarget (\_ -> PgInsertOnConflictTargetSyntax mempty)
+
+-- | Perform the conflict action only when these fields conflict. The first
+-- argument gets the current row as a table of expressions. Return the conflict
+-- key. For more information, see the @beam-postgres@ manual.
 conflictingFields :: Projectible PgExpressionSyntax proj
                   => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
                   -> PgInsertOnConflictTarget tbl
@@ -1045,6 +1087,10 @@ conflictingFields makeProjection =
   PgInsertOnConflictTargetSyntax $
   pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t")))
 
+-- | Like 'conflictingFields', but only perform the action if the condition
+-- given in the second argument is met. See the postgres
+-- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
+-- more information.
 conflictingFieldsWhere :: Projectible PgExpressionSyntax proj
                        => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
                        -> (tbl (QExpr PgExpressionSyntax PostgresInaccessible) ->
@@ -1059,15 +1105,21 @@ conflictingFieldsWhere makeProjection makeWhere =
                 PgExpressionSyntax e = mkE "t"
             in e)
 
+-- | Perform the action only if the given named constraint is violated
 conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
 conflictingConstraint nm =
   PgInsertOnConflictTarget $ \_ ->
   PgInsertOnConflictTargetSyntax $
   emit "ON CONSTRAINT" <> pgQuotedIdentifier nm
 
+-- | The Postgres @DO NOTHING@ action
 onConflictDoNothing :: PgConflictAction tbl
 onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
 
+-- | The Postgres @DO UPDATE SET@ action, without the @WHERE@ clause. The
+-- argument takes an updatable row (like the one used in 'update') and the
+-- conflicting row. Use 'current_' on the first argument to get the current
+-- value of the row in the database.
 onConflictUpdateSet :: Beamable tbl
                     => (tbl (QField PostgresInaccessible) ->
                         tbl (QExpr PgExpressionSyntax PostgresInaccessible)  ->
@@ -1085,6 +1137,33 @@ onConflictUpdateSet mkAssignments =
   in PgConflictActionSyntax $
      emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
 
+-- | The Postgres @DO UPDATE SET@ action, with the @WHERE@ clause. This is like
+-- 'onConflictUpdateSet', but only rows satisfying the given condition are
+-- updated. Sometimes this results in more efficient locking. See the Postgres
+-- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
+-- more information.
+onConflictUpdateSetWhere :: Beamable tbl
+                         => (tbl (QField PostgresInaccessible) ->
+                             tbl (QExpr PgExpressionSyntax PostgresInaccessible)  ->
+                             [ QAssignment PgFieldNameSyntax PgExpressionSyntax PostgresInaccessible ])
+                         -> (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Bool)
+                         -> PgConflictAction tbl
+onConflictUpdateSetWhere mkAssignments where_ =
+  PgConflictAction $ \tbl ->
+  let assignments = mkAssignments tbl tblExcluded
+      QExpr where_' = where_ (changeBeamRep (\(Columnar' f) -> Columnar' (current_ f)) tbl)
+      tblExcluded = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
+
+      assignmentSyntaxes = do
+        QAssignment assignments' <- assignments
+        (fieldNm, expr) <- assignments'
+        pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
+  in PgConflictActionSyntax $
+     emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes <> emit " WHERE " <> fromPgExpression (where_' "t")
+
+-- | Sometimes you want to update every value in the row. Beam can auto-generate
+-- an assignment that assigns the conflicting row to every field in the database
+-- row. This may not always be what you want.
 onConflictUpdateInstead :: (Beamable tbl, Projectible T.Text proj)
                         => (tbl (QExpr T.Text PostgresInaccessible) -> proj)
                         -> PgConflictAction tbl
@@ -1264,6 +1343,10 @@ pgBuildAction =
 
 -- * Postgres specific commands
 
+-- | A @beam-postgres@-specific version of 'Database.Beam.Query.insert', which
+-- provides fuller support for the much richer Postgres @INSERT@ syntax. This
+-- allows you to specify @ON CONFLICT@ actions. For even more complete support,
+-- see 'insertReturning'.
 insert :: DatabaseEntity Postgres db (TableEntity table)
        -> SqlInsertValues PgInsertValuesSyntax table
        -> PgInsertOnConflict table
@@ -1274,8 +1357,17 @@ insert tbl values onConflict =
                           (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int))
     in SqlInsert (PgInsertSyntax a)
 
+-- | The most general kind of @INSERT@ that postgres can perform
 newtype PgInsertReturning a = PgInsertReturning PgSyntax
 
+-- | The full Postgres @INSERT@ syntax, supporting conflict actions and the
+-- @RETURNING CLAUSE@. See 'PgInsertOnConflict' for how to specify a conflict
+-- action or provide 'onConflictDefault' to preserve the behavior without any
+-- @ON CONFLICT@ clause. The last argument takes a newly inserted row and
+-- returns the expression to be returned as part of the @RETURNING@ clause. For
+-- a backend-agnostic version of this functionality see
+-- 'MonadBeamInsertReturning'. Use 'runReturningList' or 'runReturningMany' to
+-- get the results.
 insertReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
                 -> SqlInsertValues PgInsertValuesSyntax table
@@ -1300,8 +1392,12 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
      tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField tblNm (_fieldName f))) tblSettings
 
+-- | The most general kind of @UPDATE@ that postgres can perform
 newtype PgUpdateReturning a = PgUpdateReturning PgSyntax
 
+-- | Postgres @UPDATE ... RETURNING@ statement support. The last argument takes
+-- the newly inserted row and returns the values to be returned. Use
+-- 'runReturningList' or 'runReturningMany' to get the results.
 updateReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
                 -> (forall s. table (QField s) -> [ QAssignment PgFieldNameSyntax PgExpressionSyntax s ])
@@ -1347,9 +1443,11 @@ pgDropExtensionSyntax extName =
 --                                        Nothing
 --      buildJoinFrom tbl newSource Nothing
 
+-- | Postgres @NOW()@ function. Returns the server's timestamp
 now_ :: QExpr PgExpressionSyntax s LocalTime
 now_ = QExpr (\_ -> PgExpressionSyntax (emit "NOW()"))
 
+-- | Postgres @ILIKE@ operator. A case-insensitive version of 'like_'.
 ilike_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
        => QExpr PgExpressionSyntax s text
        -> QExpr PgExpressionSyntax s text

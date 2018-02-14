@@ -9,7 +9,65 @@
 {-# LANGUAGE PolyKinds #-}
 
 -- | Postgres-specific types, functions, and operators
-module Database.Beam.Postgres.PgSpecific where
+module Database.Beam.Postgres.PgSpecific
+  ( -- ** Full-text search
+    -- $full-text-search
+
+    -- *** @TSVECTOR@ data type
+    TsVectorConfig, TsVector(..)
+  , toTsVector, english
+
+    -- *** @TSQUERY@ data type
+  , TsQuery(..), (@@)
+
+    -- ** @JSON@ and @JSONB@ data types
+    -- $json
+  , PgJSON(..), PgJSONB(..)
+  , IsPgJSON(..)
+
+  , (@>), (<@), (->#), (->$)
+  , (->>#), (->>$), (#>), (#>>)
+  , (?), (?|), (?&)
+
+  , withoutKey, withoutIdx
+  , withoutKeys
+
+  , pgJsonArrayLength
+  , pgJsonbUpdate, pgJsonbSet
+  , pgJsonbPretty
+
+    -- ** @MONEY@ data type
+  , PgMoney(..), pgMoney
+
+  , pgScaleMoney_
+  , pgDivideMoney_, pgDivideMoneys_
+
+  , pgAddMoney_, pgSubtractMoney_
+  , pgSumMoneyOver_, pgAvgMoneyOver_
+  , pgSumMoney_, pgAvgMoney_
+
+    -- ** @ARRAY@ types
+    -- $arrays
+  , PgArrayValueContext, PgIsArrayContext
+
+    -- *** Building @ARRAY@s
+  , array_, (++.)
+  , pgArrayAgg, pgArrayAggOver
+
+    -- *** Array operators and functions
+  , (!.), arrayDims_
+  , arrayUpper_, arrayLower_
+  , arrayUpperUnsafe_, arrayLowerUnsafe_
+  , arrayLength_, arrayLengthUnsafe_
+
+  , isSupersetOf_, isSubsetOf_
+
+    -- ** Postgres functions and aggregates
+  , pgBoolOr, pgBoolAnd, pgStringAgg
+
+  , pgNubBy_
+  )
+where
 
 import           Database.Beam
 import           Database.Beam.Migrate ( HasDefaultSqlDataType(..)
@@ -43,12 +101,22 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import           GHC.TypeLits
 import           GHC.Exts hiding (toList)
 
--- * TsVector type
+-- ** TsVector type
 
-newtype TsVectorConfig = TsVectorConfig ByteString
-  deriving (Show, Eq, Ord, IsString)
+-- | The type of a document preprocessed for full-text search. The contained
+-- 'ByteString' is the Postgres representation of the @TSVECTOR@ type. Use
+-- 'toTsVector' to construct these on-the-fly from strings.
+--
+-- When this field is embedded in a beam table, 'defaultMigratableDbSettings'
+-- will give the column the postgres @TSVECTOR@ type.
 newtype TsVector = TsVector ByteString
   deriving (Show, Eq, Ord)
+
+-- | The identifier of a Postgres text search configuration.
+--
+-- Use the 'IsString' instance to construct new values of this type
+newtype TsVectorConfig = TsVectorConfig ByteString
+  deriving (Show, Eq, Ord, IsString)
 
 instance Pg.FromField TsVector where
   fromField field d =
@@ -66,9 +134,12 @@ instance Pg.ToField TsVector where
 
 instance FromBackendRow Postgres TsVector
 
+-- | A full-text search configuration with sensible defaults for english
 english :: TsVectorConfig
 english = TsVectorConfig "english"
 
+-- | The Postgres @to_tsvector@ function. Given a configuration and string,
+-- return the @TSVECTOR@ that represents the contents of the string.
 toTsVector :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
            => Maybe TsVectorConfig -> QGenExpr context PgExpressionSyntax s str
            -> QGenExpr context PgExpressionSyntax s TsVector
@@ -80,6 +151,8 @@ toTsVector (Just (TsVectorConfig configNm)) (QExpr x) =
   QExpr (fmap (\(PgExpressionSyntax x') -> PgExpressionSyntax $
                  emit "to_tsquery('" <> escapeString configNm <> emit "', " <> x' <> emit ")") x)
 
+-- | Determine if the given @TSQUERY@ matches the document represented by the
+-- @TSVECTOR@. Behaves exactly like the similarly-named operator in postgres.
 (@@) :: QGenExpr context PgExpressionSyntax s TsVector
      -> QGenExpr context PgExpressionSyntax s TsQuery
      -> QGenExpr context PgExpressionSyntax s Bool
@@ -88,6 +161,10 @@ QExpr vec @@ QExpr q =
 
 -- * TsQuery type
 
+-- | A query that can be run against a document contained in a 'TsVector'.
+--
+-- When this field is embedded in a beam table, 'defaultMigratableDbSettings'
+-- will give the column the postgres @TSVECTOR@ type
 newtype TsQuery = TsQuery ByteString
   deriving (Show, Eq, Ord)
 
@@ -104,9 +181,13 @@ instance FromBackendRow Postgres TsQuery
 -- * Array operators
 
 -- TODO this should be robust to slices
+
+-- | Index into the given array. This translates to the @<array>[<index>]@
+-- syntax in postgres. The beam operator name has been chosen to match the
+-- 'Data.Vector.(!)' operator.
 (!.) :: Integral ix
-     => QGenExpr context PgExpressionSyntax s ix
-     -> QGenExpr context PgExpressionSyntax s (V.Vector a)
+     => QGenExpr context PgExpressionSyntax s (V.Vector a)
+     -> QGenExpr context PgExpressionSyntax s ix
      -> QGenExpr context PgExpressionSyntax s a
 QExpr v !. QExpr ix =
   QExpr (index <$> v <*> ix)
@@ -114,6 +195,8 @@ QExpr v !. QExpr ix =
     index (PgExpressionSyntax v') (PgExpressionSyntax ix') =
       PgExpressionSyntax (emit "(" <> v' <> emit ")[" <> ix' <> emit "]")
 
+-- | Postgres @array_dims()@ function. Returns a textual representation of the
+-- dimensions of the array.
 arrayDims_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
            => QGenExpr context PgExpressionSyntax s (V.Vector a)
            -> QGenExpr context PgExpressionSyntax s text
@@ -130,6 +213,16 @@ type family WithinBounds (dim :: Nat) (v :: *) :: Constraint where
                     ('Text "The type " ':<>: 'ShowType v ':<>: 'Text " has " ':<>: 'ShowType (CountDims v) ':<>: 'Text " dimension(s).") ':$$:
                     ('Text "Hint: The dimension should be a natural between 1 and " ':<>: 'ShowType (CountDims v)) ))
 
+-- | Return the upper or lower bound of the given array at the given dimension
+--  (statically supplied as a type application on a 'GHC.TypeLits.Nat'). Note
+--  that beam will attempt to statically determine if the dimension is in range.
+--  GHC errors will be thrown if this cannot be proved.
+--
+-- For example, to get the upper bound of the 2nd-dimension of an array:
+--
+-- @
+-- arrayUpper_ @2 vectorValuedExpression
+-- @
 arrayUpper_, arrayLower_
   :: forall (dim :: Nat) context num v s.
      (KnownNat dim, WithinBounds dim (V.Vector v), Integral num)
@@ -140,6 +233,10 @@ arrayUpper_ v =
 arrayLower_ v =
   unsafeRetype (arrayLowerUnsafe_ v (val_ (natVal (Proxy @dim) :: Integer)) :: QGenExpr context PgExpressionSyntax s (Maybe Integer))
 
+-- | These functions can be used to find the lower and upper bounds of an array
+-- where the dimension number is not known until run-time. They are marked
+-- unsafe because they may cause query processing to fail at runtime, even if
+-- they typecheck successfully.
 arrayUpperUnsafe_, arrayLowerUnsafe_
   :: (Integral dim, Integral length)
   => QGenExpr context PgExpressionSyntax s (V.Vector v)
@@ -160,6 +257,9 @@ arrayLowerUnsafe_ (QExpr v) (QExpr dim) =
          , fromPgExpression <$> dim
          , pure (emit ")") ])
 
+-- | Get the size of the array at the given (statically known) dimension,
+-- provided as a type-level 'Nat'. Like the 'arrayUpper_' and 'arrayLower_'
+-- functions,throws a compile-time error if the dimension is out of bounds.
 arrayLength_
   :: forall (dim :: Nat) ctxt num v s.
      (KnownNat dim, WithinBounds dim (V.Vector v), Integral num)
@@ -168,6 +268,8 @@ arrayLength_
 arrayLength_ v =
   unsafeRetype (arrayLengthUnsafe_ v (val_ (natVal (Proxy @dim) :: Integer)) :: QGenExpr ctxt PgExpressionSyntax s (Maybe Integer))
 
+-- | Get the size of an array at a dimension not known until run-time. Marked
+-- unsafe as this may cause runtime errors even if it type checks.
 arrayLengthUnsafe_
   :: (Integral dim, Integral num)
   => QGenExpr ctxt PgExpressionSyntax s (V.Vector v)
@@ -181,15 +283,23 @@ arrayLengthUnsafe_ (QExpr a) (QExpr dim) =
   , fromPgExpression <$> dim
   , pure (emit ")") ]
 
-isSupersetOf_, isSubsetOf_ :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
-                           -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
-                           -> QGenExpr ctxt PgExpressionSyntax s Bool
+-- | The Postgres @&#x40;>@ operator. Returns true if every member of the second
+-- array is present in the first.
+isSupersetOf_ :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+              -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+              -> QGenExpr ctxt PgExpressionSyntax s Bool
 isSupersetOf_ (QExpr haystack) (QExpr needles) =
   QExpr (pgBinOp "@>" <$> haystack <*> needles)
+
+-- | The Postgres @<&#x40;@ operator. Returns true if every member of the first
+-- array is present in the second.
+isSubsetOf_ :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+            -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
+            -> QGenExpr ctxt PgExpressionSyntax s Bool
 isSubsetOf_ (QExpr needles) (QExpr haystack) =
   QExpr (pgBinOp "<@" <$> needles <*> haystack)
 
--- Postgres @||@ operator
+-- | Postgres @||@ operator. Concatenates two vectors and returns their result.
 (++.) :: QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
       -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
       -> QGenExpr ctxt PgExpressionSyntax s (V.Vector a)
@@ -198,8 +308,13 @@ QExpr a ++. QExpr b =
 
 -- * Array expressions
 
+-- | An expression context that determines which types of expressions can be put
+-- inside an array element. Any scalar, aggregate, or window expression can be
+-- placed within an array.
 data PgArrayValueContext
 
+-- | If you are extending beam-postgres and provide another expression context
+-- that can be represented in an array, provide an empty instance of this class.
 class PgIsArrayContext ctxt where
   mkArraySyntax :: Proxy ctxt -> PgSyntax -> PgSyntax
   mkArraySyntax _ s = emit "ARRAY" <> s
@@ -209,18 +324,27 @@ instance PgIsArrayContext QValueContext
 instance PgIsArrayContext QAggregateContext
 instance PgIsArrayContext QWindowingContext
 
+-- | Build a 1-dimensional postgres array from an arbitrary 'Foldable'
+-- containing expressions.
 array_ :: forall context f s a.
           (PgIsArrayContext context, Foldable f)
        => f (QGenExpr PgArrayValueContext PgExpressionSyntax s a)
        -> QGenExpr context PgExpressionSyntax s (V.Vector a)
 array_ vs =
   QExpr $ fmap (PgExpressionSyntax . mkArraySyntax (Proxy @context) . mconcat) $
-  sequenceA $ [ pure (emit "[")
-              , pgSepBy (emit ", ") <$> mapM (\(QExpr e) -> fromPgExpression <$> e) (toList vs)
-              , pure (emit "]") ]
+  sequenceA [ pure (emit "[")
+            , pgSepBy (emit ", ") <$> mapM (\(QExpr e) -> fromPgExpression <$> e) (toList vs)
+            , pure (emit "]") ]
 
 -- * JSON
 
+-- | The Postgres @JSON@ type, which stores textual values that represent JSON
+-- objects. The type parameter indicates the Haskell type which the JSON
+-- encodes. This type must be a member of 'FromJSON' and 'ToJSON' in order for
+-- deserialization and serialization to work as expected.
+--
+-- The 'defaultMigratableDbSettings' function automatically assigns the postgres
+-- @JSON@ type to fields with this type.
 newtype PgJSON a = PgJSON a
   deriving ( Show, Eq, Ord, Hashable, Monoid )
 
@@ -238,6 +362,11 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
     PgValueSyntax $
     emit "'" <> escapeString (BL.toStrict (encode a)) <> emit "'::json"
 
+-- | The Postgres @JSONB@ type, which stores JSON-encoded data in a
+-- postgres-specific binary format. Like 'PgJSON', the type parameter indicates
+-- the Hgaskell type which the JSON encodes.
+--
+-- Fields with this type are automatically given the Postgres @JSONB@ type
 newtype PgJSONB a = PgJSONB a
   deriving ( Show, Eq, Ord, Hashable, Monoid )
 
@@ -255,6 +384,15 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
     PgValueSyntax $
     emit "'" <> escapeString (BL.toStrict (encode a)) <> emit "'::jsonb"
 
+-- | Postgres provides separate @json_@ and @jsonb_@ functions. However, we know
+-- what we're dealing with based on the type of data, so we can be less obtuse.
+--
+-- For more information on how these functions behave, see the Postgres manual
+-- section on
+-- <https://www.postgresql.org/docs/current/static/functions-json.html JSON>.
+--
+-- Note that @beam-postgres@ does not yet support @setof@ so some functions are
+-- missing. PRs to implement this functionality are welcome!
 class IsPgJSON (json :: * -> *) where
 --  pgJsonEach     :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONTable (QGenExpr ctxt PgExpressionSyntax s))
 --  pgJsonEachText :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONTable (QGenExpr ctxt PgExpressionSyntax s))
@@ -263,10 +401,17 @@ class IsPgJSON (json :: * -> *) where
 --  pgJsonArrayElementsText :: GenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONValuesTextTable (QGenExpr ctxt PgExpressionSyntax s))
 --  pgJsonToRecord
 --  pgJsonToRecordSet
+  -- | The @json_typeof@ or @jsonb_typeof@ function
   pgJsonTypeOf :: QGenExpr ctxt PgExpressionSyntax s (json a) -> QGenExpr ctxt PgExpressionSyntax s T.Text
+
+  -- | The @json_strip_nulls@ or @jsonb_strip_nulls@ function.
   pgJsonStripNulls :: QGenExpr ctxt PgExpressionSyntax s (json a) -> QGenExpr ctxt PgExpressionSyntax s (json b)
 
+  -- | The @json_agg@ or @jsonb_agg@ aggregate.
   pgJsonAgg :: QExpr PgExpressionSyntax s a -> QAgg PgExpressionSyntax s (json a)
+
+  -- | The @json_object_agg@ or @jsonb_object_agg@. The first argument gives the
+  -- key source and the second the corresponding values.
   pgJsonObjectAgg :: QExpr PgExpressionSyntax s key -> QExpr PgExpressionSyntax s value
                   -> QAgg PgExpressionSyntax s (json a)
 
@@ -300,6 +445,9 @@ instance IsPgJSON PgJSONB where
     sequenceA $ [ fromPgExpression <$> keys, pure (emit ", ")
                 , fromPgExpression <$> values ]
 
+-- | Postgres @&#x40;>@ and @<&#x40;@ operators for JSON. Return true if the
+-- json object pointed to by the arrow is completely contained in the other. See
+-- the Postgres documentation for more in formation on what this means.
 (@>), (<@) :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s (json b)
@@ -309,6 +457,8 @@ QExpr a @> QExpr b =
 QExpr a <@ QExpr b =
   QExpr (pgBinOp "<@" <$> a <*> b)
 
+-- | Access a JSON array by index. Corresponds to the Postgres @->@ operator.
+-- See '(->$)' for the corresponding operator for object access.
 (->#) :: IsPgJSON json
       => QGenExpr ctxt PgExpressionSyntax s (json a)
       -> QGenExpr ctxt PgExpressionSyntax s Int
@@ -316,6 +466,8 @@ QExpr a <@ QExpr b =
 QExpr a -># QExpr b =
   QExpr (pgBinOp "->" <$> a <*> b)
 
+-- | Acces a JSON object by key. Corresponds to the Postgres @->@ operator. See
+-- '(->#)' for the corresponding operator for arrays.
 (->$) :: IsPgJSON json
       => QGenExpr ctxt PgExpressionSyntax s (json a)
       -> QGenExpr ctxt PgExpressionSyntax s T.Text
@@ -323,6 +475,9 @@ QExpr a -># QExpr b =
 QExpr a ->$ QExpr b =
   QExpr (pgBinOp "->" <$> a <*> b)
 
+-- | Access a JSON array by index, returning the embedded object as a string.
+-- Corresponds to the Postgres @->>@ operator. See '(->>$)' for the
+-- corresponding operator on objects.
 (->>#) :: IsPgJSON json
        => QGenExpr ctxt PgExpressionSyntax s (json a)
        -> QGenExpr ctxt PgExpressionSyntax s Int
@@ -330,6 +485,9 @@ QExpr a ->$ QExpr b =
 QExpr a ->># QExpr b =
   QExpr (pgBinOp "->>" <$> a <*> b)
 
+-- | Access a JSON object by key, returning the embedded object as a string.
+-- Corresponds to the Postgres @->>@ operator. See '(->>#)' for the
+-- corresponding operator on arrays.
 (->>$) :: IsPgJSON json
        => QGenExpr ctxt PgExpressionSyntax s (json a)
        -> QGenExpr ctxt PgExpressionSyntax s T.Text
@@ -337,6 +495,11 @@ QExpr a ->># QExpr b =
 QExpr a ->>$ QExpr b =
   QExpr (pgBinOp "->>" <$> a <*> b)
 
+-- | Access a deeply nested JSON object. The first argument is the JSON object
+-- to look within, the second is the path of keys from the first argument to the
+-- target. Returns the result as a new json value. Note that the postgres
+-- function allows etiher string keys or integer indices, but this function only
+-- allows string keys. PRs to improve this functionality are welcome.
 (#>) :: IsPgJSON json
      => QGenExpr ctxt PgExpressionSyntax s (json a)
      -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
@@ -344,13 +507,16 @@ QExpr a ->>$ QExpr b =
 QExpr a #> QExpr b =
   QExpr (pgBinOp "#>" <$> a <*> b)
 
+-- | Like '(#>)' but returns the result as a string.
 (#>>) :: IsPgJSON json
       => QGenExpr ctxt PgExpressionSyntax s (json a)
       -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
       -> QGenExpr ctxt PgExpressionSyntax s T.Text
 QExpr a #>> QExpr b =
-  QExpr (pgBinOp "#>" <$> a <*> b)
+  QExpr (pgBinOp "#>>" <$> a <*> b)
 
+-- | Postgres @?@ operator. Checks if the given string exists as top-level key
+-- of the json object.
 (?) :: IsPgJSON json
     => QGenExpr ctxt PgExpressionSyntax s (json a)
     -> QGenExpr ctxt PgExpressionSyntax s T.Text
@@ -358,6 +524,8 @@ QExpr a #>> QExpr b =
 QExpr a ? QExpr b =
   QExpr (pgBinOp "?" <$> a <*> b)
 
+-- | Postgres @?|@ and @?&@ operators. Check if any or all of the given strings
+-- exist as top-level keys of the json object respectively.
 (?|), (?&) :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
@@ -367,6 +535,9 @@ QExpr a ?| QExpr b =
 QExpr a ?& QExpr b =
   QExpr (pgBinOp "?&" <$> a <*> b)
 
+-- | Postgres @-@ operator on json objects. Returns the supplied json object
+-- with the supplied key deleted. See 'withoutIdx' for the corresponding
+-- operator on arrays.
 withoutKey :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s T.Text
@@ -374,6 +545,8 @@ withoutKey :: IsPgJSON json
 QExpr a `withoutKey` QExpr b =
   QExpr (pgBinOp "-" <$> a <*> b)
 
+-- | Postgres @-@ operator on json arrays. See 'withoutKey' for the
+-- corresponding operator on objects.
 withoutIdx :: IsPgJSON json
            => QGenExpr ctxt PgExpressionSyntax s (json a)
            -> QGenExpr ctxt PgExpressionSyntax s Int
@@ -381,6 +554,8 @@ withoutIdx :: IsPgJSON json
 QExpr a `withoutIdx` QExpr b =
   QExpr (pgBinOp "-" <$> a <*> b)
 
+-- | Postgres @#-@ operator. Removes all the keys specificied from the JSON
+-- object and returns the result.
 withoutKeys :: IsPgJSON json
             => QGenExpr ctxt PgExpressionSyntax s (json a)
             -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
@@ -388,12 +563,19 @@ withoutKeys :: IsPgJSON json
 QExpr a `withoutKeys` QExpr b =
   QExpr (pgBinOp "#-" <$> a <*> b)
 
+-- | Postgres @json_array_length@ function. The supplied json object should be
+-- an array, but this isn't checked at compile-time.
 pgJsonArrayLength :: IsPgJSON json => QGenExpr ctxt PgExpressionSyntax s (json a)
                   -> QGenExpr ctxt PgExpressionSyntax s Int
 pgJsonArrayLength (QExpr a) =
   QExpr $ \tbl ->
   PgExpressionSyntax (emit "json_array_length(" <> fromPgExpression (a tbl) <> emit ")")
 
+-- | The postgres @jsonb_set@ function. 'pgJsonUpdate' expects the value
+-- specified by the path in the second argument to exist. If it does not, the
+-- first argument is not modified. 'pgJsonbSet' will create any intermediate
+-- objects necessary. This corresponds to the @create_missing@ argument of
+-- @jsonb_set@ being set to false or true respectively.
 pgJsonbUpdate, pgJsonbSet
   :: QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
   -> QGenExpr ctxt PgExpressionSyntax s (V.Vector T.Text)
@@ -406,6 +588,7 @@ pgJsonbSet (QExpr a) (QExpr path) (QExpr newVal) =
   QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_set") . pgParens . mconcat) $ sequenceA $
   [ fromPgExpression <$> a, pure (emit ", "), fromPgExpression <$> path, pure (emit ", "), fromPgExpression <$> newVal, pure (emit ", true") ]
 
+-- | Postgres @jsonb_pretty@ function
 pgJsonbPretty :: QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
               -> QGenExpr ctxt PgExpressionSyntax s T.Text
 pgJsonbPretty (QExpr a) =
@@ -413,10 +596,15 @@ pgJsonbPretty (QExpr a) =
 
 -- * Postgresql aggregates
 
+-- | An aggregate that adds each value to the resulting array. See 'pgArrayOver'
+-- if you want to specify a quantifier. Corresponds to the Postgres @ARRAY_AGG@
+-- function.
 pgArrayAgg :: QExpr PgExpressionSyntax s a
            -> QAgg PgExpressionSyntax s (V.Vector a)
 pgArrayAgg = pgArrayAggOver allInGroup_
 
+-- | Postgres @ARRAY_AGG@ with an explicit quantifier. Includes each row that
+-- meets the quantification criteria in the result.
 pgArrayAggOver :: Maybe PgAggregationSetQuantifierSyntax
                -> QExpr PgExpressionSyntax s a
                -> QAgg PgExpressionSyntax s (V.Vector a)
@@ -427,12 +615,14 @@ pgArrayAggOver quantifier (QExpr a) =
     pgParens ( maybe mempty (\q -> fromPgAggregationSetQuantifier q <> emit " ") quantifier <>
                fromPgExpression (a tbl))
 
+-- | Postgres @bool_or@ aggregate. Returns true if any of the rows are true.
 pgBoolOr :: QExpr PgExpressionSyntax s a
          -> QAgg PgExpressionSyntax s Bool
 pgBoolOr (QExpr a) =
   QExpr $ \tbl -> PgExpressionSyntax $
   emit "bool_or" <> pgParens (fromPgExpression (a tbl))
 
+-- | Postgres @bool_and@ aggregate. Returns false unless every row is true.
 pgBoolAnd :: QExpr PgExpressionSyntax s a
           -> QAgg PgExpressionSyntax s Bool
 pgBoolAnd (QExpr a) =
@@ -441,12 +631,17 @@ pgBoolAnd (QExpr a) =
 
 -- ** String aggregations
 
+-- | Joins the string value in each row of the first argument, using the second
+-- argument as a delimiter. See 'pgStringAggOver' if you want to provide
+-- explicit quantification.
 pgStringAgg :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
             => QExpr PgExpressionSyntax s str
             -> QExpr PgExpressionSyntax s str
             -> QAgg PgExpressionSyntax s str
 pgStringAgg = pgStringAggOver allInGroup_
 
+-- | The Postgres @string_agg@ function, with an explicit quantifier. Joins the
+-- values of the second argument using the delimiter given by the third.
 pgStringAggOver :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
                 => Maybe PgAggregationSetQuantifierSyntax
                 -> QExpr PgExpressionSyntax s str
@@ -461,6 +656,8 @@ pgStringAggOver quantifier (QExpr v) (QExpr delim) =
 
 -- * Postgresql SELECT DISTINCT ON
 
+-- | Modify a query to only return rows where the supplied key function returns
+-- a unique value. This corresponds to the Postgres @DISTINCT ON@ support.
 pgNubBy_ :: ( Projectible PgExpressionSyntax key
             , Projectible PgExpressionSyntax r )
          => (r -> key)
@@ -471,7 +668,8 @@ pgNubBy_ mkKey (Q q) = Q $ liftF (QDistinct (\r pfx -> pgSelectSetQuantifierDist
 -- * PostgreSql money data type
 
 -- | Postgres @MONEY@ data type. A simple wrapper over 'ByteString', because
---   Postgres money format is locale-dependent.
+--   Postgres money format is locale-dependent, and we don't handle currency
+--   symbol placement, digit grouping, or decimal separation.
 --
 --   The 'pgMoney' function can be used to convert a number to 'PgMoney'.
 newtype PgMoney = PgMoney { fromPgMoney :: ByteString }
@@ -490,11 +688,16 @@ instance FromBackendRow Postgres PgMoney
 instance HasSqlValueSyntax PgValueSyntax PgMoney where
   sqlValueSyntax (PgMoney a) = sqlValueSyntax a
 
+-- | Attempt to pack a floating point value as a 'PgMoney' value, paying no
+-- attention to the locale-dependent currency symbol, digit grouping, or decimal
+-- point. This will use the @.@ symbol as the decimal separator.
 pgMoney :: Real a => a -> PgMoney
 pgMoney val = PgMoney (BC.pack (formatScientific Fixed Nothing exactVal))
   where
     exactVal = fromRational (toRational val) :: Scientific
 
+-- | Multiply a @MONEY@ value by a numeric value. Corresponds to the Postgres
+-- @*@ operator.
 pgScaleMoney_ :: Num a
               => QGenExpr context PgExpressionSyntax s a
               -> QGenExpr context PgExpressionSyntax s PgMoney
@@ -502,6 +705,10 @@ pgScaleMoney_ :: Num a
 pgScaleMoney_ (QExpr scale) (QExpr v) =
   QExpr (pgBinOp "*" <$> scale <*> v)
 
+-- | Divide a @MONEY@ value by a numeric value. Corresponds to Postgres @/@
+-- where the numerator has type @MONEY@ and the denominator is a number. If you
+-- would like to divide two @MONEY@ values and have their units cancel out, use
+-- 'pgDivideMoneys_'.
 pgDivideMoney_ :: Num a
                => QGenExpr context PgExpressionSyntax s PgMoney
                -> QGenExpr context PgExpressionSyntax s a
@@ -509,6 +716,8 @@ pgDivideMoney_ :: Num a
 pgDivideMoney_ (QExpr v) (QExpr scale) =
   QExpr (pgBinOp "/" <$> v <*> scale)
 
+-- | Dividing two @MONEY@ value results in a number. Corresponds to Postgres @/@
+-- on two @MONEY@ values. If you would like to divide @MONEY@ by a scalar, use 'pgDivideMoney_'
 pgDivideMoneys_ :: Num a
                 => QGenExpr context PgExpressionSyntax s PgMoney
                 -> QGenExpr context PgExpressionSyntax s PgMoney
@@ -516,6 +725,7 @@ pgDivideMoneys_ :: Num a
 pgDivideMoneys_ (QExpr a) (QExpr b) =
   QExpr (pgBinOp "/" <$> a <*> b)
 
+-- | Postgres @+@ and @-@ operators on money.
 pgAddMoney_, pgSubtractMoney_
   :: QGenExpr context PgExpressionSyntax s PgMoney
   -> QGenExpr context PgExpressionSyntax s PgMoney
@@ -525,12 +735,18 @@ pgAddMoney_ (QExpr a) (QExpr b) =
 pgSubtractMoney_ (QExpr a) (QExpr b) =
   QExpr (pgBinOp "-" <$> a <*> b)
 
+-- | The Postgres @MONEY@ type can be summed or averaged in an aggregation.
+-- These functions provide the quantified aggregations. See 'pgSumMoney_' and
+-- 'pgAvgMoney_' for the unquantified versions.
 pgSumMoneyOver_, pgAvgMoneyOver_
   :: Maybe PgAggregationSetQuantifierSyntax
   -> QExpr PgExpressionSyntax s PgMoney -> QExpr PgExpressionSyntax s PgMoney
 pgSumMoneyOver_ q (QExpr a) = QExpr (sumE q <$> a)
 pgAvgMoneyOver_ q (QExpr a) = QExpr (avgE q <$> a)
 
+-- | The Postgres @MONEY@ type can be summed or averaged in an aggregation. To
+-- provide an explicit quantification, see 'pgSumMoneyOver_' and
+-- 'pgAvgMoneyOver_'.
 pgSumMoney_, pgAvgMoney_ :: QExpr PgExpressionSyntax s PgMoney
                          -> QExpr PgExpressionSyntax s PgMoney
 pgSumMoney_ = pgSumMoneyOver_ allInGroup_
@@ -557,3 +773,49 @@ instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSONB a)
 instance HasDefaultSqlDataType PgDataTypeSyntax PgMoney where
   defaultSqlDataType _ _ = pgMoneyType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax PgMoney
+
+-- $full-text-search
+--
+-- Postgres has comprehensive, and thus complicated, support for full text
+-- search. The types and functions in this section map closely to the underlying
+-- Postgres API, which is described in the
+-- <https://www.postgresql.org/docs/current/static/textsearch-intro.html documentation>.
+--
+
+-- $arrays
+--
+-- The functions and types in this section map Postgres @ARRAY@ types to
+-- Haskell. An array is serialized and deserialized to a 'Data.Vector.Vector'
+-- object. This type most closely matches the semantics of Postgres @ARRAY@s. In
+-- general, the names of functions in this section closely match names of the
+-- native Postgres functions they map to. As with most beam expression
+-- functions, names are suffixed with an underscore and CamelCased.
+--
+-- Note that Postgres supports arbitrary nesting of vectors. For example, two,
+-- three, or higher dimensional arrays can be expressed, manipulated, and stored
+-- in tables. Beam fully supports this use case. A two-dimensional postgres
+-- array is represented as @Vector (Vector a)@. Simply nest another 'Vector' for
+-- higher dimensions. Some functions that return data on arrays expect a
+-- dimension number as a parameter. Since beam can check the dimension at
+-- compile time, these functions expect a type-level 'Nat' in the expression
+-- DSL. The unsafe versions of these functions are also provided with the
+-- @Unsafe_@ suffix. The safe versions are guaranteed not to fail at run-time
+-- due to dimension mismatches, the unsafe ones may.
+--
+-- For more information on Postgres array support, refer to the postgres
+-- <https://www.postgresql.org/docs/current/static/functions-array.html manual>.
+
+-- $json
+--
+-- Postgres supports storing JSON in columns, as either a text-based type
+-- (@JSON@) or a specialized binary encoding (@JSONB@). @beam-postgres@
+-- accordingly provides the 'PgJSON' and 'PgJSONB' data types. Each of these
+-- types takes a type parameter indicating the Haskell object represented by the
+-- JSON object stored in the column. In order for serialization to work, be sure
+-- to provide 'FromJSON' and 'ToJSON' instances for this type. If you do not
+-- know the shape of the data stored, substitute 'Value' for this type
+-- parameter.
+--
+-- For more information on Psotgres json support see the postgres
+-- <https://www.postgresql.org/docs/current/static/functions-json.html manual>.
+
