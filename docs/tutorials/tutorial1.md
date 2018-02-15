@@ -160,18 +160,22 @@ instance Beamable UserT
 Additionally, all beam tables must implement the `Table` type class, which we
 can use to declare a primary key.
 
-```haskell
-instance Table UserT where
-```
-
 The only thing we need to provide is the type of the primary keys for users, and
 a function that can extract the primary key from any `UserT f` object. To do
-this, we just add the following lines to the instance declaration.
+this, add the following lines to the instance declaration.
 
 ```haskell
+instance Table UserT where
     data PrimaryKey UserT f = UserId (Columnar f Text) deriving Generic
     primaryKey = UserId . _userEmail
 instance Beamable (PrimaryKey UserT)
+```
+
+The `data` declaration is similar to a toplevel data definition, construct a key
+for `UserT` with the `UserId` constructor like a regular table.
+
+```haskell
+userKey = UserId "john@doe.org"
 ```
 
 !!! note "Note"
@@ -334,10 +338,10 @@ withDatabaseDebug putStrLn conn $ do
     documentation automates building and testing the queries, but the above
     results in strange type errors in GHC. This may be a compiler type-inference
     bug. More investigation is being carried out.
-    
+
     Nevertheless, this shows how you could limit your queries to only work in a
     particular syntax.
-    
+
     The `_` are type holes, which means GHC will happily infer these types, if
     the `PartialTypeSignatures` extension is turned on.
 
@@ -392,9 +396,9 @@ the number of users.
 ```haskell
 !employee1sql-agg sql
 !employee1out-agg output
-let numberOfUsersByName = aggregate_ (\u -> (group_ (_userFirstName u), as_ @Int countAll_)) $ 
+let numberOfUsersByName = aggregate_ (\u -> (group_ (_userFirstName u), as_ @Int countAll_)) $
                           all_ (_shoppingCartUsers shoppingCartDb)
-                          
+
 withDatabaseDebug putStrLn conn $ do
   countedByName <- runSelectReturningList $ select numberOfUsersByName
   mapM_ (liftIO . putStrLn . show) countedByName
@@ -422,7 +426,7 @@ on [GitHub](https://github.com/tathougies/beam).
 [^2]:
    Adding entities other than tables is covered in more depth in
    the [user guide](../user-guide/databases.md).
-   
+
 [^3]:
    More on the default naming conventions can be found in
    the [models section](../user-guide/models.md) of the user guide. We'll talk
