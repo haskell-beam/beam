@@ -105,9 +105,9 @@ data QField s ty
   , qFieldName    :: T.Text }
   deriving (Show, Eq, Ord)
 
-data QAssignment fieldName expr s
+newtype QAssignment fieldName expr s
   = QAssignment [(fieldName, expr)]
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Monoid)
 
 -- * QGenExpr type
 
