@@ -76,7 +76,7 @@ planned.
 | E021-06 SUBSTRING function                                      | TODO     |                                                                                                                                            |
 | E021-07 Character concatenation                                 | FULL     | Use `concat_`                                                                                                                              |
 | E021-08 UPPER and LOWER functions                               | FULL     | Use `upper_` and `lower_`                                                                                                                  |
-| E021-09 TRIM function                                           | TODO     | Use `trim_`                                                                                                                                |
+| E021-09 TRIM function                                           | PARTIAL  | Use `trim_`. Full support may be provided on backends that implement it                                                                    |
 | E021-10 Implicit casting among string types                     | WONTFIX  | Beam never implicitly casts. Use `cast_`                                                                                                   |
 | E021-11 POSITION function                                       | FULL     | Use `position_`                                                                                                                            |
 | E021-12 Character comparison                                    | FULL     | Use comparison operators (See E011-05)                                                                                                     |

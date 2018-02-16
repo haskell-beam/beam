@@ -135,6 +135,7 @@ where `cond<n>` are `QGenExpr` of type `Bool`, and `result1`, `result2`, and
 | `NOT x`                                                  | SQL92          | `not_ x`                           |                                                                               |
 | `LOWER (x)`                                              | SQL92          | `lower_ x`                         |                                                                               |
 | `UPPER (x)`                                              | SQL92          | `upper_ x`                         |                                                                               |
+| `TRIM (x)`                                               | SQL92          | `trim_ x`                          |                                                                               |
 
 ### My favorite operator / function isn't listed here!
 

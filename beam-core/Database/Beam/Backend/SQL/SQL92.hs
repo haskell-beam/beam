@@ -218,7 +218,8 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
     isTrueE, isNotTrueE, isFalseE, isNotFalseE,
     isUnknownE, isNotUnknownE, charLengthE,
     octetLengthE, bitLengthE,
-    lowerE, upperE
+    lowerE, upperE,
+    trimE
     :: expr
     -> expr
 
