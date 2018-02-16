@@ -17,6 +17,7 @@ module Database.Beam.Backend.Types
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
 import qualified Data.Aeson as Json
+import           Data.Tagged
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
@@ -187,3 +188,8 @@ instance (BeamBackend be, FromBackendRow be (Maybe x)) => FromBackendRow be (Aut
   valuesNeeded be _ = valuesNeeded be (Proxy @(Maybe x))
 
 deriving instance Generic (a, b, c, d, e, f, g, h)
+
+-- Tagged
+
+instance (BeamBackend be, FromBackendRow be t) => FromBackendRow be (Tagged tag t) where
+  fromBackendRow = Tagged <$> fromBackendRow
