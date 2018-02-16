@@ -221,6 +221,7 @@ data Expression
   | ExpressionAbs Expression
   | ExpressionLower Expression
   | ExpressionUpper Expression
+  | ExpressionTrim Expression
 
   | ExpressionFunctionCall Expression [ Expression ]
   | ExpressionInstanceField Expression Text
@@ -295,6 +296,7 @@ instance IsSql92ExpressionSyntax Expression where
   absE = ExpressionAbs
   lowerE = ExpressionLower
   upperE = ExpressionUpper
+  trimE = ExpressionTrim
 
   subqueryE = ExpressionSubquery
   uniqueE = ExpressionUnique

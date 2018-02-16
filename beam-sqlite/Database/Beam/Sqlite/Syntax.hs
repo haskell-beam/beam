@@ -716,6 +716,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   octetLengthE x = SqliteExpressionSyntax (emit "OCTET_LENGTH" <> parens (fromSqliteExpression x))
   lowerE x = SqliteExpressionSyntax (emit "LOWER" <> parens (fromSqliteExpression x))
   upperE x = SqliteExpressionSyntax (emit "UPPER" <> parens (fromSqliteExpression x))
+  trimE x = SqliteExpressionSyntax (emit "TRIM" <> parens (fromSqliteExpression x))
   coalesceE es = SqliteExpressionSyntax (emit "COALESCE" <> parens (commas (map fromSqliteExpression es)))
   extractE field from =
     SqliteExpressionSyntax $
