@@ -220,7 +220,9 @@ insertFrom (SqlSelect s) = SqlInsertValues (insertFromSql s)
 -- * UPDATE
 
 -- | Represents a SQL @UPDATE@ statement for the given @table@.
-newtype SqlUpdate syntax (table :: (* -> *) -> *) = SqlUpdate syntax
+data SqlUpdate syntax (table :: (* -> *) -> *)
+  = SqlUpdate syntax
+  | SqlIdentityUpdate -- An update with no assignments
 
 -- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
 --   build a @WHERE@ clause.
@@ -240,7 +242,9 @@ update :: ( Beamable table
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlUpdate syntax table
 update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere =
-  SqlUpdate (updateStmt tblNm assignments (Just (where_ "t")))
+  case assignments of
+    [] -> SqlIdentityUpdate
+    _  -> SqlUpdate (updateStmt tblNm assignments (Just (where_ "t")))
   where
     assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
     QExpr where_ = mkWhere tblFieldExprs
@@ -287,6 +291,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
 runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlUpdate (Sql92UpdateSyntax cmd) tbl -> m ()
 runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
+runUpdate SqlIdentityUpdate = pure ()
 
 -- * DELETE
 
