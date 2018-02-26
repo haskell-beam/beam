@@ -255,7 +255,9 @@ newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPg
 newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
 newtype PgConflictActionSyntax = PgConflictActionSyntax { fromPgConflictAction :: PgSyntax }
 data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrderingNullOrdering :: Maybe PgNullOrdering }
-data PgLockingClauseSyntax = PgLockingClauseSyntax { pgLockingClauseStrength :: PgSelectLockStrength, pgLockingTables :: [PgTableSourceSyntax], pgLockingClauseOptions :: Maybe PgSelectLockOptions }
+data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLockingClauseStrength :: PgSelectLockingStrength
+                                                               , pgSelectLockingTables :: [PgTableSourceSyntax]
+                                                               , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
 fromPgOrdering (PgOrderingSyntax s Nothing) = s
@@ -267,14 +269,14 @@ data PgNullOrdering
   | PgNullOrderingNullsLast
   deriving (Show, Eq, Generic)
 
-fromPgSelectLockingClause :: PgLockingClauseSyntax -> PgSyntax
+fromPgSelectLockingClause :: PgSelectLockingClauseSyntax -> PgSyntax
 fromPgSelectLockingClause s =
   emit " FOR " <>
   (case pgLockingClauseStrength s of
-    PgSelectLockStrengthUpdate -> emit "UPDATE"
-    PgSelectLockStrengthNoKeyUpdate -> emit "NO KEY UPDATE"
-    PgSelectLockStrengthShare -> emit "SHARE"
-    PgSelectLockStrengthKeyShare -> emit "KEY SHARE") <>
+    PgSelectLockingStrengthUpdate -> emit "UPDATE"
+    PgSelectLockingStrengthNoKeyUpdate -> emit "NO KEY UPDATE"
+    PgSelectLockingStrengthShare -> emit "SHARE"
+    PgSelectLockingStrengthKeyShare -> emit "KEY SHARE") <>
   emitTables <>
   (maybe mempty emitOptions $ pgLockingClauseOptions s)
   where
@@ -282,19 +284,19 @@ fromPgSelectLockingClause s =
       [] -> mempty
       tableNames -> emit " OF " <> (pgSepBy (emit ", ") $ coerce <$> tableNames)  
     
-    emitOptions PgSelectLockOptionsNoWait = emit " NOWAIT"
-    emitOptions PgSelectLockOptionsSkipLocked = emit " SKIP LOCKED"
+    emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
+    emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
 
-data PgSelectLockStrength
-  = PgSelectLockStrengthUpdate
-  | PgSelectLockStrengthNoKeyUpdate
-  | PgSelectLockStrengthShare
-  | PgSelectLockStrengthKeyShare
+data PgSelectLockingStrength
+  = PgSelectLockingStrengthUpdate
+  | PgSelectLockingStrengthNoKeyUpdate
+  | PgSelectLockingStrengthShare
+  | PgSelectLockingStrengthKeyShare
   deriving (Show, Eq, Generic)
 
-data PgSelectLockOptions
-  = PgSelectLockOptionsNoWait
-  | PgSelectLockOptionsSkipLocked
+data PgSelectLockingOptions
+  = PgSelectLockingOptionsNoWait
+  | PgSelectLockingOptionsSkipLocked
   deriving (Show, Eq, Generic)
 
 data PgDataTypeDescr
