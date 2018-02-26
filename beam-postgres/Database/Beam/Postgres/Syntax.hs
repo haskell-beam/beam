@@ -272,15 +272,15 @@ data PgNullOrdering
 fromPgSelectLockingClause :: PgSelectLockingClauseSyntax -> PgSyntax
 fromPgSelectLockingClause s =
   emit " FOR " <>
-  (case pgLockingClauseStrength s of
+  (case pgSelectLockingClauseStrength s of
     PgSelectLockingStrengthUpdate -> emit "UPDATE"
     PgSelectLockingStrengthNoKeyUpdate -> emit "NO KEY UPDATE"
     PgSelectLockingStrengthShare -> emit "SHARE"
     PgSelectLockingStrengthKeyShare -> emit "KEY SHARE") <>
   emitTables <>
-  (maybe mempty emitOptions $ pgLockingClauseOptions s)
+  (maybe mempty emitOptions $ pgSelectLockingClauseOptions s)
   where
-    emitTables = case pgLockingTables s of
+    emitTables = case pgSelectLockingTables s of
       [] -> mempty
       tableNames -> emit " OF " <> (pgSepBy (emit ", ") $ coerce <$> tableNames)  
     
@@ -1307,7 +1307,7 @@ pgSelectStmt :: PgSelectTableSyntax
              -> [PgOrderingSyntax]
              -> Maybe Integer {-^ LIMIT -}
              -> Maybe Integer {-^ OFFSET -}
-             -> Maybe PgLockingClauseSyntax
+             -> Maybe PgSelectLockingClauseSyntax
              -> PgSelectSyntax
 pgSelectStmt tbl ordering limit offset locking = 
     PgSelectSyntax $
