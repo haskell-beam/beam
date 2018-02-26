@@ -255,6 +255,7 @@ newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPg
 newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
 newtype PgConflictActionSyntax = PgConflictActionSyntax { fromPgConflictAction :: PgSyntax }
 data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrderingNullOrdering :: Maybe PgNullOrdering }
+data PgLockingClauseSyntax = PgLockingClauseSyntax { pgLockingClauseStrength :: PgSelectLockStrength, pgLockingTables :: [PgTableSourceSyntax], pgLockingClauseOptions :: Maybe PgSelectLockOptions }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
 fromPgOrdering (PgOrderingSyntax s Nothing) = s
@@ -264,6 +265,36 @@ fromPgOrdering (PgOrderingSyntax s (Just PgNullOrderingNullsLast)) = s <> emit "
 data PgNullOrdering
   = PgNullOrderingNullsFirst
   | PgNullOrderingNullsLast
+  deriving (Show, Eq, Generic)
+
+fromPgSelectLockingClause :: PgLockingClauseSyntax -> PgSyntax
+fromPgSelectLockingClause s =
+  emit " FOR " <>
+  (case pgLockingClauseStrength s of
+    PgSelectLockStrengthUpdate -> emit "UPDATE"
+    PgSelectLockStrengthNoKeyUpdate -> emit "NO KEY UPDATE"
+    PgSelectLockStrengthShare -> emit "SHARE"
+    PgSelectLockStrengthKeyShare -> emit "KEY SHARE") <>
+  emitTables <>
+  (maybe mempty emitOptions $ pgLockingClauseOptions s)
+  where
+    emitTables = case pgLockingTables s of
+      [] -> mempty
+      tableNames -> emit " OF " <> (pgSepBy (emit ", ") $ coerce <$> tableNames)  
+    
+    emitOptions PgSelectLockOptionsNoWait = emit " NOWAIT"
+    emitOptions PgSelectLockOptionsSkipLocked = emit " SKIP LOCKED"
+
+data PgSelectLockStrength
+  = PgSelectLockStrengthUpdate
+  | PgSelectLockStrengthNoKeyUpdate
+  | PgSelectLockStrengthShare
+  | PgSelectLockStrengthKeyShare
+  deriving (Show, Eq, Generic)
+
+data PgSelectLockOptions
+  = PgSelectLockOptionsNoWait
+  | PgSelectLockOptionsSkipLocked
   deriving (Show, Eq, Generic)
 
 data PgDataTypeDescr
@@ -1269,6 +1300,23 @@ pgBuildAction =
 --     maybe mempty (\x -> emit " REPEATABLE (" <> x <> emit ")") seedExpr
 
 -- * Postgres specific commands
+
+pgSelectStmt :: PgSelectTableSyntax
+             -> [PgOrderingSyntax]
+             -> Maybe Integer {-^ LIMIT -}
+             -> Maybe Integer {-^ OFFSET -}
+             -> Maybe PgLockingClauseSyntax
+             -> PgSelectSyntax
+pgSelectStmt tbl ordering limit offset locking = 
+    PgSelectSyntax $
+    mappend
+    (coerce tbl <>
+     (case ordering of
+        [] -> mempty
+        ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)) <>
+     (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
+     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset))
+    (maybe mempty fromPgSelectLockingClause locking)
 
 insert :: DatabaseEntity Postgres db (TableEntity table)
        -> SqlInsertValues PgInsertValuesSyntax table
