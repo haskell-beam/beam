@@ -1275,12 +1275,16 @@ insert :: DatabaseEntity Postgres db (TableEntity table)
        -> PgInsertOnConflict table
        -> SqlInsert PgInsertSyntax
 insert tbl values onConflict =
-    let PgInsertReturning a =
-          insertReturning tbl values onConflict
-                          (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int))
-    in SqlInsert (PgInsertSyntax a)
+  case insertReturning tbl values onConflict
+         (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int)) of
+    PgInsertReturning a ->
+      SqlInsert (PgInsertSyntax a)
+    PgInsertReturningEmpty ->
+      SqlInsertNoRows
 
-newtype PgInsertReturning a = PgInsertReturning PgSyntax
+data PgInsertReturning a
+  = PgInsertReturning PgSyntax
+  | PgInsertReturningEmpty
 
 insertReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
@@ -1289,6 +1293,7 @@ insertReturning :: Projectible PgExpressionSyntax a
                 -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
                 -> PgInsertReturning (QExprToIdentity a)
 
+insertReturning _ SqlInsertValuesEmpty _ _ = PgInsertReturningEmpty
 insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
                 (SqlInsertValues (PgInsertValuesSyntax insertValues))
                 (PgInsertOnConflict mkOnConflict)
@@ -1306,7 +1311,9 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
      tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField tblNm (_fieldName f))) tblSettings
 
-newtype PgUpdateReturning a = PgUpdateReturning PgSyntax
+data PgUpdateReturning a
+  = PgUpdateReturning PgSyntax
+  | PgUpdateReturningEmpty
 
 updateReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
@@ -1318,12 +1325,15 @@ updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
                 mkAssignments
                 mkWhere
                 mkProjection =
-  PgUpdateReturning $
-  fromPgUpdate pgUpdate <>
-  emit " RETURNING " <>
-  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
+  case update table mkAssignments mkWhere of
+    SqlUpdate pgUpdate ->
+      PgUpdateReturning $
+      fromPgUpdate pgUpdate <>
+      emit " RETURNING " <>
+      pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
+
+    SqlIdentityUpdate -> PgUpdateReturningEmpty
   where
-    SqlUpdate pgUpdate = update table mkAssignments mkWhere
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 newtype PgDeleteReturning a = PgDeleteReturning PgSyntax
