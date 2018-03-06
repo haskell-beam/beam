@@ -46,6 +46,12 @@ module Database.Beam.Postgres.Syntax
 
     , PgWindowFrameSyntax(..), PgWindowFrameBoundsSyntax(..), PgWindowFrameBoundSyntax(..)
 
+    , PgSelectLockingClauseSyntax(..)
+    , PgSelectLockingStrength(..)
+    , PgSelectLockingOptions(..)
+    , fromPgSelectLockingClause
+    , pgSelectStmt
+
     , PgDataTypeDescr(..)
 
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
