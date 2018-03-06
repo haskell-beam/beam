@@ -164,7 +164,9 @@ dumpSqlSelect q =
 -- * INSERT
 
 -- | Represents a SQL @INSERT@ command that has not yet been run
-newtype SqlInsert syntax = SqlInsert syntax
+data SqlInsert syntax
+  = SqlInsert syntax
+  | SqlInsertNoRows
 
 -- | Generate a 'SqlInsert' given a table and a source of values.
 insert :: IsSql92InsertSyntax syntax =>
@@ -181,12 +183,14 @@ insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues vs) =
 -- | Run a 'SqlInsert' in a 'MonadBeam'
 runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlInsert (Sql92InsertSyntax cmd) -> m ()
+runInsert SqlInsertNoRows = pure ()          
 runInsert (SqlInsert i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
 --   'tbl'.
-newtype SqlInsertValues insertValues (tbl :: (* -> *) -> *)
+data SqlInsertValues insertValues (tbl :: (* -> *) -> *)
     = SqlInsertValues insertValues
+    | SqlInsertValuesEmpty
 
 -- | Build a 'SqlInsertValues' from series of expressions
 insertExpressions ::
@@ -196,9 +200,12 @@ insertExpressions ::
     (forall s. [ table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ]) ->
     SqlInsertValues syntax table
 insertExpressions tbls =
-    SqlInsertValues $
-    insertSqlExpressions (map mkSqlExprs tbls)
+  case sqlExprs of
+    [] -> SqlInsertValuesEmpty
+    _  -> SqlInsertValues (insertSqlExpressions sqlExprs)
     where
+      sqlExprs = map mkSqlExprs tbls
+      
       mkSqlExprs :: forall s. table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) -> [Sql92InsertValuesExpressionSyntax syntax]
       mkSqlExprs = allBeamValues (\(Columnar' (QExpr x)) -> x "t")
 
