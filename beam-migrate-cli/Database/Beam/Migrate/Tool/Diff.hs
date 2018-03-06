@@ -84,8 +84,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceCommit (Just modName) com
 
   SchemaMetaData _ _ _ (Schema preds) <- readSchemaMetaData reg be commitId
 
-  let ourSources = HS.fromList [ PredicateSpecificityAllBackends, PredicateSpecificityOnlyBackend (backendName be) ]
-      applicablePreds = map snd (filter (not . HS.null . HS.intersection ourSources . fst) preds)
+  let applicablePreds = predsForBackend be preds
   pure (Just commitId, applicablePreds)
 getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase modName connStr) ref) = do
   SomeBeamMigrationBackend

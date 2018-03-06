@@ -502,6 +502,17 @@ parseMetaData d =
                -- TODO parse dummy if we can't parse
                fmap (fmap (specificity,)) (mapM (beamDeserialize d) predicates))
 
+predsForBackend :: BeamMigrationBackend be cmd hdl -> [ (HS.HashSet PredicateSpecificity, SomeDatabasePredicate) ]
+                -> [ SomeDatabasePredicate ]
+predsForBackend be = predsForBackendNamed (backendName be)
+
+predsForBackendNamed :: String -> [ (HS.HashSet PredicateSpecificity, SomeDatabasePredicate) ]
+                     -> [SomeDatabasePredicate]
+predsForBackendNamed be preds =
+  let ourSources = HS.fromList [ PredicateSpecificityAllBackends, PredicateSpecificityOnlyBackend be ]
+      applicablePreds = map snd (filter (not . HS.null . HS.intersection ourSources . fst) preds)
+  in applicablePreds
+
 withMetadata, withoutMetadata :: (Eq a, IsString a) => [a] -> [a]
 withMetadata =
     takeWhile (/="-- + END-BEAM-MIGRATE") .
@@ -614,7 +625,10 @@ sha256 = sha256' . BS.pack
 
 abortEdits :: MigrateCmdLine -> Bool -> IO ()
 abortEdits cmdLine force =
-  updatingRegistry cmdLine $ \reg ->
+  updatingRegistry cmdLine (abortEdits' force)
+
+abortEdits' :: Bool -> MigrationRegistry -> IO ((), MigrationRegistry)
+abortEdits' force reg =
   let reg' = reg { migrationRegistryMode = BeamMigrateReady }
 
       tryAbort flNm flHash = do

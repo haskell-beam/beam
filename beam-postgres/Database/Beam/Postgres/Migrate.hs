@@ -4,7 +4,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
 
-module Database.Beam.Postgres.Migrate where
+module Database.Beam.Postgres.Migrate
+    ( migrationBackend, PgCommandSyntax
+
+    , postgresDataTypeDeserializers, pgPredConverter
+    , pgTypeToHs, migrateScript
+    , writeMigrationScript, pgDataTypeFromAtt
+    , getDbConstraints
+
+    , tsquery, tsvector, bytea, unboundedArray
+    , json, jsonb, uuid, money, text
+    , smallserial, serial, bigserial
+    ) where
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Actions (defaultActionProvider)
@@ -32,7 +43,7 @@ import           Control.Exception (bracket)
 import           Control.Monad
 import           Control.Monad.Free.Church (liftF)
 
-import           Data.Aeson
+import           Data.Aeson hiding (json)
 import           Data.Bits
 import           Data.Maybe
 import           Data.ByteString (ByteString)

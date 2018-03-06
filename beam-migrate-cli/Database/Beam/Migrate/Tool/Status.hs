@@ -27,6 +27,7 @@ displayMigrateStatus :: MigrateCmdLine -> MigrationRegistry
                      -> IO ()
 displayMigrateStatus _ reg dbName sts = do
   putStrLn ("Status for '" ++ unDatabaseName dbName ++ "':\n")
+  let curHead = registryHeadCommit reg
   case sts of
     MigrateStatusNoCommits ->
       putStr . unlines $
@@ -60,9 +61,18 @@ displayMigrateStatus _ reg dbName sts = do
           showCommit timestamp sch
 
           let green x = setSGRCode [ SetColor Foreground Dull Green ] ++ x ++ setSGRCode [ Reset ]
+              yellow x = setSGRCode [ SetColor Foreground Dull Yellow ] ++ x ++ setSGRCode [ Reset ]
+              red x = setSGRCode [ SetColor Foreground Dull Red ] ++ x ++ setSGRCode [ Reset ]
           if expected == actual
-            then putStrLn (green "Everything is up-to-date")
-            else putStrLn "Database is ahead of schema\nRun 'beam-migrate diff' for a full diff"
+            then putStrLn (green "Database matches its latest schema\n")
+            else putStrLn (red "Database differs from registered schema.\nRun 'beam-migrate diff' for a full diff\n")
+
+          if curHead /= branchId
+            then do
+              putStrLn (yellow "The database is at schema " ++ show branchId)
+              putStrLn (yellow "  but beam-migrate HEAD is at " ++ show curHead)
+              putStrLn "\nRun 'beam-migrate migrate' to move this database to the current HEAD"
+            else putStrLn "Everything is up-to-date"
 
 showCommit :: LocalTime -> RegisteredSchemaInfo -> IO ()
 showCommit atTime sch = do

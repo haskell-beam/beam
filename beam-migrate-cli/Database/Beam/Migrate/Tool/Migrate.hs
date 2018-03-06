@@ -9,6 +9,8 @@ import qualified Data.Graph.Inductive.Query as Gr
 import qualified Data.HashSet as HS
 import           Data.List (find)
 
+import           System.IO
+
 doMigrateDatabase :: MigrateCmdLine -> IO ()
 doMigrateDatabase MigrateCmdLine { migrateDatabase = Nothing } =
   fail "No database specified"
@@ -25,7 +27,7 @@ doMigrateDatabase cmdLine = do
 --      backend = migrationDbBackend db
 
   case expCommit of
-    Nothing -> fail "No commit recorded in database"
+    Nothing -> fail "TODO: No commit in database, so we should run the entire migration as recorded in the schema"
     Just expCommit'
       | expPredSet /= actualPredSet ->
           fail "Database does not match expectation. Use 'beam-migrate diff'"
@@ -35,9 +37,24 @@ doMigrateDatabase cmdLine = do
           let migrations = registryMigrationGraph registry
               findMigration commit = fst <$> find (\(_, s) -> registeredSchemaInfoHash s == commit) (labNodes migrations)
 
-          case (,) <$> findMigration expCommit'
-                   <*> findMigration (registryHeadCommit registry) of
+              sourceCommit = expCommit'
+              destinationCommit = registryHeadCommit registry
+
+          case (,) <$> findMigration sourceCommit
+                   <*> findMigration  destinationCommit of
             Nothing -> fail "Can't find schemas"
-            Just (sourceNode, destNode) ->
-              let path = Gr.lesp sourceNode destNode migrations
-              in fail ("Migrating " ++ show path)
+            Just (sourceNode, destNode)
+                | sourceNode == destNode ->
+                    putStrLn "The database is already up-to-date with HEAD"
+                | otherwise ->
+                    case unLPath (Gr.lesp sourceNode destNode migrations) of
+                      [] -> do
+                        hPutStr stderr . unlines $
+                          [ "There is no migration between " ++ show sourceCommit ++
+                            " and " ++ show destinationCommit
+                          , ""
+                          , "You can ask beam to generate one for you automatically, by running 'beam-migrate migration new --auto"
+                          , "Alternatively, you can run 'beam-migrate migrate --manual', to write a custom migration script"
+                          ]
+                        fail "No possible migration"
+                      path -> fail ("Migrating " ++ show path)

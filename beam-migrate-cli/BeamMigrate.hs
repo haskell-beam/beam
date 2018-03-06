@@ -60,6 +60,11 @@ main = do
       importDb cmdLine dbName branchName doCommit doAutoMigrate
     MigrateCommandSchema (SchemaCommandNew tmplSrc tmpFile) ->
       beginNewSchema cmdLine tmplSrc tmpFile
+    MigrateCommandSchema (SchemaCommandCommit force overwrite commitMsg) ->
+      commitSchema cmdLine force overwrite commitMsg
+
+    MigrateCommandMigration (MigrationCommandNew fromCommit toCommit autoGen leaveOpen fmts) ->
+      newMigration cmdLine fromCommit toCommit autoGen leaveOpen fmts
 
     MigrateCommandAbort force ->
       abortEdits cmdLine force

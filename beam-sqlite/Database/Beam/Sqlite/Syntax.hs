@@ -315,7 +315,7 @@ instance IsSql92AlterTableSyntax SqliteAlterTableSyntax where
     SqliteAlterTableSyntax $
     case fromSqliteAlterTableAction action of
       Just alterTable ->
-        emit "ALTER TABLE " <> quotedIdentifier nm <> alterTable
+        emit "ALTER TABLE " <> quotedIdentifier nm <> emit " " <> alterTable
       Nothing ->
         emit "SELECT 1"
 

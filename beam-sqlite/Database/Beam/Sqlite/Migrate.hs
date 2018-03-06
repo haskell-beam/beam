@@ -4,7 +4,7 @@
 -- | Migrations support for SQLite databases
 module Database.Beam.Sqlite.Migrate
   ( -- * @beam-migrate@ CLI support
-    migrationBackend
+    migrationBackend, SqliteCommandSyntax
 
     -- * @beam-migrate@ utility functions
   , migrateScript, writeMigrationScript
@@ -139,7 +139,7 @@ parseSqliteDataType txt =
                doubleP <|> integerP <|>
                smallIntP <|> bigIntP <|> floatP <|>
                doubleP <|> realP <|> dateP <|>
-               timeP <|> timestampP <|> textP <|>
+               timestampP <|> timeP <|> textP <|>
                blobP <|> booleanP
 
     ws = A.many1 A.space
