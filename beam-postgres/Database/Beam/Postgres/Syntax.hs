@@ -1429,7 +1429,6 @@ pgDropExtensionSyntax extName =
 
 
 -- TODO
--- Don't directly expose sum-type constructors?
 -- Constrain 'table' to exist within the query (using s maybe?)
 -- Constrain Q to not have aggregations (at least the locked tables I think, using s?)
 --
