@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Database.Beam.Migrate.Tool.CmdLine where
 
 import Data.Monoid
@@ -7,7 +8,13 @@ import Data.Hashable
 import Data.Text (Text)
 import Data.String (fromString)
 
+import GHC.Generics
+
 import Options.Applicative
+
+data MigrationFormat = MigrationFormatHaskell | MigrationFormatBackend String
+  deriving (Show, Eq, Ord, Generic)
+instance Hashable MigrationFormat
 
 newtype ModuleName = ModuleName { unModuleName :: String }
   deriving (Show, Eq, Ord, ToJSON, FromJSON)
@@ -66,7 +73,7 @@ data MigrationCommand
                           Bool {-^ Attempt to automatically generate a migration -}
                           Bool {-^ Leave migrations open for editing -}
                           [ MigrationFormat ] {-^ Formats to generate in. If empty, defaults to every backend registered for schemas + Haskell -}
-
+    deriving Show
 
 data MigrateCommand
   = MigrateCommandInit InitCommand   -- ^ Initialize a new beam migrate registry
@@ -243,5 +250,5 @@ migrationCliOptions =
         header "beam-migrate -- migrate database schemas for various beam backends")
 
 migrationFormatReader :: String -> Either String MigrationFormat
-migrationFormatReader "hs" = pure MigrationFormatHaskelll
+migrationFormatReader "hs" = pure MigrationFormatHaskell
 migrationFormatReader backend = pure (MigrationFormatBackend backend)

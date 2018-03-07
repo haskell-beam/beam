@@ -30,6 +30,7 @@ import           Control.Monad.State
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as HS
+import           Data.List
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
@@ -73,73 +74,68 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
   (db, backendMigFmt, backend) <- withRegistry $ \registry -> lift $ loadBackend cmdLine registry dbName
 
   case backend of
-    SomeBeamMigrationBackend be@(BeamMigrationBackend { backendGetDbConstraints = getConstraints
-                                                      , backendConvertToHaskell = HaskellPredicateConverter convDbPred
+    SomeBeamMigrationBackend be@(BeamMigrationBackend { backendConvertToHaskell = HaskellPredicateConverter convDbPred
                                                       , backendTransact = transact
                                                       , backendActionProvider = actionProvider }) -> do
       newCommit <- withRegistry $ \registry -> lift (registryNewCommitId registry)
       let backendHash = newCommit
           hsHash = newCommit
 
-      cs <- lift (transact (migrationDbConnString db) getConstraints)
+      (_, cs) <- withRegistry $ \registry -> liftIO (getPredicatesFromSpec cmdLine registry (PredicateFetchSourceDbHead db Nothing))
 
-      case cs of
-        Left err -> fail ("Error getting constraints from database: " ++ show err)
-        Right cs' -> do
+      when autoCreateMigration $ do
+        registry <- get
+        oldPreds <- liftIO ((Just <$> getPredicatesFromSpec cmdLine registry
+                                    (PredicateFetchSourceDbHead db (Just 0)))
+                            `catch` (\NoRecordedSchemas -> pure Nothing))
 
-          when autoCreateMigration $ do
-            registry <- get
-            oldPreds <- liftIO ((Just <$> getPredicatesFromSpec cmdLine registry
-                                        (PredicateFetchSourceDbHead db (Just 0)))
-                                `catch` (\NoRecordedSchemas -> pure Nothing))
+        -- Generate haskell and backend migration
+        case oldPreds of
+          Nothing -> liftIO $ putStrLn "Skipping migration generation, since this is an initial import"
+          Just (Nothing, _) -> fail "No commit for DB^"
+          Just (Just oldCommitId, oldPreds') ->
+            let solver = heuristicSolver actionProvider oldPreds' cs
+            in case finalSolution solver of
+                 Candidates {} -> fail "Could not find migration in backend"
+                 Solved [] -> fail "Schemas are equivalent, not importing"
+                 Solved cmds -> do
+                   liftIO . void $ writeMigration cmdLine registry be oldCommitId newCommit cmds
+                   modifyM (newMigration oldCommitId hsHash [MigrationFormatHaskell, backendMigFmt])
 
-            -- Generate haskell and backend migration
-            case oldPreds of
-              Nothing -> liftIO $ putStrLn "Skipping migration generation, since this is an initial import"
-              Just (Nothing, _) -> fail "No commit for DB^"
-              Just (Just oldCommitId, oldPreds') ->
-                let solver = heuristicSolver actionProvider oldPreds' cs'
-                in case finalSolution solver of
-                     Candidates {} -> fail "Could not find migration in backend"
-                     Solved [] -> fail "Schemas are equivalent, not importing"
-                     Solved cmds -> do
-                       liftIO . void $ writeMigration cmdLine registry be oldCommitId newCommit cmds
-                       modifyM (newMigration oldCommitId hsHash [MigrationFormatHaskell, backendMigFmt])
+      -- TODO factor out
+      let schema = Schema (map (\pred@(SomeDatabasePredicate (_ :: pred)) -> ( HS.singleton (predicateSpecificity (Proxy @pred)), pred)) cs)
 
-          -- TODO factor out
-          let schema = Schema (map (\pred@(SomeDatabasePredicate (_ :: pred)) -> ( HS.singleton (predicateSpecificity (Proxy @pred)), pred)) cs')
+      liftIO $ putStrLn "Exporting migration for backend..."
+      backendFileName <- withRegistry $ \registry -> liftIO (writeSchema cmdLine registry backendHash be cs)
+      liftIO (putStrLn ("Exported migration as " ++ backendFileName))
 
-          liftIO $ putStrLn "Exporting migration for backend..."
-          backendFileName <- withRegistry $ \registry -> liftIO (writeSchema cmdLine registry backendHash be cs')
-          liftIO (putStrLn ("Exported migration as " ++ backendFileName))
+      cs' <- lift . fmap catMaybes .
+             forM cs $ \c -> do
+               let c' = convDbPred c
+               case c' of
+                 Nothing -> putStrLn ("Tossing constraint " ++ show c)
+                 Just {} -> pure ()
+               pure c'
 
-          cs''' <- lift . fmap catMaybes .
-                   forM cs' $ \c -> do
-                     let c' = convDbPred c
-                     case c' of
-                       Nothing -> putStrLn ("Tossing constraint " ++ show c)
-                       Just {} -> pure ()
-                     pure c'
+      liftIO $ putStrLn "Exporting haskell schema..."
+      hsFileName <- withRegistry $ \registry -> liftIO $ writeHsSchema cmdLine registry hsHash cs' schema [ backendMigFmt ]
+      liftIO $ putStrLn ("Exported haskell migration as " ++ hsFileName)
 
-          liftIO $ putStrLn "Exporting haskell schema..."
-          hsFileName <- withRegistry $ \registry -> liftIO $ writeHsSchema cmdLine registry hsHash cs''' schema [ backendMigFmt ]
-          liftIO $ putStrLn ("Exported haskell migration as " ++ hsFileName)
+      liftIO $ putStrLn "Import complete"
 
-          liftIO $ putStrLn "Import complete"
+      let msg = "Initial import of " <> fromString dbNameStr
 
-          let msg = "Initial import of " <> fromString dbNameStr
+      when doDbCommit $
+        liftIO $ reportDdlErrors $ transact (migrationDbConnString db) $ recordCommit newCommit
 
-          when doDbCommit $
-            liftIO $ reportDdlErrors $ transact (migrationDbConnString db) $ recordCommit newCommit
+      modifyM (newSchema hsHash [MigrationFormatHaskell, backendMigFmt] msg)
 
-          modifyM (newSchema hsHash [MigrationFormatHaskell, backendMigFmt] msg)
-
-          modifyM (\registry ->
-                     case lookupBranch registry branchName' of
-                       Nothing ->
-                         newBaseBranch branchName' hsHash registry
-                       Just branch ->
-                         updateBranch branchName' (branch { migrationBranchCommit = hsHash }) registry)
+      modifyM (\registry ->
+                 case lookupBranch registry branchName' of
+                   Nothing ->
+                     newBaseBranch branchName' hsHash registry
+                   Just branch ->
+                     updateBranch branchName' (branch { migrationBranchCommit = hsHash }) registry)
 
 dumpSchema :: MigrateCmdLine
            -> ModuleName
@@ -195,7 +191,7 @@ writeSchema cmdLine registry commitId be cs = do
     Candidates {} -> fail "Could not form backend schema"
     Solved actions ->
       writeSchemaFile cmdLine registry (backendFileExtension be) (schemaScriptName commitId) $
-       unlines (map (backendRenderSyntax be) actions)
+       unlines (intersperse "--" $ map (backendRenderSyntax be) actions)
 
 writeHsSchema :: MigrateCmdLine -> MigrationRegistry
               -> UUID

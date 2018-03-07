@@ -53,7 +53,6 @@ migrationBackend :: Tool.BeamMigrationBackend Sqlite SqliteCommandSyntax Connect
 migrationBackend = Tool.BeamMigrationBackend
                        "sqlite"
                        "For beam-sqlite, this is the path to a sqlite3 file"
-                       (BL.concat . migrateScript)
                        getDbConstraints
                        (Db.sql92Deserializers <> sqliteDataTypeDeserializers <>
                         Db.beamCheckDeserializers)

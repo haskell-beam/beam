@@ -18,7 +18,7 @@ import           System.Console.ANSI
 import           Text.Read
 
 data MigrateStatus
-  = MigrateStatusNoCommits
+  = MigrateStatusNoCommits Bool {- whether the schema has been created or not -}
   | MigrateStatusAtBranch UUID LocalTime PredicateDiff
   deriving Show
 
@@ -29,7 +29,7 @@ displayMigrateStatus _ reg dbName sts = do
   putStrLn ("Status for '" ++ unDatabaseName dbName ++ "':\n")
   let curHead = registryHeadCommit reg
   case sts of
-    MigrateStatusNoCommits ->
+    MigrateStatusNoCommits _ ->
       putStr . unlines $
       [ "No commit history in this database."
       , ""
@@ -86,12 +86,37 @@ showCommit atTime sch = do
   putStrLn (T.unpack . T.unlines . map ("    " <>) .
              T.lines . registeredSchemaInfoMessage $ sch)
 
+getStatus :: MigrateCmdLine -> MigrationRegistry -> DatabaseName -> IO MigrateStatus
+getStatus cmdLine reg dbName = do
+  (db, _, SomeBeamMigrationBackend be) <- loadBackend cmdLine reg dbName
+  hasSchema <- hasBackendTables (migrationDbConnString db) be
+  if not hasSchema
+    then do
+      putStrLn "WARNING: Beam migrate not installed in this database. Run"
+      putStrLn "WARNING:"
+      putStrLn ("WARNING:  beam-migrate database upgrade " ++ unDatabaseName dbName)
+      putStrLn "WARNING:"
+      putStrLn "WARNING: to build the beam tables in the database"
+      pure (MigrateStatusNoCommits False)
+    else case be of
+           BeamMigrationBackend { backendTransact = transact } -> do
+             logEntry <- reportDdlErrors (transact (migrationDbConnString db) getLatestLogEntry)
+             case logEntry of
+               Nothing -> pure (MigrateStatusNoCommits True)
+               Just logEntry' ->
+                 case readMaybe (unpack (_logEntryCommitId logEntry')) of
+                   Nothing -> fail "Invalid commit id for last log entry"
+                   Just commitId -> do
+                     diff <- genDiffFromSources cmdLine reg
+                                                (PredicateFetchSourceDbHead db Nothing)
+                                                (PredicateFetchSourceCommit (Just (migrationDbBackend db)) commitId)
+                     pure (MigrateStatusAtBranch commitId (_logEntryDate logEntry') diff)
+
 displayStatus :: MigrateCmdLine -> IO ()
 displayStatus MigrateCmdLine { migrateDatabase = Nothing } =
   fail "No database specified"
 displayStatus cmdLine@(MigrateCmdLine { migrateDatabase = Just dbName }) = do
   reg <- lookupRegistry cmdLine
-  (db, _, SomeBeamMigrationBackend be) <- loadBackend cmdLine reg dbName
 
   case migrationRegistryMode reg of
     BeamMigrateReady ->
@@ -110,28 +135,6 @@ displayStatus cmdLine@(MigrateCmdLine { migrateDatabase = Just dbName }) = do
 
   putStrLn (setSGRCode [Reset])
 
-  hasSchema <- hasBackendTables (migrationDbConnString db) be
-  migrateStatus <-
-    if not hasSchema
-    then do
-      putStrLn "WARNING: Beam migrate not installed in this database. Run"
-      putStrLn "WARNING:"
-      putStrLn ("WARNING:  beam-migrate database upgrade " ++ unDatabaseName dbName)
-      putStrLn "WARNING:"
-      putStrLn "WARNING: to build the beam tables in the database"
-      pure MigrateStatusNoCommits
-    else case be of
-           BeamMigrationBackend { backendTransact = transact } -> do
-             logEntry <- reportDdlErrors (transact (migrationDbConnString db) getLatestLogEntry)
-             case logEntry of
-               Nothing -> pure MigrateStatusNoCommits
-               Just logEntry' ->
-                 case readMaybe (unpack (_logEntryCommitId logEntry')) of
-                   Nothing -> fail "Invalid commit id for last log entry"
-                   Just commitId -> do
-                     diff <- genDiffFromSources cmdLine reg
-                                                (PredicateFetchSourceDbHead db Nothing)
-                                                (PredicateFetchSourceCommit (Just (migrationDbBackend db)) commitId)
-                     pure (MigrateStatusAtBranch commitId (_logEntryDate logEntry') diff)
+  migrateStatus <- getStatus cmdLine reg dbName
 
   displayMigrateStatus cmdLine reg dbName migrateStatus

@@ -75,6 +75,15 @@ genDiffFromSources cmdLine reg actualSource expSource =
 
      pure (PredicateDiff (HS.fromList expected) (HS.fromList actual))
 
+filterBeamMigratePreds :: SomeBeamMigrationBackend -> [SomeDatabasePredicate] -> [SomeDatabasePredicate]
+filterBeamMigratePreds (SomeBeamMigrationBackend (BeamMigrationBackend {} :: BeamMigrationBackend be cmd hdl)) preds =
+  let beamMigrateDbSchema = collectChecks (beamMigratableDb @cmd @be @hdl)
+  in foldr (\pred@(SomeDatabasePredicate pred') preds ->
+              if pred `elem` preds
+              then filter (\p@(SomeDatabasePredicate p') -> p /= pred && not (predicateCascadesDropOn p' pred')) preds
+              else preds)
+           preds beamMigrateDbSchema
+
 getPredicatesFromSpec :: MigrateCmdLine -> MigrationRegistry
                       -> PredicateFetchSource
                       -> IO (Maybe UUID, [ SomeDatabasePredicate ])
@@ -87,10 +96,10 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceCommit (Just modName) com
   let applicablePreds = predsForBackend be preds
   pure (Just commitId, applicablePreds)
 getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase modName connStr) ref) = do
-  SomeBeamMigrationBackend
-    (BeamMigrationBackend { backendGetDbConstraints = getCs
-                          , backendTransact = transact } ::
-        BeamMigrationBackend be cmd hdl) <-
+  be@(SomeBeamMigrationBackend
+       (BeamMigrationBackend { backendGetDbConstraints = getCs
+                             , backendTransact = transact } ::
+           BeamMigrationBackend be cmd hdl)) <-
     loadBackend' cmdLine modName
 
   case ref of
@@ -98,7 +107,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
       cs <- transact connStr getCs
       case cs of
         Left err -> throwIO (CouldNotFetchConstraints err)
-        Right cs' -> pure (Nothing, cs')
+        Right cs' -> pure (Nothing, filterBeamMigratePreds be cs')
     Just fromHead -> do
       logEntry <- transact connStr $
                   runSelectReturningOne $ select $

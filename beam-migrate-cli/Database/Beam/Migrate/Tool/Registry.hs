@@ -64,9 +64,6 @@ data PredicateFetchSource
   | PredicateFetchSourceEmpty
   deriving Show
 
-data MigrationFormat = MigrationFormatHaskell | MigrationFormatBackend String
-  deriving (Show, Eq, Ord)
-
 data RegisteredSchemaInfo
   = RegisteredSchemaInfo
   { registeredSchemaInfoHash    :: UUID
@@ -447,6 +444,11 @@ writeSchemaFile _ reg extension fileNm content = do
 schemaFilePath :: MigrationRegistry -> UUID -> FilePath
 schemaFilePath reg commitId =
   migrationRegistrySrcDir reg </> schemaModuleName commitId <.> "hs"
+
+schemaFilePathForBackend :: Maybe SomeBeamMigrationBackend -> MigrationRegistry -> UUID -> FilePath
+schemaFilePathForBackend Nothing reg commit = schemaFilePath reg commit
+schemaFilePathForBackend (Just (SomeBeamMigrationBackend be)) reg commit =
+  migrationRegistrySrcDir reg </> schemaScriptName commit <.> backendFileExtension be
 
 registryNewCommitId :: MigrationRegistry -> IO UUID
 registryNewCommitId reg = do

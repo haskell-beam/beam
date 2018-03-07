@@ -71,7 +71,6 @@ migrationBackend = Tool.BeamMigrationBackend
                                  , "  postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]"
                                  , ""
                                  , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
-                        (BL.concat . migrateScript)
                         (liftF (PgLiftWithHandle getDbConstraints id))
                         (Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
                          Db.sql2008BigIntDataTypeDeserializers <>

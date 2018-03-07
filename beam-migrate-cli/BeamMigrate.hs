@@ -11,6 +11,7 @@ import Database.Beam.Migrate.Tool.Log
 import Database.Beam.Migrate.Tool.Migrate
 import Database.Beam.Migrate.Tool.Registry
 import Database.Beam.Migrate.Tool.SchemaCmd
+import Database.Beam.Migrate.Tool.MigrationCmd
 import Database.Beam.Migrate.Tool.Status
 
 import Data.Maybe
@@ -64,7 +65,7 @@ main = do
       commitSchema cmdLine force overwrite commitMsg
 
     MigrateCommandMigration (MigrationCommandNew fromCommit toCommit autoGen leaveOpen fmts) ->
-      newMigration cmdLine fromCommit toCommit autoGen leaveOpen fmts
+      newMigrationCmd cmdLine fromCommit toCommit autoGen leaveOpen fmts
 
     MigrateCommandAbort force ->
       abortEdits cmdLine force
@@ -75,4 +76,4 @@ main = do
       dumpSchema cmdLine backend connStr
 
     MigrateCommandMigrate ->
-      doMigrateDatabase cmdLine
+      doMigrateDatabase cmdLine False

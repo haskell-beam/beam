@@ -84,7 +84,6 @@ data BeamMigrationBackend be commandSyntax hdl where
     , Sql92ReasonableMarshaller be ) =>
     { backendName :: String
     , backendConnStringExplanation :: String
-    , backendRenderSteps :: forall a. MigrationSteps commandSyntax () a -> BL.ByteString
     , backendGetDbConstraints :: m [ SomeDatabasePredicate ]
     , backendPredicateParsers :: BeamDeserializers commandSyntax
     , backendRenderSyntax :: commandSyntax -> String
@@ -104,7 +103,7 @@ data SomeBeamMigrationBackend where
                               BeamMigrationBackend be commandSyntax hdl
                            -> SomeBeamMigrationBackend
 
--- | Monomorphic wrappen to use when interpreting a module which
+-- | Monomorphic wrapper to use when interpreting a module which
 -- exports a 'CheckedDatabaseSettings'.
 data SomeCheckedDatabaseSettings where
   SomeCheckedDatabaseSettings :: Database db => CheckedDatabaseSettings be db
