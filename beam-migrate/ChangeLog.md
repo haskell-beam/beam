@@ -1,5 +1,3 @@
-# Revision history for beam-migrate
+# 0.3.0.0
 
-## 0.1.0.0  -- YYYY-mm-dd
-
-* First version. Released on an unsuspecting world.
+Version bump due to beam-core change. Got rid of `Auto`

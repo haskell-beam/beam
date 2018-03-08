@@ -64,19 +64,17 @@ aggregate_ (\c -> ( group_ (addressPostalCode (customerAddress c))
 
 ### ON CONFLICT
 
-Beam supports `ON CONFLICT` statements on the postgres-specific version of
-`insert`. Use the following imports to ensure the correct `insert` is used:
+Beam supports `ON CONFLICT` statements in a Postgres-specific version of
+`insert`. The code below uses the following imports to ensure the correct `insert` is used:
 
 ```haskell
 import Database.Beam hiding (insert)
-import Database.Beam.Postgres
+import qualified Database.Beam.Postgres as Pg
 ```
 
-To use the `insert` from `Postgres` like the basic `insert` statement, use
-`onConflictDefault` as the third argument to `insert`.
-
-The 3rd argument of the `insert` from `Database.Beam.Postgres` is the `ON
-CONFLICT` statement.
+The 3rd argument of the `insert` from `Database.Beam.Postgres` allows
+you to specify an `ON CONFLICT` clause. You can use
+`onConflictDefault` in order to recover the standard behavior.
 
 ```haskell
 insert :: DatabaseEntity Postgres db (TableEntity table)
@@ -85,10 +83,10 @@ insert :: DatabaseEntity Postgres db (TableEntity table)
        -> SqlInsert PgInsertSyntax
 ```
 
-Every `ON CONFLICT` statement requires to specify the indexes which are
-conflicting, and an update statement which specifies which fields are getting
-updated, and on which table. Construct the `ON CONFLICT` clause with the
-`onConflict` function.
+An explicit `ON CONFLICT` statement requires to specify the indexes
+which are conflicting and an action to take when a conflict is
+discovered. The `onConflict` function allows you to specify these
+parts of the `ON CONFLICT` clause.
 
 ```haskell
 onConflict :: Beamable tbl
@@ -97,62 +95,118 @@ onConflict :: Beamable tbl
            -> PgInsertOnConflict tbl
 ```
 
-#### Specifying targets
+#### Acting on any conflict
 
-The first argument to the `onConflict` function is specfifying on which conflict
-an action should be taken.
-
-If the conflicting index is on a field, you can also specify the fields with the
-function `conflictingFields`. To specify a conflict on the primary keys, use
-`conflictingField primaryKey`.
+The `anyConflict` value causes the action to be executed when any
+index or constraint is violated by the specified `INSERT`. The
+following example causes any conflicting update to be ignored. This
+could be useful if you want to upsert rows into a database.
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!chinookdmlpg postgres
+-- import qualified Database.Beam.Postgres as Pg
 let
-  customer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing Nothing "john.doe@johndoe.com" Nothing
-in
-  insert (employee chinookDb) (insertValues [customer]) $
-    onConflict $
-      (conflictingFields primaryKey)
-      (onConflictUpdateInstead id)
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
+    onConflict
+      anyConflict
+      onConflictDoNothing
 ```
 
-If the conflict target is an index, use `conflictingConstraint`.
+#### Acting only on certain conflicts
 
-#### Specifying updating
-
-The function `onConflictUpdateInstead` takes a
-function which takes a table and returns a table to be updated with the
-conflicting data. To update the current table, use `id`.
+Sometimes you only want to perform an action if a certain constraint
+is violated.  If the conflicting index or constraint is on a field,
+you can specify the fields with the function `conflictingFields`.
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!chinookdmlpg postgres
+-- import qualified Database.Beam.Postgres as Pg
 let
-  customer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing Nothing "john.doe@johndoe.com" Nothing
-in
-  insert (employee chinookDb) (insertValues [customer]) $
-    onConflict $
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
+    onConflict
       (conflictingFields primaryKey)
-      (onConflictUpdateInstead id)
+      onConflictSetAll
 ```
 
-To update only some fields, specify them one at a time.
+!!!tip "Tip"
+   To specify a conflict on the primary keys, use `conflictingField primaryKey`.
+
+If the conflict target is an index, use `conflictingConstraint`, and supply the name of the constraint
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!chinookdmlpg postgres
+-- import qualified Database.Beam.Postgres as Pg
 let
-  customer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing Nothing "john.doe@johndoe.com" Nothing
-in
-  insert (employee chinookDb) (insertValues [customer]) $
-    onConflict $
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
+    onConflict
+      (conflictingConstraint "PK_Customer")
+      onConflictSetAll
+```
+
+#### Specifying actions
+
+Often times, you do not want to update every field on a conflict. For
+example, for upserts, you rarely want to update the primary key. The
+function `onConflictUpdateInstead` allows you to restrict which fields
+are updated in the case of a conflict. The required function argument
+is a projection of which fields ought to be updated.
+
+In the example below, we insert a new row, but if a row with the given
+primary key already exists, we update *only* the first and last name.
+
+!beam-query
+```haskell
+!chinookdmlpg postgres
+-- import qualified Database.Beam.Postgres as Pg
+let
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
+    onConflict
+      (conflictingFields primaryKey)
+      (onConflictUpdateInstead
+	     (\c -> ( customerFirstName c
+		        , customerLastName c )))
+```
+
+You can also specify a more specific update, using the
+`onConflictUpdateSet` function. This is the most general form of the
+postgres `ON CONFLICT` action. The `excluded` table is provided as the
+second argument. The syntax of the updates is similar to that of
+`update`.
+
+In the following example, we append the old first name to the new
+first name and replace the old last name.
+
+!beam-query
+```haskell
+!chinookdmlpg postgres
+-- import qualified Database.Beam.Postgres as Pg
+let
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
+    onConflict
       (conflictingFields primaryKey)
       (onConflictUpdateSet
+	    -- tbl is the old row, tblExcluded is the row proposed for insertion
         (\tbl tblExcluded ->
-          [ (tbl ^. customerFirstName) <-. (tblExcluded ^. customerFirstName)
-          , (tbl ^. customerLastName) <-. (tblExcluded ^. customerLastName)]
+          [ (customerFirstName tbl) <-. concat_ [ current_ (customerFirstName tbl),  customerFirstName tblExcluded ]
+          , (customerLastName tbl) <-. (customerLastName tblExcluded) ]
         )
       )
 ```

@@ -31,7 +31,7 @@ module Database.Beam.Migrate.SQL.Tables
   , timestamp, timestamptz
   , binary, varbinary
 
-  , maybeType, autoType
+  , maybeType
 
     -- ** Internal classes
     --    Provided without documentation for use in type signatures
@@ -355,11 +355,6 @@ array (DataType ty) sz = DataType (arrayType ty sz)
 -- a 'DataType' that expects a concrete value to one expecting a 'Maybe'
 maybeType :: DataType syntax a -> DataType syntax (Maybe a)
 maybeType (DataType sqlTy) = DataType sqlTy
-
--- | Wrap a 'DataType' in 'Auto'
-autoType :: DataType syntax a -> DataType syntax (Auto a)
-autoType (DataType sqlTy) = DataType sqlTy
-
 
 -- ** 'field' variable arity classes
 

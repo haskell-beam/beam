@@ -101,7 +101,8 @@ data QNested s
 
 data QField s ty
   = QField
-  { qFieldTblName :: T.Text
+  { qFieldShouldQualify :: Bool
+  , qFieldTblName :: T.Text
   , qFieldName    :: T.Text }
   deriving (Show, Eq, Ord)
 

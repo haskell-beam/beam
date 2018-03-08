@@ -10,7 +10,6 @@ import Database.Beam.Backend.SQL.SQL92
 import Database.Beam.Backend.SQL.SQL99
 import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.Types
 
 import Data.Text (Text)
 import Data.ByteString (ByteString)
@@ -506,9 +505,6 @@ instance HasSqlValueSyntax Value x => HasSqlValueSyntax Value (Maybe x) where
   sqlValueSyntax (Just x) = sqlValueSyntax x
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
 
-instance HasSqlValueSyntax Value (Maybe x) => HasSqlValueSyntax Value (Auto x) where
-  sqlValueSyntax (Auto x) = sqlValueSyntax x
-
 instance Eq Value where
   Value a == Value b =
     case cast a of
@@ -556,3 +552,4 @@ data WindowFrameBound
 instance IsSql2003WindowFrameBoundSyntax WindowFrameBound where
   unboundedSyntax = WindowFrameUnbounded
   nrowsBoundSyntax = WindowFrameBoundNRows
+

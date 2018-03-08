@@ -801,7 +801,7 @@ tableEquality =
      testCase "Equality comparison between table expression and table literal" $
      do now <- getCurrentTime
 
-        let exp = DepartmentT "Sales" (EmployeeId (Just "Jane") (Just "Smith") (Just (Auto (Just now))))
+        let exp = DepartmentT "Sales" (EmployeeId (Just "Jane") (Just "Smith") (Just now))
         SqlSelect Select { selectTable = SelectTable { selectWhere = Just selectWhere, selectFrom } } <- pure $ select $ do
           d <- all_ (_departments employeeDbSettings)
           guard_ (d ==. val_ exp)
@@ -1106,7 +1106,7 @@ updateNullable =
   do curTime <- getCurrentTime
 
      let employeeKey :: PrimaryKey EmployeeT (Nullable Identity)
-         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just (Auto (Just curTime)))
+         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just curTime)
 
      SqlUpdate Update { .. } <-
        pure $ update (_departments employeeDbSettings)

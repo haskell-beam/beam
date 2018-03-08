@@ -73,11 +73,12 @@ module Database.Beam.Postgres.Syntax
 
     , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
     , PgConflictAction(..)
-    , onConflictDefault, onConflict
+    , onConflictDefault, onConflict, anyConflict
     , conflictingFields, conflictingFieldsWhere
     , conflictingConstraint
 
-    , onConflictDoNothing, onConflictUpdateSet, onConflictUpdateInstead
+    , onConflictDoNothing, onConflictUpdateSet
+    , onConflictUpdateInstead, onConflictSetAll
 
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
     , pgRenderSyntaxScript, pgBuildAction
@@ -138,6 +139,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
 import           Data.UUID (UUID)
+import qualified Data.Vector as V
 import           Data.Word
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
@@ -288,8 +290,8 @@ fromPgSelectLockingClause s =
   where
     emitTables = case pgSelectLockingTables s of
       [] -> mempty
-      tableNames -> emit " OF " <> (pgSepBy (emit ", ") $ coerce <$> tableNames)  
-    
+      tableNames -> emit " OF " <> (pgSepBy (emit ", ") $ coerce <$> tableNames)
+
     emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
     emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
 
@@ -1073,14 +1075,19 @@ onConflictDefault = PgInsertOnConflict (\_ -> PgInsertOnConflictSyntax mempty)
 
 onConflict :: Beamable tbl
            => PgInsertOnConflictTarget tbl
-           -> PgConflictAction tbl 
+           -> PgConflictAction tbl
            -> PgInsertOnConflict tbl
 onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update) =
   PgInsertOnConflict $ \tbl ->
-  let exprTbl = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField nm)))) tbl
+  let exprTbl = changeBeamRep (\(Columnar' (QField _ _ nm)) ->
+                                 Columnar' (QExpr (\_ -> fieldE (unqualifiedField nm))))
+                              tbl
   in PgInsertOnConflictSyntax $
-     emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl) <>
-                emit " " <> fromPgConflictAction (update tbl)
+     emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl)
+                         <> fromPgConflictAction (update tbl)
+
+anyConflict :: PgInsertOnConflictTarget tbl
+anyConflict = PgInsertOnConflictTarget (\_ -> PgInsertOnConflictTargetSyntax mempty)
 
 conflictingFields :: Projectible PgExpressionSyntax proj
                   => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
@@ -1088,7 +1095,7 @@ conflictingFields :: Projectible PgExpressionSyntax proj
 conflictingFields makeProjection =
   PgInsertOnConflictTarget $ \tbl ->
   PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t")))
+  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t"))) <> emit " "
 
 conflictingFieldsWhere :: Projectible PgExpressionSyntax proj
                        => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
@@ -1102,13 +1109,14 @@ conflictingFieldsWhere makeProjection makeWhere =
   emit " WHERE " <>
   pgParens (let QExpr mkE = makeWhere tbl
                 PgExpressionSyntax e = mkE "t"
-            in e)
+            in e) <>
+  emit " "
 
 conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
 conflictingConstraint nm =
   PgInsertOnConflictTarget $ \_ ->
   PgInsertOnConflictTargetSyntax $
-  emit "ON CONSTRAINT" <> pgQuotedIdentifier nm
+  emit "ON CONSTRAINT " <> pgQuotedIdentifier nm <> emit " "
 
 onConflictDoNothing :: PgConflictAction tbl
 onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
@@ -1121,7 +1129,7 @@ onConflictUpdateSet :: Beamable tbl
 onConflictUpdateSet mkAssignments =
   PgConflictAction $ \tbl ->
   let assignments = mkAssignments tbl tblExcluded
-      tblExcluded = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
+      tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
 
       assignmentSyntaxes = do
         QAssignment assignments' <- assignments
@@ -1135,10 +1143,14 @@ onConflictUpdateInstead :: (Beamable tbl, Projectible T.Text proj)
                         -> PgConflictAction tbl
 onConflictUpdateInstead mkProj =
   onConflictUpdateSet $ \tbl _ ->
-  let tblFields = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> nm))) tbl
+  let tblFields = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> nm))) tbl
       proj = project (mkProj tblFields) "t"
 
   in map (\fieldNm -> QAssignment [ (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm)) ]) proj
+
+onConflictSetAll :: (Beamable tbl, Projectible T.Text (tbl (QExpr T.Text PostgresInaccessible)))
+                 => PgConflictAction tbl
+onConflictSetAll = onConflictUpdateInstead id
 
 defaultPgValueSyntax :: Pg.ToField a => a -> PgValueSyntax
 defaultPgValueSyntax =
@@ -1185,10 +1197,6 @@ DEFAULT_SQL_SYNTAX(Scientific)
 
 instance HasSqlValueSyntax PgValueSyntax SqlNull where
   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
-
-instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Auto x) where
-  sqlValueSyntax (Auto Nothing) = PgValueSyntax (emit "DEFAULT")
-  sqlValueSyntax (Auto (Just x)) = sqlValueSyntax x
 
 instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Maybe x) where
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
@@ -1315,7 +1323,7 @@ pgSelectStmt :: PgSelectTableSyntax
              -> Maybe Integer {-^ OFFSET -}
              -> Maybe PgSelectLockingClauseSyntax
              -> PgSelectSyntax
-pgSelectStmt tbl ordering limit offset locking = 
+pgSelectStmt tbl ordering limit offset locking =
     PgSelectSyntax $
     mappend
     (coerce tbl <>
@@ -1365,7 +1373,7 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
          pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t")))
    where
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
-     tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField tblNm (_fieldName f))) tblSettings
+     tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField True tblNm (_fieldName f))) tblSettings
 
 data PgUpdateReturning a
   = PgUpdateReturning PgSyntax
@@ -1532,3 +1540,43 @@ instance HasDefaultSqlDataType PgDataTypeSyntax UUID where
   defaultSqlDataType _ _ = pgUuidType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UUID
 
+-- * Instances for 'HasSqlEqualityCheck'
+
+#define PG_HAS_EQUALITY_CHECK(ty)                                 \
+  instance HasSqlEqualityCheck PgExpressionSyntax (ty);           \
+  instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax (ty);
+
+PG_HAS_EQUALITY_CHECK(Bool)
+PG_HAS_EQUALITY_CHECK(Double)
+PG_HAS_EQUALITY_CHECK(Float)
+PG_HAS_EQUALITY_CHECK(Int)
+PG_HAS_EQUALITY_CHECK(Int8)
+PG_HAS_EQUALITY_CHECK(Int16)
+PG_HAS_EQUALITY_CHECK(Int32)
+PG_HAS_EQUALITY_CHECK(Int64)
+PG_HAS_EQUALITY_CHECK(Integer)
+PG_HAS_EQUALITY_CHECK(Word)
+PG_HAS_EQUALITY_CHECK(Word8)
+PG_HAS_EQUALITY_CHECK(Word16)
+PG_HAS_EQUALITY_CHECK(Word32)
+PG_HAS_EQUALITY_CHECK(Word64)
+PG_HAS_EQUALITY_CHECK(T.Text)
+PG_HAS_EQUALITY_CHECK(TL.Text)
+PG_HAS_EQUALITY_CHECK(UTCTime)
+PG_HAS_EQUALITY_CHECK(Value)
+PG_HAS_EQUALITY_CHECK(Pg.Oid)
+PG_HAS_EQUALITY_CHECK(LocalTime)
+PG_HAS_EQUALITY_CHECK(ZonedTime)
+PG_HAS_EQUALITY_CHECK(TimeOfDay)
+PG_HAS_EQUALITY_CHECK(NominalDiffTime)
+PG_HAS_EQUALITY_CHECK(Day)
+PG_HAS_EQUALITY_CHECK(UUID)
+PG_HAS_EQUALITY_CHECK([Char])
+PG_HAS_EQUALITY_CHECK(Pg.HStoreMap)
+PG_HAS_EQUALITY_CHECK(Pg.HStoreList)
+PG_HAS_EQUALITY_CHECK(Pg.Date)
+PG_HAS_EQUALITY_CHECK(Pg.ZonedTimestamp)
+PG_HAS_EQUALITY_CHECK(Pg.LocalTimestamp)
+PG_HAS_EQUALITY_CHECK(Pg.UTCTimestamp)
+PG_HAS_EQUALITY_CHECK(Scientific)
+PG_HAS_EQUALITY_CHECK(V.Vector a)
