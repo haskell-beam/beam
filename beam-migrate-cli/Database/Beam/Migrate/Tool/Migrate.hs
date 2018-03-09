@@ -74,7 +74,7 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
   db <- lookupDb registry cmdLine
 
   let destCommit = registryHeadCommit registry
-  
+
   sts <- getStatus cmdLine registry dbName
   (_, _,SomeBeamMigrationBackend be@(BeamMigrationBackend {} :: BeamMigrationBackend be cmd hdl)) <-
     loadBackend cmdLine registry dbName
@@ -85,15 +85,15 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
       MigrateStatusNoCommits True -> do
         putStrLn "This database has no history."
         putStrLn ("Migrating database to " ++ show destCommit)
-  
+
         let backendFmt = MigrationFormatBackend (unModuleName (migrationDbBackend db))
-  
+
             schema = lookupSchema destCommit [ backendFmt ] registry <|>
                      lookupSchema destCommit [ MigrationFormatHaskell ] registry
-  
+
         case schema of
           Nothing -> fail ("No schema for " ++ show destCommit ++ " in backend " ++ unModuleName (migrationDbBackend db))
-          Just sch -> do 
+          Just sch -> do
             -- TODO user should be able to override this choice
             backend <- if backendFmt `elem` registeredSchemaInfoFormats sch
                        then do
@@ -102,17 +102,17 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
                        else do
                          putStrLn "Using Haskell beam-migrate backend"
                          pure Nothing
-  
+
             Just . pure . CLIMigration (fromString ("Initial import of schema " ++ show destCommit)) <$>
               getSchemaCommandsForBackend registry backend destCommit
-            
+
       MigrateStatusAtBranch srcCommit _ (PredicateDiff expected actual)
         | expected /= actual -> fail "The database does not match its current schema (TODO add --fix option)"
         | otherwise -> do
             let migrations = registryMigrationGraph registry
-                
+
                 findMigration commit = fst <$> find (\(_, s) -> registeredSchemaInfoHash s == commit) (labNodes migrations)
-  
+
             case (,) <$> findMigration srcCommit
                      <*> findMigration  destCommit of
               Nothing -> fail "Can't find schemas"
@@ -138,3 +138,8 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
     Nothing -> putStrLn "No migration being performed"
     Just cmds' -> do
       showCommands cmds'
+
+  putStrLn ("Should I run these commands?")
+  _ <- getLine
+
+  runCommands cmds'
