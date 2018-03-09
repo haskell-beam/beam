@@ -4,6 +4,9 @@ module Database.Beam.Migrate.Simple
   ( simpleSchema, simpleMigration
   , runSimpleMigration, backendMigrationScript
 
+  , VerificationResult(..)
+  , verifySchema
+
   , module Database.Beam.Migrate.Actions
   , module Database.Beam.Migrate.Types ) where
 
