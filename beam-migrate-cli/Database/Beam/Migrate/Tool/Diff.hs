@@ -91,7 +91,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
   SomeBeamMigrationBackend
     (BeamMigrationBackend { backendGetDbConstraints = getCs
                           , backendTransact = transact } ::
-        BeamMigrationBackend be cmd hdl) <-
+        BeamMigrationBackend cmd be hdl m) <-
     loadBackend' cmdLine modName
 
   case ref of
