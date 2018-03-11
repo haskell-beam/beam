@@ -23,7 +23,7 @@ import qualified Data.HashSet as HS
 -- database. Returns 'Nothing' if no schema could be found, which usually means
 -- you have chosen the wrong 'ActionProvider', or the backend you're using is
 -- buggy.
-simpleSchema :: Database db
+simpleSchema :: Database be db
              => ActionProvider cmd
              -> CheckedDatabaseSettings be db
              -> Maybe [cmd]
@@ -41,7 +41,7 @@ simpleSchema provider settings =
 -- 'BeamMigrationBackend's can usually be found in a module named
 -- @Database.Beam.<Backend>.Migrate@ with the name@migrationBackend@
 simpleMigration :: ( MonadBeam cmd be handle m
-                 ,   Database db )
+                 ,   Database be db )
                 => BeamMigrationBackend cmd be handle m
                 -> handle
                 -> CheckedDatabaseSettings be db
@@ -66,7 +66,7 @@ data VerificationResult
 -- | Verify that the given, beam database matches the actual
 -- schema. On success, returns 'VerificationSucceeded', on failure,
 -- returns 'VerificationFailed' and a list of missing predicates.
-verifySchema :: ( Database db, MonadBeam cmd be handle m )
+verifySchema :: ( Database be db, MonadBeam cmd be handle m )
              => BeamMigrationBackend be cmd handle m
              -> CheckedDatabaseSettings be db
              -> m VerificationResult

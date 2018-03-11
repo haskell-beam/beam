@@ -1,6 +1,6 @@
 # 0.3.0.0
 
-Bump version due to beam-migrate and beam-core version major version bump
+* Re-introduce backend parameter to `Database` class
 
 # 0.2.0.0
 

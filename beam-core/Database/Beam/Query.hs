@@ -132,7 +132,7 @@ lookup :: ( HasQBuilder syntax
 
           , Beamable table, Table table
 
-          , Database db )
+          , Database be db )
        => DatabaseEntity be db (TableEntity table)
        -> PrimaryKey table Identity
        -> SqlSelect syntax (table Identity)

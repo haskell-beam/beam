@@ -83,7 +83,7 @@ import GHC.Generics
 
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: forall be (db :: (* -> *) -> *) table select s.
-        ( Database db
+        ( Database be db
         , IsSql92SelectSyntax select
 
         , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
@@ -98,7 +98,7 @@ all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
 
 -- | Introduce all entries of a view into the 'Q' monad
 allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
-                ( Database db
+                ( Database be db
                 , IsSql92SelectSyntax select
 
                 , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
@@ -112,7 +112,7 @@ allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given
 --   QExpr
-join_ :: ( Database db, Table table
+join_ :: ( Database be db, Table table
          , IsSql92SelectSyntax select
          , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
          , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
@@ -213,7 +213,7 @@ related_ :: forall be db rel select s.
             ( IsSql92SelectSyntax select
             , HasTableEquality (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) (PrimaryKey rel)
             , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
-            , Database db, Table rel ) =>
+            , Database be db, Table rel ) =>
             DatabaseEntity be db (TableEntity rel)
          -> PrimaryKey rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)
          -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
@@ -222,7 +222,7 @@ related_ relTbl relKey =
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
 relatedBy_ :: forall be db rel select s.
-              ( Database db, Table rel
+              ( Database be db, Table rel
               , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
               , IsSql92SelectSyntax select )
            => DatabaseEntity be db (TableEntity rel)

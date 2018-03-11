@@ -1,3 +1,7 @@
-# 0.3.0.0
+## 0.3.0.0
 
-Version bump due to beam-core change. Got rid of `Auto`
+* Re-introduce backend parameter as `Database`type class
+
+## 0.2.0.0  -- 2018-01-20
+
+* First version. Released on an unsuspecting world.

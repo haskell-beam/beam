@@ -1,5 +1,27 @@
 # 0.7.0.0
 
+## Reintroduce explicit backends to `Database` class
+
+Some database entites only work on particular backends. For example,
+beam-postgres extension support only works in beam-postgres. The lack
+of a backend parameter on the `Database` type class essentially
+mandated that every database entity worked on every backend. By
+introducing a backend parameter to `Database`, we allow the user to
+restrict which backends a database can work on.
+
+The old behavior is still easily recovered. Whereas before you'd write
+
+```haskell
+instance Database MyDatabase
+```
+
+Now write
+
+```haskell
+instance Database be MyDatabase
+```
+
+
 ## Require backends to explicitly declare types that can be compared for equality
 
 Beam previously allowed any two types to be compared for SQL
@@ -55,6 +77,7 @@ use
 ```haskell
 insertExpressions [ Table1 default_ (val_ "Field Value") (val_ "Another Field Value") ]
 ```
+>>>>>>> master
 
 # 0.6.0.0
 

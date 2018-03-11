@@ -83,10 +83,14 @@ import qualified Lens.Micro as Lens
 --   is named 'f', each field must be of the type of 'f' applied to some type
 --   for which an 'IsDatabaseEntity' instance exists.
 --
+--   The 'be' type parameter is necessary so that the compiler can
+--   ensure that backend-specific entities only work on the proper
+--   backend.
+--
 --   Entities are documented under [the corresponding
 --   section](Database.Beam.Schema#entities) and in the
 --   [manual](http://tathougies.github.io/beam/user-guide/databases/)
-class Database db where
+class Database be db where
 
     -- | Default derived function. Do not implement this yourself.
     --
@@ -146,7 +150,7 @@ newtype FieldModification f a
 --   only want to rename one table. You can do
 --
 -- > dbModification { tbl1 = modifyTable (\oldNm -> "NewTableName") tableModification }
-dbModification :: forall f be db. Database db => DatabaseModification f be  db
+dbModification :: forall f be db. Database be db => DatabaseModification f be db
 dbModification = runIdentity $
                  zipTables (Proxy @be) (\_ _ -> pure (EntityModification id)) (undefined :: DatabaseModification f be db) (undefined :: DatabaseModification f be db)
 
@@ -176,7 +180,7 @@ tableModification = runIdentity $
 -- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
 -- >      }
 withDbModification :: forall db be entity
-                    . Database db
+                    . Database be db
                    => db (entity be db)
                    -> DatabaseModification (entity be db) be db
                    -> db (entity be db)
@@ -215,7 +219,7 @@ instance RenamableField (TableField tbl) where
 
 class RenamableWithRule mod where
   renamingFields :: (Text -> Text) -> mod
-instance Database db => RenamableWithRule (db (EntityModification (DatabaseEntity be db) be)) where
+instance Database be db => RenamableWithRule (db (EntityModification (DatabaseEntity be db) be)) where
   renamingFields renamer =
     runIdentity $
     zipTables (Proxy @be) (\_ _ -> pure (renamingFields renamer))
