@@ -1,14 +1,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- ! BUILD_COMMAND: stack runhaskell --package postgresql-simple --package beam-postgres --package beam-core -- -fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -i../../beam-sqlite/examples
+-- ! BUILD_COMMAND: stack runhaskell --package postgresql-simple --package beam-postgres --package beam-core -- -fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -i../../beam-sqlite/examples -fno-warn-partial-type-signatures
 -- ! BUILD_DIR: beam-postgres/examples/
 
 module Main where
 
 import Database.Beam
 import Database.Beam.Backend.Types
-import Database.Beam.Postgres
+import Database.Beam.Postgres hiding (insert, runInsert)
+import qualified Database.Beam.Postgres as Pg
 import Database.PostgreSQL.Simple
 
 import Control.Monad

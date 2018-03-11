@@ -1,5 +1,5 @@
 name:                beam-sqlite
-version:             0.2.0.0
+version:             0.3.0.0
 synopsis:            Beam driver for SQLite
 description:         Beam driver for the <https://sqlite.org/ SQLite> embedded database.
                      See <http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/ here>
@@ -23,8 +23,8 @@ library
                       Database.Beam.Sqlite.Migrate
   build-depends:      base          >=4.7  && <5,
 
-                      beam-core     >=0.6  && <0.7,
-                      beam-migrate  >=0.2  && <0.3,
+                      beam-core     >=0.7  && <0.8,
+                      beam-migrate  >=0.3  && <0.4,
 
                       sqlite-simple >=0.4  && <0.5,
                       text          >=1.0  && <1.3,

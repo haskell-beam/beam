@@ -17,7 +17,7 @@ module Database.Beam.Query.Combinators
     -- * Project Haskell values to 'QGenExpr's
     , HaskellLiteralForQExpr
     , SqlValable(..), SqlValableTable
-    , default_, auto_
+    , default_
 
     -- * General query combinators
 
@@ -211,6 +211,7 @@ filter_ mkExpr clause = clause >>= \x -> guard_ (mkExpr x) >> pure x
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
 related_ :: forall be db rel select s.
             ( IsSql92SelectSyntax select
+            , HasTableEquality (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) (PrimaryKey rel)
             , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
             , Database db, Table rel ) =>
             DatabaseEntity be db (TableEntity rel)
@@ -233,6 +234,7 @@ relatedBy_ = join_
 -- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
 --   to the given table. Useful for creating join conditions.
 references_ :: ( IsSql92ExpressionSyntax expr
+               , HasTableEquality expr (PrimaryKey t)
                , HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Bool
                , Table t )
             => PrimaryKey t (QGenExpr ctxt expr s) -> t (QGenExpr ctxt expr s) -> QGenExpr ctxt expr s Bool
@@ -359,7 +361,8 @@ allE es = fromMaybe (QExpr (pure (valueE (sqlValueSyntax True)))) $
 -- | Extract an expression representing the current (non-UPDATEd) value of a 'QField'
 current_ :: IsSql92ExpressionSyntax expr
          => QField s ty -> QExpr expr s ty
-current_ (QField _ nm) = QExpr (pure (fieldE (unqualifiedField nm)))
+current_ (QField False _ nm) = QExpr (pure (fieldE (unqualifiedField nm)))
+current_ (QField True tbl nm) = QExpr (pure (fieldE (qualifiedField tbl nm)))
 
 infix 4 <-.
 class SqlUpdatable expr s lhs rhs | rhs -> expr, lhs -> s, rhs -> s, lhs s expr -> rhs, rhs -> lhs where
@@ -371,8 +374,8 @@ class SqlUpdatable expr s lhs rhs | rhs -> expr, lhs -> s, rhs -> s, lhs s expr 
         -> rhs
         -> QAssignment fieldName expr s
 instance SqlUpdatable expr s (QField s a) (QExpr expr s a) where
-  QField _ fieldNm <-. QExpr expr =
-    QAssignment [(unqualifiedField fieldNm, expr "t")]
+  QField _ _ nm <-. QExpr expr =
+    QAssignment [(unqualifiedField nm, expr "t")]
 instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s)) where
   (<-.) :: forall fieldName.
            IsSql92FieldNameSyntax fieldName
@@ -382,12 +385,12 @@ instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s
     QAssignment $
     allBeamValues (\(Columnar' (Const assignments)) -> assignments) $
     runIdentity $
-    zipBeamFieldsM (\(Columnar' (QField _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
+    zipBeamFieldsM (\(Columnar' (QField _ _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
                        pure (Columnar' (Const (unqualifiedField f, e "t")) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
 instance Beamable tbl => SqlUpdatable expr s (tbl (Nullable (QField s))) (tbl (Nullable (QExpr expr s))) where
   lhs <-. rhs =
-    let lhs' = changeBeamRep (\(Columnar' (QField tblName fieldName') :: Columnar' (Nullable (QField s)) a) ->
-                                Columnar' (QField tblName fieldName') :: Columnar' (QField s)  a) lhs
+    let lhs' = changeBeamRep (\(Columnar' (QField q tblName fieldName') :: Columnar' (Nullable (QField s)) a) ->
+                                Columnar' (QField q tblName fieldName') :: Columnar' (QField s)  a) lhs
         rhs' = changeBeamRep (\(Columnar' (QExpr e) :: Columnar' (Nullable (QExpr expr s)) a) ->
                                 Columnar' (QExpr e) :: Columnar' (QExpr expr s) a) rhs
     in lhs' <-. rhs'
@@ -523,9 +526,6 @@ instance ( Beamable table
 default_ :: IsSql92ExpressionSyntax expr
          => QGenExpr ctxt expr s a
 default_ = QExpr (pure defaultE)
-
-auto_ :: QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s (Auto a)
-auto_ = unsafeRetype
 
 -- * Window functions
 

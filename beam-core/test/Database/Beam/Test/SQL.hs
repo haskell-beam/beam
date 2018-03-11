@@ -785,23 +785,29 @@ tableEquality =
 
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
-        let andE = ExpressionBinOp "AND"
+        let andE = ExpressionBinOp "AND"; orE = ExpressionBinOp "OR"
             eqE = ExpressionCompOp "==" Nothing
+
+            maybeEqE a b = ExpressionCase [ (andE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value True))
+                                          , (orE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value False))
+                                          ]
+                                          (eqE a b)
+
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionFieldName (QualifiedField depts "name"))
-            firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
+            firstNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
                                 (ExpressionFieldName (QualifiedField depts "head__first_name"))
-            lastNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
-                               (ExpressionFieldName (QualifiedField depts "head__last_name"))
-            createdCond = eqE (ExpressionFieldName (QualifiedField depts "head__created"))
-                              (ExpressionFieldName (QualifiedField depts "head__created"))
+            lastNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
+                                    (ExpressionFieldName (QualifiedField depts "head__last_name"))
+            createdCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__created"))
+                                   (ExpressionFieldName (QualifiedField depts "head__created"))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
    tableExprToTableLiteral =
      testCase "Equality comparison between table expression and table literal" $
      do now <- getCurrentTime
 
-        let exp = DepartmentT "Sales" (EmployeeId (Just "Jane") (Just "Smith") (Just (Auto (Just now))))
+        let exp = DepartmentT "Sales" (EmployeeId (Just "Jane") (Just "Smith") (Just now))
         SqlSelect Select { selectTable = SelectTable { selectWhere = Just selectWhere, selectFrom } } <- pure $ select $ do
           d <- all_ (_departments employeeDbSettings)
           guard_ (d ==. val_ exp)
@@ -809,16 +815,22 @@ tableEquality =
 
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
-        let andE = ExpressionBinOp "AND"
+        let andE = ExpressionBinOp "AND"; orE = ExpressionBinOp "OR"
             eqE = ExpressionCompOp "==" Nothing
+
+            maybeEqE a b = ExpressionCase [ (andE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value True))
+                                          , (orE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value False))
+                                          ]
+                                          (eqE a b)
+
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionValue (Value ("Sales" :: Text)))
-            firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
-                                (ExpressionValue (Value ("Jane" :: Text)))
-            lastNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
-                               (ExpressionValue (Value ("Smith" :: Text)))
-            createdCond = eqE (ExpressionFieldName (QualifiedField depts "head__created"))
-                              (ExpressionValue (Value now))
+            firstNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
+                                     (ExpressionValue (Value ("Jane" :: Text)))
+            lastNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
+                                    (ExpressionValue (Value ("Smith" :: Text)))
+            createdCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__created"))
+                                  (ExpressionValue (Value now))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
 -- | Ensure related_ generates the correct ON conditions
@@ -1106,7 +1118,7 @@ updateNullable =
   do curTime <- getCurrentTime
 
      let employeeKey :: PrimaryKey EmployeeT (Nullable Identity)
-         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just (Auto (Just curTime)))
+         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just curTime)
 
      SqlUpdate Update { .. } <-
        pure $ update (_departments employeeDbSettings)

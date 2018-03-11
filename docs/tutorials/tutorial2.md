@@ -17,6 +17,7 @@ their homes. Let's build an addresses model to allow users to add home addresses
 to their profile. Our table will store United States addresses for now. An
 address in the United States consists of
 
+  * an auto-incrementing primary key
   * one required house number and street line
   * an optional apartment/suite number line
   * a required city
@@ -28,7 +29,7 @@ Let's build the `AddressT` table. `AddressT` will follow a similar formula to
 
 ```haskell
 data AddressT f = Address
-                { _addressId    :: C f (Auto Int)
+                { _addressId    :: C f Int
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -42,9 +43,9 @@ deriving instance Show (PrimaryKey UserT Identity)
 deriving instance Show Address
 
 instance Table AddressT where
-    data PrimaryKey AddressT f = AddressId (Columnar f (Auto Int)) deriving Generic
+    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
     primaryKey = AddressId . _addressId
-type AddressId = PrimaryKey AddressT Identity -- For convenience    
+type AddressId = PrimaryKey AddressT Identity -- For convenience
 
 instance Beamable AddressT
 instance Beamable (PrimaryKey AddressT)
@@ -55,34 +56,16 @@ instance Beamable (PrimaryKey AddressT)
     `C` is a type synonym for `Columnar`, and some find it reduces the syntactic
     overhead of model declaration.
 
-The lines of particular interest are the declarations for `_addressId` and
-`_addressForUser`.
+Notice that `_addressForUser` is declared as a `PrimaryKey UserT f`. This pulls
+in all the columns necessary for referencing a `UserT` [^1]. Later, we'll also
+see how beam can use the field to automatically create JOINs.
 
-The `_addressId` field is declared with type `Auto`. `Auto` is defined in
-`Database.Beam.Backend.Types` as
+Notice also that `_addressId` corresponds to our auto-increminting primary key
+field. In general, beam doesn't care if the underlying field is assigned
+automatically, only about the type of final values of that field.
 
-```haskell
-newtype Auto x = Auto { unAuto :: Maybe x }
-```
-
-`Auto x` describes a field that mainly acts the same as `x` during marshaling
-and unmarshaling. The only difference is that, if the wrapped value is
-`Nothing`, then `Auto x` will make sure to use whatever syntax is necessary to
-have the database assign the default value. The unmarshaled `Auto x` value is
-always a wrapper over a `Just`. This allows the common use case of defaulted
-auto increment primary key columns.
-
-!!! warning "Warning"
-    Unfortunately, the invariant of an unmarshaled `Auto` always having a `Just`
-    value is not currently checked at compile time. Future versions of beam will
-    likely be more strict about this.
-
-The second field of interest is `_addressForUser`, which is declared as a
-`PrimaryKey UserT f`. This pulls in all the columns necessary for referencing a
-`UserT` [^1]. Later, we'll also see how beam can use the field to automatically
-create JOINs.
-
-We have all the tables we need now, so let's go ahead and redefine our newest database type.
+We have all the tables we need now, so let's go ahead and redefine our newest
+database type.
 
 ```haskell
 data ShoppingCartDb f = ShoppingCartDb
@@ -132,7 +115,7 @@ data UserT f
     deriving Generic
 
 data AddressT f = Address
-                { _addressId    :: C f (Auto Int)
+                { _addressId    :: C f Int
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -219,7 +202,7 @@ We can bring these lenses into scope globally via a global pattern match against
 Address (LensFor addressId)    (LensFor addressLine1)
         (LensFor addressLine2) (LensFor addressCity)
         (LensFor addressState) (LensFor addressZip)
-        (UserId (LensFor addressForUserId)) = 
+        (UserId (LensFor addressForUserId)) =
         tableLenses
 
 User (LensFor userEmail)    (LensFor userFirstName)
@@ -245,7 +228,7 @@ And a table lens.
     errors about ambiguous types. These occur due to what's known as the
     monomorphism restriction. You can turn it off using the
     `NoMonomorphismRestriction` extension.
-    
+
     The monomorphism restriction is part of the Haskell standard, but there has
     been talk about removing it in future language versions. Basically, it
     requires GHC to not automatically infer polymorphic types for global
@@ -285,32 +268,39 @@ withDatabaseDebug putStrLn conn $ runInsert $
   insertValues [ james, betty, sam ]
 ```
 
-Now that we have some `User` objects, we can create associated addresses. Let's give James one
-address, Betty two addresses, and Sam none.
+Now that we have some `User` objects, we can create associated addresses. Notice
+that above, we used `insertValues` to insert concrete `User` rows. This worked
+because we could determine every field of `User` before insertion. `Address`es
+however have a pesky auto-incrementing primary key field. We can get around this
+by inserting *expressions* instead of *values*. We can use `default_` to stand
+for a value that the database needs to fill in. We can use `val_` to lift a
+literal value into an expression.
+
+With that in mind, let's give James one address, Betty two addresses, and Sam none.
 
 ```haskell
-let addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
-                , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
-                , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty) ]
-                
+let addresses = [ Address default_ (val_ "123 Little Street") (val_ Nothing) (val_ "Boston") (val_ "MA") (val_ "12345") (pk james)
+                , Address default_ (val_ "222 Main Street") (val_ (Just "Ste 1")) (val_ "Houston") (val_ "TX") (val_ "8888") (pk betty)
+                , Address default_ (val_ "9999 Residence Ave") (val_ Nothing) (val_ "Sugarland") (val_ "TX") (val_ "8989") (pk betty) ]
+
 withDatabaseDebug putStrLn conn $ runInsert $
   insert (_shoppingCartUserAddresses shoppingCartDb) $
-  insertValues addresses
+  insertExpressions addresses
 ```
 
-Notice that we used the `pk` function to assign the reference to the `UserT` table. `pk` is a
-synonym of the `primaryKey` function from the `Table` type class. It should be clear what's going
-on, but if it's not, let's ask GHCi.
+!!! warning "Warning"
+    Previous versions of beam used a type called `Auto` to insert values into
+    default fields. It was found to be a leaky abstraction and removed in version
+    0.7.0.0. Current best practices are to use `default_` instead.
+
+Notice that we used the `pk` function to assign the reference to the `UserT`
+table. `pk` is a synonym of the `primaryKey` function from the `Table` type
+class. It should be clear what's going on, but if it's not, let's ask GHCi.
 
 ```console
 *NextSteps> pk (james :: User)
 UserId "james@example.com"
 ```
-
-Notice also that we set `_addressId` to `Auto Nothing`. As mentioned above, the
-`AutoId` type means the addresses won't have an id until they're inserted into
-the database. This could be an issue if we want to refer to the addresses in the
-future.
 
 If we query for all the addresses, we'll see that SQLite has assigned them an
 appropriate id.
@@ -324,7 +314,7 @@ First, let's use the new lenses we made. Make sure to import `Lens.Micro` or
 !employee2out console
 -- import Lens.Micro
 -- import Control.Lens
-addresses <- withDatabaseDebug putStrLn conn $ 
+addresses <- withDatabaseDebug putStrLn conn $
              runSelectReturningList $
              select (all_ (shoppingCartDb ^. shoppingCartUserAddresses))
 mapM_ print addresses
@@ -523,7 +513,7 @@ update the corresponding record in the database.
   withDatabaseDebug putStrLn conn $
     do runUpdate $
          save (shoppingCartDb ^. shoppingCartUsers) (james { _userPassword = "52a516ca6df436828d9c0d26e31ef704" })
-         
+
        runSelectReturningList $
          lookup (shoppingCartDb ^. shoppingCartUsers) (UserId "james@example.com")
 
@@ -533,7 +523,7 @@ putStrLn ("James's new password is " ++ show (james ^. userPassword))
 !!! tip "Tip"
     `lookup` (defined in `Database.Beam.Query`) can be used to easily lookup a
     single entity given a table entity in a database and a primary key.
-    
+
     You may have to hide `lookup` from `Prelude` in order to use `lookup`
     unqualified.
 
@@ -562,7 +552,7 @@ addresses <-
                              , address ^. addressZip <-. val_ "12345" ])
                 (\address -> address ^. addressCity ==. val_ "Sugarland" &&.
                              address ^. addressState ==. val_ "TX")
-                           
+
        runSelectReturningList $ select $ all_ (shoppingCartDb ^. shoppingCartUserAddresses)
 
 mapM_ print addresses
