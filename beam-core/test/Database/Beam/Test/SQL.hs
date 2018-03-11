@@ -785,16 +785,22 @@ tableEquality =
 
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
-        let andE = ExpressionBinOp "AND"
+        let andE = ExpressionBinOp "AND"; orE = ExpressionBinOp "OR"
             eqE = ExpressionCompOp "==" Nothing
+
+            maybeEqE a b = ExpressionCase [ (andE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value True))
+                                          , (orE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value False))
+                                          ]
+                                          (eqE a b)
+
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionFieldName (QualifiedField depts "name"))
-            firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
+            firstNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
                                 (ExpressionFieldName (QualifiedField depts "head__first_name"))
-            lastNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
-                               (ExpressionFieldName (QualifiedField depts "head__last_name"))
-            createdCond = eqE (ExpressionFieldName (QualifiedField depts "head__created"))
-                              (ExpressionFieldName (QualifiedField depts "head__created"))
+            lastNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
+                                    (ExpressionFieldName (QualifiedField depts "head__last_name"))
+            createdCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__created"))
+                                   (ExpressionFieldName (QualifiedField depts "head__created"))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
    tableExprToTableLiteral =
@@ -809,16 +815,22 @@ tableEquality =
 
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
-        let andE = ExpressionBinOp "AND"
+        let andE = ExpressionBinOp "AND"; orE = ExpressionBinOp "OR"
             eqE = ExpressionCompOp "==" Nothing
+
+            maybeEqE a b = ExpressionCase [ (andE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value True))
+                                          , (orE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value False))
+                                          ]
+                                          (eqE a b)
+
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionValue (Value ("Sales" :: Text)))
-            firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
-                                (ExpressionValue (Value ("Jane" :: Text)))
-            lastNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
-                               (ExpressionValue (Value ("Smith" :: Text)))
-            createdCond = eqE (ExpressionFieldName (QualifiedField depts "head__created"))
-                              (ExpressionValue (Value now))
+            firstNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
+                                     (ExpressionValue (Value ("Jane" :: Text)))
+            lastNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
+                                    (ExpressionValue (Value ("Smith" :: Text)))
+            createdCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__created"))
+                                  (ExpressionValue (Value now))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
 -- | Ensure related_ generates the correct ON conditions
