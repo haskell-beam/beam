@@ -6,5 +6,3 @@ packages:
   - beam-core
   - beam-migrate
   - beam-migrate-cli
-nix:
-  enable: true
