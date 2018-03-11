@@ -5,7 +5,6 @@
 
 module Database.Beam.Backend.Types
   ( BeamBackend(..)
-  , Auto(..)
 
   , FromBackendRowF(..), FromBackendRowM
   , parseOneField, peekField, checkNextNNull
@@ -16,7 +15,6 @@ module Database.Beam.Backend.Types
 
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
-import qualified Data.Aeson as Json
 import           Data.Tagged
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
@@ -31,26 +29,6 @@ import GHC.Types
 class BeamBackend be where
   -- | Requirements to marshal a certain type from a database of a particular backend
   type BackendFromField be :: * -> Constraint
-
--- | Newtype wrapper for types that may be given default values by the database.
---   Essentially, a wrapper around 'Maybe x'.
---
---   When a value of type 'Auto x' is written to a database (via @INSERT@ or
---   @UPDATE@, for example), backends will translate a 'Nothing' value into an
---   expression that will evaluate to whatever default value the database would
---   choose. This is useful to insert rows with columns that are
---   auto-incrementable or have a @DEFAULT@ value.
---
---   When read from the database, the wrapped value will always be a 'Just'
---   value. This isn't currently enforced at the type-level, but may be in
---   future versions of beam.
-newtype Auto x = Auto { unAuto :: Maybe x }
-  deriving (Show, Read, Eq, Ord, Generic, Monoid)
-instance Json.FromJSON a => Json.FromJSON (Auto a) where
-  parseJSON a = Auto <$> Json.parseJSON a
-instance Json.ToJSON a => Json.ToJSON (Auto a) where
-  toJSON (Auto a) = Json.toJSON a
-  toEncoding (Auto a) = Json.toEncoding a
 
 data FromBackendRowF be f where
   ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
@@ -183,9 +161,6 @@ instance FromBackendRow be x => FromBackendRow be (Maybe x) where
     do isNull <- checkNextNNull (valuesNeeded (Proxy @be) (Proxy @(Maybe x)))
        if isNull then pure Nothing else Just <$> fromBackendRow
   valuesNeeded be _ = valuesNeeded be (Proxy @x)
-instance (BeamBackend be, FromBackendRow be (Maybe x)) => FromBackendRow be (Auto x) where
-  fromBackendRow = Auto <$> fromBackendRow
-  valuesNeeded be _ = valuesNeeded be (Proxy @(Maybe x))
 
 deriving instance Generic (a, b, c, d, e, f, g, h)
 

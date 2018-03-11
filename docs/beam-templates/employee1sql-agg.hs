@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
--- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core -- -fglasgow-exts -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XPartialTypeSignatures
+-- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core -- -fglasgow-exts -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XPartialTypeSignatures -fno-warn-partial-type-signatures 
 -- ! BUILD_DIR: beam-sqlite/examples/
 module Main where
 
@@ -38,7 +38,7 @@ data ShoppingCartDb f = ShoppingCartDb
 
 instance Database be ShoppingCartDb
 
-shoppingCartDb :: DatabaseSettings be ShoppingCartDb
+shoppingCartDb :: DatabaseSettings Sqlite ShoppingCartDb
 shoppingCartDb = defaultDbSettings
 
 main :: IO ()

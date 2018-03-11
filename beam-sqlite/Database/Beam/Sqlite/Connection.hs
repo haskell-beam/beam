@@ -104,9 +104,6 @@ instance FromBackendRow Sqlite Scientific where
   fromBackendRow = unSqliteScientific <$> fromBackendRow
 instance FromBackendRow Sqlite SqliteScientific
 
-instance FromField x => FromField (Auto x) where
-  fromField = fmap (Auto . Just) . fromField
-
 newtype SqliteScientific = SqliteScientific { unSqliteScientific :: Scientific }
 instance FromField SqliteScientific where
   fromField f =
@@ -247,18 +244,17 @@ insertReturning :: DatabaseEntity be db (TableEntity table)
                 -> SqliteInsertReturning table
 insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
   case insert tbl vs of
-    SqlInsert s -> 
+    SqlInsert s ->
       SqliteInsertReturning tblNm s
     SqlInsertNoRows ->
       SqliteInsertReturningNoRows
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
--- inserted row. Unfilled 'Auto' values in the table will have been filled in in
--- the output.
+-- inserted row.
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqliteInsertReturning table
                        -> SqliteM [ table Identity ]
-runInsertReturningList SqliteInsertReturningNoRows = pure []                       
+runInsertReturningList SqliteInsertReturningNoRows = pure []
 runInsertReturningList (SqliteInsertReturning nm insertStmt_) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $

@@ -25,6 +25,8 @@ module Database.Beam.Query
     -- * Operators
     , module Database.Beam.Query.Operator
 
+    , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
+
     -- ** Unquantified comparison operators
     , SqlEq(..), SqlOrd(..)
 
@@ -126,6 +128,8 @@ lookup :: ( HasQBuilder syntax
           , SqlValableTable (PrimaryKey table) (Sql92SelectExpressionSyntax syntax)
           , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
 
+          , HasTableEquality (Sql92SelectExpressionSyntax syntax) (PrimaryKey table)
+
           , Beamable table, Table table
 
           , Database be db )
@@ -175,6 +179,7 @@ insert :: IsSql92InsertSyntax syntax =>
        -> SqlInsertValues (Sql92InsertValuesSyntax syntax) table
           -- ^ Values to insert. See 'insertValues', 'insertExpressions', and 'insertFrom' for possibilities.
        -> SqlInsert syntax
+insert _ SqlInsertValuesEmpty = SqlInsertNoRows
 insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues vs) =
     SqlInsert (insertStmt tblNm tblFields vs)
   where
@@ -183,7 +188,7 @@ insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues vs) =
 -- | Run a 'SqlInsert' in a 'MonadBeam'
 runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
           => SqlInsert (Sql92InsertSyntax cmd) -> m ()
-runInsert SqlInsertNoRows = pure ()          
+runInsert SqlInsertNoRows = pure ()
 runInsert (SqlInsert i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
@@ -205,7 +210,7 @@ insertExpressions tbls =
     _  -> SqlInsertValues (insertSqlExpressions sqlExprs)
     where
       sqlExprs = map mkSqlExprs tbls
-      
+
       mkSqlExprs :: forall s. table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) -> [Sql92InsertValuesExpressionSyntax syntax]
       mkSqlExprs = allBeamValues (\(Columnar' (QExpr x)) -> x "t")
 
@@ -256,8 +261,8 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
     assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
     QExpr where_ = mkWhere tblFieldExprs
 
-    tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField tblNm name)) tblSettings
-    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
+    tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
+    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
 
 -- | Generate a 'SqlUpdate' that will update the given table with the given value.
 --
@@ -271,6 +276,8 @@ save :: forall table syntax be db.
 
         , SqlValableTable (PrimaryKey table) (Sql92UpdateExpressionSyntax syntax)
         , SqlValableTable table (Sql92UpdateExpressionSyntax syntax)
+
+        , HasTableEquality (Sql92UpdateExpressionSyntax syntax) (PrimaryKey table)
 
         , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax syntax)) Bool
         )

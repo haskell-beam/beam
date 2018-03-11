@@ -84,6 +84,8 @@ import           Foreign.C.Types
 
 import           Network.URI (uriToString)
 
+import           System.IO
+
 data PgError
   = PgRowParseError RowReadError
   | PgInternalError String
@@ -347,6 +349,8 @@ withPgDebug dbg conn (Pg action) =
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
            dbg (T.unpack (decodeUtf8 query))
+
+           hPutStrLn stderr ("Going to run " ++ show query)
 
            res <- Pg.exec conn query
            sts <- Pg.resultStatus res

@@ -1,5 +1,3 @@
-# Revision history for beam-migrate
-
 ## 0.3.0.0
 
 * Re-introduce backend parameter as `Database`type class

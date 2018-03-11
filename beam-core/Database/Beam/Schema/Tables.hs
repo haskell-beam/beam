@@ -31,6 +31,7 @@ module Database.Beam.Schema.Tables
 
     -- * Columnar and Column Tags
     , Columnar, C, Columnar'(..)
+    , ComposeColumnar(..)
     , Nullable, TableField(..)
     , Exposed
     , fieldName
@@ -41,14 +42,17 @@ module Database.Beam.Schema.Tables
     , FieldsFulfillConstraintNullable
     , WithConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
+    , withConstrainedFields, withConstraints
+    , withNullableConstrainedFields, withNullableConstraints
 
     -- * Tables
     , Table(..), Beamable(..)
-    , Retaggable(..)
+    , Retaggable(..), (:*:)(..) -- Reexported for use with 'alongsideTable'
     , defTblFieldSettings
     , tableValuesNeeded
     , pk
-    , allBeamValues, changeBeamRep )
+    , allBeamValues, changeBeamRep
+    , alongsideTable )
     where
 
 import           Database.Beam.Backend.Types
@@ -432,6 +436,9 @@ type C f a = Columnar f a
 --   simply wraps 'Columnar f a'
 newtype Columnar' f a = Columnar' (Columnar f a)
 
+-- | Like 'Data.Functor.Compose', but with an intermediate 'Columnar'
+newtype ComposeColumnar f g a = ComposeColumnar (f (Columnar g a))
+
 -- | Metadata for a field of type 'ty' in 'table'.
 --
 --   Essentially a wrapper over the field name, but with a phantom type
@@ -550,6 +557,11 @@ allBeamValues (f :: forall a. Columnar' f a -> b) (tbl :: table f) =
 changeBeamRep :: Beamable table => (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
 changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl)
 
+alongsideTable :: Beamable tbl => tbl f -> tbl g -> tbl (Columnar' f :*: Columnar' g)
+alongsideTable a b =
+  runIdentity $
+  zipBeamFieldsM (\x y -> pure (Columnar' (x :*: y))) a b
+
 class Retaggable f x | x -> f where
   type Retag (tag :: (* -> *) -> * -> *) x :: *
 
@@ -645,6 +657,24 @@ instance FieldsFulfillConstraint c t =>
 instance FieldsFulfillConstraintNullable c t =>
     GFieldsFulfillConstraint c (K1 Generic.R (t (Nullable Exposed))) (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (WithConstraint c)))) where
   gWithConstrainedFields _ _ (K1 x) = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t (Nullable Exposed)))) (from x)))
+
+withConstrainedFields :: forall c tbl
+                       . FieldsFulfillConstraint c tbl => tbl Identity -> tbl (WithConstraint c)
+withConstrainedFields =
+  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl Exposed))) . from
+
+withConstraints :: forall c tbl. (Beamable tbl, FieldsFulfillConstraint c tbl) => tbl (WithConstraint c)
+withConstraints =
+  withConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
+
+withNullableConstrainedFields :: forall c tbl
+                               . FieldsFulfillConstraintNullable c tbl => tbl (Nullable Identity) -> tbl (Nullable (WithConstraint c))
+withNullableConstrainedFields =
+  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl (Nullable Exposed)))) . from
+
+withNullableConstraints ::  forall c tbl. (Beamable tbl, FieldsFulfillConstraintNullable c tbl) => tbl (Nullable (WithConstraint c))
+withNullableConstraints =
+  withNullableConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
 
 type FieldsFulfillConstraint (c :: * -> Constraint) t =
   ( Generic (t (WithConstraint c)), Generic (t Identity), Generic (t Exposed)
