@@ -144,9 +144,9 @@ reportDdlErrors go = do
     Right  x -> pure x
 
 -- Ensure the backend tables exist
-ensureBackendTables :: forall be cmd hdl
+ensureBackendTables :: forall be cmd hdl m
                      . String
-                    -> BeamMigrationBackend be cmd hdl
+                    -> BeamMigrationBackend cmd be hdl m
                     -> IO ()
 ensureBackendTables connStr
                     be@BeamMigrationBackend { backendTransact = transact
@@ -167,7 +167,7 @@ ensureBackendTables connStr
              updateSchemaToCurrent
       pure ()
 
-hasBackendTables :: String -> BeamMigrationBackend be cmd hdl -> IO Bool
+hasBackendTables :: String -> BeamMigrationBackend cmd be hdl m -> IO Bool
 hasBackendTables connStr BeamMigrationBackend { backendTransact = transact
                                               , backendGetDbConstraints = getCs } =
   do cs <- transact connStr getCs

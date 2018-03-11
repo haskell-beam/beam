@@ -46,6 +46,12 @@ module Database.Beam.Postgres.Syntax
 
     , PgWindowFrameSyntax(..), PgWindowFrameBoundsSyntax(..), PgWindowFrameBoundSyntax(..)
 
+    , PgSelectLockingClauseSyntax(..)
+    , PgSelectLockingStrength(..)
+    , PgSelectLockingOptions(..)
+    , fromPgSelectLockingClause
+    , pgSelectStmt
+
     , PgDataTypeDescr(..)
 
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
@@ -83,6 +89,9 @@ module Database.Beam.Postgres.Syntax
 
     , PgUpdateReturning(..)
     , updateReturning
+
+    , PgDeleteReturning(..)
+    , deleteReturning
 
     , now_
     , ilike_
@@ -252,6 +261,9 @@ newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPg
 newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
 newtype PgConflictActionSyntax = PgConflictActionSyntax { fromPgConflictAction :: PgSyntax }
 data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrderingNullOrdering :: Maybe PgNullOrdering }
+data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLockingClauseStrength :: PgSelectLockingStrength
+                                                               , pgSelectLockingTables :: [PgTableSourceSyntax]
+                                                               , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
 fromPgOrdering (PgOrderingSyntax s Nothing) = s
@@ -261,6 +273,36 @@ fromPgOrdering (PgOrderingSyntax s (Just PgNullOrderingNullsLast)) = s <> emit "
 data PgNullOrdering
   = PgNullOrderingNullsFirst
   | PgNullOrderingNullsLast
+  deriving (Show, Eq, Generic)
+
+fromPgSelectLockingClause :: PgSelectLockingClauseSyntax -> PgSyntax
+fromPgSelectLockingClause s =
+  emit " FOR " <>
+  (case pgSelectLockingClauseStrength s of
+    PgSelectLockingStrengthUpdate -> emit "UPDATE"
+    PgSelectLockingStrengthNoKeyUpdate -> emit "NO KEY UPDATE"
+    PgSelectLockingStrengthShare -> emit "SHARE"
+    PgSelectLockingStrengthKeyShare -> emit "KEY SHARE") <>
+  emitTables <>
+  (maybe mempty emitOptions $ pgSelectLockingClauseOptions s)
+  where
+    emitTables = case pgSelectLockingTables s of
+      [] -> mempty
+      tableNames -> emit " OF " <> (pgSepBy (emit ", ") $ coerce <$> tableNames)  
+    
+    emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
+    emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
+
+data PgSelectLockingStrength
+  = PgSelectLockingStrengthUpdate
+  | PgSelectLockingStrengthNoKeyUpdate
+  | PgSelectLockingStrengthShare
+  | PgSelectLockingStrengthKeyShare
+  deriving (Show, Eq, Generic)
+
+data PgSelectLockingOptions
+  = PgSelectLockingOptionsNoWait
+  | PgSelectLockingOptionsSkipLocked
   deriving (Show, Eq, Generic)
 
 data PgDataTypeDescr
@@ -631,6 +673,9 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   bitLengthE x = PgExpressionSyntax (emit "BIT_LENGTH(" <> fromPgExpression x <> emit ")")
   charLengthE x = PgExpressionSyntax (emit "CHAR_LENGTH(" <> fromPgExpression x <> emit ")")
   octetLengthE x = PgExpressionSyntax (emit "OCTET_LENGTH(" <> fromPgExpression x <> emit ")")
+  lowerE x = PgExpressionSyntax (emit "LOWER(" <> fromPgExpression x <> emit ")")
+  upperE x = PgExpressionSyntax (emit "UPPER(" <> fromPgExpression x <> emit ")")
+  trimE x = PgExpressionSyntax (emit "TRIM(" <> fromPgExpression x <> emit ")")
   coalesceE es = PgExpressionSyntax (emit "COALESCE(" <> pgSepBy (emit ", ") (map fromPgExpression es) <> emit ")")
   extractE field from = PgExpressionSyntax (emit "EXTRACT(" <> fromPgExtractField field <> emit " FROM (" <> fromPgExpression from <> emit "))")
   castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") AS " <> fromPgDataType to <> emit ")")
@@ -1264,17 +1309,38 @@ pgBuildAction =
 
 -- * Postgres specific commands
 
+pgSelectStmt :: PgSelectTableSyntax
+             -> [PgOrderingSyntax]
+             -> Maybe Integer {-^ LIMIT -}
+             -> Maybe Integer {-^ OFFSET -}
+             -> Maybe PgSelectLockingClauseSyntax
+             -> PgSelectSyntax
+pgSelectStmt tbl ordering limit offset locking = 
+    PgSelectSyntax $
+    mappend
+    (coerce tbl <>
+     (case ordering of
+        [] -> mempty
+        ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)) <>
+     (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
+     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset))
+    (maybe mempty fromPgSelectLockingClause locking)
+
 insert :: DatabaseEntity Postgres db (TableEntity table)
        -> SqlInsertValues PgInsertValuesSyntax table
        -> PgInsertOnConflict table
        -> SqlInsert PgInsertSyntax
 insert tbl values onConflict =
-    let PgInsertReturning a =
-          insertReturning tbl values onConflict
-                          (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int))
-    in SqlInsert (PgInsertSyntax a)
+  case insertReturning tbl values onConflict
+         (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int)) of
+    PgInsertReturning a ->
+      SqlInsert (PgInsertSyntax a)
+    PgInsertReturningEmpty ->
+      SqlInsertNoRows
 
-newtype PgInsertReturning a = PgInsertReturning PgSyntax
+data PgInsertReturning a
+  = PgInsertReturning PgSyntax
+  | PgInsertReturningEmpty
 
 insertReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
@@ -1283,6 +1349,7 @@ insertReturning :: Projectible PgExpressionSyntax a
                 -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
                 -> PgInsertReturning (QExprToIdentity a)
 
+insertReturning _ SqlInsertValuesEmpty _ _ = PgInsertReturningEmpty
 insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
                 (SqlInsertValues (PgInsertValuesSyntax insertValues))
                 (PgInsertOnConflict mkOnConflict)
@@ -1300,7 +1367,9 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
      tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField tblNm (_fieldName f))) tblSettings
 
-newtype PgUpdateReturning a = PgUpdateReturning PgSyntax
+data PgUpdateReturning a
+  = PgUpdateReturning PgSyntax
+  | PgUpdateReturningEmpty
 
 updateReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
@@ -1312,12 +1381,33 @@ updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
                 mkAssignments
                 mkWhere
                 mkProjection =
-  PgUpdateReturning $
-  fromPgUpdate pgUpdate <>
+  case update table mkAssignments mkWhere of
+    SqlUpdate pgUpdate ->
+      PgUpdateReturning $
+      fromPgUpdate pgUpdate <>
+      emit " RETURNING " <>
+      pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
+
+    SqlIdentityUpdate -> PgUpdateReturningEmpty
+  where
+    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
+
+newtype PgDeleteReturning a = PgDeleteReturning PgSyntax
+
+deleteReturning :: Projectible PgExpressionSyntax a
+                => DatabaseEntity Postgres be (TableEntity table)
+                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
+                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+                -> PgDeleteReturning (QExprToIdentity a)
+deleteReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
+                mkWhere
+                mkProjection =
+  PgDeleteReturning $
+  fromPgDelete pgDelete <>
   emit " RETURNING " <>
   pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
   where
-    SqlUpdate pgUpdate = update table mkAssignments mkWhere
+    SqlDelete pgDelete = delete table mkWhere
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 pgCreateExtensionSyntax :: T.Text -> PgCommandSyntax
@@ -1346,6 +1436,22 @@ pgDropExtensionSyntax extName =
 --                                        [ prob ]
 --                                        Nothing
 --      buildJoinFrom tbl newSource Nothing
+
+
+-- TODO
+-- Constrain 'table' to exist within the query (using s maybe?)
+-- Constrain Q to not have aggregations (at least the locked tables I think, using s?)
+--
+--   https://www.postgresql.org/docs/10/static/sql-select.html#SQL-FOR-UPDATE-SHARE
+--   "The locking clauses cannot be used in contexts where returned rows cannot be clearly
+--   identified with individual table rows; for example they cannot be used with aggregation."
+--withLocking_ :: (Database db)
+--             => PgSelectLockingStrength
+--             -> [DatabaseEntity Postgres db (TableEntity table)]
+--             -> Maybe PgSelectLockingOptions
+--             -> Q PgSelectSyntax db s a
+--             -> Q PgSelectSyntax db s a
+--withLocking_ lockStrength tbls mLockOptions q = undefined
 
 now_ :: QExpr PgExpressionSyntax s LocalTime
 now_ = QExpr (\_ -> PgExpressionSyntax (emit "NOW()"))

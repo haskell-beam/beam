@@ -5,6 +5,8 @@ module Database.Beam.Query.Combinators
       coalesce_, position_
     , charLength_, octetLength_, bitLength_
     , currentTimestamp_
+    , lower_, upper_
+    , trim_
 
     -- ** @IF-THEN-ELSE@ support
     , if_, then_, else_
@@ -325,6 +327,24 @@ position_ ::
   QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s b
 position_ (QExpr needle) (QExpr haystack) =
   QExpr (liftA2 likeE needle haystack)
+
+-- | SQL @LOWER@ function
+lower_ :: ( IsSqlExpressionSyntaxStringType syntax text
+          , IsSql92ExpressionSyntax syntax )
+       => QGenExpr context syntax s text -> QGenExpr context syntax s text
+lower_ (QExpr s) = QExpr (lowerE <$> s)
+
+-- | SQL @UPPER@ function
+upper_ :: ( IsSqlExpressionSyntaxStringType syntax text
+          , IsSql92ExpressionSyntax syntax )
+       => QGenExpr context syntax s text -> QGenExpr context syntax s text
+upper_ (QExpr s) = QExpr (upperE <$> s)
+
+-- | SQL @TRIM@ function
+trim_ :: ( IsSqlExpressionSyntaxStringType syntax text
+         , IsSql92ExpressionSyntax syntax )
+      => QGenExpr context syntax s text -> QGenExpr context syntax s text
+trim_ (QExpr s) = QExpr (trimE <$> s)
 
 -- | Combine all the given boolean value 'QGenExpr's with the '&&.' operator.
 allE :: ( IsSql92ExpressionSyntax syntax, HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool) =>

@@ -7,6 +7,7 @@ import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
 import Data.Int
+import Data.Tagged
 import Data.Text (Text)
 import Data.Time (LocalTime)
 import Data.Typeable
@@ -216,7 +217,9 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
   notE, negateE, isNullE, isNotNullE,
     isTrueE, isNotTrueE, isFalseE, isNotFalseE,
     isUnknownE, isNotUnknownE, charLengthE,
-    octetLengthE, bitLengthE
+    octetLengthE, bitLengthE,
+    lowerE, upperE,
+    trimE
     :: expr
     -> expr
 
@@ -290,3 +293,10 @@ class IsSql92FromSyntax from =>
   IsSql92FromOuterJoinSyntax from where
 
   outerJoin :: from -> from -> Maybe (Sql92FromExpressionSyntax from) -> from
+
+-- Tagged
+
+instance HasSqlValueSyntax vs t => HasSqlValueSyntax vs (Tagged tag t) where
+  sqlValueSyntax = sqlValueSyntax . untag
+
+instance IsSqlExpressionSyntaxStringType e t => IsSqlExpressionSyntaxStringType e (Tagged tag t)

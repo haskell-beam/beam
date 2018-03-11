@@ -361,7 +361,7 @@ renderHsSchema (HsModule modNm entities migrations) =
       backendHs = case backend of
                     HsBeamBackendNone -> error "Can't instantiate Database instance: No backend matches"
                     HsBeamBackendSingle ty _ -> hsTypeSyntax ty
-                    HsBeamBackendConstrained cs -> tyVarNamed "be" -- TODO constraints
+                    HsBeamBackendConstrained {} -> tyVarNamed "be" -- TODO constraints
 
       decls = foldMap (map hsDeclSyntax . hsEntityDecls) entities ++
               [ databaseTypeDecl entities
@@ -602,6 +602,9 @@ instance IsSql92ExpressionSyntax HsExpr where
   charLengthE = hsApp (hsVar "charLengthE") . pure
   octetLengthE = hsApp (hsVar "octetLengthE") . pure
   bitLengthE = hsApp (hsVar "bitLengthE") . pure
+  lowerE = hsApp (hsVar "lowerE") . pure
+  upperE = hsApp (hsVar "upperE") . pure
+  trimE = hsApp (hsVar "trimE") . pure
 
   existsE = error "existsE"
   uniqueE = error "uniqueE"

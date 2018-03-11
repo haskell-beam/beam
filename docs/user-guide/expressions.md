@@ -41,6 +41,19 @@ val_ (V.fromList [1, 2, 3 :: Int])
   well. For example, if you have an `AddressT Identity` named `a`, `val_ a ::
   AddressT (QGenExpr context expr s)`.
   
+### UTF support
+
+All included beam backends play nicely with UTF. New backends should also
+support UTF, if they support syntaxes and deserializers for `String` or `Text`.
+
+!beam-query
+```haskell
+!chinook sqlite3
+!chinookpg postgres
+filter_ (\s -> customerFirstName s ==. "あきら") $
+  all_ (customer chinookDb)
+```
+  
 ## Arithmetic
 
 Arithmetic operations that are part of the `Fractional` and `Num` classes can be
@@ -120,6 +133,9 @@ where `cond<n>` are `QGenExpr` of type `Bool`, and `result1`, `result2`, and
 | `x IS FALSE` / `x IS NOT FALSE`                          | SQL92          | `isFalse_ x` / `isNotFalse_ x`     |                                                                               |
 | `x IS UNKNOWN` / `x IS NOT UNKNOWN`                      | SQL92          | `isUnknown_ x` / `isNotUnknown_ x` |                                                                               |
 | `NOT x`                                                  | SQL92          | `not_ x`                           |                                                                               |
+| `LOWER (x)`                                              | SQL92          | `lower_ x`                         |                                                                               |
+| `UPPER (x)`                                              | SQL92          | `upper_ x`                         |                                                                               |
+| `TRIM (x)`                                               | SQL92          | `trim_ x`                          |                                                                               |
 
 ### My favorite operator / function isn't listed here!
 
