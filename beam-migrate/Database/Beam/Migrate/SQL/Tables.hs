@@ -28,7 +28,7 @@ module Database.Beam.Migrate.SQL.Tables
   , char, varchar, double
   , characterLargeObject, binaryLargeObject, array
   , boolean, numeric, date, time
-  , timestamp, timestamptz, zonedtimestamptz
+  , timestamp, timestamptz
   , binary, varbinary
 
   , maybeType
@@ -322,11 +322,8 @@ numeric :: IsSql92DataTypeSyntax syntax => Maybe (Word, Maybe Word) -> DataType 
 numeric x = DataType (numericType x)
 
 -- | SQL92 @TIMESTAMP WITH TIME ZONE@ data type
-timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
+timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax ZonedTime
 timestamptz = DataType (timestampType Nothing True)
-
-zonedtimestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax ZonedTime
-zonedtimestamptz = DataType (timestampType Nothing True)
 
 -- | SQL92 @TIMESTAMP WITHOUT TIME ZONE@ data type
 timestamp :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
