@@ -77,7 +77,6 @@ use
 ```haskell
 insertExpressions [ Table1 default_ (val_ "Field Value") (val_ "Another Field Value") ]
 ```
->>>>>>> master
 
 # 0.6.0.0
 
