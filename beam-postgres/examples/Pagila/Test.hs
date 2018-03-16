@@ -20,13 +20,13 @@ import Database.Beam.Migrate.SQL.Types
 
 data SimpleTbl f
   = SimpleTbl
-  { simpletblField1 :: Columnar f (Auto Int)
+  { simpletblField1 :: Columnar f Int
   , simpletblField2 :: Columnar f (Maybe Text) }
   deriving Generic
 instance Beamable SimpleTbl
 
 instance Table SimpleTbl where
-  data PrimaryKey SimpleTbl f = SimpleTblId (Columnar f (Auto Int)) deriving Generic
+  data PrimaryKey SimpleTbl f = SimpleTblId (Columnar f Int) deriving Generic
   primaryKey = SimpleTblId <$> simpletblField1
 instance Beamable (PrimaryKey SimpleTbl)
 

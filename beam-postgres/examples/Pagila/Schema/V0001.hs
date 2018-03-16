@@ -269,7 +269,7 @@ data PagilaDb f
   , store      :: f (TableEntity StoreT)
   , staff      :: f (TableEntity StaffT)
   } deriving Generic
-instance Database PagilaDb
+instance Database Postgres PagilaDb
 
 -- Beamable instances
 

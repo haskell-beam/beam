@@ -64,7 +64,7 @@ import           Data.UUID (UUID)
 import           Data.Typeable
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
-migrationBackend :: Tool.BeamMigrationBackend Postgres PgCommandSyntax Pg.Connection
+migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax Postgres Pg.Connection Pg
 migrationBackend = Tool.BeamMigrationBackend
                         "postgres"
                         (unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"

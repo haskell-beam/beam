@@ -4,6 +4,9 @@ module Database.Beam.Migrate.Simple
   ( simpleSchema, simpleMigration
   , runSimpleMigration, backendMigrationScript
 
+  , VerificationResult(..)
+  , verifySchema
+
   , module Database.Beam.Migrate.Actions
   , module Database.Beam.Migrate.Types ) where
 
@@ -14,12 +17,13 @@ import Database.Beam.Migrate.Types
 import Database.Beam.Migrate.Actions
 
 import qualified Data.Text as T
+import qualified Data.HashSet as HS
 
 -- | Attempt to find a SQL schema given an 'ActionProvider' and a checked
 -- database. Returns 'Nothing' if no schema could be found, which usually means
 -- you have chosen the wrong 'ActionProvider', or the backend you're using is
 -- buggy.
-simpleSchema :: Database db
+simpleSchema :: Database be db
              => ActionProvider cmd
              -> CheckedDatabaseSettings be db
              -> Maybe [cmd]
@@ -37,8 +41,8 @@ simpleSchema provider settings =
 -- 'BeamMigrationBackend's can usually be found in a module named
 -- @Database.Beam.<Backend>.Migrate@ with the name@migrationBackend@
 simpleMigration :: ( MonadBeam cmd be handle m
-                 ,   Database db )
-                => BeamMigrationBackend be cmd handle
+                 ,   Database be db )
+                => BeamMigrationBackend cmd be handle m
                 -> handle
                 -> CheckedDatabaseSettings be db
                 -> IO (Maybe [cmd])
@@ -52,6 +56,27 @@ simpleMigration BeamMigrationBackend { backendGetDbConstraints = getCs
   case finalSolution solver of
     Solved cmds -> pure (Just cmds)
     Candidates {} -> pure Nothing
+
+-- | Result type for 'verifySchema'
+data VerificationResult
+  = VerificationSucceeded
+  | VerificationFailed [SomeDatabasePredicate]
+  deriving Show
+
+-- | Verify that the given, beam database matches the actual
+-- schema. On success, returns 'VerificationSucceeded', on failure,
+-- returns 'VerificationFailed' and a list of missing predicates.
+verifySchema :: ( Database be db, MonadBeam cmd be handle m )
+             => BeamMigrationBackend be cmd handle m
+             -> CheckedDatabaseSettings be db
+             -> m VerificationResult
+verifySchema BeamMigrationBackend { backendGetDbConstraints = getConstraints } db =
+  do actualSchema <- HS.fromList <$> getConstraints
+     let expectedSchema = HS.fromList (collectChecks db)
+         missingPredicates = expectedSchema `HS.difference` actualSchema
+     if HS.null missingPredicates
+       then pure VerificationSucceeded
+       else pure (VerificationFailed (HS.toList missingPredicates))
 
 -- | Run a sequence of commands on a database
 runSimpleMigration :: MonadBeam cmd be hdl m

@@ -104,9 +104,6 @@ instance FromBackendRow Sqlite Scientific where
   fromBackendRow = unSqliteScientific <$> fromBackendRow
 instance FromBackendRow Sqlite SqliteScientific
 
-instance FromField x => FromField (Auto x) where
-  fromField = fmap (Auto . Just) . fromField
-
 newtype SqliteScientific = SqliteScientific { unSqliteScientific :: Scientific }
 instance FromField SqliteScientific where
   fromField f =
@@ -236,8 +233,9 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
 -- Beam also offers a backend-agnostic way of using this functionality in the
 -- 'MonadBeamInsertReturning' extension. This functionality is emulated in
 -- SQLite using a temporary table and a trigger.
-data SqliteInsertReturning (table :: (* -> *) -> *) =
-  SqliteInsertReturning T.Text SqliteInsertSyntax
+data SqliteInsertReturning (table :: (* -> *) -> *)
+  = SqliteInsertReturning T.Text SqliteInsertSyntax
+  | SqliteInsertReturningNoRows
 
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
 -- into the given table. Use 'runInsertReturningList'
@@ -245,15 +243,18 @@ insertReturning :: DatabaseEntity be db (TableEntity table)
                 -> SqlInsertValues SqliteInsertValuesSyntax table
                 -> SqliteInsertReturning table
 insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
-  let SqlInsert s = insert tbl vs
-  in SqliteInsertReturning tblNm s
+  case insert tbl vs of
+    SqlInsert s ->
+      SqliteInsertReturning tblNm s
+    SqlInsertNoRows ->
+      SqliteInsertReturningNoRows
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
--- inserted row. Unfilled 'Auto' values in the table will have been filled in in
--- the output.
+-- inserted row.
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqliteInsertReturning table
                        -> SqliteM [ table Identity ]
+runInsertReturningList SqliteInsertReturningNoRows = pure []
 runInsertReturningList (SqliteInsertReturning nm insertStmt_) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $

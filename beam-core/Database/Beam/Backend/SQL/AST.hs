@@ -8,8 +8,8 @@ import Prelude hiding (Ordering)
 
 import Database.Beam.Backend.SQL.SQL92
 import Database.Beam.Backend.SQL.SQL99
+import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.Types
 
 import Data.Text (Text)
 import Data.ByteString (ByteString)
@@ -161,13 +161,15 @@ data CastTarget
   deriving (Show, Eq)
 
 data DataType
-  = DataTypeChar Bool {- Varying -} (Maybe Int)
-  | DataTypeNationalChar Bool (Maybe Int)
-  | DataTypeBit Bool (Maybe Int)
-  | DataTypeNumeric Int (Maybe Int)
+  = DataTypeChar Bool {- Varying -} (Maybe Word) (Maybe Text)
+  | DataTypeNationalChar Bool (Maybe Word)
+  | DataTypeBit Bool (Maybe Word)
+  | DataTypeNumeric (Maybe (Word, Maybe Word))
+  | DataTypeDecimal (Maybe (Word, Maybe Word))
   | DataTypeInteger
   | DataTypeSmallInt
-  | DataTypeFloat (Maybe Int)
+  | DataTypeBigInt
+  | DataTypeFloat (Maybe Word)
   | DataTypeReal
   | DataTypeDoublePrecision
   | DataTypeDate
@@ -175,7 +177,46 @@ data DataType
   | DataTypeTimeStamp (Maybe Word) Bool
   | DataTypeInterval ExtractField
   | DataTypeIntervalFromTo ExtractField ExtractField
+  | DataTypeBoolean
+
+  | DataTypeBinaryLargeObject
+  | DataTypeCharacterLargeObject
+
+  | DataTypeArray DataType Int
+  | DataTypeRow [ (Text, DataType) ]
+
+  | DataTypeDomain Text
   deriving (Show, Eq)
+
+instance IsSql92DataTypeSyntax DataType where
+  domainType = DataTypeDomain
+  charType = DataTypeChar False
+  varCharType = DataTypeChar True
+  nationalCharType = DataTypeNationalChar False
+  nationalVarCharType = DataTypeNationalChar True
+  bitType = DataTypeBit False
+  varBitType = DataTypeBit True
+  numericType = DataTypeNumeric
+  decimalType = DataTypeDecimal
+  intType = DataTypeInteger
+  smallIntType = DataTypeSmallInt
+  floatType = DataTypeFloat
+  doubleType = DataTypeDoublePrecision
+  realType = DataTypeReal
+
+  dateType = DataTypeDate
+  timeType = DataTypeTime
+  timestampType = DataTypeTimeStamp
+
+instance IsSql99DataTypeSyntax DataType where
+  characterLargeObjectType = DataTypeCharacterLargeObject
+  binaryLargeObjectType = DataTypeCharacterLargeObject
+  booleanType = DataTypeBoolean
+  arrayType = DataTypeArray
+  rowType = DataTypeRow
+
+instance IsSql2008BigIntDataTypeSyntax DataType where
+  bigIntType = DataTypeBigInt
 
 data SetQuantifier
   = SetQuantifierAll | SetQuantifierDistinct
@@ -221,6 +262,7 @@ data Expression
   | ExpressionAbs Expression
   | ExpressionLower Expression
   | ExpressionUpper Expression
+  | ExpressionTrim Expression
 
   | ExpressionFunctionCall Expression [ Expression ]
   | ExpressionInstanceField Expression Text
@@ -228,11 +270,14 @@ data Expression
 
   | ExpressionCountAll
   | ExpressionAgg Text (Maybe SetQuantifier) [ Expression ]
+  | ExpressionBuiltinFunction Text [ Expression ]
 
   | ExpressionSubquery Select
   | ExpressionUnique Select
   | ExpressionDistinct Select
   | ExpressionExists Select
+
+  | ExpressionOver Expression WindowFrame
 
   | ExpressionCurrentTimestamp
   deriving (Show, Eq)
@@ -295,6 +340,7 @@ instance IsSql92ExpressionSyntax Expression where
   absE = ExpressionAbs
   lowerE = ExpressionLower
   upperE = ExpressionUpper
+  trimE = ExpressionTrim
 
   subqueryE = ExpressionSubquery
   uniqueE = ExpressionUnique
@@ -317,10 +363,64 @@ instance IsSql92AggregationExpressionSyntax Expression where
 
   countAllE = ExpressionCountAll
   countE q = ExpressionAgg "COUNT" q . pure
-  sumE q = ExpressionAgg "SUM" q . pure
-  minE q = ExpressionAgg "MIN" q . pure
-  maxE q = ExpressionAgg "MAX" q . pure
-  avgE q = ExpressionAgg "AVG" q . pure
+  sumE q   = ExpressionAgg "SUM" q . pure
+  minE q   = ExpressionAgg "MIN" q . pure
+  maxE q   = ExpressionAgg "MAX" q . pure
+  avgE q   = ExpressionAgg "AVG" q . pure
+
+instance IsSql99AggregationExpressionSyntax Expression where
+  everyE q = ExpressionAgg "EVERY" q . pure
+  someE q  = ExpressionAgg "SOME" q . pure
+  anyE q   = ExpressionAgg "ANY" q . pure
+
+instance IsSql2003EnhancedNumericFunctionsExpressionSyntax Expression where
+  lnE    = ExpressionBuiltinFunction "LN" . pure
+  expE   = ExpressionBuiltinFunction "EXP" . pure
+  sqrtE  = ExpressionBuiltinFunction "SQRT" . pure
+  ceilE  = ExpressionBuiltinFunction "CEIL" . pure
+  floorE = ExpressionBuiltinFunction "FLOOR" . pure
+  powerE a b = ExpressionBuiltinFunction "POWER" [a, b]
+
+instance IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax Expression where
+  stddevPopE q  = ExpressionAgg "STDDEV_POP" q . pure
+  stddevSampE q = ExpressionAgg "STDDEV_SAMP" q . pure
+  varPopE q     = ExpressionAgg "VAR_POP" q . pure
+  varSampE q    = ExpressionAgg "VAR_SAMP" q . pure
+
+  covarPopE q a b      = ExpressionAgg "COVAR_POP" q [a, b]
+  covarSampE q a b     = ExpressionAgg "COVAR_SAMP" q [a, b]
+  corrE q a b          = ExpressionAgg "CORR" q [a, b]
+  regrSlopeE q a b     = ExpressionAgg "REGR_SLOPE" q [a, b]
+  regrInterceptE q a b = ExpressionAgg "REGR_INTERCEPT" q [a, b]
+  regrCountE q a b     = ExpressionAgg "REGR_COUNT" q [a, b]
+  regrRSquaredE q a b  = ExpressionAgg "REGR_R2" q [a, b]
+  regrAvgXE q a b      = ExpressionAgg "REGR_AVGX" q [a, b]
+  regrAvgYE q a b      = ExpressionAgg "REGR_AVGY" q [a, b]
+  regrSXXE q a b       = ExpressionAgg "REGR_SXX" q [a, b]
+  regrSXYE q a b       = ExpressionAgg "REGR_SXY" q [a, b]
+  regrSYYE q a b       = ExpressionAgg "REGR_SYY" q [a, b]
+
+instance IsSql2003NtileExpressionSyntax Expression where
+  ntileE = ExpressionAgg "NTILE" Nothing . pure
+
+instance IsSql2003LeadAndLagExpressionSyntax Expression where
+  leadE x Nothing Nothing   = ExpressionAgg "LEAD" Nothing [x]
+  leadE x (Just y) Nothing  = ExpressionAgg "LEAD" Nothing [x, y]
+  leadE x (Just y) (Just z) = ExpressionAgg "LEAD" Nothing [x, y, z]
+  leadE x Nothing (Just z)  = ExpressionAgg "LEAD" Nothing [x, ExpressionValue (Value (1 :: Int)), z]
+
+  lagE x Nothing Nothing  = ExpressionAgg "LAG" Nothing [x]
+  lagE x (Just y) Nothing = ExpressionAgg "LAG" Nothing [x, y]
+  lagE x (Just y) (Just z) = ExpressionAgg "LAG" Nothing [x, y, z]
+  lagE x Nothing (Just z)  = ExpressionAgg "LAG" Nothing [x, ExpressionValue (Value (1 :: Int)), z]
+
+instance IsSql2003NthValueExpressionSyntax Expression where
+  nthValueE a b = ExpressionAgg "NTH_VALUE" Nothing [a, b]
+
+instance IsSql2003ExpressionSyntax Expression where
+  type Sql2003ExpressionWindowFrameSyntax Expression = WindowFrame
+
+  overE = ExpressionOver
 
 newtype Projection
   = ProjExprs [ (Expression, Maybe Text ) ]
@@ -405,9 +505,6 @@ instance HasSqlValueSyntax Value x => HasSqlValueSyntax Value (Maybe x) where
   sqlValueSyntax (Just x) = sqlValueSyntax x
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
 
-instance HasSqlValueSyntax Value (Maybe x) => HasSqlValueSyntax Value (Auto x) where
-  sqlValueSyntax (Auto x) = sqlValueSyntax x
-
 instance Eq Value where
   Value a == Value b =
     case cast a of
@@ -419,3 +516,40 @@ instance Show Value where
     ("Value " ++ ).
     showsPrec (app_prec + 1) a
     where app_prec = 10
+
+-- Window functions
+
+data WindowFrame
+  = WindowFrame
+  { windowFramePartitions :: Maybe [Expression]
+  , windowFrameOrdering   ::  Maybe [Ordering]
+  , windowFrameBounds     :: Maybe WindowFrameBounds
+  } deriving (Show, Eq)
+
+instance IsSql2003WindowFrameSyntax WindowFrame where
+  type Sql2003WindowFrameExpressionSyntax WindowFrame = Expression
+  type Sql2003WindowFrameOrderingSyntax WindowFrame = Ordering
+  type Sql2003WindowFrameBoundsSyntax WindowFrame = WindowFrameBounds
+
+  frameSyntax = WindowFrame
+
+data WindowFrameBounds
+  = WindowFrameBounds
+  { boundsFrom :: WindowFrameBound
+  , boundsTo   :: Maybe WindowFrameBound
+  } deriving (Show, Eq)
+
+instance IsSql2003WindowFrameBoundsSyntax WindowFrameBounds where
+  type Sql2003WindowFrameBoundsBoundSyntax WindowFrameBounds = WindowFrameBound
+
+  fromToBoundSyntax = WindowFrameBounds
+
+data WindowFrameBound
+  = WindowFrameUnbounded
+  | WindowFrameBoundNRows Int
+  deriving (Show, Eq)
+
+instance IsSql2003WindowFrameBoundSyntax WindowFrameBound where
+  unboundedSyntax = WindowFrameUnbounded
+  nrowsBoundSyntax = WindowFrameBoundNRows
+

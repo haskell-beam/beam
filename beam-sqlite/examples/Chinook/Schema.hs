@@ -278,7 +278,7 @@ data ChinookDb entity
   , playlistTrack :: entity (TableEntity PlaylistTrackT)
   , track         :: entity (TableEntity TrackT)
   } deriving Generic
-instance Database ChinookDb
+instance Database be ChinookDb
 
 addressFields b = Address (fromString (b <> "Address"))
                           (fromString (b <> "City"))

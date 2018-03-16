@@ -296,17 +296,6 @@ constraints between tables in your data types. This is because references are a
 property of the database, not a particular table schema. Such relationships can
 be defined using `beam-migrate` library.
 
-
-## `Auto` fields
-
-Above, `Post` used `Auto Int` as the type for `postId`. `
-
-The `Auto` type constructor is provided by `beam-core` for fields that are
-automatically assigned by the database. Internally, `Auto x` is simply a newtype
-over `Maybe x`. The guarantee is that all values of type `Auto x` returned by
-beam in the result set will have a value, although this guarantee is not
-enforced at the type level (yet).
-
 ## Embedding
 
 Sometimes, we want to declare multiple models with fields in common. Beam allows

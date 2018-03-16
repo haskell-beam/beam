@@ -134,6 +134,12 @@ instance Pg.ToField TsVector where
 
 instance FromBackendRow Postgres TsVector
 
+instance HasSqlEqualityCheck PgExpressionSyntax TsVectorConfig
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax TsVectorConfig
+
+instance HasSqlEqualityCheck PgExpressionSyntax TsVector
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax TsVector
+
 -- | A full-text search configuration with sensible defaults for english
 english :: TsVectorConfig
 english = TsVectorConfig "english"
@@ -167,6 +173,9 @@ QExpr vec @@ QExpr q =
 -- will give the column the postgres @TSVECTOR@ type
 newtype TsQuery = TsQuery ByteString
   deriving (Show, Eq, Ord)
+
+instance HasSqlEqualityCheck PgExpressionSyntax TsQuery
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax TsQuery
 
 instance Pg.FromField TsQuery where
   fromField field d =
@@ -348,6 +357,9 @@ array_ vs =
 newtype PgJSON a = PgJSON a
   deriving ( Show, Eq, Ord, Hashable, Monoid )
 
+instance HasSqlEqualityCheck PgExpressionSyntax (PgJSON a)
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax (PgJSON a)
+
 instance (Typeable x, FromJSON x) => Pg.FromField (PgJSON x) where
   fromField field d =
     if Pg.typeOid field /= Pg.typoid Pg.json
@@ -369,6 +381,9 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
 -- Fields with this type are automatically given the Postgres @JSONB@ type
 newtype PgJSONB a = PgJSONB a
   deriving ( Show, Eq, Ord, Hashable, Monoid )
+
+instance HasSqlEqualityCheck PgExpressionSyntax (PgJSONB a)
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax (PgJSONB a)
 
 instance (Typeable x, FromJSON x) => Pg.FromField (PgJSONB x) where
   fromField field d =
@@ -683,6 +698,9 @@ instance Pg.FromField PgMoney where
    else pure (PgMoney d)
 instance Pg.ToField PgMoney where
   toField (PgMoney a) = Pg.toField a
+
+instance HasSqlEqualityCheck PgExpressionSyntax PgMoney
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax PgMoney
 
 instance FromBackendRow Postgres PgMoney
 instance HasSqlValueSyntax PgValueSyntax PgMoney where

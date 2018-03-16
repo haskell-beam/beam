@@ -21,7 +21,7 @@ displayLog MigrateCmdLine { migrateDatabase = Nothing } =
 displayLog cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } = do
   reg <- lookupRegistry cmdLine
 
-  (db, _, SomeBeamMigrationBackend (be :: BeamMigrationBackend be cmd hdl)) <-
+  (db, _, SomeBeamMigrationBackend (be :: BeamMigrationBackend cmd be hdl m)) <-
     loadBackend cmdLine reg dbName
 
   case be of

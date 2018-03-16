@@ -170,7 +170,7 @@ many-to-many relationship.
 
 ```haskell
 manyToMany_
-  :: ( Database db, Table joinThrough
+  :: ( Database be db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax
@@ -216,7 +216,7 @@ Sometimes you want to have additional data for each relationship. For this, use
 
 ```haskell
 manyToManyPassthrough_
-  :: ( Database db, Table joinThrough
+  :: ( Database be db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax
@@ -233,7 +233,7 @@ manyToManyPassthrough_
                    , right (QExpr (Sql92SelectExpressionSyntax syntax) s))
 ```
 
-Under the hood `manyToMany_` is defined simply as 
+Under the hood `manyToMany_` is defined simply as
 
 ```haskell
 manyToMany_ = fmap (\(_, left, right) -> (left, right)) manyToManyPassthrough_

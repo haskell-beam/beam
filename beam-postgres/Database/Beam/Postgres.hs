@@ -49,7 +49,6 @@ module Database.Beam.Postgres
   , tsquery, tsvector, text, bytea
   , unboundedArray
 
-
     -- *** @SERIAL@ support
   , smallserial, serial, bigserial
 

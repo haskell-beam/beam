@@ -55,18 +55,18 @@ data EmployeeT f
   , _employeeHireDate  :: Columnar f UTCTime
   , _employeeLeaveDate :: Columnar f (Maybe UTCTime)
 
-  , _employeeCreated :: Columnar f (Auto UTCTime)
+  , _employeeCreated :: Columnar f UTCTime
   } deriving Generic
 instance Beamable EmployeeT
 instance Table EmployeeT where
-  data PrimaryKey EmployeeT f = EmployeeId (Columnar f Text) (Columnar f Text) (Columnar f (Auto UTCTime))
+  data PrimaryKey EmployeeT f = EmployeeId (Columnar f Text) (Columnar f Text) (Columnar f UTCTime)
     deriving Generic
   primaryKey e = EmployeeId (_employeeFirstName e) (_employeeLastName e) (_employeeCreated e)
 instance Beamable (PrimaryKey EmployeeT)
 deriving instance Show (TableSettings EmployeeT)
 deriving instance Eq (TableSettings EmployeeT)
-deriving instance (Show (Columnar f Text), Show (Columnar f (Auto UTCTime))) => Show (PrimaryKey EmployeeT f)
-deriving instance (Eq (Columnar f Text), Eq(Columnar f (Auto UTCTime))) => Eq (PrimaryKey EmployeeT f)
+deriving instance (Show (Columnar f Text), Show (Columnar f UTCTime)) => Show (PrimaryKey EmployeeT f)
+deriving instance (Eq (Columnar f Text), Eq (Columnar f  UTCTime)) => Eq (PrimaryKey EmployeeT f)
 
 -- * Verify that the schema is generated properly
 
@@ -116,14 +116,6 @@ deriving instance Eq (TableSettings (PrimaryKey RoleT))
 
 roleTableSchema :: TableSettings RoleT
 roleTableSchema = defTblFieldSettings
-
--- automaticNestedFieldsAreUnset :: TestTree
--- automaticNestedFieldsAreUnset =
---   testCase "Automatic fields are unset when nesting" $
---   do _roleForEmployee roleTableSchema @?=
---        EmployeeId (TableField "for_employee__first_name" (DummyField True False DummyFieldText))
---                   (TableField "for_employee__last_name" (DummyField True False DummyFieldText))
---                   (TableField "for_employee__created" (DummyField True False DummyFieldUTCTime))
 
 -- * Ensure that fields of a nullable primary key are given the proper Maybe type
 
@@ -209,7 +201,7 @@ data EmployeeDb f
     , _roles       :: f (TableEntity RoleT)
     , _funny       :: f (TableEntity FunnyT) }
     deriving Generic
-instance Database EmployeeDb
+instance Database be EmployeeDb
 
 employeeDbSettings :: DatabaseSettings be EmployeeDb
 employeeDbSettings = defaultDbSettings

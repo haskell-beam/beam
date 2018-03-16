@@ -17,7 +17,7 @@ the schema should be pretty familiar, so I'm going to skip the explanation.
 
 ```haskell
 data ProductT f = Product
-                { _productId          :: C f (Auto Int)
+                { _productId          :: C f Int
                 , _productTitle       :: C f Text
                 , _productDescription :: C f Text
                 , _productPrice       :: C f Int {- Price in cents -} }
@@ -26,7 +26,7 @@ type Product = ProductT Identity
 deriving instance Show Product
 
 instance Table ProductT where
-  data PrimaryKey ProductT f = ProductId (Columnar f (Auto Int))
+  data PrimaryKey ProductT f = ProductId (Columnar f Int)
                                deriving Generic
   primaryKey = ProductId . _productId
 
@@ -51,7 +51,7 @@ import Data.Time
 deriving instance Show (PrimaryKey AddressT Identity)
 
 data OrderT f = Order
-              { _orderId      :: Columnar f (Auto Int)
+              { _orderId      :: Columnar f Int
               , _orderDate    :: Columnar f LocalTime
               , _orderForUser :: PrimaryKey UserT f
               , _orderShipToAddress :: PrimaryKey AddressT f
@@ -61,7 +61,7 @@ type Order = OrderT Identity
 deriving instance Show Order
 
 instance Table OrderT where
-    data PrimaryKey OrderT f = OrderId (Columnar f (Auto Int))
+    data PrimaryKey OrderT f = OrderId (Columnar f Int)
                                deriving Generic
     primaryKey = OrderId . _orderId
 
@@ -72,7 +72,7 @@ data ShippingCarrier = USPS | FedEx | UPS | DHL
                        deriving (Show, Read, Eq, Ord, Enum)
 
 data ShippingInfoT f = ShippingInfo
-                     { _shippingInfoId             :: Columnar f (Auto Int)
+                     { _shippingInfoId             :: Columnar f Int
                      , _shippingInfoCarrier        :: Columnar f ShippingCarrier
                      , _shippingInfoTrackingNumber :: Columnar f Text }
                        deriving Generic
@@ -80,7 +80,7 @@ type ShippingInfo = ShippingInfoT Identity
 deriving instance Show ShippingInfo
 
 instance Table ShippingInfoT where
-    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f (Auto Int))
+    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int)
                                       deriving Generic
     primaryKey = ShippingInfoId . _shippingInfoId
 
@@ -142,7 +142,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartLineItems     :: f (TableEntity LineItemT) }
                         deriving Generic
 
-instance Database ShoppingCartDb
+instance Database be ShoppingCartDb
 
 ShoppingCartDb (TableLens shoppingCartUsers) (TableLens shoppingCartUserAddresses)
                (TableLens shoppingCartProducts) (TableLens shoppingCartOrders)
@@ -199,38 +199,38 @@ let users@[james, betty, sam] =
           [ User "james@example.com" "James" "Smith"  "b4cc344d25a2efe540adbf2678e2304c" {- james -}
           , User "betty@example.com" "Betty" "Jones"  "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
           , User "sam@example.com"   "Sam"   "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -} ]
-    addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
+    addresses = [ Address default_ (val_ "123 Little Street") (val_ Nothing) (val_ "Boston") (val_ "MA") (val_ "12345") (pk james)
+                , Address default_ (val_ "222 Main Street") (val_ (Just "Ste 1")) (val_ "Houston") (val_ "TX") (val_ "8888") (pk betty)
+                , Address default_ (val_ "9999 Residence Ave") (val_ Nothing) (val_ "Sugarland") (val_ "TX") (val_ "8989") (pk betty) ]
 
-                , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
-                , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty) ]
-
-    products = [ Product (Auto Nothing) "Red Ball" "A bright red, very spherical ball" 1000
-               , Product (Auto Nothing) "Math Textbook" "Contains a lot of important math theorems and formulae" 2500
-               , Product (Auto Nothing) "Intro to Haskell" "Learn the best programming language in the world" 3000
-               , Product (Auto Nothing) "Suitcase" "A hard durable suitcase" 15000 ]
+    products = [ Product default_ (val_ "Red Ball") (val_ "A bright red, very spherical ball") (val_ 1000)
+               , Product default_ (val_ "Math Textbook") (val_ "Contains a lot of important math theorems and formulae") (val_ 2500)
+               , Product default_ (val_ "Intro to Haskell") (val_ "Learn the best programming language in the world") (val_ 3000)
+               , Product default_ (val_ "Suitcase") "A hard durable suitcase" 15000 ]
 
 (jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase) <-
   withDatabaseDebug putStrLn conn $ do
     runInsert $ insert (shoppingCartDb ^. shoppingCartUsers) $
                 insertValues users
-  
+
     [jamesAddress1, bettyAddress1, bettyAddress2] <-
       runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertValues addresses
-      
+      insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertExpressions addresses
+
     [redBall, mathTextbook, introToHaskell, suitcase] <-
       runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertValues products
-      
+      insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertExpressions products
+
     pure ( jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase )
 ```
 
-Now, if we take a look at one of the returned addresses, like `jamesAddress1`,
-we see it has had it's `Auto` field assigned correctly.
+Now, if we take a look at one of the returned addresses, like
+`jamesAddress1`, we see it has had the `default_` values assigned
+correctly.
 
 ```haskell
 Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro> jamesAddress1
-Address {_addressId = Auto {unAuto = Just 1}, _addressLine1 = "123 Little Street", _addressLine2 = Nothing, _addressCity = "Boston", _addressState = "MA", _addressZip = "12345", _addressForUser = UserId "james@example.com"}
+Address {_addressId = 1, _addressLine1 = "123 Little Street", _addressLine2 = Nothing, _addressCity = "Boston", _addressState = "MA", _addressZip = "12345", _addressForUser = UserId "james@example.com"}
 ```
 
 !!! note "Note"
@@ -238,7 +238,7 @@ Address {_addressId = Auto {unAuto = Just 1}, _addressLine1 = "123 Little Street
     package. They emulate the `INSERT .. RETURNING ..` functionatily you may
     expect in other databases. Because this emulation is backend-specific it is
     part of the backend package, rather than `beam-core`.
-    
+
     Other backends may have similar functionality. Please refer to the backend
     package you're interested in for more information, as well as notes on the
     implementation.
@@ -249,12 +249,12 @@ Now we can insert shipping information. Of course, the shipping information
 contains the `ShippingCarrier` enumeration.
 
 ```haskell
-bettyShippingInfo <- 
+bettyShippingInfo <-
   withDatabaseDebug putStrLn conn $ do
     [bettyShippingInfo] <-
       runInsertReturningList $
       insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
-      insertValues [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
+      insertExpressions [ ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI") ]
     pure bettyShippingInfo
 ```
 
@@ -268,13 +268,13 @@ If you run this, you'll get an error from GHCi.
     * In a stmt of a 'do' block:
         [bettyShippingInfo] <- runInsertReturningList
                                $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                 $ insertValues
-                                     [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]
+                                 $ insertExpressions
+                                     [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]
       In the second argument of '($)', namely
         'do { [bettyShippingInfo] <- runInsertReturningList
                                      $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                       $ insertValues
-                                           [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"];
+                                       $ insertExpressions
+                                           [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")];
               pure bettyShippingInfo }''
       In the first argument of 'GHC.GHCi.ghciStepIO ::
                                   forall a. IO a -> IO a', namely
@@ -282,26 +282,26 @@ If you run this, you'll get an error from GHCi.
          $ do { [bettyShippingInfo] <- runInsertReturningList
                                        $ insertReturning
                                            (shoppingCartDb ^. shoppingCartShippingInfos)
-                                         $ insertValues
-                                             [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"];
+                                         $ insertExpressions
+                                             [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")];
                 pure bettyShippingInfo }'
 
 <interactive>:265:7: error:
     * No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax
                          SqliteValueSyntax ShippingCarrier)
-        arising from a use of 'insertValues'
+        arising from a use of 'insertExpressions'
     * In the second argument of '($)', namely
-        'insertValues
-           [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]''
+        'insertExpressions
+           [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]''
       In the second argument of '($)', namely
         'insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-         $ insertValues
-             [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]'
+         $ insertExpressions
+             [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]'
       In a stmt of a 'do' block:
         [bettyShippingInfo] <- runInsertReturningList
                                $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                 $ insertValues
-                                     [ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI"]
+                                 $ insertExpressions
+                                     [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]
 ```
 
 These errors are because there's no way to express a `ShippingCarrier` in the
@@ -365,12 +365,12 @@ instance FromBackendRow be ShippingCarrier
 Now, if we try to insert the shipping info again, it works.
 
 ```haskell
-bettyShippingInfo <- 
+bettyShippingInfo <-
   withDatabaseDebug putStrLn conn $ do
     [bettyShippingInfo] <-
       runInsertReturningList $
       insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
-      insertValues [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
+      insertExpressions [ ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI") ]
     pure bettyShippingInfo
 ```
 
@@ -379,15 +379,14 @@ stored correctly.
 
 ```haskell
 > bettyShippingInfo
-ShippingInfo {_shippingInfoId = Auto {unAuto = Just 1}, _shippingInfoCarrier = USPS, _shippingInfoTrackingNumber = "12345790ABCDEFGHI"}
+ShippingInfo {_shippingInfoId = 1, _shippingInfoCarrier = USPS, _shippingInfoTrackingNumber = "12345790ABCDEFGHI"}
 ```
 
-Now, let's insert some orders that just came in. In the previous `INSERT`
-examples, we used `insertValues` to insert arbitrary values into the database.
-Now, we want to insert transactions with the current database timestamp (i.e.,
-`CURRENT_TIMESTAMP` in SQL). We can insert rows containing arbitrary expressions
-using the `insertExpressions` function. As you can see, the resulting rows have
-a timestamp set by the database.
+Now, let's insert some orders that just came in. We want to insert
+transactions with the current database timestamp (i.e.,
+`CURRENT_TIMESTAMP` in SQL). We can do this using
+`insertExpressions`. If you run the example below, you'll see the
+resulting rows have a timestamp set by the database.
 
 !beam-query
 ```haskell
@@ -398,10 +397,10 @@ a timestamp set by the database.
     runInsertReturningList $
       insertReturning (shoppingCartDb ^. shoppingCartOrders) $
       insertExpressions $
-      [ Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ 
-      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo))) 
-      , Order (val_ (Auto Nothing)) currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ ]
-      
+      [ Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_
+      , Order default_ currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo)))
+      , Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ ]
+
 print jamesOrder1
 print bettyOrder1
 print jamesOrder2
@@ -447,7 +446,7 @@ usersAndOrders <-
       user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
       order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
       pure (user, order)
-      
+
 mapM_ print usersAndOrders
 ```
 
@@ -472,7 +471,7 @@ usersWithNoOrders <-
       order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
       guard_ (isNothing_ order)
       pure user
-      
+
 mapM_ print usersWithNoOrders
 ```
 
@@ -491,7 +490,7 @@ usersWithNoOrders <-
       user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
       guard_ (not_ (exists_ (filter_ (\order -> _orderForUser order `references_` user) (all_ (shoppingCartDb ^. shoppingCartOrders)))))
       pure user
-      
+
 mapM_ print usersWithNoOrders
 ```
 
@@ -516,7 +515,7 @@ ordersWithCostOrdered <-
        order    <- related_ (shoppingCartDb ^. shoppingCartOrders) (_lineItemInOrder lineItem)
        product  <- related_ (shoppingCartDb ^. shoppingCartProducts) (_lineItemForProduct lineItem)
        pure (order, lineItem, product)
-       
+
 mapM_ print ordersWithCostOrdered
 ```
 
@@ -552,7 +551,7 @@ allUsersAndTotals <-
        product  <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartProducts))
                              (\product -> maybe_ (val_ False) (\lineItem -> _lineItemForProduct lineItem `references_` product) lineItem)
        pure (user, lineItem, product)
-       
+
 mapM_ print allUsersAndTotals
 ```
 
@@ -576,7 +575,7 @@ allUnshippedOrders <-
     select $
     filter_ (isNothing_ . _orderShippingInfo) $
     all_ (shoppingCartDb ^. shoppingCartOrders)
-    
+
 mapM_ print allUnshippedOrders
 ```
 
@@ -599,7 +598,7 @@ shippingInformationByUser <-
     do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
        order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
        pure (user, order)
-       
+
 mapM_ print shippingInformationByUser
 ```
 
@@ -629,16 +628,16 @@ shippingInformationByUser <-
     runSelectReturningList $
     select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
-    
+
        (userEmail, unshippedCount) <-
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
             pure (pk user, order)
-        
+
        guard_ (userEmail `references_` user)
-       
+
        (userEmail, shippedCount) <-
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
@@ -668,7 +667,7 @@ shippingInformationByUser <-
     runSelectReturningList $
     select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
-    
+
        (userEmail, unshippedCount) <-
          subselect_ $
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
@@ -676,9 +675,9 @@ shippingInformationByUser <-
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
             pure (pk user, order)
-        
+
        guard_ (userEmail `references_` user)
-       
+
        (userEmail, shippedCount) <-
          subselect_ $
          aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
@@ -705,4 +704,3 @@ havailable on [hackage](http://hackage.haskell.org/package/beam). Happy beaming!
 
 Beam is a work in progress. Please submit bugs and patches
 on [GitHub](https://github.com/tathougies/beam).
-

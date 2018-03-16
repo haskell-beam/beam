@@ -58,17 +58,20 @@ import           Control.Monad.State
 import           Control.Exception (bracket)
 
 import           Data.ByteString.Builder (toLazyByteString, byteString)
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Conduit as C
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
+import qualified Data.Text as T
+import           Data.Text.Encoding (decodeUtf8)
 
 import           Foreign.C.Types
 
 import           Network.URI (uriToString)
+
+import           System.IO
 
 -- | Errors that may arise while using the 'Pg' monad.
 data PgError
@@ -97,10 +100,10 @@ runSelect :: ( MonadIO m, Functor m, FromBackendRow Postgres a ) =>
              Pg.Connection -> SqlSelect PgSelectSyntax a -> C.Source m a
 runSelect conn (SqlSelect (PgSelectSyntax syntax)) = runQueryReturning conn syntax
 
-
 -- | Run a PostgreSQL @INSERT@ statement in any 'MonadIO'. Returns the number of
 -- rows affected.
 runInsert :: ( MonadIO m, Functor m ) => Pg.Connection -> SqlInsert PgInsertSyntax -> m Int64
+runInsert _ SqlInsertNoRows = pure 0
 runInsert conn (SqlInsert (PgInsertSyntax i)) =
     executeStatement conn i
 
@@ -110,6 +113,7 @@ runInsertReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgInsertReturning a
                    -> C.Source m a
+runInsertReturning _ PgInsertReturningEmpty = pure ()
 runInsertReturning conn (PgInsertReturning i) =
     runQueryReturning conn i
 
@@ -356,10 +360,10 @@ withPgDebug dbg conn (Pg action) =
                            next) =
         do query <- pgRenderSyntax conn syntax
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-           dbg (BS.unpack query)
+           dbg (T.unpack (decodeUtf8 query))
            action' <- runF process finishProcess stepProcess Nothing
            case action' of
-             PgStreamDone (Right x) -> Pg.execute_ conn (fromString (BS.unpack query)) >> next x
+             PgStreamDone (Right x) -> Pg.execute_ conn (Pg.Query query) >> next x
              PgStreamDone (Left err) -> pure (Left err)
              PgStreamContinue nextStream ->
                let finishUp (PgStreamDone (Right x)) = next x
@@ -367,10 +371,12 @@ withPgDebug dbg conn (Pg action) =
                    finishUp (PgStreamContinue next') = next' Nothing >>= finishUp
 
                    columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
-               in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (fromString (BS.unpack query)) (PgStreamContinue nextStream) runConsumer >>= finishUp
+               in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query) (PgStreamContinue nextStream) runConsumer >>= finishUp
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (BS.unpack query)
+           dbg (T.unpack (decodeUtf8 query))
+
+           hPutStrLn stderr ("Going to run " ++ show query)
 
            res <- Pg.exec conn query
            sts <- Pg.resultStatus res
@@ -382,8 +388,8 @@ withPgDebug dbg conn (Pg action) =
                                       res sts
       step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (BS.unpack query)
-           _ <- Pg.execute_ conn (fromString (BS.unpack query))
+           dbg (T.unpack (decodeUtf8 query))
+           _ <- Pg.execute_ conn (Pg.Query query)
 
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
            runF process next stepReturningNone
@@ -471,22 +477,30 @@ instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
 
 instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg.Connection Pg where
     runInsertReturningList tbl values = do
-        let PgInsertReturning insertReturningCmd =
+        let insertReturningCmd' =
                 insertReturning tbl values onConflictDefault
                                 (Just (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
                                                               Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty)))
 
         -- Make savepoint
-        runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
+        case insertReturningCmd' of
+          PgInsertReturningEmpty ->
+            pure []
+          PgInsertReturning insertReturningCmd ->
+            runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
 
 instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg where
     runUpdateReturningList tbl mkAssignments mkWhere = do
-        let PgUpdateReturning updateReturningCmd =
+        let updateReturningCmd' =
                 updateReturning tbl mkAssignments mkWhere
                                 (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
                                                         Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty))
 
-        runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
+        case updateReturningCmd' of
+          PgUpdateReturningEmpty ->
+            pure []
+          PgUpdateReturning updateReturningCmd ->
+            runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
 
 instance MonadBeamDeleteReturning PgCommandSyntax Postgres Pg.Connection Pg where
     runDeleteReturningList tbl mkWhere = do

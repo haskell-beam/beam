@@ -26,6 +26,7 @@ import Data.Proxy
 import Data.Text (Text)
 import Data.Scientific (Scientific)
 import Data.Time.Calendar (Day)
+import Data.Time (TimeOfDay)
 import Data.Int
 import Data.Word
 
@@ -129,13 +130,6 @@ class IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSynt
                      -> dataTypeSyntax
 
 instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
-  HasDefaultSqlDataType dataTypeSyntax (Auto ty) where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
-instance (IsSql92ColumnSchemaSyntax columnSchemaSyntax, HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty) =>
-  HasDefaultSqlDataTypeConstraints columnSchemaSyntax (Auto ty) where
-  defaultSqlDataTypeConstraints _ = defaultSqlDataTypeConstraints (Proxy @ty)
-
-instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
   HasDefaultSqlDataType dataTypeSyntax (Maybe ty) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
 instance (IsSql92ColumnSchemaSyntax columnSchemaSyntax, HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty) =>
@@ -188,6 +182,10 @@ instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeCo
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Day where
   defaultSqlDataType _ _ = dateType
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Day
+
+instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax TimeOfDay where
+  defaultSqlDataType _ _ = timeType Nothing False
+instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax TimeOfDay
 
 instance IsSql99DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Bool where
   defaultSqlDataType _ _ = booleanType
