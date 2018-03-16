@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -26,11 +27,15 @@ import           Data.Ratio (Ratio)
 import           Data.Scientific (Scientific, toBoundedInteger)
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as TL
-import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime)
+import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime(..))
 import           Data.UUID (UUID)
 import           Data.Vector (Vector)
 import           Data.Word
 
+-- | The Postgres backend. Used to parameterize 'MonadBeam' and 'FromBackendRow'
+-- to support Postgres databases. See documentation for 'MonadBeam' and the
+-- <https://tathougies.github/beam/ user guide> for more information on using
+-- this backend.
 data Postgres
   = Postgres
 
@@ -101,8 +106,20 @@ instance FromBackendRow Postgres UTCTime
 instance FromBackendRow Postgres Value
 instance FromBackendRow Postgres TL.Text
 instance FromBackendRow Postgres Pg.Oid
-instance FromBackendRow Postgres LocalTime
-instance FromBackendRow Postgres ZonedTime
+instance FromBackendRow Postgres LocalTime where
+  fromBackendRow =
+    peekField >>=
+    \case
+      Just t -> pure t
+
+      -- Also accept 'TIMESTAMP WITH TIME ZONE'. Considered as
+      -- 'LocalTime', because postgres always returns times in the
+      -- server timezone, regardless of type.
+      Nothing ->
+        peekField >>=
+        \case
+          Just zt -> pure (zonedTimeToLocalTime zt)
+          Nothing -> fail "'TIMESTAMP WITH TIME ZONE' or 'TIMESTAMP WITHOUT TIME ZONE' required for LocalTime"
 instance FromBackendRow Postgres TimeOfDay
 instance FromBackendRow Postgres Day
 instance FromBackendRow Postgres UUID
@@ -131,13 +148,3 @@ instance (Pg.FromField a, Pg.FromField b) => FromBackendRow Postgres (Either a b
 
 instance BeamSqlBackend Postgres
 instance BeamSql92Backend Postgres
-
--- * Types for postgres specific extensions
-
-newtype PgTableSamplingMethod
-  = PgTableSamplingMethod { pgTableSamplingMethodAsText :: Text }
-  deriving (Show, Eq, Ord)
-
-pgBernoulliSamplingMethod, pgSystemSamplingMethod :: PgTableSamplingMethod
-pgBernoulliSamplingMethod = PgTableSamplingMethod "BERNOULLI"
-pgSystemSamplingMethod = PgTableSamplingMethod "SYSTEM"

@@ -23,18 +23,19 @@ import           Control.Monad.Free
 
 import           Data.Aeson
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as BC
 import           Data.ByteString.Builder
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
 import           Data.Hashable
 import           Data.Monoid
 import           Data.Proxy
-import           Data.String
 import           Data.Scientific (Scientific, formatScientific, FPFormat(Fixed))
+import           Data.String
+import qualified Data.Text as T
+import           Data.Time (LocalTime)
 import           Data.Type.Bool
 import qualified Data.Vector as V
-import qualified Data.Text as T
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
@@ -43,7 +44,20 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import           GHC.TypeLits
 import           GHC.Exts hiding (toList)
 
--- * TsVector type
+-- ** Postgres-specific functions
+
+-- | @NOW@ function
+now_ :: QExpr PgExpressionSyntax s LocalTime
+now_ = QExpr (\_ -> PgExpressionSyntax (emit "NOW()"))
+
+-- | @ILIKE@ operator
+ilike_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
+       => QExpr PgExpressionSyntax s text
+       -> QExpr PgExpressionSyntax s text
+       -> QExpr PgExpressionSyntax s Bool
+ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" <$> a <*> b)
+
+-- ** TsVector type
 
 newtype TsVectorConfig = TsVectorConfig ByteString
   deriving (Show, Eq, Ord, IsString)
@@ -92,7 +106,7 @@ toTsVector (Just (TsVectorConfig configNm)) (QExpr x) =
 QExpr vec @@ QExpr q =
   QExpr (pgBinOp "@@" <$> vec <*> q)
 
--- * TsQuery type
+-- ** TsQuery type
 
 newtype TsQuery = TsQuery ByteString
   deriving (Show, Eq, Ord)
@@ -110,7 +124,7 @@ instance Pg.FromField TsQuery where
 
 instance FromBackendRow Postgres TsQuery
 
--- * Array operators
+-- ** Array operators
 
 -- TODO this should be robust to slices
 (!.) :: Integral ix
@@ -205,7 +219,7 @@ isSubsetOf_ (QExpr needles) (QExpr haystack) =
 QExpr a ++. QExpr b =
   QExpr (pgBinOp "||" <$> a <*> b)
 
--- * Array expressions
+-- ** Array expressions
 
 data PgArrayValueContext
 
@@ -228,7 +242,7 @@ array_ vs =
               , pgSepBy (emit ", ") <$> mapM (\(QExpr e) -> fromPgExpression <$> e) (toList vs)
               , pure (emit "]") ]
 
--- * JSON
+-- ** JSON
 
 newtype PgJSON a = PgJSON a
   deriving ( Show, Eq, Ord, Hashable, Monoid )
@@ -426,7 +440,7 @@ pgJsonbPretty :: QGenExpr ctxt PgExpressionSyntax s (PgJSONB a)
 pgJsonbPretty (QExpr a) =
   QExpr (\tbl -> PgExpressionSyntax (emit "jsonb_pretty" <> pgParens (fromPgExpression (a tbl))))
 
--- * Postgresql aggregates
+-- ** Postgresql aggregates
 
 pgArrayAgg :: QExpr PgExpressionSyntax s a
            -> QAgg PgExpressionSyntax s (V.Vector a)
@@ -454,7 +468,7 @@ pgBoolAnd (QExpr a) =
   QExpr $ \tbl -> PgExpressionSyntax $
   emit "bool_and" <> pgParens (fromPgExpression (a tbl))
 
--- ** String aggregations
+-- *** String aggregations
 
 pgStringAgg :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
             => QExpr PgExpressionSyntax s str
@@ -474,7 +488,7 @@ pgStringAggOver quantifier (QExpr v) (QExpr delim) =
              fromPgExpression (v tbl) <> emit ", " <>
              fromPgExpression (delim tbl))
 
--- * Postgresql SELECT DISTINCT ON
+-- ** Postgresql SELECT DISTINCT ON
 
 pgNubBy_ :: ( Projectible PgExpressionSyntax key
             , Projectible PgExpressionSyntax r )
@@ -483,7 +497,7 @@ pgNubBy_ :: ( Projectible PgExpressionSyntax key
          -> Q PgSelectSyntax db s r
 pgNubBy_ mkKey (Q q) = Q $ liftF (QDistinct (\r pfx -> pgSelectSetQuantifierDistinctOn (project (mkKey r) pfx)) q id)
 
--- * PostgreSql money data type
+-- ** PostgreSql @MONEY@ data type
 
 -- | Postgres @MONEY@ data type. A simple wrapper over 'ByteString', because
 --   Postgres money format is locale-dependent.
@@ -553,8 +567,6 @@ pgSumMoney_, pgAvgMoney_ :: QExpr PgExpressionSyntax s PgMoney
                          -> QExpr PgExpressionSyntax s PgMoney
 pgSumMoney_ = pgSumMoneyOver_ allInGroup_
 pgAvgMoney_ = pgAvgMoneyOver_ allInGroup_
-
--- * data types
 
 instance HasDefaultSqlDataType PgDataTypeSyntax TsQuery where
   defaultSqlDataType _ _ = pgTsQueryType
