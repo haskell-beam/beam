@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -10,13 +11,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Database.Beam.Postgres.Connection
-  ( Pg(..), PgF(..)
-
-  , PgRowReadError(..), PgError(..)
-
-  , runSelect, runDelete
-  , runInsert, runInsertReturning
-  , runUpdate, runUpdateReturning
+  ( PgRowReadError(..), PgError(..)
+  , Pg(..), PgF(..)
 
   , pgRenderSyntax, runPgRowReader, getFields
 
@@ -28,9 +24,6 @@ import           Control.Exception (Exception, throwIO)
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
 
-import           Data.ByteString (ByteString)
-import           Data.Int (Int64)
-
 import           Database.Beam hiding (runDelete, runUpdate, runInsert, insert)
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
@@ -39,6 +32,7 @@ import           Database.Beam.Backend.URI
 import           Database.Beam.Query.Types (QGenExpr(..))
 
 import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Postgres.Full
 import           Database.Beam.Postgres.Types
 
 import qualified Database.PostgreSQL.LibPQ as Pg hiding
@@ -47,7 +41,7 @@ import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.Internal as Pg
   ( Field(..), RowParser(..)
-  , withConnection, escapeStringConn, escapeIdentifier, escapeByteaConn
+  , escapeStringConn, escapeIdentifier, escapeByteaConn
   , exec, throwResultError )
 import qualified Database.PostgreSQL.Simple.Internal as PgI
 import qualified Database.PostgreSQL.Simple.Ok as Pg
@@ -57,10 +51,9 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Exception (bracket)
 
+import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (toLazyByteString, byteString)
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.Conduit as C
-import           Data.Maybe
 import           Data.Monoid
 import           Data.Proxy
 import           Data.String
@@ -84,7 +77,8 @@ data PgStream a = PgStreamDone     (Either PgError a)
                 | PgStreamContinue (Maybe PgI.Row -> IO (PgStream a))
 
 -- | 'BeamURIOpeners' for the standard @postgresql:@ URI scheme. See the
--- postgres documentation for more details on the formatting.
+-- postgres documentation for more details on the formatting. See documentation
+-- for 'BeamURIOpeners' for more information on how to use this with beam
 postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
                   -> BeamURIOpeners c
 postgresUriSyntax =
@@ -92,163 +86,6 @@ postgresUriSyntax =
         (\uri action -> do
             let pgConnStr = fromString (uriToString id uri "")
             bracket (Pg.connectPostgreSQL pgConnStr) Pg.close action)
-
--- * Postgres-optimized query functions
-
--- | Run a PostgreSQL @SELECT@ statement in any 'MonadIO'.
-runSelect :: ( MonadIO m, Functor m, FromBackendRow Postgres a ) =>
-             Pg.Connection -> SqlSelect PgSelectSyntax a -> C.Source m a
-runSelect conn (SqlSelect (PgSelectSyntax syntax)) = runQueryReturning conn syntax
-
--- | Run a PostgreSQL @INSERT@ statement in any 'MonadIO'. Returns the number of
--- rows affected.
-runInsert :: ( MonadIO m, Functor m ) => Pg.Connection -> SqlInsert PgInsertSyntax -> m Int64
-runInsert _ SqlInsertNoRows = pure 0
-runInsert conn (SqlInsert (PgInsertSyntax i)) =
-    executeStatement conn i
-
--- | Run a PostgreSQL @INSERT ... RETURNING ...@ statement in any 'MonadIO' and
--- get a 'C.Source' of the newly inserted rows.
-runInsertReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
-                   => Pg.Connection
-                   -> PgInsertReturning a
-                   -> C.Source m a
-runInsertReturning _ PgInsertReturningEmpty = pure ()
-runInsertReturning conn (PgInsertReturning i) =
-    runQueryReturning conn i
-
--- | Run a PostgreSQL @UPDATE@ statement in any 'MonadIO'. Returns the number of
--- rows affected.
-runUpdate :: ( MonadIO m, Functor m ) => Pg.Connection -> SqlUpdate PgUpdateSyntax tbl -> m Int64
-runUpdate conn (SqlUpdate (PgUpdateSyntax i)) =
-    executeStatement conn i
-
--- | Run a PostgreSQL @UPDATE ... RETURNING ...@ statement in any 'MonadIO' and
--- get a 'C.Source' of the newly updated rows.
-runUpdateReturning :: ( MonadIO m, FromBackendRow Postgres a)
-                   => Pg.Connection
-                   -> PgUpdateReturning a
-                   -> C.Source m a
-runUpdateReturning conn (PgUpdateReturning i) =
-    runQueryReturning conn i
-
--- | Run a PostgreSQL @DELETE@ statement in any 'MonadIO'. Returns the number of
--- rows affected.
-runDelete :: MonadIO m
-          => Pg.Connection -> SqlDelete PgDeleteSyntax tbl
-          -> m Int64
-runDelete conn (SqlDelete (PgDeleteSyntax d)) =
-    executeStatement conn d
-
--- insertFrom :: ( Beamable tbl, IsQuery q ) =>
---               q PgSyntax db PostgresInaccessible (tbl (QExpr PgSyntax PostgresInaccessible))
---            -> PgInsertValuesSyntax tbl
--- insertFrom q =
---     let (_, _, x) = buildSql92Query (Proxy @PgSyntax) (toQ q) 0
---     in PgInsertValuesSyntax x
-
--- insert :: ( MonadIO m, Functor m ) =>
---           Pg.Connection -> DatabaseTable Postgres db table
---        -> PgInsertValuesSyntax table -> PgInsertOnConflictSyntax
---        -> m ()
--- insert conn tbl values onConflict =
---     C.runConduit ((insertReturning @()) conn tbl values onConflict Nothing C.=$= C.sinkNull)
-
--- insertReturning
---     :: forall a m table db.
---        ( FromBackendRow Postgres (QExprToIdentity a)
---        , MonadIO m, Functor m, Projectible PgSyntax a ) =>
---        Pg.Connection -> DatabaseTable Postgres db table
---     -> PgInsertValuesSyntax table -> PgInsertOnConflictSyntax
---     -> Maybe (table (QExpr PgSyntax PostgresInaccessible) -> a)
---     -> C.Source m (QExprToIdentity a)
--- insertReturning conn (DatabaseTable _ tblNm tblSettings)
---                 (PgInsertValuesSyntax insertValues)
---                 (PgInsertOnConflictSyntax onConflict)
---                 returning =
---     runQueryReturning conn $
---     emit "INSERT INTO " <> pgQuotedIdentifier tblNm <> emit "(" <>
---     pgSepBy (emit ", ") (allBeamValues (\(Columnar' f) -> pgQuotedIdentifier (_fieldName f)) tblSettings) <>
---     emit ") " <> insertValues <> emit " " <> onConflict <>
---     (case returning of
---        Nothing -> mempty
---        Just mkProjection ->
---            let tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (unqualifiedFieldE (Proxy @PgSyntax) (_fieldName f)))) tblSettings
---            in emit " RETURNING " <>
---               pgSepBy (emit ", ") (project (Proxy @PgSyntax) (mkProjection tblQ)))
-
--- | Run any DML statement. Return the number of rows affected
-executeStatement ::  MonadIO m => Pg.Connection -> PgSyntax -> m Int64
-executeStatement conn x =
-  liftIO $ do
-    syntax <- pgRenderSyntax conn x
-    Pg.execute_ conn (Pg.Query syntax)
-
--- | Runs any query that returns a set of values
-runQueryReturning
-  :: forall r m
-   . ( MonadIO m, Functor m, FromBackendRow Postgres r )
-  => Pg.Connection -> PgSyntax -> C.Source m r
-runQueryReturning conn x = do
-  success <- liftIO $ do
-    syntax <- pgRenderSyntax conn x
-
-    Pg.withConnection conn (\conn' -> Pg.sendQuery conn' syntax)
-
-  if success
-    then do
-      singleRowModeSet <- liftIO (Pg.withConnection conn Pg.setSingleRowMode)
-      if singleRowModeSet then streamResults Nothing
-         else fail "Could not enable single row mode"
-    else do
-      errMsg <- fromMaybe "No libpq error provided" <$> liftIO (Pg.withConnection conn Pg.errorMessage)
-      fail (show errMsg)
-
-  where
-    streamResults fields = do
-      nextRow <- liftIO (Pg.withConnection conn Pg.getResult)
-      case nextRow of
-        Nothing -> pure ()
-        Just row ->
-          liftIO (Pg.resultStatus row) >>=
-          \case
-            Pg.SingleTuple ->
-              do fields' <- liftIO (maybe (getFields row) pure fields)
-                 parsedRow <- liftIO (runPgRowReader conn 0 row fields' fromBackendRow)
-                 case parsedRow of
-                   Left err -> liftIO (bailEarly row ("Could not read row: " <> show err))
-                   Right parsedRow' ->
-                     do C.yieldOr parsedRow' (liftIO bailAfterParse)
-                        streamResults (Just fields')
-            Pg.TuplesOk -> liftIO (Pg.withConnection conn finishQuery)
-            Pg.EmptyQuery -> fail "No query"
-            Pg.CommandOk -> pure ()
-            _ -> do errMsg <- liftIO (Pg.resultErrorMessage row)
-                    fail ("Postgres error: " <> show errMsg)
-
-    bailEarly row errorString = do
-      Pg.unsafeFreeResult row
-      cancelQuery
-      fail errorString
-
-    bailAfterParse = cancelQuery
-
-    cancelQuery =
-      Pg.withConnection conn $ \conn' -> do
-      cancel <- Pg.getCancel conn'
-      case cancel of
-        Nothing -> pure ()
-        Just cancel' -> do
-          res <- Pg.cancel cancel'
-          case res of
-            Right () -> liftIO (finishQuery conn')
-            Left err -> fail ("Could not cancel: " <> show err)
-
-    finishQuery conn' = do
-      nextRow <- Pg.getResult conn'
-      case nextRow of
-        Nothing -> pure ()
-        Just _ -> finishQuery conn'
 
 -- * Syntax rendering
 
@@ -286,10 +123,12 @@ data PgRowReadError
     = PgRowReadNoMoreColumns !CInt !CInt
       -- ^ We attempted to read more columns than postgres returned. First
       -- argument is the zero-based index of the column we attempted to read,
-      -- and the second is the total number of rows
+      -- and the second is the total number of columns
     | PgRowCouldNotParseField !CInt
       -- ^ There was an error while parsing the field. The first argument gives
-      -- the zero-based index of the column that could not have been parsed
+      -- the zero-based index of the column that could not have been
+      -- parsed. This is usually caused by your Haskell schema type being
+      -- incompatible with the one in the database.
     deriving Show
 
 instance Exception PgRowReadError
@@ -457,9 +296,8 @@ deriving instance Functor PgF
 -- for 'MonadBeam' on examples of how to use.
 --
 -- @beam-postgres@ also provides functions that let you run queries without
--- 'MonadBeam'. These functions may be more efficient and offer a conduit API.
--- See 'runSelect', 'runInsert', 'runUpdate', 'runInsertReturningList',
--- 'runUpdateReturningList', and 'runDelete' for more information.
+-- 'MonadBeam'. These functions may be more efficient and offer a conduit
+-- API. See "Database.Beam.Postgres.Conduit" for more information.
 newtype Pg a = Pg { runPg :: F PgF a }
     deriving (Monad, Applicative, Functor, MonadFree PgF)
 

@@ -19,6 +19,9 @@ library
                       Database.Beam.Postgres.PgCrypto
                       Database.Beam.Postgres.Syntax
 
+                      Database.Beam.Postgres.Conduit
+                      Database.Beam.Postgres.Full
+
   other-modules:      Database.Beam.Postgres.Types
                       Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.PgSpecific

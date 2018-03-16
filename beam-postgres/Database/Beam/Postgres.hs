@@ -28,12 +28,6 @@ module Database.Beam.Postgres
     -- * Beam Postgres backend
   , Postgres(..), Pg
 
-    -- ** Conduit querying functions
-
-  , runSelect, runDelete
-  , runInsert, runInsertReturning
-  , runUpdate, runUpdateReturning
-
     -- ** Postgres syntax
   , PgCommandSyntax, PgSyntax
   , PgSelectSyntax, PgInsertSyntax
@@ -53,32 +47,6 @@ module Database.Beam.Postgres
   , smallserial, serial, bigserial
 
   , module Database.Beam.Postgres.PgSpecific
-
-  , now_, ilike_
-
-    -- ** @INSERT@ extensions
-  , insert
-
-    -- *** @INSERT .. RETURNING ..@
-  , PgInsertReturning
-  , insertReturning
-
-    -- *** @INSERT ... ON CONFLICT@
-  , PgInsertOnConflict
-  , onConflict, onConflictDefault
-  , anyConflict
-
-  , PgInsertOnConflictTarget
-  , conflictingFields, conflictingFieldsWhere
-  , conflictingConstraint
-
-  , PgConflictAction
-  , onConflictDoNothing, onConflictUpdateInstead
-  , onConflictUpdateSet, onConflictUpdateSetWhere
-
-    -- ** @UPDATE@ extensions
-  , PgUpdateReturning
-  , updateReturning
 
     -- ** Postgres extension support
   , PgExtensionEntity, IsPgExtension(..)
