@@ -11,7 +11,7 @@
 -- for us in @haskell-src-exts@.
 module Database.Beam.Haskell.Syntax where
 
-import           Database.Beam hiding (lookup)
+import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Migrate.SQL.SQL92

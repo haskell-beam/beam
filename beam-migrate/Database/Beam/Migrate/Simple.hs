@@ -7,6 +7,8 @@ module Database.Beam.Migrate.Simple
   , VerificationResult(..)
   , verifySchema
 
+  , createSchema
+
   , module Database.Beam.Migrate.Actions
   , module Database.Beam.Migrate.Types ) where
 
@@ -31,8 +33,39 @@ simpleSchema provider settings =
   let allChecks = collectChecks settings
       solver    = heuristicSolver provider [] allChecks
   in case finalSolution solver of
-       Solved cmds -> Just cmds
+       Solved cmds -> Just (fmap migrationCommand cmds)
        Candidates {} -> Nothing
+
+-- | Given a 'CheckedDatabaseSettings' and a 'BeamMigrationBackend',
+-- attempt to create the schema from scratch in the current database.
+--
+-- May 'fail' if we cannot find a schema
+createSchema :: Database be db
+             => BeamMigrationBackend cmd be hdl m
+             -> CheckedDatabaseSettings be db
+             -> m ()
+createSchema BeamMigrationBackend { backendActionProvider = actions } db =
+  case simpleSchema actions db of
+    Nothing -> fail "createSchema: Could not determine schema"
+    Just cmds ->
+        mapM_ runNoReturn cmds
+
+autoMigrate :: Database be db
+            => BeamMigrationBackend cmd be hdl m
+            -> CheckedDatabaseSettings be db
+            -> m ()
+autoMigrate BeamMigrationBackend { backendActionProvider = actions
+                                 , backendGetDbConstraints = getCs }
+            db =
+  do actual <- getCs
+     let expected = collectChecks db
+     case finalSolution (heuristicSolver actions actual expected) of
+       Candidates {} -> fail "autoMigrate: Could not determine migration"
+       Solved cmds ->
+         -- Check if any of the commands are irreversible
+         case foldMap migrationCommandDataLossPossible cmds of
+           MigrationKeepsData -> mapM_ (runNoReturn . migrationCommand) cmds
+           _ -> fail "autoMigrate: Not performing automatic migration due to data loss"
 
 -- | Given a migration backend, a handle to a database, and a checked database,
 -- attempt to find a schema. This should always return 'Just', unless the
@@ -54,7 +87,7 @@ simpleMigration BeamMigrationBackend { backendGetDbConstraints = getCs
       solver = heuristicSolver action pre post
 
   case finalSolution solver of
-    Solved cmds -> pure (Just cmds)
+    Solved cmds -> pure (Just (fmap migrationCommand cmds))
     Candidates {} -> pure Nothing
 
 -- | Result type for 'verifySchema'

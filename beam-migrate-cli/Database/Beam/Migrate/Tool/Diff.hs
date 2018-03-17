@@ -154,4 +154,4 @@ displayScript cmdLine modName (PredicateDiff dest from) = do
   case finalSolution solver of
     Candidates {} -> fail "Could not find appropriate migration between schemas."
     Solved cmds ->
-      putStrLn (unlines (map renderCmd cmds))
+      putStrLn (unlines (map (renderCmd . migrationCommand) cmds))
