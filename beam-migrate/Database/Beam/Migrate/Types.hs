@@ -36,6 +36,8 @@ module Database.Beam.Migrate.Types
   , MigrationStep(..), MigrationSteps(..)
   , Migration, MigrationF(..)
 
+  , MigrationCommand(..), MigrationDataLoss(..)
+
   , migrationStepsToMigration, runMigrationSilenced
   , runMigrationVerbose, executeMigration
   , eraseMigrationType, migrationStep, upDown
@@ -72,6 +74,30 @@ data MigrationF syntax next where
 deriving instance Functor (MigrationF syntax)
 type Migration syntax = F (MigrationF syntax)
 
+-- | Information on whether a 'MigrationCommand' loses data. You can
+-- monoidally combine these to get the potential data loss for a
+-- sequence of commands.
+data MigrationDataLoss
+  = MigrationLosesData
+    -- ^ The command loses data
+  | MigrationKeepsData
+    -- ^ The command keeps all data
+  deriving Show
+
+instance Monoid MigrationDataLoss where
+    mempty = MigrationKeepsData
+    mappend MigrationLosesData _ = MigrationLosesData
+    mappend _ MigrationLosesData = MigrationLosesData
+    mappend MigrationKeepsData MigrationKeepsData = MigrationKeepsData
+
+-- | A migration command along with metadata on wheth
+data MigrationCommand cmd
+  = MigrationCommand
+  { migrationCommand :: cmd
+    -- ^ The command to run
+  , migrationCommandDataLossPossible :: MigrationDataLoss
+    -- ^ Information on whether the migration loses data
+  } deriving Show
 
 migrationStepsToMigration :: Int -> Maybe Int
                           -> MigrationSteps syntax () a

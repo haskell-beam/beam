@@ -33,7 +33,7 @@ simpleSchema provider settings =
   let allChecks = collectChecks settings
       solver    = heuristicSolver provider [] allChecks
   in case finalSolution solver of
-       Solved cmds -> Just cmds
+       Solved cmds -> Just (fmap migrationCommand cmds)
        Candidates {} -> Nothing
 
 -- | Given a 'CheckedDatabaseSettings' and a 'BeamMigrationBackend',
@@ -61,9 +61,11 @@ autoMigrate BeamMigrationBackend { backendActionProvider = actions
      let expected = collectChecks db
      case finalSolution (heuristicSolver actions actual expected) of
        Candidates {} -> fail "autoMigrate: Could not determine migration"
-       Solved cmds -> do
-         -- Check if any commands are irreversible
-         fail "autoMigrate: TODO"
+       Solved cmds ->
+         -- Check if any of the commands are irreversible
+         case foldMap migrationCommandDataLossPossible cmds of
+           MigrationKeepsData -> mapM_ (runNoReturn . migrationCommand) cmds
+           _ -> fail "autoMigrate: Not performing automatic migration due to data loss"
 
 -- | Given a migration backend, a handle to a database, and a checked database,
 -- attempt to find a schema. This should always return 'Just', unless the
@@ -85,7 +87,7 @@ simpleMigration BeamMigrationBackend { backendGetDbConstraints = getCs
       solver = heuristicSolver action pre post
 
   case finalSolution solver of
-    Solved cmds -> pure (Just cmds)
+    Solved cmds -> pure (Just (fmap migrationCommand cmds))
     Candidates {} -> pure Nothing
 
 -- | Result type for 'verifySchema'

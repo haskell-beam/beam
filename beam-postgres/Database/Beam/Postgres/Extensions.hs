@@ -102,7 +102,8 @@ pgCreateExtensionProvider =
           guard (ext == ext')
 
      let cmd = pgCreateExtensionSyntax ext
-     pure (PotentialAction mempty (HS.fromList [p extP]) (pure cmd)
+     pure (PotentialAction mempty (HS.fromList [p extP])
+                           (pure (MigrationCommand cmd MigrationKeepsData))
                            ("Load the postgres extension " <> ext) 1)
 
 pgDropExtensionProvider =
@@ -113,5 +114,6 @@ pgDropExtensionProvider =
           guard (ext == ext')
 
      let cmd = pgDropExtensionSyntax ext
-     pure (PotentialAction (HS.fromList [p extP]) mempty (pure cmd)
+     pure (PotentialAction (HS.fromList [p extP]) mempty
+                           (pure (MigrationCommand cmd MigrationKeepsData))
                            ("Unload the postgres extension " <> ext) 1)

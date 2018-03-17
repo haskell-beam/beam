@@ -10,7 +10,8 @@ import           Database.Beam.Migrate.Tool.Schema
 
 import           Database.Beam.Migrate ( SomeDatabasePredicate(..)
                                        , DatabasePredicate(..)
-                                       , PredicateSpecificity(..) )
+                                       , PredicateSpecificity(..)
+                                       , MigrationCommand(..) )
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.Backend
 
@@ -87,7 +88,8 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
                 in case finalSolution solver of
                      Candidates {} -> fail "Could not find migration in backend"
                      Solved [] -> fail "Schemas are equivalent, not importing"
-                     Solved cmds -> do
+                     Solved cmds' -> do
+                       let cmds = fmap migrationCommand cmds'
                        liftIO . void $ writeMigration cmdLine registry be oldCommitId newCommit cmds
                        modifyM (newMigration oldCommitId hsHash [MigrationFormatHaskell, backendMigFmt])
 
@@ -167,7 +169,7 @@ showSimpleSchema cmdLine backend connStr = do
           case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs'' of
             Candidates {} -> fail "Could not form haskell schema"
             Solved actions ->
-              case renderHsSchema (hsActionsToModule "Schema" actions) of
+              case renderHsSchema (hsActionsToModule "Schema" (fmap migrationCommand actions)) of
                 Left err -> fail ("Could not render schema: " ++ err)
                 Right sch -> putStrLn sch
 
@@ -180,7 +182,7 @@ writeSchema cmdLine registry commitId be cs = do
     Candidates {} -> fail "Could not form backend schema"
     Solved actions ->
       writeSchemaFile cmdLine registry (backendFileExtension be) (schemaScriptName commitId) $
-       unlines (map (backendRenderSyntax be) actions)
+       unlines (map (backendRenderSyntax be) (fmap migrationCommand actions))
 
 writeHsSchema :: MigrateCmdLine -> MigrationRegistry
               -> UUID
@@ -199,7 +201,7 @@ writeHsSchema cmdLine registry commitId cs dbSchema fmts =
       metadata <- SchemaMetaData <$> pure commitId <*> pure fmts <*> getCurrentTime <*> pure dbSchema
       writeSchemaFile cmdLine registry "hs" (schemaModuleName commitId) $
         let modName = unModuleName (migrationRegistrySchemaModule registry) <> "." <> schemaModuleName commitId
-        in case renderHsSchema (hsActionsToModule modName actions) of
+        in case renderHsSchema (hsActionsToModule modName (fmap migrationCommand actions)) of
              Left err -> error ("Could not render schema: " ++ err)
              Right sch -> sch ++ "\n\n" ++
                           metadataComment "--" metadata
