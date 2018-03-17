@@ -127,7 +127,7 @@ data DatabaseState cmd
     -- their source (user or from previous actions)
   , dbStateKey                :: !(HS.HashSet SomeDatabasePredicate)
     -- ^ HS.fromMap of 'dbStateCurrentState', for maximal sharing
-  , dbStateCmdSequence        :: !(Seq.Seq cmd)
+  , dbStateCmdSequence        :: !(Seq.Seq (MigrationCommand cmd))
     -- ^ The current sequence of commands we've committed to in this state
   } deriving Show
 
@@ -168,16 +168,13 @@ measureDb' _ post cmdLength st@(DatabaseState _ repr _) =
 -- Given a particular starting point, the destination database is the database
 -- where each predicate in 'actionPreConditions' has been removed and each
 -- predicate in 'actionPostConditions' has been added.
---
---
---
 data PotentialAction cmd
   = PotentialAction
   { actionPreConditions  :: !(HS.HashSet SomeDatabasePredicate)
     -- ^ Preconditions that will no longer apply
   , actionPostConditions :: !(HS.HashSet SomeDatabasePredicate)
     -- ^ Conditions that will apply after we're done
-  , actionCommands :: !(Seq.Seq cmd)
+  , actionCommands :: !(Seq.Seq (MigrationCommand cmd))
     -- ^ The sequence of commands that accomplish this movement in the database
     -- graph. For an edge, 'actionCommands' contains one command; for a path, it
     -- will contain more.
@@ -319,7 +316,9 @@ createTableActionProvider =
              cmd = createTableCmd (createTableSyntax Nothing postTblNm colsSyntax tblConstraints)
              tblConstraints = [ primaryKeyConstraintSyntax primaryKey ]
              colsSyntax = map (\(colNm, type_, cs) -> (colNm, columnSchemaSyntax type_ Nothing cs Nothing)) columns
-         pure (PotentialAction mempty (HS.fromList postConditions) (Seq.singleton cmd) ("Create the table " <> postTblNm) createTableWeight)
+         pure (PotentialAction mempty (HS.fromList postConditions)
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
+                               ("Create the table " <> postTblNm) createTableWeight)
 
 -- | Action provider for SQL92 @DROP TABLE@ actions
 dropTableActionProvider :: forall cmd
@@ -345,7 +344,9 @@ dropTableActionProvider =
         -- Now, collect all preconditions that may be related to the dropped table
         let cmd = dropTableCmd (dropTableSyntax preTblNm)
         pure ({-trace ("Dropping table " <> show preTblNm <> " would drop " <> show relatedPreds) $ -}
-              PotentialAction (HS.fromList (SomeDatabasePredicate tblP:relatedPreds)) mempty (Seq.singleton cmd) ("Drop table " <> preTblNm) dropTableWeight)
+              PotentialAction (HS.fromList (SomeDatabasePredicate tblP:relatedPreds)) mempty
+                              (Seq.singleton (MigrationCommand cmd MigrationLosesData))
+                              ("Drop table " <> preTblNm) dropTableWeight)
 
 -- | Action provider for SQL92 @ALTER TABLE ... ADD COLUMN ...@ actions
 addColumnProvider :: forall cmd
@@ -369,7 +370,7 @@ addColumnProvider =
          let cmd = alterTableCmd (alterTableSyntax tblNm (addColumnSyntax colNm schema))
              schema = columnSchemaSyntax colType Nothing [] Nothing
          pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate colP])
-                               (Seq.singleton cmd)
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Add column " <> colNm <> " to " <> tblNm)
                 (addColumnWeight + fromIntegral (T.length tblNm + T.length colNm)))
 
@@ -399,7 +400,7 @@ dropColumnProvider = ActionProvider provider
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (dropColumnSyntax colNm))
          pure (PotentialAction (HS.fromList (SomeDatabasePredicate colP:relatedPreds)) mempty
-                               (Seq.singleton cmd)
+                               (Seq.singleton (MigrationCommand cmd MigrationLosesData))
                                ("Drop column " <> colNm <> " from " <> tblNm)
                 (dropColumnWeight + fromIntegral (T.length tblNm + T.length colNm)))
 
@@ -422,7 +423,8 @@ addColumnNullProvider = ActionProvider provider
          guard (tblNm == tblNm'' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNotNullSyntax))
-         pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate colP]) (Seq.singleton cmd)
+         pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate colP])
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Add not null constraint to " <> colNm <> " on " <> tblNm) 100)
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET  NOT NULL@
@@ -444,7 +446,8 @@ dropColumnNullProvider = ActionProvider provider
          guard (tblNm == tblNm'' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNullSyntax))
-         pure (PotentialAction (HS.fromList [SomeDatabasePredicate colP]) mempty (Seq.singleton cmd)
+         pure (PotentialAction (HS.fromList [SomeDatabasePredicate colP]) mempty
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Drop not null constraint for " <> colNm <> " on " <> tblNm) 100)
 
 -- | Default action providers for any SQL92 compliant syntax.
@@ -492,7 +495,7 @@ defaultActionProvider =
 -- from injecting arbitrary actions. Instead the caller is limited to choosing
 -- only valid actions as provided by the suppled 'ActionProvider'.
 data Solver cmd where
-  ProvideSolution :: [cmd] -> Solver cmd
+  ProvideSolution :: [ MigrationCommand cmd ] -> Solver cmd
   SearchFailed    :: [ DatabaseState cmd ] -> Solver cmd
   ChooseActions   :: { choosingActionsAtState :: !(DatabaseState cmd)
                        -- ^ The current node we're searching at
@@ -511,7 +514,7 @@ data Solver cmd where
 
 -- | Represents the final results of a search
 data FinalSolution cmd
-  = Solved [ cmd ]
+  = Solved [ MigrationCommand cmd ]
     -- ^ The search found a path from the source to the destination database,
     -- and has provided a set of commands that would work
   | Candidates [ DatabaseState cmd ]
