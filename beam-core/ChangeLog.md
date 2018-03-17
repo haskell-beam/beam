@@ -1,5 +1,10 @@
 # 0.7.0.0
 
+## Miscellaneous name changes
+
+The `Database.Beam.Query.lookup` function was renamed to `lookup_` to
+avoid overlap with the `Prelude` function of the same name.
+
 ## Reintroduce explicit backends to `Database` class
 
 Some database entites only work on particular backends. For example,
