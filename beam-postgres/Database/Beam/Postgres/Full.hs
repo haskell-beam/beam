@@ -1,12 +1,36 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Module providing (almost) full support for Postgres query and data
 -- manipulation statements. These functions shadow the functions in
 -- "Database.Beam.Query" and provide a strict superset of functionality. They
 -- map 1-to-1 with the underlying Postgres support.
-module Database.Beam.Postgres.Full where
+module Database.Beam.Postgres.Full
+  ( lockingAllTablesFor_, lockingFor_
+  , PgWithLocking
+  , PgLockedTables, locked_, lockAll_, withLocks_
+  , PgSelectLockingStrength(..), PgSelectLockingOptions(..)
 
-import           Database.Beam hiding (insertValues)
+  , insert, insertReturning
+
+  , PgInsertReturning(..)
+  , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
+  , PgConflictAction(..)
+  , onConflictDefault, onConflict, anyConflict, conflictingFields
+  , conflictingFieldsWhere, conflictingConstraint
+  , onConflictDoNothing, onConflictUpdateSet
+  , onConflictUpdateSetWhere, onConflictUpdateInstead
+  , onConflictSetAll
+
+  , PgUpdateReturning(..)
+  , updateReturning
+
+  , PgDeleteReturning(..)
+  , deleteReturning
+  ) where
+
+import           Database.Beam hiding (insert, insertValues)
 import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Schema.Tables
@@ -14,8 +38,62 @@ import           Database.Beam.Schema.Tables
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax
 
+import           Control.Monad.Free.Church
+
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
+
+-- * @SELECT@
+
+newtype PgLockedTables s = PgLockedTables [ T.Text ]
+instance Monoid (PgLockedTables s) where
+  mempty = PgLockedTables []
+  mappend (PgLockedTables a) (PgLockedTables b) = PgLockedTables (a <> b)
+
+data PgWithLocking s a = PgWithLocking (PgLockedTables s) a
+instance ProjectibleWithPredicate c syntax a => ProjectibleWithPredicate c syntax (PgWithLocking s a) where
+  project' p mutateM (PgWithLocking tbls a) =
+    PgWithLocking tbls <$> project' p mutateM a
+
+-- | Use with `withLocking_` to lock all tables mentioned in the query
+lockAll_ :: a -> PgWithLocking s a
+lockAll_ = PgWithLocking mempty
+
+withLocks_ :: a -> PgLockedTables s -> PgWithLocking s a
+withLocks_ = flip PgWithLocking
+
+locked_ :: Database Postgres db
+        => DatabaseEntity Postgres db (TableEntity tbl)
+        -> Q PgSelectSyntax db s (PgLockedTables s, tbl (QExpr PgExpressionSyntax s))
+locked_ tbl@(DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
+  (nm, joined) <- Q (liftF (QAll tblNm tblSettings (\_ -> Nothing) id))
+  pure (PgLockedTables [nm], joined)
+
+-- TODO
+-- Constrain 'table' to exist within the query (using s maybe?)
+-- Constrain Q to not have aggregations (at least the locked tables I think, using s?)
+--
+--   https://www.postgresql.org/docs/10/static/sql-select.html#SQL-FOR-UPDATE-SHARE
+--   "The locking clauses cannot be used in contexts where returned rows cannot be clearly
+--   identified with individual table rows; for example they cannot be used with aggregation."
+lockingFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
+            => PgSelectLockingStrength
+            -> Maybe PgSelectLockingOptions
+            -> Q PgSelectSyntax db (QNested s) (PgWithLocking (QNested s) a)
+            -> Q PgSelectSyntax db s a
+lockingFor_ lockStrength mLockOptions (Q q) =
+  Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) r) tbl ords limit offset ->
+                            let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
+                            in pgSelectStmt tbl ords limit offset (Just locking))
+                         q (\(PgWithLocking _ a) -> a)))
+
+lockingAllTablesFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
+                     => PgSelectLockingStrength
+                     -> Maybe PgSelectLockingOptions
+                     -> Q PgSelectSyntax db (QNested s) a
+                     -> Q PgSelectSyntax db s a
+lockingAllTablesFor_ lockStrength mLockOptions q =
+  lockingFor_ lockStrength mLockOptions (lockAll_ <$> q)
 
 -- * @INSERT@
 

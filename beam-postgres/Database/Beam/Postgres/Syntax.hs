@@ -252,7 +252,7 @@ newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPg
 newtype PgConflictActionSyntax = PgConflictActionSyntax { fromPgConflictAction :: PgSyntax }
 data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrderingNullOrdering :: Maybe PgNullOrdering }
 data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLockingClauseStrength :: PgSelectLockingStrength
-                                                               , pgSelectLockingTables :: [PgTableSourceSyntax]
+                                                               , pgSelectLockingTables :: [T.Text]
                                                                , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
@@ -278,7 +278,7 @@ fromPgSelectLockingClause s =
   where
     emitTables = case pgSelectLockingTables s of
       [] -> mempty
-      tableNames -> emit " OF " <> (pgSepBy (emit ", ") $ coerce <$> tableNames)
+      tableNames -> emit " OF " <> (pgSepBy (emit ", ") (map pgQuotedIdentifier tableNames))
 
     emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
     emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
@@ -409,13 +409,7 @@ instance IsSql92SelectSyntax PgSelectSyntax where
   type Sql92SelectOrderingSyntax PgSelectSyntax = PgOrderingSyntax
 
   selectStmt tbl ordering limit offset =
-    PgSelectSyntax $
-    coerce tbl <>
-    (case ordering of
-       [] -> mempty
-       ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)) <>
-    (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
-    (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset)
+    pgSelectStmt tbl ordering limit offset Nothing
 
 instance IsSql92SelectTableSyntax PgSelectTableSyntax where
   type Sql92SelectTableSelectSyntax PgSelectTableSyntax = PgSelectSyntax
@@ -1210,14 +1204,13 @@ pgSelectStmt :: PgSelectTableSyntax
              -> PgSelectSyntax
 pgSelectStmt tbl ordering limit offset locking =
     PgSelectSyntax $
-    mappend
-    (coerce tbl <>
-     (case ordering of
-        [] -> mempty
-        ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)) <>
-     (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
-     (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset))
-    (maybe mempty fromPgSelectLockingClause locking)
+    mconcat [ coerce tbl
+            , case ordering of
+                [] -> mempty
+                ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)
+            , maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit
+            , maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset
+            , maybe mempty fromPgSelectLockingClause locking ]
 
 pgCreateExtensionSyntax :: T.Text -> PgCommandSyntax
 pgCreateExtensionSyntax extName =
@@ -1229,20 +1222,6 @@ pgDropExtensionSyntax extName =
 
 -- -- * Pg-specific Q monad
 
--- TODO
--- Constrain 'table' to exist within the query (using s maybe?)
--- Constrain Q to not have aggregations (at least the locked tables I think, using s?)
---
---   https://www.postgresql.org/docs/10/static/sql-select.html#SQL-FOR-UPDATE-SHARE
---   "The locking clauses cannot be used in contexts where returned rows cannot be clearly
---   identified with individual table rows; for example they cannot be used with aggregation."
---withLocking_ :: (Database db)
---             => PgSelectLockingStrength
---             -> [DatabaseEntity Postgres db (TableEntity table)]
---             -> Maybe PgSelectLockingOptions
---             -> Q PgSelectSyntax db s a
---             -> Q PgSelectSyntax db s a
---withLocking_ lockStrength tbls mLockOptions q = undefined
 
 data PgEscapeType = PgEscapeString | PgEscapeBytea | PgEscapeIdentifier
   deriving (Show, Eq, Ord, Enum, Bounded)
