@@ -206,9 +206,8 @@ For example, we can write the following (meaningless) query, and things will wor
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
-do tbl1 <- 
+!example chinook
+do tbl1 <-
      limit_ 10 $
      filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                            (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
@@ -224,10 +223,9 @@ possible, rather than shipping data to your application pre-processing.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- 'complicatedQuery' could be declared and imported from an external module here. The generated query is the same regardless
-let complicatedQuery = 
+let complicatedQuery =
        filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                              (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
                all_ (customer chinookDb)

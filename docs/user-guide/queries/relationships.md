@@ -50,8 +50,7 @@ invoice line table, with no attention paid to any relationship between the two:
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- all_ (invoiceLine chinookDb)
    pure (i, ln)
@@ -82,8 +81,7 @@ with only those invoice lines corresponding to that invoice.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- all_ (invoiceLine chinookDb)
    guard_ (invoiceLineInvoice ln `references_` i)
@@ -106,8 +104,7 @@ Beam supports querying for one-to-many joins. For example, to get every
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice i
    pure (i, ln)
@@ -197,15 +194,14 @@ either "Movies" or "Music".
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 manyToMany_ (playlistTrack chinookDb)
             playlistTrackPlaylistId playlistTrackTrackId
-            
+
             (filter_ (\p -> playlistName p ==. just_ (val_ "Music") ||.
                             playlistName p ==. just_ (val_ "Movies"))
                      (all_ (playlist chinookDb)))
-            
+
             (all_ (track chinookDb))
 ```
 
@@ -256,13 +252,12 @@ And we can use it as expected:
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 playlistTrackRelationship
     (filter_ (\p -> playlistName p ==. just_ (val_ "Music") ||.
                     playlistName p ==. just_ (val_ "Movies"))
              (all_ (playlist chinookDb)))
-    
+
     (all_ (track chinookDb))
 ```
 
@@ -279,7 +274,7 @@ oneToMany_ rel getKey tbl =
   join_ rel (\rel -> getKey rel ==. pk tbl)
 ```
 
-Thus, the invoice example above could be rewritten. For example, instead of 
+Thus, the invoice example above could be rewritten. For example, instead of
 
 ```haskell
 do i <- all_ (invoice chinookDb)
@@ -291,8 +286,7 @@ We could write
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- join_ (invoiceLine chinookDb) (\line -> invoiceLineInvoice line ==. primaryKey i)
    pure (i, ln)
@@ -310,8 +304,8 @@ row of that table in case no row matches. For this reason, the result of
 the corresponding `Maybe` type.
 
 !!! note "Note"
-    The table parameter passed in as the join condition does not have a 
-    `Nullable` column tag. The join condition should be written as if a 
+    The table parameter passed in as the join condition does not have a
+    `Nullable` column tag. The join condition should be written as if a
     concrete row from that table exists.
 
 For example, to get every artist along with their albums, but always including
@@ -319,8 +313,7 @@ every artist, use `leftJoin_` as follows.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do artist <- all_ (artist chinookDb)
    album  <- leftJoin_ (all_ (album chinookDb)) (\album -> albumArtist album ==. primaryKey artist)
    pure (artist, album)
@@ -340,13 +333,13 @@ the result has an additional `Nullable` tag.
     Outer joins are only supported in backends whose SQL `FROM` syntax
     implements `IsSql92FromOuterJoinSyntax`. Notably, this does not include
     SQLite.
-    
+
 For example, to get join all employees with customers with the same first name
 but including all employees and customers, we can run the query
-    
+
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook outer-join
 outerJoin_ (all_ (employee chinookDb)) (all_ (customer chinookDb)) (\(employee, customer) -> employeeFirstName employee ==. customerFirstName customer)
 ```
 
@@ -363,8 +356,7 @@ For example, the following query generates the code you'd expect.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- limit_ 10 $ all_ (invoice chinookDb)
    line <- invoiceLines i
    pure (i, line)
@@ -377,8 +369,7 @@ no effect.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- Same as above, but with explicit sub select
 do i <- subselect_ $ limit_ 10 $ all_ (invoice chinookDb)
    line <- invoiceLines i

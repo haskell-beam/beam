@@ -63,7 +63,7 @@ module Database.Beam.Postgres.PgSpecific
   , isSupersetOf_, isSubsetOf_
 
     -- ** Postgres functions and aggregates
-  , pgBoolOr, pgBoolAnd, pgStringAgg
+  , pgBoolOr, pgBoolAnd, pgStringAgg, pgStringAggOver
 
   , pgNubBy_
 
@@ -648,14 +648,14 @@ pgArrayAggOver quantifier (QExpr a) =
 
 -- | Postgres @bool_or@ aggregate. Returns true if any of the rows are true.
 pgBoolOr :: QExpr PgExpressionSyntax s a
-         -> QAgg PgExpressionSyntax s Bool
+         -> QAgg PgExpressionSyntax s (Maybe Bool)
 pgBoolOr (QExpr a) =
   QExpr $ \tbl -> PgExpressionSyntax $
   emit "bool_or" <> pgParens (fromPgExpression (a tbl))
 
 -- | Postgres @bool_and@ aggregate. Returns false unless every row is true.
 pgBoolAnd :: QExpr PgExpressionSyntax s a
-          -> QAgg PgExpressionSyntax s Bool
+          -> QAgg PgExpressionSyntax s (Maybe Bool)
 pgBoolAnd (QExpr a) =
   QExpr $ \tbl -> PgExpressionSyntax $
   emit "bool_and" <> pgParens (fromPgExpression (a tbl))
@@ -668,7 +668,7 @@ pgBoolAnd (QExpr a) =
 pgStringAgg :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
             => QExpr PgExpressionSyntax s str
             -> QExpr PgExpressionSyntax s str
-            -> QAgg PgExpressionSyntax s str
+            -> QAgg PgExpressionSyntax s (Maybe str)
 pgStringAgg = pgStringAggOver allInGroup_
 
 -- | The Postgres @string_agg@ function, with an explicit quantifier. Joins the
@@ -677,7 +677,7 @@ pgStringAggOver :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
                 => Maybe PgAggregationSetQuantifierSyntax
                 -> QExpr PgExpressionSyntax s str
                 -> QExpr PgExpressionSyntax s str
-                -> QAgg PgExpressionSyntax s str
+                -> QAgg PgExpressionSyntax s (Maybe str)
 pgStringAggOver quantifier (QExpr v) (QExpr delim) =
   QExpr $ \tbl -> PgExpressionSyntax $
   emit "string_agg" <>

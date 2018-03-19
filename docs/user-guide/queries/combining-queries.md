@@ -15,8 +15,7 @@ employees.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 let customerNames =
       fmap (\c -> (customerFirstName c, customerLastName c))
            (all_ (customer chinookDb))
@@ -43,8 +42,7 @@ generated.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook intersect
 let customerFirstNames =
       fmap customerFirstName
            (all_ (customer chinookDb))
@@ -73,8 +71,7 @@ For example, to get the second ten full names in common.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 let customerNames =
       fmap (\c -> (customerFirstName c, customerLastName c))
            (all_ (customer chinookDb))
@@ -88,8 +85,7 @@ If we only wanted the union of the first 10 names of each.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 let customerNames =
       fmap (\c -> (customerFirstName c, customerLastName c))
            (all_ (customer chinookDb))

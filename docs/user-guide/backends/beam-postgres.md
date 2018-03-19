@@ -28,8 +28,8 @@ For example, to get an arbitrary customer from each distinct area code
 
 !beam-query
 ```haskell
-!chinookpg postgres
-pgNubBy_ (addressPostalCode . customerAddress) $
+!example chinook only:Postgres
+Pg.pgNubBy_ (addressPostalCode . customerAddress) $
   all_ (customer chinookDb)
 ```
 
@@ -46,9 +46,9 @@ For example, to put together a list of all cities in all the postal codes we hav
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook only:Postgres
 aggregate_ (\c -> ( group_ (addressPostalCode (customerAddress c))
-                  , pgStringAgg (coalesce_ [addressCity (customerAddress c)] "") ",") ) $
+                  , Pg.pgStringAgg (coalesce_ [addressCity (customerAddress c)] "") ",") ) $
   all_ (customer chinookDb)
 ```
 
@@ -56,9 +56,9 @@ The above will include one city multiple times if its shared by multiple custome
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook only:Postgres
 aggregate_ (\c -> ( group_ (addressPostalCode (customerAddress c))
-                  , pgStringAggOver distinctInGroup_ (coalesce_ [addressCity (customerAddress c)] "") ",") ) $
+                  , Pg.pgStringAggOver distinctInGroup_ (coalesce_ [addressCity (customerAddress c)] "") ",") ) $
   all_ (customer chinookDb)
 ```
 
@@ -104,16 +104,16 @@ could be useful if you want to upsert rows into a database.
 
 !beam-query
 ```haskell
-!chinookdmlpg postgres
+!example chinookdml only:Postgres
 -- import qualified Database.Beam.Postgres as Pg
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
 
 runInsert $
   Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
-    onConflict
-      anyConflict
-      onConflictDoNothing
+    Pg.onConflict
+      Pg.anyConflict
+      Pg.onConflictDoNothing
 ```
 
 #### Acting only on certain conflicts
@@ -124,16 +124,16 @@ you can specify the fields with the function `conflictingFields`.
 
 !beam-query
 ```haskell
-!chinookdmlpg postgres
+!example chinookdml only:Postgres
 -- import qualified Database.Beam.Postgres as Pg
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
 
 runInsert $
   Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
-    onConflict
-      (conflictingFields primaryKey)
-      onConflictSetAll
+    Pg.onConflict
+      (Pg.conflictingFields primaryKey)
+      Pg.onConflictSetAll
 ```
 
 !!!tip "Tip"
@@ -143,16 +143,16 @@ If the conflict target is an index, use `conflictingConstraint`, and supply the 
 
 !beam-query
 ```haskell
-!chinookdmlpg postgres
+!example chinookdml only:Postgres
 -- import qualified Database.Beam.Postgres as Pg
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
 
 runInsert $
   Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
-    onConflict
-      (conflictingConstraint "PK_Customer")
-      onConflictSetAll
+    Pg.onConflict
+      (Pg.conflictingConstraint "PK_Customer")
+      Pg.onConflictSetAll
 ```
 
 #### Specifying actions
@@ -168,18 +168,18 @@ primary key already exists, we update *only* the first and last name.
 
 !beam-query
 ```haskell
-!chinookdmlpg postgres
+!example chinookdml only:Postgres
 -- import qualified Database.Beam.Postgres as Pg
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
 
 runInsert $
   Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
-    onConflict
-      (conflictingFields primaryKey)
-      (onConflictUpdateInstead
-	     (\c -> ( customerFirstName c
-		        , customerLastName c )))
+    Pg.onConflict
+      (Pg.conflictingFields primaryKey)
+      (Pg.onConflictUpdateInstead
+         (\c -> ( customerFirstName c
+                , customerLastName c )))
 ```
 
 You can also specify a more specific update, using the
@@ -193,17 +193,17 @@ first name and replace the old last name.
 
 !beam-query
 ```haskell
-!chinookdmlpg postgres
+!example chinookdml only:Postgres
 -- import qualified Database.Beam.Postgres as Pg
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
 
 runInsert $
   Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
-    onConflict
-      (conflictingFields primaryKey)
-      (onConflictUpdateSet
-	    -- tbl is the old row, tblExcluded is the row proposed for insertion
+    Pg.onConflict
+      (Pg.conflictingFields primaryKey)
+      (Pg.onConflictUpdateSet
+        -- tbl is the old row, tblExcluded is the row proposed for insertion
         (\tbl tblExcluded ->
           [ (customerFirstName tbl) <-. concat_ [ current_ (customerFirstName tbl),  customerFirstName tblExcluded ]
           , (customerLastName tbl) <-. (customerLastName tblExcluded) ]

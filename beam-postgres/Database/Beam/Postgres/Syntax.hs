@@ -462,7 +462,7 @@ instance IsSql92FromSyntax PgFromSyntax where
   rightJoin = pgJoin "RIGHT JOIN"
 
 instance IsSql92FromOuterJoinSyntax PgFromSyntax where
-  outerJoin = pgJoin "OUTER JOIN"
+  outerJoin = pgJoin "FULL OUTER JOIN"
 
 instance IsSql92OrderingSyntax PgOrderingSyntax where
   type Sql92OrderingExpressionSyntax PgOrderingSyntax = PgExpressionSyntax

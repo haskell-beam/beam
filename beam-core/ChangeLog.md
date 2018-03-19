@@ -1,5 +1,14 @@
 # 0.7.0.0
 
+## Aggregations return `Maybe` types
+
+In previous versions of beam, aggregations such as `avg_`, `sum_`, etc
+returned the an expression of the same type as its inputs. However,
+this does not match standard SQL behavior, where these aggregates can
+return NULL if no rows are selected for the aggregation. This breaks
+older code, but is more correct. To restore the older behavior, use
+the `fromMaybe_` function to supply a default value.
+
 ## Miscellaneous name changes
 
 The `Database.Beam.Query.lookup` function was renamed to `lookup_` to

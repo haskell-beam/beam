@@ -11,7 +11,7 @@ translation.
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook t611
 aggregate_ (\i -> (group_ (invoiceCustomer i), as_ @Int $ countAll_ `filterWhere_` (invoiceTotal i >. 500), as_ @Int $ countAll_ `filterWhere_` (invoiceTotal i <. 100))) $
 all_ (invoice chinookDb)
 ```
@@ -22,7 +22,7 @@ the invoice was billed to an address in Los Angeles,
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook t611
 withWindow_ (\i -> frame_ (partitionBy_ (invoiceCustomer i)) noOrder_ noBounds_)
             (\i w -> (i, avg_ (invoiceTotal i) `filterWhere_` (addressCity (invoiceBillingAddress i) ==. just_ "Los Angeles") `over_` w))
             (all_ (invoice chinookDb))
@@ -44,7 +44,7 @@ values in the sort ordering.
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook t611
 limit_ 10 $
 orderBy_ (\e -> (asc_ (addressState (employeeAddress e)), nullsLast_ (desc_ (addressCity (employeeAddress e))))) $
 all_ (employee chinookDb)

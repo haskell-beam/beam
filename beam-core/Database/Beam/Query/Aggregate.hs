@@ -134,25 +134,28 @@ allInGroupExplicitly_ :: IsSql92AggregationSetQuantifierSyntax s
 allInGroupExplicitly_ = Just setQuantifierAll
 
 -- ** Aggregations
+--
+--    These functions all return 'Maybe' (except for `count_` and
+--    `countAll_`) because empty aggregates return SQL @NULL@ values.
 
 -- | SQL @MIN(ALL ..)@ function (but without the explicit ALL)
 min_ :: IsSql92AggregationExpressionSyntax expr
-     => QExpr expr s a -> QAgg expr s a
+     => QExpr expr s a -> QAgg expr s (Maybe a)
 min_ = minOver_ allInGroup_
 
 -- | SQL @MAX(ALL ..)@ function (but without the explicit ALL)
 max_ :: IsSql92AggregationExpressionSyntax expr
-     => QExpr expr s a -> QAgg expr s a
+     => QExpr expr s a -> QAgg expr s (Maybe a)
 max_ = maxOver_ allInGroup_
 
 -- | SQL @AVG(ALL ..)@ function (but without the explicit ALL)
 avg_ :: ( IsSql92AggregationExpressionSyntax expr, Num a )
-     => QExpr expr s a -> QAgg expr s a
+     => QExpr expr s a -> QAgg expr s (Maybe a)
 avg_ = avgOver_ allInGroup_
 
 -- | SQL @SUM(ALL ..)@ function (but without the explicit ALL)
 sum_ :: ( IsSql92AggregationExpressionSyntax expr, Num a )
-     => QExpr expr s a -> QAgg expr s a
+     => QExpr expr s a -> QAgg expr s (Maybe a)
 sum_ = sumOver_ allInGroup_
 
 -- | SQL @COUNT(*)@ function
@@ -186,7 +189,7 @@ rank_ = QExpr (pure rankAggE)
 minOver_, maxOver_
   :: IsSql92AggregationExpressionSyntax expr
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s a -> QAgg expr s a
+  -> QExpr expr s a -> QAgg expr s (Maybe a)
 minOver_ q (QExpr a) = QExpr (minE q <$> a)
 maxOver_ q (QExpr a) = QExpr (maxE q <$> a)
 
@@ -194,7 +197,7 @@ avgOver_, sumOver_
   :: ( IsSql92AggregationExpressionSyntax expr
      , Num a )
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s a -> QAgg expr s a
+  -> QExpr expr s a -> QAgg expr s (Maybe a)
 avgOver_ q (QExpr a) = QExpr (avgE q <$> a)
 sumOver_ q (QExpr a) = QExpr (sumE q <$> a)
 
@@ -208,7 +211,7 @@ countOver_ q (QExpr a) = QExpr (countE q <$> a)
 everyOver_, someOver_, anyOver_
   :: IsSql99AggregationExpressionSyntax expr
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s Bool -> QAgg expr s Bool
+  -> QExpr expr s Bool -> QAgg expr s (Maybe Bool)
 everyOver_ q (QExpr a) = QExpr (everyE q <$> a)
 someOver_  q (QExpr a) = QExpr (someE  q <$> a)
 anyOver_   q (QExpr a) = QExpr (anyE   q <$> a)
@@ -221,15 +224,15 @@ filterWhere_ (QExpr agg) (QExpr cond) = QExpr (liftA2 filterAggE agg cond)
 
 -- | SQL99 @EVERY(ALL ..)@ function (but without the explicit ALL)
 every_ :: IsSql99AggregationExpressionSyntax expr
-       => QExpr expr s Bool -> QAgg expr s Bool
+       => QExpr expr s Bool -> QAgg expr s (Maybe Bool)
 every_ = everyOver_ allInGroup_
 
 -- | SQL99 @SOME(ALL ..)@ function (but without the explicit ALL)
 some_ :: IsSql99AggregationExpressionSyntax expr
-      => QExpr expr s Bool -> QAgg expr s Bool
+      => QExpr expr s Bool -> QAgg expr s (Maybe Bool)
 some_  = someOver_  allInGroup_
 
 -- | SQL99 @ANY(ALL ..)@ function (but without the explicit ALL)
 any_ :: IsSql99AggregationExpressionSyntax expr
-     => QExpr expr s Bool -> QAgg expr s Bool
+     => QExpr expr s Bool -> QAgg expr s (Maybe Bool)
 any_   = anyOver_   allInGroup_

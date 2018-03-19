@@ -44,7 +44,7 @@ module Database.Beam.Query
     -- * SQL Command construction and execution
     -- ** @SELECT@
     , SqlSelect(..)
-    , select, lookup
+    , select, lookup_
     , runSelectReturningList
     , runSelectReturningOne
     , dumpSqlSelect
@@ -97,7 +97,7 @@ data QueryInaccessible
 -- | A version of the table where each field is a 'QGenExpr'
 type QGenExprTable ctxt syntax s tbl = tbl (QGenExpr ctxt syntax s)
 
-type QExprTable syntax s tbl = QGenExprTable QValueContext syntax tbl
+type QExprTable syntax s tbl = QGenExprTable QValueContext syntax s tbl
 
 -- * SELECT
 

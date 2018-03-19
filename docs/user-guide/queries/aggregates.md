@@ -23,8 +23,7 @@ Suppose we wanted to count the number of genres in our database.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 aggregate_ (\_ -> countAll_) (all_ (genre chinookDb))
 ```
 
@@ -37,14 +36,13 @@ group by the genre.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 aggregate_ (\(genre, track) -> (group_ genre, as_ @Int $ count_ (trackId track)))
            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
 ```
 
 !!! tip "Tip"
-    `count_` can return any `Integral` type. Adding the explicit `as_ @Int` above 
+    `count_` can return any `Integral` type. Adding the explicit `as_ @Int` above
     prevents an ambiguous type error.
 
 ## SQL compatibility
@@ -68,14 +66,18 @@ to be explicit about it, you can use the `allInGroupExplicitly_` quantifier.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 aggregate_ (\(genre, track) ->
               ( group_ genre
               , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-              , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+              , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
 ```
+
+!!! tip "Tip"
+    Most Beam aggregates (`count_` and `countAll_` being an exception) return a
+    `Maybe` value, because aggregating over no rows in SQL returns a `NULL`
+    value. Use `fromMaybe_` or `coalesce_` to supply a default value in this case.
 
 The `beam-core` library supports the standard SQL aggregation functions.
 Individual backends are likely to support the full range of aggregates available
@@ -103,14 +105,13 @@ subselect and add a `WHERE` clause. Either way, this is transparent to the user.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- Only return results for genres whose total track length is over 5 minutes
 filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
 aggregate_ (\(genre, track) ->
               ( group_ genre
               , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-              , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+              , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
 ```
 
@@ -120,15 +121,14 @@ over tracks.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- Only return results for genres whose total track length is over 5 minutes
 filter_ (\(genre, track, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
 do (genre, priceCnt, trackLength) <-
             aggregate_ (\(genre, track) ->
                           ( group_ genre
                           , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+                          , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    track <- join_ (track chinookDb) (\track -> trackGenreId track ==. just_ (pk genre))
    pure (genre, track, priceCnt, trackLength)
@@ -140,15 +140,14 @@ produced a `WHERE` clause on the outermost `SELECT`. If instead, we put the
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- Only return results for genres whose total track length is over 5 minutes
 do (genre, priceCnt, trackLength) <-
             filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
             aggregate_ (\(genre, track) ->
                           ( group_ genre
                           , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
+                          , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    track <- join_ (track chinookDb) (\track -> trackGenreId track ==. just_ (pk genre))
    pure (genre, track, priceCnt, trackLength)
@@ -161,8 +160,7 @@ aggregate.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- Only return results for genres whose total track length is over 5 minutes
 do track_ <- all_ (track chinookDb)
    (genre, priceCnt, trackLength) <-
@@ -170,8 +168,8 @@ do track_ <- all_ (track chinookDb)
             aggregate_ (\(genre, track) ->
                           ( group_ genre
                           , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
-            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb)) 
+                          , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
+            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    guard_ (trackGenreId track_ ==. just_ (pk genre))
    pure (genre, track_, priceCnt, trackLength)
 ```
@@ -181,8 +179,7 @@ using the `subselect_` combinator.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- Only return results for genres whose total track length is over 5 minutes
 do track_ <- all_ (track chinookDb)
    (genre, priceCnt, trackLength) <-
@@ -191,8 +188,8 @@ do track_ <- all_ (track chinookDb)
             aggregate_ (\(genre, track) ->
                           ( group_ genre
                           , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-                          , sumOver_ allInGroupExplicitly_ (trackMilliseconds track) `div_` 1000 )) $
-            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb)) 
+                          , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
+            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    guard_ (trackGenreId track_ ==. just_ (pk genre))
    pure (genre, track_, priceCnt, trackLength)
 ```

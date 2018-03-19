@@ -2,7 +2,7 @@
 
 module Database.Beam.Query.Combinators
     ( -- * Various SQL functions and constructs
-      coalesce_, position_
+      coalesce_, fromMaybe_, position_
     , charLength_, octetLength_, bitLength_
     , currentTimestamp_
     , lower_, upper_
@@ -769,38 +769,44 @@ if_ conds (QIfElse (QExpr elseExpr)) =
   QExpr (\tbl -> caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond tbl, res tbl)) conds) (elseExpr tbl))
 
 -- | SQL @COALESCE@ support
-coalesce_ :: IsSql92ExpressionSyntax expr =>
-             [ QExpr expr s (Maybe a) ] -> QExpr expr s a -> QExpr expr s a
+coalesce_ :: IsSql92ExpressionSyntax expr
+          => [ QGenExpr ctxt expr s (Maybe a) ] -> QGenExpr ctxt expr s a -> QGenExpr ctxt expr s a
 coalesce_ qs (QExpr onNull) =
   QExpr $ do
     onNull' <- onNull
     coalesceE . (<> [onNull']) <$> mapM (\(QExpr q) -> q) qs
 
+-- | Converta a 'Maybe' value to a concrete value, by suppling a default
+fromMaybe_ :: IsSql92ExpressionSyntax expr
+           =>  QGenExpr ctxt expr s a -> QGenExpr ctxt expr s (Maybe a) -> QGenExpr ctxt expr s a
+fromMaybe_ onNull q = coalesce_ [q] onNull
+
 -- | Type class for anything which can be checked for null-ness. This includes 'QExpr (Maybe a)' as
 -- well as 'Table's or 'PrimaryKey's over 'Nullable QExpr'.
 class IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax a nonNullA s | a s -> syntax, a -> nonNullA, a -> s, nonNullA -> s where
     -- | Returns a 'QExpr' that evaluates to true when the first argument is not null
-    isJust_ :: a -> QExpr syntax s Bool
+    isJust_ :: a -> QGenExpr ctxt syntax s Bool
 
     -- | Returns a 'QExpr' that evaluates to true when the first argument is null
-    isNothing_ :: a -> QExpr syntax s Bool
+    isNothing_ :: a -> QGenExpr ctxt syntax s Bool
 
     -- | Given an object (third argument) which may or may not be null, return the default value if
     -- null (first argument), or transform the value that could be null to yield the result of the
     -- expression (second argument)
-    maybe_ :: QExpr syntax s y -> (nonNullA -> QExpr syntax s y) -> a -> QExpr syntax s y
+    maybe_ :: QGenExpr ctxt syntax s y -> (nonNullA -> QGenExpr ctxt syntax s y) -> a -> QGenExpr ctxt syntax s y
 
-instance IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax (QExpr syntax s (Maybe x)) (QExpr syntax s x) s where
+instance IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax (QGenExpr ctxt syntax s (Maybe x)) (QGenExpr ctxt syntax s x) s where
     isJust_ (QExpr x) = QExpr (isNotNullE <$> x)
     isNothing_ (QExpr x) = QExpr (isNullE <$> x)
 
-    maybe_ (QExpr onNothing) onJust (QExpr e) = let QExpr onJust' = onJust (QExpr e)
-                                                in QExpr (\tbl -> caseE [(isNotNullE (e tbl), onJust' tbl)] (onNothing tbl))
+    maybe_ (QExpr onNothing) onJust (QExpr e) =
+        let QExpr onJust' = onJust (QExpr e)
+        in QExpr (\tbl -> caseE [(isNotNullE (e tbl), onJust' tbl)] (onNothing tbl))
 
 instance ( IsSql92ExpressionSyntax syntax
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
          , Beamable t )
-    => SqlDeconstructMaybe syntax (t (Nullable (QExpr syntax s))) (t (QExpr syntax s)) s where
+    => SqlDeconstructMaybe syntax (t (Nullable (QGenExpr ctxt syntax s))) (t (QGenExpr ctxt syntax s)) s where
     isJust_ t = allE (allBeamValues (\(Columnar' e) -> isJust_ e) t)
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
     maybe_ (QExpr onNothing) onJust tbl =

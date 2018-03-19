@@ -1,3 +1,4 @@
+{-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE UndecidableInstances #-}

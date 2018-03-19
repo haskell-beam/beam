@@ -199,6 +199,9 @@ We can bring these lenses into scope globally via a global pattern match against
 `UserT` table.
 
 ```haskell
+-- Add the following to the top of the file, for GHC >8.2
+{-#  LANGUAGE ImpredicativeTypes #-}
+
 Address (LensFor addressId)    (LensFor addressLine1)
         (LensFor addressLine2) (LensFor addressCity)
         (LensFor addressState) (LensFor addressZip)
@@ -209,6 +212,11 @@ User (LensFor userEmail)    (LensFor userFirstName)
      (LensFor userLastName) (LensFor userPassword) =
      tableLenses
 ```
+
+!!! note "Note"
+    The `ImpredicativeTypes` language extension is necessary for newer
+    GHC to allow the polymorphically typed lenses to be introduced at
+    the top-level. Older GHCs were more lenient.
 
 As in tables, we can generate lenses for databases via the `dbLenses` function.
 
@@ -515,17 +523,14 @@ update the corresponding record in the database.
          save (shoppingCartDb ^. shoppingCartUsers) (james { _userPassword = "52a516ca6df436828d9c0d26e31ef704" })
 
        runSelectReturningList $
-         lookup (shoppingCartDb ^. shoppingCartUsers) (UserId "james@example.com")
+         lookup_ (shoppingCartDb ^. shoppingCartUsers) (UserId "james@example.com")
 
 putStrLn ("James's new password is " ++ show (james ^. userPassword))
 ```
 
 !!! tip "Tip"
-    `lookup` (defined in `Database.Beam.Query`) can be used to easily lookup a
+    `lookup_` (defined in `Database.Beam.Query`) can be used to easily lookup a
     single entity given a table entity in a database and a primary key.
-
-    You may have to hide `lookup` from `Prelude` in order to use `lookup`
-    unqualified.
 
 This works great, but `save` requires that we have the whole `User` object at
 our disposal. Additionally, you'll notice that it causes every field to be set
