@@ -32,7 +32,7 @@ general for the compiler to meaningfully infer types.
   `HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) x` for the type `x` in
   the appropriate `syntax` for the `QGenExpr`. For example, to construct a value
   of type `Vector Int` in the `beam-postgres` backend.
-  
+
 ```haskell
 val_ (V.fromList [1, 2, 3 :: Int])
 ```
@@ -40,7 +40,7 @@ val_ (V.fromList [1, 2, 3 :: Int])
 * **Explicit tables** can be brought to the SQL value level by using `val_` as
   well. For example, if you have an `AddressT Identity` named `a`, `val_ a ::
   AddressT (QGenExpr context expr s)`.
-  
+
 ### UTF support
 
 All included beam backends play nicely with UTF. New backends should also
@@ -48,12 +48,11 @@ support UTF, if they support syntaxes and deserializers for `String` or `Text`.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook utf8
 filter_ (\s -> customerFirstName s ==. "あきら") $
   all_ (customer chinookDb)
 ```
-  
+
 ## Arithmetic
 
 Arithmetic operations that are part of the `Fractional` and `Num` classes can be
@@ -94,8 +93,7 @@ You can also use `in_` to use the common `IN` predicate.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 limit_ 10 $
   filter_ (\customer -> customerFirstName customer `in_` [val_ "Joe", val_ "Sam", val_ "Elizabeth"]) $
   all_ (customer chinookDb)

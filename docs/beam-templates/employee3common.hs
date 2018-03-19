@@ -1,3 +1,5 @@
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 import Prelude hiding (lookup)
 
@@ -244,3 +246,4 @@ main =
            insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
            insertExpressions [ ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI") ]
          pure bettyShippingInfo
+

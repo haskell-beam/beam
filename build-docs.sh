@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 get_pythonpath () {
     export PYTHONPATH=$(python -c "import sys; print ':'.join(['.'] + [p for p in sys.path if p != ''])")
 }
@@ -14,6 +16,12 @@ ghpages () {
     mkdocs gh-deploy
 }
 
+cleandocs () {
+    if [ -f "docs/.beam-query-cache" ]; then
+	rm -rf docs/.beam-query-cache
+    fi
+}
+
 usage () {
     echo "build-docs: Build beam docs"
     echo "Usage: build-docs <command>"
@@ -23,38 +31,12 @@ usage () {
     echo "    ghpages   - build ghpages branch"
 }
 
-download_chinook_db() {
-    git submodule update --init --recursive
-}
-
-prepare_sqlite () {
-    if [ ! -f beam-sqlite/examples/chinook.db ]; then
-        download_chinook_db
-        printf "Updating SQLite chinook db... "
-        sqlite3 beam-sqlite/examples/chinook.db.tmp < docs/chinook/ChinookDatabase/DataSources/Chinook_Sqlite.sql
-        printf "DONE\n"
-        mv beam-sqlite/examples/chinook.db.tmp beam-sqlite/examples/chinook.db
-    fi
-}
-
-prepare_postgres () {
-    if psql -lAt | awk -F "|" '{print $1}' | grep "^Chinook$" > /dev/null; then
-        echo "Postgres Chinook database exists"
-    else
-        echo "Creating postgres database"
-    fi
-}
-
-prepare_databases () {
-    prepare_sqlite
-    prepare_postgres
-}
-
-prepare_databases
-
 case $1 in
-    servedocs) servedocs ;;
-    ghpages) ghpages ;;
+    clean) cleandocs ;;
+    servedocs)
+	servedocs ;;
+    ghpages)
+	ghpages ;;
     *) usage ;;
 esac
 

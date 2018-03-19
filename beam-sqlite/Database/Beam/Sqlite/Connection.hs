@@ -163,7 +163,8 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
                      unRP (next True)
                 _ -> unRP (next False)
 
--- | URI syntax or use with 'withDbConnection'.
+-- | URI syntax for use with 'withDbConnection'. See documentation for
+-- 'BeamURIOpeners' for more information.
 sqliteUriSyntax :: c SqliteCommandSyntax Sqlite Connection SqliteM
                 -> BeamURIOpeners c
 sqliteUriSyntax =

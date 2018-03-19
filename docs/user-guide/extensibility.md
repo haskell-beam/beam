@@ -28,7 +28,7 @@ For example, below, we use `customExpr_` to access the `regr_intercept` and
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook only:Postgres
 aggregate_ (\t -> ( as_ @Double @QAggregateContext $ customExpr_ (\bytes ms -> "regr_intercept(" <> bytes <> ", " <> ms <> ")") (trackBytes t) (trackMilliseconds t)
                   , as_ @Double @QAggregateContext $ customExpr_ (\bytes ms -> "regr_slope(" <> bytes <> ", " <> ms <> ")") (trackBytes t) (trackMilliseconds t) )) $
 all_ (track chinookDb)

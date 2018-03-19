@@ -1,3 +1,4 @@
+.beam-migrate
 cabal.sandbox.config
 .cabal-sandbox
 .stack-work
@@ -18,3 +19,5 @@ graveyard
 site
 TAGS
 .DS_Store
+docs/ChinookData
+
