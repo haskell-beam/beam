@@ -1,3 +1,4 @@
+
 name:                beam-sqlite
 version:             0.3.0.0
 synopsis:            Beam driver for SQLite
@@ -5,7 +6,7 @@ description:         Beam driver for the <https://sqlite.org/ SQLite> embedded d
                      See <http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/ here>
                      for more information
 homepage:            http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/
-license:             BSD3
+license:             MIT
 license-file:        LICENSE
 author:              Travis Athougies
 maintainer:          travis@athougies.net
@@ -14,6 +15,7 @@ category:            Web
 build-type:          Simple
 extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
+bug-reports:          https://github.com/tathougies/beam/issues
 cabal-version:       >=1.18
 
 library
