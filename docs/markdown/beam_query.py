@@ -18,6 +18,8 @@ import json
 import urllib
 import zipfile
 
+import sys
+
 def fetch_backend_src(backend_name, cache_dir, base_dir, src):
     if 'file' in src:
         return (os.path.join(base_dir, src['file']), {})
@@ -58,7 +60,7 @@ def fetch_backend_src(backend_name, cache_dir, base_dir, src):
         return (backend_dir, { 'STACK_YAML': backend_stack_yaml })
     else:
         print "Invalid source spec", src
-        os.exit(1)
+        sys.exit(1)
 
 def setup_backend(cache_dir, base_dir, backend):
     src = backend['src']
@@ -90,7 +92,7 @@ def setup_backend(cache_dir, base_dir, backend):
             return (out, stack_env)
         else:
             print out
-            exit(1)
+            sys.exit(1)
     else:
         with open(status_file, 'rt') as f:
             return (f.read().decode('utf-8'), stack_env)
@@ -354,7 +356,7 @@ class BeamQueryExtension(Extension):
     config = { 'template_dir' : [".", "Directory for template files"],
                'cache_dir'    : ["./.beam-query-cache", "Directory for cached results"],
                'conf'         : ["./beam-docs.yaml", "Config file for documentation generation"],
-               'enabled_backends': [ None, 'List of enabled backends' ],
+               'enabled_backends': [ [], 'List of enabled backends (empty list means use all)' ],
                'base_dir'     : [".", "Path to beam source repo"]
              }
 
@@ -365,7 +367,7 @@ class BeamQueryExtension(Extension):
 
         backends = conf['backends']
         enabled_backends = self.getConfig('enabled_backends')
-        if enabled_backends is not None:
+        if len(enabled_backends) > 0:
             all_backends = backends.keys()
             for backend_name in all_backends:
                 if backend_name not in enabled_backends:

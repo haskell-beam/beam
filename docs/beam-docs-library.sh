@@ -20,6 +20,7 @@ download () {
     CACHED_FILE=$1
     URL=$2
     EXPECTED_SHA256=$3
+    CONV=$4
 
     if [ ! -f $CACHED_FILE ]; then
         TMP_FILE="${CACHED_FILE}.tmp"
@@ -28,7 +29,12 @@ download () {
         DIR=$(dirname $TMP_FILE)
         mkdir -p $DIR
 
-        curl $URL | sed -e 's/\r$//' > $TMP_FILE
+        if [ -z $CONV ]; then
+	    curl $URL | sed -e 's/\r$//' > $TMP_FILE
+	else
+	    curl $URL | $CONV | sed -e 's/\r$//' > $TMP_FILE
+	fi
+
         ACTUAL_SUM=$(sha256 $TMP_FILE)
         if [ "$ACTUAL_SUM" != "$EXPECTED_SHA256" ]; then
             status "Sum mismatch, got $ACTUAL_SUM, expected $EXPECTED_SHA256"

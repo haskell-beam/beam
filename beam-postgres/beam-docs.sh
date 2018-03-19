@@ -3,7 +3,7 @@
 set -e
 
 CHINOOK_POSTGRES_URL="https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_PostgreSql.sql"
-EXPECTED_SHA256="6945d59e3bca94591e2a96451b9bd69084b026f7fb7dbda3d15d06114ffb34c4"
+EXPECTED_SHA256="013d267b57b31193adad64412ee4d0800807b39b4006028ce7fb958e0667a7e0"
 
 PGCONNSTR=$1
 PGDB=$2
@@ -36,14 +36,7 @@ fi
 
 if [ ! -f chinook-data/Chinook_PostgreSql.sql ]; then
     status "Downloading Postgres chinook data..."
-    download "chinook-data/Chinook_PostgreSql.sql.tmp" "$CHINOOK_POSTGRES_URL" "$EXPECTED_SHA256"
-
-    status "Converting file"
-    cat "chinook-data/Chinook_PostgreSql.sql.tmp" | iconv -f ISO-8859-2 -t UTF-8 > chinook-data/Chinook_PostgreSql.sql.conv
-
-    status "Finished conversion"
-    mv chinook-data/Chinook_PostgreSql.sql.conv chinook-data/Chinook_PostgreSql.sql
-    rm chinook-data/Chinook_PostgreSql.sql.tmp
+    download "chinook-data/Chinook_PostgreSql.sql" "$CHINOOK_POSTGRES_URL" "$EXPECTED_SHA256" "iconv -f ISO-8859-2 -t UTF-8"
 fi
 
 status "Creating Postgres database $PGDB ..."
