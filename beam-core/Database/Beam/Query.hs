@@ -224,10 +224,14 @@ insertValues ::
 insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ])
 
 -- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the same table
-insertFrom ::
-    IsSql92InsertValuesSyntax syntax =>
-    SqlSelect (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
-insertFrom (SqlSelect s) = SqlInsertValues (insertFromSql s)
+insertFrom
+    :: ( IsSql92InsertValuesSyntax syntax
+       , HasQBuilder (Sql92InsertValuesSelectSyntax syntax)
+       , Projectible (Sql92SelectExpressionSyntax (Sql92InsertValuesSelectSyntax syntax))
+                     (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) QueryInaccessible)) )
+    => Q (Sql92InsertValuesSelectSyntax syntax) db QueryInaccessible (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) QueryInaccessible))
+    -> SqlInsertValues syntax table
+insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 
 -- * UPDATE
 
