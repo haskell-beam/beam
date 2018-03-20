@@ -56,7 +56,7 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.ByteString (ByteString)
 import Data.Typeable
-import Data.Time (LocalTime, TimeOfDay)
+import Data.Time (LocalTime, TimeOfDay, ZonedTime)
 import Data.Scientific (Scientific)
 
 import GHC.TypeLits
@@ -322,7 +322,7 @@ numeric :: IsSql92DataTypeSyntax syntax => Maybe (Word, Maybe Word) -> DataType 
 numeric x = DataType (numericType x)
 
 -- | SQL92 @TIMESTAMP WITH TIME ZONE@ data type
-timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
+timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax ZonedTime
 timestamptz = DataType (timestampType Nothing True)
 
 -- | SQL92 @TIMESTAMP WITHOUT TIME ZONE@ data type
