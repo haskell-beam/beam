@@ -657,6 +657,9 @@ instance IsSql92ConstraintAttributesSyntax HsNone where
 
 instance HasSqlValueSyntax HsExpr Int where
   sqlValueSyntax = hsInt
+instance HasSqlValueSyntax HsExpr Bool where
+  sqlValueSyntax True = hsVar "True"
+  sqlValueSyntax False = hsVar "False"
 
 instance IsSql92FieldNameSyntax HsExpr where
   qualifiedField tbl nm = hsApp (hsVar "qualifiedField") [ hsStr tbl, hsStr nm ]
