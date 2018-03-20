@@ -48,6 +48,9 @@ run_template1 "CREATE DATABASE \"$PGDB_TMP\""
 
 pv chinook-data/Chinook_PostgreSql.sql | psql "$PGCONNSTR_TMP" --single-transaction -q
 
+status "Patching invoice table to have auto-incrementing id"
+psql "$PGCONNSTR_TMP" -c  "CREATE SEQUENCE \"Invoice_InvoiceId_seq\" START WITH 500; ALTER TABLE \"Invoice\" ALTER \"InvoiceId\" SET DEFAULT NEXTVAL('\"Invoice_InvoiceId_seq\"')" -q
+
 status "Success, renaming $PGDB_TMP to $PGDB"
 run_template1 "ALTER DATABASE \"$PGDB_TMP\" RENAME TO \"$PGDB\""
 

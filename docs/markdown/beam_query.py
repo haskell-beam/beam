@@ -100,7 +100,11 @@ def setup_backend(cache_dir, base_dir, backend):
 def backend_match_reqs(backend, reqs):
     backend_features = backend['supports']
     for req in reqs:
-        if req.startswith("!") and req[1:] in backend_features:
+        if req.startswith("!on:"):
+            not_backend = req[4:]
+            if not_backend == backend['backend-name']:
+                return False
+        elif req.startswith("!") and req[1:] in backend_features:
             return False
         elif req.startswith("only:"):
             exp_backend = req[5:]

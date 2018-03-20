@@ -638,6 +638,8 @@ instance HasSqlValueSyntax SqliteValueSyntax Word32 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word64 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Scientific where
+  sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString (show s)))) -- Rely on sqlites duck typing
 instance HasSqlValueSyntax SqliteValueSyntax Float where
   sqlValueSyntax f = SqliteValueSyntax (emitValue (SQLFloat (float2Double f)))
 instance HasSqlValueSyntax SqliteValueSyntax Double where

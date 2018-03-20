@@ -22,9 +22,43 @@ fi
 
 status "Creating temporary $SQLITE_DB..."
 
+rm -f $SQLITE_DB.tmp
 (echo "BEGIN;"; pv chinook-data/Chinook_Sqlite.sql; echo "END;") | sqlite3 $SQLITE_DB.tmp
 
 status "Success, creating $SQLITE_DB"
+sqlite3 $SQLITE_DB.tmp <<EOF
+ALTER TABLE [Invoice] RENAME TO [InvoiceTemp];
+CREATE TABLE [InvoiceNew]
+(
+    [InvoiceId] INTEGER NOT NULL,
+    [CustomerId] INTEGER  NOT NULL,
+    [InvoiceDate] DATETIME  NOT NULL,
+    [BillingAddress] NVARCHAR(70),
+    [BillingCity] NVARCHAR(40),
+    [BillingState] NVARCHAR(40),
+    [BillingCountry] NVARCHAR(40),
+    [BillingPostalCode] NVARCHAR(10),
+    [Total] NUMERIC(10,2)  NOT NULL
+);
+INSERT INTO [InvoiceNew] SELECT * FROM [InvoiceTemp];
+DROP TABLE [InvoiceTemp];
+CREATE TABLE [Invoice]
+(
+    [InvoiceId] INTEGER PRIMARY KEY AUTOINCREMENT,
+    [CustomerId] INTEGER  NOT NULL,
+    [InvoiceDate] DATETIME  NOT NULL,
+    [BillingAddress] NVARCHAR(70),
+    [BillingCity] NVARCHAR(40),
+    [BillingState] NVARCHAR(40),
+    [BillingCountry] NVARCHAR(40),
+    [BillingPostalCode] NVARCHAR(10),
+    [Total] NUMERIC(10,2)  NOT NULL,
+    FOREIGN KEY ([CustomerId]) REFERENCES [Customer] ([CustomerId])
+		ON DELETE NO ACTION ON UPDATE NO ACTION
+);
+INSERT INTO [Invoice] SELECT * FROM [InvoiceNew];
+DROP TABLE [InvoiceNew];
+EOF
 
 mv $SQLITE_DB.tmp $SQLITE_DB
 

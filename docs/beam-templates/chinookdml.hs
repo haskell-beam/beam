@@ -6,6 +6,7 @@ module Main where
 
 import Database.Beam
 import Database.Beam.Backend.Types
+import qualified Database.Beam.Backend.SQL.BeamExtensions as BeamExtensions
 BEAM_MODULE_IMPORT
 
 import Control.Monad

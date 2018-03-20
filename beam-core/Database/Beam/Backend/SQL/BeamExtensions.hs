@@ -5,7 +5,13 @@
 -- Beam provides type classes that some backends instantiate that provide this
 -- support. This uses direct means on sufficiently advanced backends and is
 -- emulated on others.
-module Database.Beam.Backend.SQL.BeamExtensions where
+module Database.Beam.Backend.SQL.BeamExtensions
+  ( MonadBeamInsertReturning(..)
+  , MonadBeamUpdateReturning(..)
+  , MonadBeamDeleteReturning(..)
+
+  , SqlSerial(..)
+  ) where
 
 import Database.Beam.Backend
 import Database.Beam.Backend.SQL
