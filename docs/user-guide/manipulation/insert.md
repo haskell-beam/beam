@@ -147,12 +147,12 @@ you can feel free to pattern match directly. Otherwise (if you used
 was inserted.
 
 !!! tip "Tip"
-    Note that unlike the standard beam @INSERT@ functionality, which can run any
+    Note that unlike the standard beam `INSERT` functionality, which can run any
     `SqlInsert`, `runInsertReturningList` requires that we supply a table and a
     `SqlInsertValues`.
 
     This is because this functionality is emulated on some backends. Some
-    backends (such as postgres) provide a more advanced @INSERT .. RETURNING@
+    backends (such as postgres) provide a more advanced `INSERT .. RETURNING`
     statement that can be used more like `SqlInsert`. See the backend
     documentation for more details.
 
@@ -165,6 +165,34 @@ was inserted.
     emulated functionality.
 
 ## Inserting from the result of a `SELECT` statement
+
+Sometimes you want to use existing data to insert values. For example, perhaps
+we want to give every customer their own playlist, titled "<name>'s playlist".
+
+We can use the `insertFrom` function to make a `SqlInsertValues` corresponding
+to the result of a query. Make sure to return a projection with the same 'shape'
+as your data. If not, you'll get a compile time error.
+
+For example, to create the playlists as above
+
+!beam-query
+```haskell
+!example chinookdml
+
+runInsert $ insert (playlist chinookDb) $
+  insertFrom $ do
+    customer <- all_ (customer chinookDb)
+    pure (Playlist (customerId customer + 1000) (just_ (concat_ [ customerFirstName customer, "'s Playlist" ])))
+
+playlists <- runSelectReturningList $ select $ limit_ 10 $
+             orderBy_ (\p -> asc_ (playlistId p)) $
+             filter_ (\p -> playlistId p >=. 1000) $
+             all_ (playlist chinookDb)
+
+putStrLn "Inserted playlists"
+forM_ playlists $ \playlist ->
+  putStrLn ("  - " ++ show playlist)
+```
 
 ## Choosing a subset of columns
 
