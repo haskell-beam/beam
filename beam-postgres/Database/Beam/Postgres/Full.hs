@@ -1,12 +1,47 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Module providing (almost) full support for Postgres query and data
 -- manipulation statements. These functions shadow the functions in
 -- "Database.Beam.Query" and provide a strict superset of functionality. They
 -- map 1-to-1 with the underlying Postgres support.
-module Database.Beam.Postgres.Full where
+module Database.Beam.Postgres.Full
+  ( -- * Additional @SELECT@ features
 
-import           Database.Beam hiding (insertValues)
+    -- ** @SELECT@ Locking clause
+    PgWithLocking, PgLockedTables
+  , PgSelectLockingStrength(..), PgSelectLockingOptions(..)
+  , lockingAllTablesFor_, lockingFor_
+
+  , locked_, lockAll_, withLocks_
+
+  -- * @INSERT@ and @INSERT RETURNING@
+  , insert, insertReturning
+
+  , PgInsertReturning(..)
+
+  -- ** Specifying conflict actions
+
+  , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
+  , PgConflictAction(..)
+
+  , onConflictDefault, onConflict, anyConflict, conflictingFields
+  , conflictingFieldsWhere, conflictingConstraint
+  , onConflictDoNothing, onConflictUpdateSet
+  , onConflictUpdateSetWhere, onConflictUpdateInstead
+  , onConflictSetAll
+
+  -- * @UPDATE RETURNING@
+  , PgUpdateReturning(..)
+  , updateReturning
+
+  -- * @DELETE RETURNING@
+  , PgDeleteReturning(..)
+  , deleteReturning
+  ) where
+
+import           Database.Beam hiding (insert, insertValues)
 import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Schema.Tables
@@ -14,8 +49,86 @@ import           Database.Beam.Schema.Tables
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax
 
+import           Control.Monad.Free.Church
+
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
+
+-- * @SELECT@
+
+-- | An explicit lock against some tables. You can create a value of this type using the 'locked_'
+-- function. You can combine these values monoidally to combine multiple locks for use with the
+-- 'withLocks_' function.
+newtype PgLockedTables s = PgLockedTables [ T.Text ]
+instance Monoid (PgLockedTables s) where
+  mempty = PgLockedTables []
+  mappend (PgLockedTables a) (PgLockedTables b) = PgLockedTables (a <> b)
+
+data PgWithLocking s a = PgWithLocking (PgLockedTables s) a
+instance ProjectibleWithPredicate c syntax a => ProjectibleWithPredicate c syntax (PgWithLocking s a) where
+  project' p mutateM (PgWithLocking tbls a) =
+    PgWithLocking tbls <$> project' p mutateM a
+
+-- | Use with 'lockingFor_' to lock all tables mentioned in the query
+lockAll_ :: a -> PgWithLocking s a
+lockAll_ = PgWithLocking mempty
+
+-- | Return and lock the given tables. Typically used as an infix operator. See
+-- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ the user guide> for usage
+-- examples
+withLocks_ :: a -> PgLockedTables s -> PgWithLocking s a
+withLocks_ = flip PgWithLocking
+
+-- | Join with a table while locking it explicitly. Provides a 'PgLockedTables' value that can be
+-- used with 'withLocks_' to explicitly lock a table during a @SELECT@ statement
+locked_ :: Database Postgres db
+        => DatabaseEntity Postgres db (TableEntity tbl)
+        -> Q PgSelectSyntax db s (PgLockedTables s, tbl (QExpr PgExpressionSyntax s))
+locked_ tbl@(DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
+  (nm, joined) <- Q (liftF (QAll tblNm tblSettings (\_ -> Nothing) id))
+  pure (PgLockedTables [nm], joined)
+
+-- | Lock some tables during the execution of a query. This is rather complicated, and there are
+-- several usage examples in <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/
+-- the user guide>
+--
+-- The Postgres locking clause is rather complex, and beam currently does not check several
+-- pre-conditions. It is assumed you kinda know what you're doing.
+--
+-- Things which postgres doesn't like, but beam will do
+--
+-- * Using aggregates within a query that has a locking clause
+-- * Using @UNION@, @INTERSECT@, or @EXCEPT@
+--
+--   See <https://www.postgresql.org/docs/10/static/sql-select.html#SQL-FOR-UPDATE-SHARE here> for
+--   more details.
+--
+-- This function accepts a locking strength (@UPDATE@, @SHARE@, @KEY SHARE@, etc), an optional
+-- locking option (@NOWAIT@ or @SKIP LOCKED@), and a query whose rows to lock. The query should
+-- return its result wrapped in 'PgWithLocking', via the `withLocks_` or `lockAll_` function.
+--
+-- If you want to use the most common behavior (lock all rows in every table mentioned), the
+-- 'lockingAllTablesFor_' function may be what you're after.
+lockingFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
+            => PgSelectLockingStrength
+            -> Maybe PgSelectLockingOptions
+            -> Q PgSelectSyntax db (QNested s) (PgWithLocking (QNested s) a)
+            -> Q PgSelectSyntax db s a
+lockingFor_ lockStrength mLockOptions (Q q) =
+  Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) r) tbl ords limit offset ->
+                            let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
+                            in pgSelectStmt tbl ords limit offset (Just locking))
+                         q (\(PgWithLocking _ a) -> a)))
+
+-- | Like 'lockingFor_', but does not require an explicit set of locked tables. This produces an
+-- empty @FOR .. OF@ clause.
+lockingAllTablesFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
+                     => PgSelectLockingStrength
+                     -> Maybe PgSelectLockingOptions
+                     -> Q PgSelectSyntax db (QNested s) a
+                     -> Q PgSelectSyntax db s a
+lockingAllTablesFor_ lockStrength mLockOptions q =
+  lockingFor_ lockStrength mLockOptions (lockAll_ <$> q)
 
 -- * @INSERT@
 

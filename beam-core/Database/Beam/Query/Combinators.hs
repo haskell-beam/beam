@@ -94,7 +94,7 @@ all_ :: forall be (db :: (* -> *) -> *) table select s.
        => DatabaseEntity be db (TableEntity table)
        -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
-    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) id)
+    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a view into the 'Q' monad
 allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
@@ -108,7 +108,7 @@ allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
                => DatabaseEntity be db (ViewEntity table)
                -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
-    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) id)
+    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a table into the 'Q' monad based on the given
 --   QExpr
@@ -121,7 +121,7 @@ join_ :: ( Database be db, Table table
       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
       -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 join_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
-    Q $ liftF (QAll tblNm tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) id)
+    Q $ liftF (QAll tblNm tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
 
 -- | Introduce a table using a left join with no ON clause. Because this is not
 --   an inner join, the resulting table is made nullable. This means that each
