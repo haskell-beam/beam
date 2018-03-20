@@ -28,7 +28,6 @@ module Database.Beam.Query.Ord
   , HasTableEquality, HasTableEqualityNullable
 
   , SqlBool
-  , isUnknown_, isNotUnknown_
   , isTrue_, isNotTrue_
   , isFalse_, isNotFalse_
   , isUnknown_, isNotUnknown_
@@ -116,15 +115,13 @@ unknownAs_ True  = isNotFalse_ -- If unknown is being treated as true, then retu
 --
 --   Accepts a subquery. Use 'allIn_' for an explicit list
 allOf_
-  :: forall s r select expr db.
-   ( ThreadRewritable (QNested s) r
-   , ProjectibleInSelectSyntax select r
-   , IsSql92SelectSyntax select
+  :: forall s a select expr db.
+   ( IsSql92SelectSyntax select
    , IsSql92ExpressionSyntax expr
    , HasQBuilder select
    , Sql92ExpressionSelectSyntax expr ~ select )
-  => Q select db (QNested s) r
-  -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
+  => Q select db (QNested s) (QExpr (Sql92SelectExpressionSyntax select) (QNested s) a)
+  -> QQuantified expr s a
 allOf_ s = QQuantified quantifyOverAll (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
@@ -144,15 +141,13 @@ allIn_ es = QQuantified quantifyOverAll (rowE <$> mapM (\(QExpr e) -> e) es)
 --
 --   Accepts a subquery. Use 'anyIn_' for an explicit list
 anyOf_
-  :: forall s r select expr db.
-   ( ThreadRewritable (QNested s) r
-   , ProjectibleInSelectSyntax select r
-   , IsSql92SelectSyntax select
+  :: forall s a select expr db.
+   ( IsSql92SelectSyntax select
    , IsSql92ExpressionSyntax expr
    , HasQBuilder select
    , Sql92ExpressionSelectSyntax expr ~ select )
-  => Q select db (QNested s) r
-  -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
+  => Q select db (QNested s) (QExpr (Sql92SelectExpressionSyntax select) (QNested s) a)
+  -> QQuantified expr s a
 anyOf_ s = QQuantified quantifyOverAny (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
 -- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
@@ -204,11 +199,8 @@ class SqlEq expr a | a -> expr where
 --   equality.
 class SqlEq expr a => SqlEqQuantified expr quantified a | a -> expr quantified where
 
-  -- | Quantified equality and inequality using Haskell semantics (NULLs handled properly)
-  (==*.), (/=*.) :: a -> quantified -> expr Bool
-
-  -- | Quantified equality and inequality using /SQL tri-state boolean/ semantics
-  (==?*.), (/=?*.) :: a -> quantified -> expr SqlBool
+  -- | Quantified equality and inequality using /SQL semantics/ (tri-state boolean)
+  (==*.), (/=*.) :: a -> quantified -> expr SqlBool
 
 infix 4 ==., /=., ==*., /=*.
 infix 4 <., >., <=., >=.
@@ -251,17 +243,13 @@ class HasSqlEqualityCheck syntax a => HasSqlQuantifiedEqualityCheck syntax a whe
   sqlQEqE _ = eqE
   sqlQNeqE _ = neqE
 
-  sqlQEqTriE, sqlQNeqTriE :: Proxy a -> Maybe (Sql92ExpressionQuantifierSyntax syntax)
-                          -> syntax -> syntax -> syntax
-  sqlQEqTriE _ = eqE
-  sqlQNeqTriE _ = neqE
+instance (HasSqlQuantifiedEqualityCheck syntax a, CanCheckMaybeEquality a) => HasSqlQuantifiedEqualityCheck syntax (Maybe a) where
+  sqlQEqE _ = sqlQEqE (Proxy @a)
+  sqlQNeqE _ = sqlQNeqE (Proxy @a)
 
 instance HasSqlQuantifiedEqualityCheck syntax a => HasSqlQuantifiedEqualityCheck syntax (SqlSerial a) where
   sqlQEqE _ = sqlQEqE (Proxy @a)
   sqlQNeqE _ = sqlQNeqE (Proxy @a)
-
-  sqlQEqTriE _ = sqlQEqTriE (Proxy @a)
-  sqlQNeqTriE _ = sqlQNeqTriE (Proxy @a)
 
 -- | Compare two arbitrary expressions (of the same type) for equality
 instance ( IsSql92ExpressionSyntax syntax, HasSqlEqualityCheck syntax a ) =>
@@ -279,9 +267,6 @@ instance ( IsSql92ExpressionSyntax syntax, HasSqlQuantifiedEqualityCheck syntax 
 
   a ==*. QQuantified q b = qBinOpE (sqlQEqE (Proxy @a) (Just q)) a (QExpr b)
   a /=*. QQuantified q b = qBinOpE (sqlQNeqE (Proxy @a) (Just q)) a (QExpr b)
-
-  a ==?*. QQuantified q b = qBinOpE (sqlQEqTriE (Proxy @a) (Just q)) a (QExpr b)
-  a /=?*. QQuantified q b = qBinOpE (sqlQNeqTriE (Proxy @a) (Just q)) a (QExpr b)
 
 -- | Constraint synonym to check if two tables can be compared for equality
 type HasTableEquality expr tbl =

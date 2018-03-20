@@ -1122,9 +1122,9 @@ pgCompOp :: ByteString -> Maybe PgComparisonQuantifierSyntax
 pgCompOp op quantifier a b =
   PgExpressionSyntax $
   emit "(" <> fromPgExpression a <>
-  emit (") " <> op <> " (") <>
+  emit (") " <> op) <>
   maybe mempty (\q -> emit " " <> fromPgComparisonQuantifier q <> emit " ") quantifier <>
-  fromPgExpression b <> emit ")"
+  emit " (" <> fromPgExpression b <> emit ")"
 
 pgBinOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax -> PgExpressionSyntax
 pgBinOp op a b =

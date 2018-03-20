@@ -64,8 +64,6 @@ import           Foreign.C.Types
 
 import           Network.URI (uriToString)
 
-import           System.IO
-
 -- | Errors that may arise while using the 'Pg' monad.
 data PgError
   = PgRowParseError PgRowReadError
@@ -214,8 +212,6 @@ withPgDebug dbg conn (Pg action) =
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
            dbg (T.unpack (decodeUtf8 query))
-
-           hPutStrLn stderr ("Going to run " ++ show query)
 
            res <- Pg.exec conn query
            sts <- Pg.resultStatus res
