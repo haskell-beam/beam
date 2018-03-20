@@ -25,9 +25,15 @@ module Database.Beam.Query
     -- * Operators
     , module Database.Beam.Query.Operator
 
-    , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
+    -- ** ANSI SQL Booleans
+    , SqlBool
+    , isTrue_, isNotTrue_
+    , isFalse_, isNotFalse_
+    , isUnknown_, isNotUnknown_
+    , unknownAs_
 
     -- ** Unquantified comparison operators
+    , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
     , SqlEq(..), SqlOrd(..)
 
     -- ** Quantified Comparison Operators #quantified-comparison-operator#

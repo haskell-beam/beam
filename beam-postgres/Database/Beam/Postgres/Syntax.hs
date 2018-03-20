@@ -624,6 +624,8 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   overlapsE = pgBinOp "OVERLAPS"
   eqE = pgCompOp "="
   neqE = pgCompOp "<>"
+  eqMaybeE a b _ = pgBinOp "IS NOT DISTINCT FROM" a b
+  neqMaybeE a b _ = pgBinOp "IS DISTINCT FROM" a b
   ltE = pgCompOp "<"
   gtE = pgCompOp ">"
   leE = pgCompOp "<="
