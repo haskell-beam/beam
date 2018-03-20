@@ -744,7 +744,7 @@ instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
   concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
   concatE (x:xs) =
     SqliteExpressionSyntax $ parens $
-    foldr (\a b -> parens (fromSqliteExpression a) <> emit " || " <> parens b) (fromSqliteExpression x) xs
+    foldl (\a b -> a <> emit " || " <> parens (fromSqliteExpression b)) (fromSqliteExpression x) xs
 
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
