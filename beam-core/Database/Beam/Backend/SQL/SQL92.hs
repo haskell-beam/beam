@@ -28,6 +28,7 @@ type Sql92SelectExpressionSyntax select = Sql92SelectTableExpressionSyntax (Sql9
 type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
+type Sql92InsertExpressionSyntax select = Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax select)
 
 type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92ExpressionSyntax cmdSyntax)
 type Sql92ExpressionSyntax cmdSyntax = Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax)
@@ -196,7 +197,10 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
   type Sql92ExpressionExtractFieldSyntax expr :: *
 
   valueE :: Sql92ExpressionValueSyntax expr -> expr
-  rowE, coalesceE :: [ expr ] -> expr
+
+  rowE, quantifierListE, coalesceE :: [ expr ] -> expr
+  quantifierListE = rowE
+
   caseE :: [(expr, expr)]
         -> expr -> expr
   fieldE :: Sql92ExpressionFieldNameSyntax expr -> expr

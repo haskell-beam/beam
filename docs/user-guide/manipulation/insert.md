@@ -181,8 +181,8 @@ For example, to create the playlists as above
 
 runInsert $ insert (playlist chinookDb) $
   insertFrom $ do
-    customer <- all_ (customer chinookDb)
-    pure (Playlist (customerId customer + 1000) (just_ (concat_ [ customerFirstName customer, "'s Playlist" ])))
+    c <- all_ (customer chinookDb)
+    pure (Playlist (customerId c + 1000) (just_ (concat_ [ customerFirstName c, "'s Playlist" ])))
 
 playlists <- runSelectReturningList $ select $ limit_ 10 $
              orderBy_ (\p -> asc_ (playlistId p)) $
@@ -195,6 +195,29 @@ forM_ playlists $ \playlist ->
 ```
 
 ## Choosing a subset of columns
+
+Above, we used the `default_` clause to set a column to a default
+value. Unfortunately, not all backends support `default_` (SQLite being a
+notable exception). Moreover, some `INSERT` forms simply can't use `default_`,
+such as `insertFrom_` (you can't return `default_` from a query). The standard
+SQL tool used in these cases is limiting the inserted data to specific
+columns. For example, suppose we want to insert new invoices for every customer
+with today's date. We can use the `insertOnly` function to project which field's
+are being inserted.
+
+!beam-query
+```haskell
+!example chinookdml
+
+runInsert $
+  insertOnly (invoice chinookDb)
+             (\i -> ( invoiceCustomer i, invoiceDate i, invoiceBillingAddress i, invoiceTotal i ) ) $
+  insertFrom $ do
+    c <- all_ (customer chinookDb)
+
+    -- We'll just charge each customer $10 to be mean!
+    pure (primaryKey c, currentTimestamp_, customerAddress c, as_ @Scientific $ val_ 10)
+```
 
 ## Inserting nothing
 

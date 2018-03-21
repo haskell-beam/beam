@@ -137,7 +137,7 @@ lockingAllTablesFor_ lockStrength mLockOptions q =
 -- allows you to specify @ON CONFLICT@ actions. For even more complete support,
 -- see 'insertReturning'.
 insert :: DatabaseEntity Postgres db (TableEntity table)
-       -> SqlInsertValues PgInsertValuesSyntax table
+       -> SqlInsertValues PgInsertValuesSyntax (table (QExpr PgExpressionSyntax s)) -- TODO arbitrary projectibles
        -> PgInsertOnConflict table
        -> SqlInsert PgInsertSyntax
 insert tbl values onConflict_ =
@@ -162,7 +162,7 @@ data PgInsertReturning a
 -- 'MonadBeamInsertReturning'. Use 'runInsertReturning' to get the results.
 insertReturning :: Projectible PgExpressionSyntax a
                 => DatabaseEntity Postgres be (TableEntity table)
-                -> SqlInsertValues PgInsertValuesSyntax table
+                -> SqlInsertValues PgInsertValuesSyntax (table (QExpr PgExpressionSyntax s))
                 -> PgInsertOnConflict table
                 -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
                 -> PgInsertReturning (QExprToIdentity a)

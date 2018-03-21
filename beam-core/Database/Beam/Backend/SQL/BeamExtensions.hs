@@ -32,7 +32,8 @@ class MonadBeam syntax be handle m =>
        , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
        , FromBackendRow be (table Identity) )
     => DatabaseEntity be db (TableEntity table)
-    -> SqlInsertValues (Sql92InsertValuesSyntax (Sql92InsertSyntax syntax)) table
+    -> SqlInsertValues (Sql92InsertValuesSyntax (Sql92InsertSyntax syntax))
+                       (table (QExpr (Sql92InsertExpressionSyntax (Sql92InsertSyntax syntax)) s))
     -> m [table Identity]
 
 -- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.

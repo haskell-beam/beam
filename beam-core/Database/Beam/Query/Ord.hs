@@ -134,7 +134,7 @@ allIn_
    . ( IsSql92ExpressionSyntax expr )
   => [QExpr expr s a]
   -> QQuantified expr s a
-allIn_ es = QQuantified quantifyOverAll (rowE <$> mapM (\(QExpr e) -> e) es)
+allIn_ es = QQuantified quantifyOverAll (quantifierListE <$> mapM (\(QExpr e) -> e) es)
 
 -- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
@@ -160,7 +160,7 @@ anyIn_
    . ( IsSql92ExpressionSyntax expr )
   => [QExpr expr s a]
   -> QQuantified expr s a
-anyIn_ es = QQuantified quantifyOverAny (rowE <$> mapM (\(QExpr e) -> e) es)
+anyIn_ es = QQuantified quantifyOverAny (quantifierListE <$> mapM (\(QExpr e) -> e) es)
 
 -- | SQL @BETWEEN@ clause
 between_ :: IsSql92ExpressionSyntax syntax

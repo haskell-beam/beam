@@ -14,6 +14,7 @@ import Control.Exception
 
 import Data.IORef
 import Data.Monoid ((<>))
+import Data.Scientific (Scientific)
 
 import Chinook.Schema
 

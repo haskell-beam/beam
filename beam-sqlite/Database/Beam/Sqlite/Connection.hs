@@ -16,7 +16,7 @@ import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import           Database.Beam.Backend.URI
-import           Database.Beam.Query (SqlInsert(..), SqlInsertValues(..), insert)
+import           Database.Beam.Query (QExpr, SqlInsert(..), SqlInsertValues(..), insert)
 import           Database.Beam.Schema.Tables ( DatabaseEntity(..)
                                              , DatabaseEntityDescriptor(..)
                                              , TableEntity)
@@ -249,7 +249,7 @@ data SqliteInsertReturning (table :: (* -> *) -> *)
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
 -- into the given table. Use 'runInsertReturningList'
 insertReturning :: DatabaseEntity be db (TableEntity table)
-                -> SqlInsertValues SqliteInsertValuesSyntax table
+                -> SqlInsertValues SqliteInsertValuesSyntax (table (QExpr SqliteExpressionSyntax s))
                 -> SqliteInsertReturning table
 insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
   case insert tbl vs of

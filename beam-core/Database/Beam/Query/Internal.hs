@@ -482,6 +482,19 @@ instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPr
               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
               <*> project' p mkE g <*> project' p mkE h
 
+instance Beamable t => ProjectibleWithPredicate AnyType T.Text (t (QField s)) where
+  project' _ mutateM a =
+    zipBeamFieldsM (\(Columnar' f) _ ->
+                      Columnar' <$> project' (Proxy @AnyType) mutateM f) a a
+instance Beamable t => ProjectibleWithPredicate AnyType T.Text (t (Nullable (QField s))) where
+  project' _ mutateM a =
+    zipBeamFieldsM (\(Columnar' f) _ ->
+                      Columnar' <$> project' (Proxy @AnyType) mutateM f) a a
+instance ProjectibleWithPredicate AnyType T.Text (QField s a) where
+  project' _ mutateM (QField q tbl f) =
+    fmap (\f' -> QField q tbl (f' ""))
+         (mutateM (Proxy @(QField s a)) (\_ -> f)) -- This is kind of a hack
+
 project :: Projectible syntax a => a -> WithExprContext [ syntax ]
 project = sequenceA . DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)
 
