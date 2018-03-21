@@ -27,7 +27,6 @@ module Database.Beam.Query.Ord
   , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
   , HasTableEquality, HasTableEqualityNullable
 
-  , SqlBool
   , isTrue_, isNotTrue_
   , isFalse_, isNotFalse_
   , isUnknown_, isNotUnknown_
@@ -65,14 +64,6 @@ import GHC.TypeLits
 -- | A data structure representing the set to quantify a comparison operator over.
 data QQuantified expr s r
   = QQuantified (Sql92ExpressionQuantifierSyntax expr) (WithExprContext expr)
-
--- | Phantom type representing a SQL /Tri-state/ boolean -- true, false, and unknown
---
--- This type has no values because it cannot be sent to or retrieved
--- from the database directly. Use 'isTrue_', 'isFalse_',
--- 'isNotTrue_', 'isNotFalse_', 'isUnknown_', 'isNotUnknown_', and
--- `unknownAs_` to retrieve the corresponding 'Bool' value.
-data SqlBool
 
 -- | SQL @IS TRUE@ operator
 isTrue_ :: IsSql92ExpressionSyntax syntax
@@ -290,6 +281,16 @@ instance ( IsSql92ExpressionSyntax syntax, FieldsFulfillConstraint (HasSqlEquali
             in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
 
+  a ==?. b = let (_, e) = runState (zipBeamFieldsM
+                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                        do modify (\expr ->
+                                                     case expr of
+                                                       Nothing -> Just $ x ==?. y
+                                                       Just expr' -> Just $ expr' &&?. x ==?. y)
+                                           return x') (withConstraints @(HasSqlEqualityCheck syntax) `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a /=?. b = sqlNot_ (a ==?. b)
+
 instance ( IsSql92ExpressionSyntax syntax
          , FieldsFulfillConstraintNullable (HasSqlEqualityCheck syntax) tbl
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
@@ -306,6 +307,16 @@ instance ( IsSql92ExpressionSyntax syntax
                                       (withNullableConstraints @(HasSqlEqualityCheck syntax) `alongsideTable` a) b) Nothing
             in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
+
+  a ==?. b = let (_, e) = runState (zipBeamFieldsM
+                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                        do modify (\expr ->
+                                                     case expr of
+                                                       Nothing -> Just $ x ==?. y
+                                                       Just expr' -> Just $ expr' &&?. x ==?. y)
+                                           return x') (withNullableConstraints @(HasSqlEqualityCheck syntax) `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a /=?. b = sqlNot_ (a ==?. b)
 
 
 -- * Comparisons
