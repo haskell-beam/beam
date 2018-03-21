@@ -60,6 +60,14 @@ instance ( Generic (embeddedTbl (Const [FieldCheck]))
   gDefaultTblSettingsChecks syntax _ _ =
     K1 (to (gDefaultTblSettingsChecks syntax (Proxy :: Proxy (Rep (embeddedTbl Identity))) True))
 
+instance ( Generic (embeddedTbl (Nullable (Const [FieldCheck])))
+         , IsSql92DdlCommandSyntax syntax
+         , GMigratableTableSettings syntax (Rep (embeddedTbl (Nullable Identity))) (Rep (embeddedTbl (Nullable (Const [FieldCheck])))) ) =>
+  GMigratableTableSettings syntax (Rec0 (embeddedTbl (Nullable Identity))) (Rec0 (embeddedTbl (Nullable (Const [FieldCheck])))) where
+
+  gDefaultTblSettingsChecks syntax _ _ =
+    K1 (to (gDefaultTblSettingsChecks syntax (Proxy :: Proxy (Rep (embeddedTbl (Nullable Identity)))) True))
+
 -- * Nullability check
 
 type family NullableStatus (x :: *) :: Bool where
