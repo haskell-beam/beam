@@ -45,6 +45,9 @@ markdown_extensions:
   - docs.markdown.beam_query:
       template_dir: 'docs/beam-templates'
       cache_dir: 'docs/.beam-query-cache'
+      conf: 'docs/beam.yaml'
+      base_dir: '.'
+#      enabled_backends: [ beam-postgres, beam-sqlite ]
   - docs.markdown.markdown_fenced_code_tabs
   - def_list
   - codehilite

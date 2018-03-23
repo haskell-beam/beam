@@ -19,14 +19,14 @@ In this definition
   use syntax-specific features. For example, if you want to use named windows in
   postgres, you'll likely have to specialize this to `PgSelectSyntax` from
   `Database.Beam.Postgres.Syntax`.
-  
+
 * `db` is the type of the database (as we defined above). This is used to ensure
   you only query database entities that are in scope in this database.
-  
+
 * `s` is the scope parameter. For the most part, you'll write your queries so
   that they work over all `s`. Beam manipulates this parameter internally to
   ensure that the fields in your expressions are always in scope at run-time.
-  
+
 * `a` is the type of the result of the query.
 
 `Q` is a monad, which means you can use your favorite `Monad`, `Applicative`,
@@ -49,7 +49,7 @@ data QGenExpr context syntax s a
 * `context` is the particular way in which this expression is being used. For
   example, expressions containing aggregates have `context ~ QAggregateContext`.
   Expressions returning scalar values have `context ~ QValueContext`.
-  
+
 * `syntax` is the particular SQL dialect this expression is written in. Note
   that this is usually different than the `syntax` for `Q`, because `Q`'s syntax
   refers to a particular syntax for `SELECT` expressions (a type implementing
@@ -57,7 +57,7 @@ data QGenExpr context syntax s a
   expression syntax (a type implementing `IsSql92ExpressionSyntax`). Of course,
   since syntaxes are related, you can get from a `Q` `SELECT` syntax to a
   `QGenExpr` `syntax` with the `Sql92SelectExpressionSyntax` type family.
-  
+
   Thus, a `QGenExpr` with syntax `Sql92SelectExpressionSyntax select` can be
   used in the `FILTER` clause of a query with type `Q select db s a`.
 
@@ -66,7 +66,7 @@ data QGenExpr context syntax s a
 * `a` is the type of this expression. For example, expressions returning SQL
   `int` values, will have Haskell type `Int`. This ensures that your SQL query
   won't fail at run-time with a type error.
-  
+
 Beam defines some specializations of `QGenExpr` for common uses.
 
 ```haskell
@@ -80,7 +80,7 @@ type QGroupExpr = QGenExpr QGroupingContext
 
 Thus, value expressions can be given the simpler type of `QExpr syntax s a`.
 Expressions containing aggregates are typed as `QAgg syntax s a`.
-  
+
 ### A note on type inference
 
 These types may seem incredibly complicated. Indeed, the safety that beam tries
@@ -108,14 +108,14 @@ table or view entities, you can use the `all_` function to retrieve all rows in
 a specific table or view.
 
 For example, to retrieve all `PersonT` entries in the `exampleDb` we defined in
-the last section, we can say 
+the last section, we can say
 
 ```haskell
 all_ (persons exampleDb) :: Q syntax ExampleDb s (PersonT (QExpr s))
 ```
 
 !!! note "Note"
-    We give the full type of the query here for illustrative purposes only. There 
+    We give the full type of the query here for illustrative purposes only. There
     is no need to do so in your own code
 
 Two things to note. Firstly, here `PersonT` is parameterized over the `QExpr s`
@@ -154,7 +154,7 @@ from the query. In particular, the return type of your query must be either
   default). Higher-order tuples can be formed by nested tuples. For example, for
   16 return values, you can return a 2-tuple of 8-tuples or an 8-tuple of
   2-tuples or a 4-tuple of 4-tuples, etc.
-  
+
 With this in mind, we can use `select` to get a query statement against our
 database. The return type of `all_` is just the table we ask for. In this case,
 we're interested in the `persons` table. The `persons` table has the `Beamable`
@@ -206,9 +206,8 @@ For example, we can write the following (meaningless) query, and things will wor
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
-do tbl1 <- 
+!example chinook
+do tbl1 <-
      limit_ 10 $
      filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                            (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
@@ -224,10 +223,9 @@ possible, rather than shipping data to your application pre-processing.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- 'complicatedQuery' could be declared and imported from an external module here. The generated query is the same regardless
-let complicatedQuery = 
+let complicatedQuery =
        filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                              (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
                all_ (customer chinookDb)
@@ -235,4 +233,3 @@ in do tbl1 <- limit_ 10 $ complicatedQuery
       tbl2 <- all_ (track chinookDb)
       pure (tbl1, tbl2)
 ```
-

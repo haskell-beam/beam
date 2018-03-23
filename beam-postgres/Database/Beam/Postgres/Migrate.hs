@@ -4,7 +4,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
 
-module Database.Beam.Postgres.Migrate where
+-- | Migrations support for beam-postgres. See "Database.Beam.Migrate" for more
+-- information on beam migrations.
+module Database.Beam.Postgres.Migrate
+  ( migrationBackend
+  , postgresDataTypeDeserializers
+  , pgPredConverter
+  , getDbConstraints
+  , pgTypeToHs
+  , migrateScript
+  , writeMigrationScript
+
+    -- * Postgres data types
+  , tsquery, tsvector, text, bytea
+  , unboundedArray, uuid, money
+  , json, jsonb
+  , smallserial, serial, bigserial
+  ) where
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Actions (defaultActionProvider)
@@ -32,7 +48,7 @@ import           Control.Exception (bracket)
 import           Control.Monad
 import           Control.Monad.Free.Church (liftF)
 
-import           Data.Aeson
+import           Data.Aeson hiding (json)
 import           Data.Bits
 import           Data.Maybe
 import           Data.ByteString (ByteString)
@@ -47,8 +63,7 @@ import qualified Data.Vector as V
 import           Data.UUID (UUID)
 import           Data.Typeable
 
---import qualified Language.Haskell.Exts.Syntax as Hs
-
+-- | Top-level migration backend for use by @beam-migrate@ tools
 migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax Postgres Pg.Connection Pg
 migrationBackend = Tool.BeamMigrationBackend
                         "postgres"
@@ -75,6 +90,20 @@ migrationBackend = Tool.BeamMigrationBackend
     pgToToolError (PgRowParseError err) = show err
     pgToToolError (PgInternalError err) = err
 
+-- | 'BeamDeserializers' for postgres-specific types:
+--
+--    * 'bytea'
+--    * 'smallserial'
+--    * 'serial'
+--    * 'bigserial'
+--    * 'tsvector'
+--    * 'tsquery'
+--    * 'text'
+--    * 'json'
+--    * 'jsonb'
+--    * 'uuid'
+--    * 'money'
+--
 postgresDataTypeDeserializers
   :: Db.BeamDeserializers PgCommandSyntax
 postgresDataTypeDeserializers =
@@ -93,6 +122,9 @@ postgresDataTypeDeserializers =
     "money"       ->  pure pgMoneyType
     _             -> fail "Postgres data type"
 
+-- | Converts postgres 'DatabasePredicate's to 'DatabasePredicate's in the
+-- Haskell syntax. Allows automatic generation of Haskell schemas from postgres
+-- constraints.
 pgPredConverter :: Tool.HaskellPredicateConverter
 pgPredConverter = Tool.sql92HsPredicateConverters @PgColumnSchemaSyntax pgTypeToHs <>
                   Tool.hsPredicateConverter pgHasColumnConstraint
@@ -102,6 +134,9 @@ pgPredConverter = Tool.sql92HsPredicateConverters @PgColumnSchemaSyntax pgTypeTo
           Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) :: Db.TableColumnHasConstraint HsColumnSchema))
       | otherwise = Nothing
 
+-- | Turn a 'PgDataTypeSyntax' into the corresponding 'HsDataType'. This is a
+-- best effort guess, and may fail on more exotic types. Feel free to send PRs
+-- to make this function more robust!
 pgTypeToHs :: PgDataTypeSyntax -> Maybe HsDataType
 pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
   case tyDescr of
@@ -170,6 +205,8 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
                             (pgDataTypeSerialized pgTsQueryType)
     _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
+-- | Turn a series of 'Db.MigrationSteps' into a line-by-line array of
+-- 'BL.ByteString's suitable for writing to a script.
 migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
 migrateScript steps =
   "-- CAUTION: beam-postgres currently escapes postgres string literals somewhat\n"                 :
@@ -189,6 +226,7 @@ migrateScript steps =
     renderCommand command =
       Endo ((pgRenderSyntaxScript (fromPgCommand command) <> ";\n"):)
 
+-- | Write the migration given by the 'Db.MigrationSteps' to a file.
 writeMigrationScript :: FilePath -> Db.MigrationSteps PgCommandSyntax () a -> IO ()
 writeMigrationScript fp steps =
   let stepBs = migrateScript steps
@@ -260,38 +298,54 @@ getDbConstraints conn =
 
 -- * Postgres-specific data types
 
+-- | 'Db.DataType' for @tsquery@. See 'TsQuery' for more information
 tsquery :: Db.DataType PgDataTypeSyntax TsQuery
 tsquery = Db.DataType pgTsQueryType
 
+-- | 'Db.DataType' for @tsvector@. See 'TsVector' for more information
 tsvector :: Db.DataType PgDataTypeSyntax TsVector
 tsvector = Db.DataType pgTsVectorType
 
+-- | 'Db.DataType' for Postgres @TEXT@. 'characterLargeObject' is also mapped to
+-- this data type
 text :: Db.DataType PgDataTypeSyntax T.Text
 text = Db.DataType pgTextType
 
+-- | 'Db.DataType' for Postgres @BYTEA@. 'binaryLargeObject' is also mapped to
+-- this data type
 bytea :: Db.DataType PgDataTypeSyntax ByteString
 bytea = Db.DataType pgByteaType
 
+-- | 'Db.DataType' for a Postgres array without any bounds.
+--
+-- Note that array support in @beam-migrate@ is still incomplete.
 unboundedArray :: forall a. Typeable a
                => Db.DataType PgDataTypeSyntax a
                -> Db.DataType PgDataTypeSyntax (V.Vector a)
 unboundedArray (Db.DataType elTy) =
   Db.DataType (pgUnboundedArrayType elTy)
 
+-- | 'Db.DataType' for @JSON@. See 'PgJSON' for more information
 json :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSON a)
 json = Db.DataType pgJsonType
 
+-- | 'Db.DataType' for @JSONB@. See 'PgJSON' for more information
 jsonb :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSONB a)
 jsonb = Db.DataType pgJsonbType
 
+-- | 'Db.DataType' for @UUID@ columns. The 'pgCryptoGenRandomUUID' function in
+-- the 'PgCrypto' extension can be used to generate UUIDs at random.
 uuid :: Db.DataType PgDataTypeSyntax UUID
 uuid = Db.DataType pgUuidType
 
+-- | 'Db.DataType' for @MONEY@ columns.
 money :: Db.DataType PgDataTypeSyntax PgMoney
 money = Db.DataType pgMoneyType
 
 -- * Pseudo-data types
 
+-- | Postgres @SERIAL@ data types. Automatically generates an appropriate
+-- @DEFAULT@ clause and sequence
 smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax (SqlSerial a)
 smallserial = Db.DataType pgSmallSerialType
 serial = Db.DataType pgSerialType

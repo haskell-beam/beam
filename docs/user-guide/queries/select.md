@@ -46,8 +46,7 @@ sqlite and postgres.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 all_ (track chinookDb)
 ```
 
@@ -60,8 +59,7 @@ certain subset of columns. For example, to fetch *only* the name of every track:
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do tracks <- all_ (track chinookDb)
    pure (trackName tracks)
 ```
@@ -74,8 +72,7 @@ like to know the composer:
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do tracks <- all_ (track chinookDb)
    pure (trackName tracks, trackComposer tracks)
 ```
@@ -85,8 +82,7 @@ return the name, composer, unit price, and length in seconds (where the database
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do tracks <- all_ (track chinookDb)
    pure (trackName tracks, trackComposer tracks, trackMilliseconds tracks `div_` 1000)
 ```
@@ -96,8 +92,7 @@ feel free to nest tuples. As an example, we can write the above query as
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do tracks <- all_ (track chinookDb)
    pure ((trackName tracks, trackComposer tracks), trackMilliseconds tracks `div_` 1000)
 ```
@@ -110,8 +105,7 @@ The `Q` monad is perfectly rule-abiding, which means it also implements a valid
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 fmap (\tracks -> (trackName tracks, trackComposer tracks, trackMilliseconds tracks `div_` 1000)) $
 all_ (track chinookDb)
 ```
@@ -125,8 +119,7 @@ can filter over results using the `filter_` function.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 filter_ (\customer -> customerFirstName customer `like_` "Jo%") $
 all_ (customer chinookDb)
 ```
@@ -137,14 +130,13 @@ name begins with "S", and who live in either California or Washington:
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                       (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
         all_ (customer chinookDb)
 ```
 
-!!! note "Note" 
+!!! note "Note"
     We had to use the `just_` function above to compare
     `addressState (customerAddress customer)`. This is because `addressState
     (customerAddress customer)` represents a nullable column which beam types as
@@ -159,8 +151,7 @@ the `LIMIT` and `OFFSET` SQL constructs.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 limit_ 10 $ offset_ 100 $
 filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                       (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
@@ -170,7 +161,7 @@ filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerL
 !!! note "Note"
     Nested `limit_`s and `offset_`s compose in the way you'd expect without
     generating extraneous subqueries.
-    
+
 !!! warning "Warning"
     Note that the order of the `limit_` and `offset_` functions matter.
     Offseting an already limited result is not the same as limiting an offseted
@@ -183,8 +174,7 @@ filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerL
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 offset_ 100 $ limit_ 10 $
 filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                       (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
@@ -197,8 +187,7 @@ handles this behavior.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 offset_ 100 $
 filter_ (\customer -> ((customerFirstName customer `like_` "Jo%") &&. (customerLastName customer `like_` "S%")) &&.
                       (addressState (customerAddress customer) ==. just_ "CA" ||. addressState (customerAddress customer) ==. just_ "WA")) $
@@ -216,8 +205,7 @@ the unique postal codes where our customers live.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 nub_ $ fmap (addressPostalCode . customerAddress) $
   all_ (customer chinookDb)
 ```

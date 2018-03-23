@@ -40,7 +40,7 @@ data QF select (db :: (* -> *) -> *) s next where
   QAll :: Beamable table
        => T.Text -> TableSettings table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
-       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
+       -> ((T.Text, table (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
 
   QArbitraryJoin :: Projectible (Sql92SelectExpressionSyntax select) r
                  => QM select db (QNested s) r
@@ -85,6 +85,15 @@ data QF select (db :: (* -> *) -> *) s next where
                 (a -> TablePrefix -> (Maybe (Sql92SelectGroupingSyntax select), grouping)) ->
                 QM select db (QNested s) a ->
                 (grouping -> next) -> QF select db s next
+
+  -- Force the building of a select statement, using the given builder
+  QForceSelect :: Projectible (Sql92SelectExpressionSyntax select) r
+               => (r -> Sql92SelectSelectTableSyntax select -> [ Sql92SelectOrderingSyntax select ] ->
+                   Maybe Integer -> Maybe Integer -> select)
+               -> QM select db (QNested s) r
+               -> (r -> next)
+               -> QF select db s next
+
 deriving instance Functor (QF select db s)
 
 type QM select db s = F (QF select db s)

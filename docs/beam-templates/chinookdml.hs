@@ -22,8 +22,8 @@ instance Exception BeamDone
 
 BEAM_BACKEND_EXTRA
 
-exampleQuery :: Q BEAM_SELECT_SYNTAX ChinookDb s _
-exampleQuery =
+exampleQuery :: (String -> BEAM_BACKEND_MONAD ()) -> BEAM_BACKEND_MONAD ()
+exampleQuery putStrLn = do
   BEAM_PLACEHOLDER
 
 main :: IO ()
@@ -34,11 +34,11 @@ main =
      stmts <- newIORef id
 
      let onStmt s = modifyIORef stmts (. (s:))
-         record = withDatabaseDebug onStmt chinook
+         record a = withDatabaseDebug (onStmt . (++ ";")) chinook a
 
      handle (\BeamDone -> pure ()) $
        docsWithTransaction chinook $ do
-         record $ runSelectReturningList $ select $ exampleQuery
+         record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
          throwIO BeamDone
 
      mkStmtList <- readIORef stmts

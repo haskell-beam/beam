@@ -26,16 +26,15 @@ save the entire row.
 
 !beam-query
 ```haskell
-!chinookdmlsqlite sqlite3
-!chinookdmlpg postgres
-Just c <- runSelectReturningOne $ lookup (customer chinookDb) (CustomerId 14)
+!example chinookdml
+Just c <- runSelectReturningOne $ lookup_ (customer chinookDb) (CustomerId 14)
 putStrLn ("Old phone number is " ++ show (customerPhone c))
 
 runUpdate $
   save (customer chinookDb)
        (c { customerPhone = Just "+1 (123) 456-7890" })
 
-Just c' <- runSelectReturningOne $ lookup (customer chinookDb) (CustomerId 14)
+Just c' <- runSelectReturningOne $ lookup_ (customer chinookDb) (CustomerId 14)
 putStrLn ("New phone number is " ++ show (customerPhone c'))
 ```
 
@@ -61,8 +60,8 @@ update all customer addresses to reflect that.
 
 !beam-query
 ```haskell
-!chinookdmlsqlite sqlite3
-!chinookdmlpg postgres
+!example chinookdml
+
 Just canadianCount <-
   runSelectReturningOne $ select $
   aggregate_ (\_ -> as_ @Int countAll_) $
@@ -79,7 +78,7 @@ putStrLn ("Before, there were " ++ show canadianCount ++ " addresses in Canada a
 runUpdate $ update (customer chinookDb)
                    (\c -> [ addressCountry (customerAddress c) <-. val_ (Just "USA") ])
                    (\c -> addressCountry (customerAddress c) ==. val_ (Just "Canada"))
-                   
+
 Just canadianCount' <-
   runSelectReturningOne $ select $
   aggregate_ (\_ -> as_ @Int countAll_) $
@@ -100,8 +99,7 @@ quantity of every line item.
 
 !beam-query
 ```haskell
-!chinookdmlsqlite sqlite3
-!chinookdmlpg postgres
+!example chinookdml
 
 Just totalLineItems <-
   runSelectReturningOne $ select $
@@ -112,7 +110,7 @@ putStrLn ("Before, we had " ++ show totalLineItems ++ " total products sold\n")
 runUpdate $ update (invoiceLine chinookDb)
                    (\ln -> [ invoiceLineQuantity ln <-. current_ (invoiceLineQuantity ln) * 2 ])
                    (\_ -> val_ True)
-                   
+
 Just totalLineItems' <-
   runSelectReturningOne $ select $
   aggregate_ (\ln -> sum_ (invoiceLineQuantity ln)) $

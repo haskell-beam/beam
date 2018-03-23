@@ -44,7 +44,7 @@ module Database.Beam.Query
     -- * SQL Command construction and execution
     -- ** @SELECT@
     , SqlSelect(..)
-    , select, lookup
+    , select, lookup_
     , runSelectReturningList
     , runSelectReturningOne
     , dumpSqlSelect
@@ -95,9 +95,9 @@ import Control.Monad.Writer
 data QueryInaccessible
 
 -- | A version of the table where each field is a 'QGenExpr'
-type QGenExprTable ctxt syntax tbl = forall s. tbl (QGenExpr ctxt syntax s)
+type QGenExprTable ctxt syntax s tbl = tbl (QGenExpr ctxt syntax s)
 
-type QExprTable syntax tbl = QGenExprTable QValueContext syntax tbl
+type QExprTable syntax s tbl = QGenExprTable QValueContext syntax s tbl
 
 -- * SELECT
 
@@ -122,21 +122,21 @@ select q =
 
 -- | Convenience function to generate a 'SqlSelect' that looks up a table row
 --   given a primary key.
-lookup :: ( HasQBuilder syntax
-          , Sql92SelectSanityCheck syntax
+lookup_ :: ( HasQBuilder syntax
+           , Sql92SelectSanityCheck syntax
 
-          , SqlValableTable (PrimaryKey table) (Sql92SelectExpressionSyntax syntax)
-          , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
+           , SqlValableTable (PrimaryKey table) (Sql92SelectExpressionSyntax syntax)
+           , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
 
-          , HasTableEquality (Sql92SelectExpressionSyntax syntax) (PrimaryKey table)
+           , HasTableEquality (Sql92SelectExpressionSyntax syntax) (PrimaryKey table)
 
-          , Beamable table, Table table
+           , Beamable table, Table table
 
-          , Database be db )
-       => DatabaseEntity be db (TableEntity table)
-       -> PrimaryKey table Identity
-       -> SqlSelect syntax (table Identity)
-lookup tbl tblKey =
+           , Database be db )
+        => DatabaseEntity be db (TableEntity table)
+        -> PrimaryKey table Identity
+        -> SqlSelect syntax (table Identity)
+lookup_ tbl tblKey =
   select $
   filter_ (\t -> pk t ==. val_ tblKey) $
   all_ tbl
@@ -224,10 +224,14 @@ insertValues ::
 insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ])
 
 -- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the same table
-insertFrom ::
-    IsSql92InsertValuesSyntax syntax =>
-    SqlSelect (Sql92InsertValuesSelectSyntax syntax) (table Identity) -> SqlInsertValues syntax table
-insertFrom (SqlSelect s) = SqlInsertValues (insertFromSql s)
+insertFrom
+    :: ( IsSql92InsertValuesSyntax syntax
+       , HasQBuilder (Sql92InsertValuesSelectSyntax syntax)
+       , Projectible (Sql92SelectExpressionSyntax (Sql92InsertValuesSelectSyntax syntax))
+                     (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) QueryInaccessible)) )
+    => Q (Sql92InsertValuesSelectSyntax syntax) db QueryInaccessible (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) QueryInaccessible))
+    -> SqlInsertValues syntax table
+insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 
 -- * UPDATE
 
