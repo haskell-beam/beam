@@ -575,3 +575,53 @@ instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (PgJSONB a)
 instance HasDefaultSqlDataType PgDataTypeSyntax PgMoney where
   defaultSqlDataType _ _ = pgMoneyType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax PgMoney
+
+instance HasDefaultSqlDataType PgDataTypeSyntax a =>  HasDefaultSqlDataType PgDataTypeSyntax (V.Vector a) where
+  defaultSqlDataType _ embedded = pgUnboundedArrayType (defaultSqlDataType (Proxy :: Proxy a) embedded)
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (V.Vector a)
+
+-- $full-text-search
+--
+-- Postgres has comprehensive, and thus complicated, support for full text
+-- search. The types and functions in this section map closely to the underlying
+-- Postgres API, which is described in the
+-- <https://www.postgresql.org/docs/current/static/textsearch-intro.html documentation>.
+--
+
+-- $arrays
+--
+-- The functions and types in this section map Postgres @ARRAY@ types to
+-- Haskell. An array is serialized and deserialized to a 'Data.Vector.Vector'
+-- object. This type most closely matches the semantics of Postgres @ARRAY@s. In
+-- general, the names of functions in this section closely match names of the
+-- native Postgres functions they map to. As with most beam expression
+-- functions, names are suffixed with an underscore and CamelCased.
+--
+-- Note that Postgres supports arbitrary nesting of vectors. For example, two,
+-- three, or higher dimensional arrays can be expressed, manipulated, and stored
+-- in tables. Beam fully supports this use case. A two-dimensional postgres
+-- array is represented as @Vector (Vector a)@. Simply nest another 'Vector' for
+-- higher dimensions. Some functions that return data on arrays expect a
+-- dimension number as a parameter. Since beam can check the dimension at
+-- compile time, these functions expect a type-level 'Nat' in the expression
+-- DSL. The unsafe versions of these functions are also provided with the
+-- @Unsafe_@ suffix. The safe versions are guaranteed not to fail at run-time
+-- due to dimension mismatches, the unsafe ones may.
+--
+-- For more information on Postgres array support, refer to the postgres
+-- <https://www.postgresql.org/docs/current/static/functions-array.html manual>.
+
+-- $json
+--
+-- Postgres supports storing JSON in columns, as either a text-based type
+-- (@JSON@) or a specialized binary encoding (@JSONB@). @beam-postgres@
+-- accordingly provides the 'PgJSON' and 'PgJSONB' data types. Each of these
+-- types takes a type parameter indicating the Haskell object represented by the
+-- JSON object stored in the column. In order for serialization to work, be sure
+-- to provide 'FromJSON' and 'ToJSON' instances for this type. If you do not
+-- know the shape of the data stored, substitute 'Value' for this type
+-- parameter.
+--
+-- For more information on Psotgres json support see the postgres
+-- <https://www.postgresql.org/docs/current/static/functions-json.html manual>.
+
