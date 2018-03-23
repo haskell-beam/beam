@@ -1,5 +1,32 @@
 # 0.7.0.0
 
+## Correct boolean handling
+
+Previous versions of beam used the SQL `=` operator to compare potentially
+`NULL` values. This is incorrect, as `NULL = NULL => UNKNOWN` in ANSI-compliant
+implementations. Beam has changed its emitted SQL to produce proper comparisons,
+but this can dramatically affect performance in some backends. Particularly,
+proper JOIN index usage in Postgres requires an exact match on an equality
+constructor, which may not be what you get when using the proper boolean
+handling.
+
+If you are okay using SQL null handling, you can use the new `==?.` and `/=?.`
+operators which produce an expression with type `SqlBool` instead. `SqlBool` is
+a type that can represent the SQL `BOOL` type in all its gritty glory. Note
+however, that these operators do not compare for haskell equality, only SQL
+equality, so please understand what that means before using them.
+
+Correspondingly, many functions that took `Bool` expressions now have
+corresponding versions that take `SqlBool`. For example, to use `guard_` with a
+`SqlBool` expression use `guard_'` (note the prime).
+
+(Note: I don't really like that we have to do this, but this is the only way
+unless we introspect user expressions. Beam's philosophy is to be as direct as
+possible. The `==.` operator corresponds to haskell `==`, and so produces the
+boolean we would expect as Haskell programmers. The `==?.` operator is a new
+operator that users must explicitly opt in to. Both produce the most direct code
+possible on each backend.)
+
 ## Aggregations return `Maybe` types
 
 In previous versions of beam, aggregations such as `avg_`, `sum_`, etc

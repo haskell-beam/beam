@@ -356,7 +356,9 @@ The various beam functions that deal with `Bool` also have corresponding
 versions that operate on `SqlBool`. For example, whereas `leftJoin_` expects its
 join condition to be a `Bool`, the corresponding `leftJoin_'` (notice the prime)
 method takes a `SqlBool`. There are corresponding `guard_'`, `join_'`, etc
-methods.
+methods. Boolean operators, such as `(&&.)` and `(||.)`, have `SqlBool`
+equivalents suffixed with `?` (`(&&?.)` and `(||?.)` for `SqlBool` `AND` and
+`OR` respectively).
 
 One place where this can really bite is when generating `ON` conditions. Many
 RDBMSes use a rather unintelligent means of choosing which indices to use, by
