@@ -10,6 +10,7 @@ module Database.Beam.Query.Combinators
 
     -- ** @IF-THEN-ELSE@ support
     , if_, then_, else_
+    , then_'
 
     -- * SQL @UPDATE@ assignments
     , (<-.), current_
@@ -839,6 +840,9 @@ newtype QIfElse context expr s a = QIfElse (QGenExpr context expr s a)
 
 then_ :: QGenExpr context expr s SqlBool -> QGenExpr context expr s a -> QIfCond context expr s a
 then_ cond res = QIfCond cond res
+
+then_' :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_' cond res = QIfCond (sqlBool_ cond) res
 
 else_ :: QGenExpr context expr s a -> QIfElse context expr s a
 else_ = QIfElse

@@ -183,8 +183,8 @@ data SqlInsert syntax
   = SqlInsert syntax
   | SqlInsertNoRows
 
-insertOnly :: ( IsSql92InsertSyntax syntax, Projectible Text (QExprToField r) )
 -- | Generate a 'SqlInsert' over only certain fields of a table
+insertOnly :: ( IsSql92InsertSyntax syntax, Projectible Text (QExprToField r) )
            => DatabaseEntity be db (TableEntity table)
               -- ^ Table to insert into
            -> (table (QField s) -> QExprToField r)
