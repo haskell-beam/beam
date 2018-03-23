@@ -66,8 +66,8 @@ backends:
     backend-options: "127.0.0.1 3306 root '' beam_docs_chinook"
     src:
       github: tathougies/beam-mysql
-      revision: a55d9ce7aa4b8c11f232da4bcd3b2a61c650df22
-      sha256: d39a5b43a13c7cb96dac0d5ad066288d01fdfc576fd537265f3712746457510f
+      revision: 41194218e90f4a239d5039a58bdfa3b8847824df
+      sha256: ad4e7b018aea10af37927ff7ce7b649afc9bbf6c616dacf2eaaf1177eca57258
     haskell-names:
       package: beam-mysql
       backend: MySQL

@@ -4,7 +4,7 @@ set -e
 
 SQLITE_DB=$1
 CHINOOK_SQLITE_URL="https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_Sqlite.sql"
-EXPECTED_SHA256="40215158e0dc3443d16565e3ae96c2f5d640ff00a92de3910568dc34fa086a82"
+EXPECTED_SHA256="b2e430ec8cb389509d25ec5bda2f958bbf6f0ca42e276fa5eb3de45eb816a460"
 
 print_open_statement() {
     echo "chinook <- open \"chinook.db\""
