@@ -26,7 +26,7 @@ module Database.Beam.Query
     , module Database.Beam.Query.Operator
 
     -- ** ANSI SQL Booleans
-    , SqlBool
+    , Beam.SqlBool
     , isTrue_, isNotTrue_
     , isFalse_, isNotFalse_
     , isUnknown_, isNotUnknown_
@@ -83,7 +83,8 @@ import Database.Beam.Query.Combinators
 import Database.Beam.Query.CustomSQL
 import Database.Beam.Query.Extensions
 import Database.Beam.Query.Internal
-import Database.Beam.Query.Operator
+import Database.Beam.Query.Operator hiding (SqlBool)
+import qualified Database.Beam.Query.Operator as Beam
 import Database.Beam.Query.Ord
 import Database.Beam.Query.Relationships
 import Database.Beam.Query.Types (QGenExpr) -- hide QGenExpr constructor
@@ -243,7 +244,7 @@ insertValues ::
     , IsSql92InsertValuesSyntax syntax
     , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax syntax))) table) =>
     [ table Identity ] -> SqlInsertValues syntax (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s))
-insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ])
+insertValues x = insertExpressions (map val_ x :: forall s'. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s') ])
 
 -- | Build a 'SqlInsertValues' from arbitrarily shaped data containing expressions
 insertData :: forall syntax r

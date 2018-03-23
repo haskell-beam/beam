@@ -30,7 +30,8 @@ module Database.Beam.Query.Ord
   , isTrue_, isNotTrue_
   , isFalse_, isNotFalse_
   , isUnknown_, isNotUnknown_
-  , unknownAs_
+  , unknownAs_, sqlBool_
+  , possiblyNullBool_
 
   , anyOf_, anyIn_
   , allOf_, allIn_
@@ -65,6 +66,10 @@ import GHC.TypeLits
 data QQuantified expr s r
   = QQuantified (Sql92ExpressionQuantifierSyntax expr) (WithExprContext expr)
 
+-- | Convert a /known not null/ bool to a 'SqlBool'. See 'unknownAs_' for the inverse
+sqlBool_ :: QGenExpr context syntax s Bool -> QGenExpr context syntax s SqlBool
+sqlBool_ (QExpr s) = QExpr s
+
 -- | SQL @IS TRUE@ operator
 isTrue_ :: IsSql92ExpressionSyntax syntax
         => QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
@@ -96,10 +101,18 @@ isNotUnknown_ :: IsSql92ExpressionSyntax syntax
 isNotUnknown_ (QExpr s) = QExpr (fmap isNotUnknownE s)
 
 -- | Return the first argument if the expression has the unknown SQL value
+-- See 'sqlBool_' for the inverse
 unknownAs_ :: IsSql92ExpressionSyntax syntax
            => Bool -> QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
 unknownAs_ False = isTrue_ -- If unknown is being treated as false, then return true only if the expression is true
 unknownAs_ True  = isNotFalse_ -- If unknown is being treated as true, then return true only if the expression is not false
+
+-- | Retrieve a 'SqlBool' value as a potentially @NULL@ 'Bool'. This
+-- is useful if you want to get the value of a SQL boolean expression
+-- directly, without having to specify what to do on @UNKNOWN@. Note
+-- that both @NULL@ and @UNKNOWN@ will be returned as 'Nothing'.
+possiblyNullBool_ :: QGenExpr context syntax s SqlBool -> QGenExpr context syntax s (Maybe Bool)
+possiblyNullBool_ (QExpr e) = QExpr e
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>

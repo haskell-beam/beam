@@ -49,9 +49,9 @@ data SqlBool
 
 -- | SQL @OR@ operator
 (||?.) :: IsSql92ExpressionSyntax syntax
-       => QGenExpr context syntax s Bool
-       -> QGenExpr context syntax s Bool
-       -> QGenExpr context syntax s Bool
+       => QGenExpr context syntax s SqlBool
+       -> QGenExpr context syntax s SqlBool
+       -> QGenExpr context syntax s SqlBool
 (||?.) = qBinOpE orE
 
 infixr 3 &&., &&?.
