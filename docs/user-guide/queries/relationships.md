@@ -50,8 +50,7 @@ invoice line table, with no attention paid to any relationship between the two:
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- all_ (invoiceLine chinookDb)
    pure (i, ln)
@@ -82,8 +81,7 @@ with only those invoice lines corresponding to that invoice.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- all_ (invoiceLine chinookDb)
    guard_ (invoiceLineInvoice ln `references_` i)
@@ -106,8 +104,7 @@ Beam supports querying for one-to-many joins. For example, to get every
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice i
    pure (i, ln)
@@ -170,7 +167,7 @@ many-to-many relationship.
 
 ```haskell
 manyToMany_
-  :: ( Database db, Table joinThrough
+  :: ( Database be db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax
@@ -197,15 +194,14 @@ either "Movies" or "Music".
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 manyToMany_ (playlistTrack chinookDb)
             playlistTrackPlaylistId playlistTrackTrackId
-            
+
             (filter_ (\p -> playlistName p ==. just_ (val_ "Music") ||.
                             playlistName p ==. just_ (val_ "Movies"))
                      (all_ (playlist chinookDb)))
-            
+
             (all_ (track chinookDb))
 ```
 
@@ -216,7 +212,7 @@ Sometimes you want to have additional data for each relationship. For this, use
 
 ```haskell
 manyToManyPassthrough_
-  :: ( Database db, Table joinThrough
+  :: ( Database be db, Table joinThrough
      , Table left, Table right
      , Sql92SelectSanityCheck syntax
      , IsSql92SelectSyntax syntax
@@ -233,7 +229,7 @@ manyToManyPassthrough_
                    , right (QExpr (Sql92SelectExpressionSyntax syntax) s))
 ```
 
-Under the hood `manyToMany_` is defined simply as 
+Under the hood `manyToMany_` is defined simply as
 
 ```haskell
 manyToMany_ = fmap (\(_, left, right) -> (left, right)) manyToManyPassthrough_
@@ -256,13 +252,12 @@ And we can use it as expected:
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 playlistTrackRelationship
     (filter_ (\p -> playlistName p ==. just_ (val_ "Music") ||.
                     playlistName p ==. just_ (val_ "Movies"))
              (all_ (playlist chinookDb)))
-    
+
     (all_ (track chinookDb))
 ```
 
@@ -279,7 +274,7 @@ oneToMany_ rel getKey tbl =
   join_ rel (\rel -> getKey rel ==. pk tbl)
 ```
 
-Thus, the invoice example above could be rewritten. For example, instead of 
+Thus, the invoice example above could be rewritten. For example, instead of
 
 ```haskell
 do i <- all_ (invoice chinookDb)
@@ -291,8 +286,7 @@ We could write
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- all_ (invoice chinookDb)
    ln <- join_ (invoiceLine chinookDb) (\line -> invoiceLineInvoice line ==. primaryKey i)
    pure (i, ln)
@@ -310,8 +304,8 @@ row of that table in case no row matches. For this reason, the result of
 the corresponding `Maybe` type.
 
 !!! note "Note"
-    The table parameter passed in as the join condition does not have a 
-    `Nullable` column tag. The join condition should be written as if a 
+    The table parameter passed in as the join condition does not have a
+    `Nullable` column tag. The join condition should be written as if a
     concrete row from that table exists.
 
 For example, to get every artist along with their albums, but always including
@@ -319,8 +313,7 @@ every artist, use `leftJoin_` as follows.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do artist <- all_ (artist chinookDb)
    album  <- leftJoin_ (all_ (album chinookDb)) (\album -> albumArtist album ==. primaryKey artist)
    pure (artist, album)
@@ -328,6 +321,75 @@ do artist <- all_ (artist chinookDb)
 
 Right joins are not yet supported. They can always be rewritten as left joins.
 If you have a compelling use case, please file an issue!
+
+### Handling SQL `NULL`s
+
+`NULL` is a value that SQL treats as an 'unknown' value. Unfortunately, this can
+cause a lot of unexpected issues. Beam tries to normalize the handling of NULLs
+to some extent, but it ultimately cannot save you from the database. One thing
+you can be sure of is that -- assuming your beam schema matches that of the
+database -- any beam expression that does not yield a `Maybe` type cannot be
+`NULL` at run-time.
+
+Also, beam treats equality between `Maybe` types correctly using the standard
+`==.` and `/=.` operators. This means that beam will sometimes generate obtuse
+`CASE` expressions. This is because beam's philosophy is that SQL operators be
+named after their equivalent Haskell ones, suffixed by a `.`, and that these
+operators should follow Haskell semantics.
+
+Sometimes though, this care isn't necessary. When you are okay with SQL
+equality, you can use the `(==?.)` and `(/=?.)` operators. These work the same
+as the `(==.)` and `(/=.)`, except they return a `SqlBool` instead of
+`Bool`. `SqlBool` can only occur as the result of a SQL expression, and it
+cannot be deserialized directly into Haskell on any backend. A `SqlBool` value
+can contain `TRUE`, `FALSE`, and `UNKNOWN` (the third SQL boolean value). You
+can marshal between `SqlBool` and `Bool` using `isTrue_`, `isFalse_`, or
+`isUnknown_` to determine which value a `SqlBool` contains. The `unknownAs_`
+function takes a default Haskell `Bool` and SQL expression returning
+`SqlBool`. It returns the given Haskell `Bool` value in the case the SQL
+expression is indeterminate.
+
+You can also convert any expression returning `Bool` to one returning `SqlBool`
+by using the `sqlBool_` function.
+
+The various beam functions that deal with `Bool` also have corresponding
+versions that operate on `SqlBool`. For example, whereas `leftJoin_` expects its
+join condition to be a `Bool`, the corresponding `leftJoin_'` (notice the prime)
+method takes a `SqlBool`. There are corresponding `guard_'`, `join_'`, etc
+methods. Boolean operators, such as `(&&.)` and `(||.)`, have `SqlBool`
+equivalents suffixed with `?` (`(&&?.)` and `(||?.)` for `SqlBool` `AND` and
+`OR` respectively).
+
+One place where this can really bite is when generating `ON` conditions. Many
+RDBMSes use a rather unintelligent means of choosing which indices to use, by
+directly matching on syntaxes. For example, postgres determines index usage by
+directly seeing if two columns are compared. If you wrap the comparison in the
+`IS TRUE` operator, the index is no longer used. In these cases, using the
+proper boolean handling can severely impact performance. For example, to get
+every customer along with employees in their area, we can left join the customer
+table with employees on their city.
+
+!beam-query
+```haskell
+!example chinook
+do c <- all_ (customer chinookDb)
+   e <- leftJoin_ (all_ (employee chinookDb)) (\e -> addressCity (employeeAddress e) ==. addressCity (customerAddress c))
+   pure (c, e)
+```
+
+Notice that the join condition is not just a simple `=`. This will cause
+postgres to ignore any index on these columns. We can instead use `leftJoin_'`
+and `==?.` to be more direct.
+
+!beam-query
+```haskell
+!example chinook
+do c <- all_ (customer chinookDb)
+   e <- leftJoin_' (all_ (employee chinookDb)) (\e -> addressCity (employeeAddress e) ==?. addressCity (customerAddress c))
+   pure (c, e)
+```
+
+Now postgres will use an index.
 
 ### Full Outer joins
 
@@ -340,13 +402,13 @@ the result has an additional `Nullable` tag.
     Outer joins are only supported in backends whose SQL `FROM` syntax
     implements `IsSql92FromOuterJoinSyntax`. Notably, this does not include
     SQLite.
-    
+
 For example, to get join all employees with customers with the same first name
 but including all employees and customers, we can run the query
-    
+
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook outer-join
 outerJoin_ (all_ (employee chinookDb)) (all_ (customer chinookDb)) (\(employee, customer) -> employeeFirstName employee ==. customerFirstName customer)
 ```
 
@@ -363,8 +425,7 @@ For example, the following query generates the code you'd expect.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 do i <- limit_ 10 $ all_ (invoice chinookDb)
    line <- invoiceLines i
    pure (i, line)
@@ -377,8 +438,7 @@ no effect.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 -- Same as above, but with explicit sub select
 do i <- subselect_ $ limit_ 10 $ all_ (invoice chinookDb)
    line <- invoiceLines i

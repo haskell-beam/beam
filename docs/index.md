@@ -1,14 +1,14 @@
 <img src="img/logo.svg" width="250px"/>
 
-Beam is a highly-general library for accessing any kind of database with
-Haskell. Currently, it supports two SQL backends, Postgres and SQLite. Work is
-underway for an official MySQL backend (contributions appreciated and
-accepted!).
+Beam is a highly-general library for accessing any kind of database
+with Haskell. It supports several backends. `beam-postgres` and
+`beam-sqlite` are included in the main beam repository. Others are
+hosted and maintained independently, such as `beam-mysql` and
+`beam-firebird`. The documentation here shows examples in all known backends.
 
-Beam is highly extensible and other backends can be shipped independently
-without requiring any changes in the core libraries. For example, there is an
-independently maintained [Firebird](https://github.com/gibranrosa/beam-firebird)
-backend. For information on creating additional SQL backends, see
+Beam is highly extensible and other backends can be shipped
+independently without requiring any changes in the core libraries.For
+information on creating additional SQL backends, see
 the [manual section](user-guide/custom-backends.md) for more.
 
 Beam features
@@ -27,8 +27,11 @@ Beam features
 
 ## How to install
 
-Beam **isnt** available via Hackage *or* Stack. Until a release is cut, put the
-following in your `stack.yaml` to build and use beam in your project!
+Beam is available via Hackage and Stack, and can be included in your
+stack project by adding `beam-core` and an appropriate beam backend to
+your `stack.yaml`. Some projects may want to follow the latest master,
+for the newest features. If so, put the following in your `stack.yaml`
+to build and use beam in your project!
 
 ```yaml
 packages:
@@ -39,7 +42,6 @@ packages:
   extra-dep: true
   subdirs:
     - beam-core
-    - beam-migrate
     - <backend>
 ```
 
@@ -51,22 +53,27 @@ and add the following to your `.cabal` file, in the `build-depends` section:
 
 ```haskell
 beam-core,
-beam-migrate,
 <backend>
 ```
+
+You may alse want to add the `beam-migrate` package if you want to
+manage your database schemas in Haskell as well.
 
 Available backends are:
 
 * `beam-postgres` -- A feature-complete backend for the Postgres RDBMS.
   See [the beam-postgres documentation](user-guide/backends/beam-postgres.md)
   for more information.
-  
-* `beam-sqlite` -- An almost feature-complete backend for the Sqlite library.
+
+* `beam-sqlite` -- A feature-complete backend for the Sqlite library.
   Note that SQLite does not support all SQL92 features, so some of the examples
   may not work. Refer
   to [the beam-sqlite documentation](user-guide/backends/beam-sqlite.md) for
   more information on compatibility.
-  
+
+* `beam-mysql` -- A backend for MySQL or MariaDB. Maintained
+  separately on [GitHub](https://github.com/tathougies/beam-mysql).
+
 ## Quick Start Guide
 
 For those looking to get started with beam, we first recommend you go through

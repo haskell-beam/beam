@@ -1,8 +1,8 @@
 name:                 beam-postgres
-version:              0.2.0.0
+version:              0.3.0.0
 synopsis:             Connection layer between beam and postgres
-description:          
-homepage:             http://travis.athougies.net/projects/beam.html
+description:          Beam driver for <https://www.postgresql.org/ PostgreSQL>, an advanced open-source RDBMS
+homepage:             http://tathougies.github.io/beam/user-guide/backends/beam-postgres
 license:              MIT
 license-file:         LICENSE
 author:               Travis Athougies
@@ -10,7 +10,8 @@ maintainer:           travis@athougies.net
 category:             Database
 build-type:           Simple
 cabal-version:        >=1.18
-bug-reports:          https://github.com/tathougies/issues
+extra-doc-files:      ChangeLog.md
+bug-reports:          https://github.com/tathougies/beam/issues
 
 library
   exposed-modules:    Database.Beam.Postgres
@@ -18,13 +19,16 @@ library
                       Database.Beam.Postgres.PgCrypto
                       Database.Beam.Postgres.Syntax
 
+                      Database.Beam.Postgres.Conduit
+                      Database.Beam.Postgres.Full
+
   other-modules:      Database.Beam.Postgres.Types
                       Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.PgSpecific
                       Database.Beam.Postgres.Extensions
   build-depends:      base                 >=4.7  && <5.0,
-                      beam-core            >=0.6  && <0.7,
-                      beam-migrate         >=0.2  && <0.3,
+                      beam-core            >=0.7  && <0.8,
+                      beam-migrate         >=0.3  && <0.4,
 
                       postgresql-libpq     >=0.8  && <0.10,
                       postgresql-simple    >=0.5  && <0.6,

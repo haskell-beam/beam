@@ -11,7 +11,7 @@
 -- for us in @haskell-src-exts@.
 module Database.Beam.Haskell.Syntax where
 
-import           Database.Beam hiding (lookup)
+import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Migrate.SQL.SQL92
@@ -361,13 +361,18 @@ renderHsSchema (HsModule modNm entities migrations) =
       backend = foldMap hsEntityBackend entities
       syntax  = foldMap hsEntitySyntax entities
 
+      backendHs = case backend of
+                    HsBeamBackendNone -> error "Can't instantiate Database instance: No backend matches"
+                    HsBeamBackendSingle ty _ -> hsTypeSyntax ty
+                    HsBeamBackendConstrained {} -> tyVarNamed "be" -- TODO constraints
+
       decls = foldMap (map hsDeclSyntax . hsEntityDecls) entities ++
               [ databaseTypeDecl entities
 
               , migrationTypeDecl backend syntax []
               , migrationDecl backend [] migrations entities
 
-              , hsInstance "Database" [ tyConNamed "Db" ] []
+              , hsInstance "Database" [ backendHs, tyConNamed "Db" ] []
 
               , dbTypeDecl backend syntax
               , dbDecl backend syntax [] ]
@@ -655,6 +660,9 @@ instance IsSql92ConstraintAttributesSyntax HsNone where
 
 instance HasSqlValueSyntax HsExpr Int where
   sqlValueSyntax = hsInt
+instance HasSqlValueSyntax HsExpr Bool where
+  sqlValueSyntax True = hsVar "True"
+  sqlValueSyntax False = hsVar "False"
 
 instance IsSql92FieldNameSyntax HsExpr where
   qualifiedField tbl nm = hsApp (hsVar "qualifiedField") [ hsStr tbl, hsStr nm ]

@@ -32,7 +32,7 @@ general for the compiler to meaningfully infer types.
   `HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) x` for the type `x` in
   the appropriate `syntax` for the `QGenExpr`. For example, to construct a value
   of type `Vector Int` in the `beam-postgres` backend.
-  
+
 ```haskell
 val_ (V.fromList [1, 2, 3 :: Int])
 ```
@@ -40,7 +40,7 @@ val_ (V.fromList [1, 2, 3 :: Int])
 * **Explicit tables** can be brought to the SQL value level by using `val_` as
   well. For example, if you have an `AddressT Identity` named `a`, `val_ a ::
   AddressT (QGenExpr context expr s)`.
-  
+
 ### UTF support
 
 All included beam backends play nicely with UTF. New backends should also
@@ -48,12 +48,11 @@ support UTF, if they support syntaxes and deserializers for `String` or `Text`.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook utf8
 filter_ (\s -> customerFirstName s ==. "あきら") $
   all_ (customer chinookDb)
 ```
-  
+
 ## Arithmetic
 
 Arithmetic operations that are part of the `Fractional` and `Num` classes can be
@@ -66,14 +65,83 @@ implement `Integral`. Nevertheless, versions of `div` and `mod` are available as
 
 ## Comparison
 
-The standard Haskell/SQL equality and comparison operators are available under
-the Haskell operator names, suffixed with `.`. For example, `==.` can be used to
-compare two `QGenExpr`s of the same context, thread, syntax, and type with one
-another for equality. The return type is another `QGenExpr` with type `Bool`.
+SQL comparison is not as simple as you may think. `NULL` handling in particular
+actually makes things rather complicated.  SQL comparison operators actually
+return a *tri-state boolean*, representing true, false, and *unknown*, which is
+the result when two nulls are compared. Boolean combinators (`AND` and `OR`)
+handle these values in different ways. Beam abstracts some of this difference
+away, if you ask it to.
 
-The other operators are named as you'd expect: `/=.` for inequality, `<.` for
-less than, `>.` for greater than, `<=.` for less than or equal to, `>=.` for
-greater than or equal to.
+### Haskell-like comparisons
+
+Haskell provides much more reasonable equality between potentially optional
+values. For example, `Nothing == Nothing` always! SQL does not provide a similar
+guarantee. However, beam can emulate Haskell-like equality in SQL using the
+`==.` operator. This uses a `CASE .. WHEN ..` statement or a special operator
+that properly handles `NULL`s in your given backend. Depending on your backend,
+this can severely impact performance, but it's 'correct'.
+
+For example, to find all customers living in Berlin:
+
+!beam-query
+```haskell
+!example chinook utf8
+filter_ (\s -> addressCity (customerAddress s) ==. val_ (Just "Berlin")) $
+  all_ (customer chinookDb)
+```
+
+Notice that SQLite uses a `CASE .. WHEN ..` statement, while Postgres uses the
+`IS NOT DISTINCT FROM` operator.
+
+The inequality operator is named `/=.`, as expected. Note that both `==.` and
+`/=.` return a SQL expression whose type is `Bool`.
+
+### SQL-like comparisons
+
+Beam also provides equality operators that act like their underlying SQL
+counterparts. These operators map most directly to the SQL `=` and `<>`
+operators, but they require you to explicitly handle the possibility of
+`NULL`s. These operators are named `==?.` and `/=?.` respectively.
+
+Unlike `==.` and `/=.`, these operators return an expression of type
+`SqlBool`. `SqlBool` is a type that can only be manipulated as part of a SQL
+expression, and cannot be serialized or deserialized to/from Haskell. You need
+to convert it to a `Bool` value explicitly in order to get the result or use it
+with more advanced operators, such as `CASE .. WHEN ..`.
+
+In SQL, you can handle potentially unknown comparisons using the `IS TRUE`, `IS
+NOT TRUE`, `IS FALSE`, `IS NOT FALSE`, `IS UNKNOWN`, and `IS NOT UNKNOWN`
+operators. These are provided as the beam functions `isTrue_`, `isNotTrue_`,
+etc. These each take a SQL expression of type `SqlBool` and return one of type
+`Bool`.
+
+For example, to join every employee and customer who live in the same city, but
+using SQL-like equality and making sure the comparison really is true (i.e.,
+customers and employees who both have `NULL` cities will not be included).
+
+!beam-query
+```haskell
+!example chinook utf8
+do c <- all_ (customer chinookDb)
+   e <- join_ (employee chinookDb) $ \e ->
+        isTrue_ (addressCity (customerAddress c) ==?. addressCity (employeeAddress e))
+   pure (c, e)
+```
+
+Thinking of which `IS ..` operator to use can be confusing. If you have a
+default value you'd like to return in the case of an unknown comparison, use the
+`unknownAs_` function. For example, if we want to treat unknown values as `True`
+instead (i.e, we want customers and employees who both have `NULL` cities to be
+included)
+
+!beam-query
+```haskell
+!example chinook utf8
+do c <- all_ (customer chinookDb)
+   e <- join_ (employee chinookDb) $ \e ->
+        unknownAs_ True (addressCity (customerAddress c) ==?. addressCity (employeeAddress e))
+   pure (c, e)
+```
 
 ### Quantified comparison
 
@@ -90,12 +158,43 @@ functions, which correspond to the `ANY` and `ALL` syntax respectively. `anyOf_`
 and `allOf_` take `Q` expressions (representing a query) and `anyIn_` and
 `allIn_` take lists of expressions.
 
+
+Quantified comparisons are always performed according to SQL semantics, meaning
+that they return values of type `SqlBOol`. This is because proper NULL handling
+with quantified comparisons cannot be expressed in a reasonable way. Use the
+functions described in [the section above](#sql-like-comparisons).
+
+For example, to get all invoice lines containing tracks longer than 3 minutes:
+
+!beam-query
+```haskell
+!example chinook !on:Sqlite
+let tracksLongerThanThreeMinutes =
+      fmap trackId $
+      filter_ (\t -> trackMilliseconds t >=. 180000) $
+        all_ (track chinookDb)
+in filter_ (\ln -> let TrackId lnTrackId = invoiceLineTrack ln
+                   in unknownAs_ False (lnTrackId ==*. anyOf_ tracksLongerThanThreeMinutes)) $
+     all_ (invoiceLine chinookDb)
+```
+
+We can also supply a concrete list of values. For example to get everyone living
+in either Los Angeles or Manila:
+
+!beam-query
+```haskell
+!example chinook !on:Sqlite
+filter_ (\c ->  unknownAs_ False (addressCity (customerAddress c) ==*. anyIn_ [ just_ "Los Angeles", just_ "Manila" ])) $
+     all_ (customer chinookDb)
+```
+
+### The `IN` predicate
+
 You can also use `in_` to use the common `IN` predicate.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 limit_ 10 $
   filter_ (\customer -> customerFirstName customer `in_` [val_ "Joe", val_ "Sam", val_ "Elizabeth"]) $
   all_ (customer chinookDb)

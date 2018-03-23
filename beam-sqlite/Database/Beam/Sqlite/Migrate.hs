@@ -49,7 +49,7 @@ import qualified Data.Text.Encoding as TE
 
 -- | Top-level 'Tool.BeamMigrationBackend' loaded dynamically by the
 -- @beam-migrate@ CLI tool.
-migrationBackend :: Tool.BeamMigrationBackend Sqlite SqliteCommandSyntax Connection
+migrationBackend :: Tool.BeamMigrationBackend SqliteCommandSyntax Sqlite Connection SqliteM
 migrationBackend = Tool.BeamMigrationBackend
                        "sqlite"
                        "For beam-sqlite, this is the path to a sqlite3 file"

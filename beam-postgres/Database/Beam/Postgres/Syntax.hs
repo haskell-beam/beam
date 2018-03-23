@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -13,6 +12,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
 
+-- | Data types for Postgres syntax. Access is given mainly for extension
+-- modules. The types and definitions here are likely to change.
 module Database.Beam.Postgres.Syntax
     ( PgSyntaxF(..), PgSyntaxM
     , PgSyntax(..)
@@ -46,6 +47,12 @@ module Database.Beam.Postgres.Syntax
 
     , PgWindowFrameSyntax(..), PgWindowFrameBoundsSyntax(..), PgWindowFrameBoundSyntax(..)
 
+    , PgSelectLockingClauseSyntax(..)
+    , PgSelectLockingStrength(..)
+    , PgSelectLockingOptions(..)
+    , fromPgSelectLockingClause
+    , pgSelectStmt
+
     , PgDataTypeDescr(..)
 
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
@@ -65,30 +72,8 @@ module Database.Beam.Postgres.Syntax
     , pgByteaType, pgTextType
     , pgSerialType, pgSmallSerialType, pgBigSerialType
 
-    , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
-    , PgConflictAction(..)
-    , onConflictDefault, onConflict
-    , conflictingFields, conflictingFieldsWhere
-    , conflictingConstraint
-
-    , onConflictDoNothing, onConflictUpdateSet, onConflictUpdateInstead
-
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
     , pgRenderSyntaxScript, pgBuildAction
-
-    , insert
-
-    , PgInsertReturning(..)
-    , insertReturning
-
-    , PgUpdateReturning(..)
-    , updateReturning
-
-    , PgDeleteReturning(..)
-    , deleteReturning
-
-    , now_
-    , ilike_
 
     , pgBinOp, pgCompOp, pgUnOp, pgPostFix
 
@@ -96,12 +81,8 @@ module Database.Beam.Postgres.Syntax
 
     , PostgresInaccessible ) where
 
-import           Database.Beam.Postgres.Types
-
 import           Database.Beam hiding (insert)
-import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
 
 import           Database.Beam.Migrate.SQL
@@ -132,6 +113,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
 import           Data.UUID (UUID)
+import qualified Data.Vector as V
 import           Data.Word
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
@@ -179,6 +161,10 @@ instance Sql92DisplaySyntax PgSyntax where
   displaySyntax = BL.unpack . pgRenderSyntaxScript
 
 type PgSyntaxM = F PgSyntaxF
+
+-- | A piece of Postgres SQL syntax, which may contain embedded escaped byte and
+-- text sequences. 'PgSyntax' composes monoidally, and may be created with
+-- 'emit', 'emitBuilder', 'escapeString', 'escapBytea', and 'escapeIdentifier'.
 newtype PgSyntax
   = PgSyntax { buildPgSyntax :: PgSyntaxM () }
 
@@ -222,20 +208,30 @@ data PgCommandType
     | PgCommandTypeDataUpdate
     | PgCommandTypeDataUpdateReturning
       deriving Show
+
+-- | Representation of an arbitrary Postgres command. This is the combination of
+-- the command syntax (repesented by 'PgSyntax'), as well as the type of command
+-- (represented by 'PgCommandType'). The command type is necessary for us to
+-- know how to retrieve results from the database.
 data PgCommandSyntax
     = PgCommandSyntax
     { pgCommandType :: PgCommandType
     , fromPgCommand :: PgSyntax }
+
+-- | 'IsSql92SelectSyntax' for Postgres
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
 instance HasQBuilder PgSelectSyntax where
   buildSqlQuery = buildSql92Query' True
 
 newtype PgSelectTableSyntax = PgSelectTableSyntax { fromPgSelectTable :: PgSyntax }
 
+-- | 'IsSql92InsertSyntax' for Postgres
 newtype PgInsertSyntax = PgInsertSyntax { fromPgInsert :: PgSyntax }
 
+-- | 'IsSql92DeleteSyntax' for Postgres
 newtype PgDeleteSyntax = PgDeleteSyntax { fromPgDelete :: PgSyntax }
 
+-- | 'IsSql92UpdateSyntax' for Postgres
 newtype PgUpdateSyntax = PgUpdateSyntax { fromPgUpdate :: PgSyntax }
 
 newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax } deriving Eq
@@ -255,6 +251,9 @@ newtype PgInsertOnConflictTargetSyntax = PgInsertOnConflictTargetSyntax { fromPg
 newtype PgInsertOnConflictUpdateSyntax = PgInsertOnConflictUpdateSyntax { fromPgInsertOnConflictUpdate :: PgSyntax }
 newtype PgConflictActionSyntax = PgConflictActionSyntax { fromPgConflictAction :: PgSyntax }
 data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrderingNullOrdering :: Maybe PgNullOrdering }
+data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLockingClauseStrength :: PgSelectLockingStrength
+                                                               , pgSelectLockingTables :: [T.Text]
+                                                               , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
 fromPgOrdering (PgOrderingSyntax s Nothing) = s
@@ -264,6 +263,36 @@ fromPgOrdering (PgOrderingSyntax s (Just PgNullOrderingNullsLast)) = s <> emit "
 data PgNullOrdering
   = PgNullOrderingNullsFirst
   | PgNullOrderingNullsLast
+  deriving (Show, Eq, Generic)
+
+fromPgSelectLockingClause :: PgSelectLockingClauseSyntax -> PgSyntax
+fromPgSelectLockingClause s =
+  emit " FOR " <>
+  (case pgSelectLockingClauseStrength s of
+    PgSelectLockingStrengthUpdate -> emit "UPDATE"
+    PgSelectLockingStrengthNoKeyUpdate -> emit "NO KEY UPDATE"
+    PgSelectLockingStrengthShare -> emit "SHARE"
+    PgSelectLockingStrengthKeyShare -> emit "KEY SHARE") <>
+  emitTables <>
+  (maybe mempty emitOptions $ pgSelectLockingClauseOptions s)
+  where
+    emitTables = case pgSelectLockingTables s of
+      [] -> mempty
+      tableNames -> emit " OF " <> (pgSepBy (emit ", ") (map pgQuotedIdentifier tableNames))
+
+    emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
+    emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
+
+data PgSelectLockingStrength
+  = PgSelectLockingStrengthUpdate
+  | PgSelectLockingStrengthNoKeyUpdate
+  | PgSelectLockingStrengthShare
+  | PgSelectLockingStrengthKeyShare
+  deriving (Show, Eq, Generic)
+
+data PgSelectLockingOptions
+  = PgSelectLockingOptionsNoWait
+  | PgSelectLockingOptionsSkipLocked
   deriving (Show, Eq, Generic)
 
 data PgDataTypeDescr
@@ -380,13 +409,7 @@ instance IsSql92SelectSyntax PgSelectSyntax where
   type Sql92SelectOrderingSyntax PgSelectSyntax = PgOrderingSyntax
 
   selectStmt tbl ordering limit offset =
-    PgSelectSyntax $
-    coerce tbl <>
-    (case ordering of
-       [] -> mempty
-       ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)) <>
-    (maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit) <>
-    (maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset)
+    pgSelectStmt tbl ordering limit offset Nothing
 
 instance IsSql92SelectTableSyntax PgSelectTableSyntax where
   type Sql92SelectTableSelectSyntax PgSelectTableSyntax = PgSelectSyntax
@@ -433,7 +456,7 @@ instance IsSql92FromSyntax PgFromSyntax where
   rightJoin = pgJoin "RIGHT JOIN"
 
 instance IsSql92FromOuterJoinSyntax PgFromSyntax where
-  outerJoin = pgJoin "OUTER JOIN"
+  outerJoin = pgJoin "FULL OUTER JOIN"
 
 instance IsSql92OrderingSyntax PgOrderingSyntax where
   type Sql92OrderingExpressionSyntax PgOrderingSyntax = PgExpressionSyntax
@@ -601,6 +624,8 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   overlapsE = pgBinOp "OVERLAPS"
   eqE = pgCompOp "="
   neqE = pgCompOp "<>"
+  eqMaybeE a b _ = pgBinOp "IS NOT DISTINCT FROM" a b
+  neqMaybeE a b _ = pgBinOp "IS DISTINCT FROM" a b
   ltE = pgCompOp "<"
   gtE = pgCompOp ">"
   leE = pgCompOp "<="
@@ -624,6 +649,9 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
             emit "(" <>
             pgSepBy (emit ", ") (coerce vs) <>
             emit ")"
+  quantifierListE vs =
+    PgExpressionSyntax $
+    emit "(VALUES " <> pgSepBy (emit ", ") (fmap (pgParens . fromPgExpression) vs) <> emit ")"
   fieldE = coerce
   subqueryE s = PgExpressionSyntax (emit "(" <> fromPgSelect s <> emit ")")
   positionE needle haystack =
@@ -1022,85 +1050,6 @@ instance IsSql92ColumnConstraintSyntax PgColumnConstraintSyntax where
         maybe mempty (\a -> emit " ON UPDATE " <> fromPgReferentialAction a) onUpdate <>
         maybe mempty (\a -> emit " ON DELETE " <> fromPgReferentialAction a) onDelete
 
-newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
-    PgInsertOnConflict (tbl (QField PostgresInaccessible) -> PgInsertOnConflictSyntax)
-newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
-    PgInsertOnConflictTarget (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> PgInsertOnConflictTargetSyntax)
-newtype PgConflictAction (tbl :: (* -> *) -> *) =
-    PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
-
-onConflictDefault :: PgInsertOnConflict tbl
-onConflictDefault = PgInsertOnConflict (\_ -> PgInsertOnConflictSyntax mempty)
-
-onConflict :: Beamable tbl
-           => PgInsertOnConflictTarget tbl
-           -> PgConflictAction tbl 
-           -> PgInsertOnConflict tbl
-onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update) =
-  PgInsertOnConflict $ \tbl ->
-  let exprTbl = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField nm)))) tbl
-  in PgInsertOnConflictSyntax $
-     emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl) <>
-                emit " " <> fromPgConflictAction (update tbl)
-
-conflictingFields :: Projectible PgExpressionSyntax proj
-                  => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
-                  -> PgInsertOnConflictTarget tbl
-conflictingFields makeProjection =
-  PgInsertOnConflictTarget $ \tbl ->
-  PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t")))
-
-conflictingFieldsWhere :: Projectible PgExpressionSyntax proj
-                       => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
-                       -> (tbl (QExpr PgExpressionSyntax PostgresInaccessible) ->
-                           QExpr PgExpressionSyntax PostgresInaccessible Bool)
-                       -> PgInsertOnConflictTarget tbl
-conflictingFieldsWhere makeProjection makeWhere =
-  PgInsertOnConflictTarget $ \tbl ->
-  PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t"))) <>
-  emit " WHERE " <>
-  pgParens (let QExpr mkE = makeWhere tbl
-                PgExpressionSyntax e = mkE "t"
-            in e)
-
-conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
-conflictingConstraint nm =
-  PgInsertOnConflictTarget $ \_ ->
-  PgInsertOnConflictTargetSyntax $
-  emit "ON CONSTRAINT" <> pgQuotedIdentifier nm
-
-onConflictDoNothing :: PgConflictAction tbl
-onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
-
-onConflictUpdateSet :: Beamable tbl
-                    => (tbl (QField PostgresInaccessible) ->
-                        tbl (QExpr PgExpressionSyntax PostgresInaccessible)  ->
-                        [ QAssignment PgFieldNameSyntax PgExpressionSyntax PostgresInaccessible ])
-                    -> PgConflictAction tbl
-onConflictUpdateSet mkAssignments =
-  PgConflictAction $ \tbl ->
-  let assignments = mkAssignments tbl tblExcluded
-      tblExcluded = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
-
-      assignmentSyntaxes = do
-        QAssignment assignments' <- assignments
-        (fieldNm, expr) <- assignments'
-        pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
-  in PgConflictActionSyntax $
-     emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
-
-onConflictUpdateInstead :: (Beamable tbl, Projectible T.Text proj)
-                        => (tbl (QExpr T.Text PostgresInaccessible) -> proj)
-                        -> PgConflictAction tbl
-onConflictUpdateInstead mkProj =
-  onConflictUpdateSet $ \tbl _ ->
-  let tblFields = changeBeamRep (\(Columnar' (QField _ nm)) -> Columnar' (QExpr (\_ -> nm))) tbl
-      proj = project (mkProj tblFields) "t"
-
-  in map (\fieldNm -> QAssignment [ (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm)) ]) proj
-
 defaultPgValueSyntax :: Pg.ToField a => a -> PgValueSyntax
 defaultPgValueSyntax =
     PgValueSyntax . pgBuildAction . pure . Pg.toField
@@ -1147,10 +1096,6 @@ DEFAULT_SQL_SYNTAX(Scientific)
 instance HasSqlValueSyntax PgValueSyntax SqlNull where
   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
 
-instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Auto x) where
-  sqlValueSyntax (Auto Nothing) = PgValueSyntax (emit "DEFAULT")
-  sqlValueSyntax (Auto (Just x)) = sqlValueSyntax x
-
 instance HasSqlValueSyntax PgValueSyntax x => HasSqlValueSyntax PgValueSyntax (Maybe x) where
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
   sqlValueSyntax (Just x) = sqlValueSyntax x
@@ -1180,9 +1125,10 @@ pgCompOp :: ByteString -> Maybe PgComparisonQuantifierSyntax
 pgCompOp op quantifier a b =
   PgExpressionSyntax $
   emit "(" <> fromPgExpression a <>
-  emit (") " <> op <> " (") <>
-  maybe mempty (\q -> emit " " <> fromPgComparisonQuantifier q <> emit " ") quantifier <>
-  fromPgExpression b <> emit ")"
+  emit (") " <> op) <>
+  maybe (emit " (" <> fromPgExpression b <> emit ")")
+        (\q -> emit " " <> fromPgComparisonQuantifier q <> emit " " <> fromPgExpression b)
+        quantifier
 
 pgBinOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax -> PgExpressionSyntax
 pgBinOp op a b =
@@ -1252,97 +1198,25 @@ pgBuildAction =
     Pg.EscapeIdentifier id -> escapeIdentifier id
     Pg.Many as -> pgBuildAction as
 
--- * Postrges-specific extensions
-
--- class Sql92Syntax syntax => PgExtensionsSyntax syntax where
---   tableSampleSyntax ::
---        Proxy syntax -> T.Text -> Maybe T.Text -> PgTableSamplingMethod
---     -> [Sql92ExpressionSyntax syntax] {-^ Arguments to sampling method -}
---     -> Maybe (Sql92ExpressionSyntax syntax) {-^ Seed -}
---     -> Sql92FromSyntax syntax
-
--- instance PgExtensionsSyntax PgSyntax where
---   tableSampleSyntax _ tblName tblAlias (PgTableSamplingMethod sampleMethod) sampleMethodParams seedExpr =
---     pgQuotedIdentifier tblName <>
---     maybe mempty (\x -> emit " AS " <> pgQuotedIdentifier x) tblAlias <>
---     emit " TABLESAMPLE " <> emit (TE.encodeUtf8 sampleMethod) <> emit "(" <> pgSepBy (emit ", ") sampleMethodParams <> emit ")" <>
---     maybe mempty (\x -> emit " REPEATABLE (" <> x <> emit ")") seedExpr
+-- * Postgres-specific extensions
 
 -- * Postgres specific commands
 
-insert :: DatabaseEntity Postgres db (TableEntity table)
-       -> SqlInsertValues PgInsertValuesSyntax table
-       -> PgInsertOnConflict table
-       -> SqlInsert PgInsertSyntax
-insert tbl values onConflict =
-    let PgInsertReturning a =
-          insertReturning tbl values onConflict
-                          (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int))
-    in SqlInsert (PgInsertSyntax a)
-
-newtype PgInsertReturning a = PgInsertReturning PgSyntax
-
-insertReturning :: Projectible PgExpressionSyntax a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> SqlInsertValues PgInsertValuesSyntax table
-                -> PgInsertOnConflict table
-                -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
-                -> PgInsertReturning (QExprToIdentity a)
-
-insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
-                (SqlInsertValues (PgInsertValuesSyntax insertValues))
-                (PgInsertOnConflict mkOnConflict)
-                returning =
-  PgInsertReturning $
-  emit "INSERT INTO " <> pgQuotedIdentifier tblNm <>
-  emit "(" <> pgSepBy (emit ", ") (allBeamValues (\(Columnar' f) -> pgQuotedIdentifier (_fieldName f)) tblSettings) <> emit ") " <>
-  insertValues <> emit " " <> fromPgInsertOnConflict (mkOnConflict tblFields) <>
-  (case returning of
-     Nothing -> mempty
-     Just mkProjection ->
-         emit " RETURNING "<>
-         pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t")))
-   where
-     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
-     tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField tblNm (_fieldName f))) tblSettings
-
-newtype PgUpdateReturning a = PgUpdateReturning PgSyntax
-
-updateReturning :: Projectible PgExpressionSyntax a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> (forall s. table (QField s) -> [ QAssignment PgFieldNameSyntax PgExpressionSyntax s ])
-                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
-                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
-                -> PgUpdateReturning (QExprToIdentity a)
-updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
-                mkAssignments
-                mkWhere
-                mkProjection =
-  PgUpdateReturning $
-  fromPgUpdate pgUpdate <>
-  emit " RETURNING " <>
-  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
-  where
-    SqlUpdate pgUpdate = update table mkAssignments mkWhere
-    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
-
-newtype PgDeleteReturning a = PgDeleteReturning PgSyntax
-
-deleteReturning :: Projectible PgExpressionSyntax a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
-                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
-                -> PgDeleteReturning (QExprToIdentity a)
-deleteReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
-                mkWhere
-                mkProjection =
-  PgDeleteReturning $
-  fromPgDelete pgDelete <>
-  emit " RETURNING " <>
-  pgSepBy (emit ", ") (map fromPgExpression (project (mkProjection tblQ) "t"))
-  where
-    SqlDelete pgDelete = delete table mkWhere
-    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
+pgSelectStmt :: PgSelectTableSyntax
+             -> [PgOrderingSyntax]
+             -> Maybe Integer {-^ LIMIT -}
+             -> Maybe Integer {-^ OFFSET -}
+             -> Maybe PgSelectLockingClauseSyntax
+             -> PgSelectSyntax
+pgSelectStmt tbl ordering limit offset locking =
+    PgSelectSyntax $
+    mconcat [ coerce tbl
+            , case ordering of
+                [] -> mempty
+                ordering -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering ordering)
+            , maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit
+            , maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset
+            , maybe mempty fromPgSelectLockingClause locking ]
 
 pgCreateExtensionSyntax :: T.Text -> PgCommandSyntax
 pgCreateExtensionSyntax extName =
@@ -1354,33 +1228,6 @@ pgDropExtensionSyntax extName =
 
 -- -- * Pg-specific Q monad
 
--- bernoulliSample ::
---   forall syntax db table s.
---   ( Database db, SupportedSyntax Postgres syntax, PgExtensionsSyntax syntax) =>
---   DatabaseTable Postgres db table -> QExpr syntax s Double ->
---   Q syntax db s (table (QExpr syntax s))
--- bernoulliSample
---   tbl@(DatabaseTable table name tableSettings :: DatabaseTable Postgres db table)
---   (QExpr prob) =
-
---   do curTbl <- gets qbNextTblRef
---      let newSource = tableSampleSyntax (Proxy @syntax) name
---                                        (Just (fromString ("t" <> show curTbl)))
---                                        pgBernoulliSamplingMethod
---                                        [ prob ]
---                                        Nothing
---      buildJoinFrom tbl newSource Nothing
-
-now_ :: QExpr PgExpressionSyntax s LocalTime
-now_ = QExpr (\_ -> PgExpressionSyntax (emit "NOW()"))
-
-ilike_ :: IsSqlExpressionSyntaxStringType PgExpressionSyntax text
-       => QExpr PgExpressionSyntax s text
-       -> QExpr PgExpressionSyntax s text
-       -> QExpr PgExpressionSyntax s Bool
-ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" <$> a <*> b)
-
--- * Testing support
 
 data PgEscapeType = PgEscapeString | PgEscapeBytea | PgEscapeIdentifier
   deriving (Show, Eq, Ord, Enum, Bounded)
@@ -1450,3 +1297,43 @@ instance HasDefaultSqlDataType PgDataTypeSyntax UUID where
   defaultSqlDataType _ _ = pgUuidType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UUID
 
+-- * Instances for 'HasSqlEqualityCheck'
+
+#define PG_HAS_EQUALITY_CHECK(ty)                                 \
+  instance HasSqlEqualityCheck PgExpressionSyntax (ty);           \
+  instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax (ty);
+
+PG_HAS_EQUALITY_CHECK(Bool)
+PG_HAS_EQUALITY_CHECK(Double)
+PG_HAS_EQUALITY_CHECK(Float)
+PG_HAS_EQUALITY_CHECK(Int)
+PG_HAS_EQUALITY_CHECK(Int8)
+PG_HAS_EQUALITY_CHECK(Int16)
+PG_HAS_EQUALITY_CHECK(Int32)
+PG_HAS_EQUALITY_CHECK(Int64)
+PG_HAS_EQUALITY_CHECK(Integer)
+PG_HAS_EQUALITY_CHECK(Word)
+PG_HAS_EQUALITY_CHECK(Word8)
+PG_HAS_EQUALITY_CHECK(Word16)
+PG_HAS_EQUALITY_CHECK(Word32)
+PG_HAS_EQUALITY_CHECK(Word64)
+PG_HAS_EQUALITY_CHECK(T.Text)
+PG_HAS_EQUALITY_CHECK(TL.Text)
+PG_HAS_EQUALITY_CHECK(UTCTime)
+PG_HAS_EQUALITY_CHECK(Value)
+PG_HAS_EQUALITY_CHECK(Pg.Oid)
+PG_HAS_EQUALITY_CHECK(LocalTime)
+PG_HAS_EQUALITY_CHECK(ZonedTime)
+PG_HAS_EQUALITY_CHECK(TimeOfDay)
+PG_HAS_EQUALITY_CHECK(NominalDiffTime)
+PG_HAS_EQUALITY_CHECK(Day)
+PG_HAS_EQUALITY_CHECK(UUID)
+PG_HAS_EQUALITY_CHECK([Char])
+PG_HAS_EQUALITY_CHECK(Pg.HStoreMap)
+PG_HAS_EQUALITY_CHECK(Pg.HStoreList)
+PG_HAS_EQUALITY_CHECK(Pg.Date)
+PG_HAS_EQUALITY_CHECK(Pg.ZonedTimestamp)
+PG_HAS_EQUALITY_CHECK(Pg.LocalTimestamp)
+PG_HAS_EQUALITY_CHECK(Pg.UTCTimestamp)
+PG_HAS_EQUALITY_CHECK(Scientific)
+PG_HAS_EQUALITY_CHECK(V.Vector a)

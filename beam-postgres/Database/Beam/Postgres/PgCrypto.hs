@@ -1,3 +1,7 @@
+-- | The @pgcrypto@ extension provides several cryptographic functions to
+-- Postgres. This module provides a @beam-postgres@ extension to access this
+-- functionality. For an example of usage, see the documentation for
+-- 'PgExtensionEntity'.
 module Database.Beam.Postgres.PgCrypto
   ( PgCrypto(..) ) where
 
@@ -19,6 +23,11 @@ type family LiftPg ctxt s fn where
   LiftPg ctxt s (a -> b) = PgExpr ctxt s a -> LiftPg ctxt s b
   LiftPg ctxt s a = PgExpr ctxt s a
 
+-- | Data type representing definitions contained in the @pgcrypto@ extension
+--
+-- Each field maps closely to the underlying @pgcrypto@ function, which are
+-- described in further detail in the
+-- <https://www.postgresql.org/docs/current/static/pgcrypto.html pgcrypto manual>.
 data PgCrypto
   = PgCrypto
   { pgCryptoDigestText ::

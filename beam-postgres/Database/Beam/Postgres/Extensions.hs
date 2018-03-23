@@ -1,5 +1,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
+-- | Postgres extensions are run-time loadable plugins that can extend Postgres
+-- functionality. Extensions are part of the database schema.
+--
+-- Beam fully supports including Postgres extensions in Beam databases. The
+-- 'PgExtensionEntity' type constructor can be used to declare the existence of
+-- the extension in a particular backend. @beam-postgres@ provides predicates
+-- and checks for @beam-migrate@ which allow extensions to be included as
+-- regular parts of beam migrations.
 module Database.Beam.Postgres.Extensions where
 
 import           Database.Beam
@@ -19,10 +27,61 @@ import           Data.Monoid
 import           Data.Proxy
 import           Data.Text (Text)
 
+-- *** Embedding extensions in databases
+
+-- | Represents an extension in a database.
+--
+-- For example, to include the "Database.Beam.Postgres.PgCrypto" extension in a
+-- database,
+--
+-- @
+-- import Database.Beam.Migrate.PgCrypto
+--
+-- data MyDatabase entity
+--     = MyDatabase
+--     { _table1 :: entity (TableEntity Table1)
+--     , _cryptoExtension :: entity (PgExtensionEntity PgCrypto)
+--     }
+--
+-- migratableDbSettings :: CheckedDatabaseSettings Postgres MyDatabase
+-- migratableDbSettings = defaultMigratableDbSettings
+--
+-- dbSettings :: DatabaseSettings Postgres MyDatabase
+-- dbSettings = unCheckDatabase migratableDbSettings
+-- @
+--
+-- Note that our database now only works in the 'Postgres' backend.
+--
+-- Extensions are implemented as records of functions and values that expose
+-- extension functionality. For example, the @pgcrypto@ extension (implemented
+-- by 'PgCrypto') provides cryptographic functions. Thus, 'PgCrypto' is a record
+-- of functions over 'QGenExpr' which wrap the underlying postgres
+-- functionality.
+--
+-- You get access to these functions by retrieving them from the entity in the
+-- database.
+--
+-- For example, to use the @pgcrypto@ extension in the database above:
+--
+-- @
+-- let PgCrypto { pgCryptoDigestText = digestText
+--              , pgCryptoCrypt = crypt } = getPgExtension (_cryptoExtension dbSettings)
+-- in fmap_ (\tbl -> (tbl, crypt (_field1 tbl) (_salt tbl))) (all_ (table1 dbSettings))
+-- @
+--
+-- To implement your own extension, create a record type, and implement the
+-- 'IsPgExtension' type class.
 data PgExtensionEntity extension
 
+-- | Type class implemented by any Postgresql extension
 class IsPgExtension extension where
+  -- | Return the name of this extension. This should be the string that is
+  -- passed to @CREATE EXTENSION@. For example, 'PgCrypto' returns @"pgcrypto"@.
   pgExtensionName :: Proxy extension -> Text
+
+  -- | Return a value of this extension type. This should fill in all fields in
+  -- the record. For example, 'PgCrypto' builds a record where each function
+  -- wraps the underlying Postgres one.
   pgExtensionBuild :: extension
 
 -- | There are no fields to rename when defining entities
@@ -55,12 +114,22 @@ instance IsCheckedDatabaseEntity Postgres (PgExtensionEntity extension) where
     [ SomeDatabasePredicate (PgHasExtension (pgExtensionName (Proxy @extension))) ]
   checkedDbEntityAuto _ = CheckedPgExtension . dbEntityAuto
 
-getPgExtension :: CheckedDatabaseEntity Postgres db (PgExtensionEntity extension)
+-- | Get the extension record from a database entity. See the documentation for
+-- 'PgExtensionEntity'.
+getPgExtension :: DatabaseEntity Postgres db (PgExtensionEntity extension)
                -> extension
-getPgExtension (CheckedDatabaseEntity (CheckedPgExtension (PgDatabaseExtension _ ext)) _) = ext
+getPgExtension (DatabaseEntity (PgDatabaseExtension _ ext)) = ext
 
--- * Migration
+-- *** Migrations support for extensions
 
+-- | 'Migration' representing the Postgres @CREATE EXTENSION@ command. Because
+-- the extension name is statically known by the extension type and
+-- 'IsPgExtension' type class, this simply produces the checked extension
+-- entity.
+--
+-- If you need to use the extension in subsequent migration steps, use
+-- 'getPgExtension' and 'unCheck' to get access to the underlying
+-- 'DatabaseEntity'.
 pgCreateExtension :: forall extension db
                    . IsPgExtension extension
                   => Migration PgCommandSyntax (CheckedDatabaseEntity Postgres db (PgExtensionEntity extension))
@@ -70,6 +139,9 @@ pgCreateExtension =
   in upDown (pgCreateExtensionSyntax extName) Nothing >>
      pure (CheckedDatabaseEntity entity (collectEntityChecks entity))
 
+-- | 'Migration' representing the Postgres @DROP EXTENSION@. After this
+-- executes, you should expect any further uses of the extension to fail.
+-- Unfortunately, without linear types, we cannot check this.
 pgDropExtension :: forall extension
                  . CheckedDatabaseEntityDescriptor Postgres (PgExtensionEntity extension)
                 -> Migration PgCommandSyntax ()
@@ -77,8 +149,9 @@ pgDropExtension (CheckedPgExtension (PgDatabaseExtension {})) =
   upDown (pgDropExtensionSyntax (pgExtensionName (Proxy @extension))) Nothing
 
 
--- * Check
-
+-- | Postgres-specific database predicate asserting the existence of an
+-- extension in the database. The 'pgExtensionActionProvider' properly provides
+-- @CREATE EXTENSION@ and @DROP EXTENSION@ statements to the migration finder.
 newtype PgHasExtension = PgHasExtension Text {- Extension Name -}
   deriving (Show, Eq, Generic, Hashable)
 instance DatabasePredicate PgHasExtension where
@@ -102,7 +175,8 @@ pgCreateExtensionProvider =
           guard (ext == ext')
 
      let cmd = pgCreateExtensionSyntax ext
-     pure (PotentialAction mempty (HS.fromList [p extP]) (pure cmd)
+     pure (PotentialAction mempty (HS.fromList [p extP])
+                           (pure (MigrationCommand cmd MigrationKeepsData))
                            ("Load the postgres extension " <> ext) 1)
 
 pgDropExtensionProvider =
@@ -113,5 +187,6 @@ pgDropExtensionProvider =
           guard (ext == ext')
 
      let cmd = pgDropExtensionSyntax ext
-     pure (PotentialAction (HS.fromList [p extP]) mempty (pure cmd)
+     pure (PotentialAction (HS.fromList [p extP]) mempty
+                           (pure (MigrationCommand cmd MigrationKeepsData))
                            ("Unload the postgres extension " <> ext) 1)

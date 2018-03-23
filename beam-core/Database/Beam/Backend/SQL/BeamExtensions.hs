@@ -1,4 +1,17 @@
-module Database.Beam.Backend.SQL.BeamExtensions where
+-- | Some functionality is useful enough to be provided across backends, but is
+-- not standardized. For example, many RDBMS systems provide ways of fetching
+-- auto-incrementing or defaulting fields on INSERT or UPDATE.
+--
+-- Beam provides type classes that some backends instantiate that provide this
+-- support. This uses direct means on sufficiently advanced backends and is
+-- emulated on others.
+module Database.Beam.Backend.SQL.BeamExtensions
+  ( MonadBeamInsertReturning(..)
+  , MonadBeamUpdateReturning(..)
+  , MonadBeamDeleteReturning(..)
+
+  , SqlSerial(..)
+  ) where
 
 import Database.Beam.Backend
 import Database.Beam.Backend.SQL
@@ -10,11 +23,8 @@ import Control.Monad.Identity
 
 --import GHC.Generics
 
--- | 'MonadBeam's that support returning the results of an insert statement.
+-- | 'MonadBeam's that support returning the newly created rows of an @INSERT@ statement.
 --   Useful for discovering the real value of a defaulted value.
---
---   Unfortunately, SQL has no standard way of doing this, so it is provided as
---   a beam extension.
 class MonadBeam syntax be handle m =>
   MonadBeamInsertReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
   runInsertReturningList
@@ -22,9 +32,12 @@ class MonadBeam syntax be handle m =>
        , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
        , FromBackendRow be (table Identity) )
     => DatabaseEntity be db (TableEntity table)
-    -> SqlInsertValues (Sql92InsertValuesSyntax (Sql92InsertSyntax syntax)) table
+    -> SqlInsertValues (Sql92InsertValuesSyntax (Sql92InsertSyntax syntax))
+                       (table (QExpr (Sql92InsertExpressionSyntax (Sql92InsertSyntax syntax)) s))
     -> m [table Identity]
 
+-- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.
+--   Useful for discovering the new values of the updated rows.
 class MonadBeam syntax be handle m =>
   MonadBeamUpdateReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
   runUpdateReturningList
@@ -36,6 +49,9 @@ class MonadBeam syntax be handle m =>
     -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s) -> QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s Bool)
     -> m [table Identity]
 
+-- | 'MonadBeam's that suppert returning rows that will be deleted by the given
+-- @DELETE@ statement. Useful for deallocating resources based on the value of
+-- deleted rows.
 class MonadBeam syntax be handle m =>
   MonadBeamDeleteReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
   runDeleteReturningList

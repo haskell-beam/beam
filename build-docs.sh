@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 get_pythonpath () {
     export PYTHONPATH=$(python -c "import sys; print ':'.join(['.'] + [p for p in sys.path if p != ''])")
 }
@@ -14,6 +16,12 @@ ghpages () {
     mkdocs gh-deploy
 }
 
+cleandocs () {
+    if [ -f "docs/.beam-query-cache" ]; then
+	rm -rf docs/.beam-query-cache
+    fi
+}
+
 usage () {
     echo "build-docs: Build beam docs"
     echo "Usage: build-docs <command>"
@@ -24,8 +32,11 @@ usage () {
 }
 
 case $1 in
-    servedocs) servedocs ;;
-    ghpages) ghpages ;;
+    clean) cleandocs ;;
+    servedocs)
+	servedocs ;;
+    ghpages)
+	ghpages ;;
     *) usage ;;
 esac
 

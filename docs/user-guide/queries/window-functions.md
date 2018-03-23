@@ -19,7 +19,7 @@ customer, use `withWindow_` as follows.
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook window
 withWindow_ (\i -> frame_ (partitionBy_ (invoiceCustomer i)) noOrder_ noBounds_)
             (\i w -> (i, avg_ (invoiceTotal i) `over_` w))
             (all_ (invoice chinookDb))
@@ -30,7 +30,7 @@ customer *and* the overall ranking,
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook window
 withWindow_ (\i -> ( frame_ noPartition_ (orderPartitionBy_ (asc_ (invoiceTotal i))) noBounds_
                    , frame_ (partitionBy_ (invoiceCustomer i)) (orderPartitionBy_ (asc_ (invoiceTotal i))) noBounds_ ))
             (\i (allInvoices, customerInvoices) -> (i, rank_ `over_` allInvoices, rank_ `over_` customerInvoices))
@@ -42,7 +42,6 @@ withWindow_ (\i -> ( frame_ noPartition_ (orderPartitionBy_ (asc_ (invoiceTotal 
     T611 feature "Elementary OLAP operations". Beam syntaxes that implement this
     functionality implement the
     `IsSql2003ExpressionElementaryOLAPOperationsSyntax` type class.
-    
 
 Notice that aggregates over the result of the window expression work as you'd
 expect. Beam automatically generates a subquery once a query has been windowed.
@@ -50,7 +49,7 @@ For example, to get the sum of the totals of the invoices, by rank.
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook window
 orderBy_ (\(rank, _) -> asc_ rank) $
 aggregate_ (\(i, rank) -> (group_ rank, sum_ $ invoiceTotal i)) $
 withWindow_ (\i -> frame_ (partitionBy_ (invoiceCustomer i)) (orderPartitionBy_ (asc_ (invoiceTotal i))) noBounds_)
@@ -87,7 +86,7 @@ The following query illustrates some of these features. Along with each invoice,
 
 !beam-query
 ```haskell
-!chinookpg postgres
+!example chinook window
 withWindow_ (\i -> ( frame_ noPartition_ noOrder_ noBounds_
                    , frame_ (partitionBy_ (invoiceCustomer i)) noOrder_ noBounds_
                    , frame_ noPartition_ (orderPartitionBy_ (asc_ (invoiceTotal i))) noBounds_

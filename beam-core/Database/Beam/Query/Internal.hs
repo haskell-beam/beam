@@ -40,7 +40,7 @@ data QF select (db :: (* -> *) -> *) s next where
   QAll :: Beamable table
        => T.Text -> TableSettings table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
-       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> next) -> QF select db s next
+       -> ((T.Text, table (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
 
   QArbitraryJoin :: Projectible (Sql92SelectExpressionSyntax select) r
                  => QM select db (QNested s) r
@@ -85,6 +85,15 @@ data QF select (db :: (* -> *) -> *) s next where
                 (a -> TablePrefix -> (Maybe (Sql92SelectGroupingSyntax select), grouping)) ->
                 QM select db (QNested s) a ->
                 (grouping -> next) -> QF select db s next
+
+  -- Force the building of a select statement, using the given builder
+  QForceSelect :: Projectible (Sql92SelectExpressionSyntax select) r
+               => (r -> Sql92SelectSelectTableSyntax select -> [ Sql92SelectOrderingSyntax select ] ->
+                   Maybe Integer -> Maybe Integer -> select)
+               -> QM select db (QNested s) r
+               -> (r -> next)
+               -> QF select db s next
+
 deriving instance Functor (QF select db s)
 
 type QM select db s = F (QF select db s)
@@ -101,7 +110,8 @@ data QNested s
 
 data QField s ty
   = QField
-  { qFieldTblName :: T.Text
+  { qFieldShouldQualify :: Bool
+  , qFieldTblName :: T.Text
   , qFieldName    :: T.Text }
   deriving (Show, Eq, Ord)
 
@@ -471,6 +481,19 @@ instance ( ProjectibleWithPredicate contextPredicate syntax a, ProjectibleWithPr
     (,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
               <*> project' p mkE g <*> project' p mkE h
+
+instance Beamable t => ProjectibleWithPredicate AnyType T.Text (t (QField s)) where
+  project' _ mutateM a =
+    zipBeamFieldsM (\(Columnar' f) _ ->
+                      Columnar' <$> project' (Proxy @AnyType) mutateM f) a a
+instance Beamable t => ProjectibleWithPredicate AnyType T.Text (t (Nullable (QField s))) where
+  project' _ mutateM a =
+    zipBeamFieldsM (\(Columnar' f) _ ->
+                      Columnar' <$> project' (Proxy @AnyType) mutateM f) a a
+instance ProjectibleWithPredicate AnyType T.Text (QField s a) where
+  project' _ mutateM (QField q tbl f) =
+    fmap (\f' -> QField q tbl (f' ""))
+         (mutateM (Proxy @(QField s a)) (\_ -> f)) -- This is kind of a hack
 
 project :: Projectible syntax a => a -> WithExprContext [ syntax ]
 project = sequenceA . DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)

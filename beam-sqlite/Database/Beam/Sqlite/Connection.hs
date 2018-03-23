@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -15,7 +16,7 @@ import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import           Database.Beam.Backend.URI
-import           Database.Beam.Query (SqlInsert(..), SqlInsertValues(..), insert)
+import           Database.Beam.Query (QExpr, SqlInsert(..), SqlInsertValues(..), insert)
 import           Database.Beam.Schema.Tables ( DatabaseEntity(..)
                                              , DatabaseEntityDescriptor(..)
                                              , TableEntity)
@@ -25,15 +26,14 @@ import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
                                         , Query(..), SQLData(..), field
                                         , execute, execute_
                                         , withStatement, bind, nextRow
-                                        , withTransaction, query_
-                                        , withConnection )
+                                        , query_, withConnection )
 import           Database.SQLite.Simple.FromField ( FromField(..), ResultError(..)
                                                   , returnError, fieldData)
 import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
 
-import           Control.Exception (bracket)
+import           Control.Exception (bracket_, onException, mask)
 import           Control.Monad (forM_, replicateM_)
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class (MonadIO(..))
@@ -56,6 +56,14 @@ import           Data.Time ( LocalTime, UTCTime, Day
 import           Data.Word
 
 import           Network.URI
+
+#ifdef UNIX
+import           System.Posix.Process (getProcessID)
+#elif defined(WINDOWS)
+import           System.Win32.Process (getCurrentProcessId)
+#else
+#error Need either POSIX or Win32 API for MonadBeamInsertReturning
+#endif
 
 import           Text.Read (readMaybe)
 
@@ -103,9 +111,6 @@ instance FromBackendRow Sqlite LocalTime where
 instance FromBackendRow Sqlite Scientific where
   fromBackendRow = unSqliteScientific <$> fromBackendRow
 instance FromBackendRow Sqlite SqliteScientific
-
-instance FromField x => FromField (Auto x) where
-  fromField = fmap (Auto . Just) . fromField
 
 newtype SqliteScientific = SqliteScientific { unSqliteScientific :: Scientific }
 instance FromField SqliteScientific where
@@ -166,7 +171,8 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
                      unRP (next True)
                 _ -> unRP (next False)
 
--- | URI syntax or use with 'withDbConnection'.
+-- | URI syntax for use with 'withDbConnection'. See documentation for
+-- 'BeamURIOpeners' for more information.
 sqliteUriSyntax :: c SqliteCommandSyntax Sqlite Connection SqliteM
                 -> BeamURIOpeners c
 sqliteUriSyntax =
@@ -236,41 +242,65 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
 -- Beam also offers a backend-agnostic way of using this functionality in the
 -- 'MonadBeamInsertReturning' extension. This functionality is emulated in
 -- SQLite using a temporary table and a trigger.
-data SqliteInsertReturning (table :: (* -> *) -> *) =
-  SqliteInsertReturning T.Text SqliteInsertSyntax
+data SqliteInsertReturning (table :: (* -> *) -> *)
+  = SqliteInsertReturning T.Text SqliteInsertSyntax
+  | SqliteInsertReturningNoRows
 
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
 -- into the given table. Use 'runInsertReturningList'
 insertReturning :: DatabaseEntity be db (TableEntity table)
-                -> SqlInsertValues SqliteInsertValuesSyntax table
+                -> SqlInsertValues SqliteInsertValuesSyntax (table (QExpr SqliteExpressionSyntax s))
                 -> SqliteInsertReturning table
 insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
-  let SqlInsert s = insert tbl vs
-  in SqliteInsertReturning tblNm s
+  case insert tbl vs of
+    SqlInsert s ->
+      SqliteInsertReturning tblNm s
+    SqlInsertNoRows ->
+      SqliteInsertReturningNoRows
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
--- inserted row. Unfilled 'Auto' values in the table will have been filled in in
--- the output.
+-- inserted row.
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqliteInsertReturning table
                        -> SqliteM [ table Identity ]
+runInsertReturningList SqliteInsertReturningNoRows = pure []
 runInsertReturningList (SqliteInsertReturning nm insertStmt_) =
   do (logger, conn) <- SqliteM ask
-     SqliteM . liftIO $
-       withTransaction conn $
-         bracket (createInsertedValuesTable conn) (dropInsertedValuesTable conn) $ \() ->
-         bracket (createInsertTrigger conn) (dropInsertTrigger conn) $ \() -> do
-           runSqliteInsert logger conn insertStmt_
-           fmap (\(BeamSqliteRow r) -> r) <$> query_ conn "SELECT * FROM inserted_values"
+     SqliteM . liftIO $ do
 
-  where
-    createInsertedValuesTable conn =
-      execute_ conn (Query ("CREATE TEMPORARY TABLE inserted_values AS SELECT * FROM \"" <> sqliteEscape nm <> "\" LIMIT 0"))
-    dropInsertedValuesTable conn () =
-      execute_ conn (Query "DROP TABLE inserted_values")
+#ifdef UNIX
+       processId <- fromString . show <$> getProcessID
+#elif defined(WINDOWS)
+       processId <- fromString . show <$> getCurrentProcessId
+#else
+#error Need either POSIX or Win32 API for MonadBeamInsertReturning
+#endif
 
-    createInsertTrigger conn =
-      execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger AFTER INSERT ON \"" <> sqliteEscape nm <> "\" BEGIN " <>
-                            "INSERT INTO inserted_values SELECT * FROM \"" <> sqliteEscape nm <> "\" WHERE ROWID=last_insert_rowid(); END" ))
-    dropInsertTrigger conn () =
-      execute_ conn "DROP TRIGGER insert_trigger"
+       let startSavepoint =
+             execute_ conn (Query ("SAVEPOINT insert_savepoint_" <> processId))
+           rollbackToSavepoint =
+             execute_ conn (Query ("ROLLBACK TRANSACTION TO SAVEPOINT insert_savepoint_" <> processId))
+           releaseSavepoint =
+             execute_ conn (Query ("RELEASE SAVEPOINT insert_savepoint_" <> processId))
+
+           createInsertedValuesTable =
+             execute_ conn (Query ("CREATE TEMPORARY TABLE inserted_values_" <> processId <> " AS SELECT * FROM \"" <> sqliteEscape nm <> "\" LIMIT 0"))
+           dropInsertedValuesTable =
+             execute_ conn (Query ("DROP TABLE inserted_values_" <> processId))
+
+           createInsertTrigger =
+             execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger_" <> processId <> " AFTER INSERT ON \"" <> sqliteEscape nm <> "\" BEGIN " <>
+                                   "INSERT INTO inserted_values_" <> processId <> " SELECT * FROM \"" <> sqliteEscape nm <> "\" WHERE ROWID=last_insert_rowid(); END" ))
+           dropInsertTrigger =
+             execute_ conn (Query ("DROP TRIGGER insert_trigger_" <> processId))
+
+
+       mask $ \restore -> do
+         startSavepoint
+         flip onException rollbackToSavepoint . restore $ do
+           x <- bracket_ createInsertedValuesTable dropInsertedValuesTable $
+                bracket_ createInsertTrigger dropInsertTrigger $ do
+                runSqliteInsert logger conn insertStmt_
+                fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT * FROM inserted_values_" <> processId))
+           releaseSavepoint
+           return x

@@ -1,3 +1,5 @@
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 import Prelude hiding (lookup)
 
@@ -40,7 +42,7 @@ instance Table UserT where
 instance Beamable (PrimaryKey UserT)
 
 data AddressT f = Address
-                { _addressId    :: C f (Auto Int)
+                { _addressId    :: C f Int
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -54,15 +56,15 @@ deriving instance Show (PrimaryKey UserT Identity)
 deriving instance Show Address
 
 instance Table AddressT where
-    data PrimaryKey AddressT f = AddressId (Columnar f (Auto Int)) deriving Generic
+    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
     primaryKey = AddressId . _addressId
-type AddressId = PrimaryKey AddressT Identity -- For convenience    
+type AddressId = PrimaryKey AddressT Identity -- For convenience
 
 instance Beamable AddressT
 instance Beamable (PrimaryKey AddressT)
 
 data ProductT f = Product
-                { _productId          :: C f (Auto Int)
+                { _productId          :: C f Int
                 , _productTitle       :: C f Text
                 , _productDescription :: C f Text
                 , _productPrice       :: C f Int {- Price in cents -} }
@@ -71,7 +73,7 @@ type Product = ProductT Identity
 deriving instance Show Product
 
 instance Table ProductT where
-  data PrimaryKey ProductT f = ProductId (Columnar f (Auto Int))
+  data PrimaryKey ProductT f = ProductId (Columnar f Int)
                                deriving Generic
   primaryKey = ProductId . _productId
 
@@ -80,7 +82,7 @@ instance Beamable (PrimaryKey ProductT)
 deriving instance Show (PrimaryKey AddressT Identity)
 
 data OrderT f = Order
-              { _orderId      :: Columnar f (Auto Int)
+              { _orderId      :: Columnar f Int
               , _orderDate    :: Columnar f LocalTime
               , _orderForUser :: PrimaryKey UserT f
               , _orderShipToAddress :: PrimaryKey AddressT f
@@ -90,7 +92,7 @@ type Order = OrderT Identity
 deriving instance Show Order
 
 instance Table OrderT where
-    data PrimaryKey OrderT f = OrderId (Columnar f (Auto Int))
+    data PrimaryKey OrderT f = OrderId (Columnar f Int)
                                deriving Generic
     primaryKey = OrderId . _orderId
 
@@ -110,7 +112,7 @@ instance FromField ShippingCarrier where
 instance (BeamBackend be, BackendFromField be ShippingCarrier) => FromBackendRow be ShippingCarrier
 
 data ShippingInfoT f = ShippingInfo
-                     { _shippingInfoId             :: Columnar f (Auto Int)
+                     { _shippingInfoId             :: Columnar f Int
                      , _shippingInfoCarrier        :: Columnar f ShippingCarrier
                      , _shippingInfoTrackingNumber :: Columnar f Text }
                        deriving Generic
@@ -118,7 +120,7 @@ type ShippingInfo = ShippingInfoT Identity
 deriving instance Show ShippingInfo
 
 instance Table ShippingInfoT where
-    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f (Auto Int))
+    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int)
                                       deriving Generic
     primaryKey = ShippingInfoId . _shippingInfoId
 
@@ -155,7 +157,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartLineItems     :: f (TableEntity LineItemT) }
                         deriving Generic
 
-instance Database ShoppingCartDb
+instance Database be ShoppingCartDb
 
 ShoppingCartDb (TableLens shoppingCartUsers) (TableLens shoppingCartUserAddresses)
                (TableLens shoppingCartProducts) (TableLens shoppingCartOrders)
@@ -212,15 +214,15 @@ main =
            [ User "james@example.com" "James" "Smith"  "b4cc344d25a2efe540adbf2678e2304c" {- james -}
            , User "betty@example.com" "Betty" "Jones"  "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
            , User "sam@example.com"   "Sam"   "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -} ]
-         addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
 
-                     , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
-                     , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty) ]
+         addresses = [ Address default_ (val_ "123 Little Street") (val_ Nothing) (val_ "Boston") (val_ "MA") (val_ "12345") (pk james)
+                     , Address default_ (val_ "222 Main Street") (val_ (Just "Ste 1")) (val_ "Houston") (val_ "TX") (val_ "8888") (pk betty)
+                     , Address default_ (val_ "9999 Residence Ave") (val_ Nothing) (val_ "Sugarland") (val_ "TX") (val_ "8989") (pk betty) ]
 
-         products = [ Product (Auto Nothing) "Red Ball" "A bright red, very spherical ball" 1000
-                    , Product (Auto Nothing) "Math Textbook" "Contains a lot of important math theorems and formulae" 2500
-                    , Product (Auto Nothing) "Intro to Haskell" "Learn the best programming language in the world" 3000
-                    , Product (Auto Nothing) "Suitcase" "A hard durable suitcase" 15000 ]
+         products = [ Product default_ (val_ "Red Ball") (val_ "A bright red, very spherical ball") (val_ 1000)
+                    , Product default_ (val_ "Math Textbook") (val_ "Contains a lot of important math theorems and formulae") (val_ 2500)
+                    , Product default_ (val_ "Intro to Haskell") (val_ "Learn the best programming language in the world") (val_ 3000)
+                    , Product default_ (val_ "Suitcase") (val_ "A hard durable suitcase") (val_ 15000) ]
 
      (jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase) <-
        withDatabase conn $ do
@@ -229,11 +231,11 @@ main =
 
          [jamesAddress1, bettyAddress1, bettyAddress2] <-
            runInsertReturningList $
-           insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertValues addresses
+           insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertExpressions addresses
 
          [redBall, mathTextbook, introToHaskell, suitcase] <-
            runInsertReturningList $
-           insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertValues products
+           insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertExpressions products
 
          pure ( jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase )
 
@@ -242,5 +244,6 @@ main =
          [bettyShippingInfo] <-
            runInsertReturningList $
            insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
-           insertValues [ ShippingInfo (Auto Nothing) USPS "12345790ABCDEFGHI" ]
+           insertExpressions [ ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI") ]
          pure bettyShippingInfo
+

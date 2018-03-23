@@ -261,18 +261,22 @@ aggregates =
                           , selectLimit = Nothing, selectOffset = Nothing
                           , selectOrdering = [] } <-
            pure $ select $
-           do (age, maxNameLength) <- aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+           do (age, maxNameLength) <- aggregate_ (\e -> ( group_ (_employeeAge e)
+                                                        , fromMaybe_ 0 (max_ (charLength_ (_employeeFirstName e)))) ) $
                                       all_ (_employees employeeDbSettings)
               guard_ (maxNameLength >. 42)
               pure (age, maxNameLength)
 
          Just (FromTable (TableNamed "employees") (Just t0)) <- pure selectFrom
          selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0 "age"), Just "res0" )
-                                        , ( ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ], Just "res1") ]
+                                        , ( ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ]
+                                                               , ExpressionValue (Value (0 :: Int)) ], Just "res1" ) ]
          selectWhere @?= Nothing
          selectGrouping @?= Just (Grouping [ ExpressionFieldName (QualifiedField t0 "age") ])
-         selectHaving @?= Just (ExpressionCompOp ">" Nothing (ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ])
-                                                             (ExpressionValue (Value (42 :: Int))))
+         selectHaving @?= Just (ExpressionCompOp ">" Nothing
+                                (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ]
+                                                    , ExpressionValue (Value (0 :: Int)) ])
+                                (ExpressionValue (Value (42 :: Int))))
 
     aggregateInJoin =
       testCase "Aggregate in JOIN" $
@@ -381,18 +385,24 @@ aggregates =
                           , selectOrdering = [] } <-
            pure $ select $
            filter_ (\(_, l) -> l <. 10 ||. l >. 20) $
-           aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+           aggregate_ (\e -> ( group_ (_employeeAge e)
+                             , fromMaybe_ 0 (max_ (charLength_ (_employeeFirstName e)))) ) $
            limit_ 10 (all_ (_employees employeeDbSettings))
          Just (FromTable (TableFromSubSelect subselect) (Just t0)) <- pure selectFrom
 
-         selectProjection @?= ProjExprs [(ExpressionFieldName (QualifiedField t0 "res3"),Just "res0"),(ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0"))], Just "res1")]
+         selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t0 "res3"),Just "res0")
+                                        , (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0"))]
+                                                              , ExpressionValue (Value (0 :: Int)) ], Just "res1")
+                                        ]
          selectWhere @?= Nothing
          selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "res3")])
          selectHaving @?= Just (ExpressionBinOp "OR" (ExpressionCompOp "<" Nothing
-                                                      (ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ])
+                                                      (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ]
+                                                                          , ExpressionValue (Value (0 :: Int)) ])
                                                       (ExpressionValue (Value (10 :: Int))))
                                                      (ExpressionCompOp ">" Nothing
-                                                      (ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ])
+                                                      (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ]
+                                                                          , ExpressionValue (Value (0 :: Int)) ])
                                                       (ExpressionValue (Value (20 :: Int)))))
 
          selectLimit subselect @?= Just 10
@@ -422,7 +432,7 @@ aggregates =
                           , selectOrdering = [] } <-
            pure $ select $
            do (lastName, firstNameLength) <-
-                  filter_ (\(_, charLength) -> charLength >. 10) $
+                  filter_ (\(_, charLength) -> fromMaybe_ 0 charLength >. 10) $
                   aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               role <- relatedBy_ (_roles employeeDbSettings) (\r -> _roleName r ==. lastName)
@@ -450,7 +460,8 @@ aggregates =
            pure subselect
          Just (FromTable (TableFromSubSelect employeesSelect) (Just t0')) <- pure selectFrom
          selectWhere @?= Nothing
-         selectHaving @?= Just (ExpressionCompOp ">" Nothing (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))])
+         selectHaving @?= Just (ExpressionCompOp ">" Nothing (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))]
+                                                                                 , ExpressionValue (Value (0 :: Int)) ])
                                                              (ExpressionValue (Value (10 :: Int))))
          selectGrouping @?= Just (Grouping [ (ExpressionFieldName (QualifiedField t0' "res1")) ])
          selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0' "res1"), Just "res0" )
@@ -482,7 +493,8 @@ aggregates =
            do role <- all_ (_roles employeeDbSettings)
               (lastName, firstNameLength) <-
                   filter_ (\(_, charLength) -> charLength >. 10) $
-                  aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
+                  aggregate_ (\e -> ( group_ (_employeeLastName e)
+                                    , fromMaybe_ 0 $ max_ (charLength_ (_employeeFirstName e))) ) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               guard_ (_roleName role ==. lastName)
               pure (firstNameLength, role, lastName)
@@ -512,7 +524,9 @@ aggregates =
          selectHaving @?= Nothing
          selectGrouping @?= Just (Grouping [ (ExpressionFieldName (QualifiedField t0' "res1")) ])
          selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0' "res1"), Just "res0" )
-                                        , ( ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))], Just "res1" ) ]
+                                        , ( ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))]
+                                                               , ExpressionValue (Value (0 :: Int)) ]
+                                          , Just "res1" ) ]
 
          Select { selectTable = SelectTable { .. }, selectLimit = Just 10
                 , selectOffset = Nothing, selectOrdering = [] } <-
@@ -725,7 +739,7 @@ joinHaving =
                       , selectLimit = Nothing, selectOffset = Nothing
                       , selectOrdering = [] } <-
        pure $ select $
-       do (age, maxFirstNameLength) <- filter_ (\(_, nameLength) -> nameLength >=. 20) $
+       do (age, maxFirstNameLength) <- filter_ (\(_, nameLength) -> fromMaybe_ 0 nameLength >=. 20) $
                                        aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
                                        all_ (_employees employeeDbSettings)
           role <- all_ (_roles employeeDbSettings)
@@ -750,7 +764,10 @@ joinHaving =
                                     , (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))], Just "res1") ]
      selectWhere @?= Nothing
      selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
-     selectHaving @?= Just (ExpressionCompOp ">=" Nothing (ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))]) (ExpressionValue (Value (20 :: Int))))
+     selectHaving @?= Just (ExpressionCompOp ">=" Nothing
+                            (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))]
+                                                , ExpressionValue (Value (0 :: Int)) ])
+                            (ExpressionValue (Value (20 :: Int))))
 
 -- | Ensure that isJustE and isNothingE work correctly for simple types
 
@@ -785,23 +802,29 @@ tableEquality =
 
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
-        let andE = ExpressionBinOp "AND"
+        let andE = ExpressionBinOp "AND"; orE = ExpressionBinOp "OR"
             eqE = ExpressionCompOp "==" Nothing
+
+            maybeEqE a b = ExpressionCase [ (andE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value True))
+                                          , (orE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value False))
+                                          ]
+                                          (eqE a b)
+
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionFieldName (QualifiedField depts "name"))
-            firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
+            firstNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
                                 (ExpressionFieldName (QualifiedField depts "head__first_name"))
-            lastNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
-                               (ExpressionFieldName (QualifiedField depts "head__last_name"))
-            createdCond = eqE (ExpressionFieldName (QualifiedField depts "head__created"))
-                              (ExpressionFieldName (QualifiedField depts "head__created"))
+            lastNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
+                                    (ExpressionFieldName (QualifiedField depts "head__last_name"))
+            createdCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__created"))
+                                   (ExpressionFieldName (QualifiedField depts "head__created"))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
    tableExprToTableLiteral =
      testCase "Equality comparison between table expression and table literal" $
      do now <- getCurrentTime
 
-        let exp = DepartmentT "Sales" (EmployeeId (Just "Jane") (Just "Smith") (Just (Auto (Just now))))
+        let exp = DepartmentT "Sales" (EmployeeId (Just "Jane") (Just "Smith") (Just now))
         SqlSelect Select { selectTable = SelectTable { selectWhere = Just selectWhere, selectFrom } } <- pure $ select $ do
           d <- all_ (_departments employeeDbSettings)
           guard_ (d ==. val_ exp)
@@ -809,16 +832,22 @@ tableEquality =
 
         Just (FromTable (TableNamed "departments") (Just depts)) <- pure selectFrom
 
-        let andE = ExpressionBinOp "AND"
+        let andE = ExpressionBinOp "AND"; orE = ExpressionBinOp "OR"
             eqE = ExpressionCompOp "==" Nothing
+
+            maybeEqE a b = ExpressionCase [ (andE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value True))
+                                          , (orE (ExpressionIsNull a) (ExpressionIsNull b), ExpressionValue (Value False))
+                                          ]
+                                          (eqE a b)
+
             nameCond = eqE (ExpressionFieldName (QualifiedField depts "name"))
                            (ExpressionValue (Value ("Sales" :: Text)))
-            firstNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
-                                (ExpressionValue (Value ("Jane" :: Text)))
-            lastNameCond = eqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
-                               (ExpressionValue (Value ("Smith" :: Text)))
-            createdCond = eqE (ExpressionFieldName (QualifiedField depts "head__created"))
-                              (ExpressionValue (Value now))
+            firstNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__first_name"))
+                                     (ExpressionValue (Value ("Jane" :: Text)))
+            lastNameCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__last_name"))
+                                    (ExpressionValue (Value ("Smith" :: Text)))
+            createdCond = maybeEqE (ExpressionFieldName (QualifiedField depts "head__created"))
+                                  (ExpressionValue (Value now))
         selectWhere @?= andE (andE (andE nameCond firstNameCond) lastNameCond) createdCond
 
 -- | Ensure related_ generates the correct ON conditions
@@ -1106,7 +1135,7 @@ updateNullable =
   do curTime <- getCurrentTime
 
      let employeeKey :: PrimaryKey EmployeeT (Nullable Identity)
-         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just (Auto (Just curTime)))
+         employeeKey = EmployeeId (Just "John") (Just "Smith") (Just curTime)
 
      SqlUpdate Update { .. } <-
        pure $ update (_departments employeeDbSettings)
@@ -1223,7 +1252,7 @@ gh70OrderByInFirstJoinCausesIncorrectProjection =
             orderBy_ (\(fn, _) -> desc_ fn) $
             filter_ (\(_, sl) -> sl >=. val_ 100000) $
             aggregate_ (\e -> ( group_ (_employeeFirstName e)
-                              , avg_ (_employeeSalary e) )) $
+                              , fromMaybe_ 0 $ avg_ (_employeeSalary e) )) $
             all_ (_employees employeeDbSettings)
 
           richEmployeeNamesAndRoles = do
@@ -1259,13 +1288,17 @@ gh70OrderByInFirstJoinCausesIncorrectProjection =
       selectOrdering @?= [ OrderingDesc (ExpressionFieldName (QualifiedField "t0" "first_name")) ]
       selectGrouping @?= Just (Grouping [ ExpressionFieldName (QualifiedField "t0" "first_name") ])
       selectHaving @?= Just (ExpressionCompOp ">=" Nothing
-                              (ExpressionAgg "AVG" Nothing
-                                [ ExpressionFieldName (QualifiedField "t0" "salary") ])
+                              (ExpressionCoalesce
+                               [ ExpressionAgg "AVG" Nothing
+                                  [ ExpressionFieldName (QualifiedField "t0" "salary") ]
+                               , ExpressionValue (Value (0 :: Double)) ])
                               (ExpressionValue (Value (100000 :: Double))))
       selectProjection @?= ProjExprs
         [ ( ExpressionFieldName (QualifiedField "t0" "first_name"), Just "res0" )
-        , ( ExpressionAgg "AVG" Nothing
+        , ( ExpressionCoalesce
+            [ ExpressionAgg "AVG" Nothing
               [ ExpressionFieldName (QualifiedField "t0" "salary") ]
+            , ExpressionValue (Value (0 :: Double)) ]
           , Just "res1" )
         ]
 

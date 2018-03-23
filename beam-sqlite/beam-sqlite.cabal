@@ -1,11 +1,12 @@
+
 name:                beam-sqlite
-version:             0.2.0.0
+version:             0.3.0.0
 synopsis:            Beam driver for SQLite
 description:         Beam driver for the <https://sqlite.org/ SQLite> embedded database.
                      See <http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/ here>
                      for more information
 homepage:            http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/
-license:             BSD3
+license:             MIT
 license-file:        LICENSE
 author:              Travis Athougies
 maintainer:          travis@athougies.net
@@ -14,6 +15,7 @@ category:            Web
 build-type:          Simple
 extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
+bug-reports:          https://github.com/tathougies/beam/issues
 cabal-version:       >=1.18
 
 library
@@ -23,8 +25,8 @@ library
                       Database.Beam.Sqlite.Migrate
   build-depends:      base          >=4.7  && <5,
 
-                      beam-core     >=0.6  && <0.7,
-                      beam-migrate  >=0.2  && <0.3,
+                      beam-core     >=0.7  && <0.8,
+                      beam-migrate  >=0.3  && <0.4,
 
                       sqlite-simple >=0.4  && <0.5,
                       text          >=1.0  && <1.3,
@@ -45,6 +47,13 @@ library
   ghc-options:        -Wall
   if flag(werror)
     ghc-options:       -Werror
+
+  if os(windows)
+    ghc-options:      -DWINDOWS
+    build-depends:    Win32
+  if os(freebsd) || os(netbsd) || os(darwin) || os(linux) || os(solaris)
+    ghc-options:      -DUNIX
+    build-depends:    unix
 
 flag werror
   description: Enable -Werror during development

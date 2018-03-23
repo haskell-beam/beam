@@ -1,5 +1,5 @@
 module Database.Beam.Query.Types
-  ( Q, QExpr, QGenExpr(..), QExprToIdentity, QWindow, QWindowFrame
+  ( Q, QExpr, QGenExpr(..), QExprToIdentity, QExprToField, QWindow, QWindowFrame
 
   , Projectible, Aggregation
 
@@ -34,6 +34,27 @@ type instance QExprToIdentity (a, b, c, d, e, f, g, h) =
   ( QExprToIdentity a, QExprToIdentity b, QExprToIdentity c, QExprToIdentity d, QExprToIdentity e, QExprToIdentity f
   , QExprToIdentity g, QExprToIdentity h )
 type instance QExprToIdentity (Vector n a) = Vector n (QExprToIdentity a)
+
+-- TODO can this be unified with QExprToIdentity?
+type family QExprToField x
+type instance QExprToField (table (QGenExpr context syntax s)) = table (QField s)
+type instance QExprToField (table (Nullable (QGenExpr context syntax s))) = table (Nullable (QField s))
+type instance QExprToField (QGenExpr ctxt syntax s a) = QField s a
+type instance QExprToField () = ()
+type instance QExprToField (a, b) = (QExprToField a, QExprToField b)
+type instance QExprToField (a, b, c) = (QExprToField a, QExprToField b, QExprToField c)
+type instance QExprToField (a, b, c, d) = (QExprToField a, QExprToField b, QExprToField c, QExprToField d)
+type instance QExprToField (a, b, c, d, e) = (QExprToField a, QExprToField b, QExprToField c, QExprToField d, QExprToField e)
+type instance QExprToField (a, b, c, d, e, f) =
+  ( QExprToField a, QExprToField b, QExprToField c, QExprToField d
+  , QExprToField e, QExprToField f )
+type instance QExprToField (a, b, c, d, e, f, g) =
+  ( QExprToField a, QExprToField b, QExprToField c, QExprToField d
+  , QExprToField e, QExprToField f, QExprToField g )
+type instance QExprToField (a, b, c, d, e, f, g, h) =
+  ( QExprToField a, QExprToField b, QExprToField c, QExprToField d
+  , QExprToField e, QExprToField f, QExprToField g, QExprToField h)
+type instance QExprToField (Vector n a) = Vector n (QExprToField a)
 
 class IsSql92SelectSyntax selectSyntax => HasQBuilder selectSyntax where
   buildSqlQuery :: Projectible (Sql92SelectExpressionSyntax selectSyntax) a =>

@@ -14,9 +14,9 @@ import           Database.Beam.Migrate.Tool.Schema
 import           Database.Beam.Migrate ( SomeDatabasePredicate(..)
                                        , DatabasePredicate(..)
                                        , PredicateSpecificity(..)
+                                       , MigrationCommand(..)
                                        , CheckedDatabaseSettings
-                                       , collectChecks
-                                       )
+                                       , collectChecks )
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.Backend
 
@@ -99,7 +99,7 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
                  Candidates {} -> fail "Could not find migration in backend"
                  Solved [] -> fail "Schemas are equivalent, not importing"
                  Solved cmds -> do
-                   liftIO . void $ writeMigration cmdLine registry be oldCommitId newCommit cmds
+                   liftIO . void $ writeMigration cmdLine registry be oldCommitId newCommit (fmap migrationCommand cmds)
                    modifyM (newMigration oldCommitId hsHash [MigrationFormatHaskell, backendMigFmt])
 
       -- TODO factor out
@@ -178,12 +178,12 @@ showSimpleSchema cmdLine backend connStr = do
           case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs'' of
             Candidates {} -> fail "Could not form haskell schema"
             Solved actions ->
-              case renderHsSchema (hsActionsToModule "Schema" actions) of
+              case renderHsSchema (hsActionsToModule "Schema" (fmap migrationCommand actions)) of
                 Left err -> fail ("Could not render schema: " ++ err)
                 Right sch -> putStrLn sch
 
 writeSchema :: MigrateCmdLine -> MigrationRegistry
-             -> UUID -> BeamMigrationBackend be cmd hdl
+             -> UUID -> BeamMigrationBackend cmd be hdl m
              -> [SomeDatabasePredicate]
              -> IO FilePath
 writeSchema cmdLine registry commitId be cs = do
@@ -191,7 +191,7 @@ writeSchema cmdLine registry commitId be cs = do
     Candidates {} -> fail "Could not form backend schema"
     Solved actions ->
       writeSchemaFile cmdLine registry (backendFileExtension be) (schemaScriptName commitId) $
-       unlines (intersperse "--" $ map (backendRenderSyntax be) actions)
+       unlines (intersperse "--" $ map (backendRenderSyntax be) (fmap migrationCommand actions))
 
 writeHsSchema :: MigrateCmdLine -> MigrationRegistry
               -> UUID
@@ -210,7 +210,7 @@ writeHsSchema cmdLine registry commitId cs dbSchema fmts =
       metadata <- SchemaMetaData <$> pure commitId <*> pure fmts <*> getCurrentTime <*> pure dbSchema
       writeHsSchemaFile cmdLine registry commitId metadata $
         let modName = unModuleName (migrationRegistrySchemaModule registry) <> "." <> schemaModuleName commitId
-        in case renderHsSchema (hsActionsToModule modName actions) of
+        in case renderHsSchema (hsActionsToModule modName (fmap migrationCommand actions)) of
              Left err -> error ("Could not render schema: " ++ err)
              Right sch -> sch
 
@@ -221,7 +221,7 @@ writeHsSchemaFile cmdLine registry commitId metadata modStr =
                     (modStr ++ "\n\n" ++ metadataComment "--" metadata)
 
 writeMigration :: MigrateCmdLine -> MigrationRegistry
-               -> BeamMigrationBackend be cmd hdl
+               -> BeamMigrationBackend cmd be hdl m
                -> UUID -> UUID
                -> [ cmd ]
                -> IO FilePath
@@ -304,10 +304,10 @@ beginNewSchema cmdLine tmplSrc tmpFile = do
 
     pure ((), reg { migrationRegistryMode = BeamMigrateCreatingSchema tmpFile src hash })
 
-loadSchema :: forall be cmd hdl a
-            . Typeable cmd => ModuleName -> BeamMigrationBackend be cmd hdl
+loadSchema :: forall be cmd hdl m a
+            . Typeable cmd => ModuleName -> BeamMigrationBackend cmd be hdl m
            -> MigrateCmdLine -> MigrationRegistry -> FilePath
-           -> (forall be' db. Database db => CheckedDatabaseSettings be' db -> IO a)
+           -> (forall be' db. Database be' db => CheckedDatabaseSettings be' db -> IO a)
            -> IO a
 loadSchema backendModule _ cmdLine reg modPath withDb = do
   putStrLn ("Schema module path " ++ modPath)

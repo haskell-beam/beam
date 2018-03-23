@@ -76,7 +76,7 @@ genDiffFromSources cmdLine reg actualSource expSource =
      pure (PredicateDiff (HS.fromList expected) (HS.fromList actual))
 
 filterBeamMigratePreds :: SomeBeamMigrationBackend -> [SomeDatabasePredicate] -> [SomeDatabasePredicate]
-filterBeamMigratePreds (SomeBeamMigrationBackend (BeamMigrationBackend {} :: BeamMigrationBackend be cmd hdl)) preds =
+filterBeamMigratePreds (SomeBeamMigrationBackend (BeamMigrationBackend {} :: BeamMigrationBackend cmd be hdl m)) preds =
   let beamMigrateDbSchema = collectChecks (beamMigratableDb @cmd @be @hdl)
   in foldr (\pred@(SomeDatabasePredicate pred') preds ->
               if pred `elem` preds
@@ -99,7 +99,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
   be@(SomeBeamMigrationBackend
        (BeamMigrationBackend { backendGetDbConstraints = getCs
                              , backendTransact = transact } ::
-           BeamMigrationBackend be cmd hdl)) <-
+           BeamMigrationBackend cmd be hdl m)) <-
     loadBackend' cmdLine modName
 
   case ref of
@@ -162,4 +162,4 @@ displayScript cmdLine modName (PredicateDiff dest from) = do
   case finalSolution solver of
     Candidates {} -> fail "Could not find appropriate migration between schemas."
     Solved cmds ->
-      putStrLn (unlines (map renderCmd cmds))
+      putStrLn (unlines (map (renderCmd . migrationCommand) cmds))

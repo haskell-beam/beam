@@ -1,0 +1,85 @@
+# The docs machinery can be used to generate examples using multiple
+# backends, including those not included as part of the beam-core
+# repository
+#
+# This configuration contains the defaults for the main beam documentation
+#
+# To restrict which backends should be included in a local build,
+# modify the mkdocs.yaml file, and set enabled_backends to a list of
+# backend names that should be included
+
+backends:
+
+  beam-postgres:
+    backend-name: Postgres
+    backend-module: Database.Beam.Postgres
+    backend-options: '"" beam_docs_chinook'
+    src:
+      file: ./beam-postgres
+    haskell-names:
+      package: beam-postgres
+      backend: Postgres
+      monad: Pg
+      select-syntax: PgSelectSyntax
+      mnemonic: Pg
+    extra-packages:
+      - postgresql-simple
+    extra-imports:
+      - Database.PostgreSQL.Simple
+      - "qualified Database.Beam.Postgres.Full as Pg"
+    backend-extra: >-
+      docsWithTransaction = withTransaction
+    supports:
+      - utf8
+      - t611
+      - outer-join
+      - window
+      - intersect
+      - except
+
+  beam-sqlite:
+    backend-name: Sqlite
+    backend-module: Database.Beam.Sqlite
+    backend-options: chinook.db
+    src:
+      file: ./beam-sqlite
+    haskell-names:
+      package: beam-sqlite
+      backend: Sqlite
+      monad: SqliteM
+      select-syntax: SqliteSelectSyntax
+      mnemonic: Sqlite
+    extra-packages:
+      - sqlite-simple
+    extra-imports:
+      - Database.SQLite.Simple
+    backend-extra: >-
+      docsWithTransaction = withTransaction
+    supports:
+      - utf8
+      - intersect
+      - except
+
+  beam-mysql:
+    backend-name: MySQL
+    backend-module: Database.Beam.MySQL
+    backend-options: "127.0.0.1 3306 root '' beam_docs_chinook"
+    src:
+      github: tathougies/beam-mysql
+      revision: a55d9ce7aa4b8c11f232da4bcd3b2a61c650df22
+      sha256: d39a5b43a13c7cb96dac0d5ad066288d01fdfc576fd537265f3712746457510f
+    haskell-names:
+      package: beam-mysql
+      backend: MySQL
+      monad: MySQLM
+      select-syntax: MysqlSelectSyntax
+      mnemonic: My
+    extra-packages:
+      - mysql-simple
+    extra-imports:
+      - Database.MySQL.Simple
+      - "qualified Database.MySQL.Base as Base"
+    backend-extra: >-
+      docsWithTransaction = withTransaction
+    supports:
+      - utf8

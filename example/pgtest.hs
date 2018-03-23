@@ -97,7 +97,7 @@ data EmployeeDatabase q
   , _orders :: q OrderT }
   deriving Generic
 
-instance Database EmployeeDatabase
+instance Database Postgres EmployeeDatabase
 
 employeeDb :: DatabaseSettings Postgres EmployeeDatabase
 employeeDb = autoDbSettings

@@ -31,6 +31,7 @@ module Database.Beam.Schema.Tables
 
     -- * Columnar and Column Tags
     , Columnar, C, Columnar'(..)
+    , ComposeColumnar(..)
     , Nullable, TableField(..)
     , Exposed
     , fieldName
@@ -41,14 +42,17 @@ module Database.Beam.Schema.Tables
     , FieldsFulfillConstraintNullable
     , WithConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
+    , withConstrainedFields, withConstraints
+    , withNullableConstrainedFields, withNullableConstraints
 
     -- * Tables
     , Table(..), Beamable(..)
-    , Retaggable(..)
+    , Retaggable(..), (:*:)(..) -- Reexported for use with 'alongsideTable'
     , defTblFieldSettings
     , tableValuesNeeded
     , pk
-    , allBeamValues, changeBeamRep )
+    , allBeamValues, changeBeamRep
+    , alongsideTable )
     where
 
 import           Database.Beam.Backend.Types
@@ -79,10 +83,14 @@ import qualified Lens.Micro as Lens
 --   is named 'f', each field must be of the type of 'f' applied to some type
 --   for which an 'IsDatabaseEntity' instance exists.
 --
+--   The 'be' type parameter is necessary so that the compiler can
+--   ensure that backend-specific entities only work on the proper
+--   backend.
+--
 --   Entities are documented under [the corresponding
 --   section](Database.Beam.Schema#entities) and in the
 --   [manual](http://tathougies.github.io/beam/user-guide/databases/)
-class Database db where
+class Database be db where
 
     -- | Default derived function. Do not implement this yourself.
     --
@@ -142,7 +150,7 @@ newtype FieldModification f a
 --   only want to rename one table. You can do
 --
 -- > dbModification { tbl1 = modifyTable (\oldNm -> "NewTableName") tableModification }
-dbModification :: forall f be db. Database db => DatabaseModification f be  db
+dbModification :: forall f be db. Database be db => DatabaseModification f be db
 dbModification = runIdentity $
                  zipTables (Proxy @be) (\_ _ -> pure (EntityModification id)) (undefined :: DatabaseModification f be db) (undefined :: DatabaseModification f be db)
 
@@ -172,7 +180,7 @@ tableModification = runIdentity $
 -- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
 -- >      }
 withDbModification :: forall db be entity
-                    . Database db
+                    . Database be db
                    => db (entity be db)
                    -> DatabaseModification (entity be db) be db
                    -> db (entity be db)
@@ -211,7 +219,7 @@ instance RenamableField (TableField tbl) where
 
 class RenamableWithRule mod where
   renamingFields :: (Text -> Text) -> mod
-instance Database db => RenamableWithRule (db (EntityModification (DatabaseEntity be db) be)) where
+instance Database be db => RenamableWithRule (db (EntityModification (DatabaseEntity be db) be)) where
   renamingFields renamer =
     runIdentity $
     zipTables (Proxy @be) (\_ _ -> pure (renamingFields renamer))
@@ -428,6 +436,9 @@ type C f a = Columnar f a
 --   simply wraps 'Columnar f a'
 newtype Columnar' f a = Columnar' (Columnar f a)
 
+-- | Like 'Data.Functor.Compose', but with an intermediate 'Columnar'
+newtype ComposeColumnar f g a = ComposeColumnar (f (Columnar g a))
+
 -- | Metadata for a field of type 'ty' in 'table'.
 --
 --   Essentially a wrapper over the field name, but with a phantom type
@@ -546,6 +557,11 @@ allBeamValues (f :: forall a. Columnar' f a -> b) (tbl :: table f) =
 changeBeamRep :: Beamable table => (forall a. Columnar' f a -> Columnar' g a) -> table f -> table g
 changeBeamRep f tbl = runIdentity (zipBeamFieldsM (\x _ -> return (f x)) tbl tbl)
 
+alongsideTable :: Beamable tbl => tbl f -> tbl g -> tbl (Columnar' f :*: Columnar' g)
+alongsideTable a b =
+  runIdentity $
+  zipBeamFieldsM (\x y -> pure (Columnar' (x :*: y))) a b
+
 class Retaggable f x | x -> f where
   type Retag (tag :: (* -> *) -> * -> *) x :: *
 
@@ -641,6 +657,24 @@ instance FieldsFulfillConstraint c t =>
 instance FieldsFulfillConstraintNullable c t =>
     GFieldsFulfillConstraint c (K1 Generic.R (t (Nullable Exposed))) (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (WithConstraint c)))) where
   gWithConstrainedFields _ _ (K1 x) = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t (Nullable Exposed)))) (from x)))
+
+withConstrainedFields :: forall c tbl
+                       . FieldsFulfillConstraint c tbl => tbl Identity -> tbl (WithConstraint c)
+withConstrainedFields =
+  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl Exposed))) . from
+
+withConstraints :: forall c tbl. (Beamable tbl, FieldsFulfillConstraint c tbl) => tbl (WithConstraint c)
+withConstraints =
+  withConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
+
+withNullableConstrainedFields :: forall c tbl
+                               . FieldsFulfillConstraintNullable c tbl => tbl (Nullable Identity) -> tbl (Nullable (WithConstraint c))
+withNullableConstrainedFields =
+  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl (Nullable Exposed)))) . from
+
+withNullableConstraints ::  forall c tbl. (Beamable tbl, FieldsFulfillConstraintNullable c tbl) => tbl (Nullable (WithConstraint c))
+withNullableConstraints =
+  withNullableConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
 
 type FieldsFulfillConstraint (c :: * -> Constraint) t =
   ( Generic (t (WithConstraint c)), Generic (t Identity), Generic (t Exposed)

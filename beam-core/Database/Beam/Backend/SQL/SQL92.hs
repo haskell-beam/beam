@@ -28,6 +28,7 @@ type Sql92SelectExpressionSyntax select = Sql92SelectTableExpressionSyntax (Sql9
 type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
+type Sql92InsertExpressionSyntax select = Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax select)
 
 type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92ExpressionSyntax cmdSyntax)
 type Sql92ExpressionSyntax cmdSyntax = Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax)
@@ -183,6 +184,7 @@ class IsSql92DataTypeSyntax dataType where
   -- TODO interval type
 
 class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
+      , HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Bool
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
       , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr)
       , Typeable expr ) =>
@@ -195,7 +197,10 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
   type Sql92ExpressionExtractFieldSyntax expr :: *
 
   valueE :: Sql92ExpressionValueSyntax expr -> expr
-  rowE, coalesceE :: [ expr ] -> expr
+
+  rowE, quantifierListE, coalesceE :: [ expr ] -> expr
+  quantifierListE = rowE
+
   caseE :: [(expr, expr)]
         -> expr -> expr
   fieldE :: Sql92ExpressionFieldNameSyntax expr -> expr
@@ -211,6 +216,28 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
   eqE, neqE, ltE, gtE, leE, geE
     :: Maybe (Sql92ExpressionQuantifierSyntax expr)
     -> expr -> expr -> expr
+
+  -- | Compare the first and second argument for nullable equality, if
+  -- they are both not null, return the result of the third expression
+  --
+  -- Some backends, like @beam-postgres@ totally ignore the third
+  -- result, because all equality there is sensible.
+  eqMaybeE, neqMaybeE :: expr -> expr -> expr -> expr
+
+  eqMaybeE a b e =
+    let aIsNull = isNullE a
+        bIsNull = isNullE b
+    in caseE [ ( aIsNull `andE` bIsNull, valueE (sqlValueSyntax True) )
+             , ( aIsNull `orE` bIsNull, valueE (sqlValueSyntax False) ) ]
+             e
+
+
+  neqMaybeE a b e =
+    let aIsNull = isNullE a
+        bIsNull = isNullE b
+    in caseE [ ( aIsNull `andE` bIsNull, valueE (sqlValueSyntax False) )
+             , ( aIsNull `orE` bIsNull, valueE (sqlValueSyntax True) ) ]
+             e
 
   castE :: expr -> Sql92ExpressionCastTargetSyntax expr -> expr
 

@@ -20,8 +20,7 @@ For example, to get the first ten albums when sorted lexicographically, use
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 limit_ 10  $
 orderBy_ (asc_ . albumTitle) $
 all_ (album chinookDb)
@@ -34,8 +33,7 @@ arbitrarily chosen rows, you can use a different ordering.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 orderBy_ (asc_ . albumTitle) $
 limit_ 10 $
 all_ (album chinookDb)
@@ -51,8 +49,7 @@ order and by their city name in descending order.
 
 !beam-query
 ```haskell
-!chinook sqlite3
-!chinookpg postgres
+!example chinook
 limit_ 10 $
 orderBy_ (\e -> (asc_ (addressState (employeeAddress e)), desc_ (addressCity (employeeAddress e)))) $
 all_ (employee chinookDb)

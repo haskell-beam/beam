@@ -130,13 +130,6 @@ class IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSynt
                      -> dataTypeSyntax
 
 instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
-  HasDefaultSqlDataType dataTypeSyntax (Auto ty) where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
-instance (IsSql92ColumnSchemaSyntax columnSchemaSyntax, HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty) =>
-  HasDefaultSqlDataTypeConstraints columnSchemaSyntax (Auto ty) where
-  defaultSqlDataTypeConstraints _ = defaultSqlDataTypeConstraints (Proxy @ty)
-
-instance (IsSql92DataTypeSyntax dataTypeSyntax, HasDefaultSqlDataType dataTypeSyntax ty) =>
   HasDefaultSqlDataType dataTypeSyntax (Maybe ty) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
 instance (IsSql92ColumnSchemaSyntax columnSchemaSyntax, HasDefaultSqlDataTypeConstraints columnSchemaSyntax ty) =>

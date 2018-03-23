@@ -53,7 +53,7 @@ showCommands cmds = do
     green x = setSGRCode [ SetColor Foreground Dull Green ] ++ x ++ setSGRCode [ Reset ]
 
 getSchemaCommandsForBackend :: Typeable cmd
-                            => MigrationRegistry -> Maybe (BeamMigrationBackend be cmd hdl)
+                            => MigrationRegistry -> Maybe (BeamMigrationBackend cmd be hdl m)
                             -> UUID -> IO [ MigrateDDLCommand cmd ]
 getSchemaCommandsForBackend reg Nothing id = fail "Asked to get haskell schema"
 getSchemaCommandsForBackend reg (Just be@(BeamMigrationBackend {})) commitId =
@@ -76,7 +76,7 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
   let destCommit = registryHeadCommit registry
 
   sts <- getStatus cmdLine registry dbName
-  (_, _,SomeBeamMigrationBackend be@(BeamMigrationBackend {} :: BeamMigrationBackend be cmd hdl)) <-
+  (_, _, SomeBeamMigrationBackend be@(BeamMigrationBackend {} :: BeamMigrationBackend cmd be hdl m)) <-
     loadBackend cmdLine registry dbName
 
   cmds <-
@@ -140,6 +140,9 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
       showCommands cmds'
 
   putStrLn ("Should I run these commands?")
-  _ <- getLine
+  ack <- getLine
 
-  runCommands cmds'
+  if Char.toLower <$> ack /= "yes"
+    then fail "Exiting due to user request..."
+    else do
+      

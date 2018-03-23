@@ -1,10 +1,10 @@
 module Database.Beam.Query.Extensions
   ( -- * Various combinators corresponding to SQL extensions
 
-    -- * T614 NTILE function
+    -- ** T614 NTILE function
     ntile_
 
-    -- * T615 LEAD and LAG function
+    -- ** T615 LEAD and LAG function
   , lead1_, lag1_, lead_, lag_
   , leadWithDefault_, lagWithDefault_
 

@@ -1,18 +1,18 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
--- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core -- -fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications
+-- ! BUILD_OPTIONS: -fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -XStandaloneDeriving -XFlexibleInstances -XMultiParamTypeClasses -XDeriveGeneric -XFlexibleContexts -fno-warn-partial-type-signatures -i$$BEAM_SOURCE$$/beam-sqlite/examples/
 -- ! BUILD_DIR: beam-sqlite/examples/
 module Main where
 
 import Database.Beam
 import Database.Beam.Backend.Types
-import Database.Beam.Sqlite
-import Database.SQLite.Simple
+BEAM_MODULE_IMPORT
 
 import Control.Monad
 import Control.Exception
 
 import Data.IORef
+import Data.Monoid ((<>))
 
 import Chinook.Schema
 
@@ -20,13 +20,16 @@ data BeamDone = BeamDone
   deriving (Show)
 instance Exception BeamDone
 
-exampleQuery :: Q SqliteSelectSyntax ChinookDb s _
+BEAM_BACKEND_EXTRA
+
+exampleQuery :: Q BEAM_SELECT_SYNTAX ChinookDb s _
 exampleQuery =
   BEAM_PLACEHOLDER
 
 main :: IO ()
 main =
-  do chinook <- open "chinook.db"
+  do
+     BEAM_OPEN_DATABASE
 
      stmts <- newIORef id
 
@@ -34,7 +37,7 @@ main =
          record = withDatabaseDebug onStmt chinook
 
      handle (\BeamDone -> pure ()) $
-       withTransaction chinook $ do
+       docsWithTransaction chinook $ do
          record $ runSelectReturningList $ select $ exampleQuery
          throwIO BeamDone
 

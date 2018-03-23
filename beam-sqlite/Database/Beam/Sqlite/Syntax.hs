@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE CPP #-}
 
 -- | SQLite implementations of the Beam SQL syntax classes
 --
@@ -46,18 +47,20 @@ import           Database.Beam.Query
 import           Database.Beam.Query.SQL92
 
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
-import qualified Data.ByteString as B
 import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Scientific
 import           Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as TL
 import           Data.Time
 import           Data.Word
 
@@ -627,12 +630,16 @@ instance HasSqlValueSyntax SqliteValueSyntax Int64 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Word8 where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word16 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word32 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word64 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Scientific where
+  sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString (show s)))) -- Rely on sqlites duck typing
 instance HasSqlValueSyntax SqliteValueSyntax Float where
   sqlValueSyntax f = SqliteValueSyntax (emitValue (SQLFloat (float2Double f)))
 instance HasSqlValueSyntax SqliteValueSyntax Double where
@@ -645,12 +652,12 @@ instance HasSqlValueSyntax SqliteValueSyntax String where
   sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString s)))
 instance HasSqlValueSyntax SqliteValueSyntax T.Text where
   sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText s))
+instance HasSqlValueSyntax SqliteValueSyntax TL.Text where
+  sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (TL.toStrict s)))
 instance HasSqlValueSyntax SqliteValueSyntax x =>
   HasSqlValueSyntax SqliteValueSyntax (Maybe x) where
   sqlValueSyntax (Just x) = sqlValueSyntax x
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
-instance HasSqlValueSyntax SqliteValueSyntax (Maybe x) => HasSqlValueSyntax SqliteValueSyntax (Auto x) where
-  sqlValueSyntax (Auto x) = sqlValueSyntax x
 
 instance IsCustomSqlSyntax SqliteExpressionSyntax where
   newtype CustomSqlSyntax SqliteExpressionSyntax =
@@ -684,9 +691,11 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   negateE = unOp "-"; notE = unOp "NOT"
 
   isNotNullE = postFix "IS NOT NULL"; isNullE = postFix "IS NULL"
-  isTrueE = postFix "IS TRUE"; isNotTrueE = postFix "IS NOT TRUE"
-  isFalseE = postFix "IS FALSE"; isNotFalseE = postFix "IS NOT FALSE"
-  isUnknownE = postFix "IS UNKNOWN"; isNotUnknownE = postFix "IS NOT UNKNOWN"
+
+  -- SQLite doesn't handle tri-state booleans properly
+  isTrueE = postFix "IS 1"; isNotTrueE = postFix "IS NOT 1"
+  isFalseE = postFix "IS 0"; isNotFalseE = postFix "IS NOT 0"
+  isUnknownE = postFix "IS NULL"; isNotUnknownE = postFix "IS NOT NULL"
 
   existsE select = SqliteExpressionSyntax (emit "EXISTS " <> parens (fromSqliteSelect select))
   uniqueE select = SqliteExpressionSyntax (emit "UNIQUE " <> parens (fromSqliteSelect select))
@@ -737,7 +746,7 @@ instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
   concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
   concatE (x:xs) =
     SqliteExpressionSyntax $ parens $
-    foldr (\a b -> parens (fromSqliteExpression a) <> emit " || " <> parens b) (fromSqliteExpression x) xs
+    foldl (\a b -> a <> emit " || " <> parens (fromSqliteExpression b)) (fromSqliteExpression x) xs
 
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
@@ -751,8 +760,8 @@ compOp op quantifier a b =
   SqliteExpressionSyntax $
   parens (fromSqliteExpression a) <>
   emit op <>
-  parens (maybe mempty (\q -> emit " " <> fromSqliteComparisonQuantifier q <> emit " ") quantifier <>
-          fromSqliteExpression b)
+  maybe mempty (\q -> emit " " <> fromSqliteComparisonQuantifier q <> emit " ") quantifier <>
+  parens (fromSqliteExpression b)
 
 unOp, postFix :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 unOp op a =
@@ -815,7 +824,7 @@ instance IsSql92DeleteSyntax SqliteDeleteSyntax where
     maybe mempty (\where_ -> emit " WHERE " <> fromSqliteExpression where_) where_
 
 spaces, parens :: SqliteSyntax -> SqliteSyntax
-spaces a = emit " " <> a <> emit " " 
+spaces a = emit " " <> a <> emit " "
 parens a = emit "(" <> a <> emit ")"
 
 commas :: [SqliteSyntax] -> SqliteSyntax
@@ -850,3 +859,33 @@ instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
 instance HasSqlValueSyntax SqliteValueSyntax Day where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
     where tmStr = formatTime defaultTimeLocale (iso8601DateFormat Nothing) tm
+
+-- * Equality checks
+#define HAS_SQLITE_EQUALITY_CHECK(ty)                       \
+  instance HasSqlEqualityCheck SqliteExpressionSyntax (ty); \
+  instance HasSqlQuantifiedEqualityCheck SqliteExpressionSyntax (ty);
+
+HAS_SQLITE_EQUALITY_CHECK(Int)
+HAS_SQLITE_EQUALITY_CHECK(Int8)
+HAS_SQLITE_EQUALITY_CHECK(Int16)
+HAS_SQLITE_EQUALITY_CHECK(Int32)
+HAS_SQLITE_EQUALITY_CHECK(Int64)
+HAS_SQLITE_EQUALITY_CHECK(Word)
+HAS_SQLITE_EQUALITY_CHECK(Word8)
+HAS_SQLITE_EQUALITY_CHECK(Word16)
+HAS_SQLITE_EQUALITY_CHECK(Word32)
+HAS_SQLITE_EQUALITY_CHECK(Word64)
+HAS_SQLITE_EQUALITY_CHECK(Double)
+HAS_SQLITE_EQUALITY_CHECK(Float)
+HAS_SQLITE_EQUALITY_CHECK(Bool)
+HAS_SQLITE_EQUALITY_CHECK(String)
+HAS_SQLITE_EQUALITY_CHECK(T.Text)
+HAS_SQLITE_EQUALITY_CHECK(TL.Text)
+HAS_SQLITE_EQUALITY_CHECK(B.ByteString)
+HAS_SQLITE_EQUALITY_CHECK(BL.ByteString)
+HAS_SQLITE_EQUALITY_CHECK(UTCTime)
+HAS_SQLITE_EQUALITY_CHECK(LocalTime)
+HAS_SQLITE_EQUALITY_CHECK(ZonedTime)
+HAS_SQLITE_EQUALITY_CHECK(Char)
+HAS_SQLITE_EQUALITY_CHECK(Integer)
+HAS_SQLITE_EQUALITY_CHECK(Scientific)

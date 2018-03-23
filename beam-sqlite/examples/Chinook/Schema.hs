@@ -4,6 +4,7 @@
 module Chinook.Schema where
 
 import Database.Beam
+import Database.Beam.Backend.SQL.BeamExtensions
 
 import Data.Int
 import Data.Text (Text)
@@ -138,7 +139,7 @@ deriving instance Show (PrimaryKey GenreT (Nullable Identity))
 
 data InvoiceT f
   = Invoice
-  { invoiceId       :: Columnar f Int32
+  { invoiceId       :: Columnar f (SqlSerial Int32) -- Slightly different from the standard chinook schema. Used for illustrative purposes in the docs
   , invoiceCustomer :: PrimaryKey CustomerT f
   , invoiceDate     :: Columnar f LocalTime
   , invoiceBillingAddress :: AddressMixin f
@@ -148,7 +149,7 @@ instance Beamable InvoiceT
 type Invoice = InvoiceT Identity; deriving instance Show Invoice
 
 instance Table InvoiceT where
-  data PrimaryKey InvoiceT f = InvoiceId (Columnar f Int32) deriving Generic
+  data PrimaryKey InvoiceT f = InvoiceId (Columnar f (SqlSerial Int32)) deriving Generic
   primaryKey = InvoiceId . invoiceId
 instance Beamable (PrimaryKey InvoiceT)
 type InvoiceId = PrimaryKey InvoiceT Identity; deriving instance Show InvoiceId
@@ -278,7 +279,7 @@ data ChinookDb entity
   , playlistTrack :: entity (TableEntity PlaylistTrackT)
   , track         :: entity (TableEntity TrackT)
   } deriving Generic
-instance Database ChinookDb
+instance Database be ChinookDb
 
 addressFields b = Address (fromString (b <> "Address"))
                           (fromString (b <> "City"))

@@ -42,6 +42,7 @@ class FencedCodeTabsPreprocessor(Preprocessor):
     FENCE_BLOCK_REGEX = re.compile(r'''
         (?P<fence>^(?:~{3,}|`{3,}))[ ]*         # Opening ``` or ~~~
         (\{?\.?(?P<lang>[\w#.+-]*))?[ ]*        # Optional {, and lang
+        (name=(?P<name>[\w]*))?[ ]*              # Optional name
         # Optional highlight lines, single- or double-quote-delimited
         (hl_lines=(?P<quot>"|')(?P<hl_lines>.*?)(?P=quot))?[ ]*
         }?[ ]*\n                                # Optional closing }
@@ -129,6 +130,10 @@ class FencedCodeTabsPreprocessor(Preprocessor):
                 if m.group('lang') and m.group('lang') not in PARAM_REGEXES:
                     lang = m.group('lang')
 
+                name = lang
+                if m.group('name'):
+                    name = m.group('name')
+
                 if self.codehilite_conf:
                     highliter = CodeHilite(
                         m.group('code'),
@@ -146,7 +151,7 @@ class FencedCodeTabsPreprocessor(Preprocessor):
                     code = self.TAB_ITEM_BODY_WRAP_ESCAPE % (lang,
                                                              self._escape(m.group('code')))
 
-                self.tab_items.append(FencedCodeTabs(lang, lang, code))
+                self.tab_items.append(FencedCodeTabs(name.title(), lang, code))
 
                 placeholder = self.tab_item_placeholder.format(len(self.tab_items) - 1)
 
@@ -273,10 +278,10 @@ class FencedCodeTabsSet(object):
 
     def _get_tab_id(self, tab):
 
-        tab_lang = tab.get_lang()
-        tab_id = tab_lang
+        tab_name = tab.get_name()
+        tab_id = tab_name
 
-        if tab_lang is None or not tab_lang.strip():
+        if tab_name is None or not tab_name.strip():
             tab_id = ''. join(
                 random.SystemRandom().choice(
                     string.ascii_lowercase + string.digits
@@ -300,7 +305,7 @@ class FencedCodeTabsSet(object):
             tab_handles += self.TAB_SET_HANDLE_TEMPLATE.format(id=tab_set_id,
                                                                isTabActiveClass=tab_active_class,
                                                                lang=lang,
-                                                               ulang=lang[0:1].capitalize() + lang[1:])
+                                                               ulang=tab.get_name())
 
             tabs += self.TAB_BODY_CONTAINER_TEMPLATE.format(id=tab_set_id,
                                                             isTabActiveClass=tab_active_class,
@@ -334,6 +339,9 @@ class FencedCodeTabs(object):
 
     def get_lang(self):
         return self.lang
+
+    def get_name(self):
+        return self.name
 
     def __repr__(self):
         return self.__str__()

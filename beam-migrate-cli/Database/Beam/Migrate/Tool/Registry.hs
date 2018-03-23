@@ -504,7 +504,7 @@ parseMetaData d =
                -- TODO parse dummy if we can't parse
                fmap (fmap (specificity,)) (mapM (beamDeserialize d) predicates))
 
-predsForBackend :: BeamMigrationBackend be cmd hdl -> [ (HS.HashSet PredicateSpecificity, SomeDatabasePredicate) ]
+predsForBackend :: BeamMigrationBackend syntax be hdl m -> [ (HS.HashSet PredicateSpecificity, SomeDatabasePredicate) ]
                 -> [ SomeDatabasePredicate ]
 predsForBackend be = predsForBackendNamed (backendName be)
 
@@ -523,7 +523,7 @@ withoutMetadata =
     takeWhile (/="-- + BEAM-MIGRATE")
 
 readSchemaMetaData :: MigrationRegistry
-                   -> BeamMigrationBackend be cmd hdl
+                   -> BeamMigrationBackend cmd be hdl m
                    -> UUID
                    -> IO SchemaMetaData
 readSchemaMetaData reg BeamMigrationBackend { backendPredicateParsers = parsers } commitId = do

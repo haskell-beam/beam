@@ -1,24 +1,20 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 
--- ! BUILD_COMMAND: stack runhaskell --package postgresql-simple --package beam-postgres --package beam-core -- -fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -i../../beam-sqlite/examples -fno-warn-partial-type-signatures
--- ! BUILD_DIR: beam-postgres/examples/
-
+-- ! BUILD_OPTIONS: -fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -XStandaloneDeriving -XFlexibleInstances -XMultiParamTypeClasses -XDeriveGeneric -XFlexibleContexts -fno-warn-partial-type-signatures -i$$BEAM_SOURCE$$/beam-sqlite/examples/
+-- ! BUILD_DIR: beam-sqlite/examples/
 module Main where
-
-import Prelude hiding (lookup)
 
 import Database.Beam
 import Database.Beam.Backend.Types
-import Database.Beam.Postgres hiding (insert, runInsert)
-import qualified Database.Beam.Postgres as Pg
-import Database.PostgreSQL.Simple
+import qualified Database.Beam.Backend.SQL.BeamExtensions as BeamExtensions
+BEAM_MODULE_IMPORT
 
 import Control.Monad
 import Control.Exception
 
 import Data.IORef
-import Data.Monoid
+import Data.Monoid ((<>))
+import Data.Scientific (Scientific)
 
 import Chinook.Schema
 
@@ -26,13 +22,16 @@ data BeamDone = BeamDone
   deriving (Show)
 instance Exception BeamDone
 
-exampleQuery :: (String -> Pg ()) -> Pg ()
+BEAM_BACKEND_EXTRA
+
+exampleQuery :: (String -> BEAM_BACKEND_MONAD ()) -> BEAM_BACKEND_MONAD ()
 exampleQuery putStrLn = do
   BEAM_PLACEHOLDER
 
 main :: IO ()
 main =
-  do chinook <- connectPostgreSQL "dbname=chinook"
+  do
+     BEAM_OPEN_DATABASE
 
      stmts <- newIORef id
 
@@ -40,7 +39,7 @@ main =
          record a = withDatabaseDebug (onStmt . (++ ";")) chinook a
 
      handle (\BeamDone -> pure ()) $
-       withTransaction chinook $ do
+       docsWithTransaction chinook $ do
          record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
          throwIO BeamDone
 

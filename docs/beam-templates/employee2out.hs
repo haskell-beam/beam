@@ -1,7 +1,8 @@
+{-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
--- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core --package microlens -- -fglasgow-exts -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XPartialTypeSignatures
+-- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core --package microlens -- -fglasgow-exts -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XPartialTypeSignatures -fno-warn-partial-type-signatures
 -- ! BUILD_DIR: beam-sqlite/examples/
 module Main where
 
@@ -40,7 +41,7 @@ instance Table UserT where
 instance Beamable (PrimaryKey UserT)
 
 data AddressT f = Address
-                { _addressId    :: C f (Auto Int)
+                { _addressId    :: C f Int
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -54,7 +55,7 @@ deriving instance Show (PrimaryKey UserT Identity)
 deriving instance Show Address
 
 instance Table AddressT where
-    data PrimaryKey AddressT f = AddressId (Columnar f (Auto Int)) deriving Generic
+    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
     primaryKey = AddressId . _addressId
 
 instance Beamable AddressT
@@ -65,9 +66,9 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartUserAddresses :: f (TableEntity AddressT) }
                         deriving Generic
 
-instance Database ShoppingCartDb
+instance Database be ShoppingCartDb
 
-shoppingCartDb :: DatabaseSettings be ShoppingCartDb
+shoppingCartDb :: DatabaseSettings Sqlite ShoppingCartDb
 shoppingCartDb = defaultDbSettings `withDbModification`
                  dbModification {
                    _shoppingCartUserAddresses =
@@ -78,7 +79,7 @@ shoppingCartDb = defaultDbSettings `withDbModification`
                      }
                  }
 
-shoppingCartDb1 :: DatabaseSettings be ShoppingCartDb
+shoppingCartDb1 :: DatabaseSettings Sqlite ShoppingCartDb
 shoppingCartDb1 = defaultDbSettings `withDbModification`
                   dbModification {
                     _shoppingCartUsers = modifyTable (\_ -> "users") tableModification,
@@ -88,7 +89,7 @@ shoppingCartDb1 = defaultDbSettings `withDbModification`
 Address (LensFor addressId)    (LensFor addressLine1)
         (LensFor addressLine2) (LensFor addressCity)
         (LensFor addressState) (LensFor addressZip)
-        (UserId (LensFor addressForUserId)) = 
+        (UserId (LensFor addressForUserId)) =
         tableLenses
 
 User (LensFor userEmail)    (LensFor userFirstName)
@@ -122,12 +123,12 @@ main =
          print :: Show a => a -> IO ()
          print = putStrLn . show
 
-     let addresses = [ Address (Auto Nothing) "123 Little Street" Nothing "Boston" "MA" "12345" (pk james)
-                     , Address (Auto Nothing) "222 Main Street" (Just "Ste 1") "Houston" "TX" "8888" (pk betty)
-                     , Address (Auto Nothing) "9999 Residence Ave" Nothing "Sugarland" "TX" "8989" (pk betty) ]
+     let addresses = [ Address default_ (val_ "123 Little Street") (val_ Nothing) (val_ "Boston") (val_ "MA") (val_ "12345") (pk james)
+                     , Address default_ (val_ "222 Main Street") (val_ (Just "Ste 1")) (val_ "Houston") (val_ "TX") (val_ "8888") (pk betty)
+                     , Address default_ (val_ "9999 Residence Ave") (val_ Nothing) (val_ "Sugarland") (val_ "TX") (val_ "8989") (pk betty) ]
 
      withDatabase conn $ runInsert $
       insert (_shoppingCartUserAddresses shoppingCartDb) $
-      insertValues addresses
+      insertExpressions addresses
 
      BEAM_PLACEHOLDER
