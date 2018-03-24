@@ -838,11 +838,11 @@ instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Id
 data QIfCond context expr s a = QIfCond (QGenExpr context expr s SqlBool) (QGenExpr context expr s a)
 newtype QIfElse context expr s a = QIfElse (QGenExpr context expr s a)
 
-then_ :: QGenExpr context expr s SqlBool -> QGenExpr context expr s a -> QIfCond context expr s a
-then_ cond res = QIfCond cond res
+then_ :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_ cond res = QIfCond (sqlBool_ cond) res
 
-then_' :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
-then_' cond res = QIfCond (sqlBool_ cond) res
+then_' :: QGenExpr context expr s SqlBool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_' cond res = QIfCond cond res
 
 else_ :: QGenExpr context expr s a -> QIfElse context expr s a
 else_ = QIfElse
