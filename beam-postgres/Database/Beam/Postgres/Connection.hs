@@ -81,9 +81,10 @@ postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
                   -> BeamURIOpeners c
 postgresUriSyntax =
     mkUriOpener "postgresql:"
-        (\uri action -> do
+        (\uri -> do
             let pgConnStr = fromString (uriToString id uri "")
-            bracket (Pg.connectPostgreSQL pgConnStr) Pg.close action)
+            hdl <- Pg.connectPostgreSQL pgConnStr
+            pure (hdl, Pg.close hdl))
 
 -- * Syntax rendering
 
