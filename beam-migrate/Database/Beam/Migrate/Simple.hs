@@ -1,8 +1,11 @@
 
 -- | Utility functions for common use cases
 module Database.Beam.Migrate.Simple
-  ( simpleSchema, simpleMigration
-  , runSimpleMigration, backendMigrationScript
+  ( autoMigrate
+  , simpleSchema
+  , simpleMigration
+  , runSimpleMigration
+  , backendMigrationScript
 
   , VerificationResult(..)
   , verifySchema
