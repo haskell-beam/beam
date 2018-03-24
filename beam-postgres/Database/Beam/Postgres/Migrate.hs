@@ -322,9 +322,8 @@ bytea = Db.DataType pgByteaType
 unboundedArray :: forall a. Typeable a
                => Db.DataType PgDataTypeSyntax a
                -> Db.DataType PgDataTypeSyntax (V.Vector a)
-unboundedArray (Db.DataType (PgDataTypeSyntax _ syntax serialized)) =
-  Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]")
-                                (pgDataTypeJSON (object [ "unbounded-array" .= Db.fromBeamSerializedDataType serialized])))
+unboundedArray (Db.DataType elTy) =
+  Db.DataType (pgUnboundedArrayType elTy)
 
 -- | 'Db.DataType' for @JSON@. See 'PgJSON' for more information
 json :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSON a)

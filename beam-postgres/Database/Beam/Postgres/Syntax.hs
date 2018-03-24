@@ -69,7 +69,7 @@ module Database.Beam.Postgres.Syntax
     , pgMoneyType
     , pgTsQueryTypeInfo, pgTsVectorTypeInfo
 
-    , pgByteaType, pgTextType
+    , pgByteaType, pgTextType, pgUnboundedArrayType
     , pgSerialType, pgSmallSerialType, pgBigSerialType
 
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
@@ -94,7 +94,7 @@ import           Database.Beam.Migrate.Generics
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
-import           Data.Aeson (Value)
+import           Data.Aeson (Value, object, (.=))
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByteString)
@@ -555,6 +555,12 @@ pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
 pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL") (pgDataTypeJSON "smallserial")
 pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL") (pgDataTypeJSON "serial")
 pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL") (pgDataTypeJSON "bigserial")
+
+pgUnboundedArrayType :: PgDataTypeSyntax -> PgDataTypeSyntax
+pgUnboundedArrayType (PgDataTypeSyntax _ syntax serialized) =
+    PgDataTypeSyntax (error "Can't do array migrations yet")
+                     (syntax <> emit "[]")
+                     (pgDataTypeJSON (object [ "unbounded-array" .= fromBeamSerializedDataType serialized ]))
 
 pgTsQueryTypeInfo :: Pg.TypeInfo
 pgTsQueryTypeInfo = Pg.Basic (Pg.Oid 3615) 'U' ',' "tsquery"
