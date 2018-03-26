@@ -14,8 +14,8 @@
 -- @
 --
 --   Then, apply 'customExpr_' to your function.  This will result in a function
---   with the same arity, that takes in 'QGenExpr's instead of 'ByteString's',
---   and returns a 'QGenExpr' as well.
+--   with the same arity, that takes in and returns 'QGenExpr's instead of
+--   generic @a@s.
 --
 --   The returned function is polymorphic in the types of SQL expressions it
 --   will accept, but you can give it a more specific signature. For example, to
