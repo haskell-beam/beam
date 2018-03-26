@@ -65,7 +65,7 @@ withDbConnection protos uri actionWithDb =
   bracket (openDbConnection protos uri) closeBeamConnection $
   \(OpenedBeamConnection c hdl _) -> actionWithDb c hdl
 
-openDbConnection :: forall c a
+openDbConnection :: forall c
                   . BeamURIOpeners c
                  -> String
                  -> IO (OpenedBeamConnection c)

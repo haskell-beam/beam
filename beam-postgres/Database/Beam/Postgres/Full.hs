@@ -84,7 +84,7 @@ withLocks_ = flip PgWithLocking
 locked_ :: Database Postgres db
         => DatabaseEntity Postgres db (TableEntity tbl)
         -> Q PgSelectSyntax db s (PgLockedTables s, tbl (QExpr PgExpressionSyntax s))
-locked_ tbl@(DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
+locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
   (nm, joined) <- Q (liftF (QAll tblNm tblSettings (\_ -> Nothing) id))
   pure (PgLockedTables [nm], joined)
 
@@ -115,7 +115,7 @@ lockingFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
             -> Q PgSelectSyntax db (QNested s) (PgWithLocking (QNested s) a)
             -> Q PgSelectSyntax db s a
 lockingFor_ lockStrength mLockOptions (Q q) =
-  Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) r) tbl ords limit offset ->
+  Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) _) tbl ords limit offset ->
                             let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
                             in pgSelectStmt tbl ords limit offset (Just locking))
                          q (\(PgWithLocking _ a) -> a)))
