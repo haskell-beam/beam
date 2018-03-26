@@ -17,6 +17,7 @@ module Database.Beam.Migrate.Types
     --
     --    The functions in this section can be used to modify 'CheckedDatabaseSettings' objects.
   , CheckedFieldModification
+  , checkedFieldNamed
 
   , modifyCheckedTable
   , checkedTableModification
