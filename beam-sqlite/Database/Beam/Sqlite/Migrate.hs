@@ -139,7 +139,7 @@ parseSqliteDataType txt =
                doubleP <|> integerP <|>
                smallIntP <|> bigIntP <|> floatP <|>
                doubleP <|> realP <|> dateP <|>
-               timeP <|> timestampP <|> textP <|>
+               timestampP <|> timeP <|> textP <|>
                blobP <|> booleanP
 
     ws = A.many1 A.space
