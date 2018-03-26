@@ -15,7 +15,7 @@ newtype SqlBitString = SqlBitString Integer
   deriving (Show, Eq, Ord, Enum, Bits)
 
 newtype SqlSerial a = SqlSerial { unSerial :: a }
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Read, Eq, Ord, Num)
 instance FromBackendRow be x => FromBackendRow be (SqlSerial x) where
   fromBackendRow = SqlSerial <$> fromBackendRow
 instance Json.FromJSON a => Json.FromJSON (SqlSerial a) where

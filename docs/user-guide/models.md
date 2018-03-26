@@ -145,9 +145,6 @@ now unambiguous. You can easily use `conv` to implement `conv'`:
 conv' (Columnar' a) = Columnar' (conv a)
 ```
 
-You will often need to write explicit type signatures in order to get the
-compiler to accept your code.
-
 ## The `Beamable` type class
 
 All beam tables, primary keys, and shared data fields must be instances of the
@@ -182,9 +179,9 @@ instance Table PersonT where
   data PrimaryKey PersonT f
       = PersonKey (Columnar f Text) deriving Generic
   primaryKey person = PersonKey <$> personEmail
-instance Beamable (PrimaryKey PersonT) -- PrimaryKey's must be 'Beamable'  
+instance Beamable (PrimaryKey PersonT) -- PrimaryKey's must be 'Beamable'
 ```
-    
+
 !!! tip "Tip"
     Many people find it useful to use the `Applicative` instance for `(->) a` to
     write `primaryKey`. For example, we could have written the above `primaryKey
@@ -294,7 +291,7 @@ support, rather than in the model declarations.
 Also, notice that beam does not allow you to specify any kind of reference
 constraints between tables in your data types. This is because references are a
 property of the database, not a particular table schema. Such relationships can
-be defined using `beam-migrate` library.
+be defined using the `beam-migrate` package.
 
 ## Embedding
 

@@ -1,12 +1,11 @@
 module Database.Beam.Query.Operator
-  ( -- ** General-purpose operators
-    (&&.), (||.), not_, div_, mod_
+  ( SqlBool
+
+    -- ** General-purpose operators
+  , (&&.), (||.), not_, div_, mod_
+  , (&&?.), (||?.), sqlNot_
 
   , like_, similarTo_
-
-  , isTrue_, isNotTrue_
-  , isFalse_, isNotFalse_
-  , isUnknown_, isNotUnknown_
 
   , concat_
   ) where
@@ -18,6 +17,14 @@ import           Database.Beam.Query.Internal
 import           Control.Applicative
 
 import qualified Data.Text as T
+
+-- | Phantom type representing a SQL /Tri-state/ boolean -- true, false, and unknown
+--
+-- This type has no values because it cannot be sent to or retrieved
+-- from the database directly. Use 'isTrue_', 'isFalse_',
+-- 'isNotTrue_', 'isNotFalse_', 'isUnknown_', 'isNotUnknown_', and
+-- `unknownAs_` to retrieve the corresponding 'Bool' value.
+data SqlBool
 
 -- | SQL @AND@ operator
 (&&.) :: IsSql92ExpressionSyntax syntax
@@ -33,8 +40,22 @@ import qualified Data.Text as T
       -> QGenExpr context syntax s Bool
 (||.) = qBinOpE orE
 
-infixr 3 &&.
-infixr 2 ||.
+-- | SQL @AND@ operator for 'SqlBool'
+(&&?.) :: IsSql92ExpressionSyntax syntax
+       => QGenExpr context syntax s SqlBool
+       -> QGenExpr context syntax s SqlBool
+       -> QGenExpr context syntax s SqlBool
+(&&?.) = qBinOpE andE
+
+-- | SQL @OR@ operator
+(||?.) :: IsSql92ExpressionSyntax syntax
+       => QGenExpr context syntax s SqlBool
+       -> QGenExpr context syntax s SqlBool
+       -> QGenExpr context syntax s SqlBool
+(||?.) = qBinOpE orE
+
+infixr 3 &&., &&?.
+infixr 2 ||., ||?.
 
 -- | SQL @LIKE@ operator
 like_ ::
@@ -59,6 +80,13 @@ not_ :: forall syntax context s.
      -> QGenExpr context syntax s Bool
 not_ (QExpr a) = QExpr (fmap notE a)
 
+-- | SQL @NOT@ operator, but operating on 'SqlBool' instead
+sqlNot_ :: forall syntax context s.
+           IsSql92ExpressionSyntax syntax
+        => QGenExpr context syntax s SqlBool
+        -> QGenExpr context syntax s SqlBool
+sqlNot_ (QExpr a) = QExpr (fmap notE a)
+
 -- | SQL @/@ operator
 div_ :: (Integral a, IsSql92ExpressionSyntax syntax)
      => QGenExpr context syntax s a -> QGenExpr context syntax s a
@@ -70,36 +98,6 @@ mod_ :: (Integral a, IsSql92ExpressionSyntax syntax)
      => QGenExpr context syntax s a -> QGenExpr context syntax s a
      -> QGenExpr context syntax s a
 mod_ = qBinOpE modE
-
--- | SQL @IS TRUE@ operator
-isTrue_ :: IsSql92ExpressionSyntax syntax
-        => QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-isTrue_ (QExpr s) = QExpr (fmap isTrueE s)
-
--- | SQL @IS NOT TRUE@ operator
-isNotTrue_ :: IsSql92ExpressionSyntax syntax
-           => QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-isNotTrue_ (QExpr s) = QExpr (fmap isNotTrueE s)
-
--- | SQL @IS FALSE@ operator
-isFalse_ :: IsSql92ExpressionSyntax syntax
-         => QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-isFalse_ (QExpr s) = QExpr (fmap isFalseE s)
-
--- | SQL @IS NOT FALSE@ operator
-isNotFalse_ :: IsSql92ExpressionSyntax syntax
-            => QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-isNotFalse_ (QExpr s) = QExpr (fmap isNotFalseE s)
-
--- | SQL @IS UNKNOWN@ operator
-isUnknown_ :: IsSql92ExpressionSyntax syntax
-           => QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-isUnknown_ (QExpr s) = QExpr (fmap isUnknownE s)
-
--- | SQL @IS NOT UNKNOWN@ operator
-isNotUnknown_ :: IsSql92ExpressionSyntax syntax
-              => QGenExpr context syntax s a -> QGenExpr context syntax s Bool
-isNotUnknown_ (QExpr s) = QExpr (fmap isNotUnknownE s)
 
 -- | SQL @CONCAT@ function
 concat_ :: IsSql99ConcatExpressionSyntax syntax

@@ -450,7 +450,7 @@ usersAndOrders <-
 mapM_ print usersAndOrders
 ```
 
-Notice that sam is included in the result set, even though he doesn't have any
+Notice that Sam is included in the result set, even though he doesn't have any
 associated orders. Instead of a `Just (Order ..)`, `Nothing` is returned
 instead.
 

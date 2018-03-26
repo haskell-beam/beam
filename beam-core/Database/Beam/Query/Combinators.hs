@@ -10,6 +10,7 @@ module Database.Beam.Query.Combinators
 
     -- ** @IF-THEN-ELSE@ support
     , if_, then_, else_
+    , then_'
 
     -- * SQL @UPDATE@ assignments
     , (<-.), current_
@@ -22,10 +23,11 @@ module Database.Beam.Query.Combinators
     -- * General query combinators
 
     , all_
-    , allFromView_, join_, guard_, filter_
-    , related_, relatedBy_
-    , leftJoin_, perhaps_
-    , outerJoin_
+    , allFromView_, join_, join_'
+    , guard_, guard_', filter_, filter_'
+    , related_, relatedBy_, relatedBy_'
+    , leftJoin_, leftJoin_'
+    , perhaps_, outerJoin_, outerJoin_'
     , subselect_, references_
 
     , nub_
@@ -110,8 +112,11 @@ allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
 allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
     Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) snd)
 
--- | Introduce all entries of a table into the 'Q' monad based on the given
---   QExpr
+-- | Introduce all entries of a table into the 'Q' monad based on the
+--   given QExpr. The join condition is expected to return a
+--   'Bool'. For a version that takes 'SqlBool' (a possibly @UNKNOWN@
+--   boolean, that maps more closely to the SQL standard), see
+--   'join_''.
 join_ :: ( Database be db, Table table
          , IsSql92SelectSyntax select
          , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
@@ -120,7 +125,19 @@ join_ :: ( Database be db, Table table
          DatabaseEntity be db (TableEntity table)
       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
       -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-join_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
+join_ tbl mkOn = join_' tbl (sqlBool_ . mkOn)
+
+-- | Like 'join_', but accepting an @ON@ condition that returns
+-- 'SqlBool'
+join_' :: ( Database be db, Table table
+          , IsSql92SelectSyntax select
+          , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
+          , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+          , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ) =>
+          DatabaseEntity be db (TableEntity table)
+       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool)
+       -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
     Q $ liftF (QAll tblNm tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
 
 -- | Introduce a table using a left join with no ON clause. Because this is not
@@ -142,6 +159,12 @@ perhaps_ (Q sub) =
                                             Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
                                   rewriteThread (Proxy @s) r))
 
+-- | Outer join. every row of each table, returning @NULL@ for any row
+-- of either table for which the join condition finds no related rows.
+--
+-- This expects a join expression returning 'Bool', for a version that
+-- accepts a 'SqlBool' (a possibly @UNKNOWN@ boolean, that maps more
+-- closely to the SQL standard), see 'outerJoin_''
 outerJoin_ :: forall s a b select db.
               ( Projectible (Sql92SelectExpressionSyntax select) a, Projectible (Sql92SelectExpressionSyntax select) b
               , ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
@@ -153,7 +176,23 @@ outerJoin_ :: forall s a b select db.
            -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr (Sql92SelectExpressionSyntax select) s Bool )
            -> Q select db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
                             , Retag Nullable (WithRewrittenThread (QNested s) s b) )
-outerJoin_ (Q a) (Q b) on_ =
+outerJoin_ a b on_ = outerJoin_' a b (sqlBool_ . on_)
+
+-- | Like 'outerJoin_', but accepting 'SqlBool'. Pairs of rows for
+-- which the join condition is unknown are considered to be unrelated,
+-- by SQL compliant databases at least.
+outerJoin_' :: forall s a b select db.
+               ( Projectible (Sql92SelectExpressionSyntax select) a, Projectible (Sql92SelectExpressionSyntax select) b
+               , ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
+               , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s a)
+               , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s b)
+               , IsSql92FromOuterJoinSyntax (Sql92SelectFromSyntax select) )
+            => Q select db (QNested s) a
+            -> Q select db (QNested s) b
+            -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr (Sql92SelectExpressionSyntax select) s SqlBool )
+            -> Q select db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
+                             , Retag Nullable (WithRewrittenThread (QNested s) s b) )
+outerJoin_' (Q a) (Q b) on_ =
   Q $ liftF (QTwoWayJoin a b outerJoin
               (\(a', b') ->
                  let QExpr e = on_ (rewriteThread (Proxy @s) a', rewriteThread (Proxy @s) b')
@@ -170,6 +209,9 @@ outerJoin_ (Q a) (Q b) on_ =
 --   this is not an inner join, the resulting table is made nullable. This means
 --   that each field that would normally have type 'QExpr x' will now have type
 --   'QExpr (Maybe x)'.
+--
+--   The @ON@ condition given must return 'Bool'. For a version that
+--   accepts an @ON@ condition returning 'SqlBool', see 'leftJoin_''.
 leftJoin_ :: forall s r select db.
            ( Projectible (Sql92SelectExpressionSyntax select) r
            , IsSql92SelectSyntax select
@@ -178,7 +220,18 @@ leftJoin_ :: forall s r select db.
           => Q select db (QNested s) r
           -> (WithRewrittenThread (QNested s) s r -> QExpr (Sql92SelectExpressionSyntax select) s Bool)
           -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
-leftJoin_ (Q sub) on_ =
+leftJoin_ sub on_ = leftJoin_' sub (sqlBool_ . on_)
+
+-- | Like 'leftJoin_', but accepts an @ON@ clause returning 'SqlBool'.
+leftJoin_' :: forall s r select db.
+            ( Projectible (Sql92SelectExpressionSyntax select) r
+            , IsSql92SelectSyntax select
+            , ThreadRewritable (QNested s) r
+            , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
+           => Q select db (QNested s) r
+           -> (WithRewrittenThread (QNested s) s r -> QExpr (Sql92SelectExpressionSyntax select) s SqlBool)
+           -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
+leftJoin_' (Q sub) on_ =
   Q $ liftF (QArbitraryJoin
                sub leftJoin
                (\r -> let QExpr e = on_ (rewriteThread (Proxy @s) r) in Just e)
@@ -194,19 +247,38 @@ subselect_ :: forall s r select db.
 subselect_ (Q q') =
   Q (liftF (QSubSelect q' (rewriteThread (Proxy @s))))
 
--- | Only allow results for which the 'QExpr' yields 'True'
+-- | Only allow results for which the 'QExpr' yields 'True'. For a
+-- version that operates over possibly @NULL@ 'SqlBool's, see
+-- 'guard_''.
 guard_ :: forall select db s.
           ( IsSql92SelectSyntax select ) =>
           QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool -> Q select db s ()
-guard_ (QExpr guardE') =
-    Q (liftF (QGuard guardE' ()))
+guard_ = guard_' . sqlBool_
 
--- | Synonym for @clause >>= \x -> guard_ (mkExpr x)>> pure x@
+-- | Only allow results for which the 'QExpr' yields @TRUE@.
+--
+-- This function operates over 'SqlBool', which are like haskell
+-- 'Bool's, except for the special @UNKNOWN@ value that occurs when
+-- comparisons include @NULL@. For a version that operates over known
+-- non-@NULL@ booleans, see 'guard_'.
+guard_' :: forall select db s
+         . IsSql92SelectSyntax select
+        => QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool -> Q select db s ()
+guard_' (QExpr guardE') = Q (liftF (QGuard guardE' ()))
+
+-- | Synonym for @clause >>= \x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
 filter_ :: forall r select db s.
            ( IsSql92SelectSyntax select )
         => (r -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
         -> Q select db s r -> Q select db s r
 filter_ mkExpr clause = clause >>= \x -> guard_ (mkExpr x) >> pure x
+
+-- | Synonym for @clause >>= \x -> guard_' (mkExpr x)>> pure x@. Use 'filter_' for comparisons with 'Bool'
+filter_' :: forall r select db s.
+           ( IsSql92SelectSyntax select )
+        => (r -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool)
+        -> Q select db s r -> Q select db s r
+filter_' mkExpr clause = clause >>= \x -> guard_' (mkExpr x) >> pure x
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
 related_ :: forall be db rel select s.
@@ -230,6 +302,17 @@ relatedBy_ :: forall be db rel select s.
                 QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 relatedBy_ = join_
+
+-- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
+relatedBy_' :: forall be db rel select s.
+               ( Database be db, Table rel
+               , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
+               , IsSql92SelectSyntax select )
+            => DatabaseEntity be db (TableEntity rel)
+            -> (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) ->
+                 QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool)
+            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+relatedBy_' = join_'
 
 -- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
 --   to the given table. Useful for creating join conditions.
@@ -752,11 +835,14 @@ instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Id
 
 -- * Nullable checking
 
-data QIfCond context expr s a = QIfCond (QGenExpr context expr s Bool) (QGenExpr context expr s a)
+data QIfCond context expr s a = QIfCond (QGenExpr context expr s SqlBool) (QGenExpr context expr s a)
 newtype QIfElse context expr s a = QIfElse (QGenExpr context expr s a)
 
 then_ :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
-then_ cond res = QIfCond cond res
+then_ cond res = QIfCond (sqlBool_ cond) res
+
+then_' :: QGenExpr context expr s SqlBool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_' cond res = QIfCond cond res
 
 else_ :: QGenExpr context expr s a -> QIfElse context expr s a
 else_ = QIfElse

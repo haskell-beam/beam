@@ -6,6 +6,7 @@ module Main where
 
 import Database.Beam
 import Database.Beam.Backend.Types
+import qualified Database.Beam.Backend.SQL.BeamExtensions as BeamExtensions
 BEAM_MODULE_IMPORT
 
 import Control.Monad
@@ -13,6 +14,7 @@ import Control.Exception
 
 import Data.IORef
 import Data.Monoid ((<>))
+import Data.Scientific (Scientific)
 
 import Chinook.Schema
 

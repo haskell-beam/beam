@@ -630,6 +630,8 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   overlapsE = pgBinOp "OVERLAPS"
   eqE = pgCompOp "="
   neqE = pgCompOp "<>"
+  eqMaybeE a b _ = pgBinOp "IS NOT DISTINCT FROM" a b
+  neqMaybeE a b _ = pgBinOp "IS DISTINCT FROM" a b
   ltE = pgCompOp "<"
   gtE = pgCompOp ">"
   leE = pgCompOp "<="
@@ -653,6 +655,9 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
             emit "(" <>
             pgSepBy (emit ", ") (coerce vs) <>
             emit ")"
+  quantifierListE vs =
+    PgExpressionSyntax $
+    emit "(VALUES " <> pgSepBy (emit ", ") (fmap (pgParens . fromPgExpression) vs) <> emit ")"
   fieldE = coerce
   subqueryE s = PgExpressionSyntax (emit "(" <> fromPgSelect s <> emit ")")
   positionE needle haystack =
@@ -1126,9 +1131,10 @@ pgCompOp :: ByteString -> Maybe PgComparisonQuantifierSyntax
 pgCompOp op quantifier a b =
   PgExpressionSyntax $
   emit "(" <> fromPgExpression a <>
-  emit (") " <> op <> " (") <>
-  maybe mempty (\q -> emit " " <> fromPgComparisonQuantifier q <> emit " ") quantifier <>
-  fromPgExpression b <> emit ")"
+  emit (") " <> op) <>
+  maybe (emit " (" <> fromPgExpression b <> emit ")")
+        (\q -> emit " " <> fromPgComparisonQuantifier q <> emit " " <> fromPgExpression b)
+        quantifier
 
 pgBinOp :: ByteString -> PgExpressionSyntax -> PgExpressionSyntax -> PgExpressionSyntax
 pgBinOp op a b =

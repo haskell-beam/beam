@@ -5,7 +5,13 @@
 -- Beam provides type classes that some backends instantiate that provide this
 -- support. This uses direct means on sufficiently advanced backends and is
 -- emulated on others.
-module Database.Beam.Backend.SQL.BeamExtensions where
+module Database.Beam.Backend.SQL.BeamExtensions
+  ( MonadBeamInsertReturning(..)
+  , MonadBeamUpdateReturning(..)
+  , MonadBeamDeleteReturning(..)
+
+  , SqlSerial(..)
+  ) where
 
 import Database.Beam.Backend
 import Database.Beam.Backend.SQL
@@ -26,7 +32,8 @@ class MonadBeam syntax be handle m =>
        , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
        , FromBackendRow be (table Identity) )
     => DatabaseEntity be db (TableEntity table)
-    -> SqlInsertValues (Sql92InsertValuesSyntax (Sql92InsertSyntax syntax)) table
+    -> SqlInsertValues (Sql92InsertValuesSyntax (Sql92InsertSyntax syntax))
+                       (table (QExpr (Sql92InsertExpressionSyntax (Sql92InsertSyntax syntax)) s))
     -> m [table Identity]
 
 -- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.

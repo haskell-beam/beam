@@ -638,6 +638,8 @@ instance HasSqlValueSyntax SqliteValueSyntax Word32 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word64 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+instance HasSqlValueSyntax SqliteValueSyntax Scientific where
+  sqlValueSyntax s = SqliteValueSyntax (emitValue (SQLText (fromString (show s)))) -- Rely on sqlites duck typing
 instance HasSqlValueSyntax SqliteValueSyntax Float where
   sqlValueSyntax f = SqliteValueSyntax (emitValue (SQLFloat (float2Double f)))
 instance HasSqlValueSyntax SqliteValueSyntax Double where
@@ -689,9 +691,11 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   negateE = unOp "-"; notE = unOp "NOT"
 
   isNotNullE = postFix "IS NOT NULL"; isNullE = postFix "IS NULL"
-  isTrueE = postFix "IS TRUE"; isNotTrueE = postFix "IS NOT TRUE"
-  isFalseE = postFix "IS FALSE"; isNotFalseE = postFix "IS NOT FALSE"
-  isUnknownE = postFix "IS UNKNOWN"; isNotUnknownE = postFix "IS NOT UNKNOWN"
+
+  -- SQLite doesn't handle tri-state booleans properly
+  isTrueE = postFix "IS 1"; isNotTrueE = postFix "IS NOT 1"
+  isFalseE = postFix "IS 0"; isNotFalseE = postFix "IS NOT 0"
+  isUnknownE = postFix "IS NULL"; isNotUnknownE = postFix "IS NOT NULL"
 
   existsE select = SqliteExpressionSyntax (emit "EXISTS " <> parens (fromSqliteSelect select))
   uniqueE select = SqliteExpressionSyntax (emit "UNIQUE " <> parens (fromSqliteSelect select))
@@ -756,8 +760,8 @@ compOp op quantifier a b =
   SqliteExpressionSyntax $
   parens (fromSqliteExpression a) <>
   emit op <>
-  parens (maybe mempty (\q -> emit " " <> fromSqliteComparisonQuantifier q <> emit " ") quantifier <>
-          fromSqliteExpression b)
+  maybe mempty (\q -> emit " " <> fromSqliteComparisonQuantifier q <> emit " ") quantifier <>
+  parens (fromSqliteExpression b)
 
 unOp, postFix :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 unOp op a =

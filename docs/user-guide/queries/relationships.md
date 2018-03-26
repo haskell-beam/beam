@@ -322,6 +322,75 @@ do artist <- all_ (artist chinookDb)
 Right joins are not yet supported. They can always be rewritten as left joins.
 If you have a compelling use case, please file an issue!
 
+### Handling SQL `NULL`s
+
+`NULL` is a value that SQL treats as an 'unknown' value. Unfortunately, this can
+cause a lot of unexpected issues. Beam tries to normalize the handling of NULLs
+to some extent, but it ultimately cannot save you from the database. One thing
+you can be sure of is that -- assuming your beam schema matches that of the
+database -- any beam expression that does not yield a `Maybe` type cannot be
+`NULL` at run-time.
+
+Also, beam treats equality between `Maybe` types correctly using the standard
+`==.` and `/=.` operators. This means that beam will sometimes generate obtuse
+`CASE` expressions. This is because beam's philosophy is that SQL operators be
+named after their equivalent Haskell ones, suffixed by a `.`, and that these
+operators should follow Haskell semantics.
+
+Sometimes though, this care isn't necessary. When you are okay with SQL
+equality, you can use the `(==?.)` and `(/=?.)` operators. These work the same
+as the `(==.)` and `(/=.)`, except they return a `SqlBool` instead of
+`Bool`. `SqlBool` can only occur as the result of a SQL expression, and it
+cannot be deserialized directly into Haskell on any backend. A `SqlBool` value
+can contain `TRUE`, `FALSE`, and `UNKNOWN` (the third SQL boolean value). You
+can marshal between `SqlBool` and `Bool` using `isTrue_`, `isFalse_`, or
+`isUnknown_` to determine which value a `SqlBool` contains. The `unknownAs_`
+function takes a default Haskell `Bool` and SQL expression returning
+`SqlBool`. It returns the given Haskell `Bool` value in the case the SQL
+expression is indeterminate.
+
+You can also convert any expression returning `Bool` to one returning `SqlBool`
+by using the `sqlBool_` function.
+
+The various beam functions that deal with `Bool` also have corresponding
+versions that operate on `SqlBool`. For example, whereas `leftJoin_` expects its
+join condition to be a `Bool`, the corresponding `leftJoin_'` (notice the prime)
+method takes a `SqlBool`. There are corresponding `guard_'`, `join_'`, etc
+methods. Boolean operators, such as `(&&.)` and `(||.)`, have `SqlBool`
+equivalents suffixed with `?` (`(&&?.)` and `(||?.)` for `SqlBool` `AND` and
+`OR` respectively).
+
+One place where this can really bite is when generating `ON` conditions. Many
+RDBMSes use a rather unintelligent means of choosing which indices to use, by
+directly matching on syntaxes. For example, postgres determines index usage by
+directly seeing if two columns are compared. If you wrap the comparison in the
+`IS TRUE` operator, the index is no longer used. In these cases, using the
+proper boolean handling can severely impact performance. For example, to get
+every customer along with employees in their area, we can left join the customer
+table with employees on their city.
+
+!beam-query
+```haskell
+!example chinook
+do c <- all_ (customer chinookDb)
+   e <- leftJoin_ (all_ (employee chinookDb)) (\e -> addressCity (employeeAddress e) ==. addressCity (customerAddress c))
+   pure (c, e)
+```
+
+Notice that the join condition is not just a simple `=`. This will cause
+postgres to ignore any index on these columns. We can instead use `leftJoin_'`
+and `==?.` to be more direct.
+
+!beam-query
+```haskell
+!example chinook
+do c <- all_ (customer chinookDb)
+   e <- leftJoin_' (all_ (employee chinookDb)) (\e -> addressCity (employeeAddress e) ==?. addressCity (customerAddress c))
+   pure (c, e)
+```
+
+Now postgres will use an index.
+
 ### Full Outer joins
 
 Outer joins are supported with the `outerJoin_` function. `outerJoin_` takes two

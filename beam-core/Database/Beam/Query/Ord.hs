@@ -27,6 +27,12 @@ module Database.Beam.Query.Ord
   , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
   , HasTableEquality, HasTableEqualityNullable
 
+  , isTrue_, isNotTrue_
+  , isFalse_, isNotFalse_
+  , isUnknown_, isNotUnknown_
+  , unknownAs_, sqlBool_
+  , possiblyNullBool_
+
   , anyOf_, anyIn_
   , allOf_, allIn_
 
@@ -60,20 +66,66 @@ import GHC.TypeLits
 data QQuantified expr s r
   = QQuantified (Sql92ExpressionQuantifierSyntax expr) (WithExprContext expr)
 
+-- | Convert a /known not null/ bool to a 'SqlBool'. See 'unknownAs_' for the inverse
+sqlBool_ :: QGenExpr context syntax s Bool -> QGenExpr context syntax s SqlBool
+sqlBool_ (QExpr s) = QExpr s
+
+-- | SQL @IS TRUE@ operator
+isTrue_ :: IsSql92ExpressionSyntax syntax
+        => QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
+isTrue_ (QExpr s) = QExpr (fmap isTrueE s)
+
+-- | SQL @IS NOT TRUE@ operator
+isNotTrue_ :: IsSql92ExpressionSyntax syntax
+           => QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
+isNotTrue_ (QExpr s) = QExpr (fmap isNotTrueE s)
+
+-- | SQL @IS FALSE@ operator
+isFalse_ :: IsSql92ExpressionSyntax syntax
+         => QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
+isFalse_ (QExpr s) = QExpr (fmap isFalseE s)
+
+-- | SQL @IS NOT FALSE@ operator
+isNotFalse_ :: IsSql92ExpressionSyntax syntax
+            => QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
+isNotFalse_ (QExpr s) = QExpr (fmap isNotFalseE s)
+
+-- | SQL @IS UNKNOWN@ operator
+isUnknown_ :: IsSql92ExpressionSyntax syntax
+           => QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
+isUnknown_ (QExpr s) = QExpr (fmap isUnknownE s)
+
+-- | SQL @IS NOT UNKNOWN@ operator
+isNotUnknown_ :: IsSql92ExpressionSyntax syntax
+              => QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
+isNotUnknown_ (QExpr s) = QExpr (fmap isNotUnknownE s)
+
+-- | Return the first argument if the expression has the unknown SQL value
+-- See 'sqlBool_' for the inverse
+unknownAs_ :: IsSql92ExpressionSyntax syntax
+           => Bool -> QGenExpr context syntax s SqlBool -> QGenExpr context syntax s Bool
+unknownAs_ False = isTrue_ -- If unknown is being treated as false, then return true only if the expression is true
+unknownAs_ True  = isNotFalse_ -- If unknown is being treated as true, then return true only if the expression is not false
+
+-- | Retrieve a 'SqlBool' value as a potentially @NULL@ 'Bool'. This
+-- is useful if you want to get the value of a SQL boolean expression
+-- directly, without having to specify what to do on @UNKNOWN@. Note
+-- that both @NULL@ and @UNKNOWN@ will be returned as 'Nothing'.
+possiblyNullBool_ :: QGenExpr context syntax s SqlBool -> QGenExpr context syntax s (Maybe Bool)
+possiblyNullBool_ (QExpr e) = QExpr e
+
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
 --
 --   Accepts a subquery. Use 'allIn_' for an explicit list
 allOf_
-  :: forall s r select expr db.
-   ( ThreadRewritable (QNested s) r
-   , ProjectibleInSelectSyntax select r
-   , IsSql92SelectSyntax select
+  :: forall s a select expr db.
+   ( IsSql92SelectSyntax select
    , IsSql92ExpressionSyntax expr
    , HasQBuilder select
    , Sql92ExpressionSelectSyntax expr ~ select )
-  => Q select db (QNested s) r
-  -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
+  => Q select db (QNested s) (QExpr (Sql92SelectExpressionSyntax select) (QNested s) a)
+  -> QQuantified expr s a
 allOf_ s = QQuantified quantifyOverAll (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
@@ -86,22 +138,20 @@ allIn_
    . ( IsSql92ExpressionSyntax expr )
   => [QExpr expr s a]
   -> QQuantified expr s a
-allIn_ es = QQuantified quantifyOverAll (rowE <$> mapM (\(QExpr e) -> e) es)
+allIn_ es = QQuantified quantifyOverAll (quantifierListE <$> mapM (\(QExpr e) -> e) es)
 
 -- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
 --
 --   Accepts a subquery. Use 'anyIn_' for an explicit list
 anyOf_
-  :: forall s r select expr db.
-   ( ThreadRewritable (QNested s) r
-   , ProjectibleInSelectSyntax select r
-   , IsSql92SelectSyntax select
+  :: forall s a select expr db.
+   ( IsSql92SelectSyntax select
    , IsSql92ExpressionSyntax expr
    , HasQBuilder select
    , Sql92ExpressionSelectSyntax expr ~ select )
-  => Q select db (QNested s) r
-  -> QQuantified expr s (WithRewrittenThread (QNested s) s r)
+  => Q select db (QNested s) (QExpr (Sql92SelectExpressionSyntax select) (QNested s) a)
+  -> QQuantified expr s a
 anyOf_ s = QQuantified quantifyOverAny (\tblPfx -> subqueryE (buildSqlQuery tblPfx s))
 
 -- | A 'QQuantified' representing a SQL @ANY(..)@ for use with a
@@ -114,7 +164,7 @@ anyIn_
    . ( IsSql92ExpressionSyntax expr )
   => [QExpr expr s a]
   -> QQuantified expr s a
-anyIn_ es = QQuantified quantifyOverAny (rowE <$> mapM (\(QExpr e) -> e) es)
+anyIn_ es = QQuantified quantifyOverAny (quantifierListE <$> mapM (\(QExpr e) -> e) es)
 
 -- | SQL @BETWEEN@ clause
 between_ :: IsSql92ExpressionSyntax syntax
@@ -138,16 +188,23 @@ in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
 --   Instances are provided to check the equality of expressions of the same
 --   type as well as entire 'Beamable' types parameterized over 'QGenExpr'
 class SqlEq expr a | a -> expr where
-  -- | Given two expressions, returns whether they are equal
+  -- | Given two expressions, returns whether they are equal, using Haskell semantics (NULLs handled properly)
   (==.) :: a -> a -> expr Bool
-  -- | Given two expressions, returns whether they are not equal
+  -- | Given two expressions, returns whether they are not equal, using Haskell semantics (NULLs handled properly)
   (/=.) :: a -> a -> expr Bool
+
+  -- | Given two expressions, returns the /SQL tri-state boolean/ when compared for equality
+  (==?.) :: a -> a -> expr SqlBool
+
+  -- | Given two expressions, returns the /SQL tri-state boolean/ when compared for inequality
+  (/=?.) :: a -> a -> expr SqlBool
 
 -- | Class for expression types for which there is a notion of /quantified/
 --   equality.
 class SqlEq expr a => SqlEqQuantified expr quantified a | a -> expr quantified where
 
-  (==*.), (/=*.) :: a -> quantified -> expr Bool
+  -- | Quantified equality and inequality using /SQL semantics/ (tri-state boolean)
+  (==*.), (/=*.) :: a -> quantified -> expr SqlBool
 
 infix 4 ==., /=., ==*., /=*.
 infix 4 <., >., <=., >=.
@@ -161,6 +218,11 @@ class (IsSql92ExpressionSyntax syntax, HasSqlValueSyntax (Sql92ExpressionValueSy
   sqlEqE _ = eqE Nothing
   sqlNeqE _ = neqE Nothing
 
+  -- | Tri-state equality
+  sqlEqTriE, sqlNeqTriE :: Proxy a -> syntax -> syntax -> syntax
+  sqlEqTriE _ = eqE Nothing
+  sqlNeqTriE _ = neqE Nothing
+
 type family CanCheckMaybeEquality a :: Constraint where
   CanCheckMaybeEquality (Maybe a) =
     TypeError ('Text "Attempt to check equality of nested Maybe." ':$$:
@@ -168,12 +230,15 @@ type family CanCheckMaybeEquality a :: Constraint where
   CanCheckMaybeEquality a = ()
 
 instance (HasSqlEqualityCheck syntax a, CanCheckMaybeEquality a) => HasSqlEqualityCheck syntax (Maybe a) where
-  sqlEqE _ = eqMaybeE (Proxy @a)
-  sqlNeqE _ = neqMaybeE (Proxy @a)
+  sqlEqE _ a b = eqMaybeE a b (sqlEqE (Proxy @a) a b)
+  sqlNeqE _ a b = neqMaybeE a b (sqlNeqE (Proxy @a) a b)
 
 instance HasSqlEqualityCheck syntax a => HasSqlEqualityCheck syntax (SqlSerial a) where
   sqlEqE _ = sqlEqE (Proxy @a)
   sqlNeqE _ = sqlNeqE (Proxy @a)
+
+  sqlEqTriE _ = sqlEqTriE (Proxy @a)
+  sqlNeqTriE _ = sqlNeqTriE (Proxy @a)
 
 -- | Class for Haskell types that can be compared for quantified equality in the given expression syntax
 class HasSqlEqualityCheck syntax a => HasSqlQuantifiedEqualityCheck syntax a where
@@ -181,6 +246,10 @@ class HasSqlEqualityCheck syntax a => HasSqlQuantifiedEqualityCheck syntax a whe
                     -> syntax -> syntax -> syntax
   sqlQEqE _ = eqE
   sqlQNeqE _ = neqE
+
+instance (HasSqlQuantifiedEqualityCheck syntax a, CanCheckMaybeEquality a) => HasSqlQuantifiedEqualityCheck syntax (Maybe a) where
+  sqlQEqE _ = sqlQEqE (Proxy @a)
+  sqlQNeqE _ = sqlQNeqE (Proxy @a)
 
 instance HasSqlQuantifiedEqualityCheck syntax a => HasSqlQuantifiedEqualityCheck syntax (SqlSerial a) where
   sqlQEqE _ = sqlQEqE (Proxy @a)
@@ -192,6 +261,9 @@ instance ( IsSql92ExpressionSyntax syntax, HasSqlEqualityCheck syntax a ) =>
 
   (==.) = qBinOpE (sqlEqE (Proxy @a))
   (/=.) = qBinOpE (sqlNeqE (Proxy @a))
+
+  (==?.) = qBinOpE (sqlEqTriE (Proxy @a))
+  (/=?.) = qBinOpE (sqlNeqTriE (Proxy @a))
 
 -- | Two arbitrary expressions can be quantifiably compared for equality.
 instance ( IsSql92ExpressionSyntax syntax, HasSqlQuantifiedEqualityCheck syntax a ) =>
@@ -222,6 +294,16 @@ instance ( IsSql92ExpressionSyntax syntax, FieldsFulfillConstraint (HasSqlEquali
             in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
 
+  a ==?. b = let (_, e) = runState (zipBeamFieldsM
+                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                        do modify (\expr ->
+                                                     case expr of
+                                                       Nothing -> Just $ x ==?. y
+                                                       Just expr' -> Just $ expr' &&?. x ==?. y)
+                                           return x') (withConstraints @(HasSqlEqualityCheck syntax) `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a /=?. b = sqlNot_ (a ==?. b)
+
 instance ( IsSql92ExpressionSyntax syntax
          , FieldsFulfillConstraintNullable (HasSqlEqualityCheck syntax) tbl
          , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
@@ -239,20 +321,15 @@ instance ( IsSql92ExpressionSyntax syntax
             in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
 
-eqMaybeE, neqMaybeE :: (IsSql92ExpressionSyntax syntax, HasSqlEqualityCheck syntax a) => Proxy a -> syntax -> syntax -> syntax
-eqMaybeE aType a b =
-  let aIsNull = isNullE a
-      bIsNull = isNullE b
-  in caseE [ ( aIsNull `andE` bIsNull, valueE (sqlValueSyntax True) )
-           , ( aIsNull `orE` bIsNull, valueE (sqlValueSyntax False) ) ]
-           (sqlEqE aType a b)
-
-neqMaybeE aType a b =
-  let aIsNull = isNullE a
-      bIsNull = isNullE b
-  in caseE [ ( aIsNull `andE` bIsNull, valueE (sqlValueSyntax False) )
-           , ( aIsNull `orE` bIsNull, valueE (sqlValueSyntax True) ) ]
-           (sqlNeqE aType a b)
+  a ==?. b = let (_, e) = runState (zipBeamFieldsM
+                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                        do modify (\expr ->
+                                                     case expr of
+                                                       Nothing -> Just $ x ==?. y
+                                                       Just expr' -> Just $ expr' &&?. x ==?. y)
+                                           return x') (withNullableConstraints @(HasSqlEqualityCheck syntax) `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a /=?. b = sqlNot_ (a ==?. b)
 
 
 -- * Comparisons

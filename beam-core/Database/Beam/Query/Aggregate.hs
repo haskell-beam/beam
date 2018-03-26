@@ -5,7 +5,7 @@ module Database.Beam.Query.Aggregate
     --   for more detail
 
     aggregate_
-  , filterWhere_
+  , filterWhere_, filterWhere_'
 
   , QGroupable(..)
 
@@ -28,6 +28,8 @@ module Database.Beam.Query.Aggregate
   ) where
 
 import Database.Beam.Query.Internal
+import Database.Beam.Query.Operator
+import Database.Beam.Query.Ord
 
 import Database.Beam.Backend.SQL
 import Database.Beam.Schema.Tables
@@ -208,31 +210,41 @@ countOver_
   -> QExpr expr s a -> QAgg expr s b
 countOver_ q (QExpr a) = QExpr (countE q <$> a)
 
+-- | SQL @EVERY@, @SOME@, and @ANY@ aggregates. Operates over
+-- 'SqlBool' only, as the result can be @NULL@, even if all inputs are
+-- known (no input rows).
 everyOver_, someOver_, anyOver_
   :: IsSql99AggregationExpressionSyntax expr
   => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s Bool -> QAgg expr s (Maybe Bool)
+  -> QExpr expr s SqlBool -> QAgg expr s SqlBool
 everyOver_ q (QExpr a) = QExpr (everyE q <$> a)
 someOver_  q (QExpr a) = QExpr (someE  q <$> a)
 anyOver_   q (QExpr a) = QExpr (anyE   q <$> a)
 
 -- | Support for FILTER (WHERE ...) syntax for aggregates.
---   Part of SQL2003 Advanced OLAP operations feature (T612)
+--   Part of SQL2003 Advanced OLAP operations feature (T612).
+--
+-- See 'filterWhere_'' for a version that accepts 'SqlBool'.
 filterWhere_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
              => QAgg expr s a -> QExpr expr s Bool -> QAgg expr s a
-filterWhere_ (QExpr agg) (QExpr cond) = QExpr (liftA2 filterAggE agg cond)
+filterWhere_ agg cond = filterWhere_' agg (sqlBool_ cond)
+
+-- | Like 'filterWhere_' but accepting 'SqlBool'.
+filterWhere_' :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
+              => QAgg expr s a -> QExpr expr s SqlBool -> QAgg expr s a
+filterWhere_' (QExpr agg) (QExpr cond) = QExpr (liftA2 filterAggE agg cond)
 
 -- | SQL99 @EVERY(ALL ..)@ function (but without the explicit ALL)
 every_ :: IsSql99AggregationExpressionSyntax expr
-       => QExpr expr s Bool -> QAgg expr s (Maybe Bool)
+       => QExpr expr s SqlBool -> QAgg expr s SqlBool
 every_ = everyOver_ allInGroup_
 
 -- | SQL99 @SOME(ALL ..)@ function (but without the explicit ALL)
 some_ :: IsSql99AggregationExpressionSyntax expr
-      => QExpr expr s Bool -> QAgg expr s (Maybe Bool)
+      => QExpr expr s SqlBool -> QAgg expr s SqlBool
 some_  = someOver_  allInGroup_
 
 -- | SQL99 @ANY(ALL ..)@ function (but without the explicit ALL)
 any_ :: IsSql99AggregationExpressionSyntax expr
-     => QExpr expr s Bool -> QAgg expr s (Maybe Bool)
+     => QExpr expr s SqlBool -> QAgg expr s SqlBool
 any_   = anyOver_   allInGroup_

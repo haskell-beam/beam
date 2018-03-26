@@ -22,7 +22,7 @@ instance Exception BeamOpenURIUnsupportedScheme
 data BeamURIOpener c where
   BeamURIOpener :: MonadBeam syntax be hdl m
                 => c syntax be hdl m
-                -> (forall a. URI -> (hdl -> IO a) -> IO a)
+                -> (URI -> IO (hdl, IO ()))
                 -> BeamURIOpener c
 newtype BeamURIOpeners c where
   BeamURIOpeners :: M.Map String (BeamURIOpener c) -> BeamURIOpeners c
@@ -32,8 +32,17 @@ instance Monoid (BeamURIOpeners c) where
   mappend (BeamURIOpeners a) (BeamURIOpeners b) =
     BeamURIOpeners (mappend a b)
 
+data OpenedBeamConnection c where
+  OpenedBeamConnection
+    :: MonadBeam syntax be hdl m
+    => { openedBeamDatabase :: c syntax be hdl m
+       , openedBeamHandle   :: hdl
+       , closeBeamConnection :: IO ()
+     } -> OpenedBeamConnection c
+
 mkUriOpener :: MonadBeam syntax be hdl m
-            => String -> (forall a. URI -> (hdl -> IO a) -> IO a)
+            => String
+            -> (URI -> IO (hdl, IO ()))
             -> c syntax be hdl m
             -> BeamURIOpeners c
 mkUriOpener schemeNm opener c = BeamURIOpeners (M.singleton schemeNm (BeamURIOpener c opener))
@@ -52,11 +61,24 @@ withDbConnection :: forall c a
                  -> (forall syntax be hdl m. MonadBeam syntax be hdl m =>
                       c syntax be hdl m -> hdl -> IO a)
                  -> IO a
-withDbConnection (BeamURIOpeners protos) uri actionWithDb =
+withDbConnection protos uri actionWithDb =
+  bracket (openDbConnection protos uri) closeBeamConnection $
+  \(OpenedBeamConnection c hdl _) -> actionWithDb c hdl
+
+openDbConnection :: forall c a
+                  . BeamURIOpeners c
+                 -> String
+                 -> IO (OpenedBeamConnection c)
+openDbConnection protos uri = do
+  (parsedUri, BeamURIOpener c openURI) <- findURIOpener protos uri
+  (hdl, closeHdl) <- openURI parsedUri
+  pure (OpenedBeamConnection c hdl closeHdl)
+
+findURIOpener :: BeamURIOpeners c -> String -> IO (URI, BeamURIOpener c)
+findURIOpener (BeamURIOpeners protos) uri =
   case parseURI uri of
     Nothing -> throwIO BeamOpenURIInvalid
     Just parsedUri ->
       case M.lookup (uriScheme parsedUri) protos of
         Nothing -> throwIO (BeamOpenURIUnsupportedScheme (uriScheme parsedUri))
-        Just (BeamURIOpener c withURI) ->
-          withURI parsedUri (actionWithDb c)
+        Just opener -> pure (parsedUri, opener)

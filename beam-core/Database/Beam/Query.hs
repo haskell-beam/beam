@@ -25,9 +25,15 @@ module Database.Beam.Query
     -- * Operators
     , module Database.Beam.Query.Operator
 
-    , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
+    -- ** ANSI SQL Booleans
+    , Beam.SqlBool
+    , isTrue_, isNotTrue_
+    , isFalse_, isNotFalse_
+    , isUnknown_, isNotUnknown_
+    , unknownAs_, sqlBool_
 
     -- ** Unquantified comparison operators
+    , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
     , SqlEq(..), SqlOrd(..)
 
     -- ** Quantified Comparison Operators #quantified-comparison-operator#
@@ -51,13 +57,14 @@ module Database.Beam.Query
 
     -- ** @INSERT@
     , SqlInsert(..)
-    , insert
+    , insert, insertOnly
     , runInsert
 
     , SqlInsertValues(..)
     , insertExpressions
     , insertValues
     , insertFrom
+    , insertData
 
     -- ** @UPDATE@
     , SqlUpdate(..)
@@ -76,7 +83,8 @@ import Database.Beam.Query.Combinators
 import Database.Beam.Query.CustomSQL
 import Database.Beam.Query.Extensions
 import Database.Beam.Query.Internal
-import Database.Beam.Query.Operator
+import Database.Beam.Query.Operator hiding (SqlBool)
+import qualified Database.Beam.Query.Operator as Beam
 import Database.Beam.Query.Ord
 import Database.Beam.Query.Relationships
 import Database.Beam.Query.Types (QGenExpr) -- hide QGenExpr constructor
@@ -89,6 +97,9 @@ import Database.Beam.Schema.Tables
 
 import Control.Monad.Identity
 import Control.Monad.Writer
+
+import Data.Text (Text)
+import Data.Proxy
 
 -- * Query
 
@@ -172,18 +183,30 @@ data SqlInsert syntax
   = SqlInsert syntax
   | SqlInsertNoRows
 
+-- | Generate a 'SqlInsert' over only certain fields of a table
+insertOnly :: ( IsSql92InsertSyntax syntax, Projectible Text (QExprToField r) )
+           => DatabaseEntity be db (TableEntity table)
+              -- ^ Table to insert into
+           -> (table (QField s) -> QExprToField r)
+           -> SqlInsertValues (Sql92InsertValuesSyntax syntax) r
+              -- ^ Values to insert. See 'insertValues', 'insertExpressions', 'insertData', and 'insertFrom' for possibilities.
+           -> SqlInsert syntax
+insertOnly _ _ SqlInsertValuesEmpty = SqlInsertNoRows
+insertOnly (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkProj (SqlInsertValues vs) =
+    SqlInsert (insertStmt tblNm proj vs)
+  where
+    tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
+    proj = execWriter (project' (Proxy @AnyType) (\_ f -> tell [f ""] >> pure f)
+                                (mkProj tblFields))
+
 -- | Generate a 'SqlInsert' given a table and a source of values.
-insert :: IsSql92InsertSyntax syntax =>
-          DatabaseEntity be db (TableEntity table)
+insert :: ( IsSql92InsertSyntax syntax, Projectible Text (table (QField s)) )
+       => DatabaseEntity be db (TableEntity table)
           -- ^ Table to insert into
-       -> SqlInsertValues (Sql92InsertValuesSyntax syntax) table
+       -> SqlInsertValues (Sql92InsertValuesSyntax syntax) (table (QExpr (Sql92InsertExpressionSyntax syntax) s))
           -- ^ Values to insert. See 'insertValues', 'insertExpressions', and 'insertFrom' for possibilities.
        -> SqlInsert syntax
-insert _ SqlInsertValuesEmpty = SqlInsertNoRows
-insert (DatabaseEntity (DatabaseTable tblNm tblSettings)) (SqlInsertValues vs) =
-    SqlInsert (insertStmt tblNm tblFields vs)
-  where
-    tblFields = allBeamValues (\(Columnar' f) -> _fieldName f) tblSettings
+insert tbl values = insertOnly tbl id values
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
 runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
@@ -193,17 +216,17 @@ runInsert (SqlInsert i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
 --   'tbl'.
-data SqlInsertValues insertValues (tbl :: (* -> *) -> *)
+data SqlInsertValues insertValues proj --(tbl :: (* -> *) -> *)
     = SqlInsertValues insertValues
     | SqlInsertValuesEmpty
 
--- | Build a 'SqlInsertValues' from series of expressions
+-- | Build a 'SqlInsertValues' from series of expressions in tables
 insertExpressions ::
-    forall syntax table.
+    forall syntax table s.
     ( Beamable table
     , IsSql92InsertValuesSyntax syntax ) =>
-    (forall s. [ table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ]) ->
-    SqlInsertValues syntax table
+    (forall s'. [ table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s') ]) ->
+    SqlInsertValues syntax (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s))
 insertExpressions tbls =
   case sqlExprs of
     [] -> SqlInsertValuesEmpty
@@ -211,26 +234,38 @@ insertExpressions tbls =
     where
       sqlExprs = map mkSqlExprs tbls
 
-      mkSqlExprs :: forall s. table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) -> [Sql92InsertValuesExpressionSyntax syntax]
+      mkSqlExprs :: forall s'. table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s') -> [Sql92InsertValuesExpressionSyntax syntax]
       mkSqlExprs = allBeamValues (\(Columnar' (QExpr x)) -> x "t")
 
 -- | Build a 'SqlInsertValues' from concrete table values
 insertValues ::
-    forall table syntax.
+    forall table syntax s.
     ( Beamable table
     , IsSql92InsertValuesSyntax syntax
     , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax syntax))) table) =>
-    [ table Identity ] -> SqlInsertValues syntax table
-insertValues x = insertExpressions (map val_ x :: forall s. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s) ])
+    [ table Identity ] -> SqlInsertValues syntax (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s))
+insertValues x = insertExpressions (map val_ x :: forall s'. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s') ])
+
+-- | Build a 'SqlInsertValues' from arbitrarily shaped data containing expressions
+insertData :: forall syntax r
+            . ( Projectible (Sql92InsertValuesExpressionSyntax syntax) r
+              , IsSql92InsertValuesSyntax syntax )
+           => [ r ] -> SqlInsertValues syntax r
+insertData rows =
+  case rows of
+    [] -> SqlInsertValuesEmpty
+    _  -> SqlInsertValues (insertSqlExpressions (map mkSqlExprs rows))
+  where
+    mkSqlExprs :: r -> [Sql92InsertValuesExpressionSyntax syntax]
+    mkSqlExprs r = execWriter (project' (Proxy @AnyType) (\_ s -> tell [ s "t" ] >> pure s) r)
 
 -- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the same table
 insertFrom
     :: ( IsSql92InsertValuesSyntax syntax
        , HasQBuilder (Sql92InsertValuesSelectSyntax syntax)
-       , Projectible (Sql92SelectExpressionSyntax (Sql92InsertValuesSelectSyntax syntax))
-                     (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) QueryInaccessible)) )
-    => Q (Sql92InsertValuesSelectSyntax syntax) db QueryInaccessible (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) QueryInaccessible))
-    -> SqlInsertValues syntax table
+       , Projectible (Sql92SelectExpressionSyntax (Sql92InsertValuesSelectSyntax syntax)) r )
+    => Q (Sql92InsertValuesSelectSyntax syntax) db QueryInaccessible r
+    -> SqlInsertValues syntax r
 insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 
 -- * UPDATE
