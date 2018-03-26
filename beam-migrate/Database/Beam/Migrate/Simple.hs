@@ -8,21 +8,144 @@ module Database.Beam.Migrate.Simple
   , backendMigrationScript
 
   , VerificationResult(..)
-  , verifySchema
+  , verifySchema, autoMigrate
 
   , createSchema
+
+  , BringUpToDateHooks(..)
+  , defaultUpToDateHooks
+  , bringUpToDate, bringUpToDateWithHooks
 
   , module Database.Beam.Migrate.Actions
   , module Database.Beam.Migrate.Types ) where
 
-import Database.Beam
-import Database.Beam.Backend.SQL
-import Database.Beam.Migrate.Backend
-import Database.Beam.Migrate.Types
-import Database.Beam.Migrate.Actions
+import           Database.Beam
+import           Database.Beam.Backend.SQL
+import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Types
+import           Database.Beam.Migrate.Actions
+import           Database.Beam.Migrate.Log
 
-import qualified Data.Text as T
+import           Control.Monad.Cont
+import           Control.Monad.Writer
+import           Control.Monad.State
+
 import qualified Data.HashSet as HS
+import           Data.Semigroup (Max(..))
+import qualified Data.Text as T
+
+data BringUpToDateHooks m
+  = BringUpToDateHooks
+  { runIrreversibleHook :: m Bool
+  , startStepHook       :: Int -> T.Text -> m ()
+  , endStepHook         :: Int -> T.Text -> m ()
+  , runCommandHook      :: Int -> String -> m ()
+
+  , queryFailedHook     :: m ()
+    -- ^ Called when a query fails
+  , discontinuousMigrationsHook
+                        :: Int -> m ()
+    -- ^ Called when the migration log has a discontinuity at the supplied index
+  , logMismatchHook     :: Int -> T.Text -> T.Text -> m ()
+    -- ^ The migration log at the given index is not what was expected. The
+    -- first text is the actual commit id, the second, the expected
+  , databaseAheadHook   :: Int -> m ()
+    -- ^ The database is ahead of the given migrations. The parameter supplies
+    -- the number of entries passed the given migrations the database has.
+  }
+
+defaultUpToDateHooks :: Monad m => BringUpToDateHooks m
+defaultUpToDateHooks =
+  BringUpToDateHooks
+  { runIrreversibleHook = pure False
+  , startStepHook       = \_ _ -> pure ()
+  , endStepHook         = \_ _ -> pure ()
+  , runCommandHook      = \_ _ -> pure ()
+  , queryFailedHook     = fail "Log entry query fails"
+  , discontinuousMigrationsHook =
+      \ix -> fail ("Discontinuous migration log: missing migration at " ++ show ix)
+  , logMismatchHook =
+      \ix actual expected ->
+        fail ("Log mismatch at index " ++ show ix ++ ":\n" ++
+              "  expected: " ++ T.unpack expected ++ "\n" ++
+              "  actual  : " ++ T.unpack actual)
+  , databaseAheadHook =
+      \aheadBy ->
+        fail ("The database is ahead of the known schema by " ++ show aheadBy ++ " migration(s)")
+  }
+
+-- | Check for the beam-migrate log. If it exists, use it and the supplied
+-- migrations to bring the database up-to-date. Otherwise, create the log and
+-- run all migrations.
+bringUpToDate :: Database be db
+              => BeamMigrationBackend cmd be hdl m
+              -> MigrationSteps cmd () (CheckedDatabaseSettings be db)
+              -> m (Maybe (CheckedDatabaseSettings be db))
+bringUpToDate be@BeamMigrationBackend {} =
+  bringUpToDateWithHooks defaultUpToDateHooks be
+
+bringUpToDateWithHooks :: forall db cmd be hdl m
+                        . Database be db
+                       => BringUpToDateHooks m
+                       -> BeamMigrationBackend cmd be hdl m
+                       -> MigrationSteps cmd () (CheckedDatabaseSettings be db)
+                       -> m (Maybe (CheckedDatabaseSettings be db))
+bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = renderSyntax }) steps = do
+  ensureBackendTables be
+
+  entries <- runSelectReturningList $ select $
+             all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
+  let verifyMigration :: Int -> T.Text -> Migration cmd a -> StateT [LogEntry] (WriterT (Max Int) m) a
+      verifyMigration stepIx stepNm step =
+        do log <- get
+           case log of
+             [] -> pure ()
+             LogEntry actId actStepNm _:log'
+               | actId == stepIx && actStepNm == stepNm ->
+                   tell (Max stepIx) >> put log'
+               | actId /= stepIx ->
+                   lift . lift $ discontinuousMigrationsHook hooks stepIx
+               | otherwise ->
+                   lift . lift $ logMismatchHook hooks stepIx actStepNm stepNm
+           executeMigration (\_ -> pure ()) step
+
+  (futureEntries, Max lastCommit) <-
+    runWriterT (execStateT (runMigrationSteps 0 Nothing steps verifyMigration) entries <*
+                tell (Max (-1)))
+
+  case futureEntries of
+    _:_ -> databaseAheadHook hooks (length futureEntries)
+    [] -> pure ()
+
+  -- Check data loss
+  shouldRunMigration <-
+    flip runContT (\_ -> pure True) $
+    runMigrationSteps (lastCommit + 1) Nothing steps
+      (\stepIx stepName step -> do
+          case migrationDataLoss step of
+            MigrationLosesData ->
+              ContT $ \_ -> runIrreversibleHook hooks
+            MigrationKeepsData ->
+              executeMigration (\_ -> pure ()) step)
+
+  if shouldRunMigration
+    then Just <$>
+         runMigrationSteps (lastCommit + 1) Nothing steps
+           (\stepIx stepName step ->
+              do startStepHook hooks stepIx stepName
+                 ret <-
+                   executeMigration
+                     (\cmd -> do
+                         runCommandHook hooks stepIx (renderSyntax cmd)
+                         runNoReturn cmd)
+                     step
+
+                 runInsert $ insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd)) $
+                   insertExpressions [ LogEntry (val_ stepIx) (val_ stepName) currentTimestamp_ ]
+                 endStepHook hooks stepIx stepName
+
+                 return ret)
+    else pure Nothing
 
 -- | Attempt to find a SQL schema given an 'ActionProvider' and a checked
 -- database. Returns 'Nothing' if no schema could be found, which usually means
@@ -103,7 +226,7 @@ data VerificationResult
 -- schema. On success, returns 'VerificationSucceeded', on failure,
 -- returns 'VerificationFailed' and a list of missing predicates.
 verifySchema :: ( Database be db, MonadBeam cmd be handle m )
-             => BeamMigrationBackend be cmd handle m
+             => BeamMigrationBackend cmd be handle m
              -> CheckedDatabaseSettings be db
              -> m VerificationResult
 verifySchema BeamMigrationBackend { backendGetDbConstraints = getConstraints } db =

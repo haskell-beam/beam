@@ -19,7 +19,6 @@ executable beam-migrate
                        Database.Beam.Migrate.Tool.Registry
                        Database.Beam.Migrate.Tool.Backend
                        Database.Beam.Migrate.Tool.Schema
-                       Database.Beam.Migrate.Tool.SchemaCmd
                        Database.Beam.Migrate.Tool.Branch
                        Database.Beam.Migrate.Tool.Database
                        Database.Beam.Migrate.Tool.Init

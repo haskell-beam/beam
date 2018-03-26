@@ -286,6 +286,13 @@ instance FromJSON MigrationFormat where
   parseJSON (String be) = pure (MigrationFormatBackend (unpack be))
   parseJSON _ = fail "Cannot parse MigrationFormat"
 
+reportDdlErrors :: IO (Either DdlError a) -> IO a
+reportDdlErrors go = do
+  res <- go
+  case res of
+    Left err -> fail ("DDL error: " ++ show err)
+    Right  x -> pure x
+
 registeredSchemaInfoShortMessage :: RegisteredSchemaInfo -> Text
 registeredSchemaInfoShortMessage sch =
   let fullMsg = registeredSchemaInfoMessage sch

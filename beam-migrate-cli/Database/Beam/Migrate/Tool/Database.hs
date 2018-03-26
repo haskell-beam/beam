@@ -1,10 +1,10 @@
 module Database.Beam.Migrate.Tool.Database where
 
 import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.Tool.Backend
 import           Database.Beam.Migrate.Tool.CmdLine
 import           Database.Beam.Migrate.Tool.Registry
-import           Database.Beam.Migrate.Tool.Schema
 
 import           Control.Monad
 
@@ -45,8 +45,9 @@ initDatabase cmdLine dbName moduleName connStr =
     Just {} -> fail "Database already exists"
     Nothing -> do
       -- Get the constraints and see if the migration table already exists
-      SomeBeamMigrationBackend be <- loadBackend' cmdLine moduleName
-      ensureBackendTables connStr be
+      SomeBeamMigrationBackend be@BeamMigrationBackend { backendTransact = transact } <-
+        loadBackend' cmdLine moduleName
+      transact connStr (ensureBackendTables be)
 
       let db = MigrationDatabase moduleName connStr
       pure ((), reg { migrationRegistryDatabases =
