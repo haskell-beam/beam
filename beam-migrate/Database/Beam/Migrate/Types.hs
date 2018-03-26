@@ -38,9 +38,10 @@ module Database.Beam.Migrate.Types
 
   , MigrationCommand(..), MigrationDataLoss(..)
 
-  , migrationStepsToMigration, runMigrationSilenced
+  , runMigrationSteps, runMigrationSilenced
   , runMigrationVerbose, executeMigration
   , eraseMigrationType, migrationStep, upDown
+  , migrationDataLoss
 
   , migrateScript, evaluateDatabase, stepNames ) where
 
@@ -99,16 +100,17 @@ data MigrationCommand cmd
     -- ^ Information on whether the migration loses data
   } deriving Show
 
-migrationStepsToMigration :: Int -> Maybe Int
-                          -> MigrationSteps syntax () a
-                          -> (forall a'. Text -> Migration syntax a' -> IO a')
-                          -> IO a
-migrationStepsToMigration firstIdx lastIdx (MigrationSteps steps) runMigration =
+runMigrationSteps :: Monad m
+                  => Int -> Maybe Int
+                  -> MigrationSteps syntax () a
+                  -> (forall a'. Int -> Text -> Migration syntax a' -> m a')
+                  -> m a
+runMigrationSteps firstIdx lastIdx (MigrationSteps steps) runMigration =
   runF (runKleisli steps ()) finish step 0
   where finish x _ = pure x
         step (MigrationStep nm doStep next) i =
           if i >= firstIdx && maybe True (i <) lastIdx
-          then runMigration nm doStep >>= \x -> next x (i + 1)
+          then runMigration i nm doStep >>= \x -> next x (i + 1)
           else next (runMigrationSilenced doStep) (i + 1)
 
 runMigrationSilenced :: Migration syntax a -> a
@@ -156,6 +158,14 @@ executeMigration runSyntax go = runF go pure doStep
   where
     doStep (MigrationRunCommand cmd _ next) =
       runSyntax cmd *> next
+
+-- | Given a migration, get the potential data loss, if it's run top-down
+migrationDataLoss :: Migration syntax a -> MigrationDataLoss
+migrationDataLoss go = runF go (\_ -> MigrationKeepsData)
+                         (\(MigrationRunCommand _ x next) ->
+                            case x of
+                              Nothing -> MigrationLosesData
+                              _ -> next)
 
 evaluateDatabase :: forall syntax a. MigrationSteps syntax () a -> a
 evaluateDatabase (MigrationSteps f) = runF (runKleisli f ()) id (\(MigrationStep _ migration next) -> next (runMigration migration))

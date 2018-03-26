@@ -3,10 +3,10 @@ module Database.Beam.Migrate.Tool.Diff where
 import           Database.Beam
 import           Database.Beam.Migrate hiding (timestamp)
 import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.Tool.Backend
 import           Database.Beam.Migrate.Tool.CmdLine
 import           Database.Beam.Migrate.Tool.Registry
-import           Database.Beam.Migrate.Tool.Schema
 
 import           Control.Exception
 import           Control.Monad
