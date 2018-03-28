@@ -144,8 +144,7 @@ recordCommit commitId = do
 ensureBackendTables :: forall be cmd hdl m
                      . BeamMigrationBackend cmd be hdl m
                     -> m ()
-ensureBackendTables be@BeamMigrationBackend { backendRenderSyntax = renderBeSyntax
-                                            , backendGetDbConstraints = getCs } =
+ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } =
   do backendSchemaBuilt <- checkForBackendTables be
      if backendSchemaBuilt
        then continueMigrate

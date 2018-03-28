@@ -8,7 +8,7 @@ module Database.Beam.Migrate.Simple
   , backendMigrationScript
 
   , VerificationResult(..)
-  , verifySchema, autoMigrate
+  , verifySchema
 
   , createSchema
 
@@ -18,6 +18,8 @@ module Database.Beam.Migrate.Simple
 
   , module Database.Beam.Migrate.Actions
   , module Database.Beam.Migrate.Types ) where
+
+import           Prelude hiding (log)
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
@@ -90,7 +92,7 @@ bringUpToDateWithHooks :: forall db cmd be hdl m
                        -> BeamMigrationBackend cmd be hdl m
                        -> MigrationSteps cmd () (CheckedDatabaseSettings be db)
                        -> m (Maybe (CheckedDatabaseSettings be db))
-bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = renderSyntax }) steps = do
+bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = renderSyntax' }) steps = do
   ensureBackendTables be
 
   entries <- runSelectReturningList $ select $
@@ -121,7 +123,7 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
   shouldRunMigration <-
     flip runContT (\_ -> pure True) $
     runMigrationSteps (lastCommit + 1) Nothing steps
-      (\stepIx stepName step -> do
+      (\_ _ step -> do
           case migrationDataLoss step of
             MigrationLosesData ->
               ContT $ \_ -> runIrreversibleHook hooks
@@ -136,7 +138,7 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
                  ret <-
                    executeMigration
                      (\cmd -> do
-                         runCommandHook hooks stepIx (renderSyntax cmd)
+                         runCommandHook hooks stepIx (renderSyntax' cmd)
                          runNoReturn cmd)
                      step
 
