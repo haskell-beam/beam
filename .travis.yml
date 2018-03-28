@@ -37,4 +37,5 @@ install:
 
 script:
 # Build the package, its tests
-- stack --no-terminal --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror test
+- stack --no-terminal build --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror
+- stack --no-terminal test
