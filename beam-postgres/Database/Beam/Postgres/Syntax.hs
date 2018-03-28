@@ -102,6 +102,7 @@ import qualified Data.ByteString.Char8 as B
 import           Data.ByteString.Lazy.Char8 (toStrict)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Coerce
+import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
@@ -134,18 +135,21 @@ data PgSyntaxF f where
   EscapeIdentifier :: ByteString -> f -> PgSyntaxF f
 deriving instance Functor PgSyntaxF
 
+instance Eq1 PgSyntaxF where
+  liftEq eq (EmitByteString b1 next1) (EmitByteString b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq eq (EmitBuilder b1 next1) (EmitBuilder b2 next2) =
+      toLazyByteString b1 == toLazyByteString b2 && next1 `eq` next2
+  liftEq eq (EscapeString b1 next1) (EscapeString b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq eq (EscapeBytea b1 next1) (EscapeBytea b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq eq (EscapeIdentifier b1 next1) (EscapeIdentifier b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq _ _ _ = False
+
 instance Eq f => Eq (PgSyntaxF f) where
-  EmitByteString b1 next1 == EmitByteString b2 next2 =
-      b1 == b2 && next1 == next2
-  EmitBuilder b1 next1 == EmitBuilder b2 next2 =
-      toLazyByteString b1 == toLazyByteString b2 && next1 == next2
-  EscapeString b1 next1 == EscapeString b2 next2 =
-      b1 == b2 && next1 == next2
-  EscapeBytea b1 next1 == EscapeBytea b2 next2 =
-      b1 == b2 && next1 == next2
-  EscapeIdentifier b1 next1 == EscapeIdentifier b2 next2 =
-      b1 == b2 && next1 == next2
-  _ == _ = False
+  (==) = eq1
 
 instance Hashable PgSyntax where
   hashWithSalt salt (PgSyntax s) = runF s finish step salt

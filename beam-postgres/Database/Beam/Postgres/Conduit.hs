@@ -128,7 +128,7 @@ runQueryReturning conn x = do
                  case parsedRow of
                    Left err -> liftIO (bailEarly row ("Could not read row: " <> show err))
                    Right parsedRow' ->
-                     do C.yieldOr parsedRow' (liftIO bailAfterParse)
+                     do C.yield parsedRow'
                         streamResults (Just fields')
             Pg.TuplesOk -> liftIO (Pg.withConnection conn finishQuery)
             Pg.EmptyQuery -> fail "No query"
@@ -140,8 +140,6 @@ runQueryReturning conn x = do
       Pg.unsafeFreeResult row
       cancelQuery
       fail errorString
-
-    bailAfterParse = cancelQuery
 
     cancelQuery =
       Pg.withConnection conn $ \conn' -> do

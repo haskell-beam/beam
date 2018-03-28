@@ -199,15 +199,15 @@ databaseTypeDecl :: [ HsEntity ] -> Hs.Decl ()
 databaseTypeDecl entities =
   Hs.DataDecl () (Hs.DataType ()) Nothing
               declHead [ conDecl ]
-              (Just deriving_)
+              [deriving_]
   where
     declHead = Hs.DHApp () (Hs.DHead () (Hs.Ident () "Db"))
                            (Hs.UnkindedVar () (Hs.Ident () "entity"))
     conDecl = Hs.QualConDecl () Nothing Nothing
                 (Hs.RecDecl () (Hs.Ident () "Db") (mkField <$> entities))
-    deriving_ = Hs.Deriving () [ Hs.IRule () Nothing Nothing $
-                                 Hs.IHCon () $ Hs.UnQual () $
-                                 Hs.Ident () "Generic" ]
+    deriving_ = Hs.Deriving () Nothing [ Hs.IRule () Nothing Nothing $
+                                         Hs.IHCon () $ Hs.UnQual () $
+                                         Hs.Ident () "Generic" ]
 
     mkField entity = Hs.FieldDecl () [ Hs.Ident () (entityDbFieldName entity) ]
                                      (buildHsDbField (hsEntityDbDecl entity) $
@@ -473,7 +473,7 @@ instance IsSql92CreateTableSyntax HsAction where
       imports = foldMap (\(_, ty) -> hsTypeImports (hsColumnSchemaType ty)) fields
 
       tblDecl = Hs.DataDecl () (Hs.DataType ()) Nothing
-                  tblDeclHead [ tblConDecl ] (Just deriving_)
+                  tblDeclHead [ tblConDecl ] [deriving_]
       tblDeclHead = Hs.DHApp () (Hs.DHead () (Hs.Ident () tyName))
                                 (Hs.UnkindedVar () (Hs.Ident () "f"))
       tblConDecl = Hs.QualConDecl () Nothing Nothing (Hs.RecDecl () (Hs.Ident () tyConName) tyConFieldDecls)
@@ -485,7 +485,7 @@ instance IsSql92CreateTableSyntax HsAction where
                                                    [ tyVarNamed "f"
                                                    , hsTypeSyntax (hsColumnSchemaType ty) ])) fields
 
-      deriving_ = Hs.Deriving () [ inst "Generic" ]
+      deriving_ = Hs.Deriving () Nothing [ inst "Generic" ]
 
       tblBeamable = hsInstance "Beamable" [ tyConNamed tyName ] []
       tblPun = Hs.TypeDecl () (Hs.DHead () (Hs.Ident () tyConName))
@@ -516,7 +516,7 @@ instance IsSql92ColumnSchemaSyntax HsColumnSchema where
 instance IsSql92TableConstraintSyntax HsTableConstraint where
   primaryKeyConstraintSyntax fields =
     HsTableConstraint $ \tblNm tblFields ->
-    let primaryKeyDataDecl = Hs.InsData () (Hs.DataType ()) primaryKeyType [ primaryKeyConDecl ] (Just primaryKeyDeriving)
+    let primaryKeyDataDecl = Hs.InsData () (Hs.DataType ()) primaryKeyType [ primaryKeyConDecl ] [ primaryKeyDeriving ]
 
         tableTypeNm = tblNm <> "T"
         tableTypeKeyNm = tblNm <> "Key"
@@ -525,7 +525,7 @@ instance IsSql92TableConstraintSyntax HsTableConstraint where
 
         primaryKeyType = tyApp (tyConNamed "PrimaryKey") [ tyConNamed (T.unpack tableTypeNm), tyVarNamed "f" ]
         primaryKeyConDecl  = Hs.QualConDecl () Nothing Nothing (Hs.ConDecl () (Hs.Ident () (T.unpack tableTypeKeyNm)) fieldTys)
-        primaryKeyDeriving = Hs.Deriving () [ inst "Generic" ]
+        primaryKeyDeriving = Hs.Deriving () Nothing [ inst "Generic" ]
 
         primaryKeyTypeDecl = Hs.TypeDecl () (Hs.DHead () (Hs.Ident () (T.unpack tableTypeKeyNm)))
                                             (tyApp (tyConNamed "PrimaryKey")
@@ -867,7 +867,7 @@ hsInstance classNm params decls =
     instHead = foldl (Hs.IHApp ()) (Hs.IHCon () (Hs.UnQual () (Hs.Ident () (T.unpack classNm)))) params
 
 hsDerivingInstance :: T.Text -> [ Hs.Type () ] -> Hs.Decl ()
-hsDerivingInstance classNm params = Hs.DerivDecl () Nothing (Hs.IRule () Nothing Nothing instHead)
+hsDerivingInstance classNm params = Hs.DerivDecl () Nothing Nothing (Hs.IRule () Nothing Nothing instHead)
   where
     instHead = foldl (Hs.IHApp ()) (Hs.IHCon () (Hs.UnQual () (Hs.Ident () (T.unpack classNm)))) params
 
@@ -958,5 +958,7 @@ instance Hashable (Hs.BangType ())
 instance Hashable (Hs.ImportSpec ())
 instance Hashable (Hs.Namespace ())
 instance Hashable (Hs.CName ())
+instance Hashable (Hs.DerivStrategy ())
+instance Hashable (Hs.MaybePromotedName ())
 instance Hashable a => Hashable (S.Set a) where
   hashWithSalt s a = hashWithSalt s (S.toList a)
