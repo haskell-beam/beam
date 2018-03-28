@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing#-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -24,7 +25,7 @@ module Database.Beam.Sqlite.Syntax
     -- * SQLite data type syntax
   , SqliteDataTypeSyntax(..)
   , sqliteTextType, sqliteBlobType
-  , sqliteBigIntType
+  , sqliteBigIntType, sqliteSerialType
 
     -- * Building and consuming 'SqliteSyntax'
   , fromSqliteCommand, formatSqliteInsert
@@ -41,6 +42,8 @@ import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
+import           Database.Beam.Migrate.SQL (DataType(..), FieldReturnType(..), field)
+import           Database.Beam.Migrate.SQL.BeamExtensions
 import           Database.Beam.Migrate.Serialization
 import           Database.Beam.Migrate.Types
 import           Database.Beam.Query
@@ -56,6 +59,7 @@ import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Proxy (Proxy(..))
 import           Data.Scientific
 import           Data.String
 import qualified Data.Text as T
@@ -223,9 +227,12 @@ data SqliteTableOptionsSyntax = SqliteTableOptionsSyntax SqliteSyntax SqliteSynt
 
 -- | SQLite syntax for column schemas in @CREATE TABLE@ or @ALTER COLUMN ... ADD
 -- COLUMN@ statements
-newtype SqliteColumnSchemaSyntax
-  = SqliteColumnSchemaSyntax { fromSqliteColumnSchema :: SqliteSyntax }
-  deriving (Show, Eq, Hashable)
+data SqliteColumnSchemaSyntax
+  = SqliteColumnSchemaSyntax
+  { fromSqliteColumnSchema :: SqliteSyntax
+  , sqliteIsSerialColumn   :: Bool }
+  deriving (Show, Eq, Generic)
+instance Hashable SqliteColumnSchemaSyntax
 
 instance Sql92DisplaySyntax SqliteColumnSchemaSyntax where
   displaySyntax = displaySyntax . fromSqliteColumnSchema
@@ -237,9 +244,10 @@ data SqliteDataTypeSyntax
   { fromSqliteDataType :: SqliteSyntax
   , sqliteDataTypeToHs :: HsDataType
   , sqliteDataTypeSerialized :: BeamSerializedDataType
+  , sqliteDataTypeSerial :: Bool
   } deriving (Show, Eq, Generic)
 instance Hashable SqliteDataTypeSyntax where
-  hashWithSalt salt (SqliteDataTypeSyntax s _ _) = hashWithSalt salt s
+  hashWithSalt salt (SqliteDataTypeSyntax s _ _ _) = hashWithSalt salt s
 instance Sql92DisplaySyntax SqliteDataTypeSyntax where
   displaySyntax = displaySyntax . fromSqliteDataType
 
@@ -257,7 +265,10 @@ data SqliteColumnConstraintSyntax
     = SqliteColumnConstraintSyntax
     { fromSqliteColumnConstraint :: SqlConstraintAttributesBuilder -> SqliteSyntax
     , sqliteColumnConstraintSerialized :: BeamSerializedConstraint }
-newtype SqliteTableConstraintSyntax = SqliteTableConstraintSyntax { fromSqliteTableConstraint :: SqliteSyntax }
+data SqliteTableConstraintSyntax
+  = SqliteTableConstraintSyntax
+  { fromSqliteTableConstraint :: SqliteSyntax
+  , sqliteTableConstraintPrimaryKey :: Maybe [ T.Text ] }
 data SqliteMatchTypeSyntax
     = SqliteMatchTypeSyntax
     { fromSqliteMatchType :: SqliteSyntax
@@ -318,7 +329,7 @@ instance IsSql92AlterTableSyntax SqliteAlterTableSyntax where
     SqliteAlterTableSyntax $
     case fromSqliteAlterTableAction action of
       Just alterTable ->
-        emit "ALTER TABLE " <> quotedIdentifier nm <> alterTable
+        emit "ALTER TABLE " <> quotedIdentifier nm <> emit " " <> alterTable
       Nothing ->
         emit "SELECT 1"
 
@@ -356,11 +367,12 @@ instance IsSql92ColumnSchemaSyntax SqliteColumnSchemaSyntax where
   type Sql92ColumnSchemaColumnConstraintDefinitionSyntax SqliteColumnSchemaSyntax = SqliteColumnConstraintDefinitionSyntax
 
   columnSchemaSyntax  ty defVal constraints collation =
-    SqliteColumnSchemaSyntax $
-    fromSqliteDataType ty <>
-    maybe mempty (\defVal -> emit " DEFAULT " <> parens (fromSqliteExpression defVal)) defVal <>
-    foldMap (\constraint -> emit " " <> fromSqliteColumnConstraintDefinition constraint <> emit " ") constraints <>
-    maybe mempty (\c -> emit " COLLATE " <> quotedIdentifier c) collation
+    SqliteColumnSchemaSyntax
+      (fromSqliteDataType ty <>
+       maybe mempty (\defVal -> emit " DEFAULT " <> parens (fromSqliteExpression defVal)) defVal <>
+       foldMap (\constraint -> emit " " <> fromSqliteColumnConstraintDefinition constraint <> emit " ") constraints <>
+       maybe mempty (\c -> emit " COLLATE " <> quotedIdentifier c) collation)
+      (if sqliteDataTypeSerial ty then True else False)
 
 instance IsSql92ColumnConstraintDefinitionSyntax SqliteColumnConstraintDefinitionSyntax where
   type Sql92ColumnConstraintDefinitionConstraintSyntax SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintSyntax
@@ -421,8 +433,9 @@ instance IsSql92ReferentialActionSyntax SqliteReferentialActionSyntax where
 
 instance IsSql92TableConstraintSyntax SqliteTableConstraintSyntax where
   primaryKeyConstraintSyntax fields =
-    SqliteTableConstraintSyntax $
-    emit "PRIMARY KEY" <> parens (commas (map quotedIdentifier fields))
+    SqliteTableConstraintSyntax
+      (emit "PRIMARY KEY" <> parens (commas (map quotedIdentifier fields)))
+      (Just fields)
 
 instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
   type Sql92CreateTableColumnSchemaSyntax SqliteCreateTableSyntax = SqliteColumnSchemaSyntax
@@ -432,50 +445,72 @@ instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
   createTableSyntax _ nm fields constraints =
     let fieldDefs = map mkFieldDef fields
         constraintDefs = map fromSqliteTableConstraint constraints
+        noPkConstraintDefs = map fromSqliteTableConstraint (filter (isNothing . sqliteTableConstraintPrimaryKey) constraints)
+
+        constraintPks = mapMaybe sqliteTableConstraintPrimaryKey constraints
+        fieldPrimaryKey = map fst (filter (sqliteIsSerialColumn . snd) fields)
 
         mkFieldDef (fieldNm, fieldTy) =
-          quotedIdentifier fieldNm <> emit " " <> fromSqliteColumnSchema fieldTy
+          quotedIdentifier fieldNm <> emit " " <>
+          fromSqliteColumnSchema fieldTy
 
-    in SqliteCreateTableSyntax $
-       emit "CREATE TABLE " <> quotedIdentifier nm <> parens (commas (fieldDefs <> constraintDefs))
+        createWithConstraints constraintDefs' =
+          SqliteCreateTableSyntax $
+          emit "CREATE TABLE " <> quotedIdentifier nm <> parens (commas (fieldDefs <> constraintDefs'))
+        normalCreateTable = createWithConstraints constraintDefs
+        createTableNoPkConstraint = createWithConstraints noPkConstraintDefs
+
+    in case fieldPrimaryKey of
+         []  -> normalCreateTable
+         [field] ->
+           case constraintPks of
+             [] -> error "A column claims to have a primary key, but there is no key on this table"
+             [[fieldPk]]
+               | field /= fieldPk -> error "Two columns claim to be a primary key on this table"
+               | otherwise -> createTableNoPkConstraint
+             _ -> error "There are multiple primary key constraints on this table"
+         _ -> error "More than one column claims to be a primary key on this table"
 
 instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
-  domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm) (domainType nm) (domainType nm)
+  domainType nm = SqliteDataTypeSyntax (quotedIdentifier nm) (domainType nm) (domainType nm) False
   charType prec charSet = SqliteDataTypeSyntax (emit "CHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet)
                                                (charType prec charSet)
                                                (charType prec charSet)
+                                               False
   varCharType prec charSet = SqliteDataTypeSyntax (emit "VARCHAR" <> sqliteOptPrec prec <> sqliteOptCharSet charSet)
                                                   (varCharType prec charSet)
                                                   (varCharType prec charSet)
+                                                  False
   nationalCharType prec = SqliteDataTypeSyntax (emit "NATIONAL CHAR" <> sqliteOptPrec prec)
                                                (nationalCharType prec)
                                                (nationalCharType prec)
+                                               False
   nationalVarCharType prec = SqliteDataTypeSyntax (emit "NATIONAL CHARACTER VARYING" <> sqliteOptPrec prec)
                                                   (nationalVarCharType prec)
                                                   (nationalVarCharType prec)
+                                                  False
+  bitType prec = SqliteDataTypeSyntax (emit "BIT" <> sqliteOptPrec prec) (bitType prec) (bitType prec) False
+  varBitType prec = SqliteDataTypeSyntax (emit "BIT VARYING" <> sqliteOptPrec prec) (varBitType prec) (varBitType prec) False
 
-  bitType prec = SqliteDataTypeSyntax (emit "BIT" <> sqliteOptPrec prec) (bitType prec) (bitType prec)
-  varBitType prec = SqliteDataTypeSyntax (emit "BIT VARYING" <> sqliteOptPrec prec) (varBitType prec) (varBitType prec)
+  numericType prec = SqliteDataTypeSyntax (emit "NUMERIC" <> sqliteOptNumericPrec prec) (numericType prec) (numericType prec) False
+  decimalType prec = SqliteDataTypeSyntax (emit "DOUBLE" <> sqliteOptNumericPrec prec) (decimalType prec) (decimalType prec) False
 
-  numericType prec = SqliteDataTypeSyntax (emit "NUMERIC" <> sqliteOptNumericPrec prec) (numericType prec) (numericType prec)
-  decimalType prec = SqliteDataTypeSyntax (emit "DOUBLE" <> sqliteOptNumericPrec prec) (decimalType prec) (decimalType prec)
+  intType = SqliteDataTypeSyntax (emit "INTEGER") intType intType False
+  smallIntType = SqliteDataTypeSyntax (emit "SMALLINT") smallIntType smallIntType False
 
-  intType = SqliteDataTypeSyntax (emit "INTEGER") intType intType
-  smallIntType = SqliteDataTypeSyntax (emit "SMALLINT") smallIntType smallIntType
-
-  floatType prec = SqliteDataTypeSyntax (emit "FLOAT" <> sqliteOptPrec prec) (floatType prec) (floatType prec)
-  doubleType = SqliteDataTypeSyntax (emit "DOUBLE PRECISION") doubleType doubleType
-  realType = SqliteDataTypeSyntax (emit "REAL") realType realType
-  dateType = SqliteDataTypeSyntax (emit "DATE") dateType dateType
+  floatType prec = SqliteDataTypeSyntax (emit "FLOAT" <> sqliteOptPrec prec) (floatType prec) (floatType prec) False
+  doubleType = SqliteDataTypeSyntax (emit "DOUBLE PRECISION") doubleType doubleType False
+  realType = SqliteDataTypeSyntax (emit "REAL") realType realType False
+  dateType = SqliteDataTypeSyntax (emit "DATE") dateType dateType False
   timeType prec withTz = SqliteDataTypeSyntax (emit "TIME" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
-                                              (timeType prec withTz) (timeType prec withTz)
+                                              (timeType prec withTz) (timeType prec withTz) False
   timestampType prec withTz = SqliteDataTypeSyntax (emit "TIMESTAMP" <> sqliteOptPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
-                                                   (timestampType prec withTz) (timestampType prec withTz)
+                                                   (timestampType prec withTz) (timestampType prec withTz) False
 
 instance IsSql99DataTypeSyntax SqliteDataTypeSyntax where
   characterLargeObjectType = sqliteTextType
   binaryLargeObjectType = sqliteBlobType
-  booleanType = SqliteDataTypeSyntax (emit "BOOLEAN") booleanType booleanType
+  booleanType = SqliteDataTypeSyntax (emit "BOOLEAN") booleanType booleanType False
   arrayType _ _ = error "SQLite does not support arrayType"
   rowType _ = error "SQLite does not support rowType"
 
@@ -489,18 +524,21 @@ sqliteTextType = SqliteDataTypeSyntax (emit "TEXT")
                                                           (importSome "Data.Text" [importTyNamed "Text"]))
                                                   characterLargeObjectType)
                                      characterLargeObjectType
+                                     False
 sqliteBlobType = SqliteDataTypeSyntax (emit "BLOB")
                                       (HsDataType (hsVarFrom "sqliteBlob" "Database.Beam.Sqlite")
                                                   (HsType (tyConNamed "ByteString")
                                                           (importSome "Data.ByteString" [importTyNamed "ByteString"]))
                                                   binaryLargeObjectType)
-                                     binaryLargeObjectType
+                                       binaryLargeObjectType
+                                       False
 sqliteBigIntType = SqliteDataTypeSyntax (emit "BIGINT")
-                                      (HsDataType (hsVarFrom "sqliteBigInt" "Database.Beam.Sqlite")
-                                                  (HsType (tyConNamed "Int64")
-                                                          (importSome "Data.Int" [importTyNamed "Int64"]))
-                                                  bigIntType)
-                                     bigIntType
+                                        (HsDataType (hsVarFrom "sqliteBigInt" "Database.Beam.Sqlite")
+                                                    (HsType (tyConNamed "Int64")
+                                                            (importSome "Data.Int" [importTyNamed "Int64"]))
+                                                    bigIntType)
+                                        bigIntType
+                                        False
 
 instance Sql92SerializableDataTypeSyntax SqliteDataTypeSyntax where
   serializeDataType = fromBeamSerializedDataType . sqliteDataTypeSerialized
@@ -832,12 +870,25 @@ commas [] = mempty
 commas [x] = x
 commas (x:xs) = x <> foldMap (emit ", " <>) xs
 
+sqliteSerialType :: SqliteDataTypeSyntax
+sqliteSerialType = SqliteDataTypeSyntax (emit "INTEGER PRIMARY KEY AUTOINCREMENT")
+                                        intType
+                                        (BeamSerializedDataType (beamSerializeJSON "sqlite" "serial"))
+                                        True
+
+data SqliteHasDefault = SqliteHasDefault
+instance FieldReturnType 'True 'False SqliteColumnSchemaSyntax resTy a =>
+         FieldReturnType 'False 'False SqliteColumnSchemaSyntax resTy (SqliteHasDefault -> a) where
+  field' _ _ nm ty d collation constraints SqliteHasDefault =
+    field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
+
+instance IsBeamSerialColumnSchemaSyntax SqliteColumnSchemaSyntax where
+  genericSerial nm = field nm (DataType sqliteSerialType) SqliteHasDefault
+
 instance HasDefaultSqlDataType SqliteDataTypeSyntax (SqlSerial Int) where
-  defaultSqlDataType _ _ = intType
+  defaultSqlDataType _ False = sqliteSerialType
+  defaultSqlDataType _ True = intType
 instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax (SqlSerial Int) where
-  defaultSqlDataTypeConstraints _ _ False = [ FieldCheck $ \tblNm colNm -> p (TableColumnHasConstraint tblNm colNm c :: TableColumnHasConstraint SqliteColumnSchemaSyntax) ]
-    where c = constraintDefinitionSyntax Nothing (SqliteColumnConstraintSyntax (\_ -> emit "DEFAULT ROWID")
-                                                                               (BeamSerializedConstraint (beamSerializeJSON "sqlite" "serial"))) Nothing
   defaultSqlDataTypeConstraints _ _ _ = []
 
 instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where

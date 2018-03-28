@@ -2,6 +2,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
 
 -- | Migrations support for beam-postgres. See "Database.Beam.Migrate" for more
@@ -351,5 +353,11 @@ smallserial = Db.DataType pgSmallSerialType
 serial = Db.DataType pgSerialType
 bigserial = Db.DataType pgBigSerialType
 
+data PgHasDefault = PgHasDefault
+instance Db.FieldReturnType 'True 'False PgColumnSchemaSyntax resTy a =>
+         Db.FieldReturnType 'False 'False PgColumnSchemaSyntax resTy (PgHasDefault -> a) where
+  field' _ _ nm ty d collation constraints PgHasDefault =
+    Db.field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
+
 instance IsBeamSerialColumnSchemaSyntax PgColumnSchemaSyntax where
-  genericSerial nm = Db.field nm serial
+  genericSerial nm = Db.field nm serial PgHasDefault
