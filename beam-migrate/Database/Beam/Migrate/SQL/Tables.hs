@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.Beam.Migrate.SQL.Tables
   ( -- * Table manipulation
@@ -120,14 +121,16 @@ data ColumnMigration a
 -- | Monad representing a series of @ALTER TABLE@ statements
 newtype TableMigration syntax a
   = TableMigration (WriterT [Sql92DdlCommandAlterTableSyntax syntax] (State (Text, [TableCheck])) a)
+  deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
 renameTableTo :: Sql92SaneDdlCommandSyntax syntax
               => Text -> table ColumnMigration
               -> TableMigration syntax (table ColumnMigration)
 renameTableTo newName oldTbl = TableMigration $ do
-  (curNm, _) <- get
+  (curNm, chks) <- get
   tell [ alterTableSyntax curNm (renameTableToSyntax newName) ]
+  put (newName, chks)
   return oldTbl
 
 -- | @ALTER TABLE ... RENAME COLUMN ... TO ...@ command
