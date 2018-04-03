@@ -65,7 +65,8 @@ library
                        network-uri  >=2.6     && <2.7,
                        containers   >=0.5     && <0.6,
                        vector-sized >=0.5     && <0.7,
-                       tagged       >=0.8     && <0.9
+                       tagged       >=0.8     && <0.9,
+                       beam-backend
   Default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
@@ -81,6 +82,7 @@ flag werror
   manual:      True
 
 test-suite beam-core-tests
+  buildable: False
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs

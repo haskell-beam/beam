@@ -62,6 +62,7 @@ module Database.Beam.Query.Combinators
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
     ) where
 
+import Database.Beam.Backend
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
 
@@ -84,31 +85,15 @@ import Data.Time (LocalTime)
 import GHC.Generics
 
 -- | Introduce all entries of a table into the 'Q' monad
-all_ :: forall be (db :: (* -> *) -> *) table select s.
-        ( Database be db
-        , IsSql92SelectSyntax select
-
-        , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
-        , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)))
-        , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
-
-        , Table table )
-       => DatabaseEntity be db (TableEntity table)
-       -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+all_ :: DatabaseEntity db (TableEntity table)
+     -> Q db s (table (QExpr s))
 all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
     Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a view into the 'Q' monad
-allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
-                ( Database be db
-                , IsSql92SelectSyntax select
-
-                , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
-                , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)))
-                , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
-                , Beamable table )
-               => DatabaseEntity be db (ViewEntity table)
-               -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+allFromView_ :: Beamable table
+             => DatabaseEntity db (ViewEntity table)
+             -> Q db s (table (QExpr s))
 allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
     Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) snd)
 
@@ -117,26 +102,16 @@ allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
 --   'Bool'. For a version that takes 'SqlBool' (a possibly @UNKNOWN@
 --   boolean, that maps more closely to the SQL standard), see
 --   'join_''.
-join_ :: ( Database be db, Table table
-         , IsSql92SelectSyntax select
-         , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
-         , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
-         , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ) =>
-         DatabaseEntity be db (TableEntity table)
-      -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
-      -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+join_ :: DatabaseEntity db (TableEntity table)
+      -> (table (QExpr s) -> QExpr s Bool)
+      -> Q db s (table (QExpr s))
 join_ tbl mkOn = join_' tbl (sqlBool_ . mkOn)
 
 -- | Like 'join_', but accepting an @ON@ condition that returns
 -- 'SqlBool'
-join_' :: ( Database be db, Table table
-          , IsSql92SelectSyntax select
-          , IsSql92FromSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))
-          , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)) ~ Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
-          , IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ) =>
-          DatabaseEntity be db (TableEntity table)
-       -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool)
-       -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+join_' :: DatabaseEntity db (TableEntity table)
+       -> (table (QExpr s) -> QExpr s SqlBool)
+       -> Q db s (table (QExpr s))
 join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
     Q $ liftF (QAll tblNm tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
 
@@ -144,19 +119,18 @@ join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
 --   an inner join, the resulting table is made nullable. This means that each
 --   field that would normally have type 'QExpr x' will now have type 'QExpr
 --   (Maybe x)'.
-perhaps_ :: forall s r select db.
-          ( Projectible (Sql92SelectExpressionSyntax select) r
-          , IsSql92SelectSyntax select
-          , ThreadRewritable (QNested s) r
-          , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
-         => Q select db (QNested s) r
-         -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
+perhaps_ :: forall db s r. ( ThreadRewritable (QNested s) r
+            , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s r)
+            , Projectible r
+            )
+         => Q db (QNested s) r
+         -> Q db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
 perhaps_ (Q sub) =
   Q $ liftF (QArbitraryJoin
               sub leftJoin
               (\_ -> Nothing)
-              (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
-                                            Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
+              (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr s) a) ->
+                                            Columnar' (QExpr e) :: Columnar' (Nullable (QExpr s)) a) $
                                   rewriteThread (Proxy @s) r))
 
 -- | Outer join. every row of each table, returning @NULL@ for any row
@@ -165,43 +139,43 @@ perhaps_ (Q sub) =
 -- This expects a join expression returning 'Bool', for a version that
 -- accepts a 'SqlBool' (a possibly @UNKNOWN@ boolean, that maps more
 -- closely to the SQL standard), see 'outerJoin_''
-outerJoin_ :: forall s a b select db.
-              ( Projectible (Sql92SelectExpressionSyntax select) a, Projectible (Sql92SelectExpressionSyntax select) b
-              , ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
-              , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s a)
-              , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s b)
-              , IsSql92FromOuterJoinSyntax (Sql92SelectFromSyntax select) )
-           => Q select db (QNested s) a
-           -> Q select db (QNested s) b
-           -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr (Sql92SelectExpressionSyntax select) s Bool )
-           -> Q select db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
-                            , Retag Nullable (WithRewrittenThread (QNested s) s b) )
+outerJoin_ :: ( ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
+              , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s a)
+              , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s b)
+              , Projectible a
+              , Projectible b
+              )
+           => Q db (QNested s) a
+           -> Q db (QNested s) b
+           -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr s Bool )
+           -> Q db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
+                     , Retag Nullable (WithRewrittenThread (QNested s) s b) )
 outerJoin_ a b on_ = outerJoin_' a b (sqlBool_ . on_)
 
 -- | Like 'outerJoin_', but accepting 'SqlBool'. Pairs of rows for
 -- which the join condition is unknown are considered to be unrelated,
 -- by SQL compliant databases at least.
-outerJoin_' :: forall s a b select db.
-               ( Projectible (Sql92SelectExpressionSyntax select) a, Projectible (Sql92SelectExpressionSyntax select) b
-               , ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
-               , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s a)
-               , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s b)
-               , IsSql92FromOuterJoinSyntax (Sql92SelectFromSyntax select) )
-            => Q select db (QNested s) a
-            -> Q select db (QNested s) b
-            -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr (Sql92SelectExpressionSyntax select) s SqlBool )
-            -> Q select db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
-                             , Retag Nullable (WithRewrittenThread (QNested s) s b) )
+outerJoin_' :: forall db s a b. ( ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
+               , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s a)
+               , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s b)
+               , Projectible a
+               , Projectible b
+               )
+            => Q db (QNested s) a
+            -> Q db (QNested s) b
+            -> ( (WithRewrittenThread (QNested s) s a, WithRewrittenThread (QNested s) s b) -> QExpr s SqlBool )
+            -> Q db s ( Retag Nullable (WithRewrittenThread (QNested s) s a)
+                      , Retag Nullable (WithRewrittenThread (QNested s) s b) )
 outerJoin_' (Q a) (Q b) on_ =
   Q $ liftF (QTwoWayJoin a b outerJoin
               (\(a', b') ->
                  let QExpr e = on_ (rewriteThread (Proxy @s) a', rewriteThread (Proxy @s) b')
                  in Just e)
               (\(a', b') ->
-                 let retag' :: (ThreadRewritable (QNested s) x, Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s x))
+                 let retag' :: (ThreadRewritable (QNested s) x, Retaggable (QExpr s) (WithRewrittenThread (QNested s) s x))
                             => x -> Retag Nullable (WithRewrittenThread (QNested s) s x)
-                     retag' = retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) x) ->
-                                        Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) x) .
+                     retag' = retag (\(Columnar' (QExpr e) :: Columnar' (QExpr s) x) ->
+                                        Columnar' (QExpr e) :: Columnar' (Nullable (QExpr s)) x) .
                               rewriteThread (Proxy @s)
                  in ( retag' a', retag' b' )))
 
@@ -212,47 +186,41 @@ outerJoin_' (Q a) (Q b) on_ =
 --
 --   The @ON@ condition given must return 'Bool'. For a version that
 --   accepts an @ON@ condition returning 'SqlBool', see 'leftJoin_''.
-leftJoin_ :: forall s r select db.
-           ( Projectible (Sql92SelectExpressionSyntax select) r
-           , IsSql92SelectSyntax select
-           , ThreadRewritable (QNested s) r
-           , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
-          => Q select db (QNested s) r
-          -> (WithRewrittenThread (QNested s) s r -> QExpr (Sql92SelectExpressionSyntax select) s Bool)
-          -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
+leftJoin_ :: ( ThreadRewritable (QNested s) r
+           , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s r)
+           , Projectible r
+           )
+          => Q db (QNested s) r
+          -> (WithRewrittenThread (QNested s) s r -> QExpr s Bool)
+          -> Q db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
 leftJoin_ sub on_ = leftJoin_' sub (sqlBool_ . on_)
 
 -- | Like 'leftJoin_', but accepts an @ON@ clause returning 'SqlBool'.
-leftJoin_' :: forall s r select db.
-            ( Projectible (Sql92SelectExpressionSyntax select) r
-            , IsSql92SelectSyntax select
-            , ThreadRewritable (QNested s) r
-            , Retaggable (QExpr (Sql92SelectExpressionSyntax select) s) (WithRewrittenThread (QNested s) s r) )
-           => Q select db (QNested s) r
-           -> (WithRewrittenThread (QNested s) s r -> QExpr (Sql92SelectExpressionSyntax select) s SqlBool)
-           -> Q select db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
+leftJoin_' :: forall db s r. ( ThreadRewritable (QNested s) r
+            , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s r)
+            , Projectible r
+            )
+           => Q db (QNested s) r
+           -> (WithRewrittenThread (QNested s) s r -> QExpr s SqlBool)
+           -> Q db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
 leftJoin_' (Q sub) on_ =
   Q $ liftF (QArbitraryJoin
                sub leftJoin
                (\r -> let QExpr e = on_ (rewriteThread (Proxy @s) r) in Just e)
-               (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr (Sql92SelectExpressionSyntax select) s) a) ->
-                                Columnar' (QExpr e) :: Columnar' (Nullable (QExpr (Sql92SelectExpressionSyntax select) s)) a) $
+               (\r -> retag (\(Columnar' (QExpr e) :: Columnar' (QExpr s) a) ->
+                                Columnar' (QExpr e) :: Columnar' (Nullable (QExpr s)) a) $
                       rewriteThread (Proxy @s) r))
 
-subselect_ :: forall s r select db.
-            ( ThreadRewritable (QNested s) r
-            , ProjectibleInSelectSyntax select r )
-           => Q select db (QNested s) r
-           -> Q select db s (WithRewrittenThread (QNested s) s r)
+subselect_ :: forall db s r. ( ThreadRewritable (QNested s) r, Projectible r )
+           => Q db (QNested s) r
+           -> Q db s (WithRewrittenThread (QNested s) s r)
 subselect_ (Q q') =
   Q (liftF (QSubSelect q' (rewriteThread (Proxy @s))))
 
 -- | Only allow results for which the 'QExpr' yields 'True'. For a
 -- version that operates over possibly @NULL@ 'SqlBool's, see
 -- 'guard_''.
-guard_ :: forall select db s.
-          ( IsSql92SelectSyntax select ) =>
-          QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool -> Q select db s ()
+guard_ :: QExpr s Bool -> Q db s ()
 guard_ = guard_' . sqlBool_
 
 -- | Only allow results for which the 'QExpr' yields @TRUE@.
@@ -261,179 +229,124 @@ guard_ = guard_' . sqlBool_
 -- 'Bool's, except for the special @UNKNOWN@ value that occurs when
 -- comparisons include @NULL@. For a version that operates over known
 -- non-@NULL@ booleans, see 'guard_'.
-guard_' :: forall select db s
-         . IsSql92SelectSyntax select
-        => QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool -> Q select db s ()
+guard_' :: QExpr s SqlBool -> Q db s ()
 guard_' (QExpr guardE') = Q (liftF (QGuard guardE' ()))
 
 -- | Synonym for @clause >>= \x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
-filter_ :: forall r select db s.
-           ( IsSql92SelectSyntax select )
-        => (r -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
-        -> Q select db s r -> Q select db s r
+filter_ :: (r -> QExpr s Bool)
+        -> Q db s r
+        -> Q db s r
 filter_ mkExpr clause = clause >>= \x -> guard_ (mkExpr x) >> pure x
 
 -- | Synonym for @clause >>= \x -> guard_' (mkExpr x)>> pure x@. Use 'filter_' for comparisons with 'Bool'
-filter_' :: forall r select db s.
-           ( IsSql92SelectSyntax select )
-        => (r -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool)
-        -> Q select db s r -> Q select db s r
+filter_' :: (r -> QExpr s SqlBool)
+         -> Q db s r -> Q db s r
 filter_' mkExpr clause = clause >>= \x -> guard_' (mkExpr x) >> pure x
 
--- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
-related_ :: forall be db rel select s.
-            ( IsSql92SelectSyntax select
-            , HasTableEquality (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) (PrimaryKey rel)
-            , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
-            , Database be db, Table rel ) =>
-            DatabaseEntity be db (TableEntity rel)
-         -> PrimaryKey rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s)
-         -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
-related_ relTbl relKey =
-  join_ relTbl (\rel -> relKey ==. primaryKey rel)
+-- -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
+-- related_ :: ( HasTableEquality (PrimaryKey rel)
+--             , Database db
+--             , Table rel
+--             ) =>
+--             DatabaseEntity db (TableEntity rel)
+--          -> PrimaryKey rel (QExpr s)
+--          -> Q db s (rel (QExpr s))
+-- related_ relTbl relKey =
+--   join_ relTbl (\rel -> relKey ==. primaryKey rel)
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
-relatedBy_ :: forall be db rel select s.
-              ( Database be db, Table rel
-              , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
-              , IsSql92SelectSyntax select )
-           => DatabaseEntity be db (TableEntity rel)
-           -> (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) ->
-                QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool)
-           -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+relatedBy_ :: ( Database db, Table rel )
+           => DatabaseEntity db (TableEntity rel)
+           -> (rel (QExpr s) -> QExpr s Bool)
+           -> Q db s (rel (QExpr s))
 relatedBy_ = join_
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
-relatedBy_' :: forall be db rel select s.
-               ( Database be db, Table rel
-               , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))) Bool
-               , IsSql92SelectSyntax select )
-            => DatabaseEntity be db (TableEntity rel)
-            -> (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s) ->
-                 QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool)
-            -> Q select db s (rel (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
+relatedBy_' :: ( Database db, Table rel )
+            => DatabaseEntity db (TableEntity rel)
+            -> (rel (QExpr s) -> QExpr s SqlBool)
+            -> Q db s (rel (QExpr s))
 relatedBy_' = join_'
 
 -- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
 --   to the given table. Useful for creating join conditions.
-references_ :: ( IsSql92ExpressionSyntax expr
-               , HasTableEquality expr (PrimaryKey t)
-               , HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Bool
-               , Table t )
-            => PrimaryKey t (QGenExpr ctxt expr s) -> t (QGenExpr ctxt expr s) -> QGenExpr ctxt expr s Bool
+references_ :: ( HasTableEquality (PrimaryKey t), Table t )
+            => PrimaryKey t (QGenExpr ctxt s) -> t (QGenExpr ctxt s) -> QGenExpr ctxt s Bool
 references_ fk tbl = fk ==. pk tbl
 
 -- | Only return distinct values from a query
-nub_ :: ( IsSql92SelectSyntax select
-        , Projectible (Sql92SelectExpressionSyntax select) r )
-     => Q select db s r -> Q select db s r
+nub_ :: Projectible r => Q db s r -> Q db s r
 nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
 
 -- | Limit the number of results returned by a query.
-limit_ :: forall s a select db.
-           ( ProjectibleInSelectSyntax select a
-          , ThreadRewritable (QNested s) a ) =>
-          Integer -> Q select db (QNested s) a -> Q select db s (WithRewrittenThread (QNested s) s a)
+limit_ :: forall db s a. ( ThreadRewritable (QNested s) a, Projectible a ) =>
+          Integer -> Q db (QNested s) a -> Q db s (WithRewrittenThread (QNested s) s a)
 limit_ limit' (Q q) =
   Q (liftF (QLimit limit' q (rewriteThread (Proxy @s))))
 
 -- | Drop the first `offset'` results.
-offset_ :: forall s a select db.
-           ( ProjectibleInSelectSyntax select a
-           , ThreadRewritable (QNested s) a ) =>
-           Integer -> Q select db (QNested s) a -> Q select db s (WithRewrittenThread (QNested s) s a)
+offset_ :: forall db s a. ( ThreadRewritable (QNested s) a, Projectible a ) =>
+           Integer -> Q db (QNested s) a -> Q db s (WithRewrittenThread (QNested s) s a)
 offset_ offset' (Q q) =
   Q (liftF (QOffset offset' q (rewriteThread (Proxy @s))))
 
 -- | Use the SQL @EXISTS@ operator to determine if the given query returns any results
-exists_ :: ( IsSql92SelectSyntax select
-           , HasQBuilder select
-           , ProjectibleInSelectSyntax select a
-           , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select)
-        => Q select db s a
-        -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
+exists_ :: Projectible a => Q db s a -> QExpr s Bool
 exists_ q = QExpr (\tbl -> existsE (buildSqlQuery tbl q))
 
 -- | Use the SQL @UNIQUE@ operator to determine if the given query produces a unique result
-unique_ :: ( IsSql92SelectSyntax select
-           , HasQBuilder select
-           , ProjectibleInSelectSyntax select a
-           , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select)
-        => Q select db s a
-        -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
+unique_ :: Projectible a => Q db s a -> QExpr s Bool
 unique_ q = QExpr (\tbl -> uniqueE (buildSqlQuery tbl q))
 
 -- | Use the SQL99 @DISTINCT@ operator to determine if the given query produces a distinct result
-distinct_ :: ( IsSql99ExpressionSyntax (Sql92SelectExpressionSyntax select)
-             , HasQBuilder select
-             , ProjectibleInSelectSyntax select a
-             , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
-             Q select db s a
-          -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s Bool
+distinct_ :: Projectible a => Q db s a -> QExpr s Bool
 distinct_ q = QExpr (\tbl -> distinctE (buildSqlQuery tbl q))
 
 -- | Project the (presumably) singular result of the given query as an expression
-subquery_ ::
-  ( IsSql92SelectSyntax select
-  , HasQBuilder select
-  , ProjectibleInSelectSyntax select (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
-  , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
-  Q select (db :: (* -> *) -> *) s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
-  -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+subquery_ :: Projectible a => Q db s (QExpr s a) -> QExpr s a
 subquery_ q =
   QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
 -- | SQL @CHAR_LENGTH@ function
-charLength_ :: ( IsSqlExpressionSyntaxStringType syntax text
-               , IsSql92ExpressionSyntax syntax )
-            => QGenExpr context syntax s text -> QGenExpr context syntax s Int
+charLength_ :: IsStringType text 
+            => QGenExpr context s text -> QGenExpr context s Int
 charLength_ (QExpr s) = QExpr (charLengthE <$> s)
 
 -- | SQL @OCTET_LENGTH@ function
-octetLength_ :: ( IsSqlExpressionSyntaxStringType syntax text
-                , IsSql92ExpressionSyntax syntax )
-             => QGenExpr context syntax s text -> QGenExpr context syntax s Int
+octetLength_ :: IsStringType text => QGenExpr context s text -> QGenExpr context s Int
 octetLength_ (QExpr s) = QExpr (octetLengthE <$> s)
 
 -- | SQL @BIT_LENGTH@ function
-bitLength_ ::
-  IsSql92ExpressionSyntax syntax =>
-  QGenExpr context syntax s SqlBitString -> QGenExpr context syntax s Int
+bitLength_ :: QGenExpr context s SqlBitString -> QGenExpr context s Int
 bitLength_ (QExpr x) = QExpr (bitLengthE <$> x)
 
 -- | SQL @CURRENT_TIMESTAMP@ function
-currentTimestamp_ :: IsSql92ExpressionSyntax syntax => QGenExpr ctxt syntax s LocalTime
+currentTimestamp_ :: QGenExpr ctxt s LocalTime
 currentTimestamp_ = QExpr (pure currentTimestampE)
 
 -- | SQL @POSITION(.. IN ..)@ function
 position_ ::
-  ( IsSqlExpressionSyntaxStringType syntax text
-  , IsSql92ExpressionSyntax syntax, Integral b ) =>
-  QExpr syntax s text -> QExpr syntax s text -> QExpr syntax s b
+  ( IsStringType text , Integral b ) => QExpr s text -> QExpr s text -> QExpr s b
 position_ (QExpr needle) (QExpr haystack) =
   QExpr (liftA2 likeE needle haystack)
 
 -- | SQL @LOWER@ function
-lower_ :: ( IsSqlExpressionSyntaxStringType syntax text
-          , IsSql92ExpressionSyntax syntax )
-       => QGenExpr context syntax s text -> QGenExpr context syntax s text
+lower_ :: IsStringType text
+       => QGenExpr context s text -> QGenExpr context s text
 lower_ (QExpr s) = QExpr (lowerE <$> s)
 
 -- | SQL @UPPER@ function
-upper_ :: ( IsSqlExpressionSyntaxStringType syntax text
-          , IsSql92ExpressionSyntax syntax )
-       => QGenExpr context syntax s text -> QGenExpr context syntax s text
+upper_ :: IsStringType text
+       => QGenExpr context s text -> QGenExpr context s text
 upper_ (QExpr s) = QExpr (upperE <$> s)
 
 -- | SQL @TRIM@ function
-trim_ :: ( IsSqlExpressionSyntaxStringType syntax text
-         , IsSql92ExpressionSyntax syntax )
-      => QGenExpr context syntax s text -> QGenExpr context syntax s text
+trim_ :: IsStringType text
+      => QGenExpr context s text -> QGenExpr context s text
 trim_ (QExpr s) = QExpr (trimE <$> s)
 
 -- | Combine all the given boolean value 'QGenExpr's with the '&&.' operator.
-allE :: ( IsSql92ExpressionSyntax syntax, HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool) =>
-        [ QGenExpr context syntax s Bool ] -> QGenExpr context syntax s Bool
+allE :: [ QGenExpr context s Bool ] -> QGenExpr context s Bool
 allE es = fromMaybe (QExpr (pure (valueE (sqlValueSyntax True)))) $
           foldl (\expr x ->
                    Just $ maybe x (\e -> e &&. x) expr)
@@ -442,100 +355,83 @@ allE es = fromMaybe (QExpr (pure (valueE (sqlValueSyntax True)))) $
 -- * UPDATE operators
 
 -- | Extract an expression representing the current (non-UPDATEd) value of a 'QField'
-current_ :: IsSql92ExpressionSyntax expr
-         => QField s ty -> QExpr expr s ty
+current_ :: QField s ty -> QExpr s ty
 current_ (QField False _ nm) = QExpr (pure (fieldE (unqualifiedField nm)))
 current_ (QField True tbl nm) = QExpr (pure (fieldE (qualifiedField tbl nm)))
 
 infix 4 <-.
-class SqlUpdatable expr s lhs rhs | rhs -> expr, lhs -> s, rhs -> s, lhs s expr -> rhs, rhs -> lhs where
+class SqlUpdatable s lhs rhs | lhs -> s, rhs -> s, lhs s -> rhs, rhs -> lhs where
   -- | Update a 'QField' or 'Beamable' type containing 'QField's with the given
   --   'QExpr' or 'Beamable' type containing 'QExpr'
-  (<-.) :: forall fieldName.
-           IsSql92FieldNameSyntax fieldName
-        => lhs
+  (<-.) :: lhs
         -> rhs
-        -> QAssignment fieldName expr s
-instance SqlUpdatable expr s (QField s a) (QExpr expr s a) where
+        -> QAssignment s
+instance SqlUpdatable s (QField s a) (QExpr s a) where
   QField _ _ nm <-. QExpr expr =
     QAssignment [(unqualifiedField nm, expr "t")]
-instance Beamable tbl => SqlUpdatable expr s (tbl (QField s)) (tbl (QExpr expr s)) where
-  (<-.) :: forall fieldName.
-           IsSql92FieldNameSyntax fieldName
-        => tbl (QField s) -> tbl (QExpr expr s)
-        -> QAssignment fieldName expr s
+instance Beamable tbl => SqlUpdatable s (tbl (QField s)) (tbl (QExpr s)) where
+  (<-.) :: tbl (QField s) -> tbl (QExpr s)
+        -> QAssignment s
   lhs <-. rhs =
     QAssignment $
     allBeamValues (\(Columnar' (Const assignments)) -> assignments) $
     runIdentity $
     zipBeamFieldsM (\(Columnar' (QField _ _ f) :: Columnar' (QField s) t) (Columnar' (QExpr e)) ->
-                       pure (Columnar' (Const (unqualifiedField f, e "t")) :: Columnar' (Const (fieldName,expr)) t)) lhs rhs
-instance Beamable tbl => SqlUpdatable expr s (tbl (Nullable (QField s))) (tbl (Nullable (QExpr expr s))) where
+                       pure (Columnar' (Const (unqualifiedField f, e "t")) :: Columnar' (Const (FieldNameSyntax,ExpressionSyntax)) t)) lhs rhs
+instance Beamable tbl => SqlUpdatable s (tbl (Nullable (QField s))) (tbl (Nullable (QExpr s))) where
   lhs <-. rhs =
     let lhs' = changeBeamRep (\(Columnar' (QField q tblName fieldName') :: Columnar' (Nullable (QField s)) a) ->
                                 Columnar' (QField q tblName fieldName') :: Columnar' (QField s)  a) lhs
-        rhs' = changeBeamRep (\(Columnar' (QExpr e) :: Columnar' (Nullable (QExpr expr s)) a) ->
-                                Columnar' (QExpr e) :: Columnar' (QExpr expr s) a) rhs
+        rhs' = changeBeamRep (\(Columnar' (QExpr e) :: Columnar' (Nullable (QExpr s)) a) ->
+                                Columnar' (QExpr e) :: Columnar' (QExpr s) a) rhs
     in lhs' <-. rhs'
 
 -- | SQL @UNION@ operator
-union_ :: forall select db s a.
-          ( IsSql92SelectSyntax select
-          , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) a
-          , ProjectibleInSelectSyntax select a
+union_ :: forall db s a.
+          ( Projectible a
           , ThreadRewritable (QNested s) a)
-       => Q select db (QNested s) a -> Q select db (QNested s) a
-       -> Q select db s (WithRewrittenThread (QNested s) s a)
+       => Q db (QNested s) a -> Q db (QNested s) a
+       -> Q db s (WithRewrittenThread (QNested s) s a)
 union_ (Q a) (Q b) = Q (liftF (QUnion False a b (rewriteThread (Proxy @s))))
 
 -- | SQL @UNION ALL@ operator
-unionAll_ :: forall select db s a.
-             ( IsSql92SelectSyntax select
-             , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) a
-             , ProjectibleInSelectSyntax select a
+unionAll_ :: forall db s a.
+             ( Projectible a
              , ThreadRewritable (QNested s) a)
-          => Q select db (QNested s) a -> Q select db (QNested s) a
-          -> Q select db s (WithRewrittenThread (QNested s) s a)
+          => Q db (QNested s) a -> Q db (QNested s) a
+          -> Q db s (WithRewrittenThread (QNested s) s a)
 unionAll_ (Q a) (Q b) = Q (liftF (QUnion True a b (rewriteThread (Proxy @s))))
 
 -- | SQL @INTERSECT@ operator
-intersect_ :: forall select db s a.
-              ( IsSql92SelectSyntax select
-              , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) a
-              , ProjectibleInSelectSyntax select a
+intersect_ :: forall db s a.
+              ( Projectible a
               , ThreadRewritable (QNested s) a)
-           => Q select db (QNested s) a -> Q select db (QNested s) a
-           -> Q select db s (WithRewrittenThread (QNested s) s a)
+           => Q db (QNested s) a -> Q db (QNested s) a
+           -> Q db s (WithRewrittenThread (QNested s) s a)
 intersect_ (Q a) (Q b) = Q (liftF (QIntersect False a b (rewriteThread (Proxy @s))))
 
 -- | SQL @INTERSECT ALL@ operator
-intersectAll_ :: forall select db s a.
-                 ( IsSql92SelectSyntax select
-                 , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) a
-                 , ProjectibleInSelectSyntax select a
+intersectAll_ :: forall db s a.
+                 ( Projectible a
                  , ThreadRewritable (QNested s) a)
-              => Q select db (QNested s) a -> Q select db (QNested s) a
-              -> Q select db s (WithRewrittenThread (QNested s) s a)
+              => Q db (QNested s) a -> Q db (QNested s) a
+              -> Q db s (WithRewrittenThread (QNested s) s a)
 intersectAll_ (Q a) (Q b) = Q (liftF (QIntersect True a b (rewriteThread (Proxy @s))))
 
 -- | SQL @EXCEPT@ operator
-except_ :: forall select db s a.
-           ( IsSql92SelectSyntax select
-           , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) a
-           , ProjectibleInSelectSyntax select a
+except_ :: forall db s a.
+           ( Projectible a
            , ThreadRewritable (QNested s) a)
-        => Q select db (QNested s) a -> Q select db (QNested s) a
-        -> Q select db s (WithRewrittenThread (QNested s) s a)
+        => Q db (QNested s) a -> Q db (QNested s) a
+        -> Q db s (WithRewrittenThread (QNested s) s a)
 except_ (Q a) (Q b) = Q (liftF (QExcept False a b (rewriteThread (Proxy @s))))
 
 -- | SQL @EXCEPT ALL@ operator
-exceptAll_ :: forall select db s a.
-              ( IsSql92SelectSyntax select
-              , Projectible (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) a
-              , ProjectibleInSelectSyntax select a
+exceptAll_ :: forall db s a.
+              ( Projectible a
               , ThreadRewritable (QNested s) a)
-           => Q select db (QNested s) a -> Q select db (QNested s) a
-           -> Q select db s (WithRewrittenThread (QNested s) s a)
+           => Q db (QNested s) a -> Q db (QNested s) a
+           -> Q db s (WithRewrittenThread (QNested s) s a)
 exceptAll_ (Q a) (Q b) = Q (liftF (QExcept True a b (rewriteThread (Proxy @s))))
 
 -- | Convenience function that allows you to use type applications to specify
@@ -554,90 +450,82 @@ exceptAll_ (Q a) (Q b) = Q (liftF (QExcept True a b (rewriteThread (Proxy @s))))
 --
 -- > aggregate_ (\_ -> as_ @Int countAll_) ..
 --
-as_ :: forall a ctxt syntax s. QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a
+as_ :: QGenExpr ctxt s a -> QGenExpr ctxt s a
 as_ = id
 
 -- * Marshalling between Haskell literals and QExprs
 
 type family HaskellLiteralForQExpr x = a
-type instance HaskellLiteralForQExpr (QGenExpr context syntax s a) = a
-type instance HaskellLiteralForQExpr (table (QGenExpr context syntax s)) = table Identity
+type instance HaskellLiteralForQExpr (QGenExpr context s a) = a
+type instance HaskellLiteralForQExpr (table (QGenExpr context s)) = table Identity
 type instance HaskellLiteralForQExpr (table (Nullable f)) = HaskellLiteralForQExpr_AddNullable (HaskellLiteralForQExpr (table f))
 
 type family HaskellLiteralForQExpr_AddNullable x = a
 type instance HaskellLiteralForQExpr_AddNullable (tbl f) = tbl (Nullable f)
 
 type family QExprSyntax x where
-  QExprSyntax (QGenExpr ctxt syntax s a) = syntax
+  QExprSyntax (QGenExpr ctxt s a) = ExpressionSyntax
 
-type SqlValableTable table expr =
+type SqlValableTable table =
    ( Beamable table
-   , IsSql92ExpressionSyntax expr
-   , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax expr)) table )
+   , FieldsFulfillConstraint HasSqlValueSyntax table )
 
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
 
-instance (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) a, IsSql92ExpressionSyntax syntax) =>
-  SqlValable (QGenExpr ctxt syntax s a) where
+-- instance (HasSqlValueSyntax Sql92ExpressionValueSyntax a) =>
+--   SqlValable (QGenExpr ctxt s a) where
 
-  val_ = QExpr . pure . valueE . sqlValueSyntax
-instance ( Beamable table
-         , IsSql92ExpressionSyntax syntax
-         , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
-  SqlValable (table (QGenExpr ctxt syntax s)) where
-  val_ tbl =
-    let fields :: table (WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
-        fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
-                                            (Proxy @(Rep (table Exposed))) (from tbl))
-    in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) x)) ->
-                         Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
-instance ( Beamable table
-         , IsSql92ExpressionSyntax syntax
+--   val_ = QExpr . pure . valueE . sqlValueSyntax
+-- instance ( Beamable table
+--          , FieldsFulfillConstraint HasSqlValueSyntax table ) =>
+--   SqlValable (table (QGenExpr ctxt s)) where
+--   val_ tbl =
+--     let fields :: table (WithConstraint HasSqlValueSyntax)
+--         fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax Sql92ExpressionValueSyntax))
+--                                             (Proxy @(Rep (table Exposed))) (from tbl))
+--     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint HasSqlValueSyntax x)) ->
+--                          Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
+-- instance ( Beamable table
+--          , IsSql92ExpressionSyntax syntax
 
-         , FieldsFulfillConstraintNullable (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
+--          , FieldsFulfillConstraintNullable (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) table ) =>
 
-         SqlValable (table (Nullable (QGenExpr ctxt syntax s))) where
+--          SqlValable (table (Nullable (QGenExpr ctxt syntax s))) where
 
-  val_ tbl =
-    let fields :: table (Nullable (WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax))))
-        fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
-                                            (Proxy @(Rep (table (Nullable Exposed)))) (from tbl))
-    in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) (Maybe x))) ->
-                         Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
+--   val_ tbl =
+--     let fields :: table (Nullable (WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax))))
+--         fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)))
+--                                             (Proxy @(Rep (table (Nullable Exposed)))) (from tbl))
+--     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) (Maybe x))) ->
+--                          Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
 
-default_ :: IsSql92ExpressionSyntax expr
-         => QGenExpr ctxt expr s a
+default_ :: QGenExpr ctxt s a
 default_ = QExpr (pure defaultE)
 
 -- * Window functions
 
-noBounds_ :: QFrameBounds syntax
+noBounds_ :: QFrameBounds
 noBounds_ = QFrameBounds Nothing
 
-fromBound_ :: IsSql2003WindowFrameBoundsSyntax syntax
-           => QFrameBound (Sql2003WindowFrameBoundsBoundSyntax syntax)
-           -> QFrameBounds syntax
+fromBound_ :: QFrameBound -> QFrameBounds
 fromBound_ start = bounds_ start Nothing
 
-bounds_ :: IsSql2003WindowFrameBoundsSyntax syntax
-        => QFrameBound (Sql2003WindowFrameBoundsBoundSyntax syntax)
-        -> Maybe (QFrameBound (Sql2003WindowFrameBoundsBoundSyntax syntax))
-        -> QFrameBounds syntax
+bounds_ :: QFrameBound
+        -> Maybe QFrameBound 
+        -> QFrameBounds
 bounds_ (QFrameBound start) end =
     QFrameBounds . Just $
     fromToBoundSyntax start
       (fmap (\(QFrameBound end') -> end') end)
 
-unbounded_ :: IsSql2003WindowFrameBoundSyntax syntax
-           => QFrameBound syntax
+unbounded_ :: QFrameBound
 unbounded_ = QFrameBound unboundedSyntax
 
-nrows_ :: IsSql2003WindowFrameBoundSyntax syntax
-       => Int -> QFrameBound syntax
+nrows_ :: Int -> QFrameBound
 nrows_ x = QFrameBound (nrowsBoundSyntax x)
 
-noPartition_, noOrder_ :: Maybe (QOrd syntax s Int)
+noPartition_, noOrder_ :: Maybe (QOrd s Int)
 noOrder_ = Nothing
 noPartition_ = Nothing
 
@@ -646,14 +534,13 @@ partitionBy_  = Just
 orderPartitionBy_ = Just
 
 -- | Specify a window frame with all the options
-frame_ :: ( IsSql2003ExpressionSyntax syntax
-          , SqlOrderable (Sql2003WindowFrameOrderingSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) ordering
-          , Projectible syntax partition
-          , Sql2003ExpressionSanityCheck syntax )
+frame_ :: ( SqlOrderable ordering
+          , Projectible partition
+          )
        => Maybe partition             {-^ PARTITION BY -}
        -> Maybe ordering              {-^ ORDER BY -}
-       -> QFrameBounds (Sql2003WindowFrameBoundsSyntax (Sql2003ExpressionWindowFrameSyntax syntax)) {-^ RANGE / ROWS -}
-       -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s
+       -> QFrameBounds {-^ RANGE / ROWS -}
+       -> QWindow s
 frame_ partition_ ordering_ (QFrameBounds bounds) =
     QWindow $ \tblPfx ->
     frameSyntax (case maybe [] (flip project tblPfx) partition_ of
@@ -666,8 +553,7 @@ frame_ partition_ ordering_ (QFrameBounds bounds) =
                 bounds
 
 -- | Produce a window expression given an aggregate function and a window.
-over_ :: IsSql2003ExpressionSyntax syntax =>
-         QAgg syntax s a -> QWindow (Sql2003ExpressionWindowFrameSyntax syntax) s -> QWindowExpr syntax s a
+over_ :: QAgg s a -> QWindow s -> QWindowExpr s a
 over_ (QExpr a) (QWindow frame) = QExpr (overE <$> a <*> frame)
 
 -- | Compute a query over windows.
@@ -682,70 +568,70 @@ over_ (QExpr a) (QWindow frame) = QExpr (overE <$> a <*> frame)
 --   function, window expressions can be included in the output using the
 --   'over_' function.
 --
-withWindow_ :: forall window a s r select db.
-               ( ProjectibleWithPredicate WindowFrameContext (Sql2003ExpressionWindowFrameSyntax (Sql92SelectExpressionSyntax select)) window
-               , Projectible (Sql92SelectExpressionSyntax select) r
-               , Projectible (Sql92SelectExpressionSyntax select) a
+withWindow_ :: forall window a s r db.
+               ( ProjectibleWithPredicate WindowFrameContext window
+               , Projectible r
+               , Projectible a
                , ContextRewritable a
                , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
-               , IsSql92SelectSyntax select)
+               )
             => (r -> window)      -- ^ Window builder function
             -> (r -> window -> a) -- ^ Projection builder function. Has access to the windows generated above
-            -> Q select db (QNested s) r -- ^ Query to window over
-            -> Q select db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
+            -> Q db (QNested s) r -- ^ Query to window over
+            -> Q db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
 withWindow_ mkWindow mkProjection (Q windowOver)=
   Q (liftF (QWindowOver mkWindow mkProjection windowOver (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
 
 -- * Order bys
 
-class SqlOrderable syntax a | a -> syntax where
-    makeSQLOrdering :: a -> [ WithExprContext syntax ]
-instance SqlOrderable syntax (QOrd syntax s a) where
+class SqlOrderable a where
+    makeSQLOrdering :: a -> [ WithExprContext OrderingSyntax ]
+instance SqlOrderable (QOrd s a) where
     makeSQLOrdering (QExpr x) = [x]
-instance SqlOrderable syntax a => SqlOrderable syntax [a] where
+instance SqlOrderable a => SqlOrderable [a] where
     makeSQLOrdering = concatMap makeSQLOrdering
-instance ( SqlOrderable syntax a
-         , SqlOrderable syntax b ) => SqlOrderable syntax (a, b) where
+instance ( SqlOrderable a
+         , SqlOrderable b ) => SqlOrderable (a, b) where
     makeSQLOrdering (a, b) = makeSQLOrdering a <> makeSQLOrdering b
-instance ( SqlOrderable syntax a
-         , SqlOrderable syntax b
-         , SqlOrderable syntax c ) => SqlOrderable syntax (a, b, c) where
+instance ( SqlOrderable a
+         , SqlOrderable b
+         , SqlOrderable c ) => SqlOrderable (a, b, c) where
     makeSQLOrdering (a, b, c) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c
-instance ( SqlOrderable syntax a
-         , SqlOrderable syntax b
-         , SqlOrderable syntax c
-         , SqlOrderable syntax d ) => SqlOrderable syntax (a, b, c, d) where
+instance ( SqlOrderable a
+         , SqlOrderable b
+         , SqlOrderable c
+         , SqlOrderable d ) => SqlOrderable (a, b, c, d) where
     makeSQLOrdering (a, b, c, d) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d
-instance ( SqlOrderable syntax a
-         , SqlOrderable syntax b
-         , SqlOrderable syntax c
-         , SqlOrderable syntax d
-         , SqlOrderable syntax e ) => SqlOrderable syntax (a, b, c, d, e) where
+instance ( SqlOrderable a
+         , SqlOrderable b
+         , SqlOrderable c
+         , SqlOrderable d
+         , SqlOrderable e ) => SqlOrderable (a, b, c, d, e) where
     makeSQLOrdering (a, b, c, d, e) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <> makeSQLOrdering e
-instance ( SqlOrderable syntax a
-         , SqlOrderable syntax b
-         , SqlOrderable syntax c
-         , SqlOrderable syntax d
-         , SqlOrderable syntax e
-         , SqlOrderable syntax f ) => SqlOrderable syntax (a, b, c, d, e, f) where
+instance ( SqlOrderable a
+         , SqlOrderable b
+         , SqlOrderable c
+         , SqlOrderable d
+         , SqlOrderable e
+         , SqlOrderable f ) => SqlOrderable (a, b, c, d, e, f) where
     makeSQLOrdering (a, b, c, d, e, f) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <> makeSQLOrdering e <> makeSQLOrdering f
-instance ( SqlOrderable syntax a
-         , SqlOrderable syntax b
-         , SqlOrderable syntax c
-         , SqlOrderable syntax d
-         , SqlOrderable syntax e
-         , SqlOrderable syntax f
-         , SqlOrderable syntax g ) => SqlOrderable syntax (a, b, c, d, e, f, g) where
+instance ( SqlOrderable a
+         , SqlOrderable b
+         , SqlOrderable c
+         , SqlOrderable d
+         , SqlOrderable e
+         , SqlOrderable f
+         , SqlOrderable g ) => SqlOrderable (a, b, c, d, e, f, g) where
     makeSQLOrdering (a, b, c, d, e, f, g) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <>
                                             makeSQLOrdering e <> makeSQLOrdering f <> makeSQLOrdering g
-instance ( SqlOrderable syntax a
-         , SqlOrderable syntax b
-         , SqlOrderable syntax c
-         , SqlOrderable syntax d
-         , SqlOrderable syntax e
-         , SqlOrderable syntax f
-         , SqlOrderable syntax g
-         , SqlOrderable syntax h) => SqlOrderable syntax (a, b, c, d, e, f, g, h) where
+instance ( SqlOrderable a
+         , SqlOrderable b
+         , SqlOrderable c
+         , SqlOrderable d
+         , SqlOrderable e
+         , SqlOrderable f
+         , SqlOrderable g
+         , SqlOrderable h) => SqlOrderable (a, b, c, d, e, f, g, h) where
     makeSQLOrdering (a, b, c, d, e, f, g, h) = makeSQLOrdering a <> makeSQLOrdering b <> makeSQLOrdering c <> makeSQLOrdering d <>
                                             makeSQLOrdering e <> makeSQLOrdering f <> makeSQLOrdering g <> makeSQLOrdering h
 
@@ -757,33 +643,25 @@ instance ( SqlOrderable syntax a
 --   The <https://tathougies.github.io/beam/user-guide/queries/ordering manual section>
 --   has more information.
 orderBy_ :: forall s a ordering syntax db.
-            ( Projectible (Sql92SelectExpressionSyntax syntax) a
-            , SqlOrderable (Sql92SelectOrderingSyntax syntax) ordering
+            ( Projectible a
+            , SqlOrderable ordering
             , ThreadRewritable (QNested s) a) =>
-            (a -> ordering) -> Q syntax db (QNested s) a -> Q syntax db s (WithRewrittenThread (QNested s) s a)
+            (a -> ordering) -> Q db (QNested s) a -> Q db s (WithRewrittenThread (QNested s) s a)
 orderBy_ orderer (Q q) =
     Q (liftF (QOrderBy (sequenceA . makeSQLOrdering . orderer) q (rewriteThread (Proxy @s))))
 
-nullsFirst_ :: IsSql2003OrderingElementaryOLAPOperationsSyntax syntax
-            => QOrd syntax s a
-            -> QOrd syntax s a
+nullsFirst_ :: QOrd s a -> QOrd s a
 nullsFirst_ (QExpr e) = QExpr (nullsFirstOrdering <$> e)
 
-nullsLast_ :: IsSql2003OrderingElementaryOLAPOperationsSyntax syntax
-           => QOrd syntax s a
-           -> QOrd syntax s a
+nullsLast_ :: QOrd s a -> QOrd s a
 nullsLast_ (QExpr e) = QExpr (nullsLastOrdering <$> e)
 
 -- | Produce a 'QOrd' corresponding to a SQL @ASC@ ordering
-asc_ :: forall syntax s a. IsSql92OrderingSyntax syntax
-     => QExpr (Sql92OrderingExpressionSyntax syntax) s a
-     -> QOrd syntax s a
+asc_ :: QExpr s a -> QOrd s a
 asc_ (QExpr e) = QExpr (ascOrdering <$> e)
 
 -- | Produce a 'QOrd' corresponding to a SQL @DESC@ ordering
-desc_ :: forall syntax s a. IsSql92OrderingSyntax syntax
-      => QExpr (Sql92OrderingExpressionSyntax syntax) s a
-      -> QOrd syntax s a
+desc_ :: QExpr s a -> QOrd s a
 desc_ (QExpr e) = QExpr (descOrdering <$> e)
 
 -- * Subqueries
@@ -804,24 +682,19 @@ class SqlJustable a b | b -> a where
     --   'PrimaryKey' filled with 'Nothing'.
     nothing_ :: b
 
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull) =>
-    SqlJustable (QExpr syntax s a) (QExpr syntax s (Maybe a)) where
+instance HasSqlValueSyntax SqlNull
 
+instance SqlJustable (QExpr s a) (QExpr s (Maybe a)) where 
     just_ (QExpr e) = QExpr e
     nothing_ = QExpr (pure (valueE (sqlValueSyntax SqlNull)))
 
-instance {-# OVERLAPPING #-} ( Table t
-                             , IsSql92ExpressionSyntax syntax
-                             , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull ) =>
-    SqlJustable (PrimaryKey t (QExpr syntax s)) (PrimaryKey t (Nullable (QExpr syntax s))) where
+instance {-# OVERLAPPING #-} Table t =>
+    SqlJustable (PrimaryKey t (QExpr s)) (PrimaryKey t (Nullable (QExpr s))) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
     nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' nothing_) (primaryKey (tblSkeleton :: TableSkeleton t))
 
-instance {-# OVERLAPPING #-} ( Table t
-                             , IsSql92ExpressionSyntax syntax
-                             , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) SqlNull ) =>
-    SqlJustable (t (QExpr syntax s)) (t (Nullable (QExpr syntax s))) where
+instance {-# OVERLAPPING #-} Table t =>
+    SqlJustable (t (QExpr s)) (t (Nullable (QExpr s))) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
     nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' nothing_) (tblSkeleton :: TableSkeleton t)
 
@@ -835,53 +708,50 @@ instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Id
 
 -- * Nullable checking
 
-data QIfCond context expr s a = QIfCond (QGenExpr context expr s SqlBool) (QGenExpr context expr s a)
-newtype QIfElse context expr s a = QIfElse (QGenExpr context expr s a)
+data QIfCond context s a = QIfCond (QGenExpr context s SqlBool) (QGenExpr context s a)
+newtype QIfElse context s a = QIfElse (QGenExpr context s a)
 
-then_ :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_ :: QGenExpr context s Bool -> QGenExpr context s a -> QIfCond context s a
 then_ cond res = QIfCond (sqlBool_ cond) res
 
-then_' :: QGenExpr context expr s SqlBool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_' :: QGenExpr context s SqlBool -> QGenExpr context s a -> QIfCond context s a
 then_' cond res = QIfCond cond res
 
-else_ :: QGenExpr context expr s a -> QIfElse context expr s a
+else_ :: QGenExpr context s a -> QIfElse context s a
 else_ = QIfElse
 
-if_ :: IsSql92ExpressionSyntax expr =>
-       [ QIfCond context expr s a ]
-    -> QIfElse context expr s a
-    -> QGenExpr context expr s a
+if_ :: [ QIfCond context s a ]
+    -> QIfElse context s a
+    -> QGenExpr context s a
 if_ conds (QIfElse (QExpr elseExpr)) =
   QExpr (\tbl -> caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond tbl, res tbl)) conds) (elseExpr tbl))
 
 -- | SQL @COALESCE@ support
-coalesce_ :: IsSql92ExpressionSyntax expr
-          => [ QGenExpr ctxt expr s (Maybe a) ] -> QGenExpr ctxt expr s a -> QGenExpr ctxt expr s a
+coalesce_ :: [ QGenExpr ctxt s (Maybe a) ] -> QGenExpr ctxt s a -> QGenExpr ctxt s a
 coalesce_ qs (QExpr onNull) =
   QExpr $ do
     onNull' <- onNull
     coalesceE . (<> [onNull']) <$> mapM (\(QExpr q) -> q) qs
 
--- | Converta a 'Maybe' value to a concrete value, by suppling a default
-fromMaybe_ :: IsSql92ExpressionSyntax expr
-           =>  QGenExpr ctxt expr s a -> QGenExpr ctxt expr s (Maybe a) -> QGenExpr ctxt expr s a
+-- | Convert a 'Maybe' value to a concrete value, by suppling a default
+fromMaybe_ :: QGenExpr ctxt s a -> QGenExpr ctxt s (Maybe a) -> QGenExpr ctxt s a
 fromMaybe_ onNull q = coalesce_ [q] onNull
 
 -- | Type class for anything which can be checked for null-ness. This includes 'QExpr (Maybe a)' as
 -- well as 'Table's or 'PrimaryKey's over 'Nullable QExpr'.
-class IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax a nonNullA s | a s -> syntax, a -> nonNullA, a -> s, nonNullA -> s where
+class SqlDeconstructMaybe a nonNullA s | a -> nonNullA, a -> s, nonNullA -> s where
     -- | Returns a 'QExpr' that evaluates to true when the first argument is not null
-    isJust_ :: a -> QGenExpr ctxt syntax s Bool
+    isJust_ :: a -> QGenExpr ctxt s Bool
 
     -- | Returns a 'QExpr' that evaluates to true when the first argument is null
-    isNothing_ :: a -> QGenExpr ctxt syntax s Bool
+    isNothing_ :: a -> QGenExpr ctxt s Bool
 
     -- | Given an object (third argument) which may or may not be null, return the default value if
     -- null (first argument), or transform the value that could be null to yield the result of the
     -- expression (second argument)
-    maybe_ :: QGenExpr ctxt syntax s y -> (nonNullA -> QGenExpr ctxt syntax s y) -> a -> QGenExpr ctxt syntax s y
+    maybe_ :: QGenExpr ctxt s y -> (nonNullA -> QGenExpr ctxt s y) -> a -> QGenExpr ctxt s y
 
-instance IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax (QGenExpr ctxt syntax s (Maybe x)) (QGenExpr ctxt syntax s x) s where
+instance SqlDeconstructMaybe (QGenExpr ctxt s (Maybe x)) (QGenExpr ctxt s x) s where
     isJust_ (QExpr x) = QExpr (isNotNullE <$> x)
     isNothing_ (QExpr x) = QExpr (isNullE <$> x)
 
@@ -889,10 +759,8 @@ instance IsSql92ExpressionSyntax syntax => SqlDeconstructMaybe syntax (QGenExpr 
         let QExpr onJust' = onJust (QExpr e)
         in QExpr (\tbl -> caseE [(isNotNullE (e tbl), onJust' tbl)] (onNothing tbl))
 
-instance ( IsSql92ExpressionSyntax syntax
-         , HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) Bool
-         , Beamable t )
-    => SqlDeconstructMaybe syntax (t (Nullable (QGenExpr ctxt syntax s))) (t (QGenExpr ctxt syntax s)) s where
+instance Beamable t
+    => SqlDeconstructMaybe (t (Nullable (QGenExpr ctxt s))) (t (QGenExpr ctxt s)) s where
     isJust_ t = allE (allBeamValues (\(Columnar' e) -> isJust_ e) t)
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
     maybe_ (QExpr onNothing) onJust tbl =

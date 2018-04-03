@@ -90,7 +90,7 @@ import qualified Lens.Micro as Lens
 --   Entities are documented under [the corresponding
 --   section](Database.Beam.Schema#entities) and in the
 --   [manual](http://tathougies.github.io/beam/user-guide/databases/)
-class Database be db where
+class Database db where
 
     -- | Default derived function. Do not implement this yourself.
     --
@@ -102,22 +102,20 @@ class Database be db where
     --
     --   If that doesn't make sense, don't worry. This is mostly beam internal
     zipTables :: Monad m
-              => Proxy be
-              -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
+              => (forall tbl. (IsDatabaseEntity tbl, DatabaseEntityRegularRequirements tbl) =>
                   f tbl -> g tbl -> m (h tbl))
               -> db f -> db g -> m (db h)
     default zipTables :: ( Generic (db f), Generic (db g), Generic (db h)
                          , Monad m
-                         , GZipDatabase be f g h
+                         , GZipDatabase f g h
                                         (Rep (db f)) (Rep (db g)) (Rep (db h)) ) =>
-                         Proxy be ->
-                         (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl)) ->
+                         (forall tbl. (IsDatabaseEntity tbl, DatabaseEntityRegularRequirements tbl) => f tbl -> g tbl -> m (h tbl)) ->
                          db f -> db g -> m (db h)
     -- We need the pattern type signature on 'combine' to get around a type checking bug in GHC 8.0.1. In future releases,
     -- we will switch to the standard forall.
-    zipTables be combine (f :: db f) (g :: db g) =
+    zipTables combine (f :: db f) (g :: db g) =
       refl $ \h ->
-        to <$> gZipDatabase (Proxy @f, Proxy @g, h, be) combine (from f) (from g)
+        to <$> gZipDatabase (Proxy @f, Proxy @g, h) combine (from f) (from g)
       where
         -- For GHC 8.0.1 renamer bug
         refl :: (Proxy h -> m (db h)) -> m (db h)
@@ -127,18 +125,18 @@ class Database be db where
 --   'defTblFieldSettings'). Your database must implement 'Generic', and must be
 --   auto-derivable. For more information on name generation, see the
 --   [manual](https://tathougies.github.io/beam/user-guide/models)
-defaultDbSettings :: ( Generic (DatabaseSettings be db)
-                     , GAutoDbSettings (Rep (DatabaseSettings be db) ()) ) =>
-                     DatabaseSettings be db
+defaultDbSettings :: ( Generic (DatabaseSettings db)
+                     , GAutoDbSettings (Rep (DatabaseSettings db) ()) ) =>
+                     DatabaseSettings db
 defaultDbSettings = to' autoDbSettings'
 
 -- | A helper data type that lets you modify a database schema. Converts all
 -- entities in the database into functions from that entity to itself.
-type DatabaseModification f be db = db (EntityModification f be)
+type DatabaseModification f db = db (EntityModification f)
 -- | A newtype wrapper around 'f e -> f e' (i.e., an endomorphism between entity
 --   types in 'f'). You usually want to use 'modifyTable' or another function to
 --   contstruct these for you.
-newtype EntityModification f be e = EntityModification (f e -> f e)
+newtype EntityModification f e = EntityModification (f e -> f e)
 -- | A newtype wrapper around 'Columnar f a -> Columnar f ' (i.e., an
 --   endomorphism between 'Columnar's over 'f'). You usually want to use
 --   'fieldNamed' or the 'IsString' instance to rename the field, when 'f ~
@@ -150,9 +148,9 @@ newtype FieldModification f a
 --   only want to rename one table. You can do
 --
 -- > dbModification { tbl1 = modifyTable (\oldNm -> "NewTableName") tableModification }
-dbModification :: forall f be db. Database be db => DatabaseModification f be db
+dbModification :: forall f db. Database db => DatabaseModification f db
 dbModification = runIdentity $
-                 zipTables (Proxy @be) (\_ _ -> pure (EntityModification id)) (undefined :: DatabaseModification f be db) (undefined :: DatabaseModification f be db)
+                 zipTables (\_ _ -> pure (EntityModification id)) (undefined :: DatabaseModification f db) (undefined :: DatabaseModification f db)
 
 -- | Return a table modification (for use with 'modifyTable') that does nothing.
 --   Useful if you only want to change the table name, or if you only want to
@@ -179,13 +177,13 @@ tableModification = runIdentity $
 -- >        -- Change default name "table1" to "Table_1". Change the name of "table1Field1" to "first_name"
 -- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
 -- >      }
-withDbModification :: forall db be entity
-                    . Database be db
-                   => db (entity be db)
-                   -> DatabaseModification (entity be db) be db
-                   -> db (entity be db)
+withDbModification :: forall db entity
+                    . Database db
+                   => db (entity db)
+                   -> DatabaseModification (entity db) db
+                   -> db (entity db)
 withDbModification db mods =
-  runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
+  runIdentity $ zipTables (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
 
 -- | Modify a table according to the given field modifications. Invoked by
 --   'modifyTable' to apply the modification in the database. Not used as often in
@@ -200,7 +198,7 @@ withTableModification mods tbl =
 --   table. See the examples for 'withDbModification' for more.
 modifyTable :: (Text -> Text)
             -> tbl (FieldModification (TableField tbl))
-            -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)
+            -> EntityModification (DatabaseEntity db) (TableEntity tbl)
 modifyTable modTblNm modFields =
   EntityModification (\(DatabaseEntity (DatabaseTable nm fields)) ->
                          (DatabaseEntity (DatabaseTable (modTblNm nm) (withTableModification modFields fields))))
@@ -219,13 +217,13 @@ instance RenamableField (TableField tbl) where
 
 class RenamableWithRule mod where
   renamingFields :: (Text -> Text) -> mod
-instance Database be db => RenamableWithRule (db (EntityModification (DatabaseEntity be db) be)) where
+instance Database db => RenamableWithRule (db (EntityModification (DatabaseEntity db))) where
   renamingFields renamer =
     runIdentity $
-    zipTables (Proxy @be) (\_ _ -> pure (renamingFields renamer))
-              (undefined :: DatabaseModification f be db)
-              (undefined :: DatabaseModification f be db)
-instance IsDatabaseEntity be entity => RenamableWithRule (EntityModification (DatabaseEntity be db) be entity) where
+    zipTables (\_ _ -> pure (renamingFields renamer))
+              (undefined :: DatabaseModification f db)
+              (undefined :: DatabaseModification f db)
+instance IsDatabaseEntity entity => RenamableWithRule (EntityModification (DatabaseEntity db) entity) where
   renamingFields renamer =
     EntityModification (\(DatabaseEntity tbl) -> DatabaseEntity (withFieldRenamer (renamingFields renamer) tbl))
 instance (Beamable tbl, RenamableField f) => RenamableWithRule (tbl (FieldModification f)) where
@@ -252,17 +250,17 @@ data DomainTypeEntity (ty :: *)
 --data TranslationEntity
 --data AssertionEntity
 
-class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) =>
-    IsDatabaseEntity be entityType where
-  data DatabaseEntityDescriptor be entityType :: *
-  type DatabaseEntityDefaultRequirements be entityType :: Constraint
-  type DatabaseEntityRegularRequirements be entityType :: Constraint
+class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor entityType)) =>
+    IsDatabaseEntity entityType where
+  data DatabaseEntityDescriptor entityType :: *
+  type DatabaseEntityDefaultRequirements entityType :: Constraint
+  type DatabaseEntityRegularRequirements entityType :: Constraint
 
-  dbEntityName :: Lens' (DatabaseEntityDescriptor be entityType) Text
-  dbEntityAuto :: DatabaseEntityDefaultRequirements be entityType =>
-                  Text -> DatabaseEntityDescriptor be entityType
+  dbEntityName :: Lens' (DatabaseEntityDescriptor entityType) Text
+  dbEntityAuto :: DatabaseEntityDefaultRequirements entityType =>
+                  Text -> DatabaseEntityDescriptor entityType
 
-instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (TableEntity tbl))) where
+instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor (TableEntity tbl))) where
   renamingFields renamer =
     FieldRenamer $ \(DatabaseTable tblName fields) ->
     DatabaseTable tblName $
@@ -270,20 +268,20 @@ instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescript
                      Columnar' (renameField (Proxy @(TableField tbl)) (Proxy @a) renamer tblField) :: Columnar' (TableField tbl) a) $
     fields
 
-instance Beamable tbl => IsDatabaseEntity be (TableEntity tbl) where
-  data DatabaseEntityDescriptor be (TableEntity tbl) where
-    DatabaseTable :: Table tbl => Text -> TableSettings tbl -> DatabaseEntityDescriptor be (TableEntity tbl)
-  type DatabaseEntityDefaultRequirements be (TableEntity tbl) =
+instance Beamable tbl => IsDatabaseEntity (TableEntity tbl) where
+  data DatabaseEntityDescriptor (TableEntity tbl) where
+    DatabaseTable :: Table tbl => Text -> TableSettings tbl -> DatabaseEntityDescriptor (TableEntity tbl)
+  type DatabaseEntityDefaultRequirements (TableEntity tbl) =
     ( GDefaultTableFieldSettings (Rep (TableSettings tbl) ())
     , Generic (TableSettings tbl), Table tbl, Beamable tbl )
-  type DatabaseEntityRegularRequirements be (TableEntity tbl) =
+  type DatabaseEntityRegularRequirements (TableEntity tbl) =
     ( Table tbl, Beamable tbl )
 
   dbEntityName f (DatabaseTable t s) = fmap (\t' -> DatabaseTable t' s) (f t)
   dbEntityAuto nm =
     DatabaseTable (unCamelCaseSel nm) defTblFieldSettings
 
-instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (ViewEntity tbl))) where
+instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor (ViewEntity tbl))) where
   renamingFields renamer =
     FieldRenamer $ \(DatabaseView tblName fields) ->
     DatabaseView tblName $
@@ -291,27 +289,27 @@ instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescript
                      Columnar' (renameField (Proxy @(TableField tbl)) (Proxy @a) renamer tblField) :: Columnar' (TableField tbl) a) $
     fields
 
-instance Beamable tbl => IsDatabaseEntity be (ViewEntity tbl) where
-  data DatabaseEntityDescriptor be (ViewEntity tbl) where
-    DatabaseView :: Text -> TableSettings tbl -> DatabaseEntityDescriptor be (ViewEntity tbl)
-  type DatabaseEntityDefaultRequirements be (ViewEntity tbl) =
+instance Beamable tbl => IsDatabaseEntity (ViewEntity tbl) where
+  data DatabaseEntityDescriptor (ViewEntity tbl) where
+    DatabaseView :: Text -> TableSettings tbl -> DatabaseEntityDescriptor (ViewEntity tbl)
+  type DatabaseEntityDefaultRequirements (ViewEntity tbl) =
     ( GDefaultTableFieldSettings (Rep (TableSettings tbl) ())
     , Generic (TableSettings tbl), Beamable tbl )
-  type DatabaseEntityRegularRequirements be (ViewEntity tbl) =
+  type DatabaseEntityRegularRequirements (ViewEntity tbl) =
     (  Beamable tbl )
 
   dbEntityName f (DatabaseView t s) = fmap (\t' -> DatabaseView t' s) (f t)
   dbEntityAuto nm =
     DatabaseView (unCamelCaseSel nm) defTblFieldSettings
 
-instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (DomainTypeEntity ty))) where
+instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor (DomainTypeEntity ty))) where
   renamingFields _ = FieldRenamer id
 
-instance IsDatabaseEntity be (DomainTypeEntity ty) where
-  data DatabaseEntityDescriptor be (DomainTypeEntity ty)
+instance IsDatabaseEntity (DomainTypeEntity ty) where
+  data DatabaseEntityDescriptor (DomainTypeEntity ty)
     = DatabaseDomainType !Text
-  type DatabaseEntityDefaultRequirements be (DomainTypeEntity ty) = ()
-  type DatabaseEntityRegularRequirements be (DomainTypeEntity ty) = ()
+  type DatabaseEntityDefaultRequirements (DomainTypeEntity ty) = ()
+  type DatabaseEntityRegularRequirements (DomainTypeEntity ty) = ()
 
   dbEntityName f (DatabaseDomainType t) = DatabaseDomainType <$> f t
   dbEntityAuto = DatabaseDomainType
@@ -319,12 +317,12 @@ instance IsDatabaseEntity be (DomainTypeEntity ty) where
 -- | Represents a meta-description of a particular entityType. Mostly, a wrapper
 --   around 'DatabaseEntityDescriptor be entityType', but carries around the
 --   'IsDatabaseEntity' dictionary.
-data DatabaseEntity be (db :: (* -> *) -> *) entityType  where
+data DatabaseEntity (db :: (* -> *) -> *) entityType  where
     DatabaseEntity ::
-      IsDatabaseEntity be entityType =>
-      DatabaseEntityDescriptor be entityType ->  DatabaseEntity be db entityType
+      IsDatabaseEntity entityType =>
+      DatabaseEntityDescriptor entityType ->  DatabaseEntity db entityType
 
-dbEntityDescriptor :: SimpleGetter (DatabaseEntity be db entityType) (DatabaseEntityDescriptor be entityType)
+dbEntityDescriptor :: SimpleGetter (DatabaseEntity db entityType) (DatabaseEntityDescriptor entityType)
 dbEntityDescriptor = Lens.to (\(DatabaseEntity e) -> e)
 
 -- | When parameterized by this entity tag, a database type will hold
@@ -332,7 +330,7 @@ dbEntityDescriptor = Lens.to (\(DatabaseEntity e) -> e)
 --   hood, each entity type is transformed into its 'DatabaseEntityDescriptor'
 --   type. For tables this includes the table name as well as the corresponding
 --   'TableSettings', which provides names for each column.
-type DatabaseSettings be db = db (DatabaseEntity be db)
+type DatabaseSettings db = db (DatabaseEntity db)
 
 class GAutoDbSettings x where
     autoDbSettings' :: x
@@ -342,28 +340,28 @@ instance GAutoDbSettings (x p) => GAutoDbSettings (C1 f x p) where
     autoDbSettings' = M1 autoDbSettings'
 instance (GAutoDbSettings (x p), GAutoDbSettings (y p)) => GAutoDbSettings ((x :*: y) p) where
     autoDbSettings' = autoDbSettings' :*: autoDbSettings'
-instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements be x ) =>
-  GAutoDbSettings (S1 f (K1 Generic.R (DatabaseEntity be db x)) p) where
+instance ( Selector f, IsDatabaseEntity x, DatabaseEntityDefaultRequirements x ) =>
+  GAutoDbSettings (S1 f (K1 Generic.R (DatabaseEntity db x)) p) where
   autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto name)))
-    where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
+    where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity db x)) p))
 
-class GZipDatabase be f g h x y z where
+class GZipDatabase f g h x y z where
   gZipDatabase :: Monad m =>
-                  (Proxy f, Proxy g, Proxy h, Proxy be)
-               -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl))
+                  (Proxy f, Proxy g, Proxy h)
+               -> (forall tbl. (IsDatabaseEntity tbl, DatabaseEntityRegularRequirements tbl) => f tbl -> g tbl -> m (h tbl))
                -> x () -> y () -> m (z ())
-instance GZipDatabase be f g h x y z =>
-  GZipDatabase be f g h (M1 a b x) (M1 a b y) (M1 a b z) where
+instance GZipDatabase f g h x y z =>
+  GZipDatabase f g h (M1 a b x) (M1 a b y) (M1 a b z) where
   gZipDatabase p combine ~(M1 f) ~(M1 g) = M1 <$> gZipDatabase p combine f g
-instance ( GZipDatabase be f g h ax ay az
-         , GZipDatabase be f g h bx by bz ) =>
-  GZipDatabase be f g h (ax :*: bx) (ay :*: by) (az :*: bz) where
+instance ( GZipDatabase f g h ax ay az
+         , GZipDatabase f g h bx by bz ) =>
+  GZipDatabase f g h (ax :*: bx) (ay :*: by) (az :*: bz) where
   gZipDatabase p combine ~(ax :*: bx) ~(ay :*: by) =
     do a <- gZipDatabase p combine ax ay
        b <- gZipDatabase p combine bx by
        pure (a :*: b)
-instance (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
-  GZipDatabase be f g h (K1 Generic.R (f tbl)) (K1 Generic.R (g tbl)) (K1 Generic.R (h tbl)) where
+instance (IsDatabaseEntity tbl, DatabaseEntityRegularRequirements tbl) =>
+  GZipDatabase f g h (K1 Generic.R (f tbl)) (K1 Generic.R (g tbl)) (K1 Generic.R (h tbl)) where
 
   gZipDatabase _ combine ~(K1 x) ~(K1 y) =
     K1 <$> combine x y
