@@ -1,0 +1,228 @@
+signature Database.Beam.Backend where
+
+import Data.String ( IsString )
+import Data.Text ( Text )
+
+data Handle
+
+data DBIO a
+
+instance Functor DBIO
+
+instance Applicative DBIO
+
+withDatabase :: Handle -> DBIO a -> IO a
+
+data ExpressionSyntax
+
+instance Eq ExpressionSyntax
+
+orE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+andE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+data FromSyntax
+
+leftJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax
+
+outerJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax
+
+data ComparisonQuantifierSyntax
+
+neqE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+eqE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+data ValueSyntax
+
+valueE :: ValueSyntax -> ExpressionSyntax
+
+notE :: ExpressionSyntax -> ExpressionSyntax
+
+class HasSqlValueSyntax a where
+  sqlValueSyntax :: a -> ValueSyntax
+
+instance HasSqlValueSyntax Bool
+
+data SelectSetQuantifierSyntax
+
+setQuantifierDistinct :: SelectSetQuantifierSyntax
+
+data SelectSyntax
+
+existsE :: SelectSyntax -> ExpressionSyntax
+
+data SelectTableSyntax
+
+data Syntax
+
+data TableSourceSyntax
+
+innerJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax  
+
+fromTable :: TableSourceSyntax -> Maybe Text -> FromSyntax
+
+tableFromSubSelect :: SelectSyntax -> TableSourceSyntax
+
+qualifiedField :: Text -> Text -> FieldNameSyntax
+unqualifiedField :: Text -> FieldNameSyntax
+
+data FieldNameSyntax
+
+tableNamed :: Text -> TableSourceSyntax
+
+fieldE :: FieldNameSyntax -> ExpressionSyntax
+
+projExprs :: [(ExpressionSyntax, Maybe Text)] -> ProjectionSyntax
+
+data ProjectionSyntax
+
+selectTableStmt :: Maybe SelectSetQuantifierSyntax -> ProjectionSyntax -> Maybe FromSyntax -> Maybe ExpressionSyntax -> Maybe GroupingSyntax -> Maybe ExpressionSyntax -> SelectTableSyntax
+
+data GroupingSyntax
+
+selectStmt :: SelectTableSyntax -> [ExpressionSyntax] -> Maybe Integer -> Maybe Integer -> SelectSyntax
+
+uniqueE :: SelectSyntax -> ExpressionSyntax
+
+distinctE :: SelectSyntax -> ExpressionSyntax
+
+subqueryE :: SelectSyntax -> ExpressionSyntax
+
+charLengthE :: ExpressionSyntax -> ExpressionSyntax
+octetLengthE :: ExpressionSyntax -> ExpressionSyntax
+bitLengthE :: ExpressionSyntax -> ExpressionSyntax
+currentTimestampE :: ExpressionSyntax
+likeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+lowerE :: ExpressionSyntax -> ExpressionSyntax
+upperE :: ExpressionSyntax -> ExpressionSyntax
+trimE :: ExpressionSyntax -> ExpressionSyntax
+
+class IsStringType a
+
+data WindowFrameBoundSyntax
+
+fromToBoundSyntax :: WindowFrameBoundSyntax -> Maybe WindowFrameBoundSyntax -> ExpressionSyntax
+
+unboundedSyntax :: WindowFrameBoundSyntax
+nrowsBoundSyntax :: Int -> WindowFrameBoundSyntax
+
+frameSyntax :: Maybe [ExpressionSyntax] -> Maybe [ExpressionSyntax] -> Maybe ExpressionSyntax -> ExpressionSyntax
+
+overE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+nullsFirstOrdering :: ExpressionSyntax -> ExpressionSyntax
+nullsLastOrdering :: ExpressionSyntax -> ExpressionSyntax
+
+ascOrdering :: ExpressionSyntax -> ExpressionSyntax
+descOrdering :: ExpressionSyntax -> ExpressionSyntax
+
+caseE :: [( ExpressionSyntax, ExpressionSyntax )] -> ExpressionSyntax -> ExpressionSyntax
+
+coalesceE :: [ExpressionSyntax] -> ExpressionSyntax
+
+isNotNullE :: ExpressionSyntax -> ExpressionSyntax
+
+isNullE :: ExpressionSyntax -> ExpressionSyntax
+
+defaultE :: ExpressionSyntax
+
+eqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+neqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+isTrueE :: ExpressionSyntax -> ExpressionSyntax
+isNotTrueE :: ExpressionSyntax -> ExpressionSyntax
+isFalseE :: ExpressionSyntax -> ExpressionSyntax
+isNotFalseE :: ExpressionSyntax -> ExpressionSyntax
+isUnknownE :: ExpressionSyntax -> ExpressionSyntax
+isNotUnknownE :: ExpressionSyntax -> ExpressionSyntax
+
+quantifyOverAll :: ComparisonQuantifierSyntax
+quantifyOverAny :: ComparisonQuantifierSyntax
+quantifierListE :: [ExpressionSyntax] -> ExpressionSyntax
+
+betweenE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+inE :: ExpressionSyntax -> [ExpressionSyntax] -> ExpressionSyntax 
+
+ltE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+gtE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+leE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+geE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+mulE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+addE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+subE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+negateE :: ExpressionSyntax -> ExpressionSyntax
+absE :: ExpressionSyntax -> ExpressionSyntax
+
+divE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+unionTables :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
+intersectTables :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
+exceptTable :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
+
+groupByExpressions :: [ExpressionSyntax] -> GroupingSyntax
+
+setQuantifierAll :: SelectSetQuantifierSyntax
+
+data AggregationSetQuantifierSyntax
+
+minE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+maxE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+sumE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+avgE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+anyE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+someE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+everyE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+countE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+filterAggE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+denseRankAggE :: ExpressionSyntax
+percentRankAggE :: ExpressionSyntax
+cumeDistAggE :: ExpressionSyntax
+countAllE :: ExpressionSyntax
+rankAggE :: ExpressionSyntax
+
+
+data CustomSqlSyntax
+
+instance Semigroup CustomSqlSyntax
+instance Monoid CustomSqlSyntax
+instance IsString CustomSqlSyntax
+
+-- | Given an arbitrary string-like expression, produce a 'syntax' that represents the
+--   'ByteString' as a SQL expression.
+customExprSyntax :: CustomSqlSyntax -> ExpressionSyntax
+
+-- | Given an arbitrary 'syntax', produce a string-like value that corresponds to
+--   how that syntax would look when rendered in the backend.
+renderSyntax :: ExpressionSyntax -> CustomSqlSyntax
+
+regrSXYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrSYYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrSXXE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrAvgXE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrAvgYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrRSquaredE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrCountE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrInterceptE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+regrSlopeE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+corrE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+covarSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+covarPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+varSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+varPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+stddevSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+stddevPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+powerE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+floorE :: ExpressionSyntax -> ExpressionSyntax
+ceilE :: ExpressionSyntax -> ExpressionSyntax
+sqrtE :: ExpressionSyntax -> ExpressionSyntax
+expE :: ExpressionSyntax -> ExpressionSyntax
+lnE :: ExpressionSyntax -> ExpressionSyntax
+nthValueE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+lastValueE :: ExpressionSyntax -> ExpressionSyntax
+firstValueE :: ExpressionSyntax -> ExpressionSyntax
+ntileE :: ExpressionSyntax -> ExpressionSyntax
+leadE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax
+lagE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax
