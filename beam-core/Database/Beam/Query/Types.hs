@@ -11,10 +11,6 @@ import Database.Beam.Query.SQL92
 
 import Database.Beam.Schema.Tables
 
-import Database.Beam.Backend.SQL.Builder
-import Database.Beam.Backend.SQL.AST
-import Database.Beam.Backend.SQL.SQL92
-
 import Control.Monad.Identity
 import Data.Vector.Sized (Vector)
 

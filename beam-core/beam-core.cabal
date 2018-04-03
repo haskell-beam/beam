@@ -40,9 +40,7 @@ library
                        Database.Beam.Backend.SQL.BeamExtensions
                        Database.Beam.Backend.SQL.SQL92
                        Database.Beam.Backend.SQL.SQL99
-                       Database.Beam.Backend.SQL.SQL2003
                        Database.Beam.Backend.SQL.Builder
-                       Database.Beam.Backend.SQL.AST
   other-modules:       Database.Beam.Query.Aggregate
                        Database.Beam.Query.Combinators
                        Database.Beam.Query.Extensions
