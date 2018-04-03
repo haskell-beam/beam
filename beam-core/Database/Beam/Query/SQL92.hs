@@ -33,7 +33,7 @@ instance ProjectibleWithPredicate c b => ProjectibleWithPredicate c (PreserveLef
 
 type SelectStmtFn
   = SelectTableSyntax
- -> [OrderingSyntax]
+ -> [ExpressionSyntax]
  -> Maybe Integer {-^ LIMIT -}
  -> Maybe Integer {-^ OFFSET -}
  -> SelectSyntax
@@ -66,7 +66,7 @@ data SelectBuilder (db :: (* -> *) -> *) a where
 
   SelectBuilderTopLevel ::
     { sbLimit, sbOffset :: Maybe Integer
-    , sbOrdering        :: [ OrderingSyntax ]
+    , sbOrdering        :: [ExpressionSyntax]
     , sbTable           :: SelectBuilder db a
     , sbSelectFn        :: Maybe SelectStmtFn
                         -- ^ Which 'SelectStmtFn' to use to build this select. If 'Nothing', use the default

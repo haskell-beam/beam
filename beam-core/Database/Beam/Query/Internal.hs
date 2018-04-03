@@ -21,13 +21,7 @@ import           Control.Monad.Writer
 import           GHC.TypeLits
 import           GHC.Types
 
--- type ProjectibleInSelectSyntax syntax a =
---   ( IsSql92SelectSyntax syntax
---   , Eq (Sql92SelectExpressionSyntax syntax)
---   , Sql92ProjectionExpressionSyntax (Sql92SelectProjectionSyntax syntax) ~ Sql92SelectExpressionSyntax syntax
---   , Sql92TableSourceSelectSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax syntax)) ~ syntax
---   , Projectible (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a
---   , ProjectibleValue (Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax syntax))) a)
+type ProjectibleInSelectSyntax a = ( Projectible a, ProjectibleValue a )
 
 type TablePrefix = T.Text
 
@@ -113,7 +107,7 @@ data QF (db :: (* -> *) -> *) s next where
 
   QOrderBy
     :: Projectible r
-    => (r -> WithExprContext [ OrderingSyntax ])
+    => (r -> WithExprContext [ ExpressionSyntax ])
     -> QM db (QNested s) r
     -> (r -> next)
     -> QF db s next

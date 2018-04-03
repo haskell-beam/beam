@@ -25,7 +25,8 @@ module Database.Beam.Query.Combinators
     , all_
     , allFromView_, join_, join_'
     , guard_, guard_', filter_, filter_'
-    , related_, relatedBy_, relatedBy_'
+    -- , related_
+    , relatedBy_, relatedBy_'
     , leftJoin_, leftJoin_'
     , perhaps_, outerJoin_, outerJoin_'
     , subselect_, references_
@@ -585,7 +586,7 @@ withWindow_ mkWindow mkProjection (Q windowOver)=
 -- * Order bys
 
 class SqlOrderable a where
-    makeSQLOrdering :: a -> [ WithExprContext OrderingSyntax ]
+    makeSQLOrdering :: a -> [ WithExprContext ExpressionSyntax ]
 instance SqlOrderable (QOrd s a) where
     makeSQLOrdering (QExpr x) = [x]
 instance SqlOrderable a => SqlOrderable [a] where
