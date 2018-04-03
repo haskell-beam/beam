@@ -5,5 +5,4 @@ build-type: Simple
 
 library
     build-depends: base, text
-    signatures: 
-      Database.Beam.Backend
+    signatures: Database.Beam.Backend

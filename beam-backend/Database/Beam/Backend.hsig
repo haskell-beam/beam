@@ -259,3 +259,19 @@ data InsertValuesSyntax
 insertSqlExpressions :: [[ExpressionSyntax]] -> InsertValuesSyntax
 
 insertFromSql :: SelectSyntax -> InsertValuesSyntax
+
+data DataTypeSyntax
+
+bigIntType :: DataTypeSyntax
+
+varBinaryType :: Maybe Word -> DataTypeSyntax
+
+binaryType :: Maybe Word -> DataTypeSyntax
+
+rowType :: [(Text, DataTypeSyntax)] -> DataTypeSyntax
+
+arrayType :: DataTypeSyntax -> Int -> DataTypeSyntax
+
+binaryLargeObjectType :: DataTypeSyntax
+
+characterLargeObjectType :: DataTypeSyntax

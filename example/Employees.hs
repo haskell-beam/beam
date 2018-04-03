@@ -20,7 +20,6 @@ import GHC.Generics
 
 import Lens.Micro
 
-<<<<<<< HEAD
 import System.Environment (getArgs, getProgName)
 
 import EmployeesData
@@ -389,4 +388,3 @@ main = putStrLn "Hello" -- do [sqliteDbPath] <- getArgs
 --                         guard_ (_groupLocation group ==. highestGrossingRegion)
 --                         pure employee
 --                liftIO (mapM_ (putStrLn . show) q5)
->>>>>>> Separated beam core. Started work on postgres integration
