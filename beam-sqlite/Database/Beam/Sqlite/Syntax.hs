@@ -38,14 +38,12 @@ module Database.Beam.Sqlite.Syntax
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Haskell.Syntax
-import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.SQL (DataType(..), FieldReturnType(..), field)
 import           Database.Beam.Migrate.SQL.BeamExtensions
 import           Database.Beam.Migrate.Serialization
-import           Database.Beam.Migrate.Types
 import           Database.Beam.Query
 import           Database.Beam.Query.SQL92
 
@@ -879,7 +877,7 @@ sqliteSerialType = SqliteDataTypeSyntax (emit "INTEGER PRIMARY KEY AUTOINCREMENT
 data SqliteHasDefault = SqliteHasDefault
 instance FieldReturnType 'True 'False SqliteColumnSchemaSyntax resTy a =>
          FieldReturnType 'False 'False SqliteColumnSchemaSyntax resTy (SqliteHasDefault -> a) where
-  field' _ _ nm ty d collation constraints SqliteHasDefault =
+  field' _ _ nm ty _ collation constraints SqliteHasDefault =
     field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
 
 instance IsBeamSerialColumnSchemaSyntax SqliteColumnSchemaSyntax where
