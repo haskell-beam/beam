@@ -474,13 +474,13 @@ type SqlValableTable table =
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
 
--- instance (HasSqlValueSyntax Sql92ExpressionValueSyntax a) =>
---   SqlValable (QGenExpr ctxt s a) where
+instance (HasSqlValueSyntax a) =>
+  SqlValable (QGenExpr ctxt s a) where
 
---   val_ = QExpr . pure . valueE . sqlValueSyntax
--- instance ( Beamable table
---          , FieldsFulfillConstraint HasSqlValueSyntax table ) =>
---   SqlValable (table (QGenExpr ctxt s)) where
+  val_ = QExpr . pure . valueE . sqlValueSyntax
+instance ( Beamable table
+         , FieldsFulfillConstraint HasSqlValueSyntax table ) =>
+  SqlValable (table (QGenExpr ctxt s)) where
 --   val_ tbl =
 --     let fields :: table (WithConstraint HasSqlValueSyntax)
 --         fields = to (gWithConstrainedFields (Proxy @(HasSqlValueSyntax Sql92ExpressionValueSyntax))
@@ -643,7 +643,7 @@ instance ( SqlOrderable a
 --
 --   The <https://tathougies.github.io/beam/user-guide/queries/ordering manual section>
 --   has more information.
-orderBy_ :: forall s a ordering syntax db.
+orderBy_ :: forall s a ordering db.
             ( Projectible a
             , SqlOrderable ordering
             , ThreadRewritable (QNested s) a) =>

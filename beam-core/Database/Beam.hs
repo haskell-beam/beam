@@ -18,7 +18,6 @@ module Database.Beam
 
 import Database.Beam.Query
 import Database.Beam.Schema
-import Database.Beam.Backend
 
 import Control.Monad.Identity
 import Control.Monad.IO.Class (MonadIO(..))

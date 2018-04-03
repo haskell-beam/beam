@@ -1,3 +1,5 @@
+{-# language ConstraintKinds #-}
+
 signature Database.Beam.Backend where
 
 import Data.String ( IsString )
@@ -226,3 +228,34 @@ firstValueE :: ExpressionSyntax -> ExpressionSyntax
 ntileE :: ExpressionSyntax -> ExpressionSyntax
 leadE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax
 lagE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax
+
+-- | Requirements to marshal a certain type from a database of a particular backend
+class BackendFromField a
+
+data Command
+
+selectCmd :: SelectSyntax -> Command
+
+data InsertSyntax
+
+insertCmd :: InsertSyntax -> Command
+
+data DeleteSyntax
+
+deleteCmd :: DeleteSyntax -> Command
+
+deleteStmt :: Text -> Maybe ExpressionSyntax -> DeleteSyntax
+
+data UpdateSyntax
+
+updateCmd :: UpdateSyntax -> Command
+
+updateStmt :: Text -> [(FieldNameSyntax, ExpressionSyntax)] -> Maybe ExpressionSyntax -> UpdateSyntax 
+
+insertStmt :: Text -> [ExpressionSyntax] -> InsertValuesSyntax -> InsertSyntax
+
+data InsertValuesSyntax
+
+insertSqlExpressions :: [[ExpressionSyntax]] -> InsertValuesSyntax
+
+insertFromSql :: SelectSyntax -> InsertValuesSyntax

@@ -6,9 +6,6 @@ import Database.Beam.Backend.Types
 import qualified Data.Aeson as Json
 import           Data.Bits
 
-class ( BeamBackend be ) =>
-      BeamSqlBackend be where
-
 data SqlNull = SqlNull
   deriving (Show, Eq, Ord, Bounded, Enum)
 newtype SqlBitString = SqlBitString Integer
@@ -16,7 +13,7 @@ newtype SqlBitString = SqlBitString Integer
 
 newtype SqlSerial a = SqlSerial { unSerial :: a }
   deriving (Show, Read, Eq, Ord, Num, Integral, Real, Enum)
-instance FromBackendRow be x => FromBackendRow be (SqlSerial x) where
+instance FromBackendRow x => FromBackendRow (SqlSerial x) where
   fromBackendRow = SqlSerial <$> fromBackendRow
 instance Json.FromJSON a => Json.FromJSON (SqlSerial a) where
   parseJSON a = SqlSerial <$> Json.parseJSON a
