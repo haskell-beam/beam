@@ -47,7 +47,7 @@ initDatabase cmdLine dbName moduleName connStr =
       -- Get the constraints and see if the migration table already exists
       SomeBeamMigrationBackend be@BeamMigrationBackend { backendTransact = transact } <-
         loadBackend' cmdLine moduleName
-      transact connStr (ensureBackendTables be)
+      _ <- transact connStr (ensureBackendTables be)
 
       let db = MigrationDatabase moduleName connStr
       pure ((), reg { migrationRegistryDatabases =
