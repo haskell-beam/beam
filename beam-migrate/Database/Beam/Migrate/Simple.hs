@@ -1,4 +1,4 @@
-
+{-# LANGUAGE AllowAmbiguousTypes #-}
 -- | Utility functions for common use cases
 module Database.Beam.Migrate.Simple
   ( autoMigrate
@@ -96,7 +96,7 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
   ensureBackendTables be
 
   entries <- runSelectReturningList $ select $
-             all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
+             all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
   let verifyMigration :: Int -> T.Text -> Migration cmd a -> StateT [LogEntry] (WriterT (Max Int) m) a
       verifyMigration stepIx stepNm step =
         do log <- get
@@ -142,7 +142,7 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
                          runNoReturn cmd)
                      step
 
-                 runInsert $ insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd)) $
+                 runInsert $ insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m)) $
                    insertExpressions [ LogEntry (val_ stepIx) (val_ stepName) currentTimestamp_ ]
                  endStepHook hooks stepIx stepName
 
@@ -240,10 +240,10 @@ verifySchema BeamMigrationBackend { backendGetDbConstraints = getConstraints } d
        else pure (VerificationFailed (HS.toList missingPredicates))
 
 -- | Run a sequence of commands on a database
-runSimpleMigration :: MonadBeam cmd be hdl m
+runSimpleMigration :: forall cmd be hdl m . MonadBeam cmd be hdl m
                    => hdl -> [cmd] -> IO ()
 runSimpleMigration hdl =
-  withDatabase hdl . mapM_ runNoReturn
+  withDatabase @cmd @be @hdl @m hdl . mapM_ runNoReturn
 
 -- | Given a function to convert a command to a 'String', produce a script that
 -- will execute the given migration. Usually, the function you provide
