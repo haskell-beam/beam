@@ -118,7 +118,7 @@ newtype SqlSelect a
     = SqlSelect SelectSyntax
 
 -- | Build a 'SqlSelect' for the given 'Q'.
-select :: Projectible res => Q db QueryInaccessible res -> SqlSelect (QExprToIdentity res)
+select :: Projectible ExpressionSyntax res => Q db QueryInaccessible res -> SqlSelect (QExprToIdentity res)
 select q =
   SqlSelect (buildSqlQuery "t" q)
 
@@ -168,7 +168,7 @@ data SqlInsert
   | SqlInsertNoRows
 
 -- | Generate a 'SqlInsert' over only certain fields of a table
-insertOnly :: ( Projectible (QExprToField r) )
+insertOnly :: ( Projectible Text (QExprToField r) )
            => DatabaseEntity db (TableEntity table)
               -- ^ Table to insert into
            -> (table (QField s) -> QExprToField r)
@@ -184,7 +184,7 @@ insertOnly (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkProj (SqlInsertV
                                 (mkProj tblFields))
 
 -- | Generate a 'SqlInsert' given a table and a source of values.
-insert :: ( Projectible (table (QField s)) )
+insert :: ( Projectible Text (table (QField s)) )
        => DatabaseEntity db (TableEntity table)
           -- ^ Table to insert into
        -> SqlInsertValues (table (QExpr s))
@@ -230,7 +230,7 @@ insertValues x = insertExpressions (map val_ x :: forall s'. [table (QExpr s') ]
 
 -- | Build a 'SqlInsertValues' from arbitrarily shaped data containing expressions
 insertData :: forall r
-            . Projectible r
+            . Projectible ExpressionSyntax r
            => [ r ] -> SqlInsertValues r
 insertData rows =
   case rows of
@@ -242,7 +242,7 @@ insertData rows =
 
 -- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the same table
 insertFrom
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => Q db QueryInaccessible r
     -> SqlInsertValues r
 insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))

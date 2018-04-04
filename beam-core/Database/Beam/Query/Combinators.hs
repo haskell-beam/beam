@@ -122,7 +122,7 @@ join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
 --   (Maybe x)'.
 perhaps_ :: forall db s r. ( ThreadRewritable (QNested s) r
             , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s r)
-            , Projectible r
+            , Projectible ExpressionSyntax r
             )
          => Q db (QNested s) r
          -> Q db s (Retag Nullable (WithRewrittenThread (QNested s) s r))
@@ -143,8 +143,8 @@ perhaps_ (Q sub) =
 outerJoin_ :: ( ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
               , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s a)
               , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s b)
-              , Projectible a
-              , Projectible b
+              , Projectible ExpressionSyntax a
+              , Projectible ExpressionSyntax b
               )
            => Q db (QNested s) a
            -> Q db (QNested s) b
@@ -159,8 +159,8 @@ outerJoin_ a b on_ = outerJoin_' a b (sqlBool_ . on_)
 outerJoin_' :: forall db s a b. ( ThreadRewritable (QNested s) a, ThreadRewritable (QNested s) b
                , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s a)
                , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s b)
-               , Projectible a
-               , Projectible b
+               , Projectible ExpressionSyntax a
+               , Projectible ExpressionSyntax b
                )
             => Q db (QNested s) a
             -> Q db (QNested s) b
@@ -189,7 +189,7 @@ outerJoin_' (Q a) (Q b) on_ =
 --   accepts an @ON@ condition returning 'SqlBool', see 'leftJoin_''.
 leftJoin_ :: ( ThreadRewritable (QNested s) r
            , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s r)
-           , Projectible r
+           , Projectible ExpressionSyntax r
            )
           => Q db (QNested s) r
           -> (WithRewrittenThread (QNested s) s r -> QExpr s Bool)
@@ -199,7 +199,7 @@ leftJoin_ sub on_ = leftJoin_' sub (sqlBool_ . on_)
 -- | Like 'leftJoin_', but accepts an @ON@ clause returning 'SqlBool'.
 leftJoin_' :: forall db s r. ( ThreadRewritable (QNested s) r
             , Retaggable (QExpr s) (WithRewrittenThread (QNested s) s r)
-            , Projectible r
+            , Projectible ExpressionSyntax r
             )
            => Q db (QNested s) r
            -> (WithRewrittenThread (QNested s) s r -> QExpr s SqlBool)
@@ -212,7 +212,7 @@ leftJoin_' (Q sub) on_ =
                                 Columnar' (QExpr e) :: Columnar' (Nullable (QExpr s)) a) $
                       rewriteThread (Proxy @s) r))
 
-subselect_ :: forall db s r. ( ThreadRewritable (QNested s) r, Projectible r )
+subselect_ :: forall db s r. ( ThreadRewritable (QNested s) r, Projectible ExpressionSyntax r )
            => Q db (QNested s) r
            -> Q db s (WithRewrittenThread (QNested s) s r)
 subselect_ (Q q') =
@@ -276,35 +276,35 @@ references_ :: ( HasTableEquality (PrimaryKey t), Table t )
 references_ fk tbl = fk ==. pk tbl
 
 -- | Only return distinct values from a query
-nub_ :: Projectible r => Q db s r -> Q db s r
+nub_ :: Projectible ExpressionSyntax r => Q db s r -> Q db s r
 nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
 
 -- | Limit the number of results returned by a query.
-limit_ :: forall db s a. ( ThreadRewritable (QNested s) a, Projectible a ) =>
+limit_ :: forall db s a. ( ThreadRewritable (QNested s) a, Projectible ExpressionSyntax a ) =>
           Integer -> Q db (QNested s) a -> Q db s (WithRewrittenThread (QNested s) s a)
 limit_ limit' (Q q) =
   Q (liftF (QLimit limit' q (rewriteThread (Proxy @s))))
 
 -- | Drop the first `offset'` results.
-offset_ :: forall db s a. ( ThreadRewritable (QNested s) a, Projectible a ) =>
+offset_ :: forall db s a. ( ThreadRewritable (QNested s) a, Projectible ExpressionSyntax a ) =>
            Integer -> Q db (QNested s) a -> Q db s (WithRewrittenThread (QNested s) s a)
 offset_ offset' (Q q) =
   Q (liftF (QOffset offset' q (rewriteThread (Proxy @s))))
 
 -- | Use the SQL @EXISTS@ operator to determine if the given query returns any results
-exists_ :: Projectible a => Q db s a -> QExpr s Bool
+exists_ :: Projectible ExpressionSyntax a => Q db s a -> QExpr s Bool
 exists_ q = QExpr (\tbl -> existsE (buildSqlQuery tbl q))
 
 -- | Use the SQL @UNIQUE@ operator to determine if the given query produces a unique result
-unique_ :: Projectible a => Q db s a -> QExpr s Bool
+unique_ :: Projectible ExpressionSyntax a => Q db s a -> QExpr s Bool
 unique_ q = QExpr (\tbl -> uniqueE (buildSqlQuery tbl q))
 
 -- | Use the SQL99 @DISTINCT@ operator to determine if the given query produces a distinct result
-distinct_ :: Projectible a => Q db s a -> QExpr s Bool
+distinct_ :: Projectible ExpressionSyntax a => Q db s a -> QExpr s Bool
 distinct_ q = QExpr (\tbl -> distinctE (buildSqlQuery tbl q))
 
 -- | Project the (presumably) singular result of the given query as an expression
-subquery_ :: Projectible a => Q db s (QExpr s a) -> QExpr s a
+subquery_ :: Projectible ExpressionSyntax a => Q db s (QExpr s a) -> QExpr s a
 subquery_ q =
   QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
@@ -389,7 +389,7 @@ instance Beamable tbl => SqlUpdatable s (tbl (Nullable (QField s))) (tbl (Nullab
 
 -- | SQL @UNION@ operator
 union_ :: forall db s a.
-          ( Projectible a
+          ( Projectible ExpressionSyntax a
           , ThreadRewritable (QNested s) a)
        => Q db (QNested s) a -> Q db (QNested s) a
        -> Q db s (WithRewrittenThread (QNested s) s a)
@@ -397,7 +397,7 @@ union_ (Q a) (Q b) = Q (liftF (QUnion False a b (rewriteThread (Proxy @s))))
 
 -- | SQL @UNION ALL@ operator
 unionAll_ :: forall db s a.
-             ( Projectible a
+             ( Projectible ExpressionSyntax a
              , ThreadRewritable (QNested s) a)
           => Q db (QNested s) a -> Q db (QNested s) a
           -> Q db s (WithRewrittenThread (QNested s) s a)
@@ -405,7 +405,7 @@ unionAll_ (Q a) (Q b) = Q (liftF (QUnion True a b (rewriteThread (Proxy @s))))
 
 -- | SQL @INTERSECT@ operator
 intersect_ :: forall db s a.
-              ( Projectible a
+              ( Projectible ExpressionSyntax a
               , ThreadRewritable (QNested s) a)
            => Q db (QNested s) a -> Q db (QNested s) a
            -> Q db s (WithRewrittenThread (QNested s) s a)
@@ -413,7 +413,7 @@ intersect_ (Q a) (Q b) = Q (liftF (QIntersect False a b (rewriteThread (Proxy @s
 
 -- | SQL @INTERSECT ALL@ operator
 intersectAll_ :: forall db s a.
-                 ( Projectible a
+                 ( Projectible ExpressionSyntax a
                  , ThreadRewritable (QNested s) a)
               => Q db (QNested s) a -> Q db (QNested s) a
               -> Q db s (WithRewrittenThread (QNested s) s a)
@@ -421,7 +421,7 @@ intersectAll_ (Q a) (Q b) = Q (liftF (QIntersect True a b (rewriteThread (Proxy 
 
 -- | SQL @EXCEPT@ operator
 except_ :: forall db s a.
-           ( Projectible a
+           ( Projectible ExpressionSyntax a
            , ThreadRewritable (QNested s) a)
         => Q db (QNested s) a -> Q db (QNested s) a
         -> Q db s (WithRewrittenThread (QNested s) s a)
@@ -429,7 +429,7 @@ except_ (Q a) (Q b) = Q (liftF (QExcept False a b (rewriteThread (Proxy @s))))
 
 -- | SQL @EXCEPT ALL@ operator
 exceptAll_ :: forall db s a.
-              ( Projectible a
+              ( Projectible ExpressionSyntax a
               , ThreadRewritable (QNested s) a)
            => Q db (QNested s) a -> Q db (QNested s) a
            -> Q db s (WithRewrittenThread (QNested s) s a)
@@ -536,7 +536,7 @@ orderPartitionBy_ = Just
 
 -- | Specify a window frame with all the options
 frame_ :: ( SqlOrderable ordering
-          , Projectible partition
+          , Projectible ExpressionSyntax partition
           )
        => Maybe partition             {-^ PARTITION BY -}
        -> Maybe ordering              {-^ ORDER BY -}
@@ -570,9 +570,9 @@ over_ (QExpr a) (QWindow frame) = QExpr (overE <$> a <*> frame)
 --   'over_' function.
 --
 withWindow_ :: forall window a s r db.
-               ( ProjectibleWithPredicate WindowFrameContext window
-               , Projectible r
-               , Projectible a
+               ( ProjectibleWithPredicate WindowFrameContext ExpressionSyntax window
+               , Projectible ExpressionSyntax r
+               , Projectible ExpressionSyntax a
                , ContextRewritable a
                , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
                )
@@ -644,7 +644,7 @@ instance ( SqlOrderable a
 --   The <https://tathougies.github.io/beam/user-guide/queries/ordering manual section>
 --   has more information.
 orderBy_ :: forall s a ordering db.
-            ( Projectible a
+            ( Projectible ExpressionSyntax a
             , SqlOrderable ordering
             , ThreadRewritable (QNested s) a) =>
             (a -> ordering) -> Q db (QNested s) a -> Q db s (WithRewrittenThread (QNested s) s a)

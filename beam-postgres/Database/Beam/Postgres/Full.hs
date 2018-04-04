@@ -6,40 +6,40 @@
 -- manipulation statements. These functions shadow the functions in
 -- "Database.Beam.Query" and provide a strict superset of functionality. They
 -- map 1-to-1 with the underlying Postgres support.
-module Database.Beam.Postgres.Full
-  ( -- * Additional @SELECT@ features
+module Database.Beam.Postgres.Full where
+  -- ( -- * Additional @SELECT@ features
 
-    -- ** @SELECT@ Locking clause
-    PgWithLocking, PgLockedTables
-  , PgSelectLockingStrength(..), PgSelectLockingOptions(..)
-  , lockingAllTablesFor_, lockingFor_
+  --   -- ** @SELECT@ Locking clause
+  --   PgWithLocking, PgLockedTables
+  -- , PgSelectLockingStrength(..), PgSelectLockingOptions(..)
+  -- , lockingAllTablesFor_, lockingFor_
 
-  , locked_, lockAll_, withLocks_
+  -- , locked_, lockAll_, withLocks_
 
-  -- * @INSERT@ and @INSERT RETURNING@
-  , insert, insertReturning
+  -- -- * @INSERT@ and @INSERT RETURNING@
+  -- , insert, insertReturning
 
-  , PgInsertReturning(..)
+  -- , PgInsertReturning(..)
 
-  -- ** Specifying conflict actions
+  -- -- ** Specifying conflict actions
 
-  , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
-  , PgConflictAction(..)
+  -- , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
+  -- , PgConflictAction(..)
 
-  , onConflictDefault, onConflict, anyConflict, conflictingFields
-  , conflictingFieldsWhere, conflictingConstraint
-  , onConflictDoNothing, onConflictUpdateSet
-  , onConflictUpdateSetWhere, onConflictUpdateInstead
-  , onConflictSetAll
+  -- , onConflictDefault, onConflict, anyConflict, conflictingFields
+  -- , conflictingFieldsWhere, conflictingConstraint
+  -- , onConflictDoNothing, onConflictUpdateSet
+  -- , onConflictUpdateSetWhere, onConflictUpdateInstead
+  -- , onConflictSetAll
 
-  -- * @UPDATE RETURNING@
-  , PgUpdateReturning(..)
-  , updateReturning
+  -- -- * @UPDATE RETURNING@
+  -- , PgUpdateReturning(..)
+  -- , updateReturning
 
-  -- * @DELETE RETURNING@
-  , PgDeleteReturning(..)
-  , deleteReturning
-  ) where
+  -- -- * @DELETE RETURNING@
+  -- , PgDeleteReturning(..)
+  -- , deleteReturning
+  -- ) where
 
 import           Database.Beam hiding (insert, insertValues)
 import           Database.Beam.Query.Internal
@@ -47,7 +47,7 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Schema.Tables
 
 import           Database.Beam.Postgres.Types
-import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Backend
 
 import           Control.Monad.Free.Church
 
@@ -62,7 +62,8 @@ import qualified Data.Text as T
 newtype PgLockedTables s = PgLockedTables [ T.Text ]
 instance Monoid (PgLockedTables s) where
   mempty = PgLockedTables []
-  mappend (PgLockedTables a) (PgLockedTables b) = PgLockedTables (a <> b)
+instance Semigroup (PgLockedTables s) where
+  (<>) (PgLockedTables a) (PgLockedTables b) = PgLockedTables (a <> b)
 
 data PgWithLocking s a = PgWithLocking (PgLockedTables s) a
 instance ProjectibleWithPredicate c syntax a => ProjectibleWithPredicate c syntax (PgWithLocking s a) where
@@ -81,12 +82,12 @@ withLocks_ = flip PgWithLocking
 
 -- | Join with a table while locking it explicitly. Provides a 'PgLockedTables' value that can be
 -- used with 'withLocks_' to explicitly lock a table during a @SELECT@ statement
-locked_ :: Database Postgres db
-        => DatabaseEntity Postgres db (TableEntity tbl)
-        -> Q PgSelectSyntax db s (PgLockedTables s, tbl (QExpr PgExpressionSyntax s))
-locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
-  (nm, joined) <- Q (liftF (QAll tblNm tblSettings (\_ -> Nothing) id))
-  pure (PgLockedTables [nm], joined)
+-- locked_ :: Database Postgres db
+--         => DatabaseEntity Postgres db (TableEntity tbl)
+--         -> Q PgSelectSyntax db s (PgLockedTables s, tbl (QExpr s))
+-- locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
+--   (nm, joined) <- Q (liftF (QAll tblNm tblSettings (\_ -> Nothing) id))
+--   pure (PgLockedTables [nm], joined)
 
 -- | Lock some tables during the execution of a query. This is rather complicated, and there are
 -- several usage examples in <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/
@@ -109,26 +110,26 @@ locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
 --
 -- If you want to use the most common behavior (lock all rows in every table mentioned), the
 -- 'lockingAllTablesFor_' function may be what you're after.
-lockingFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
-            => PgSelectLockingStrength
-            -> Maybe PgSelectLockingOptions
-            -> Q PgSelectSyntax db (QNested s) (PgWithLocking (QNested s) a)
-            -> Q PgSelectSyntax db s a
-lockingFor_ lockStrength mLockOptions (Q q) =
-  Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) _) tbl ords limit offset ->
-                            let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
-                            in pgSelectStmt tbl ords limit offset (Just locking))
-                         q (\(PgWithLocking _ a) -> a)))
+-- lockingFor_ :: ( Database Postgres db, Projectible ExpressionSyntax a )
+--             => PgSelectLockingStrength
+--             -> Maybe PgSelectLockingOptions
+--             -> Q PgSelectSyntax db (QNested s) (PgWithLocking (QNested s) a)
+--             -> Q PgSelectSyntax db s a
+-- lockingFor_ lockStrength mLockOptions (Q q) =
+--   Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) _) tbl ords limit offset ->
+--                             let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
+--                             in pgSelectStmt tbl ords limit offset (Just locking))
+--                          q (\(PgWithLocking _ a) -> a)))
 
 -- | Like 'lockingFor_', but does not require an explicit set of locked tables. This produces an
 -- empty @FOR .. OF@ clause.
-lockingAllTablesFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
-                     => PgSelectLockingStrength
-                     -> Maybe PgSelectLockingOptions
-                     -> Q PgSelectSyntax db (QNested s) a
-                     -> Q PgSelectSyntax db s a
-lockingAllTablesFor_ lockStrength mLockOptions q =
-  lockingFor_ lockStrength mLockOptions (lockAll_ <$> q)
+-- lockingAllTablesFor_ :: ( Database Postgres db, Projectible ExpressionSyntax a )
+--                      => PgSelectLockingStrength
+--                      -> Maybe PgSelectLockingOptions
+--                      -> Q PgSelectSyntax db (QNested s) a
+--                      -> Q PgSelectSyntax db s a
+-- lockingAllTablesFor_ lockStrength mLockOptions q =
+--   lockingFor_ lockStrength mLockOptions (lockAll_ <$> q)
 
 -- * @INSERT@
 
@@ -136,21 +137,21 @@ lockingAllTablesFor_ lockStrength mLockOptions q =
 -- provides fuller support for the much richer Postgres @INSERT@ syntax. This
 -- allows you to specify @ON CONFLICT@ actions. For even more complete support,
 -- see 'insertReturning'.
-insert :: DatabaseEntity Postgres db (TableEntity table)
-       -> SqlInsertValues PgInsertValuesSyntax (table (QExpr PgExpressionSyntax s)) -- TODO arbitrary projectibles
-       -> PgInsertOnConflict table
-       -> SqlInsert PgInsertSyntax
-insert tbl values onConflict_ =
-  case insertReturning tbl values onConflict_
-         (Nothing :: Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Int)) of
-    PgInsertReturning a ->
-      SqlInsert (PgInsertSyntax a)
-    PgInsertReturningEmpty ->
-      SqlInsertNoRows
+-- insert :: DatabaseEntity Postgres db (TableEntity table)
+--        -> SqlInsertValues PgInsertValuesSyntax (table (QExpr s)) -- TODO arbitrary projectibles
+--        -> PgInsertOnConflict table
+--        -> SqlInsert InsertSyntax
+-- insert tbl values onConflict_ =
+--   case insertReturning tbl values onConflict_
+--          (Nothing :: Maybe (table (QExpr PostgresInaccessible) -> QExpr PostgresInaccessible Int)) of
+--     PgInsertReturning a ->
+--       SqlInsert (PgInsertSyntax a)
+--     PgInsertReturningEmpty ->
+--       SqlInsertNoRows
 
 -- | The most general kind of @INSERT@ that postgres can perform
 data PgInsertReturning a
-  = PgInsertReturning PgSyntax
+  = PgInsertReturning Syntax
   | PgInsertReturningEmpty
 
 -- | The full Postgres @INSERT@ syntax, supporting conflict actions and the
@@ -160,11 +161,11 @@ data PgInsertReturning a
 -- returns the expression to be returned as part of the @RETURNING@ clause. For
 -- a backend-agnostic version of this functionality see
 -- 'MonadBeamInsertReturning'. Use 'runInsertReturning' to get the results.
-insertReturning :: Projectible PgExpressionSyntax a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> SqlInsertValues PgInsertValuesSyntax (table (QExpr PgExpressionSyntax s))
+insertReturning :: Projectible ExpressionSyntax a
+                => DatabaseEntity be (TableEntity table)
+                -> SqlInsertValues (table (QExpr s))
                 -> PgInsertOnConflict table
-                -> Maybe (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+                -> Maybe (table (QExpr PostgresInaccessible) -> a)
                 -> PgInsertReturning (QExprToIdentity a)
 
 insertReturning _ SqlInsertValuesEmpty _ _ = PgInsertReturningEmpty
@@ -190,15 +191,15 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
 -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
 -- that violates a constraint.
 newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
-    PgInsertOnConflict (tbl (QField PostgresInaccessible) -> PgInsertOnConflictSyntax)
+    PgInsertOnConflict (tbl (QField PostgresInaccessible) -> InsertOnConflictSyntax)
 
 -- | Specifies the kind of constraint that must be violated for the action to occur
-newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
-    PgInsertOnConflictTarget (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> PgInsertOnConflictTargetSyntax)
+-- newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
+--     PgInsertOnConflictTarget (tbl (QExpr PostgresInaccessible) -> PgInsertOnConflictTargetSyntax)
 
 -- | A description of what to do when a constraint or index is violated.
-newtype PgConflictAction (tbl :: (* -> *) -> *) =
-    PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
+-- newtype PgConflictAction (tbl :: (* -> *) -> *) =
+--     PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
 
 -- | By default, Postgres will throw an error when a conflict is detected. This
 -- preserves that functionality.
@@ -215,145 +216,145 @@ onConflictDefault = PgInsertOnConflict (\_ -> PgInsertOnConflictSyntax mempty)
 --
 -- See the
 -- <https://www.postgresql.org/docs/current/static/sql-insert.html Postgres documentation>.
-onConflict :: Beamable tbl
-           => PgInsertOnConflictTarget tbl
-           -> PgConflictAction tbl
-           -> PgInsertOnConflict tbl
-onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update_) =
-  PgInsertOnConflict $ \tbl ->
-  let exprTbl = changeBeamRep (\(Columnar' (QField _ _ nm)) ->
-                                 Columnar' (QExpr (\_ -> fieldE (unqualifiedField nm))))
-                              tbl
-  in PgInsertOnConflictSyntax $
-     emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl)
-                         <> fromPgConflictAction (update_ tbl)
+-- onConflict :: Beamable tbl
+--            => PgInsertOnConflictTarget tbl
+--            -> PgConflictAction tbl
+--            -> PgInsertOnConflict tbl
+-- onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update_) =
+--   PgInsertOnConflict $ \tbl ->
+--   let exprTbl = changeBeamRep (\(Columnar' (QField _ _ nm)) ->
+--                                  Columnar' (QExpr (\_ -> fieldE (unqualifiedField nm))))
+--                               tbl
+--   in PgInsertOnConflictSyntax $
+--      emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl)
+--                          <> fromPgConflictAction (update_ tbl)
 
 -- | Perform the conflict action when any constraint or index conflict occurs.
 -- Syntactically, this is the @ON CONFLICT@ clause, without any /conflict target/.
-anyConflict :: PgInsertOnConflictTarget tbl
-anyConflict = PgInsertOnConflictTarget (\_ -> PgInsertOnConflictTargetSyntax mempty)
+-- anyConflict :: PgInsertOnConflictTarget tbl
+-- anyConflict = PgInsertOnConflictTarget (\_ -> PgInsertOnConflictTargetSyntax mempty)
 
 -- | Perform the conflict action only when these fields conflict. The first
 -- argument gets the current row as a table of expressions. Return the conflict
 -- key. For more information, see the @beam-postgres@ manual.
-conflictingFields :: Projectible PgExpressionSyntax proj
-                  => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
-                  -> PgInsertOnConflictTarget tbl
-conflictingFields makeProjection =
-  PgInsertOnConflictTarget $ \tbl ->
-  PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t"))) <> emit " "
+-- conflictingFields :: Projectible ExpressionSyntax proj
+--                   => (tbl (QExpr PostgresInaccessible) -> proj)
+--                   -> PgInsertOnConflictTarget tbl
+-- conflictingFields makeProjection =
+--   PgInsertOnConflictTarget $ \tbl ->
+--   PgInsertOnConflictTargetSyntax $
+--   pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t"))) <> emit " "
 
 -- | Like 'conflictingFields', but only perform the action if the condition
 -- given in the second argument is met. See the postgres
 -- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
 -- more information.
-conflictingFieldsWhere :: Projectible PgExpressionSyntax proj
-                       => (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> proj)
-                       -> (tbl (QExpr PgExpressionSyntax PostgresInaccessible) ->
-                           QExpr PgExpressionSyntax PostgresInaccessible Bool)
-                       -> PgInsertOnConflictTarget tbl
-conflictingFieldsWhere makeProjection makeWhere =
-  PgInsertOnConflictTarget $ \tbl ->
-  PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t"))) <>
-  emit " WHERE " <>
-  pgParens (let QExpr mkE = makeWhere tbl
-                PgExpressionSyntax e = mkE "t"
-            in e) <>
-  emit " "
+-- conflictingFieldsWhere :: Projectible ExpressionSyntax proj
+--                        => (tbl (QExpr PostgresInaccessible) -> proj)
+--                        -> (tbl (QExpr PostgresInaccessible) ->
+--                            QExpr PostgresInaccessible Bool)
+--                        -> PgInsertOnConflictTarget tbl
+-- conflictingFieldsWhere makeProjection makeWhere =
+--   PgInsertOnConflictTarget $ \tbl ->
+--   PgInsertOnConflictTargetSyntax $
+--   pgParens (pgSepBy (emit ", ") (map fromPgExpression (project (makeProjection tbl) "t"))) <>
+--   emit " WHERE " <>
+--   pgParens (let QExpr mkE = makeWhere tbl
+--                 PgExpressionSyntax e = mkE "t"
+--             in e) <>
+--   emit " "
 
 -- | Perform the action only if the given named constraint is violated
-conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
-conflictingConstraint nm =
-  PgInsertOnConflictTarget $ \_ ->
-  PgInsertOnConflictTargetSyntax $
-  emit "ON CONSTRAINT " <> pgQuotedIdentifier nm <> emit " "
+-- conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
+-- conflictingConstraint nm =
+--   PgInsertOnConflictTarget $ \_ ->
+--   PgInsertOnConflictTargetSyntax $
+--   emit "ON CONSTRAINT " <> pgQuotedIdentifier nm <> emit " "
 
 -- | The Postgres @DO NOTHING@ action
-onConflictDoNothing :: PgConflictAction tbl
-onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
+-- onConflictDoNothing :: PgConflictAction tbl
+-- onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
 
 -- | The Postgres @DO UPDATE SET@ action, without the @WHERE@ clause. The
 -- argument takes an updatable row (like the one used in 'update') and the
 -- conflicting row. Use 'current_' on the first argument to get the current
 -- value of the row in the database.
-onConflictUpdateSet :: Beamable tbl
-                    => (tbl (QField PostgresInaccessible) ->
-                        tbl (QExpr PgExpressionSyntax PostgresInaccessible)  ->
-                        [ QAssignment PgFieldNameSyntax PgExpressionSyntax PostgresInaccessible ])
-                    -> PgConflictAction tbl
-onConflictUpdateSet mkAssignments =
-  PgConflictAction $ \tbl ->
-  let assignments = mkAssignments tbl tblExcluded
-      tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
+-- onConflictUpdateSet :: Beamable tbl
+--                     => (tbl (QField PostgresInaccessible) ->
+--                         tbl (QExpr PostgresInaccessible)  ->
+--                         [ QAssignment PostgresInaccessible ])
+--                     -> PgConflictAction tbl
+-- onConflictUpdateSet mkAssignments =
+--   PgConflictAction $ \tbl ->
+--   let assignments = mkAssignments tbl tblExcluded
+--       tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
 
-      assignmentSyntaxes = do
-        QAssignment assignments' <- assignments
-        (fieldNm, expr) <- assignments'
-        pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
-  in PgConflictActionSyntax $
-     emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
+--       assignmentSyntaxes = do
+--         QAssignment assignments' <- assignments
+--         (fieldNm, expr) <- assignments'
+--         pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
+--   in PgConflictActionSyntax $
+--      emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
 
 -- | The Postgres @DO UPDATE SET@ action, with the @WHERE@ clause. This is like
 -- 'onConflictUpdateSet', but only rows satisfying the given condition are
 -- updated. Sometimes this results in more efficient locking. See the Postgres
 -- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
 -- more information.
-onConflictUpdateSetWhere :: Beamable tbl
-                         => (tbl (QField PostgresInaccessible) ->
-                             tbl (QExpr PgExpressionSyntax PostgresInaccessible)  ->
-                             [ QAssignment PgFieldNameSyntax PgExpressionSyntax PostgresInaccessible ])
-                         -> (tbl (QExpr PgExpressionSyntax PostgresInaccessible) -> QExpr PgExpressionSyntax PostgresInaccessible Bool)
-                         -> PgConflictAction tbl
-onConflictUpdateSetWhere mkAssignments where_ =
-  PgConflictAction $ \tbl ->
-  let assignments = mkAssignments tbl tblExcluded
-      QExpr where_' = where_ (changeBeamRep (\(Columnar' f) -> Columnar' (current_ f)) tbl)
-      tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
+-- onConflictUpdateSetWhere :: Beamable tbl
+--                          => (tbl (QField PostgresInaccessible) ->
+--                              tbl (QExpr PostgresInaccessible)  ->
+--                              [ QAssignment PostgresInaccessible ])
+--                          -> (tbl (QExpr PostgresInaccessible) -> QExpr PostgresInaccessible Bool)
+--                          -> PgConflictAction tbl
+-- onConflictUpdateSetWhere mkAssignments where_ =
+--   PgConflictAction $ \tbl ->
+--   let assignments = mkAssignments tbl tblExcluded
+--       QExpr where_' = where_ (changeBeamRep (\(Columnar' f) -> Columnar' (current_ f)) tbl)
+--       tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
 
-      assignmentSyntaxes = do
-        QAssignment assignments' <- assignments
-        (fieldNm, expr) <- assignments'
-        pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
-  in PgConflictActionSyntax $
-     emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes <> emit " WHERE " <> fromPgExpression (where_' "t")
+--       assignmentSyntaxes = do
+--         QAssignment assignments' <- assignments
+--         (fieldNm, expr) <- assignments'
+--         pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
+--   in PgConflictActionSyntax $
+--      emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes <> emit " WHERE " <> fromPgExpression (where_' "t")
 
 -- | Sometimes you want to update certain columns in the row. Given a
 -- projection from a row to the fields you want, Beam can auto-generate
 -- an assignment that assigns the corresponding fields of the conflicting row.
-onConflictUpdateInstead :: (Beamable tbl, Projectible T.Text proj)
-                        => (tbl (QExpr T.Text PostgresInaccessible) -> proj)
-                        -> PgConflictAction tbl
-onConflictUpdateInstead mkProj =
-  onConflictUpdateSet $ \tbl _ ->
-  let tblFields = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> nm))) tbl
-      proj = project (mkProj tblFields) "t"
+-- onConflictUpdateInstead :: (Beamable tbl, Projectible T.Text proj)
+--                         => (tbl (QExpr T.Text PostgresInaccessible) -> proj)
+--                         -> PgConflictAction tbl
+-- onConflictUpdateInstead mkProj =
+--   onConflictUpdateSet $ \tbl _ ->
+--   let tblFields = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> nm))) tbl
+--       proj = project (mkProj tblFields) "t"
 
-  in map (\fieldNm -> QAssignment [ (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm)) ]) proj
+--   in map (\fieldNm -> QAssignment [ (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm)) ]) proj
 
 -- | Sometimes you want to update every value in the row. Beam can auto-generate
 -- an assignment that assigns the conflicting row to every field in the database
 -- row. This may not always be what you want.
-onConflictSetAll :: (Beamable tbl, Projectible T.Text (tbl (QExpr T.Text PostgresInaccessible)))
-                 => PgConflictAction tbl
-onConflictSetAll = onConflictUpdateInstead id
+-- onConflictSetAll :: (Beamable tbl, Projectible T.Text (tbl (QExpr T.Text PostgresInaccessible)))
+--                  => PgConflictAction tbl
+-- onConflictSetAll = onConflictUpdateInstead id
 
 -- * @UPDATE@
 
 -- | The most general kind of @UPDATE@ that postgres can perform
 data PgUpdateReturning a
-  = PgUpdateReturning PgSyntax
+  = PgUpdateReturning Syntax
   | PgUpdateReturningEmpty
 
 -- | Postgres @UPDATE ... RETURNING@ statement support. The last
 -- argument takes the newly inserted row and returns the values to be
 -- returned. Use 'runUpdateReturning' to get the results.
-updateReturning :: Projectible PgExpressionSyntax a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> (forall s. table (QField s) -> [ QAssignment PgFieldNameSyntax PgExpressionSyntax s ])
-                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
-                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+updateReturning :: Projectible ExpressionSyntax a
+                => DatabaseEntity be (TableEntity table)
+                -> (forall s. table (QField s) -> [ QAssignment s ])
+                -> (forall s. table (QExpr s) -> QExpr s Bool)
+                -> (table (QExpr PostgresInaccessible) -> a)
                 -> PgUpdateReturning (QExprToIdentity a)
 updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
                 mkAssignments
@@ -373,15 +374,15 @@ updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
 -- * @DELETE@
 
 -- | The most general kind of @DELETE@ that postgres can perform
-newtype PgDeleteReturning a = PgDeleteReturning PgSyntax
+newtype PgDeleteReturning a = PgDeleteReturning Syntax
 
 -- | Postgres @DELETE ... RETURNING@ statement support. The last
 -- argument takes the newly inserted row and returns the values to be
 -- returned. Use 'runDeleteReturning' to get the results.
-deleteReturning :: Projectible PgExpressionSyntax a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> (forall s. table (QExpr PgExpressionSyntax s) -> QExpr PgExpressionSyntax s Bool)
-                -> (table (QExpr PgExpressionSyntax PostgresInaccessible) -> a)
+deleteReturning :: Projectible ExpressionSyntax a
+                => DatabaseEntity be (TableEntity table)
+                -> (forall s. table (QExpr s) -> QExpr s Bool)
+                -> (table (QExpr PostgresInaccessible) -> a)
                 -> PgDeleteReturning (QExprToIdentity a)
 deleteReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
                 mkWhere

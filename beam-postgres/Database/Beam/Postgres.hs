@@ -26,32 +26,34 @@ module Database.Beam.Postgres
     PgRowReadError(..), PgError(..)
 
     -- * Beam Postgres backend
-  , Postgres(..), Pg
+  -- , Postgres(..)
+  , Pg
+  , DBIO
 
-    -- ** Postgres syntax
-  , PgCommandSyntax, PgSyntax
-  , PgSelectSyntax, PgInsertSyntax
-  , PgUpdateSyntax, PgDeleteSyntax
+  --   -- ** Postgres syntax
+  -- , PgCommandSyntax, PgSyntax
+  -- , PgSelectSyntax, PgInsertSyntax
+  -- , PgUpdateSyntax, PgDeleteSyntax
 
     -- * Beam URI support
-  , postgresUriSyntax
+  -- , postgresUriSyntax
 
     -- * Postgres-specific features
     -- ** Postgres-specific data types
 
-  , json, jsonb, uuid, money
-  , tsquery, tsvector, text, bytea
-  , unboundedArray
+  -- , json, jsonb, uuid, money
+  -- , tsquery, tsvector, text, bytea
+  -- , unboundedArray
 
     -- *** @SERIAL@ support
-  , smallserial, serial, bigserial
+  -- , smallserial, serial, bigserial
 
   , module Database.Beam.Postgres.PgSpecific
 
-    -- ** Postgres extension support
-  , PgExtensionEntity, IsPgExtension(..)
-  , pgCreateExtension, pgDropExtension
-  , getPgExtension
+  --   -- ** Postgres extension support
+  -- , PgExtensionEntity, IsPgExtension(..)
+  -- , pgCreateExtension, pgDropExtension
+  -- , getPgExtension
 
   -- * @postgresql-simple@ re-exports
 
@@ -66,14 +68,14 @@ module Database.Beam.Postgres
   ) where
 
 import Database.Beam.Postgres.Connection
-import Database.Beam.Postgres.Syntax hiding (PostgresInaccessible)
+import Database.Beam.Backend hiding (PostgresInaccessible)
 import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.PgSpecific
-import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unboundedArray
-                                      , json, jsonb, uuid, money, smallserial, serial
-                                      , bigserial)
-import Database.Beam.Postgres.Extensions ( PgExtensionEntity, IsPgExtension(..)
-                                         , pgCreateExtension, pgDropExtension
-                                         , getPgExtension )
+-- import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unboundedArray
+--                                       , json, jsonb, uuid, money, smallserial, serial
+--                                       , bigserial)
+-- import Database.Beam.Postgres.Extensions ( PgExtensionEntity, IsPgExtension(..)
+--                                          , pgCreateExtension, pgDropExtension
+--                                          , getPgExtension )
 
 import qualified Database.PostgreSQL.Simple as Pg

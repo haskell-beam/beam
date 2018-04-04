@@ -7,10 +7,10 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Database.Beam.Postgres.Types
-  ( Postgres(..) ) where
+module Database.Beam.Postgres.Types () where
 
-import           Database.Beam
+import Data.Typeable
+import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
@@ -33,43 +33,35 @@ import           Data.UUID (UUID)
 import           Data.Vector (Vector)
 import           Data.Word
 
--- | The Postgres backend type, used to parameterize 'MonadBeam'. See the
--- definitions there for more information. The corresponding query monad is
--- 'Pg'. See documentation for 'MonadBeam' and the
--- <https://tathougies.github/beam/ user guide> for more information on using
--- this backend.
-data Postgres
-  = Postgres
-
-instance BeamBackend Postgres where
-  type BackendFromField Postgres = Pg.FromField
+-- instance BeamBackend Postgres where
+--   type BackendFromField Postgres = Pg.FromField
 
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 
-fromScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
+fromScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM a
 fromScientificOrIntegral = do
   sciVal <- fmap (toBoundedInteger =<<) peekField
   case sciVal of
     Just sciVal' -> do
       -- If the parse succeeded, consume the field
-      _ <- parseOneField @Postgres @Scientific
+      _ <- parseOneField @Scientific
       pure sciVal'
-    Nothing -> fromIntegral <$> fromBackendRow @Postgres @Integer
+    Nothing -> fromIntegral <$> fromBackendRow @Integer
 
 -- | Deserialize integral fields, possibly downcasting from a larger integral
 -- type, but only if we won't lose data
 fromPgIntegral :: forall a
                 . (Pg.FromField a, Integral a)
-               => FromBackendRowM Postgres a
+               => FromBackendRowM a
 fromPgIntegral = do
   val <- peekField
   case val of
     Just val' -> do
-      _ <- parseOneField @Postgres @a
+      _ <- parseOneField @a
       pure val'
     Nothing -> do
-      val' <- parseOneField @Postgres @Integer
+      val' <- parseOneField @Integer
       let val'' = fromIntegral val'
       if fromIntegral val'' == val'
         then pure val''
@@ -77,38 +69,38 @@ fromPgIntegral = do
                           , "Make sure your Haskell types are wide enough for your data" ])
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
-instance FromBackendRow Postgres SqlNull
-instance FromBackendRow Postgres Bool
-instance FromBackendRow Postgres Char
-instance FromBackendRow Postgres Double
-instance FromBackendRow Postgres Int where
+instance FromBackendRow SqlNull
+instance FromBackendRow Bool
+instance FromBackendRow Char
+instance FromBackendRow Double
+instance FromBackendRow Int where
   fromBackendRow = fromPgIntegral
-instance FromBackendRow Postgres Int16 where
+instance FromBackendRow Int16 where
   fromBackendRow = fromPgIntegral
-instance FromBackendRow Postgres Int32 where
+instance FromBackendRow Int32 where
   fromBackendRow = fromPgIntegral
-instance FromBackendRow Postgres Int64 where
+instance FromBackendRow Int64 where
   fromBackendRow = fromPgIntegral
 -- Word values are serialized as SQL @NUMBER@ types to guarantee full domain coverage.
 -- However, we wan them te be serialized/deserialized as whichever type makes sense
-instance FromBackendRow Postgres Word where
+instance FromBackendRow Word where
   fromBackendRow = fromScientificOrIntegral
-instance FromBackendRow Postgres Word16 where
+instance FromBackendRow Word16 where
   fromBackendRow = fromScientificOrIntegral
-instance FromBackendRow Postgres Word32 where
+instance FromBackendRow Word32 where
   fromBackendRow = fromScientificOrIntegral
-instance FromBackendRow Postgres Word64 where
+instance FromBackendRow Word64 where
   fromBackendRow = fromScientificOrIntegral
-instance FromBackendRow Postgres Integer
-instance FromBackendRow Postgres ByteString
-instance FromBackendRow Postgres Scientific
-instance FromBackendRow Postgres BL.ByteString
-instance FromBackendRow Postgres Text
-instance FromBackendRow Postgres UTCTime
-instance FromBackendRow Postgres Value
-instance FromBackendRow Postgres TL.Text
-instance FromBackendRow Postgres Pg.Oid
-instance FromBackendRow Postgres LocalTime where
+instance FromBackendRow Integer
+instance FromBackendRow ByteString
+instance FromBackendRow Scientific
+instance FromBackendRow BL.ByteString
+instance FromBackendRow Text
+instance FromBackendRow UTCTime
+instance FromBackendRow Value
+instance FromBackendRow TL.Text
+instance FromBackendRow Pg.Oid
+instance FromBackendRow LocalTime where
   fromBackendRow =
     peekField >>=
     \case
@@ -122,31 +114,31 @@ instance FromBackendRow Postgres LocalTime where
         \case
           Just (_ :: ZonedTime) -> zonedTimeToLocalTime <$> parseOneField
           Nothing -> fail "'TIMESTAMP WITH TIME ZONE' or 'TIMESTAMP WITHOUT TIME ZONE' required for LocalTime"
-instance FromBackendRow Postgres TimeOfDay
-instance FromBackendRow Postgres Day
-instance FromBackendRow Postgres UUID
-instance FromBackendRow Postgres Pg.Null
-instance FromBackendRow Postgres Pg.Date
-instance FromBackendRow Postgres Pg.ZonedTimestamp
-instance FromBackendRow Postgres Pg.UTCTimestamp
-instance FromBackendRow Postgres Pg.LocalTimestamp
-instance FromBackendRow Postgres Pg.HStoreMap
-instance FromBackendRow Postgres Pg.HStoreList
-instance FromBackendRow Postgres [Char]
-instance FromBackendRow Postgres (Ratio Integer)
-instance FromBackendRow Postgres (CI Text)
-instance FromBackendRow Postgres (CI TL.Text)
-instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a) where
+instance FromBackendRow TimeOfDay
+instance FromBackendRow Day
+instance FromBackendRow UUID
+instance FromBackendRow Pg.Null
+instance FromBackendRow Pg.Date
+instance FromBackendRow Pg.ZonedTimestamp
+instance FromBackendRow Pg.UTCTimestamp
+instance FromBackendRow Pg.LocalTimestamp
+instance FromBackendRow Pg.HStoreMap
+instance FromBackendRow Pg.HStoreList
+instance FromBackendRow [Char]
+instance FromBackendRow (Ratio Integer)
+instance FromBackendRow (CI Text)
+instance FromBackendRow (CI TL.Text)
+instance (Pg.FromField a, Typeable a) => FromBackendRow (Vector a) where
     fromBackendRow = do
       isNull <- peekField
       case isNull of
         Just SqlNull -> pure mempty
-        Nothing -> parseOneField @Postgres @(Vector a)
-instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGArray a)
-instance FromBackendRow Postgres (Pg.Binary ByteString)
-instance FromBackendRow Postgres (Pg.Binary BL.ByteString)
-instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGRange a)
-instance (Pg.FromField a, Pg.FromField b) => FromBackendRow Postgres (Either a b)
+        Nothing -> parseOneField @(Vector a)
+instance (Pg.FromField a, Typeable a) => FromBackendRow (Pg.PGArray a)
+instance FromBackendRow (Pg.Binary ByteString)
+instance FromBackendRow (Pg.Binary BL.ByteString)
+instance (Pg.FromField a, Typeable a) => FromBackendRow (Pg.PGRange a)
+instance (Pg.FromField a, Pg.FromField b) => FromBackendRow (Either a b)
 
-instance BeamSqlBackend Postgres
-instance BeamSql92Backend Postgres
+-- instance BeamSqlBackend Postgres
+-- instance BeamSql92Backend Postgres

@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -81,9 +82,9 @@ module Database.Beam.Postgres.Syntax where
 
     -- , PostgresInaccessible ) where
 
-import           Database.Beam hiding (insert)
-import           Database.Beam.Backend.SQL
-import           Database.Beam.Query.SQL92
+-- import           Database.Beam hiding (insert)
+-- import           Database.Beam.Backend.SQL
+-- import           Database.Beam.Query.SQL92
 
 -- import           Database.Beam.Migrate.SQL
 -- import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
@@ -91,9 +92,11 @@ import           Database.Beam.Query.SQL92
 
 -- import           Database.Beam.Migrate.Generics
 
+import Control.Monad.Trans.Reader
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
+import GHC.Generics ( Generic )
 import           Data.Aeson (Value, object, (.=))
 import           Data.Bits
 import           Data.ByteString (ByteString)
@@ -115,7 +118,10 @@ import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDif
 import           Data.UUID (UUID)
 import qualified Data.Vector as V
 import           Data.Word
+import Data.Functor.Classes
 
+import qualified Database.PostgreSQL.Simple as Pg ( Connection )
+import qualified Database.PostgreSQL.Simple.FromField as Pg ( FromField )
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..), Binary(..), Null(..))
@@ -133,6 +139,8 @@ data PgSyntaxF f where
   EscapeBytea  :: ByteString -> f -> PgSyntaxF f
   EscapeIdentifier :: ByteString -> f -> PgSyntaxF f
 deriving instance Functor PgSyntaxF
+
+instance Eq1 PgSyntaxF where
 
 instance Eq f => Eq (PgSyntaxF f) where
   EmitByteString b1 next1 == EmitByteString b2 next2 =
@@ -171,8 +179,8 @@ instance Monoid Syntax where
 instance Semigroup Syntax where
   (<>) a b = PgSyntax (buildPgSyntax a >> buildPgSyntax b)
 
--- instance Eq Syntax where
---   PgSyntax x == PgSyntax y = (fromF x :: Free PgSyntaxF ()) == fromF y
+instance Eq Syntax where
+  PgSyntax x == PgSyntax y = (fromF x :: Free PgSyntaxF ()) == fromF y
 
 instance Show Syntax where
   showsPrec prec s =
@@ -231,7 +239,7 @@ newtype DeleteSyntax = PgDeleteSyntax { fromPgDelete :: Syntax }
 -- | 'IsSql92UpdateSyntax' for Postgres
 newtype UpdateSyntax = PgUpdateSyntax { fromPgUpdate :: Syntax }
 
-newtype ExpressionSyntax = PgExpressionSyntax { fromPgExpression :: Syntax } 
+newtype ExpressionSyntax = PgExpressionSyntax { fromPgExpression :: Syntax }  deriving Eq
 newtype AggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fromPgAggregationSetQuantifier :: Syntax }
 newtype SelectSetQuantifierSyntax = PgSelectSetQuantifierSyntax { fromPgSelectSetQuantifier :: Syntax }
 newtype FromSyntax = PgFromSyntax { fromPgFrom :: Syntax }
@@ -306,8 +314,8 @@ instance Hashable PgDataTypeDescr where
 -- data PgTableOptionsSyntax = PgTableOptionsSyntax PgSyntax PgSyntax
 -- newtype PgColumnSchemaSyntax = PgColumnSchemaSyntax { fromPgColumnSchema :: PgSyntax } deriving (Show, Eq)
 
--- data PgDataTypeSyntax
---   = PgDataTypeSyntax
+data DataTypeSyntax
+  = DataTypeSyntax
 --   { pgDataTypeDescr :: PgDataTypeDescr
 --   , fromPgDataType :: PgSyntax
 --   , pgDataTypeSerialized :: BeamSerializedDataType
@@ -340,8 +348,8 @@ newtype PgAlterTableSyntax = PgAlterTableSyntax { fromPgAlterTable :: Syntax }
 newtype PgAlterTableActionSyntax = PgAlterTableActionSyntax { fromPgAlterTableAction :: Syntax }
 newtype PgAlterColumnActionSyntax = PgAlterColumnActionSyntax { fromPgAlterColumnAction :: Syntax }
 newtype PgWindowFrameSyntax = PgWindowFrameSyntax { fromPgWindowFrame :: Syntax }
-newtype PgWindowFrameBoundsSyntax = PgWindowFrameBoundsSyntax { fromPgWindowFrameBounds :: Syntax }
-newtype PgWindowFrameBoundSyntax = PgWindowFrameBoundSyntax { fromPgWindowFrameBound :: ByteString -> Syntax }
+newtype WindowFrameBoundsSyntax = PgWindowFrameBoundsSyntax { fromPgWindowFrameBounds :: Syntax }
+newtype WindowFrameBoundSyntax = PgWindowFrameBoundSyntax { fromPgWindowFrameBound :: ByteString -> Syntax }
 
 -- instance Hashable PgDataTypeSyntax where
 --   hashWithSalt salt (PgDataTypeSyntax a _ _) = hashWithSalt salt a
@@ -387,6 +395,7 @@ deleteStmt tbl where_ =
 selectStmt tbl ordering limit offset =
   pgSelectStmt tbl ordering limit offset Nothing
 
+selectTableStmt :: Maybe SelectSetQuantifierSyntax -> ProjectionSyntax -> Maybe FromSyntax -> Maybe ExpressionSyntax -> Maybe GroupingSyntax -> Maybe ExpressionSyntax -> SelectTableSyntax
 selectTableStmt setQuantifier proj from where_ grouping having =
   PgSelectTableSyntax $
   emit "SELECT " <>
@@ -419,11 +428,14 @@ rightJoin = pgJoin "RIGHT JOIN"
 
 outerJoin = pgJoin "FULL OUTER JOIN"
 
-ascOrdering e =  e <> emit " ASC"
-descOrdering e = e <> emit " DESC"
+ascOrdering e =  PgExpressionSyntax $ fromPgExpression e <> emit " ASC"
+descOrdering e = PgExpressionSyntax $ fromPgExpression e <> emit " DESC"
 
--- nullsFirstOrdering o = o { pgOrderingNullOrdering = Just PgNullOrderingNullsFirst }
--- nullsLastOrdering o = o { pgOrderingNullOrdering = Just PgNullOrderingNullsLast }
+nullsFirstOrdering :: ExpressionSyntax -> ExpressionSyntax
+nullsFirstOrdering o = o -- { pgOrderingNullOrdering = Just PgNullOrderingNullsFirst }
+
+nullsLastOrdering :: ExpressionSyntax -> ExpressionSyntax
+nullsLastOrdering o = o -- { pgOrderingNullOrdering = Just PgNullOrderingNullsLast }
 
 -- domainType nm = PgDataTypeSyntax (PgDataTypeDescrDomain nm) (pgQuotedIdentifier nm)
 --                                  (domainType nm)
@@ -573,7 +585,9 @@ likeE = pgBinOp "LIKE"
 overlapsE = pgBinOp "OVERLAPS"
 eqE = pgCompOp "="
 neqE = pgCompOp "<>"
+eqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
 eqMaybeE a b _ = pgBinOp "IS NOT DISTINCT FROM" a b
+neqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
 neqMaybeE a b _ = pgBinOp "IS DISTINCT FROM" a b
 ltE = pgCompOp "<"
 gtE = pgCompOp ">"
@@ -618,6 +632,7 @@ trimE x = PgExpressionSyntax (emit "TRIM(" <> fromPgExpression x <> emit ")")
 coalesceE es = PgExpressionSyntax (emit "COALESCE(" <> pgSepBy (emit ", ") (map fromPgExpression es) <> emit ")")
 extractE field from = PgExpressionSyntax (emit "EXTRACT(" <> fromPgExtractField field <> emit " FROM (" <> fromPgExpression from <> emit "))")
 -- castE e to = PgExpressionSyntax (emit "CAST((" <> fromPgExpression e <> emit ") AS " <> fromPgDataType to <> emit ")")
+caseE :: [(ExpressionSyntax, ExpressionSyntax)] -> ExpressionSyntax -> ExpressionSyntax
 caseE cases else_ =
     PgExpressionSyntax $
     emit "CASE " <>
@@ -658,7 +673,7 @@ concatE es =
 
 overE expr frame =
   PgExpressionSyntax $
-  fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
+  fromPgExpression expr <> emit " " <> fromPgExpression frame
 
 lnE    x = PgExpressionSyntax (emit "LN("    <> fromPgExpression x <> emit ")")
 expE   x = PgExpressionSyntax (emit "EXP("   <> fromPgExpression x <> emit ")")
@@ -720,22 +735,25 @@ lastValueE x = PgExpressionSyntax (emit "LAST_VALUE(" <> fromPgExpression x <> e
 nthValueE x n = PgExpressionSyntax (emit "NTH_VALUE(" <> fromPgExpression x <> emit ", " <> fromPgExpression n <> emit ")")
 
 frameSyntax partition_ ordering_ bounds_ =
-  PgWindowFrameSyntax $
+  PgExpressionSyntax $
   emit "OVER " <>
   pgParens
   (
     maybe mempty (\p -> emit "PARTITION BY " <> pgSepBy (emit ", ") (map fromPgExpression p)) partition_ <>
-    maybe mempty (\o -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgOrdering o)) ordering_ <>
-    maybe mempty (\b -> emit " ROWS " <> fromPgWindowFrameBounds b) bounds_
+    maybe mempty (\o -> emit " ORDER BY " <> pgSepBy (emit ", ") (map fromPgExpression o)) ordering_ <>
+    maybe mempty (\b -> emit " ROWS " <> fromPgExpression b) bounds_
   )
 
+fromToBoundSyntax :: WindowFrameBoundSyntax -> Maybe WindowFrameBoundSyntax -> ExpressionSyntax
 fromToBoundSyntax from Nothing =
-  PgWindowFrameBoundsSyntax (fromPgWindowFrameBound from "PRECEDING")
+  PgExpressionSyntax (fromPgWindowFrameBound from "PRECEDING")
 fromToBoundSyntax from (Just to) =
-  PgWindowFrameBoundsSyntax $
+  PgExpressionSyntax $
   emit "BETWEEN " <> fromPgWindowFrameBound from "PRECEDING" <> emit " AND " <> fromPgWindowFrameBound to "FOLLOWING"
 
 unboundedSyntax = PgWindowFrameBoundSyntax $ \where_ -> emit "UNBOUNDED " <> emit where_
+
+nrowsBoundSyntax :: Int -> WindowFrameBoundSyntax
 nrowsBoundSyntax 0 = PgWindowFrameBoundSyntax $ \_ -> emit "CURRENT ROW"
 nrowsBoundSyntax n = PgWindowFrameBoundSyntax $ \where_ -> emit (fromString (show n)) <> emit " " <> emit where_
 
@@ -753,8 +771,8 @@ everyE = pgUnAgg "EVERY"
 someE = pgUnAgg "BOOL_ANY"
 anyE = pgUnAgg "BOOL_ANY"
 
-setQuantifierDistinct = PgAggregationSetQuantifierSyntax $ emit "DISTINCT"
-setQuantifierAll = PgAggregationSetQuantifierSyntax $ emit "ALL"
+setQuantifierDistinct = PgSelectSetQuantifierSyntax $ emit "DISTINCT"
+setQuantifierAll = PgSelectSetQuantifierSyntax $ emit "ALL"
 
 pgSelectSetQuantifierDistinctOn :: [ExpressionSyntax] -> SelectSetQuantifierSyntax
 pgSelectSetQuantifierDistinctOn exprs =
@@ -786,13 +804,15 @@ projExprs exprs =
   pgSepBy (emit ", ")
           (map (\(expr, nm) -> fromPgExpression expr <>
                                maybe mempty (\nm -> emit " AS " <> pgQuotedIdentifier nm) nm) exprs)
-
+  
+insertStmt :: T.Text -> [T.Text] -> InsertValuesSyntax -> InsertSyntax
 insertStmt tblName fields values =
     PgInsertSyntax $
     emit "INSERT INTO " <> pgQuotedIdentifier tblName <> emit "(" <>
     pgSepBy (emit ", ") (map pgQuotedIdentifier fields) <>
     emit ") " <> fromPgInsertValues values
 
+insertSqlExpressions :: [[ExpressionSyntax]] -> InsertValuesSyntax
 insertSqlExpressions es =
     PgInsertValuesSyntax $
     emit "VALUES " <>
@@ -969,12 +989,12 @@ DEFAULT_SQL_SYNTAX(Scientific)
 class HasSqlValueSyntax a where
   sqlValueSyntax :: a -> ValueSyntax
 
-instance HasSqlValueSyntax SqlNull where
-  sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
+-- instance HasSqlValueSyntax SqlNull where
+--   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
 
-instance HasSqlValueSyntax x => HasSqlValueSyntax (Maybe x) where
-  sqlValueSyntax Nothing = sqlValueSyntax SqlNull
-  sqlValueSyntax (Just x) = sqlValueSyntax x
+-- instance HasSqlValueSyntax x => HasSqlValueSyntax (Maybe x) where
+--   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
+--   sqlValueSyntax (Just x) = sqlValueSyntax x
 
 instance HasSqlValueSyntax B.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
@@ -1179,39 +1199,52 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
   instance HasSqlEqualityCheck (ty);           \
   instance HasSqlQuantifiedEqualityCheck (ty);
 
-PG_HAS_EQUALITY_CHECK(Bool)
-PG_HAS_EQUALITY_CHECK(Double)
-PG_HAS_EQUALITY_CHECK(Float)
-PG_HAS_EQUALITY_CHECK(Int)
-PG_HAS_EQUALITY_CHECK(Int8)
-PG_HAS_EQUALITY_CHECK(Int16)
-PG_HAS_EQUALITY_CHECK(Int32)
-PG_HAS_EQUALITY_CHECK(Int64)
-PG_HAS_EQUALITY_CHECK(Integer)
-PG_HAS_EQUALITY_CHECK(Word)
-PG_HAS_EQUALITY_CHECK(Word8)
-PG_HAS_EQUALITY_CHECK(Word16)
-PG_HAS_EQUALITY_CHECK(Word32)
-PG_HAS_EQUALITY_CHECK(Word64)
-PG_HAS_EQUALITY_CHECK(T.Text)
-PG_HAS_EQUALITY_CHECK(TL.Text)
-PG_HAS_EQUALITY_CHECK(UTCTime)
-PG_HAS_EQUALITY_CHECK(Value)
-PG_HAS_EQUALITY_CHECK(Pg.Oid)
-PG_HAS_EQUALITY_CHECK(LocalTime)
-PG_HAS_EQUALITY_CHECK(ZonedTime)
-PG_HAS_EQUALITY_CHECK(TimeOfDay)
-PG_HAS_EQUALITY_CHECK(NominalDiffTime)
-PG_HAS_EQUALITY_CHECK(Day)
-PG_HAS_EQUALITY_CHECK(UUID)
-PG_HAS_EQUALITY_CHECK([Char])
-PG_HAS_EQUALITY_CHECK(Pg.HStoreMap)
-PG_HAS_EQUALITY_CHECK(Pg.HStoreList)
-PG_HAS_EQUALITY_CHECK(Pg.Date)
-PG_HAS_EQUALITY_CHECK(Pg.ZonedTimestamp)
-PG_HAS_EQUALITY_CHECK(Pg.LocalTimestamp)
-PG_HAS_EQUALITY_CHECK(Pg.UTCTimestamp)
-PG_HAS_EQUALITY_CHECK(Scientific)
-PG_HAS_EQUALITY_CHECK(ByteString)
-PG_HAS_EQUALITY_CHECK(BL.ByteString)
-PG_HAS_EQUALITY_CHECK(V.Vector a)
+-- PG_HAS_EQUALITY_CHECK(Bool)
+-- PG_HAS_EQUALITY_CHECK(Double)
+-- PG_HAS_EQUALITY_CHECK(Float)
+-- PG_HAS_EQUALITY_CHECK(Int)
+-- PG_HAS_EQUALITY_CHECK(Int8)
+-- PG_HAS_EQUALITY_CHECK(Int16)
+-- PG_HAS_EQUALITY_CHECK(Int32)
+-- PG_HAS_EQUALITY_CHECK(Int64)
+-- PG_HAS_EQUALITY_CHECK(Integer)
+-- PG_HAS_EQUALITY_CHECK(Word)
+-- PG_HAS_EQUALITY_CHECK(Word8)
+-- PG_HAS_EQUALITY_CHECK(Word16)
+-- PG_HAS_EQUALITY_CHECK(Word32)
+-- PG_HAS_EQUALITY_CHECK(Word64)
+-- PG_HAS_EQUALITY_CHECK(T.Text)
+-- PG_HAS_EQUALITY_CHECK(TL.Text)
+-- PG_HAS_EQUALITY_CHECK(UTCTime)
+-- PG_HAS_EQUALITY_CHECK(Value)
+-- PG_HAS_EQUALITY_CHECK(Pg.Oid)
+-- PG_HAS_EQUALITY_CHECK(LocalTime)
+-- PG_HAS_EQUALITY_CHECK(ZonedTime)
+-- PG_HAS_EQUALITY_CHECK(TimeOfDay)
+-- PG_HAS_EQUALITY_CHECK(NominalDiffTime)
+-- PG_HAS_EQUALITY_CHECK(Day)
+-- PG_HAS_EQUALITY_CHECK(UUID)
+-- PG_HAS_EQUALITY_CHECK([Char])
+-- PG_HAS_EQUALITY_CHECK(Pg.HStoreMap)
+-- PG_HAS_EQUALITY_CHECK(Pg.HStoreList)
+-- PG_HAS_EQUALITY_CHECK(Pg.Date)
+-- PG_HAS_EQUALITY_CHECK(Pg.ZonedTimestamp)
+-- PG_HAS_EQUALITY_CHECK(Pg.LocalTimestamp)
+-- PG_HAS_EQUALITY_CHECK(Pg.UTCTimestamp)
+-- PG_HAS_EQUALITY_CHECK(Scientific)
+-- PG_HAS_EQUALITY_CHECK(ByteString)
+-- PG_HAS_EQUALITY_CHECK(BL.ByteString)
+-- PG_HAS_EQUALITY_CHECK(V.Vector a)
+
+class IsStringType ( a :: * )
+
+type Handle = Pg.Connection
+
+newtype DBIO a = DBIO ( ReaderT Pg.Connection IO a )
+  deriving ( Functor, Applicative, Monad )
+
+type BackendFromField = Pg.FromField
+
+withDatabase c (DBIO m) = runReaderT m c
+
+

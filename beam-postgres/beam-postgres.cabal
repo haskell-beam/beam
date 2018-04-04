@@ -9,23 +9,44 @@ author:               Travis Athougies
 maintainer:           travis@athougies.net
 category:             Database
 build-type:           Simple
-cabal-version:        >=1.18
+cabal-version:        2.0
 extra-doc-files:      ChangeLog.md
 bug-reports:          https://github.com/tathougies/beam/issues
 
+library beam-postgres-backend
+  exposed-modules: Database.Beam.Postgres.Syntax
+  build-depends:      base                 >=4.7  && <5.0,
+                      postgresql-libpq     >=0.8  && <0.10,
+                      postgresql-simple    >=0.5  && <0.6, 
+                      text                 >=1.0  && <1.3,
+                      bytestring           >=0.10 && <0.11, 
+                      hashable             >=1.1  && <1.3,
+                      free                 >=4.12 && <4.13,
+                      time                 >=1.6  && <1.10,
+                      mtl                  >=2.1  && <2.3,
+                      conduit              >=1.2  && <1.3,
+                      aeson                >=0.11 && <1.3,
+                      uuid                 >=1.2  && <1.4,
+                      case-insensitive     >=1.2  && <1.3,
+                      scientific           >=0.3  && <0.4,
+                      vector               >=0.11 && <0.13,
+                      network-uri          >=2.6  && <2.7,
+                      unordered-containers >= 0.2 && <0.3, 
+                      haskell-src-exts     >=1.18 && <1.20,
+                      transformers
+  default-language:   Haskell2010
+  hs-source-dirs: syntax
+                      
 library
   exposed-modules:    Database.Beam.Postgres
-                      Database.Beam.Postgres.Migrate
-                      Database.Beam.Postgres.PgCrypto
-                      Database.Beam.Postgres.Syntax
-
                       Database.Beam.Postgres.Conduit
                       Database.Beam.Postgres.Full
+
+  mixins: beam-postgres-backend (Database.Beam.Postgres.Syntax as Database.Beam.Backend) 
 
   other-modules:      Database.Beam.Postgres.Types
                       Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.PgSpecific
-                      Database.Beam.Postgres.Extensions
   build-depends:      base                 >=4.7  && <5.0,
                       beam-core            >=0.7  && <0.8,
 
@@ -48,14 +69,15 @@ library
                       network-uri          >=2.6  && <2.7,
                       unordered-containers >= 0.2 && <0.3,
 
-                      haskell-src-exts     >=1.18 && <1.20
+                      haskell-src-exts     >=1.18 && <1.20,
+                      beam-postgres-backend
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
                       CPP, TypeApplications, FlexibleContexts
-  ghc-options:        -Wall
-  if flag(werror)
-    ghc-options:       -Werror
+  -- ghc-options:        -Wall
+  -- if flag(werror)
+    -- ghc-options:       -Werror
 
 flag werror
   description: Enable -Werror during development

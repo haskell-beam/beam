@@ -29,7 +29,7 @@ class MonadBeam handle m =>
   MonadBeamInsertReturning handle m | m -> handle, handle -> m where
   runInsertReturningList
     :: ( Beamable table
-       , Projectible (table (QExpr ()))
+       , Projectible ExpressionSyntax (table (QExpr ()))
        , FromBackendRow (table Identity) )
     => DatabaseEntity db (TableEntity table)
     -> SqlInsertValues (table (QExpr s))
@@ -41,7 +41,7 @@ class MonadBeam handle m =>
   MonadBeamUpdateReturning handle m | m -> handle, handle -> m where
   runUpdateReturningList
     :: ( Beamable table
-       , Projectible (table (QExpr ()))
+       , Projectible ExpressionSyntax (table (QExpr ()))
        , FromBackendRow (table Identity) )
     => DatabaseEntity db (TableEntity table)
     -> (forall s. table (QField s) -> [ QAssignment s ])
@@ -55,7 +55,7 @@ class MonadBeam handle m =>
   MonadBeamDeleteReturning handle m | m -> handle, handle -> m where
   runDeleteReturningList
     :: ( Beamable table
-       , Projectible (table (QExpr ()))
+       , Projectible ExpressionSyntax (table (QExpr ()))
        , FromBackendRow (table Identity) )
     => DatabaseEntity db (TableEntity table)
     -> (forall s. table (QExpr s) -> QExpr s Bool)

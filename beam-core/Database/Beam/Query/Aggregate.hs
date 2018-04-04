@@ -60,9 +60,9 @@ import Data.Typeable
 --   For usage examples, see
 --   <https://tathougies.github.io/beam/user-guide/queries/aggregates/ the manual>.
 aggregate_ :: forall a r db s.
-              ( ProjectibleWithPredicate AggregateContext a
-              , Projectible r
-              , Projectible a
+              ( ProjectibleWithPredicate AggregateContext ExpressionSyntax a
+              , Projectible ExpressionSyntax r
+              , Projectible ExpressionSyntax a
 
               , ContextRewritable a
               , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext) 

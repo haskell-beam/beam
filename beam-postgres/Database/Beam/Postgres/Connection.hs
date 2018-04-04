@@ -10,15 +10,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Database.Beam.Postgres.Connection
-  ( PgRowReadError(..), PgError(..)
-  , Pg(..), PgF(..)
+module Database.Beam.Postgres.Connection where
+  -- ( PgRowReadError(..), PgError(..)
+  -- , Pg(..), PgF(..)
 
-  , pgRenderSyntax, runPgRowReader, getFields
+  -- , pgRenderSyntax, runPgRowReader, getFields
 
-  , withPgDebug
+  -- , withPgDebug
 
-  , postgresUriSyntax ) where
+  -- , postgresUriSyntax ) where
 
 import           Control.Exception (Exception, throwIO)
 import           Control.Monad.Free.Church
@@ -31,7 +31,7 @@ import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Backend.URI
 import           Database.Beam.Query.Types (QGenExpr(..))
 
-import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Backend
 import           Database.Beam.Postgres.Full
 import           Database.Beam.Postgres.Types
 
@@ -76,19 +76,19 @@ data PgStream a = PgStreamDone     (Either PgError a)
 -- | 'BeamURIOpeners' for the standard @postgresql:@ URI scheme. See the
 -- postgres documentation for more details on the formatting. See documentation
 -- for 'BeamURIOpeners' for more information on how to use this with beam
-postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
-                  -> BeamURIOpeners c
-postgresUriSyntax =
-    mkUriOpener "postgresql:"
-        (\uri -> do
-            let pgConnStr = fromString (uriToString id uri "")
-            hdl <- Pg.connectPostgreSQL pgConnStr
-            pure (hdl, Pg.close hdl))
+-- postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
+--                   -> BeamURIOpeners c
+-- postgresUriSyntax =
+--     mkUriOpener "postgresql:"
+--         (\uri -> do
+--             let pgConnStr = fromString (uriToString id uri "")
+--             hdl <- Pg.connectPostgreSQL pgConnStr
+--             pure (hdl, Pg.close hdl))
 
 -- * Syntax rendering
 
 pgRenderSyntax ::
-  Pg.Connection -> PgSyntax -> IO ByteString
+  Pg.Connection -> Syntax -> IO ByteString
 pgRenderSyntax conn (PgSyntax mkQuery) =
   renderBuilder <$> runF mkQuery finish step mempty
   where
@@ -141,7 +141,7 @@ getFields res = do
   mapM getField [0..colCount - 1]
 
 runPgRowReader ::
-  Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either PgRowReadError a)
+  Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM a -> IO (Either PgRowReadError a)
 runPgRowReader conn rowIdx res fields readRow =
   Pg.nfields res >>= \(Pg.Col colCount) ->
   runF readRow finish step 0 colCount fields
@@ -207,7 +207,7 @@ withPgDebug dbg conn (Pg action) =
                    finishUp (PgStreamDone (Left err)) = pure (Left err)
                    finishUp (PgStreamContinue next') = next' Nothing >>= finishUp
 
-                   columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
+                   columnCount = fromIntegral $ valuesNeeded (Proxy @x)
                in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query) (PgStreamContinue nextStream) runConsumer >>= finishUp
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
@@ -280,10 +280,10 @@ withPgDebug dbg conn (Pg action) =
 data PgF next where
     PgLiftIO :: IO a -> (a -> next) -> PgF next
     PgRunReturning ::
-        FromBackendRow Postgres x =>
-        PgCommandSyntax -> (Pg (Maybe x) -> Pg a) -> (a -> next) -> PgF next
+        FromBackendRow x =>
+        Command -> (Pg (Maybe x) -> Pg a) -> (a -> next) -> PgF next
     PgFetchNext ::
-        FromBackendRow Postgres x =>
+        FromBackendRow x =>
         (Maybe x -> next) -> PgF next
     PgLiftWithHandle :: (Pg.Connection -> IO a) -> (a -> next) -> PgF next
 deriving instance Functor PgF
@@ -300,7 +300,7 @@ newtype Pg a = Pg { runPg :: F PgF a }
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)
 
-instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
+instance MonadBeam Pg.Connection Pg where
     withDatabase conn action =
       withPgDebug (\_ -> pure ()) conn action >>= either throwIO pure
     withDatabaseDebug dbg conn action =
@@ -309,12 +309,12 @@ instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
     runReturningMany cmd consume =
         liftF (PgRunReturning cmd consume id)
 
-instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg.Connection Pg where
+instance MonadBeamInsertReturning Pg.Connection Pg where
     runInsertReturningList tbl values = do
         let insertReturningCmd' =
                 insertReturning tbl values onConflictDefault
-                                (Just (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
-                                                              Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty)))
+                                (Just (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PostgresInaccessible) ty) ->
+                                                              Columnar' (QExpr s) :: Columnar' (QExpr ()) ty)))
 
         -- Make savepoint
         case insertReturningCmd' of
@@ -323,12 +323,12 @@ instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg.Connection Pg wher
           PgInsertReturning insertReturningCmd ->
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
 
-instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg where
+instance MonadBeamUpdateReturning Pg.Connection Pg where
     runUpdateReturningList tbl mkAssignments mkWhere = do
         let updateReturningCmd' =
                 updateReturning tbl mkAssignments mkWhere
-                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
-                                                        Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty))
+                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PostgresInaccessible) ty) ->
+                                                        Columnar' (QExpr s) :: Columnar' (QExpr ()) ty))
 
         case updateReturningCmd' of
           PgUpdateReturningEmpty ->
@@ -336,11 +336,11 @@ instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg wher
           PgUpdateReturning updateReturningCmd ->
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
 
-instance MonadBeamDeleteReturning PgCommandSyntax Postgres Pg.Connection Pg where
+instance MonadBeamDeleteReturning Pg.Connection Pg where
     runDeleteReturningList tbl mkWhere = do
         let PgDeleteReturning deleteReturningCmd =
                 deleteReturning tbl mkWhere
-                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax PostgresInaccessible) ty) ->
-                                                        Columnar' (QExpr s) :: Columnar' (QExpr PgExpressionSyntax ()) ty))
+                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr PostgresInaccessible) ty) ->
+                                                        Columnar' (QExpr s) :: Columnar' (QExpr ()) ty))
 
         runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning deleteReturningCmd)

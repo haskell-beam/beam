@@ -21,13 +21,13 @@ import           Control.Monad.Writer
 import           GHC.TypeLits
 import           GHC.Types
 
-type ProjectibleInSelectSyntax a = ( Projectible a, ProjectibleValue a )
+type ProjectibleInSelectSyntax a = ( Projectible ExpressionSyntax a, ProjectibleValue a )
 
 type TablePrefix = T.Text
 
 data QF (db :: (* -> *) -> *) s next where
   QDistinct
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => (r -> WithExprContext SelectSetQuantifierSyntax)
     -> QM db s r
     -> (r -> next)
@@ -41,14 +41,14 @@ data QF (db :: (* -> *) -> *) s next where
     -> ((T.Text, table (QExpr s)) -> next) -> QF db s next
 
   QArbitraryJoin
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => QM db (QNested s) r
     -> (FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax) -> (r -> Maybe (WithExprContext ExpressionSyntax))
     -> (r -> next)
     -> QF db s next
 
   QTwoWayJoin
-    :: (Projectible a, Projectible b)
+    :: (Projectible ExpressionSyntax a, Projectible ExpressionSyntax b)
     => QM db (QNested s) a
     -> QM db (QNested s) b
     -> (FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax)
@@ -57,7 +57,7 @@ data QF (db :: (* -> *) -> *) s next where
     -> QF db s next
 
   QSubSelect
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => QM db (QNested s) r
     -> (r -> next)
     -> QF db s next
@@ -68,29 +68,29 @@ data QF (db :: (* -> *) -> *) s next where
     -> QF db s next
 
   QLimit
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => Integer
     -> QM db (QNested s) r
     -> (r -> next)
     -> QF db s next
 
   QOffset
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => Integer
     -> QM db (QNested s) r
     -> (r -> next)
     -> QF db s next
 
   QUnion
-    :: Projectible r
-    =>  Bool
+    :: Projectible ExpressionSyntax r
+    => Bool
     -> QM db (QNested s) r
     -> QM db (QNested s) r
     -> (r -> next)
     -> QF db s next
 
   QIntersect
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => Bool
     -> QM db (QNested s) r
     -> QM db (QNested s) r
@@ -98,7 +98,7 @@ data QF (db :: (* -> *) -> *) s next where
     -> QF db s next
 
   QExcept
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => Bool
     -> QM db (QNested s) r
     -> QM db (QNested s) r
@@ -106,16 +106,16 @@ data QF (db :: (* -> *) -> *) s next where
     -> QF db s next
 
   QOrderBy
-    :: Projectible r
+    :: Projectible ExpressionSyntax r
     => (r -> WithExprContext [ ExpressionSyntax ])
     -> QM db (QNested s) r
     -> (r -> next)
     -> QF db s next
 
   QWindowOver
-    :: ( ProjectibleWithPredicate WindowFrameContext window
-       , Projectible r
-       , Projectible a
+    :: ( ProjectibleWithPredicate WindowFrameContext ExpressionSyntax window
+       , Projectible ExpressionSyntax r
+       , Projectible ExpressionSyntax a
        )
     => (r -> window)
     -> (r -> window -> a)
@@ -124,8 +124,8 @@ data QF (db :: (* -> *) -> *) s next where
     -> QF db s next
 
   QAggregate
-    :: ( Projectible grouping
-       , Projectible a
+    :: ( Projectible ExpressionSyntax grouping
+       , Projectible ExpressionSyntax a
        )
     => (a -> TablePrefix -> (Maybe GroupingSyntax, grouping))
     -> QM db (QNested s) a
@@ -309,7 +309,7 @@ type family ValueContextSuggestion a :: ErrorMessage where
     ValueContextSuggestion _ = 'Text ""
 
 type Projectible = ProjectibleWithPredicate AnyType
-type ProjectibleValue = ProjectibleWithPredicate ValueContext
+type ProjectibleValue = ProjectibleWithPredicate ValueContext ExpressionSyntax
 
 class ThreadRewritable (s :: *) (a :: *) | a -> s where
   type WithRewrittenThread s (s' :: *) a :: *
@@ -457,71 +457,71 @@ instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
     , rewriteContext p d, rewriteContext p e, rewriteContext p f
     , rewriteContext p g, rewriteContext p h )
 
-class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) a where
+class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) syntax a | a -> syntax where
   project' :: Monad m => Proxy contextPredicate
-           -> (forall context. contextPredicate context => Proxy context -> WithExprContext ExpressionSyntax -> m (WithExprContext ExpressionSyntax))
+           -> (forall context. contextPredicate context => Proxy context -> WithExprContext syntax -> m (WithExprContext syntax))
            -> a -> m a
-instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate (t (QGenExpr context s)) where
+instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate ExpressionSyntax (t (QGenExpr context s)) where
   project' _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
                       Columnar' . QExpr <$> mutateM (Proxy @context) e) a a
-instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate (t (Nullable (QGenExpr context s))) where
-  project' _ mutateM a =
-    zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
-                      Columnar' . QExpr <$> mutateM (Proxy @context) e) a a
-instance ProjectibleWithPredicate WindowFrameContext (QWindow s) where
-  project' _ mutateM (QWindow a) =
-    QWindow <$> mutateM (Proxy @QWindowFrameContext) a
-instance contextPredicate context => ProjectibleWithPredicate contextPredicate (QGenExpr context s a) where
+-- instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate (t (Nullable (QGenExpr context s))) where
+--   project' _ mutateM a =
+--     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
+--                       Columnar' . QExpr <$> mutateM (Proxy @context) e) a a
+-- instance ProjectibleWithPredicate WindowFrameContext (QWindow s) where
+--   project' _ mutateM (QWindow a) =
+--     QWindow <$> mutateM (Proxy @QWindowFrameContext) a
+instance contextPredicate context => ProjectibleWithPredicate contextPredicate ExpressionSyntax (QGenExpr context s a) where
   project' _ mkE (QExpr a) = QExpr <$> mkE (Proxy @context) a
-instance ProjectibleWithPredicate contextPredicate a => ProjectibleWithPredicate contextPredicate [a] where
-  project' p mkE as = traverse (project' p mkE) as
-instance (ProjectibleWithPredicate contextPredicate a, KnownNat n) => ProjectibleWithPredicate contextPredicate (Vector n a) where
-  project' p mkE as = traverse (project' p mkE) as
-instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b ) =>
-  ProjectibleWithPredicate contextPredicate (a, b) where
+-- instance ProjectibleWithPredicate contextPredicate a => ProjectibleWithPredicate contextPredicate [a] where
+--   project' p mkE as = traverse (project' p mkE) as
+-- instance (ProjectibleWithPredicate contextPredicate a, KnownNat n) => ProjectibleWithPredicate contextPredicate (Vector n a) where
+--   project' p mkE as = traverse (project' p mkE) as
+instance ( ProjectibleWithPredicate contextPredicate syn a, ProjectibleWithPredicate contextPredicate syn b ) =>
+  ProjectibleWithPredicate contextPredicate syn (a, b) where
 
   project' p mkE (a, b) = (,) <$> project' p mkE a <*> project' p mkE b
-instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c ) =>
-  ProjectibleWithPredicate contextPredicate (a, b, c) where
+-- instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c ) =>
+--   ProjectibleWithPredicate contextPredicate (a, b, c) where
 
-  project' p mkE (a, b, c) = (,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
-instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
-         , ProjectibleWithPredicate contextPredicate d ) =>
-  ProjectibleWithPredicate contextPredicate (a, b, c, d) where
+--   project' p mkE (a, b, c) = (,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+-- instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
+--          , ProjectibleWithPredicate contextPredicate d ) =>
+--   ProjectibleWithPredicate contextPredicate (a, b, c, d) where
 
-  project' p mkE (a, b, c, d) = (,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
-                                      <*> project' p mkE d
-instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
-         , ProjectibleWithPredicate contextPredicate d, ProjectibleWithPredicate contextPredicate e ) =>
-  ProjectibleWithPredicate contextPredicate (a, b, c, d, e) where
+--   project' p mkE (a, b, c, d) = (,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+--                                       <*> project' p mkE d
+-- instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
+--          , ProjectibleWithPredicate contextPredicate d, ProjectibleWithPredicate contextPredicate e ) =>
+--   ProjectibleWithPredicate contextPredicate (a, b, c, d, e) where
 
-  project' p mkE (a, b, c, d, e) = (,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
-                                          <*> project' p mkE d <*> project' p mkE e
-instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
-         , ProjectibleWithPredicate contextPredicate d, ProjectibleWithPredicate contextPredicate e, ProjectibleWithPredicate contextPredicate f ) =>
-  ProjectibleWithPredicate contextPredicate (a, b, c, d, e, f) where
+--   project' p mkE (a, b, c, d, e) = (,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+--                                           <*> project' p mkE d <*> project' p mkE e
+-- instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
+--          , ProjectibleWithPredicate contextPredicate d, ProjectibleWithPredicate contextPredicate e, ProjectibleWithPredicate contextPredicate f ) =>
+--   ProjectibleWithPredicate contextPredicate (a, b, c, d, e, f) where
 
-  project' p mkE (a, b, c, d, e, f) = (,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
-                                              <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
-instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
-         , ProjectibleWithPredicate contextPredicate d, ProjectibleWithPredicate contextPredicate e, ProjectibleWithPredicate contextPredicate f
-         , ProjectibleWithPredicate contextPredicate g ) =>
-  ProjectibleWithPredicate contextPredicate (a, b, c, d, e, f, g) where
+--   project' p mkE (a, b, c, d, e, f) = (,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+--                                               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+-- instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
+--          , ProjectibleWithPredicate contextPredicate d, ProjectibleWithPredicate contextPredicate e, ProjectibleWithPredicate contextPredicate f
+--          , ProjectibleWithPredicate contextPredicate g ) =>
+--   ProjectibleWithPredicate contextPredicate (a, b, c, d, e, f, g) where
 
-  project' p mkE (a, b, c, d, e, f, g) =
-    (,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
-             <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
-             <*> project' p mkE g
-instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate contextPredicate b, ProjectibleWithPredicate contextPredicate c
-         , ProjectibleWithPredicate contextPredicate d, ProjectibleWithPredicate contextPredicate e, ProjectibleWithPredicate contextPredicate f
-         , ProjectibleWithPredicate contextPredicate g, ProjectibleWithPredicate contextPredicate h ) =>
-  ProjectibleWithPredicate contextPredicate (a, b, c, d, e, f, g, h) where
+--   project' p mkE (a, b, c, d, e, f, g) =
+--     (,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+--              <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+--              <*> project' p mkE g
+-- instance ( ProjectibleWithPredicate contextPredicate x a, ProjectibleWithPredicate contextPredicate x b, ProjectibleWithPredicate contextPredicate x c
+--          , ProjectibleWithPredicate contextPredicate x d, ProjectibleWithPredicate contextPredicate x e, ProjectibleWithPredicate contextPredicate x f
+--          , ProjectibleWithPredicate contextPredicate x g, ProjectibleWithPredicate contextPredicate x h ) =>
+--   ProjectibleWithPredicate contextPredicate x (a, b, c, d, e, f, g, h) where
 
-  project' p mkE (a, b, c, d, e, f, g, h) =
-    (,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
-              <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
-              <*> project' p mkE g <*> project' p mkE h
+--   project' p mkE (a, b, c, d, e, f, g, h) =
+--     (,,,,,,,) <$> project' p mkE a <*> project' p mkE b <*> project' p mkE c
+--               <*> project' p mkE d <*> project' p mkE e <*> project' p mkE f
+--               <*> project' p mkE g <*> project' p mkE h
 
 -- instance Beamable t => ProjectibleWithPredicate AnyType (t (QField s)) where
 --   project' _ mutateM a =
@@ -531,14 +531,14 @@ instance ( ProjectibleWithPredicate contextPredicate a, ProjectibleWithPredicate
 --   project' _ mutateM a =
 --     zipBeamFieldsM (\(Columnar' f) _ ->
 --                       Columnar' <$> project' (Proxy @AnyType) mutateM f) a a
--- instance ProjectibleWithPredicate AnyType T.Text (QField s a) where
---   project' _ mutateM (QField q tbl f) =
---     fmap (\f' -> QField q tbl (f' ""))
---          (mutateM (Proxy @(QField s a)) (\_ -> f)) -- This is kind of a hack
+instance ProjectibleWithPredicate AnyType T.Text (QField s a) where
+  project' _ mutateM (QField q tbl f) =
+    fmap (\f' -> QField q tbl (f' ""))
+         (mutateM (Proxy @(QField s a)) (\_ -> f)) -- This is kind of a hack
 
-project :: Projectible a => a -> WithExprContext [ ExpressionSyntax ]
+project :: (Projectible b a) => a -> WithExprContext [b]
 project = sequenceA . DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)
 
-reproject :: Projectible a => (Int -> ExpressionSyntax) -> a -> a
+reproject :: (Projectible b a) => (Int -> b) -> a -> a
 reproject mkField a =
   evalState (project' (Proxy @AnyType) (\_ _ -> state (\i -> (i, i + 1)) >>= pure . pure . mkField) a) 0

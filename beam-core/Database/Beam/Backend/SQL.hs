@@ -4,6 +4,7 @@ module Database.Beam.Backend.SQL
 
   , MonadBeam(..) ) where
 
+import Database.Beam.Backend
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
@@ -52,20 +53,20 @@ class (Monad m, MonadIO m) =>
   --   this reader action returns 'Nothing', there are no rows left to consume.
   --   When the reader action returns, the database result is freed.
   runReturningMany :: FromBackendRow x
-                   => syntax               -- ^ The query to run
+                   => Command              -- ^ The query to run
                    -> (m (Maybe x) -> m a) -- ^ Reader action that will be called with a function to fetch the next row
                    -> m a
 
   -- | Run the given command and don't consume any results. Useful for DML
   --   statements like INSERT, UPDATE, and DELETE, or DDL statements.
-  runNoReturn :: syntax -> m ()
+  runNoReturn :: Command -> m ()
   runNoReturn cmd =
       runReturningMany cmd $ \(_ :: m (Maybe ())) -> pure ()
 
   -- | Run the given command and fetch the unique result. The result is
   --   'Nothing' if either no results are returned or more than one result is
   --   returned.
-  runReturningOne :: FromBackendRow x => syntax -> m (Maybe x)
+  runReturningOne :: FromBackendRow x => Command -> m (Maybe x)
   runReturningOne cmd =
       runReturningMany cmd $ \next ->
         do a <- next
@@ -80,7 +81,7 @@ class (Monad m, MonadIO m) =>
   -- | Run the given command, collect all the results, and return them as a
   --   list. May be more convenient than 'runReturningMany', but reads the entire
   --   result set into memory.
-  runReturningList :: FromBackendRow x => syntax -> m [x]
+  runReturningList :: FromBackendRow x => Command -> m [x]
   runReturningList cmd =
       runReturningMany cmd $ \next ->
           let collectM acc = do

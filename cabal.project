@@ -4,3 +4,4 @@ packages:
     ./beam-migrate/*.cabal
     ./beam-postgres/*.cabal
     ./postgresql-simple/*.cabal
+    ./postgresql-libpq/*.cabal

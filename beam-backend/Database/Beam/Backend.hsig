@@ -145,10 +145,10 @@ betweenE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> Expressi
 
 inE :: ExpressionSyntax -> [ExpressionSyntax] -> ExpressionSyntax 
 
-ltE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-gtE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-leE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-geE :: Maybe a -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+ltE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+gtE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+leE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+geE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
 
 mulE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
 addE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
@@ -252,7 +252,7 @@ updateCmd :: UpdateSyntax -> Command
 
 updateStmt :: Text -> [(FieldNameSyntax, ExpressionSyntax)] -> Maybe ExpressionSyntax -> UpdateSyntax 
 
-insertStmt :: Text -> [ExpressionSyntax] -> InsertValuesSyntax -> InsertSyntax
+insertStmt :: Text -> [Text] -> InsertValuesSyntax -> InsertSyntax
 
 data InsertValuesSyntax
 
@@ -260,18 +260,18 @@ insertSqlExpressions :: [[ExpressionSyntax]] -> InsertValuesSyntax
 
 insertFromSql :: SelectSyntax -> InsertValuesSyntax
 
-data DataTypeSyntax
+-- data DataTypeSyntax
 
-bigIntType :: DataTypeSyntax
+-- bigIntType :: DataTypeSyntax
 
-varBinaryType :: Maybe Word -> DataTypeSyntax
+-- varBinaryType :: Maybe Word -> DataTypeSyntax
 
-binaryType :: Maybe Word -> DataTypeSyntax
+-- binaryType :: Maybe Word -> DataTypeSyntax
 
-rowType :: [(Text, DataTypeSyntax)] -> DataTypeSyntax
+-- rowType :: [(Text, DataTypeSyntax)] -> DataTypeSyntax
 
-arrayType :: DataTypeSyntax -> Int -> DataTypeSyntax
+-- arrayType :: DataTypeSyntax -> Int -> DataTypeSyntax
 
-binaryLargeObjectType :: DataTypeSyntax
+-- binaryLargeObjectType :: DataTypeSyntax
 
-characterLargeObjectType :: DataTypeSyntax
+-- characterLargeObjectType :: DataTypeSyntax

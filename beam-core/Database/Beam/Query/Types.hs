@@ -54,5 +54,5 @@ type instance QExprToField (a, b, c, d, e, f, g, h) =
 type instance QExprToField (Vector n a) = Vector n (QExprToField a)
 
 -- TODO ocharles Move to beam-backend
-buildSqlQuery :: Projectible a => TablePrefix -> Q db s a -> SelectSyntax
+buildSqlQuery :: Projectible ExpressionSyntax a => TablePrefix -> Q db s a -> SelectSyntax
 buildSqlQuery = buildSql92Query' True

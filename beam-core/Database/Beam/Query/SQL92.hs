@@ -27,7 +27,7 @@ andE' Nothing (Just y) = Just y
 andE' (Just x) (Just y) = Just (andE x y)
 
 newtype PreserveLeft a b = PreserveLeft { unPreserveLeft :: (a, b) }
-instance ProjectibleWithPredicate c b => ProjectibleWithPredicate c (PreserveLeft a b) where
+instance ProjectibleWithPredicate c syn b => ProjectibleWithPredicate c syn (PreserveLeft a b) where
   project' p f (PreserveLeft (a, b)) =
     PreserveLeft . (a,) <$> project' p f b
 
@@ -83,13 +83,13 @@ fieldNameFunc mkField i = fieldE (mkField ("res" <> fromString (show i)))
 nextTblPfx :: TablePrefix -> TablePrefix
 nextTblPfx = ("sub_" <>)
 
-defaultProjection :: Projectible x =>
+defaultProjection :: Projectible ExpressionSyntax x =>
                      TablePrefix -> x -> [ ( ExpressionSyntax, Maybe T.Text ) ]
 defaultProjection pfx =
     zipWith (\i e -> (e, Just (fromString "res" <> fromString (show (i :: Integer)))))
             [0..] . flip project (nextTblPfx pfx)
 
-buildSelect :: Projectible a => TablePrefix -> SelectBuilder db a -> SelectSyntax
+buildSelect :: Projectible ExpressionSyntax a => TablePrefix -> SelectBuilder db a -> SelectSyntax
 buildSelect _ (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ _ table) selectStmt') =
     (fromMaybe selectStmt selectStmt') table ordering limit offset
 buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_)) selectStmt') =
@@ -98,7 +98,7 @@ buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderGroup
     (fromMaybe selectStmt selectStmt') (selectTableStmt distinct (projExprs (defaultProjection pfx proj)) from where_ grouping having) ordering limit offset
 buildSelect pfx x = buildSelect pfx (SelectBuilderTopLevel Nothing Nothing [] x Nothing)
 
-selectBuilderToTableSource :: ( Projectible a ) =>
+selectBuilderToTableSource :: ( Projectible ExpressionSyntax a ) =>
                               TablePrefix -> SelectBuilder db a -> SelectTableSyntax
 selectBuilderToTableSource _ (SelectBuilderSelectSyntax _ _ x) = x
 selectBuilderToTableSource pfx (SelectBuilderQ x (QueryBuilder _ from where_)) =
@@ -109,7 +109,7 @@ selectBuilderToTableSource pfx sb =
     let (x, QueryBuilder _ from where_) = selectBuilderToQueryBuilder pfx sb
     in selectTableStmt Nothing (projExprs (defaultProjection pfx x)) from where_ Nothing Nothing
 
-selectBuilderToQueryBuilder :: ( Projectible a ) =>
+selectBuilderToQueryBuilder :: ( Projectible ExpressionSyntax a ) =>
                                TablePrefix -> SelectBuilder db a -> (a, QueryBuilder)
 selectBuilderToQueryBuilder pfx sb =
     let select = buildSelect pfx sb
@@ -126,7 +126,7 @@ sbProj (SelectBuilderGrouping proj _ _ _ _) = proj
 sbProj (SelectBuilderSelectSyntax _ proj _) = proj
 sbProj (SelectBuilderTopLevel _ _ _ sb _) = sbProj sb
 
-setSelectBuilderProjection :: Projectible b => SelectBuilder db a -> b -> SelectBuilder db b
+setSelectBuilderProjection :: Projectible ExpressionSyntax b => SelectBuilder db a -> b -> SelectBuilder db b
 setSelectBuilderProjection (SelectBuilderQ _ q) proj = SelectBuilderQ proj q
 setSelectBuilderProjection (SelectBuilderGrouping _ q grouping having d) proj = SelectBuilderGrouping proj q grouping having d
 setSelectBuilderProjection (SelectBuilderSelectSyntax containsSetOp _ q) proj = SelectBuilderSelectSyntax containsSetOp proj q
@@ -148,7 +148,7 @@ exprWithContext :: TablePrefix -> WithExprContext a -> a
 exprWithContext pfx = ($ nextTblPfx pfx)
 
 buildJoinTableSourceQuery
-  :: Projectible x
+  :: Projectible ExpressionSyntax x
   => TablePrefix -> SelectSyntax
   -> x -> QueryBuilder
   -> (x, QueryBuilder)
@@ -193,7 +193,7 @@ nextTbl qb tblPfx _ tblSettings =
       newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
   in (newTbl, newTblNm, qb { qbNextTblRef = qbNextTblRef qb + 1})
 
-projOrder :: Projectible x =>
+projOrder :: Projectible ExpressionSyntax x =>
              x -> WithExprContext [ ExpressionSyntax ]
 projOrder = project -- (Proxy @AnyType) (\_ x -> tell [x] >> pure x)
 
@@ -202,7 +202,7 @@ projOrder = project -- (Proxy @AnyType) (\_ x -> tell [x] >> pure x)
 -- 'buildSqlQuery' in 'HasQBuilder'.
 buildSql92Query' ::
     forall db s a.
-    Projectible a =>
+    Projectible ExpressionSyntax a =>
     Bool {-^ Whether this backend supports arbitrary nested UNION, INTERSECT, EXCEPT -} ->
     T.Text {-^ Table prefix -} ->
     Q db s a ->
@@ -211,7 +211,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
     buildSelect tblPfx (buildQuery (fromF q))
   where
     buildQuery :: forall s x.
-                  Projectible x =>
+                  Projectible ExpressionSyntax x =>
                   Free (QF db s) x
                -> SelectBuilder db x
     buildQuery (Pure x) = SelectBuilderQ x emptyQb
@@ -391,7 +391,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
 
     buildTableCombination ::
       forall s x r.
-        ( Projectible r, Projectible x ) =>
+        ( Projectible ExpressionSyntax r, Projectible ExpressionSyntax x ) =>
         (SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax) ->
         QM db (QNested s) x -> QM db (QNested s) x -> (x -> Free (QF db s) r) -> SelectBuilder db r
     buildTableCombination combineTables left right next =
@@ -422,7 +422,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                   in buildJoinedQuery (next x') qb
 
     buildJoinedQuery :: forall s x.
-                        Projectible x =>
+                        Projectible ExpressionSyntax x =>
                         Free (QF db s) x -> QueryBuilder -> SelectBuilder db x
     buildJoinedQuery (Pure x) qb = SelectBuilderQ x qb
     buildJoinedQuery (Free (QAll tbl tblSettings on next)) qb =
@@ -509,7 +509,8 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
 
     onlyQ :: forall s x.
              Free (QF db s) x
-          -> (forall a'. Projectible a' => Free (QF db s) a' -> (a' -> Free (QF db s) x) -> SelectBuilder db x)
+          -> (forall a'. Projectible ExpressionSyntax
+              a' => Free (QF db s) a' -> (a' -> Free (QF db s) x) -> SelectBuilder db x)
           -> SelectBuilder db x
     onlyQ (Free (QAll entityNm entitySettings mkOn next)) f =
       f (Free (QAll entityNm entitySettings mkOn (Pure . PreserveLeft))) (next . unPreserveLeft)
