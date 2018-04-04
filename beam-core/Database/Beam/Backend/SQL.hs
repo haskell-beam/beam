@@ -1,11 +1,9 @@
 module Database.Beam.Backend.SQL
-  ( module Database.Beam.Backend.SQL.SQL2003
-  , module Database.Beam.Backend.SQL.Types
+  ( module Database.Beam.Backend.SQL.Types
   , module Database.Beam.Backend.Types
 
   , MonadBeam(..) ) where
 
-import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
@@ -32,8 +30,8 @@ import Control.Monad.IO.Class
 --   strategies. More complicated strategies (for example, Postgres's @COPY@)
 --   are supported in individual backends. See the documentation of those
 --   backends for more details.
-class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
-  MonadBeam syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+class (Monad m, MonadIO m) =>
+  MonadBeam handle m | m -> handle, handle -> m where
 
   {-# MINIMAL withDatabaseDebug, runReturningMany #-}
 
@@ -53,7 +51,7 @@ class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
   --   will get a reader action that can be used to fetch the next row. When
   --   this reader action returns 'Nothing', there are no rows left to consume.
   --   When the reader action returns, the database result is freed.
-  runReturningMany :: FromBackendRow be x
+  runReturningMany :: FromBackendRow x
                    => syntax               -- ^ The query to run
                    -> (m (Maybe x) -> m a) -- ^ Reader action that will be called with a function to fetch the next row
                    -> m a
@@ -67,7 +65,7 @@ class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
   -- | Run the given command and fetch the unique result. The result is
   --   'Nothing' if either no results are returned or more than one result is
   --   returned.
-  runReturningOne :: FromBackendRow be x => syntax -> m (Maybe x)
+  runReturningOne :: FromBackendRow x => syntax -> m (Maybe x)
   runReturningOne cmd =
       runReturningMany cmd $ \next ->
         do a <- next
@@ -82,7 +80,7 @@ class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
   -- | Run the given command, collect all the results, and return them as a
   --   list. May be more convenient than 'runReturningMany', but reads the entire
   --   result set into memory.
-  runReturningList :: FromBackendRow be x => syntax -> m [x]
+  runReturningList :: FromBackendRow x => syntax -> m [x]
   runReturningList cmd =
       runReturningMany cmd $ \next ->
           let collectM acc = do

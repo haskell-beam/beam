@@ -4,9 +4,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 
 module Database.Beam.Backend.Types
-  ( BeamBackend(..)
-
-  , FromBackendRowF(..), FromBackendRowM
+  ( FromBackendRowF(..), FromBackendRowM
   , parseOneField, peekField, checkNextNNull
 
   , FromBackendRow(..)
@@ -19,40 +17,37 @@ import           Data.Tagged
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
+import Database.Beam.Backend
+
 import Data.Proxy
 
 import GHC.Generics
 import GHC.TypeLits
-import GHC.Types
 
--- | Class for all beam backends
-class BeamBackend be where
-  -- | Requirements to marshal a certain type from a database of a particular backend
-  type BackendFromField be :: * -> Constraint
+data FromBackendRowF f where
+  ParseOneField :: BackendFromField a => (a -> f) -> FromBackendRowF f
+  PeekField :: BackendFromField a => (Maybe a -> f) -> FromBackendRowF f
+  CheckNextNNull :: Int -> (Bool -> f) -> FromBackendRowF f
 
-data FromBackendRowF be f where
-  ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
-  PeekField :: BackendFromField be a => (Maybe a -> f) -> FromBackendRowF be f
-  CheckNextNNull :: Int -> (Bool -> f) -> FromBackendRowF be f
-deriving instance Functor (FromBackendRowF be)
-type FromBackendRowM be = F (FromBackendRowF be)
+deriving instance Functor FromBackendRowF 
+type FromBackendRowM = F FromBackendRowF
 
-parseOneField :: BackendFromField be a => FromBackendRowM be a
+parseOneField :: BackendFromField a => FromBackendRowM a
 parseOneField = liftF (ParseOneField id)
 
-peekField :: BackendFromField be a => FromBackendRowM be (Maybe a)
+peekField :: BackendFromField a => FromBackendRowM (Maybe a)
 peekField = liftF (PeekField id)
 
-checkNextNNull :: Int -> FromBackendRowM be Bool
+checkNextNNull :: Int -> FromBackendRowM Bool
 checkNextNNull n = liftF (CheckNextNNull n id)
 
-class BeamBackend be => FromBackendRow be a where
-  fromBackendRow :: FromBackendRowM be a
-  default fromBackendRow :: BackendFromField be a => FromBackendRowM be a
+class FromBackendRow a where
+  fromBackendRow :: FromBackendRowM a
+  default fromBackendRow :: BackendFromField a => FromBackendRowM a
   fromBackendRow = parseOneField
 
-  valuesNeeded :: Proxy be -> Proxy a -> Int
-  valuesNeeded _ _ = 1
+  valuesNeeded :: Proxy a -> Int
+  valuesNeeded _ = 1
 
 -- | newtype mainly used to inspect tho tag structure of a particular
 --   'Beamable'. Prevents overlapping instances in some case. Usually not used
@@ -69,102 +64,95 @@ data Exposed x
 -- See 'Columnar' for more information.
 data Nullable (c :: * -> *) x
 
-class GFromBackendRow be (exposed :: * -> *) rep where
-  gFromBackendRow :: Proxy exposed -> FromBackendRowM be (rep ())
-  gValuesNeeded :: Proxy be -> Proxy exposed -> Proxy rep -> Int
-instance GFromBackendRow be e p => GFromBackendRow be (M1 t f e) (M1 t f p) where
+class GFromBackendRow (exposed :: * -> *) rep where
+  gFromBackendRow :: Proxy exposed -> FromBackendRowM (rep ())
+  gValuesNeeded :: Proxy exposed -> Proxy rep -> Int
+instance GFromBackendRow e p => GFromBackendRow (M1 t f e) (M1 t f p) where
   gFromBackendRow _ = M1 <$> gFromBackendRow (Proxy @e)
-  gValuesNeeded be _ _ = gValuesNeeded be (Proxy @e) (Proxy @p)
-instance GFromBackendRow be e U1 where
+  gValuesNeeded _ _ = gValuesNeeded (Proxy @e) (Proxy @p)
+instance GFromBackendRow e U1 where
   gFromBackendRow _ = pure U1
-  gValuesNeeded _ _ _ = 0
-instance (GFromBackendRow be aExp a, GFromBackendRow be bExp b) => GFromBackendRow be (aExp :*: bExp) (a :*: b) where
+  gValuesNeeded _ _ = 0
+instance (GFromBackendRow aExp a, GFromBackendRow bExp b) => GFromBackendRow (aExp :*: bExp) (a :*: b) where
   gFromBackendRow _ = (:*:) <$> gFromBackendRow (Proxy @aExp) <*> gFromBackendRow (Proxy @bExp)
-  gValuesNeeded be _ _ = gValuesNeeded be (Proxy @aExp) (Proxy @a) + gValuesNeeded be (Proxy @bExp) (Proxy @b)
-instance FromBackendRow be x => GFromBackendRow be (K1 R (Exposed x)) (K1 R x) where
+  gValuesNeeded _ _ = gValuesNeeded (Proxy @aExp) (Proxy @a) + gValuesNeeded (Proxy @bExp) (Proxy @b)
+instance FromBackendRow x => GFromBackendRow (K1 R (Exposed x)) (K1 R x) where
   gFromBackendRow _ = K1 <$> fromBackendRow
-  gValuesNeeded be _ _ = valuesNeeded be (Proxy @x)
-instance FromBackendRow be (t Identity) => GFromBackendRow be (K1 R (t Exposed)) (K1 R (t Identity)) where
+  gValuesNeeded _ _ = valuesNeeded (Proxy @x)
+instance FromBackendRow (t Identity) => GFromBackendRow (K1 R (t Exposed)) (K1 R (t Identity)) where
     gFromBackendRow _ = K1 <$> fromBackendRow
-    gValuesNeeded be _ _ = valuesNeeded be (Proxy @(t Identity))
-instance FromBackendRow be (t (Nullable Identity)) => GFromBackendRow be (K1 R (t (Nullable Exposed))) (K1 R (t (Nullable Identity))) where
+    gValuesNeeded _ _ = valuesNeeded (Proxy @(t Identity))
+instance FromBackendRow (t (Nullable Identity)) => GFromBackendRow (K1 R (t (Nullable Exposed))) (K1 R (t (Nullable Identity))) where
     gFromBackendRow _ = K1 <$> fromBackendRow
-    gValuesNeeded be _ _ = valuesNeeded be (Proxy @(t (Nullable Identity)))
-instance BeamBackend be => FromBackendRow be () where
+    gValuesNeeded _ _ = valuesNeeded (Proxy @(t (Nullable Identity)))
+instance FromBackendRow () where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep ()))
-  valuesNeeded _ _ = 0
+  valuesNeeded _ = 0
 
-instance ( BeamBackend be, KnownNat n, FromBackendRow be a ) => FromBackendRow be (Vector n a) where
+instance ( KnownNat n, FromBackendRow a ) => FromBackendRow (Vector n a) where
   fromBackendRow = Vector.replicateM fromBackendRow
-  valuesNeeded _ _ = fromIntegral (natVal (Proxy @n))
+  valuesNeeded _ = fromIntegral (natVal (Proxy @n))
 
-instance ( BeamBackend be, FromBackendRow be a, FromBackendRow be b ) =>
-  FromBackendRow be (a, b) where
+instance ( FromBackendRow a, FromBackendRow b ) =>
+  FromBackendRow (a, b) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b)))
-  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b)
-instance ( BeamBackend be, FromBackendRow be a, FromBackendRow be b, FromBackendRow be c ) =>
-  FromBackendRow be (a, b, c) where
+  valuesNeeded _ = valuesNeeded (Proxy @a) + valuesNeeded (Proxy @b)
+instance ( FromBackendRow a, FromBackendRow b, FromBackendRow c ) =>
+  FromBackendRow (a, b, c) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c)))
-  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c)
-instance ( BeamBackend be
-         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
-         , FromBackendRow be d ) =>
-  FromBackendRow be (a, b, c, d) where
+  valuesNeeded _ = valuesNeeded (Proxy @a) + valuesNeeded (Proxy @b) + valuesNeeded (Proxy @c)
+instance ( FromBackendRow a, FromBackendRow b, FromBackendRow c
+         , FromBackendRow d ) =>
+  FromBackendRow (a, b, c, d) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d)))
-  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d)
-instance ( BeamBackend be
-         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
-         , FromBackendRow be d, FromBackendRow be e ) =>
-  FromBackendRow be (a, b, c, d, e) where
+  valuesNeeded _ = valuesNeeded (Proxy @a) + valuesNeeded (Proxy @b) + valuesNeeded (Proxy @c) + valuesNeeded (Proxy @d)
+instance ( FromBackendRow a, FromBackendRow b, FromBackendRow c
+         , FromBackendRow d, FromBackendRow e ) =>
+  FromBackendRow (a, b, c, d, e) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e)))
-  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
-                      valuesNeeded be (Proxy @e)
-instance ( BeamBackend be
-         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
-         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f ) =>
-  FromBackendRow be (a, b, c, d, e, f) where
+  valuesNeeded _ = valuesNeeded (Proxy @a) + valuesNeeded (Proxy @b) + valuesNeeded (Proxy @c) + valuesNeeded (Proxy @d) +
+                      valuesNeeded (Proxy @e)
+instance ( FromBackendRow a, FromBackendRow b, FromBackendRow c
+         , FromBackendRow d, FromBackendRow e, FromBackendRow f ) =>
+  FromBackendRow (a, b, c, d, e, f) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f)))
-  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
-                      valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f)
-instance ( BeamBackend be
-         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
-         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
-         , FromBackendRow be g ) =>
-  FromBackendRow be (a, b, c, d, e, f, g) where
+  valuesNeeded _ = valuesNeeded (Proxy @a) + valuesNeeded (Proxy @b) + valuesNeeded (Proxy @c) + valuesNeeded (Proxy @d) +
+                      valuesNeeded (Proxy @e) + valuesNeeded (Proxy @f)
+instance ( FromBackendRow a, FromBackendRow b, FromBackendRow c
+         , FromBackendRow d, FromBackendRow e, FromBackendRow f
+         , FromBackendRow g ) =>
+  FromBackendRow (a, b, c, d, e, f, g) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g)))
-  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
-                      valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g)
-instance ( BeamBackend be
-         , FromBackendRow be a, FromBackendRow be b, FromBackendRow be c
-         , FromBackendRow be d, FromBackendRow be e, FromBackendRow be f
-         , FromBackendRow be g, FromBackendRow be h ) =>
-  FromBackendRow be (a, b, c, d, e, f, g, h) where
+  valuesNeeded _ = valuesNeeded (Proxy @a) + valuesNeeded (Proxy @b) + valuesNeeded (Proxy @c) + valuesNeeded (Proxy @d) +
+                      valuesNeeded (Proxy @e) + valuesNeeded (Proxy @f) + valuesNeeded (Proxy @g)
+instance ( FromBackendRow a, FromBackendRow b, FromBackendRow c
+         , FromBackendRow d, FromBackendRow e, FromBackendRow f
+         , FromBackendRow g, FromBackendRow h ) =>
+  FromBackendRow (a, b, c, d, e, f, g, h) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (Exposed a, Exposed b, Exposed c, Exposed d, Exposed e, Exposed f, Exposed g, Exposed h)))
-  valuesNeeded be _ = valuesNeeded be (Proxy @a) + valuesNeeded be (Proxy @b) + valuesNeeded be (Proxy @c) + valuesNeeded be (Proxy @d) +
-                      valuesNeeded be (Proxy @e) + valuesNeeded be (Proxy @f) + valuesNeeded be (Proxy @g) + valuesNeeded be (Proxy @h)
+  valuesNeeded _ = valuesNeeded (Proxy @a) + valuesNeeded (Proxy @b) + valuesNeeded (Proxy @c) + valuesNeeded (Proxy @d) +
+                      valuesNeeded (Proxy @e) + valuesNeeded (Proxy @f) + valuesNeeded (Proxy @g) + valuesNeeded (Proxy @h)
 
-instance ( BeamBackend be, Generic (tbl Identity), Generic (tbl Exposed)
-         , GFromBackendRow be (Rep (tbl Exposed)) (Rep (tbl Identity))) =>
+instance ( Generic (tbl Identity), Generic (tbl Exposed), GFromBackendRow (Rep (tbl Exposed)) (Rep (tbl Identity))) =>
 
-    FromBackendRow be (tbl Identity) where
+    FromBackendRow (tbl Identity) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (tbl Exposed)))
-  valuesNeeded be _ = gValuesNeeded be (Proxy @(Rep (tbl Exposed))) (Proxy @(Rep (tbl Identity)))
-instance ( BeamBackend be, Generic (tbl (Nullable Identity)), Generic (tbl (Nullable Exposed))
-         , GFromBackendRow be (Rep (tbl (Nullable Exposed))) (Rep (tbl (Nullable Identity)))) =>
+  valuesNeeded _ = gValuesNeeded (Proxy @(Rep (tbl Exposed))) (Proxy @(Rep (tbl Identity)))
+instance ( Generic (tbl (Nullable Identity)), Generic (tbl (Nullable Exposed)), GFromBackendRow (Rep (tbl (Nullable Exposed))) (Rep (tbl (Nullable Identity)))) =>
 
-    FromBackendRow be (tbl (Nullable Identity)) where
+    FromBackendRow (tbl (Nullable Identity)) where
   fromBackendRow = to <$> gFromBackendRow (Proxy @(Rep (tbl (Nullable Exposed))))
-  valuesNeeded be _ = gValuesNeeded be (Proxy @(Rep (tbl (Nullable Exposed)))) (Proxy @(Rep (tbl (Nullable Identity))))
+  valuesNeeded _ = gValuesNeeded (Proxy @(Rep (tbl (Nullable Exposed)))) (Proxy @(Rep (tbl (Nullable Identity))))
 
-instance FromBackendRow be x => FromBackendRow be (Maybe x) where
+instance FromBackendRow x => FromBackendRow (Maybe x) where
   fromBackendRow =
-    do isNull <- checkNextNNull (valuesNeeded (Proxy @be) (Proxy @(Maybe x)))
+    do isNull <- checkNextNNull (valuesNeeded (Proxy @(Maybe x)))
        if isNull then pure Nothing else Just <$> fromBackendRow
-  valuesNeeded be _ = valuesNeeded be (Proxy @x)
+  valuesNeeded _ = valuesNeeded (Proxy @x)
 
 deriving instance Generic (a, b, c, d, e, f, g, h)
 
 -- Tagged
 
-instance (BeamBackend be, FromBackendRow be t) => FromBackendRow be (Tagged tag t) where
+instance (FromBackendRow t) => FromBackendRow (Tagged tag t) where
   fromBackendRow = Tagged <$> fromBackendRow
