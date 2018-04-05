@@ -363,9 +363,7 @@ array_ vs =
             , pure (emit "]") ]
 
 -- | Build a 1-dimensional postgres array from a subquery
-arrayOf_ :: forall context f s a.
-            (PgIsArrayContext context, Foldable f)
-         => f (QGenExpr PgArrayValueContext PgExpressionSyntax s a)
+arrayOf_ :: Q PgSelectSyntax db s (QExpr PgExpressionSyntax s a)
          -> QGenExpr context PgExpressionSyntax s (V.Vector a)
 arrayOf_ q =
   let QExpr sub = subquery_ q
