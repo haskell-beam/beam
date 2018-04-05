@@ -52,7 +52,7 @@ module Database.Beam.Postgres.PgSpecific
   , PgArrayValueContext, PgIsArrayContext
 
     -- *** Building @ARRAY@s
-  , array_, (++.)
+  , array_, arrayOf_, (++.)
   , pgArrayAgg, pgArrayAggOver
 
     -- *** Array operators and functions
@@ -361,6 +361,16 @@ array_ vs =
   sequenceA [ pure (emit "[")
             , pgSepBy (emit ", ") <$> mapM (\(QExpr e) -> fromPgExpression <$> e) (toList vs)
             , pure (emit "]") ]
+
+-- | Build a 1-dimensional postgres array from a subquery
+arrayOf_ :: forall context f s a.
+            (PgIsArrayContext context, Foldable f)
+         => f (QGenExpr PgArrayValueContext PgExpressionSyntax s a)
+         -> QGenExpr context PgExpressionSyntax s (V.Vector a)
+arrayOf_ q =
+  let QExpr sub = subquery_ q
+  in QExpr (\t -> let PgExpressionSyntax sub' = sub t
+                  in PgExpressionSyntax (emit "ARRAY(" <> sub' <> emit ")"))
 
 -- ** JSON
 
