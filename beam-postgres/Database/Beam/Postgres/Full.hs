@@ -85,7 +85,7 @@ locked_ :: Database Postgres db
         => DatabaseEntity Postgres db (TableEntity tbl)
         -> Q PgSelectSyntax db s (PgLockedTables s, tbl (QExpr PgExpressionSyntax s))
 locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
-  (nm, joined) <- Q (liftF (QAll tblNm tblSettings (\_ -> Nothing) id))
+  (nm, joined) <- Q (liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\_ -> Nothing) id))
   pure (PgLockedTables [nm], joined)
 
 -- | Lock some tables during the execution of a query. This is rather complicated, and there are
