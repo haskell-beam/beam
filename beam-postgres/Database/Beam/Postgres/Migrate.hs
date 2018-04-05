@@ -356,7 +356,7 @@ bigserial = Db.DataType pgBigSerialType
 data PgHasDefault = PgHasDefault
 instance Db.FieldReturnType 'True 'False PgColumnSchemaSyntax resTy a =>
          Db.FieldReturnType 'False 'False PgColumnSchemaSyntax resTy (PgHasDefault -> a) where
-  field' _ _ nm ty d collation constraints PgHasDefault =
+  field' _ _ nm ty _ collation constraints PgHasDefault =
     Db.field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
 
 instance IsBeamSerialColumnSchemaSyntax PgColumnSchemaSyntax where

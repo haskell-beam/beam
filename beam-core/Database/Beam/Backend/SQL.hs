@@ -33,7 +33,7 @@ import Control.Monad.IO.Class
 --   are supported in individual backends. See the documentation of those
 --   backends for more details.
 class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
-  MonadBeam syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+  MonadBeam syntax be handle m | m -> syntax be handle where
 
   {-# MINIMAL withDatabaseDebug, runReturningMany #-}
 

@@ -29,8 +29,7 @@ import           Control.Exception
 import           Control.Monad.Reader
 
 import           Database.SQLite.Simple
-                    ( Connection, Only(..)
-                    , open, close, query_ )
+                    ( Connection, open, close, query_ )
 
 import           Data.Aeson
 import           Data.Attoparsec.Text (asciiCI, skipSpace)
@@ -245,7 +244,7 @@ getDbConstraints =
 
         let columnPreds =
               foldMap
-                (\(_ ::Int, nm, typStr, notNull, mDefaultValueTxt, _) ->
+                (\(_ ::Int, nm, typStr, notNull, _, _) ->
                      let dtType = if isAutoincrement then sqliteSerialType else parseSqliteDataType typStr
                          isAutoincrement = isJust (A.maybeResult (A.parse autoincrementParser sql))
 
