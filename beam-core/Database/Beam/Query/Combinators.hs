@@ -379,7 +379,7 @@ subquery_ ::
   , ProjectibleInSelectSyntax select (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   Q select (db :: (* -> *) -> *) s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
-  -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+  -> QGenExpr ctxt (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
 subquery_ q =
   QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
