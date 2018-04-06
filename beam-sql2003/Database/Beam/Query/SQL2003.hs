@@ -1,4 +1,5 @@
 {-# language FlexibleContexts #-}
+{-# language MultiParamTypeClasses #-}
 {-# language ScopedTypeVariables #-}
 {-# language TypeApplications #-}
 
@@ -217,3 +218,7 @@ noOrder_ = Nothing
 partitionBy_, orderPartitionBy_ :: partition -> Maybe partition
 partitionBy_  = Just
 orderPartitionBy_ = Just
+
+instance ProjectibleWithPredicate WindowFrameContext ExpressionSyntax (QWindow s) where
+  project' _ mutateM (QWindow a) =
+    QWindow <$> mutateM (Proxy @QWindowFrameContext) a

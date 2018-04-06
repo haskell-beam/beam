@@ -1,7 +1,7 @@
 module Database.Beam.Query.Types
   ( Q, QExpr, QGenExpr(..), QExprToIdentity, QExprToField
 
-  , Projectible, Aggregation
+  , Projectible
 
   , buildSqlQuery ) where
 
