@@ -34,7 +34,8 @@ data SqlBool
 (&&.) = qBinOpE andE
 
 -- | SQL @OR@ operator
-(||.) :: QGenExpr context s Bool
+(||.) :: ExpressionContext context
+      => QGenExpr context s Bool
       -> QGenExpr context s Bool
       -> QGenExpr context s Bool
 (||.) = qBinOpE orE

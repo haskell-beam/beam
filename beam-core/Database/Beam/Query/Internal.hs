@@ -174,6 +174,9 @@ data QOrderingContext
 data QWindowingContext
 data QWindowFrameContext
 
+type family ContextSyntax (context :: *) :: * where
+  ContextSyntax QValueContext = ExpressionSyntax
+
 -- | The type of lifted beam expressions that will yield the haskell type 't'.
 --
 --   'context' is a type-level representation of the types of expressions this
@@ -187,7 +190,7 @@ data QWindowFrameContext
 --   's' is a state threading parameter that prevents 'QExpr's from incompatible
 --   sources to be combined. For example, this is used to prevent monadic joins
 --   from depending on the result of previous joins (so-called @LATERAL@ joins).
-newtype QGenExpr context s t = QExpr (TablePrefix -> ExpressionSyntax)
+newtype QGenExpr context s t = QExpr (TablePrefix -> ContextSyntax context)
 type WithExprContext a = TablePrefix -> a
 
 -- | 'QExpr's represent expressions not containing aggregates.
@@ -198,7 +201,7 @@ type QWindowExpr = QGenExpr QWindowingContext
 type QWindowFrame = QGenExpr QWindowFrameContext
 type QGroupExpr = QGenExpr QGroupingContext
 --deriving instance Show syntax => Show (QGenExpr context syntax s t)
-instance Eq (QGenExpr context s t) where
+instance Eq (ContextSyntax context) => Eq (QGenExpr context s t) where
   QExpr a == QExpr b = a "" == b ""
 
 instance Retaggable (QGenExpr ctxt s) (QGenExpr ctxt s t) where
@@ -210,7 +213,11 @@ newtype QWindow s = QWindow (WithExprContext ExpressionSyntax)
 newtype QFrameBounds = QFrameBounds (Maybe ExpressionSyntax)
 newtype QFrameBound = QFrameBound WindowFrameBoundSyntax
 
-qBinOpE :: (ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax)
+class ContextSyntax ctxt ~ ExpressionSyntax => ExpressionContext ctxt
+instance ContextSyntax ctxt ~ ExpressionSyntax => ExpressionContext ctxt
+
+qBinOpE :: ExpressionContext context
+        => (ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax)
         -> QGenExpr context s a -> QGenExpr context s b
         -> QGenExpr context s c
 qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE <$> a <*> b)
@@ -218,10 +225,10 @@ qBinOpE mkOpE (QExpr a) (QExpr b) = QExpr (mkOpE <$> a <*> b)
 unsafeRetype :: QGenExpr ctxt s a -> QGenExpr ctxt s a'
 unsafeRetype (QExpr v) = QExpr v
 
-instance ( HasSqlValueSyntax [Char] ) =>
+instance ( HasSqlValueSyntax [Char], ContextSyntax context ~ ExpressionSyntax ) =>
     IsString (QGenExpr context s T.Text) where
     fromString = QExpr . pure . valueE . sqlValueSyntax
-instance (Num a, HasSqlValueSyntax a) =>
+instance (Num a, HasSqlValueSyntax a, ContextSyntax context ~ ExpressionSyntax) =>
     Num (QGenExpr context s a) where
     fromInteger x = let res :: QGenExpr context s a
                         res = QExpr (pure (valueE (sqlValueSyntax (fromIntegral x :: a))))
@@ -234,7 +241,8 @@ instance (Num a, HasSqlValueSyntax a) =>
     signum _ = error "signum: not defined for QExpr. Use CASE...WHEN"
 
 instance ( Fractional a
-         , HasSqlValueSyntax a ) =>
+         , HasSqlValueSyntax a
+         , ContextSyntax context ~ ExpressionSyntax ) =>
   Fractional (QGenExpr context s a) where
 
   QExpr a / QExpr b = QExpr (divE <$> a <*> b)
@@ -384,36 +392,55 @@ instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c, Thr
 
 class ContextRewritable a where
   type WithRewrittenContext a ctxt :: *
+  type ContextCompatible a ctxt :: Constraint
 
-  rewriteContext :: Proxy ctxt -> a -> WithRewrittenContext a ctxt
+  rewriteContext :: ContextCompatible a ctxt => Proxy ctxt -> a -> WithRewrittenContext a ctxt
 instance Beamable tbl => ContextRewritable (tbl (QGenExpr old s)) where
   type WithRewrittenContext (tbl (QGenExpr old s)) ctxt = tbl (QGenExpr ctxt s)
-
+  type ContextCompatible (tbl (QGenExpr old s)) ctxt = ContextSyntax old ~ ContextSyntax ctxt
   rewriteContext _ = changeBeamRep (\(Columnar' (QExpr a)) -> Columnar' (QExpr a))
 instance Beamable tbl => ContextRewritable (tbl (Nullable (QGenExpr old s))) where
   type WithRewrittenContext (tbl (Nullable (QGenExpr old s))) ctxt = tbl (Nullable (QGenExpr ctxt s))
-
+  type ContextCompatible (tbl (Nullable (QGenExpr old s))) ctxt = ContextSyntax old ~ ContextSyntax ctxt
   rewriteContext _ = changeBeamRep (\(Columnar' (QExpr a)) -> Columnar' (QExpr a))
 instance ContextRewritable (QGenExpr old s a) where
   type WithRewrittenContext (QGenExpr old s a) ctxt = QGenExpr ctxt s a
+  type ContextCompatible (QGenExpr old s a) ctxt = ContextSyntax old ~ ContextSyntax ctxt
   rewriteContext _ (QExpr a) = QExpr a
 instance ContextRewritable a => ContextRewritable [a] where
   type WithRewrittenContext [a] ctxt = [ WithRewrittenContext a ctxt ]
+  type ContextCompatible [a] ctxt = ContextCompatible a ctxt
   rewriteContext p as = map (rewriteContext p) as
 instance (ContextRewritable a, KnownNat n) => ContextRewritable (Vector n a) where
   type WithRewrittenContext (Vector n a) ctxt = Vector n (WithRewrittenContext a ctxt)
+  type ContextCompatible (Vector n a) ctxt = ContextCompatible a ctxt
   rewriteContext p as = fmap (rewriteContext p) as
 instance (ContextRewritable a, ContextRewritable b) => ContextRewritable (a, b) where
   type WithRewrittenContext (a, b) ctxt = (WithRewrittenContext a ctxt, WithRewrittenContext b ctxt)
+  type ContextCompatible (a, b) ctxt =
+    ( ContextCompatible a ctxt
+    , ContextCompatible b ctxt
+    )
   rewriteContext p (a, b) = (rewriteContext p a, rewriteContext p b)
 instance (ContextRewritable a, ContextRewritable b, ContextRewritable c) => ContextRewritable (a, b, c) where
   type WithRewrittenContext (a, b, c) ctxt = (WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt)
+  type ContextCompatible (a, b, c) ctxt =
+    ( ContextCompatible a ctxt
+    , ContextCompatible b ctxt
+    , ContextCompatible c ctxt
+    )
   rewriteContext p (a, b, c) = (rewriteContext p a, rewriteContext p b, rewriteContext p c)
 instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
          , ContextRewritable d ) => ContextRewritable (a, b, c, d) where
   type WithRewrittenContext (a, b, c, d) ctxt =
       ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
       , WithRewrittenContext d ctxt )
+  type ContextCompatible (a, b, c, d) ctxt =
+    ( ContextCompatible a ctxt
+    , ContextCompatible b ctxt
+    , ContextCompatible c ctxt
+    , ContextCompatible d ctxt
+    )
   rewriteContext p (a, b, c, d) = ( rewriteContext p a, rewriteContext p b, rewriteContext p c
                                   , rewriteContext p d )
 instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
@@ -422,6 +449,13 @@ instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
   type WithRewrittenContext (a, b, c, d, e) ctxt =
       ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
       , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt )
+  type ContextCompatible (a, b, c, d, e) ctxt =
+    ( ContextCompatible a ctxt
+    , ContextCompatible b ctxt
+    , ContextCompatible c ctxt
+    , ContextCompatible d ctxt
+    , ContextCompatible e ctxt
+    )
   rewriteContext p (a, b, c, d, e) = ( rewriteContext p a, rewriteContext p b, rewriteContext p c
                                      , rewriteContext p d, rewriteContext p e )
 instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
@@ -430,6 +464,14 @@ instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
   type WithRewrittenContext (a, b, c, d, e, f) ctxt =
       ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
       , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt, WithRewrittenContext f ctxt )
+  type ContextCompatible (a, b, c, d, e, f) ctxt =
+    ( ContextCompatible a ctxt
+    , ContextCompatible b ctxt
+    , ContextCompatible c ctxt
+    , ContextCompatible d ctxt
+    , ContextCompatible e ctxt
+    , ContextCompatible f ctxt
+    )
   rewriteContext p (a, b, c, d, e, f) = ( rewriteContext p a, rewriteContext p b, rewriteContext p c
                                         , rewriteContext p d, rewriteContext p e, rewriteContext p f )
 instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
@@ -440,18 +482,39 @@ instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
       ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
       , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt, WithRewrittenContext f ctxt
       , WithRewrittenContext g ctxt )
+  type ContextCompatible (a, b, c, d, e, f, g) ctxt =
+    ( ContextCompatible a ctxt
+    , ContextCompatible b ctxt
+    , ContextCompatible c ctxt
+    , ContextCompatible d ctxt
+    , ContextCompatible e ctxt
+    , ContextCompatible f ctxt
+    , ContextCompatible g ctxt
+    )
   rewriteContext p (a, b, c, d, e, f, g) =
     ( rewriteContext p a, rewriteContext p b, rewriteContext p c
     , rewriteContext p d, rewriteContext p e, rewriteContext p f
     , rewriteContext p g )
 instance ( ContextRewritable a, ContextRewritable b, ContextRewritable c
          , ContextRewritable d, ContextRewritable e, ContextRewritable f
-         , ContextRewritable g, ContextRewritable h ) =>
+         , ContextRewritable g, ContextRewritable h
+         ) =>
     ContextRewritable (a, b, c, d, e, f, g, h) where
   type WithRewrittenContext (a, b, c, d, e, f, g, h) ctxt =
       ( WithRewrittenContext a ctxt, WithRewrittenContext b ctxt, WithRewrittenContext c ctxt
       , WithRewrittenContext d ctxt, WithRewrittenContext e ctxt, WithRewrittenContext f ctxt
-      , WithRewrittenContext g ctxt, WithRewrittenContext h ctxt )
+      , WithRewrittenContext g ctxt, WithRewrittenContext h ctxt
+      )
+  type ContextCompatible (a, b, c, d, e, f, g, h) ctxt =
+    ( ContextCompatible a ctxt
+    , ContextCompatible b ctxt
+    , ContextCompatible c ctxt
+    , ContextCompatible d ctxt
+    , ContextCompatible e ctxt
+    , ContextCompatible f ctxt
+    , ContextCompatible g ctxt
+    , ContextCompatible h ctxt
+    )
   rewriteContext p (a, b, c, d, e, f, g, h) =
     ( rewriteContext p a, rewriteContext p b, rewriteContext p c
     , rewriteContext p d, rewriteContext p e, rewriteContext p f
@@ -461,7 +524,7 @@ class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) syntax a | 
   project' :: Monad m => Proxy contextPredicate
            -> (forall context. contextPredicate context => Proxy context -> WithExprContext syntax -> m (WithExprContext syntax))
            -> a -> m a
-instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate ExpressionSyntax (t (QGenExpr context s)) where
+instance (Beamable t, contextPredicate context, ContextSyntax context ~ syn) => ProjectibleWithPredicate contextPredicate syn (t (QGenExpr context s)) where
   project' _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
                       Columnar' . QExpr <$> mutateM (Proxy @context) e) a a
@@ -472,7 +535,7 @@ instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate cont
 -- instance ProjectibleWithPredicate WindowFrameContext (QWindow s) where
 --   project' _ mutateM (QWindow a) =
 --     QWindow <$> mutateM (Proxy @QWindowFrameContext) a
-instance contextPredicate context => ProjectibleWithPredicate contextPredicate ExpressionSyntax (QGenExpr context s a) where
+instance (contextPredicate context, syn ~ ContextSyntax context) => ProjectibleWithPredicate contextPredicate syn (QGenExpr context s a) where
   project' _ mkE (QExpr a) = QExpr <$> mkE (Proxy @context) a
 -- instance ProjectibleWithPredicate contextPredicate a => ProjectibleWithPredicate contextPredicate [a] where
 --   project' p mkE as = traverse (project' p mkE) as
