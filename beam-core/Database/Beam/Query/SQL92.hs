@@ -4,7 +4,7 @@
 module Database.Beam.Query.SQL92
     ( buildSql92Query' ) where
 
-import           Database.Beam.Backend
+import           Database.Beam.Syntax
 import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
 

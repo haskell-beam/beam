@@ -1,6 +1,6 @@
 {-# language ConstraintKinds #-}
 
-signature Database.Beam.Backend where
+signature Database.Beam.Syntax where
 
 import Data.String ( IsString )
 import Data.Text ( Text )

@@ -17,7 +17,7 @@ import           Data.Tagged
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 
 import Data.Proxy
 

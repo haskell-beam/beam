@@ -40,7 +40,7 @@ module Database.Beam.Query.Ord
 
   , in_ ) where
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Types
 import Database.Beam.Query.Operator

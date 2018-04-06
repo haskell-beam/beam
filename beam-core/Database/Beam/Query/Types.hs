@@ -5,7 +5,7 @@ module Database.Beam.Query.Types
 
   , buildSqlQuery ) where
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 import Database.Beam.Query.Internal
 import Database.Beam.Query.SQL92
 

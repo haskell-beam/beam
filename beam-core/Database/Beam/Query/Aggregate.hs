@@ -27,7 +27,7 @@ module Database.Beam.Query.Aggregate
   , distinctInGroup_, allInGroup_, allInGroupExplicitly_
   ) where
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Operator
 import Database.Beam.Query.Ord

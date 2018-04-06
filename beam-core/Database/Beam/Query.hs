@@ -77,7 +77,7 @@ module Database.Beam.Query
 
 import Prelude hiding (lookup)
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.CustomSQL

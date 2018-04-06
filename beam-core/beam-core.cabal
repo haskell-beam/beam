@@ -23,7 +23,7 @@ bug-reports:         https://github.com/tathougies/beam/issues
 extra-doc-files:     ChangeLog.md
 
 library
-  signatures:          Database.Beam.Backend
+  signatures:          Database.Beam.Syntax
   exposed-modules:     Database.Beam
                        Database.Beam.Query
                        Database.Beam.Query.Internal

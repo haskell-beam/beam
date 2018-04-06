@@ -4,7 +4,7 @@ module Database.Beam.Backend.SQL
 
   , MonadBeam(..) ) where
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 

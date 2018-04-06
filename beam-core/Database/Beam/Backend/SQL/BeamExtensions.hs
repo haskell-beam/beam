@@ -13,7 +13,7 @@ module Database.Beam.Backend.SQL.BeamExtensions
   , SqlSerial(..)
   ) where
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 import Database.Beam.Backend.SQL
 import Database.Beam.Query
 import Database.Beam.Query.Internal

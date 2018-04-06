@@ -10,7 +10,7 @@ module Database.Beam.Query.Operator where
   -- , concat_
   -- ) where
 
-import           Database.Beam.Backend
+import           Database.Beam.Syntax
 import           Database.Beam.Backend.SQL
 
 import           Database.Beam.Query.Internal

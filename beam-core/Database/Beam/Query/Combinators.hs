@@ -64,7 +64,7 @@ module Database.Beam.Query.Combinators
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
     ) where
 
-import Database.Beam.Backend
+import Database.Beam.Syntax
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
 
