@@ -1,0 +1,6 @@
+signature Database.Beam.Syntax.Build where
+
+import Database.Beam.Syntax
+import Database.Beam.Query.Internal
+
+buildSqlQuery :: Projectible ExpressionSyntax a => TablePrefix -> Q db s a -> SelectSyntax

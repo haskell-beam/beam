@@ -24,6 +24,7 @@ extra-doc-files:     ChangeLog.md
 
 library
   signatures:          Database.Beam.Syntax
+                       Database.Beam.Syntax.Build
   exposed-modules:     Database.Beam
                        Database.Beam.Backend
                        Database.Beam.Query

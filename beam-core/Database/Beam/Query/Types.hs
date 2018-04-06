@@ -6,6 +6,7 @@ module Database.Beam.Query.Types
   , buildSqlQuery ) where
 
 import Database.Beam.Syntax
+import Database.Beam.Syntax.Build
 import Database.Beam.Query.Internal
 import Database.Beam.Query.SQL92
 
@@ -52,6 +53,3 @@ type instance QExprToField (a, b, c, d, e, f, g, h) =
   ( QExprToField a, QExprToField b, QExprToField c, QExprToField d
   , QExprToField e, QExprToField f, QExprToField g, QExprToField h)
 type instance QExprToField (Vector n a) = Vector n (QExprToField a)
-
-buildSqlQuery :: Projectible ExpressionSyntax a => TablePrefix -> Q db s a -> SelectSyntax
-buildSqlQuery = buildSql92Query' True
