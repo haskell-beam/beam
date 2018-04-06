@@ -237,33 +237,33 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
            Pure x -> SelectBuilderGrouping x qb gp hv (Just (exprWithContext tblPfx (nubType proj)))
            _ -> let ( proj', qb' ) = selectBuilderToQueryBuilder tblPfx (SelectBuilderGrouping proj qb gp hv (Just (exprWithContext tblPfx (nubType proj))))
                 in buildJoinedQuery (next proj') qb'
-    -- buildQuery (Free (QAggregate mkAgg q' next)) =
-    --     let sb = buildQuery (fromF q')
-    --         (groupingSyntax, aggProj) = mkAgg (sbProj sb) (nextTblPfx tblPfx)
-    --     in case tryBuildGuardsOnly (next aggProj) Nothing of
-    --         Just (proj, having) ->
-    --             case sb of
-    --               SelectBuilderQ _ q'' -> SelectBuilderGrouping proj q'' groupingSyntax having Nothing
+    buildQuery (Free (QAggregate mkAgg q' next)) =
+        let sb = buildQuery (fromF q')
+            (groupingSyntax, aggProj) = mkAgg (sbProj sb) (nextTblPfx tblPfx)
+        in case tryBuildGuardsOnly (next aggProj) Nothing of
+            Just (proj, having) ->
+                case sb of
+                  SelectBuilderQ _ q'' -> SelectBuilderGrouping proj q'' groupingSyntax having Nothing
 
-    --               -- We'll have to generate a subselect
-    --               _ -> let (subProj, qb) = selectBuilderToQueryBuilder tblPfx sb --(setSelectBuilderProjection sb aggProj)
-    --                        (groupingSyntax, aggProj') = mkAgg subProj (nextTblPfx tblPfx)
-    --                    in case tryBuildGuardsOnly (next aggProj') Nothing of
-    --                         Nothing -> error "buildQuery (Free (QAggregate ...)): Impossible"
-    --                         Just (aggProj'', having') ->
-    --                           SelectBuilderGrouping aggProj'' qb groupingSyntax having' Nothing
-    --         Nothing ->
-    --           let (_, having) = tryCollectHaving (next aggProj') Nothing
-    --               (next', _) = tryCollectHaving (next x') Nothing
-    --               (groupingSyntax', aggProj', qb) =
-    --                 case sb of
-    --                   SelectBuilderQ _ q'' -> (groupingSyntax, aggProj, q'')
-    --                   _ -> let (proj', qb''') = selectBuilderToQueryBuilder tblPfx sb
-    --                            (groupingSyntax', aggProj') = mkAgg proj' (nextTblPfx tblPfx)
-    --                        in (groupingSyntax', aggProj', qb''')
-    --               (x', qb') = selectBuilderToQueryBuilder tblPfx $
-    --                           SelectBuilderGrouping aggProj' qb groupingSyntax' having Nothing
-    --           in buildJoinedQuery next' qb'
+                  -- We'll have to generate a subselect
+                  _ -> let (subProj, qb) = selectBuilderToQueryBuilder tblPfx sb --(setSelectBuilderProjection sb aggProj)
+                           (groupingSyntax, aggProj') = mkAgg subProj (nextTblPfx tblPfx)
+                       in case tryBuildGuardsOnly (next aggProj') Nothing of
+                            Nothing -> error "buildQuery (Free (QAggregate ...)): Impossible"
+                            Just (aggProj'', having') ->
+                              SelectBuilderGrouping aggProj'' qb groupingSyntax having' Nothing
+            Nothing ->
+              let (_, having) = tryCollectHaving (next aggProj') Nothing
+                  (next', _) = tryCollectHaving (next x') Nothing
+                  (groupingSyntax', aggProj', qb) =
+                    case sb of
+                      SelectBuilderQ _ q'' -> (groupingSyntax, aggProj, q'')
+                      _ -> let (proj', qb''') = selectBuilderToQueryBuilder tblPfx sb
+                               (groupingSyntax', aggProj') = mkAgg proj' (nextTblPfx tblPfx)
+                           in (groupingSyntax', aggProj', qb''')
+                  (x', qb') = selectBuilderToQueryBuilder tblPfx $
+                              SelectBuilderGrouping aggProj' qb groupingSyntax' having Nothing
+              in buildJoinedQuery next' qb'
 
     buildQuery (Free (QOrderBy mkOrdering q' next)) =
         let sb = buildQuery (fromF q')
