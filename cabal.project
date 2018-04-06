@@ -1,7 +1,5 @@
 packages:
-    ./beam-backend/beam-backend.cabal
     ./beam-core/beam-core.cabal
     ./beam-migrate/*.cabal
     ./beam-postgres/*.cabal
     ./postgresql-simple/*.cabal
-    ./postgresql-libpq/*.cabal

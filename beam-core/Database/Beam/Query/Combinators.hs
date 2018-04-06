@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Query.Combinators
@@ -271,7 +272,7 @@ relatedBy_' = join_'
 
 -- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
 --   to the given table. Useful for creating join conditions.
-references_ :: ( HasTableEquality (PrimaryKey t), Table t )
+references_ :: ( HasTableEquality (PrimaryKey t), Table t, ExpressionContext ctxt )
             => PrimaryKey t (QGenExpr ctxt s) -> t (QGenExpr ctxt s) -> QGenExpr ctxt s Bool
 references_ fk tbl = fk ==. pk tbl
 
@@ -309,20 +310,20 @@ subquery_ q =
   QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
 -- | SQL @CHAR_LENGTH@ function
-charLength_ :: IsStringType text 
+charLength_ :: (IsStringType text, ExpressionContext context)
             => QGenExpr context s text -> QGenExpr context s Int
 charLength_ (QExpr s) = QExpr (charLengthE <$> s)
 
 -- | SQL @OCTET_LENGTH@ function
-octetLength_ :: IsStringType text => QGenExpr context s text -> QGenExpr context s Int
+octetLength_ :: (IsStringType text, ExpressionContext context) => QGenExpr context s text -> QGenExpr context s Int
 octetLength_ (QExpr s) = QExpr (octetLengthE <$> s)
 
 -- | SQL @BIT_LENGTH@ function
-bitLength_ :: QGenExpr context s SqlBitString -> QGenExpr context s Int
+bitLength_ :: ExpressionContext context => QGenExpr context s SqlBitString -> QGenExpr context s Int
 bitLength_ (QExpr x) = QExpr (bitLengthE <$> x)
 
 -- | SQL @CURRENT_TIMESTAMP@ function
-currentTimestamp_ :: QGenExpr ctxt s LocalTime
+currentTimestamp_ :: ExpressionContext ctxt => QGenExpr ctxt s LocalTime
 currentTimestamp_ = QExpr (pure currentTimestampE)
 
 -- | SQL @POSITION(.. IN ..)@ function
@@ -332,22 +333,22 @@ position_ (QExpr needle) (QExpr haystack) =
   QExpr (liftA2 likeE needle haystack)
 
 -- | SQL @LOWER@ function
-lower_ :: IsStringType text
+lower_ :: ( IsStringType text, ExpressionContext context )
        => QGenExpr context s text -> QGenExpr context s text
 lower_ (QExpr s) = QExpr (lowerE <$> s)
 
 -- | SQL @UPPER@ function
-upper_ :: IsStringType text
+upper_ :: ( IsStringType text, ExpressionContext context )
        => QGenExpr context s text -> QGenExpr context s text
 upper_ (QExpr s) = QExpr (upperE <$> s)
 
 -- | SQL @TRIM@ function
-trim_ :: IsStringType text
+trim_ :: ( IsStringType text, ExpressionContext context )
       => QGenExpr context s text -> QGenExpr context s text
 trim_ (QExpr s) = QExpr (trimE <$> s)
 
 -- | Combine all the given boolean value 'QGenExpr's with the '&&.' operator.
-allE :: [ QGenExpr context s Bool ] -> QGenExpr context s Bool
+allE :: ExpressionContext context => [ QGenExpr context s Bool ] -> QGenExpr context s Bool
 allE es = fromMaybe (QExpr (pure (valueE (sqlValueSyntax True)))) $
           foldl (\expr x ->
                    Just $ maybe x (\e -> e &&. x) expr)
@@ -474,7 +475,7 @@ type SqlValableTable table =
 class SqlValable a where
     val_ :: HaskellLiteralForQExpr a -> a
 
-instance (HasSqlValueSyntax a) =>
+instance (HasSqlValueSyntax a, ExpressionContext ctxt) =>
   SqlValable (QGenExpr ctxt s a) where
 
   val_ = QExpr . pure . valueE . sqlValueSyntax
@@ -501,7 +502,7 @@ instance ( Beamable table
 --     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax)) (Maybe x))) ->
 --                          Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
 
-default_ :: QGenExpr ctxt s a
+default_ :: ExpressionContext ctxt => QGenExpr ctxt s a
 default_ = QExpr (pure defaultE)
 
 -- * Window functions
@@ -575,6 +576,7 @@ withWindow_ :: forall window a s r db.
                , Projectible ExpressionSyntax a
                , ContextRewritable a
                , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
+               , ContextCompatible a QValueContext
                )
             => (r -> window)      -- ^ Window builder function
             -> (r -> window -> a) -- ^ Projection builder function. Has access to the windows generated above
@@ -721,38 +723,38 @@ then_' cond res = QIfCond cond res
 else_ :: QGenExpr context s a -> QIfElse context s a
 else_ = QIfElse
 
-if_ :: [ QIfCond context s a ]
+if_ :: ExpressionContext context => [ QIfCond context s a ]
     -> QIfElse context s a
     -> QGenExpr context s a
 if_ conds (QIfElse (QExpr elseExpr)) =
   QExpr (\tbl -> caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond tbl, res tbl)) conds) (elseExpr tbl))
 
 -- | SQL @COALESCE@ support
-coalesce_ :: [ QGenExpr ctxt s (Maybe a) ] -> QGenExpr ctxt s a -> QGenExpr ctxt s a
+coalesce_ :: ExpressionContext ctxt => [ QGenExpr ctxt s (Maybe a) ] -> QGenExpr ctxt s a -> QGenExpr ctxt s a
 coalesce_ qs (QExpr onNull) =
   QExpr $ do
     onNull' <- onNull
     coalesceE . (<> [onNull']) <$> mapM (\(QExpr q) -> q) qs
 
 -- | Convert a 'Maybe' value to a concrete value, by suppling a default
-fromMaybe_ :: QGenExpr ctxt s a -> QGenExpr ctxt s (Maybe a) -> QGenExpr ctxt s a
+fromMaybe_ :: ExpressionContext ctxt => QGenExpr ctxt s a -> QGenExpr ctxt s (Maybe a) -> QGenExpr ctxt s a
 fromMaybe_ onNull q = coalesce_ [q] onNull
 
 -- | Type class for anything which can be checked for null-ness. This includes 'QExpr (Maybe a)' as
 -- well as 'Table's or 'PrimaryKey's over 'Nullable QExpr'.
 class SqlDeconstructMaybe a nonNullA s | a -> nonNullA, a -> s, nonNullA -> s where
     -- | Returns a 'QExpr' that evaluates to true when the first argument is not null
-    isJust_ :: a -> QGenExpr ctxt s Bool
+    isJust_ :: ExpressionContext ctxt => a -> QGenExpr ctxt s Bool
 
     -- | Returns a 'QExpr' that evaluates to true when the first argument is null
-    isNothing_ :: a -> QGenExpr ctxt s Bool
+    isNothing_ :: ExpressionContext ctxt => a -> QGenExpr ctxt s Bool
 
     -- | Given an object (third argument) which may or may not be null, return the default value if
     -- null (first argument), or transform the value that could be null to yield the result of the
     -- expression (second argument)
-    maybe_ :: QGenExpr ctxt s y -> (nonNullA -> QGenExpr ctxt s y) -> a -> QGenExpr ctxt s y
+    maybe_ :: ExpressionContext ctxt => QGenExpr ctxt s y -> (nonNullA -> QGenExpr ctxt s y) -> a -> QGenExpr ctxt s y
 
-instance SqlDeconstructMaybe (QGenExpr ctxt s (Maybe x)) (QGenExpr ctxt s x) s where
+instance ExpressionContext ctxt => SqlDeconstructMaybe (QGenExpr ctxt s (Maybe x)) (QGenExpr ctxt s x) s where
     isJust_ (QExpr x) = QExpr (isNotNullE <$> x)
     isNothing_ (QExpr x) = QExpr (isNullE <$> x)
 
@@ -760,11 +762,15 @@ instance SqlDeconstructMaybe (QGenExpr ctxt s (Maybe x)) (QGenExpr ctxt s x) s w
         let QExpr onJust' = onJust (QExpr e)
         in QExpr (\tbl -> caseE [(isNotNullE (e tbl), onJust' tbl)] (onNothing tbl))
 
-instance Beamable t
+instance ( Beamable t, ExpressionContext ctxt )
     => SqlDeconstructMaybe (t (Nullable (QGenExpr ctxt s))) (t (QGenExpr ctxt s)) s where
     isJust_ t = allE (allBeamValues (\(Columnar' e) -> isJust_ e) t)
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
+
     maybe_ (QExpr onNothing) onJust tbl =
-      let QExpr onJust' = onJust (changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (QExpr e)) tbl)
-          QExpr cond = isJust_ tbl
+      let onJust' :: TablePrefix -> ContextSyntax ctxt
+          QExpr onJust' = onJust (changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (QExpr e)) tbl)
+
+          cond :: TablePrefix -> ContextSyntax ctxt
+          QExpr cond = isJust_ tbl :: QGenExpr ctxt s Bool
       in QExpr (\tblPfx -> caseE [(cond tblPfx, onJust' tblPfx)] (onNothing tblPfx))

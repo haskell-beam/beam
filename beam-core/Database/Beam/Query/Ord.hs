@@ -72,32 +72,32 @@ sqlBool_ :: QGenExpr context s Bool -> QGenExpr context s SqlBool
 sqlBool_ (QExpr s) = QExpr s
 
 -- | SQL @IS TRUE@ operator
-isTrue_ :: QGenExpr context s SqlBool -> QGenExpr context s Bool
+isTrue_ :: ExpressionContext context => QGenExpr context s SqlBool -> QGenExpr context s Bool
 isTrue_ (QExpr s) = QExpr (fmap isTrueE s)
 
 -- | SQL @IS NOT TRUE@ operator
-isNotTrue_ :: QGenExpr context s SqlBool -> QGenExpr context s Bool
+isNotTrue_ :: ExpressionContext context => QGenExpr context s SqlBool -> QGenExpr context s Bool
 isNotTrue_ (QExpr s) = QExpr (fmap isNotTrueE s)
 
 -- | SQL @IS FALSE@ operator
-isFalse_ :: QGenExpr context s SqlBool -> QGenExpr context s Bool
+isFalse_ :: ExpressionContext context => QGenExpr context s SqlBool -> QGenExpr context s Bool
 isFalse_ (QExpr s) = QExpr (fmap isFalseE s)
 
 -- | SQL @IS NOT FALSE@ operator
-isNotFalse_ :: QGenExpr context s SqlBool -> QGenExpr context s Bool
+isNotFalse_ :: ExpressionContext context => QGenExpr context s SqlBool -> QGenExpr context s Bool
 isNotFalse_ (QExpr s) = QExpr (fmap isNotFalseE s)
 
 -- | SQL @IS UNKNOWN@ operator
-isUnknown_ :: QGenExpr context s SqlBool -> QGenExpr context s Bool
+isUnknown_ :: ExpressionContext context => QGenExpr context s SqlBool -> QGenExpr context s Bool
 isUnknown_ (QExpr s) = QExpr (fmap isUnknownE s)
 
 -- | SQL @IS NOT UNKNOWN@ operator
-isNotUnknown_ :: QGenExpr context s SqlBool -> QGenExpr context s Bool
+isNotUnknown_ :: ExpressionContext context => QGenExpr context s SqlBool -> QGenExpr context s Bool
 isNotUnknown_ (QExpr s) = QExpr (fmap isNotUnknownE s)
 
 -- | Return the first argument if the expression has the unknown SQL value
 -- See 'sqlBool_' for the inverse
-unknownAs_ :: Bool -> QGenExpr context s SqlBool -> QGenExpr context s Bool
+unknownAs_ :: ExpressionContext context => Bool -> QGenExpr context s SqlBool -> QGenExpr context s Bool
 unknownAs_ False = isTrue_ -- If unknown is being treated as false, then return true only if the expression is true
 unknownAs_ True  = isNotFalse_ -- If unknown is being treated as true, then return true only if the expression is not false
 
@@ -141,13 +141,13 @@ anyIn_ :: [QExpr s a] -> QQuantified s a
 anyIn_ es = QQuantified quantifyOverAny (quantifierListE <$> mapM (\(QExpr e) -> e) es)
 
 -- | SQL @BETWEEN@ clause
-between_ :: QGenExpr context s a -> QGenExpr context s a
+between_ :: ExpressionContext context => QGenExpr context s a -> QGenExpr context s a
          -> QGenExpr context s a -> QGenExpr context s Bool
 between_ (QExpr a) (QExpr min_) (QExpr max_) =
   QExpr (liftA3 betweenE a min_ max_)
 
 -- | SQL @IN@ predicate
-in_ :: QGenExpr context s a -> [ QGenExpr context s a ] -> QGenExpr context s Bool
+in_ :: ExpressionContext context => QGenExpr context s a -> [ QGenExpr context s a ] -> QGenExpr context s Bool
 in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
 in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
 
@@ -223,7 +223,7 @@ instance HasSqlQuantifiedEqualityCheck a => HasSqlQuantifiedEqualityCheck (SqlSe
   sqlQNeqE _ = sqlQNeqE (Proxy @a)
 
 -- | Compare two arbitrary expressions (of the same type) for equality
-instance ( HasSqlEqualityCheck a ) =>
+instance ( HasSqlEqualityCheck a, ExpressionContext context ) =>
   SqlEq (QGenExpr context s) (QGenExpr context s a) where
 
   (==.) = qBinOpE (sqlEqE (Proxy @a))
@@ -233,7 +233,7 @@ instance ( HasSqlEqualityCheck a ) =>
   (/=?.) = qBinOpE (sqlNeqTriE (Proxy @a))
 
 -- | Two arbitrary expressions can be quantifiably compared for equality.
-instance ( HasSqlQuantifiedEqualityCheck a ) =>
+instance ( HasSqlQuantifiedEqualityCheck a, ExpressionContext context ) => 
   SqlEqQuantified (QGenExpr context s) (QQuantified s a) (QGenExpr context s a) where
 
   a ==*. QQuantified q b = qBinOpE (sqlQEqE (Proxy @a) (Just q)) a (QExpr b)
@@ -248,6 +248,7 @@ type HasTableEqualityNullable expr tbl =
 -- | Compare two arbitrary 'Beamable' types containing 'QGenExpr's for equality.
 instance ( FieldsFulfillConstraint HasSqlEqualityCheck tbl
          , Beamable tbl
+         , ExpressionContext context
          ) =>
          SqlEq (QGenExpr context s) (tbl (QGenExpr context s)) where
 
@@ -315,14 +316,14 @@ class SqlOrd expr e =>
 
   (<*.), (>*.), (<=*.), (>=*.) :: e -> quantified  -> expr Bool
 
-instance SqlOrd (QGenExpr context s) (QGenExpr context s a) where
+instance ExpressionContext context => SqlOrd (QGenExpr context s) (QGenExpr context s a) where
 
   (<.) = qBinOpE (ltE Nothing)
   (>.) = qBinOpE (gtE Nothing)
   (<=.) = qBinOpE (leE Nothing)
   (>=.) = qBinOpE (geE Nothing)
 
-instance SqlOrdQuantified (QGenExpr context s) (QQuantified s a) (QGenExpr context s a) where
+instance ExpressionContext context => SqlOrdQuantified (QGenExpr context s) (QQuantified s a) (QGenExpr context s a) where
   a <*. QQuantified q b = qBinOpE (ltE (Just q)) a (QExpr b)
   a <=*. QQuantified q b = qBinOpE (leE (Just q)) a (QExpr b)
   a >*. QQuantified q b = qBinOpE (gtE (Just q)) a (QExpr b)

@@ -66,6 +66,7 @@ aggregate_ :: forall a r db s.
 
               , ContextRewritable a
               , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext) 
+              , ContextCompatible a QValueContext
               )
            => (r -> a)                  -- ^ Aggregate projection
            -> Q db (QNested s) r -- ^ Query to aggregate over

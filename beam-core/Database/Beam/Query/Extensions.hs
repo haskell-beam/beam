@@ -70,19 +70,19 @@ lastValue_ (QExpr a) = QExpr (lastValueE <$> a)
 nthValue_ :: QExpr s a -> QExpr s Int -> QAgg s a
 nthValue_ (QExpr a) (QExpr n) = QExpr (nthValueE <$> a <*> n)
 
-ln_, exp_, sqrt_ :: Floating a
+ln_, exp_, sqrt_ :: (Floating a, ExpressionContext ctxt)
                  => QGenExpr ctxt s a -> QGenExpr ctxt s a
 ln_ (QExpr a) = QExpr (lnE <$> a)
 exp_ (QExpr a) = QExpr (expE <$> a)
 sqrt_ (QExpr a) = QExpr (sqrtE <$> a)
 
-ceiling_, floor_ :: (RealFrac a, Integral b)
+ceiling_, floor_ :: (RealFrac a, Integral b, ExpressionContext ctxt)
                  => QGenExpr ctxt s a -> QGenExpr ctxt s b
 ceiling_ (QExpr a) = QExpr (ceilE <$> a)
 floor_ (QExpr a) = QExpr (floorE <$> a)
 
 infixr 8 **.
-(**.) :: (Floating a)
+(**.) :: (Floating a, ExpressionContext ctxt)
       => QGenExpr ctxt s a -> QGenExpr ctxt s a -> QGenExpr ctxt s a
 QExpr a **. QExpr b = QExpr (powerE <$> a <*> b)
 

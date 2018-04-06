@@ -176,6 +176,11 @@ data QWindowFrameContext
 
 type family ContextSyntax (context :: *) :: * where
   ContextSyntax QValueContext = ExpressionSyntax
+  ContextSyntax QOrderingContext = ExpressionSyntax
+  ContextSyntax QAggregateContext = ExpressionSyntax
+  ContextSyntax QWindowingContext = ExpressionSyntax
+  ContextSyntax QAggregateContext = ExpressionSyntax
+  ContextSyntax QGroupingContext = ExpressionSyntax
 
 -- | The type of lifted beam expressions that will yield the haskell type 't'.
 --

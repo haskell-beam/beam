@@ -66,9 +66,9 @@ instance IsString CustomSqlSnippet where
 class IsCustomExprFn fn res | res -> fn where
   customExpr_ :: fn -> res
 
-instance IsCustomExprFn CustomSqlSnippet (QGenExpr ctxt s res) where
+instance ExpressionContext ctxt => IsCustomExprFn CustomSqlSnippet (QGenExpr ctxt s res) where
   customExpr_ (CustomSqlSnippet mkSyntax) = QExpr (customExprSyntax . mkSyntax)
-instance IsCustomExprFn a res => IsCustomExprFn (CustomSqlSnippet -> a) (QGenExpr ctxt s r -> res) where
+instance (ExpressionContext ctxt, IsCustomExprFn a res) => IsCustomExprFn (CustomSqlSnippet -> a) (QGenExpr ctxt s r -> res) where
   customExpr_ fn (QExpr e) = customExpr_ $ fn (CustomSqlSnippet (renderSyntax . e))
 
 -- | Force a 'QGenExpr' to be typed as a value expression (a 'QExpr'). Useful

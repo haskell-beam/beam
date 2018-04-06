@@ -28,7 +28,8 @@ import qualified Data.Text as T
 data SqlBool
 
 -- | SQL @AND@ operator
-(&&.) :: QGenExpr context s Bool
+(&&.) :: ExpressionContext context
+      => QGenExpr context s Bool
       -> QGenExpr context s Bool
       -> QGenExpr context s Bool
 (&&.) = qBinOpE andE
@@ -41,13 +42,15 @@ data SqlBool
 (||.) = qBinOpE orE
 
 -- | SQL @AND@ operator for 'SqlBool'
-(&&?.) :: QGenExpr context s SqlBool
+(&&?.) :: ExpressionContext context
+       => QGenExpr context s SqlBool
        -> QGenExpr context s SqlBool
        -> QGenExpr context s SqlBool
 (&&?.) = qBinOpE andE
 
 -- | SQL @OR@ operator
-(||?.) :: QGenExpr context s SqlBool
+(||?.) :: ExpressionContext context
+       => QGenExpr context s SqlBool
        -> QGenExpr context s SqlBool
        -> QGenExpr context s SqlBool
 (||?.) = qBinOpE orE
@@ -72,12 +75,14 @@ data SqlBool
 --   QExpr (liftA2 similarToE scrutinee search)
 
 -- | SQL @NOT@ operator
-not_ :: QGenExpr context s Bool
+not_ :: ExpressionContext context
+     => QGenExpr context s Bool
      -> QGenExpr context s Bool
 not_ (QExpr a) = QExpr (fmap notE a)
 
 -- | SQL @NOT@ operator, but operating on 'SqlBool' instead
-sqlNot_ :: QGenExpr context s SqlBool
+sqlNot_ :: ExpressionContext context
+        => QGenExpr context s SqlBool
         -> QGenExpr context s SqlBool
 sqlNot_ (QExpr a) = QExpr (fmap notE a)
 
