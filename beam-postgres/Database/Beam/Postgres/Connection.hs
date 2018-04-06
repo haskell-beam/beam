@@ -76,14 +76,13 @@ data PgStream a = PgStreamDone     (Either PgError a)
 -- | 'BeamURIOpeners' for the standard @postgresql:@ URI scheme. See the
 -- postgres documentation for more details on the formatting. See documentation
 -- for 'BeamURIOpeners' for more information on how to use this with beam
--- postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
---                   -> BeamURIOpeners c
--- postgresUriSyntax =
---     mkUriOpener "postgresql:"
---         (\uri -> do
---             let pgConnStr = fromString (uriToString id uri "")
---             hdl <- Pg.connectPostgreSQL pgConnStr
---             pure (hdl, Pg.close hdl))
+postgresUriSyntax :: c Pg.Connection Pg -> BeamURIOpeners c
+postgresUriSyntax =
+    mkUriOpener "postgresql:"
+        (\uri -> do
+            let pgConnStr = fromString (uriToString id uri "")
+            hdl <- Pg.connectPostgreSQL pgConnStr
+            pure (hdl, Pg.close hdl))
 
 -- * Syntax rendering
 

@@ -49,6 +49,7 @@ library
                       Database.Beam.Postgres.PgSpecific
   build-depends:      base                 >=4.7  && <5.0,
                       beam-core            >=0.7  && <0.8,
+                      beam-migrate,
 
                       postgresql-libpq     >=0.8  && <0.10,
                       postgresql-simple    >=0.5  && <0.6,

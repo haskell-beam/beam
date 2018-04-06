@@ -29,13 +29,8 @@ module Database.Beam.Postgres
   -- , Postgres(..)
   , Pg
 
-  --   -- ** Postgres syntax
-  -- , PgCommandSyntax, PgSyntax
-  -- , PgSelectSyntax, PgInsertSyntax
-  -- , PgUpdateSyntax, PgDeleteSyntax
-
     -- * Beam URI support
-  -- , postgresUriSyntax
+  , postgresUriSyntax
 
     -- * Postgres-specific features
     -- ** Postgres-specific data types
@@ -73,8 +68,8 @@ import Database.Beam.Postgres.PgSpecific
 -- import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unboundedArray
 --                                       , json, jsonb, uuid, money, smallserial, serial
 --                                       , bigserial)
--- import Database.Beam.Postgres.Extensions ( PgExtensionEntity, IsPgExtension(..)
---                                          , pgCreateExtension, pgDropExtension
---                                          , getPgExtension )
+import Database.Beam.Postgres.Extensions ( PgExtensionEntity, IsPgExtension(..)
+                                         , pgCreateExtension, pgDropExtension
+                                         , getPgExtension )
 
 import qualified Database.PostgreSQL.Simple as Pg

@@ -10,160 +10,160 @@
 -- regular parts of beam migrations.
 module Database.Beam.Postgres.Extensions where
 
--- import           Database.Beam
--- import           Database.Beam.Schema.Tables
+import           Database.Beam
+import           Database.Beam.Schema.Tables
 
--- import           Database.Beam.Postgres.Types
--- import           Database.Beam.Backend
+import           Database.Beam.Postgres.Types
+import           Database.Beam.Backend
 
--- -- import           Database.Beam.Migrate
+-- import           Database.Beam.Migrate
 
--- import           Control.Monad
+import           Control.Monad
 
--- import           Data.Aeson
--- import qualified Data.HashSet as HS
--- import           Data.Hashable (Hashable)
--- import           Data.Monoid
--- import           Data.Proxy
--- import           Data.Text (Text)
+import           Data.Aeson
+import qualified Data.HashSet as HS
+import           Data.Hashable (Hashable)
+import           Data.Monoid
+import           Data.Proxy
+import           Data.Text (Text)
 
--- -- *** Embedding extensions in databases
+-- *** Embedding extensions in databases
 
--- -- | Represents an extension in a database.
--- --
--- -- For example, to include the "Database.Beam.Postgres.PgCrypto" extension in a
--- -- database,
--- --
--- -- @
--- -- import Database.Beam.Migrate.PgCrypto
--- --
--- -- data MyDatabase entity
--- --     = MyDatabase
--- --     { _table1 :: entity (TableEntity Table1)
--- --     , _cryptoExtension :: entity (PgExtensionEntity PgCrypto)
--- --     }
--- --
--- -- migratableDbSettings :: CheckedDatabaseSettings Postgres MyDatabase
--- -- migratableDbSettings = defaultMigratableDbSettings
--- --
--- -- dbSettings :: DatabaseSettings Postgres MyDatabase
--- -- dbSettings = unCheckDatabase migratableDbSettings
--- -- @
--- --
--- -- Note that our database now only works in the 'Postgres' backend.
--- --
--- -- Extensions are implemented as records of functions and values that expose
--- -- extension functionality. For example, the @pgcrypto@ extension (implemented
--- -- by 'PgCrypto') provides cryptographic functions. Thus, 'PgCrypto' is a record
--- -- of functions over 'QGenExpr' which wrap the underlying postgres
--- -- functionality.
--- --
--- -- You get access to these functions by retrieving them from the entity in the
--- -- database.
--- --
--- -- For example, to use the @pgcrypto@ extension in the database above:
--- --
--- -- @
--- -- let PgCrypto { pgCryptoDigestText = digestText
--- --              , pgCryptoCrypt = crypt } = getPgExtension (_cryptoExtension dbSettings)
--- -- in fmap_ (\tbl -> (tbl, crypt (_field1 tbl) (_salt tbl))) (all_ (table1 dbSettings))
--- -- @
--- --
--- -- To implement your own extension, create a record type, and implement the
--- -- 'IsPgExtension' type class.
--- data PgExtensionEntity extension
+-- | Represents an extension in a database.
+--
+-- For example, to include the "Database.Beam.Postgres.PgCrypto" extension in a
+-- database,
+--
+-- @
+-- import Database.Beam.Migrate.PgCrypto
+--
+-- data MyDatabase entity
+--     = MyDatabase
+--     { _table1 :: entity (TableEntity Table1)
+--     , _cryptoExtension :: entity (PgExtensionEntity PgCrypto)
+--     }
+--
+-- migratableDbSettings :: CheckedDatabaseSettings Postgres MyDatabase
+-- migratableDbSettings = defaultMigratableDbSettings
+--
+-- dbSettings :: DatabaseSettings Postgres MyDatabase
+-- dbSettings = unCheckDatabase migratableDbSettings
+-- @
+--
+-- Note that our database now only works in the 'Postgres' backend.
+--
+-- Extensions are implemented as records of functions and values that expose
+-- extension functionality. For example, the @pgcrypto@ extension (implemented
+-- by 'PgCrypto') provides cryptographic functions. Thus, 'PgCrypto' is a record
+-- of functions over 'QGenExpr' which wrap the underlying postgres
+-- functionality.
+--
+-- You get access to these functions by retrieving them from the entity in the
+-- database.
+--
+-- For example, to use the @pgcrypto@ extension in the database above:
+--
+-- @
+-- let PgCrypto { pgCryptoDigestText = digestText
+--              , pgCryptoCrypt = crypt } = getPgExtension (_cryptoExtension dbSettings)
+-- in fmap_ (\tbl -> (tbl, crypt (_field1 tbl) (_salt tbl))) (all_ (table1 dbSettings))
+-- @
+--
+-- To implement your own extension, create a record type, and implement the
+-- 'IsPgExtension' type class.
+data PgExtensionEntity extension
 
--- -- | Type class implemented by any Postgresql extension
--- class IsPgExtension extension where
---   -- | Return the name of this extension. This should be the string that is
---   -- passed to @CREATE EXTENSION@. For example, 'PgCrypto' returns @"pgcrypto"@.
---   pgExtensionName :: Proxy extension -> Text
+-- | Type class implemented by any Postgresql extension
+class IsPgExtension extension where
+  -- | Return the name of this extension. This should be the string that is
+  -- passed to @CREATE EXTENSION@. For example, 'PgCrypto' returns @"pgcrypto"@.
+  pgExtensionName :: Proxy extension -> Text
 
---   -- | Return a value of this extension type. This should fill in all fields in
---   -- the record. For example, 'PgCrypto' builds a record where each function
---   -- wraps the underlying Postgres one.
---   pgExtensionBuild :: extension
+  -- | Return a value of this extension type. This should fill in all fields in
+  -- the record. For example, 'PgCrypto' builds a record where each function
+  -- wraps the underlying Postgres one.
+  pgExtensionBuild :: extension
 
--- -- | There are no fields to rename when defining entities
--- instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor Postgres (PgExtensionEntity e))) where
---   renamingFields _ = FieldRenamer id
+-- | There are no fields to rename when defining entities
+instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor (PgExtensionEntity e))) where
+  renamingFields _ = FieldRenamer id
 
--- instance IsDatabaseEntity Postgres (PgExtensionEntity extension) where
+instance IsDatabaseEntity (PgExtensionEntity extension) where
 
---   data DatabaseEntityDescriptor Postgres (PgExtensionEntity extension) where
---     PgDatabaseExtension :: IsPgExtension extension
---                         => Text
---                         -> extension
---                         -> DatabaseEntityDescriptor Postgres (PgExtensionEntity extension)
---   type DatabaseEntityDefaultRequirements Postgres (PgExtensionEntity extension) =
---     ( IsPgExtension extension )
---   type DatabaseEntityRegularRequirements Postgres (PgExtensionEntity extension) =
---     ( IsPgExtension extension )
+  data DatabaseEntityDescriptor (PgExtensionEntity extension) where
+    PgDatabaseExtension :: IsPgExtension extension
+                        => Text
+                        -> extension
+                        -> DatabaseEntityDescriptor (PgExtensionEntity extension)
+  type DatabaseEntityDefaultRequirements (PgExtensionEntity extension) =
+    ( IsPgExtension extension )
+  type DatabaseEntityRegularRequirements (PgExtensionEntity extension) =
+    ( IsPgExtension extension )
 
---   dbEntityName f (PgDatabaseExtension nm ext) = fmap (\nm' -> PgDatabaseExtension nm' ext) (f nm)
---   dbEntityAuto _ = PgDatabaseExtension (pgExtensionName (Proxy @extension)) pgExtensionBuild
+  dbEntityName f (PgDatabaseExtension nm ext) = fmap (\nm' -> PgDatabaseExtension nm' ext) (f nm)
+  dbEntityAuto _ = PgDatabaseExtension (pgExtensionName (Proxy @extension)) pgExtensionBuild
 
--- -- instance IsCheckedDatabaseEntity Postgres (PgExtensionEntity extension) where
--- --   newtype CheckedDatabaseEntityDescriptor Postgres (PgExtensionEntity extension) =
--- --     CheckedPgExtension (DatabaseEntityDescriptor Postgres (PgExtensionEntity extension))
--- --   type CheckedDatabaseEntityDefaultRequirements Postgres (PgExtensionEntity extension) syntax =
--- --     DatabaseEntityRegularRequirements Postgres (PgExtensionEntity extension)
+-- instance IsCheckedDatabaseEntity (PgExtensionEntity extension) where
+--   newtype CheckedDatabaseEntityDescriptor (PgExtensionEntity extension) =
+--     CheckedPgExtension (DatabaseEntityDescriptor (PgExtensionEntity extension))
+--   type CheckedDatabaseEntityDefaultRequirements (PgExtensionEntity extension) syntax =
+--     DatabaseEntityRegularRequirements Postgres (PgExtensionEntity extension)
 
 --   unCheck (CheckedPgExtension ext) = ext
 --   collectEntityChecks (CheckedPgExtension (PgDatabaseExtension {})) =
 --     [ SomeDatabasePredicate (PgHasExtension (pgExtensionName (Proxy @extension))) ]
 --   checkedDbEntityAuto _ = CheckedPgExtension . dbEntityAuto
 
--- -- | Get the extension record from a database entity. See the documentation for
--- -- 'PgExtensionEntity'.
--- getPgExtension :: DatabaseEntity db (PgExtensionEntity extension)
---                -> extension
--- getPgExtension (DatabaseEntity (PgDatabaseExtension _ ext)) = ext
+-- | Get the extension record from a database entity. See the documentation for
+-- 'PgExtensionEntity'.
+getPgExtension :: DatabaseEntity db (PgExtensionEntity extension)
+               -> extension
+getPgExtension (DatabaseEntity (PgDatabaseExtension _ ext)) = ext
 
--- -- *** Migrations support for extensions
+-- *** Migrations support for extensions
 
--- -- | 'Migration' representing the Postgres @CREATE EXTENSION@ command. Because
--- -- the extension name is statically known by the extension type and
--- -- 'IsPgExtension' type class, this simply produces the checked extension
--- -- entity.
--- --
--- -- If you need to use the extension in subsequent migration steps, use
--- -- 'getPgExtension' and 'unCheck' to get access to the underlying
--- -- 'DatabaseEntity'.
--- -- pgCreateExtension :: forall extension db
--- --                    . IsPgExtension extension
--- --                   => Migration PgCommandSyntax (CheckedDatabaseEntity Postgres db (PgExtensionEntity extension))
--- -- pgCreateExtension =
--- --   let entity = checkedDbEntityAuto (Proxy @PgCommandSyntax) ""
--- --       extName = pgExtensionName (Proxy @extension)
--- --   in upDown (pgCreateExtensionSyntax extName) Nothing >>
--- --      pure (CheckedDatabaseEntity entity (collectEntityChecks entity))
+-- | 'Migration' representing the Postgres @CREATE EXTENSION@ command. Because
+-- the extension name is statically known by the extension type and
+-- 'IsPgExtension' type class, this simply produces the checked extension
+-- entity.
+--
+-- If you need to use the extension in subsequent migration steps, use
+-- 'getPgExtension' and 'unCheck' to get access to the underlying
+-- 'DatabaseEntity'.
+-- pgCreateExtension :: forall extension db
+--                    . IsPgExtension extension
+--                   => Migration PgCommandSyntax (CheckedDatabaseEntity Postgres db (PgExtensionEntity extension))
+-- pgCreateExtension =
+--   let entity = checkedDbEntityAuto (Proxy @PgCommandSyntax) ""
+--       extName = pgExtensionName (Proxy @extension)
+--   in upDown (pgCreateExtensionSyntax extName) Nothing >>
+--      pure (CheckedDatabaseEntity entity (collectEntityChecks entity))
 
--- -- | 'Migration' representing the Postgres @DROP EXTENSION@. After this
--- -- executes, you should expect any further uses of the extension to fail.
--- -- Unfortunately, without linear types, we cannot check this.
--- -- pgDropExtension :: forall extension
--- --                  . CheckedDatabaseEntityDescriptor Postgres (PgExtensionEntity extension)
--- --                 -> Migration PgCommandSyntax ()
--- -- pgDropExtension (CheckedPgExtension (PgDatabaseExtension {})) =
--- --   upDown (pgDropExtensionSyntax (pgExtensionName (Proxy @extension))) Nothing
+-- | 'Migration' representing the Postgres @DROP EXTENSION@. After this
+-- executes, you should expect any further uses of the extension to fail.
+-- Unfortunately, without linear types, we cannot check this.
+-- pgDropExtension :: forall extension
+--                  . CheckedDatabaseEntityDescriptor Postgres (PgExtensionEntity extension)
+--                 -> Migration PgCommandSyntax ()
+-- pgDropExtension (CheckedPgExtension (PgDatabaseExtension {})) =
+--   upDown (pgDropExtensionSyntax (pgExtensionName (Proxy @extension))) Nothing
 
 
--- -- | Postgres-specific database predicate asserting the existence of an
--- -- extension in the database. The 'pgExtensionActionProvider' properly provides
--- -- @CREATE EXTENSION@ and @DROP EXTENSION@ statements to the migration finder.
--- newtype PgHasExtension = PgHasExtension Text {- Extension Name -}
---   deriving (Show, Eq, Generic, Hashable)
--- -- instance DatabasePredicate PgHasExtension where
--- --   englishDescription (PgHasExtension extName) =
--- --     "Postgres extension " ++ show extName ++ " is loaded"
+-- | Postgres-specific database predicate asserting the existence of an
+-- extension in the database. The 'pgExtensionActionProvider' properly provides
+-- @CREATE EXTENSION@ and @DROP EXTENSION@ statements to the migration finder.
+newtype PgHasExtension = PgHasExtension Text {- Extension Name -}
+  deriving (Show, Eq, Generic, Hashable)
+-- instance DatabasePredicate PgHasExtension where
+--   englishDescription (PgHasExtension extName) =
+--     "Postgres extension " ++ show extName ++ " is loaded"
 
---   -- predicateSpecificity _ = PredicateSpecificityOnlyBackend "postgres"
---   -- serializePredicate (PgHasExtension nm) =
---   --   object [ "has-postgres-extension" .= nm ]
+  -- predicateSpecificity _ = PredicateSpecificityOnlyBackend "postgres"
+  -- serializePredicate (PgHasExtension nm) =
+  --   object [ "has-postgres-extension" .= nm ]
 
--- -- pgExtensionActionProvider :: ActionProvider PgCommandSyntax
--- -- pgExtensionActionProvider = pgCreateExtensionProvider <> pgDropExtensionProvider
+-- pgExtensionActionProvider :: ActionProvider PgCommandSyntax
+-- pgExtensionActionProvider = pgCreateExtensionProvider <> pgDropExtensionProvider
 
 -- -- pgCreateExtensionProvider, pgDropExtensionProvider :: ActionProvider PgCommandSyntax
 
