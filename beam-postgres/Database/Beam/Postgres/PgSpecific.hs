@@ -867,14 +867,14 @@ pgAvgMoney_ = pgAvgMoneyOver_ allInGroup_
 
 data PgSetOf (tbl :: (* -> *) -> *)
 
-pgUnnest :: forall tbl db s
-          . Beamable tbl
-         => QExpr PgExpressionSyntax s (PgSetOf tbl)
-         -> Q PgSelectSyntax db s (QExprTable PgExpressionSyntax s tbl)
-pgUnnest (QExpr q) =
+pgUnnest' :: forall tbl db s
+           . Beamable tbl
+          => (TablePrefix -> PgSyntax)
+          -> Q PgSelectSyntax db s (QExprTable PgExpressionSyntax s tbl)
+pgUnnest' q =
   Q (liftF (QAll (\pfx alias ->
                     PgFromSyntax . mconcat $
-                    [ pgParens (fromPgExpression (q pfx)), emit " "
+                    [ q pfx, emit " "
                     , pgQuotedIdentifier alias
                     , pgParens (pgSepBy (emit ", ") (allBeamValues (\(Columnar' (TableField nm)) -> pgQuotedIdentifier nm) tblFields))
                     ])
@@ -887,7 +887,14 @@ pgUnnest (QExpr q) =
                                    do i <- get
                                       put (i + 1)
                                       pure (Columnar' (TableField (fromString ("r" ++ show i)))))
-                                tblSkeleton tblSkeleton) 0
+                                tblSkeleton tblSkeleton) (0 :: Int)
+
+pgUnnest :: forall tbl db s
+          . Beamable tbl
+         => QExpr PgExpressionSyntax s (PgSetOf tbl)
+         -> Q PgSelectSyntax db s (QExprTable PgExpressionSyntax s tbl)
+pgUnnest (QExpr q) =
+  pgUnnest' (\t -> pgParens (fromPgExpression (q t)))
 
 data PgUnnestArrayTbl a f = PgUnnestArrayTbl (C f a)
   deriving Generic
@@ -897,7 +904,7 @@ pgUnnestArray :: QExpr PgExpressionSyntax s (V.Vector a)
               -> Q PgSelectSyntax db s (QExpr PgExpressionSyntax s a)
 pgUnnestArray (QExpr q) =
   fmap (\(PgUnnestArrayTbl x) -> x) $
-  pgUnnest (QExpr (\t -> PgExpressionSyntax (emit "UNNEST" <> pgParens (fromPgExpression (q t)))))
+  pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)))
 
 data PgUnnestArrayWithOrdinalityTbl a f = PgUnnestArrayWithOrdinalityTbl (C f Int) (C f a)
   deriving Generic
@@ -907,7 +914,7 @@ pgUnnestArrayWithOrdinality :: QExpr PgExpressionSyntax s (V.Vector a)
                             -> Q PgSelectSyntax db s (QExpr PgExpressionSyntax s Int, QExpr PgExpressionSyntax s a)
 pgUnnestArrayWithOrdinality (QExpr q) =
   fmap (\(PgUnnestArrayWithOrdinalityTbl i x) -> (i, x)) $
-  pgUnnest (QExpr (\t -> PgExpressionSyntax (emit "UNNEST" <> pgParens (fromPgExpression (q t)) <> emit " WITH ORDINALITY")))
+  pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)) <> emit " WITH ORDINALITY")
 
 instance HasDefaultSqlDataType PgDataTypeSyntax TsQuery where
   defaultSqlDataType _ _ = pgTsQueryType
