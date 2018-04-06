@@ -25,6 +25,7 @@ extra-doc-files:     ChangeLog.md
 library
   signatures:          Database.Beam.Syntax
   exposed-modules:     Database.Beam
+                       Database.Beam.Backend
                        Database.Beam.Query
                        Database.Beam.Query.Internal
                        Database.Beam.Query.CustomSQL
@@ -39,8 +40,6 @@ library
                        Database.Beam.Backend.SQL
                        Database.Beam.Backend.SQL.Types
                        Database.Beam.Backend.SQL.BeamExtensions
-                       Database.Beam.Backend.SQL.SQL92
-                       Database.Beam.Backend.SQL.SQL99
   other-modules:       Database.Beam.Query.Aggregate
                        Database.Beam.Query.Combinators
                        Database.Beam.Query.Extensions
