@@ -5,16 +5,6 @@ signature Database.Beam.Syntax where
 import Data.String ( IsString )
 import Data.Text ( Text )
 
-data Handle
-
-data DBIO a
-
-instance Functor DBIO
-
-instance Applicative DBIO
-
-withDatabase :: Handle -> DBIO a -> IO a
-
 data ExpressionSyntax
 
 instance Eq ExpressionSyntax
