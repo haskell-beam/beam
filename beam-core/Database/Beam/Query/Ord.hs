@@ -47,8 +47,6 @@ import Database.Beam.Query.Operator
 
 import Database.Beam.Schema.Tables
 import Database.Beam.Backend.SQL
--- import Database.Beam.Backend.SQL.AST (Expression)
--- import Database.Beam.Backend.SQL.Builder (SqlSyntaxBuilder)
 
 import Control.Applicative
 import Control.Monad.State
@@ -242,7 +240,7 @@ instance ( HasSqlQuantifiedEqualityCheck a, ExpressionContext context ) =>
 -- | Constraint synonym to check if two tables can be compared for equality
 type HasTableEquality tbl =
   (FieldsFulfillConstraint HasSqlEqualityCheck tbl, Beamable tbl)
-type HasTableEqualityNullable expr tbl =
+type HasTableEqualityNullable tbl =
   (FieldsFulfillConstraintNullable HasSqlEqualityCheck tbl, Beamable tbl)
 
 -- | Compare two arbitrary 'Beamable' types containing 'QGenExpr's for equality.
@@ -252,50 +250,51 @@ instance ( FieldsFulfillConstraint HasSqlEqualityCheck tbl
          ) =>
          SqlEq (QGenExpr context s) (tbl (QGenExpr context s)) where
 
---   a ==. b = let (_, e) = runState (zipBeamFieldsM
---                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
---                                        do modify (\expr ->
---                                                     case expr of
---                                                       Nothing -> Just $ x ==. y
---                                                       Just expr' -> Just $ expr' &&. x ==. y)
---                                           return x') (withConstraints @HasSqlEqualityCheck `alongsideTable` a) b) Nothing
---             in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a ==. b = let (_, e) = runState (zipBeamFieldsM
+                                   (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                       do modify (\expr ->
+                                                    case expr of
+                                                      Nothing -> Just $ x ==. y
+                                                      Just expr' -> Just $ expr' &&. x ==. y)
+                                          return x') (withConstraints @HasSqlEqualityCheck `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=. b = not_ (a ==. b)
 
-  -- a ==?. b = let (_, e) = runState (zipBeamFieldsM
-  --                                   (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
-  --                                       do modify (\expr ->
-  --                                                    case expr of
-  --                                                      Nothing -> Just $ x ==?. y
-  --                                                      Just expr' -> Just $ expr' &&?. x ==?. y)
-  --                                          return x') (withConstraints @HasSqlEqualityCheck  `alongsideTable` a) b) Nothing
-  --           in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a ==?. b = let (_, e) = runState (zipBeamFieldsM
+                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                        do modify (\expr ->
+                                                     case expr of
+                                                       Nothing -> Just $ x ==?. y
+                                                       Just expr' -> Just $ expr' &&?. x ==?. y)
+                                           return x') (withConstraints @HasSqlEqualityCheck  `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
   a /=?. b = sqlNot_ (a ==?. b)
 
 instance ( FieldsFulfillConstraintNullable HasSqlEqualityCheck tbl
-         , Beamable tbl)
+         , Beamable tbl
+         , ExpressionContext context )
     => SqlEq (QGenExpr context s) (tbl (Nullable (QGenExpr context s))) where
 
---   a ==. b = let (_, e) = runState (zipBeamFieldsM
---                                       (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) -> do
---                                           modify (\expr ->
---                                                     case expr of
---                                                       Nothing -> Just $ x ==. y
---                                                       Just expr' -> Just $ expr' &&. x ==. y)
---                                           return x')
---                                       (withNullableConstraints @(HasSqlEqualityCheck syntax) `alongsideTable` a) b) Nothing
---             in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
---   a /=. b = not_ (a ==. b)
+  a ==. b = let (_, e) = runState (zipBeamFieldsM
+                                      (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) -> do
+                                          modify (\expr ->
+                                                    case expr of
+                                                      Nothing -> Just $ x ==. y
+                                                      Just expr' -> Just $ expr' &&. x ==. y)
+                                          return x')
+                                      (withNullableConstraints @HasSqlEqualityCheck `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a /=. b = not_ (a ==. b)
 
---   a ==?. b = let (_, e) = runState (zipBeamFieldsM
---                                     (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
---                                         do modify (\expr ->
---                                                      case expr of
---                                                        Nothing -> Just $ x ==?. y
---                                                        Just expr' -> Just $ expr' &&?. x ==?. y)
---                                            return x') (withNullableConstraints @(HasSqlEqualityCheck syntax) `alongsideTable` a) b) Nothing
---             in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
---   a /=?. b = sqlNot_ (a ==?. b)
+  a ==?. b = let (_, e) = runState (zipBeamFieldsM
+                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                        do modify (\expr ->
+                                                     case expr of
+                                                       Nothing -> Just $ x ==?. y
+                                                       Just expr' -> Just $ expr' &&?. x ==?. y)
+                                           return x') (withNullableConstraints @HasSqlEqualityCheck `alongsideTable` a) b) Nothing
+            in fromMaybe (QExpr (\_ -> valueE (sqlValueSyntax True))) e
+  a /=?. b = sqlNot_ (a ==?. b)
 
 
 -- * Comparisons

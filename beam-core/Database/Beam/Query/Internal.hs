@@ -591,9 +591,9 @@ instance ProjectibleWithPredicate AnyType T.Text (QField s a) where
     fmap (\f' -> QField q tbl (f' ""))
          (mutateM (Proxy @(QField s a)) (\_ -> f)) -- This is kind of a hack
 
-project :: (Projectible b a) => a -> WithExprContext [b]
+project :: (Projectible syntax a) => a -> WithExprContext [syntax]
 project = sequenceA . DList.toList . execWriter . project' (Proxy @AnyType) (\_ e -> tell (DList.singleton e) >> pure e)
 
-reproject :: (Projectible b a) => (Int -> b) -> a -> a
+reproject :: (Projectible syntax a) => (Int -> syntax) -> a -> a
 reproject mkField a =
   evalState (project' (Proxy @AnyType) (\_ _ -> state (\i -> (i, i + 1)) >>= pure . pure . mkField) a) 0
