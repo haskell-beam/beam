@@ -5,152 +5,222 @@ signature Database.Beam.Syntax where
 import Data.String ( IsString )
 import Data.Text ( Text )
 
-data ExpressionSyntax
 
-instance Eq ExpressionSyntax
-
-orE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-andE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-
-data FromSyntax
-
-leftJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax
-
-outerJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax
-
-data ComparisonQuantifierSyntax
-
-neqE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-eqE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-
-data ValueSyntax
-
-valueE :: ValueSyntax -> ExpressionSyntax
-
-notE :: ExpressionSyntax -> ExpressionSyntax
+-- HasSqlValueSyntax
 
 class HasSqlValueSyntax a where
   sqlValueSyntax :: a -> ValueSyntax
 
 instance HasSqlValueSyntax Bool
 
-data SelectSetQuantifierSyntax
 
-setQuantifierDistinct :: SelectSetQuantifierSyntax
+-- IsStringType
+
+class IsStringType a
+
+
+-- IsSql92Syntax
+
+data Command
 
 data SelectSyntax
+data InsertSyntax
+data UpdateSyntax
+data DeleteSyntax
 
-existsE :: SelectSyntax -> ExpressionSyntax
+selectCmd :: SelectSyntax -> Command 
+insertCmd :: InsertSyntax -> Command 
+deleteCmd :: DeleteSyntax -> Command
+updateCmd :: UpdateSyntax -> Command
+
+
+-- IsSql92SelectSyntax
 
 data SelectTableSyntax
 
-data Syntax
+selectStmt :: SelectTableSyntax -> [ExpressionSyntax] -> Maybe Integer -> Maybe Integer -> SelectSyntax
 
-data TableSourceSyntax
 
-innerJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax  
+-- IsSql92SelectTableSyntax
 
-fromTable :: TableSourceSyntax -> Maybe Text -> FromSyntax
+data ProjectionSyntax
+data FromSyntax
+data GroupingSyntax
+data SelectSetQuantifierSyntax
 
-tableFromSubSelect :: SelectSyntax -> TableSourceSyntax
+selectTableStmt
+  :: Maybe SelectSetQuantifierSyntax
+  -> ProjectionSyntax
+  -> Maybe FromSyntax
+  -> Maybe ExpressionSyntax
+  -> Maybe GroupingSyntax
+  -> Maybe ExpressionSyntax
+  -> SelectTableSyntax
+
+unionTables :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
+
+intersectTables :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
+
+exceptTable :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
+
+
+-- IsSql92InsertSyntax
+
+data InsertValuesSyntax
+
+insertStmt :: Text -> [Text] -> InsertValuesSyntax -> InsertSyntax
+
+
+-- IsSql92InsertValuesSyntax
+
+
+
+-- IsSql92QuantifierSyntax
+insertSqlExpressions :: [[ExpressionSyntax]] -> InsertValuesSyntax
+
+insertFromSql :: SelectSyntax -> InsertValuesSyntax
+
+
+-- IsSql92UpdateSyntax
+
+updateStmt :: Text -> [(FieldNameSyntax, ExpressionSyntax)] -> Maybe ExpressionSyntax -> UpdateSyntax
+
+
+-- IsSql92DeleteSyntax
+
+deleteStmt :: Text -> Maybe ExpressionSyntax -> DeleteSyntax
+
+
+-- IsSql92FieldNameSyntax
+
+data FieldNameSyntax
 
 qualifiedField :: Text -> Text -> FieldNameSyntax
 unqualifiedField :: Text -> FieldNameSyntax
 
-data FieldNameSyntax
 
-tableNamed :: Text -> TableSourceSyntax
+-- IsSql92QuantifierSyntax
 
-fieldE :: FieldNameSyntax -> ExpressionSyntax
+quantifyOverAll :: ComparisonQuantifierSyntax
+quantifyOverAny :: ComparisonQuantifierSyntax
 
-projExprs :: [(ExpressionSyntax, Maybe Text)] -> ProjectionSyntax
 
-data ProjectionSyntax
+-- IsSql92ExpressionSyntax
 
-selectTableStmt :: Maybe SelectSetQuantifierSyntax -> ProjectionSyntax -> Maybe FromSyntax -> Maybe ExpressionSyntax -> Maybe GroupingSyntax -> Maybe ExpressionSyntax -> SelectTableSyntax
+data ExpressionSyntax 
+instance Eq ExpressionSyntax
 
-data GroupingSyntax
+data ValueSyntax
 
-selectStmt :: SelectTableSyntax -> [ExpressionSyntax] -> Maybe Integer -> Maybe Integer -> SelectSyntax
+data ComparisonQuantifierSyntax
 
-uniqueE :: SelectSyntax -> ExpressionSyntax
-
-subqueryE :: SelectSyntax -> ExpressionSyntax
-
-charLengthE :: ExpressionSyntax -> ExpressionSyntax
-octetLengthE :: ExpressionSyntax -> ExpressionSyntax
-bitLengthE :: ExpressionSyntax -> ExpressionSyntax
-currentTimestampE :: ExpressionSyntax
-likeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-lowerE :: ExpressionSyntax -> ExpressionSyntax
-upperE :: ExpressionSyntax -> ExpressionSyntax
-trimE :: ExpressionSyntax -> ExpressionSyntax
-
-class IsStringType a
-
-ascOrdering :: ExpressionSyntax -> ExpressionSyntax
-descOrdering :: ExpressionSyntax -> ExpressionSyntax
-
-caseE :: [( ExpressionSyntax, ExpressionSyntax )] -> ExpressionSyntax -> ExpressionSyntax
-
+valueE :: ValueSyntax -> ExpressionSyntax
 coalesceE :: [ExpressionSyntax] -> ExpressionSyntax
-
-isNotNullE :: ExpressionSyntax -> ExpressionSyntax
-
+caseE :: [( ExpressionSyntax, ExpressionSyntax )] -> ExpressionSyntax -> ExpressionSyntax
+fieldE :: FieldNameSyntax -> ExpressionSyntax
+betweenE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax 
+andE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+orE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+addE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+subE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+mulE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+divE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+likeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+modE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+eqE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+neqE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax 
+ltE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+gtE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+leE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+geE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+notE :: ExpressionSyntax -> ExpressionSyntax
+negateE :: ExpressionSyntax -> ExpressionSyntax
 isNullE :: ExpressionSyntax -> ExpressionSyntax
-
-defaultE :: ExpressionSyntax
-
-eqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-neqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-
+isNotNullE :: ExpressionSyntax -> ExpressionSyntax
 isTrueE :: ExpressionSyntax -> ExpressionSyntax
 isNotTrueE :: ExpressionSyntax -> ExpressionSyntax
 isFalseE :: ExpressionSyntax -> ExpressionSyntax
 isNotFalseE :: ExpressionSyntax -> ExpressionSyntax
 isUnknownE :: ExpressionSyntax -> ExpressionSyntax
-isNotUnknownE :: ExpressionSyntax -> ExpressionSyntax
-
-quantifyOverAll :: ComparisonQuantifierSyntax
-quantifyOverAny :: ComparisonQuantifierSyntax
-quantifierListE :: [ExpressionSyntax] -> ExpressionSyntax
-
-betweenE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-
+isNotUnknownE :: ExpressionSyntax -> ExpressionSyntax 
+charLengthE :: ExpressionSyntax -> ExpressionSyntax
+octetLengthE :: ExpressionSyntax -> ExpressionSyntax
+bitLengthE :: ExpressionSyntax -> ExpressionSyntax
+absE :: ExpressionSyntax -> ExpressionSyntax
+existsE :: SelectSyntax -> ExpressionSyntax 
+uniqueE :: SelectSyntax -> ExpressionSyntax 
+subqueryE :: SelectSyntax -> ExpressionSyntax 
+currentTimestampE :: ExpressionSyntax 
+defaultE :: ExpressionSyntax
 inE :: ExpressionSyntax -> [ExpressionSyntax] -> ExpressionSyntax 
 
-ltE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-gtE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-leE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-geE :: Maybe ComparisonQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+lowerE :: ExpressionSyntax -> ExpressionSyntax
+upperE :: ExpressionSyntax -> ExpressionSyntax
+trimE :: ExpressionSyntax -> ExpressionSyntax
+eqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+neqMaybeE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax 
+quantifierListE :: [ExpressionSyntax] -> ExpressionSyntax
 
-mulE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-addE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-subE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-negateE :: ExpressionSyntax -> ExpressionSyntax
-absE :: ExpressionSyntax -> ExpressionSyntax
+similarToE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
 
-divE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
 
-unionTables :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
-intersectTables :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
-exceptTable :: Bool -> SelectTableSyntax -> SelectTableSyntax -> SelectTableSyntax
+-- IsSql92AggregationExpressionSyntax
 
-groupByExpressions :: [ExpressionSyntax] -> GroupingSyntax
+countAllE :: ExpressionSyntax
+countE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+avgE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+maxE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+minE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+sumE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
 
-setQuantifierAll :: SelectSetQuantifierSyntax
+
+-- IsSql92AggregationSetQuantifierSyntax
 
 data AggregationSetQuantifierSyntax
 
-minE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-maxE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-sumE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-avgE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-countE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+setQuantifierAll :: SelectSetQuantifierSyntax
+setQuantifierDistinct :: SelectSetQuantifierSyntax
 
-countAllE :: ExpressionSyntax
 
-data CustomSqlSyntax
+-- IsSql92ProjectionSyntax
+
+projExprs :: [(ExpressionSyntax, Maybe Text)] -> ProjectionSyntax
+
+
+-- IsSql92OrderingSyntax
+
+ascOrdering :: ExpressionSyntax -> ExpressionSyntax
+descOrdering :: ExpressionSyntax -> ExpressionSyntax
+
+
+-- IsSql92TableSourceSyntax
+
+tableNamed :: Text -> TableSourceSyntax
+tableFromSubSelect :: SelectSyntax -> TableSourceSyntax
+
+
+-- IsSql92GroupingSyntax
+
+groupByExpressions :: [ExpressionSyntax] -> GroupingSyntax 
+
+
+-- IsSql92FromSyntax
+
+data TableSourceSyntax
+
+fromTable :: TableSourceSyntax -> Maybe Text -> FromSyntax
+innerJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax  
+leftJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax 
+
+
+-- IsSql92FromOuterJoinSyntax
+
+outerJoin :: FromSyntax -> FromSyntax -> Maybe ExpressionSyntax -> FromSyntax
+
+
+-- CustomSqlSyntax
+
+data CustomSqlSyntax 
 
 instance Semigroup CustomSqlSyntax
 instance Monoid CustomSqlSyntax
@@ -167,51 +237,3 @@ renderSyntax :: ExpressionSyntax -> CustomSqlSyntax
 
 -- | Requirements to marshal a certain type from a database of a particular backend
 class BackendFromField a
-
-data Command
-
-selectCmd :: SelectSyntax -> Command
-
-data InsertSyntax
-
-insertCmd :: InsertSyntax -> Command
-
-data DeleteSyntax
-
-deleteCmd :: DeleteSyntax -> Command
-
-deleteStmt :: Text -> Maybe ExpressionSyntax -> DeleteSyntax
-
-data UpdateSyntax
-
-updateCmd :: UpdateSyntax -> Command
-
-updateStmt :: Text -> [(FieldNameSyntax, ExpressionSyntax)] -> Maybe ExpressionSyntax -> UpdateSyntax 
-
-insertStmt :: Text -> [Text] -> InsertValuesSyntax -> InsertSyntax
-
-data InsertValuesSyntax
-
-insertSqlExpressions :: [[ExpressionSyntax]] -> InsertValuesSyntax
-
-insertFromSql :: SelectSyntax -> InsertValuesSyntax
-
--- data DataTypeSyntax
-
--- bigIntType :: DataTypeSyntax
-
--- varBinaryType :: Maybe Word -> DataTypeSyntax
-
--- binaryType :: Maybe Word -> DataTypeSyntax
-
--- rowType :: [(Text, DataTypeSyntax)] -> DataTypeSyntax
-
--- arrayType :: DataTypeSyntax -> Int -> DataTypeSyntax
-
--- binaryLargeObjectType :: DataTypeSyntax
-
--- characterLargeObjectType :: DataTypeSyntax
-
-similarToE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-
-modE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
