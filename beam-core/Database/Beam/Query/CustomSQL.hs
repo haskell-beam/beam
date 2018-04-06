@@ -43,7 +43,6 @@ module Database.Beam.Query.CustomSQL
 
 import           Database.Beam.Syntax
 import           Database.Beam.Query.Internal
-import           Database.Beam.Backend.SQL.Builder
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (byteString, toLazyByteString)

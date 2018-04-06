@@ -92,7 +92,6 @@ import Database.Beam.Query.Types hiding (QGenExpr)
 
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL.Builder
 import Database.Beam.Schema.Tables
 
 import Control.Monad.Identity
