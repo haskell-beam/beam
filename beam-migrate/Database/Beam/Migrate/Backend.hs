@@ -72,9 +72,9 @@ type DdlError = String
 -- | Backends should create a value of this type and export it in an exposed
 -- module under the name 'migrationBackend'. See the module documentation for
 -- more details.
-data BeamMigrationBackend commandSyntax be hdl m where
+data BeamMigrationBackend commandSyntax be m where
   BeamMigrationBackend ::
-    ( MonadBeam commandSyntax be hdl m
+    ( MonadBeam commandSyntax be m
     , Typeable be
     , HasQBuilder (Sql92SelectSyntax commandSyntax)
     , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) LocalTime
@@ -95,7 +95,7 @@ data BeamMigrationBackend commandSyntax be hdl m where
     , backendConvertToHaskell :: HaskellPredicateConverter
     , backendActionProvider :: ActionProvider commandSyntax
     , backendTransact :: forall a. String -> m a -> IO (Either DdlError a)
-    } -> BeamMigrationBackend commandSyntax be hdl m
+    } -> BeamMigrationBackend commandSyntax be m
 
 -- | Monomorphic wrapper for use with plugin loaders that cannot handle
 -- polymorphism
@@ -104,7 +104,7 @@ data SomeBeamMigrationBackend where
                               , IsSql92DdlCommandSyntax commandSyntax
                               , IsSql92Syntax commandSyntax
                               , Sql92SanityCheck commandSyntax ) =>
-                              BeamMigrationBackend commandSyntax be hdl m
+                              BeamMigrationBackend commandSyntax be m
                            -> SomeBeamMigrationBackend
 
 -- | In order to support Haskell schema generation, backends need to provide a

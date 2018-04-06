@@ -1,6 +1,7 @@
 module Database.Beam.Backend
   ( module Database.Beam.Backend.Types
-  , MonadBeam(..) ) where
+  , MonadBeam(..)
+  ) where
 
 import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL

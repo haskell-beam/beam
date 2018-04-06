@@ -177,10 +177,10 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
 
 -- | URI syntax for use with 'withDbConnection'. See documentation for
 -- 'BeamURIOpeners' for more information.
-sqliteUriSyntax :: c SqliteCommandSyntax Sqlite Connection SqliteM
+sqliteUriSyntax :: c Connection SqliteM
                 -> BeamURIOpeners c
 sqliteUriSyntax =
-  mkUriOpener "sqlite:"
+  mkUriOpener runBeamSqlite "sqlite:"
     (\uri -> do
         let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
         hdl <- open sqliteName
@@ -192,10 +192,7 @@ runBeamSqliteDebug debugStmt conn x = runReaderT (runSqliteM x) (debugStmt, conn
 runBeamSqlite :: Connection -> SqliteM a -> IO a
 runBeamSqlite = runBeamSqliteDebug (\_ -> pure ())
 
-instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
-  withDatabase = runBeamSqlite
-  withDatabaseDebug = runBeamSqliteDebug
-
+instance MonadBeam SqliteCommandSyntax Sqlite SqliteM where
   runNoReturn (SqliteCommandSyntax (SqliteSyntax cmd vals)) =
     SqliteM $ do
       (logger, conn) <- ask
@@ -226,7 +223,7 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
       , "rows from an insert, use Database.Beam.Sqlite.insertReturning "
       , "for emulation" ]
 
-instance Beam.MonadBeamInsertReturning SqliteCommandSyntax Sqlite Connection SqliteM where
+instance Beam.MonadBeamInsertReturning SqliteCommandSyntax Sqlite SqliteM where
   runInsertReturningList tbl values =
     runInsertReturningList (insertReturning tbl values)
 

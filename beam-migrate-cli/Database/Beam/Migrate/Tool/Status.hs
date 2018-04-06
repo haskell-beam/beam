@@ -76,7 +76,7 @@ showCommit atTime sch = do
   putStrLn (T.unpack . T.unlines . map ("    " <>) .
              T.lines . registeredSchemaInfoMessage $ sch)
 
-hasBackendTables :: String -> BeamMigrationBackend cmd be hdl m -> IO Bool
+hasBackendTables :: String -> BeamMigrationBackend cmd be m -> IO Bool
 hasBackendTables connStr be@BeamMigrationBackend { backendTransact = transact } =
   do res <- transact connStr (checkForBackendTables be)
      case res of

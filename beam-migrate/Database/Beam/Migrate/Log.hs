@@ -64,24 +64,24 @@ data BeamMigrateDb entity
 
 instance Database be BeamMigrateDb
 
-beamMigratableDb :: forall cmd be hdl m
+beamMigratableDb :: forall cmd be m
                   . ( Sql92SaneDdlCommandSyntax cmd
                     , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
-                    , MonadBeam cmd be hdl m )
+                    , MonadBeam cmd be m )
                  => CheckedDatabaseSettings be BeamMigrateDb
-beamMigratableDb = runMigrationSilenced $ beamMigrateDbMigration @cmd @be @hdl @m
+beamMigratableDb = runMigrationSilenced $ beamMigrateDbMigration @cmd @be @m
 
-beamMigrateDb :: forall be cmd hdl m
+beamMigrateDb :: forall be cmd m
                . ( Sql92SaneDdlCommandSyntax cmd
                  , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
-                 , MonadBeam cmd be hdl m )
+                 , MonadBeam cmd be m )
                => DatabaseSettings be BeamMigrateDb
-beamMigrateDb = unCheckDatabase $ beamMigratableDb @cmd @be @hdl @m
+beamMigrateDb = unCheckDatabase $ beamMigratableDb @cmd @be @m
 
-beamMigrateDbMigration ::  forall cmd be hdl m
+beamMigrateDbMigration ::  forall cmd be m
                         . ( Sql92SaneDdlCommandSyntax cmd
                           , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
-                          , MonadBeam cmd be hdl m )
+                          , MonadBeam cmd be m )
                        => Migration cmd (CheckedDatabaseSettings be BeamMigrateDb)
 beamMigrateDbMigration =
   BeamMigrateDb <$> createTable "beam_version"
@@ -93,33 +93,33 @@ beamMigrateDbMigration =
 beamMigrateSchemaVersion :: Int
 beamMigrateSchemaVersion = 1
 
-getLatestLogEntry :: forall be cmd hdl m
+getLatestLogEntry :: forall be cmd m
                    . ( IsSql92Syntax cmd
                      , HasQBuilder (Sql92SelectSyntax cmd)
                      , Sql92ReasonableMarshaller be
                      , Sql92SanityCheck cmd
                      , Sql92SaneDdlCommandSyntax cmd
                      , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
-                     , MonadBeam cmd be hdl m )
+                     , MonadBeam cmd be m )
                   => m (Maybe LogEntry)
 getLatestLogEntry =
   runSelectReturningOne (select $
                          limit_ 1 $
                          orderBy_ (desc_ . _logEntryId) $
-                         all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m)))
+                         all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @m)))
 
-updateSchemaToCurrent :: forall be cmd hdl m
+updateSchemaToCurrent :: forall be cmd m
                        . ( IsSql92Syntax cmd
                          , Sql92SanityCheck cmd
                          , Sql92ReasonableMarshaller be
                          , Sql92SaneDdlCommandSyntax cmd
                          , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
-                         , MonadBeam cmd be hdl m )
+                         , MonadBeam cmd be m )
                       => m ()
 updateSchemaToCurrent =
-  runInsert (insert (_beamMigrateVersionTbl (beamMigrateDb @be @cmd @hdl @m)) (insertValues [BeamMigrateVersion beamMigrateSchemaVersion]))
+  runInsert (insert (_beamMigrateVersionTbl (beamMigrateDb @be @cmd @m)) (insertValues [BeamMigrateVersion beamMigrateSchemaVersion]))
 
-recordCommit :: forall be cmd hdl m
+recordCommit :: forall be cmd m
              . ( IsSql92Syntax cmd
                , Sql92SanityCheck cmd
                , Sql92SaneDdlCommandSyntax cmd
@@ -127,7 +127,7 @@ recordCommit :: forall be cmd hdl m
                , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
                , HasSqlValueSyntax (Sql92ValueSyntax cmd) Text
                , Sql92ReasonableMarshaller be
-               , MonadBeam cmd be hdl m )
+               , MonadBeam cmd be m )
              => UUID -> m ()
 recordCommit commitId = do
   let commitIdTxt = fromString (show commitId)
@@ -135,15 +135,15 @@ recordCommit commitId = do
   logEntry <- getLatestLogEntry
   let nextLogEntryId = maybe 0 (succ . _logEntryId) logEntry
 
-  runInsert (insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
+  runInsert (insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd @m))
                     (insertExpressions
                      [ LogEntry (val_ nextLogEntryId)
                                 (val_ commitIdTxt)
                                 currentTimestamp_]))
 
 -- Ensure the backend tables exist
-ensureBackendTables :: forall be cmd hdl m
-                     . BeamMigrationBackend cmd be hdl m
+ensureBackendTables :: forall be cmd m
+                     . BeamMigrationBackend cmd be m
                     -> m ()
 ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } =
   do backendSchemaBuilt <- checkForBackendTables be
@@ -158,7 +158,7 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
       maxVersion <-
         runSelectReturningOne $ select $
         aggregate_ (\v -> max_ (_beamMigrateVersion v)) $
-        all_ (_beamMigrateVersionTbl (beamMigrateDb @be @cmd @hdl @m))
+        all_ (_beamMigrateVersionTbl (beamMigrateDb @be @cmd @m))
 
       case maxVersion of
         Nothing -> cleanAndCreateSchema
@@ -178,7 +178,7 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
         Just totalCnt <-
           runSelectReturningOne $ select $
           aggregate_ (\_ -> as_ @Int countAll_) $
-          all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
+          all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @m))
         when (totalCnt > 0) (fail "beam-migrate: No versioning information, but log entries present")
         runNoReturn (dropTableCmd (dropTableSyntax "beam_migration"))
 
@@ -187,10 +187,10 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
       createSchema
 
     createSchema = do
-      _ <- executeMigration doStep (beamMigrateDbMigration @cmd @be @hdl @m)
+      _ <- executeMigration doStep (beamMigrateDbMigration @cmd @be @m)
       updateSchemaToCurrent
 
-checkForBackendTables :: BeamMigrationBackend cmd be hdl m -> m Bool
+checkForBackendTables :: BeamMigrationBackend cmd be m -> m Bool
 checkForBackendTables BeamMigrationBackend { backendGetDbConstraints = getCs } =
   do cs <- getCs
      pure (any (== p (TableExistsPredicate "beam_version")) cs)

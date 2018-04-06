@@ -174,7 +174,7 @@ showSimpleSchema cmdLine backend connStr = do
                 Right sch -> putStrLn sch
 
 writeSchema :: MigrateCmdLine -> MigrationRegistry
-             -> UUID -> BeamMigrationBackend cmd be hdl m
+             -> UUID -> BeamMigrationBackend cmd be m
              -> [SomeDatabasePredicate]
              -> IO FilePath
 writeSchema cmdLine registry commitId be cs = do
@@ -207,7 +207,7 @@ writeHsSchema cmdLine registry commitId cs dbSchema fmts =
                           metadataComment "--" metadata
 
 writeMigration :: MigrateCmdLine -> MigrationRegistry
-               -> BeamMigrationBackend cmd be hdl m
+               -> BeamMigrationBackend cmd be m
                -> UUID -> UUID
                -> [ cmd ]
                -> IO FilePath

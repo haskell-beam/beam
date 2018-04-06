@@ -3,47 +3,26 @@ module Database.Beam.Backend.SQL
   , module Database.Beam.Backend.SQL.Types
   , module Database.Beam.Backend.Types
 
-  , MonadBeam(..) ) where
+  , MonadBeam(..)
+  ) where
 
 import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
-import Control.Monad.IO.Class
-
--- * MonadBeam class
-
--- | A class that ties together a Sql syntax, backend, handle, and monad type.
+-- | A class that ties together a Sql syntax, backend, and monad type.
 --
---   Intuitively, this allows you to write code that performs database commands
---   without having to know the underlying API. As long as you have an
---   appropriate handle from a database library that Beam can use, you can use
---   the 'MonadBeam' methods to execute the query.
---
---   Provided here is a low-level interface. Most often, you'll only need the
---   'withDatabase' and 'withDatabaseDebug' function. The 'run*' functions are
---   wrapped by the appropriate functions in "Database.Beam.Query".
+--   Provided here is a low-level interface for executing commands. The 'run*'
+--   functions are wrapped by the appropriate functions in 'Database.Beam.Query'.
 --
 --   This interface is very high-level and isn't meant to expose the full power
 --   of the underlying database. Namely, it only supports simple data retrieval
 --   strategies. More complicated strategies (for example, Postgres's @COPY@)
 --   are supported in individual backends. See the documentation of those
 --   backends for more details.
-class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
-  MonadBeam syntax be handle m | m -> syntax be handle where
-
-  {-# MINIMAL withDatabaseDebug, runReturningMany #-}
-
-  -- | Run a database action, and log debugging information about statements
-  --   executed using the specified 'IO' action.
-  withDatabaseDebug :: (String -> IO ()) -- ^ Database statement logging function
-                    -> handle            -- ^ The database connection handle against which to execute the action
-                    -> m a               -- ^ The database action
-                    -> IO a
-  withDatabase :: handle -> m a -> IO a
-
-  -- | Run a database action, but don't report any debug information
-  withDatabase = withDatabaseDebug (\_ -> pure ())
+class (BeamBackend be, Monad m, Sql92SanityCheck syntax) =>
+  MonadBeam syntax be m | m -> syntax be where
+  {-# MINIMAL runReturningMany #-}
 
   -- | Run a query determined by the given syntax, providing an action that will
   --   be called to consume the results from the database (if any). The action

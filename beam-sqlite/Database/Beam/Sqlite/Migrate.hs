@@ -28,8 +28,7 @@ import           Control.Applicative
 import           Control.Exception
 import           Control.Monad.Reader
 
-import           Database.SQLite.Simple
-                    ( Connection, open, close, query_ )
+import           Database.SQLite.Simple (open, close, query_)
 
 import           Data.Aeson
 import           Data.Attoparsec.Text (asciiCI, skipSpace)
@@ -48,7 +47,7 @@ import qualified Data.Text.Encoding as TE
 
 -- | Top-level 'Tool.BeamMigrationBackend' loaded dynamically by the
 -- @beam-migrate@ CLI tool.
-migrationBackend :: Tool.BeamMigrationBackend SqliteCommandSyntax Sqlite Connection SqliteM
+migrationBackend :: Tool.BeamMigrationBackend SqliteCommandSyntax Sqlite SqliteM
 migrationBackend = Tool.BeamMigrationBackend
                        "sqlite"
                        "For beam-sqlite, this is the path to a sqlite3 file"

@@ -21,7 +21,7 @@ displayLog MigrateCmdLine { migrateDatabase = Nothing } =
 displayLog cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } = do
   reg <- lookupRegistry cmdLine
 
-  (db, _, SomeBeamMigrationBackend (be :: BeamMigrationBackend cmd be hdl m)) <-
+  (db, _, SomeBeamMigrationBackend (be :: BeamMigrationBackend cmd be m)) <-
     loadBackend cmdLine reg dbName
 
   case be of
@@ -29,7 +29,7 @@ displayLog cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } = do
       res <- transact (migrationDbConnString db) $
              runSelectReturningList $ select $
              orderBy_ (desc_ . _logEntryId) $
-             all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
+             all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @m))
       case res of
         Left err -> throwIO (CouldNotFetchLog err)
         Right entries ->

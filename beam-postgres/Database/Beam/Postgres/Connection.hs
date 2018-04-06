@@ -81,10 +81,10 @@ data PgStream a = PgStreamDone     (Either PgError a)
 -- | 'BeamURIOpeners' for the standard @postgresql:@ URI scheme. See the
 -- postgres documentation for more details on the formatting. See documentation
 -- for 'BeamURIOpeners' for more information on how to use this with beam
-postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
+postgresUriSyntax :: c Pg.Connection Pg
                   -> BeamURIOpeners c
 postgresUriSyntax =
-    mkUriOpener "postgresql:"
+    mkUriOpener runBeamPostgres "postgresql:"
         (\uri -> do
             let pgConnStr = fromString (uriToString id uri "")
             hdl <- Pg.connectPostgreSQL pgConnStr
@@ -312,14 +312,11 @@ runBeamPostgresDebug dbg conn action =
 runBeamPostgres :: Pg.Connection -> Pg a -> IO a
 runBeamPostgres = runBeamPostgresDebug (\_ -> pure ())
 
-instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
-    withDatabase = runBeamPostgres
-    withDatabaseDebug = runBeamPostgresDebug
-
+instance MonadBeam PgCommandSyntax Postgres Pg where
     runReturningMany cmd consume =
         liftF (PgRunReturning cmd consume id)
 
-instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg.Connection Pg where
+instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg where
     runInsertReturningList tbl values = do
         let insertReturningCmd' =
                 insertReturning tbl values onConflictDefault
@@ -333,7 +330,7 @@ instance MonadBeamInsertReturning PgCommandSyntax Postgres Pg.Connection Pg wher
           PgInsertReturning insertReturningCmd ->
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
 
-instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg where
+instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg where
     runUpdateReturningList tbl mkAssignments mkWhere = do
         let updateReturningCmd' =
                 updateReturning tbl mkAssignments mkWhere
@@ -346,7 +343,7 @@ instance MonadBeamUpdateReturning PgCommandSyntax Postgres Pg.Connection Pg wher
           PgUpdateReturning updateReturningCmd ->
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
 
-instance MonadBeamDeleteReturning PgCommandSyntax Postgres Pg.Connection Pg where
+instance MonadBeamDeleteReturning PgCommandSyntax Postgres Pg where
     runDeleteReturningList tbl mkWhere = do
         let PgDeleteReturning deleteReturningCmd =
                 deleteReturning tbl mkWhere

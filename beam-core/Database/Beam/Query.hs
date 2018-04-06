@@ -154,7 +154,7 @@ lookup_ tbl tblKey =
 
 -- | Run a 'SqlSelect' in a 'MonadBeam' and get the results as a list
 runSelectReturningList ::
-  (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
+  (IsSql92Syntax cmd, MonadBeam cmd be m, FromBackendRow be a) =>
   SqlSelect (Sql92SelectSyntax cmd) a -> m [ a ]
 runSelectReturningList (SqlSelect s) =
   runReturningList (selectCmd s)
@@ -163,7 +163,7 @@ runSelectReturningList (SqlSelect s) =
 --   one. Both no results as well as more than one result cause this to return
 --   'Nothing'.
 runSelectReturningOne ::
-  (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
+  (IsSql92Syntax cmd, MonadBeam cmd be m, FromBackendRow be a) =>
   SqlSelect (Sql92SelectSyntax cmd) a -> m (Maybe a)
 runSelectReturningOne (SqlSelect s) =
   runReturningOne (selectCmd s)
@@ -209,7 +209,7 @@ insert :: ( IsSql92InsertSyntax syntax, Projectible Text (table (QField s)) )
 insert tbl values = insertOnly tbl id values
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
-runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
+runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be m)
           => SqlInsert (Sql92InsertSyntax cmd) -> m ()
 runInsert SqlInsertNoRows = pure ()
 runInsert (SqlInsert i) = runNoReturn (insertCmd i)
@@ -341,7 +341,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
       allBeamValues (\(Columnar' (TableField fieldNm)) -> fieldNm) (primaryKey tblSettings)
 
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
-runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
+runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be m)
           => SqlUpdate (Sql92UpdateSyntax cmd) tbl -> m ()
 runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
 runUpdate SqlIdentityUpdate = pure ()
@@ -364,6 +364,6 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
     QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField name))))) tblSettings)
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
-runDelete :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
+runDelete :: (IsSql92Syntax cmd, MonadBeam cmd be m)
           => SqlDelete (Sql92DeleteSyntax cmd) table -> m ()
 runDelete (SqlDelete d) = runNoReturn (deleteCmd d)

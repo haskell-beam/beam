@@ -25,8 +25,8 @@ import Control.Monad.Identity
 
 -- | 'MonadBeam's that support returning the newly created rows of an @INSERT@ statement.
 --   Useful for discovering the real value of a defaulted value.
-class MonadBeam syntax be handle m =>
-  MonadBeamInsertReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+class MonadBeam syntax be m =>
+  MonadBeamInsertReturning syntax be m | m -> syntax be where
   runInsertReturningList
     :: ( Beamable table
        , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
@@ -38,8 +38,8 @@ class MonadBeam syntax be handle m =>
 
 -- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.
 --   Useful for discovering the new values of the updated rows.
-class MonadBeam syntax be handle m =>
-  MonadBeamUpdateReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+class MonadBeam syntax be m =>
+  MonadBeamUpdateReturning syntax be m | m -> syntax be where
   runUpdateReturningList
     :: ( Beamable table
        , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
@@ -52,8 +52,8 @@ class MonadBeam syntax be handle m =>
 -- | 'MonadBeam's that suppert returning rows that will be deleted by the given
 -- @DELETE@ statement. Useful for deallocating resources based on the value of
 -- deleted rows.
-class MonadBeam syntax be handle m =>
-  MonadBeamDeleteReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+class MonadBeam syntax be m =>
+  MonadBeamDeleteReturning syntax be m | m -> syntax be where
   runDeleteReturningList
     :: ( Beamable table
        , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
