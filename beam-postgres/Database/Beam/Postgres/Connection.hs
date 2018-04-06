@@ -31,7 +31,7 @@ import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Backend.URI
 import           Database.Beam.Query.Types (QGenExpr(..))
 
-import           Database.Beam.Backend
+import           Database.Beam.Syntax
 import           Database.Beam.Postgres.Full
 import           Database.Beam.Postgres.Types
 

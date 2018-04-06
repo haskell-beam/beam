@@ -10,7 +10,7 @@
 module Database.Beam.Postgres.Types () where
 
 import Data.Typeable
-import           Database.Beam.Backend
+import           Database.Beam.Syntax
 import           Database.Beam.Backend.SQL
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg

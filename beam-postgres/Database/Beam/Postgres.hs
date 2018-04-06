@@ -28,7 +28,6 @@ module Database.Beam.Postgres
     -- * Beam Postgres backend
   -- , Postgres(..)
   , Pg
-  , DBIO
 
   --   -- ** Postgres syntax
   -- , PgCommandSyntax, PgSyntax

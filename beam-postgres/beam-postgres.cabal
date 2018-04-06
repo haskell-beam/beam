@@ -42,7 +42,7 @@ library
                       Database.Beam.Postgres.Conduit
                       Database.Beam.Postgres.Full
 
-  mixins: beam-postgres-backend (Database.Beam.Postgres.Syntax as Database.Beam.Backend) 
+  mixins: beam-postgres-backend (Database.Beam.Postgres.Syntax as Database.Beam.Syntax) 
 
   other-modules:      Database.Beam.Postgres.Types
                       Database.Beam.Postgres.Connection
