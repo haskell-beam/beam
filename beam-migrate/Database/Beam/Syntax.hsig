@@ -1,0 +1,107 @@
+{-# LANGUAGE ConstraintKinds #-}
+-- | Encoding of SQL92 DDL commands.
+--
+--  If you're writing a beam backend driver and you want to support migrations,
+--  making an instance of your command syntax for 'IsSql92DdlCommandSyntax' and
+--  making it satisfy 'Sql92SaneDdlCommandSyntax'.
+signature Database.Beam.Syntax where
+
+-- data Command
+
+-- data CreateTableSyntax
+-- data AlterTableSyntax
+-- data DropTableSyntax
+
+-- createTableCmd :: CreateTableSyntax -> Command
+-- dropTableCmd   :: DropTableSyntax -> Command
+-- alterTableCmd  :: AlterTableSyntax -> Command
+
+-- data ColumnSchemaSyntax
+-- data TableConstraintSyntax
+-- data TableOptionsSyntax
+
+-- createTableSyntax :: Maybe TableOptionsSyntax
+--                   -> Text
+--                   -> [ (Text, ColumnSchemaSyntax) ]
+--                   -> [ TableConstraintSyntax ]
+--                   -> CreateTableSyntax
+
+-- dropTableSyntax :: Text -> DropTableSyntax
+
+-- data AlterTableActionSyntax
+
+-- alterTableSyntax :: Text -> AlterTableActionSyntax -> AlterTableSyntax
+
+-- data AlterColumnActionSyntax
+-- data AlterTableColumnSchemaSyntax
+
+-- alterColumnSyntax :: Text -> AlterColumnActionSyntax -> AlterTableColumnSchemaSyntax 
+-- addColumnSyntax :: Text -> ColumnSchemaSyntax -> AlterTableColumnSchemaSyntax
+-- dropColumnSyntax :: Text -> AlterTableColumnSchemaSyntax
+-- renameTableToSyntax :: Text -> AlterTableColumnSchemaSyntax
+-- renameColumnToSyntax :: Text -> Text -> AlterTableColumnSchemaSyntax
+
+-- setNotNullSyntax, setNullSyntax :: AlterColumnActionSyntax
+
+-- columnSchemaSyntax :: ColumnSchemaColumnTypeSyntax
+--                    -> Maybe ColumnSchemaExpressionSyntax {-^ Default value -}
+--                    -> [ ColumnSchemaColumnConstraintDefinitionSyntax ] {-^ Column constraints -}
+--                    -> Maybe Text {-^ Default collation -}
+--                    -> ColumnSchemaSyntax
+
+-- -- class Typeable constraint => IsSql92TableConstraintSyntax constraint where
+-- --   primaryKeyConstraintSyntax :: [ Text ] -> constraint
+
+-- -- class Typeable match => IsSql92MatchTypeSyntax match where
+-- --   fullMatchSyntax :: match
+-- --   partialMatchSyntax :: match
+
+-- -- class Typeable refAction => IsSql92ReferentialActionSyntax refAction where
+-- --   referentialActionCascadeSyntax :: refAction
+-- --   referentialActionSetNullSyntax :: refAction
+-- --   referentialActionSetDefaultSyntax :: refAction
+-- --   referentialActionNoActionSyntax :: refAction
+
+-- -- class ( IsSql92ColumnConstraintSyntax (Sql92ColumnConstraintDefinitionConstraintSyntax constraint)
+-- --       , IsSql92ConstraintAttributesSyntax (Sql92ColumnConstraintDefinitionAttributesSyntax constraint)
+-- --       , Typeable constraint ) =>
+-- --       IsSql92ColumnConstraintDefinitionSyntax constraint where
+-- --   type Sql92ColumnConstraintDefinitionConstraintSyntax constraint :: *
+-- --   type Sql92ColumnConstraintDefinitionAttributesSyntax constraint :: *
+
+-- --   constraintDefinitionSyntax :: Maybe Text -> Sql92ColumnConstraintDefinitionConstraintSyntax constraint
+-- --                              -> Maybe (Sql92ColumnConstraintDefinitionAttributesSyntax constraint)
+-- --                              -> constraint
+
+-- -- class (Monoid attrs, Typeable attrs) => IsSql92ConstraintAttributesSyntax attrs where
+-- --   initiallyDeferredAttributeSyntax :: attrs
+-- --   initiallyImmediateAttributeSyntax :: attrs
+-- --   notDeferrableAttributeSyntax :: attrs
+-- --   deferrableAttributeSyntax :: attrs
+
+-- -- class ( IsSql92MatchTypeSyntax (Sql92ColumnConstraintMatchTypeSyntax constraint)
+-- --       , IsSql92ReferentialActionSyntax (Sql92ColumnConstraintReferentialActionSyntax constraint)
+-- --       , Typeable (Sql92ColumnConstraintExpressionSyntax constraint)
+-- --       , Typeable constraint ) =>
+-- --   IsSql92ColumnConstraintSyntax constraint where
+-- --   type Sql92ColumnConstraintMatchTypeSyntax constraint :: *
+-- --   type Sql92ColumnConstraintReferentialActionSyntax constraint :: *
+-- --   type Sql92ColumnConstraintExpressionSyntax constraint :: *
+
+-- --   notNullConstraintSyntax :: constraint
+-- --   uniqueColumnConstraintSyntax :: constraint
+-- --   primaryKeyColumnConstraintSyntax :: constraint
+-- --   checkColumnConstraintSyntax :: Sql92ColumnConstraintExpressionSyntax constraint -> constraint
+-- --   referencesConstraintSyntax :: Text -> [ Text ]
+-- --                              -> Maybe (Sql92ColumnConstraintMatchTypeSyntax constraint)
+-- --                              -> Maybe (Sql92ColumnConstraintReferentialActionSyntax constraint) {-^ On update -}
+-- --                              -> Maybe (Sql92ColumnConstraintReferentialActionSyntax constraint) {-^ On delete -}
+-- --                              -> constraint
+
+-- -- -- | 'IsSql92DataTypeSyntax'es that can be serialized to JSON
+-- -- class Sql92SerializableDataTypeSyntax dataType where
+-- --   serializeDataType :: dataType -> Value
+
+-- -- -- | 'IsSql92ColumnConstraintDefinitionSyntax'es that can be serialized to JSON
+-- -- class Sql92SerializableConstraintDefinitionSyntax constraint where
+-- --   serializeConstraint :: constraint -> Value

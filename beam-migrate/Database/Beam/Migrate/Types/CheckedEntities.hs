@@ -8,7 +8,7 @@ import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Types.Predicates
 import Database.Beam.Migrate.Generics.Tables
-import Database.Beam.Migrate.SQL.SQL92
+-- import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.Checks
 
 import Control.Applicative
@@ -28,7 +28,7 @@ import GHC.Generics
 -- can generate 'DatabasePredicate's. Conceptually, this is the same as
 -- 'IsDatabaseEntity', but with one extra function to generate
 -- 'DatabasePredicate's from the description.
-class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
+class IsDatabaseEntity entity => IsCheckedDatabaseEntity be entity where
   -- | The type of the descriptor for this checked entity. Usually this wraps
   -- the corresponding 'DatabaseEntityDescriptor' from 'IsDatabaseEntity', along
   -- with some mechanism for generating 'DatabasePredicate's.
@@ -38,7 +38,7 @@ class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
   type CheckedDatabaseEntityDefaultRequirements be entity syntax :: Constraint
 
   -- | Produce the corresponding 'DatabaseEntityDescriptior'
-  unCheck :: CheckedDatabaseEntityDescriptor be entity -> DatabaseEntityDescriptor be entity
+  unCheck :: CheckedDatabaseEntityDescriptor be entity -> DatabaseEntityDescriptor entity
 
   -- | Produce the set of 'DatabasePredicate's that apply to this entity
   collectEntityChecks :: CheckedDatabaseEntityDescriptor be entity -> [ SomeDatabasePredicate ]
@@ -61,29 +61,29 @@ data CheckedDatabaseEntity be (db :: (* -> *) -> *) entityType where
 -- predicates.
 type CheckedDatabaseSettings be db = db (CheckedDatabaseEntity be db)
 
--- | Convert a 'CheckedDatabaseSettings' to a regular 'DatabaseSettings'. The
--- return value is suitable for use in any regular beam query or DML statement.
-unCheckDatabase :: forall be db. Database be db => CheckedDatabaseSettings be db -> DatabaseSettings be db
-unCheckDatabase db = runIdentity $ zipTables (Proxy @be) (\(CheckedDatabaseEntity x _) _ -> pure $ DatabaseEntity (unCheck x)) db db
+-- -- | Convert a 'CheckedDatabaseSettings' to a regular 'DatabaseSettings'. The
+-- -- return value is suitable for use in any regular beam query or DML statement.
+-- unCheckDatabase :: forall be db. Database db => CheckedDatabaseSettings be db -> DatabaseSettings db
+-- unCheckDatabase db = runIdentity $ zipTables (Proxy @be) (\(CheckedDatabaseEntity x _) _ -> pure $ DatabaseEntity (unCheck x)) db db
 
--- | A @beam-migrate@ database schema is defined completely by the set of
--- predicates that apply to it. This function allows you to access this
--- definition for a 'CheckedDatabaseSettings' object.
-collectChecks :: forall be db. Database be  db => CheckedDatabaseSettings be db -> [ SomeDatabasePredicate ]
-collectChecks db = let (_ :: CheckedDatabaseSettings be db, a) =
-                         runWriter $ zipTables (Proxy @be)
-                           (\(CheckedDatabaseEntity entity cs :: CheckedDatabaseEntity be db entityType) b ->
-                              do tell (collectEntityChecks entity)
-                                 tell cs
-                                 pure b) db db
-                   in a
+-- -- | A @beam-migrate@ database schema is defined completely by the set of
+-- -- predicates that apply to it. This function allows you to access this
+-- -- definition for a 'CheckedDatabaseSettings' object.
+-- collectChecks :: forall be db. Database db => CheckedDatabaseSettings be db -> [ SomeDatabasePredicate ]
+-- collectChecks db = let (_ :: CheckedDatabaseSettings be db, a) =
+--                          runWriter $ zipTables (Proxy @be)
+--                            (\(CheckedDatabaseEntity entity cs :: CheckedDatabaseEntity be db entityType) b ->
+--                               do tell (collectEntityChecks entity)
+--                                  tell cs
+--                                  pure b) db db
+--                    in a
 
 instance IsCheckedDatabaseEntity be (DomainTypeEntity ty) where
   data CheckedDatabaseEntityDescriptor be (DomainTypeEntity ty) =
-    CheckedDatabaseDomainType (DatabaseEntityDescriptor be (DomainTypeEntity ty))
+    CheckedDatabaseDomainType (DatabaseEntityDescriptor (DomainTypeEntity ty))
                               [ DomainCheck ]
   type CheckedDatabaseEntityDefaultRequirements be (DomainTypeEntity ty) syntax =
-    DatabaseEntityDefaultRequirements be (DomainTypeEntity ty)
+    DatabaseEntityDefaultRequirements (DomainTypeEntity ty)
 
   unCheck (CheckedDatabaseDomainType x _) = x
   collectEntityChecks (CheckedDatabaseDomainType (DatabaseDomainType domName) domainChecks) =
@@ -94,16 +94,16 @@ instance IsCheckedDatabaseEntity be (DomainTypeEntity ty) where
 instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
   data CheckedDatabaseEntityDescriptor be (TableEntity tbl) where
     CheckedDatabaseTable :: Table tbl
-                         => DatabaseEntityDescriptor be (TableEntity tbl)
+                         => DatabaseEntityDescriptor (TableEntity tbl)
                          -> [ TableCheck ]
                          -> tbl (Const [FieldCheck])
                          -> CheckedDatabaseEntityDescriptor be (TableEntity tbl)
 
-  type CheckedDatabaseEntityDefaultRequirements be (TableEntity tbl) syntax =
-    ( DatabaseEntityDefaultRequirements be (TableEntity tbl)
-    , Generic (tbl (Const [FieldCheck]))
-    , GMigratableTableSettings syntax (Rep (tbl Identity)) (Rep (tbl (Const [FieldCheck])))
-    , IsSql92DdlCommandSyntax syntax )
+  -- type CheckedDatabaseEntityDefaultRequirements be (TableEntity tbl) syntax =
+  --   ( DatabaseEntityDefaultRequirements be (TableEntity tbl)
+  --   , Generic (tbl (Const [FieldCheck]))
+  --   , GMigratableTableSettings syntax (Rep (tbl Identity)) (Rep (tbl (Const [FieldCheck])))
+  --   , IsSql92DdlCommandSyntax syntax )
 
   unCheck (CheckedDatabaseTable x _ _) = x
 
@@ -114,15 +114,15 @@ instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
                                     pure c)
                                tblFields tblFieldChecks)
 
-  checkedDbEntityAuto syntax tblTypeName =
-    let tblChecks =
-          [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableExistsPredicate tblName))
-          , TableCheck (\tblName tblFields ->
-                           let pkFields = allBeamValues (\(Columnar' (TableField x)) -> x) (primaryKey tblFields)
-                           in SomeDatabasePredicate (TableHasPrimaryKey tblName pkFields)) ]
+  -- checkedDbEntityAuto syntax tblTypeName =
+  --   let tblChecks =
+  --         [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableExistsPredicate tblName))
+  --         , TableCheck (\tblName tblFields ->
+  --                          let pkFields = allBeamValues (\(Columnar' (TableField x)) -> x) (primaryKey tblFields)
+  --                          in SomeDatabasePredicate (TableHasPrimaryKey tblName pkFields)) ]
 
-        fieldChecks = to (gDefaultTblSettingsChecks syntax (Proxy @(Rep (tbl Identity))) False)
-    in CheckedDatabaseTable (dbEntityAuto tblTypeName) tblChecks fieldChecks
+  --       fieldChecks = to (gDefaultTblSettingsChecks syntax (Proxy @(Rep (tbl Identity))) False)
+  --   in CheckedDatabaseTable (dbEntityAuto tblTypeName) tblChecks fieldChecks
 
 -- | Purposefully opaque type describing how to modify a table field. Used to
 -- parameterize the second argument to 'modifyCheckedTable'. For now, the only
@@ -177,7 +177,7 @@ instance Beamable tbl => RenamableWithRule (tbl (CheckedFieldModification tbl)) 
 modifyCheckedTable
   :: ( Text -> Text )
   -> tbl (CheckedFieldModification tbl)
-  -> EntityModification (CheckedDatabaseEntity be db) be (TableEntity tbl)
+  -> EntityModification (CheckedDatabaseEntity be db) (TableEntity tbl)
 modifyCheckedTable renamer modFields =
   EntityModification (\(CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable nm fields) tblChecks fieldChecks) extraChecks) ->
                           let fields' = runIdentity $

@@ -31,6 +31,9 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
+  signatures: 
+    Database.Beam.Syntax
+
   exposed-modules:     Database.Beam.Migrate
 
                        Database.Beam.Migrate.Types
@@ -42,7 +45,6 @@ library
                        Database.Beam.Migrate.SQL
                        Database.Beam.Migrate.SQL.Builder
                        Database.Beam.Migrate.SQL.Tables
-                       Database.Beam.Migrate.SQL.SQL92
                        Database.Beam.Migrate.SQL.BeamExtensions
 
                        Database.Beam.Migrate.Log

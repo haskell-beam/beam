@@ -5,34 +5,33 @@
 --
 -- Used to read and write machine-readable schema descriptions.
 
-module Database.Beam.Migrate.Serialization
-       ( -- * Serialization helpers
-         -- $serialization
-         BeamSerializedDataType(..)
-       , BeamSerializedConstraintDefinition(..)
-       , BeamSerializedConstraintAttributes(..)
-       , BeamSerializedConstraint(..)
-       , BeamSerializedMatchType(..)
-       , BeamSerializedReferentialAction(..)
-       , BeamSerializedExpression(..)
+module Database.Beam.Migrate.Serialization where
+       -- ( -- * Serialization helpers
+       --   -- $serialization
+       --   BeamSerializedDataType(..)
+       -- , BeamSerializedConstraintDefinition(..)
+       -- , BeamSerializedConstraintAttributes(..)
+       -- , BeamSerializedConstraint(..)
+       -- , BeamSerializedMatchType(..)
+       -- , BeamSerializedReferentialAction(..)
+       -- , BeamSerializedExpression(..)
 
-       , beamSerializeJSON, serializePrecAndDecimal
+       -- , beamSerializeJSON, serializePrecAndDecimal
 
-       -- * Deserialization helpers
-       -- $deserialization
+       -- -- * Deserialization helpers
+       -- -- $deserialization
 
-       , BeamDeserializers(..)
+       -- , BeamDeserializers(..)
 
-       , beamDeserialize, beamDeserializeMaybe
-       , beamDeserializer, sql92Deserializers
-       , sql99DataTypeDeserializers
-       , sql2003BinaryAndVarBinaryDataTypeDeserializers
-       , sql2008BigIntDataTypeDeserializers
-       ) where
+       -- , beamDeserialize, beamDeserializeMaybe
+       -- , beamDeserializer, sql92Deserializers
+       -- , sql99DataTypeDeserializers
+       -- , sql2003BinaryAndVarBinaryDataTypeDeserializers
+       -- , sql2008BigIntDataTypeDeserializers
+       -- ) where
 
-import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate.SQL.SQL92
+-- import           Database.Beam.Migrate.SQL.SQL92
 
 import           Control.Applicative
 import           Control.Monad
@@ -202,278 +201,295 @@ newtype BeamSerializedExpression
 --   notDeferrableAttributeSyntax = BeamSerializedConstraintAttributes [ "not-deferrable" ]
 --   deferrableAttributeSyntax = BeamSerializedConstraintAttributes [ "deferrable" ]
 
--- | Some backends serialize data that can only be read by that backend. If so,
--- they should wrap these data in 'beamSerializeJSON', which provides a standard
--- syntax for specifying backend specific data, as well as which backend the
--- data are valid for.
---
--- The first argument is a string that is unique to a given backend
-beamSerializeJSON :: Text -> Value -> Value
-beamSerializeJSON backend v =
-  object [ "be-specific" .= backend
-         , "be-data" .= v ]
+-- -- | Some backends serialize data that can only be read by that backend. If so,
+-- -- they should wrap these data in 'beamSerializeJSON', which provides a standard
+-- -- syntax for specifying backend specific data, as well as which backend the
+-- -- data are valid for.
+-- --
+-- -- The first argument is a string that is unique to a given backend
+-- beamSerializeJSON :: Text -> Value -> Value
+-- beamSerializeJSON backend v =
+--   object [ "be-specific" .= backend
+--          , "be-data" .= v ]
 
--- | Helper for serializing the precision and decimal count parameters to
--- 'decimalType', etc.
-serializePrecAndDecimal :: Maybe (Word, Maybe Word) -> Value
-serializePrecAndDecimal Nothing =
-  object []
-serializePrecAndDecimal (Just (prec, Nothing)) =
-  object [ "prec" .= prec ]
-serializePrecAndDecimal (Just (prec, Just decimal)) =
-  object [ "prec" .= prec
-         , "decimal" .= decimal ]
+-- -- | Helper for serializing the precision and decimal count parameters to
+-- -- 'decimalType', etc.
+-- serializePrecAndDecimal :: Maybe (Word, Maybe Word) -> Value
+-- serializePrecAndDecimal Nothing =
+--   object []
+-- serializePrecAndDecimal (Just (prec, Nothing)) =
+--   object [ "prec" .= prec ]
+-- serializePrecAndDecimal (Just (prec, Just decimal)) =
+--   object [ "prec" .= prec
+--          , "decimal" .= decimal ]
 
--- * Deserialization helpers
+-- -- * Deserialization helpers
 
--- ** Data types
+-- -- ** Data types
 
-newtype BeamDeserializer
-  = BeamDeserializer (BeamDeserializers -> Value -> Parser ())
+-- newtype BeamDeserializer syntax
+--   = BeamDeserializer (forall cmd. BeamDeserializers cmd -> Value -> Parser syntax)
 
--- | Provides a collection of deserializers from aeson 'Value's for arbitrary
--- types. The @cmd@ type parameter is a phantom type parameter. Notionally, all
--- deserializers within this 'BeamDeserializers' relate to the @cmd@ syntax.
-newtype BeamDeserializers
-  = BeamDeserializers
-  { beamArbitraryDeserializers :: ()
-  }
+-- -- | Provides a collection of deserializers from aeson 'Value's for arbitrary
+-- -- types. The @cmd@ type parameter is a phantom type parameter. Notionally, all
+-- -- deserializers within this 'BeamDeserializers' relate to the @cmd@ syntax.
+-- newtype BeamDeserializers cmd
+--   = BeamDeserializers
+--   { beamArbitraryDeserializers :: D.DMap BeamDeserializerLabel BeamDeserializer
+--   }
 
-instance Monoid BeamDeserializer where
-  mempty = BeamDeserializer (const (const mzero))
-  mappend (BeamDeserializer a) (BeamDeserializer b) =
-    BeamDeserializer $ \d o ->
-    a d o <|> b d o
+-- instance Monoid (BeamDeserializer cmd) where
+--   mempty = BeamDeserializer (const (const mzero))
+--   mappend (BeamDeserializer a) (BeamDeserializer b) =
+--     BeamDeserializer $ \d o ->
+--     a d o <|> b d o
 
-instance Monoid BeamDeserializers where
-  mempty = BeamDeserializers mempty
-  mappend (BeamDeserializers a) (BeamDeserializers b) =
-    BeamDeserializers (D.unionWithKey (const mappend) a b)
+-- instance Monoid (BeamDeserializers cmd) where
+--   mempty = BeamDeserializers mempty
+--   mappend (BeamDeserializers a) (BeamDeserializers b) =
+--     BeamDeserializers (D.unionWithKey (const mappend) a b)
 
--- | Helper function to deserialize data from a 'Maybe' 'Value'.
---
--- @
+-- -- | Helper function to deserialize data from a 'Maybe' 'Value'.
+-- --
+-- -- @
+-- -- beamDeserializeMaybe _ Nothing = pure Nothing
+-- -- beamDeserializeMaybe d (Just v) = Just <$> beamDeserialize d v
+-- -- @
+-- --
+-- beamDeserializeMaybe :: Typeable a
+--                      => BeamDeserializers cmd
+--                      -> Maybe Value
+--                      -> Parser (Maybe a)
 -- beamDeserializeMaybe _ Nothing = pure Nothing
--- beamDeserializeMaybe d (Just v) = Just <$> beamDeserialize d v
--- @
---
-beamDeserializeMaybe :: Typeable a
-                     => BeamDeserializers
-                     -> Maybe Value
-                     -> Parser (Maybe a)
-beamDeserializeMaybe _ Nothing = pure Nothing
-beamDeserializeMaybe d (Just v) =
-  Just <$> beamDeserialize d v
+-- beamDeserializeMaybe d (Just v) =
+--   Just <$> beamDeserialize d v
 
--- | Deserialize the requested type from the given deserializers and aeson 'Value'.
-beamDeserialize :: forall a. Typeable a
-                => BeamDeserializers -> Value
-                -> Parser a
-beamDeserialize allD@(BeamDeserializers d) v =
-  case D.lookup (BeamDeserializerLabel :: BeamDeserializerLabel a) d of
-    Nothing -> fail ("beamDeserialize: No deserializer for " ++ show (typeOf (undefined :: a)))
-    Just (BeamDeserializer doParse) ->
-      doParse allD v
+-- -- | Deserialize the requested type from the given deserializers and aeson 'Value'.
+-- beamDeserialize :: forall a cmd. Typeable a
+--                 => BeamDeserializers cmd -> Value
+--                 -> Parser a
+-- beamDeserialize allD@(BeamDeserializers d) v =
+--   case D.lookup (BeamDeserializerLabel :: BeamDeserializerLabel a) d of
+--     Nothing -> fail ("beamDeserialize: No deserializer for " ++ show (typeOf (undefined :: a)))
+--     Just (BeamDeserializer doParse) ->
+--       doParse allD v
 
-data BeamDeserializerLabel ty where
-  BeamDeserializerLabel :: Typeable ty
-                        => BeamDeserializerLabel ty
-instance D.GEq BeamDeserializerLabel where
-  geq a b =
-    case D.gcompare a b of
-      D.GEQ -> Just Refl
-      _ -> Nothing
-instance D.GCompare BeamDeserializerLabel where
-  gcompare a@(BeamDeserializerLabel :: BeamDeserializerLabel a)
-           b@(BeamDeserializerLabel :: BeamDeserializerLabel b) =
-    case eqT of
-      Just (Refl :: a :~: b)-> D.GEQ
-      Nothing ->
-        case compare (typeRep a) (typeRep b) of
-          LT -> D.GLT
-          GT -> D.GGT
-          EQ -> error "Impossible"
+-- data BeamDeserializerLabel ty where
+--   BeamDeserializerLabel :: Typeable ty
+--                         => BeamDeserializerLabel ty
+-- instance D.GEq BeamDeserializerLabel where
+--   geq a b =
+--     case D.gcompare a b of
+--       D.GEQ -> Just Refl
+--       _ -> Nothing
+-- instance D.GCompare BeamDeserializerLabel where
+--   gcompare a@(BeamDeserializerLabel :: BeamDeserializerLabel a)
+--            b@(BeamDeserializerLabel :: BeamDeserializerLabel b) =
+--     case eqT of
+--       Just (Refl :: a :~: b)-> D.GEQ
+--       Nothing ->
+--         case compare (typeRep a) (typeRep b) of
+--           LT -> D.GLT
+--           GT -> D.GGT
+--           EQ -> error "Impossible"
 
-beamDeserializer :: Typeable ty
-                 => (BeamDeserializers -> Value -> Parser ty)
-                 -> BeamDeserializers
-beamDeserializer parse =
-  BeamDeserializers (D.singleton BeamDeserializerLabel (BeamDeserializer parse))
+-- beamDeserializer :: Typeable ty
+--                  => (forall cmd'. BeamDeserializers cmd' -> Value -> Parser ty)
+--                  -> BeamDeserializers cmd
+-- beamDeserializer parse =
+--   BeamDeserializers (D.singleton BeamDeserializerLabel (BeamDeserializer parse))
 
--- | Deserializers for SQL92 syntaxes
-sql92Deserializers :: BeamDeserializers
-sql92Deserializers = mconcat
-                   [ beamDeserializer deserializeSql92DataType
-                   , beamDeserializer deserializeSql92ConstraintDefinition
-                   , beamDeserializer deserializeSql92Constraint
-                   , beamDeserializer deserializeSql92MatchType
-                   , beamDeserializer deserializeSql92ReferentialAction
-                   , beamDeserializer deserializeSql92Attributes ]
-  where
-    parseSub nm o key parse =
-      withObject (unpack (nm <> "." <> key)) parse =<< o .: key
+-- -- | Deserializers for SQL92 syntaxes
+-- sql92Deserializers :: forall cmd
+--                     . IsSql92DdlCommandSyntax cmd
+--                    => BeamDeserializers cmd
+-- sql92Deserializers = mconcat
+--                    [ beamDeserializer deserializeSql92DataType
+--                    , beamDeserializer deserializeSql92ConstraintDefinition
+--                    , beamDeserializer deserializeSql92Constraint
+--                    , beamDeserializer deserializeSql92MatchType
+--                    , beamDeserializer deserializeSql92ReferentialAction
+--                    , beamDeserializer deserializeSql92Attributes ]
+--   where
+--     parseSub nm o key parse =
+--       withObject (unpack (nm <> "." <> key)) parse =<< o .: key
 
-    deserializeSql92DataType :: BeamDeserializers -> Value
-                             -> Parser ()
-    deserializeSql92DataType _ o =
-      deserializeSql92DataTypeObject o <|>
-      deserializeSql92DataTypeScalar o
+--     deserializeSql92DataType :: BeamDeserializers cmd' -> Value
+--                              -> Parser (Sql92DdlCommandDataTypeSyntax cmd)
+--     deserializeSql92DataType _ o =
+--       deserializeSql92DataTypeObject o <|>
+--       deserializeSql92DataTypeScalar o
 
-    deserializeSql92DataTypeScalar "int" = pure intType
-    deserializeSql92DataTypeScalar "smallint" = pure smallIntType
-    deserializeSql92DataTypeScalar "double" = pure dateType
-    deserializeSql92DataTypeScalar "real" = pure realType
-    deserializeSql92DataTypeScalar "date" = pure dateType
-    deserializeSql92DataTypeScalar _ = mzero
+--     deserializeSql92DataTypeScalar "int" = pure intType
+--     deserializeSql92DataTypeScalar "smallint" = pure smallIntType
+--     deserializeSql92DataTypeScalar "double" = pure dateType
+--     deserializeSql92DataTypeScalar "real" = pure realType
+--     deserializeSql92DataTypeScalar "date" = pure dateType
+--     deserializeSql92DataTypeScalar _ = mzero
 
-    deserializeSql92DataTypeObject =
-      withObject "Sql92DataType" $ \o ->
-      let (==>) = parseSub "Sql92DataType" o
-      in (domainType <$> o .: "domain") <|>
-         ("char" ==> \v ->
-             charType <$> v .: "prec" <*> v .: "collation") <|>
-         ("varchar" ==> \v ->
-             varCharType <$> v .: "prec" <*> v .: "collation") <|>
-         ("national-char" ==> \v ->
-             nationalCharType <$> v .: "prec") <|>
-         ("national-varchar" ==> \v ->
-             nationalVarCharType <$> v .: "prec") <|>
-         ("bit" ==> \v ->
-             bitType <$> v .: "prec") <|>
-         ("varbit" ==> \v ->
-             varBitType <$> v .: "prec") <|>
-         ("numeric" ==> \v ->
-             numericType <$> deserializePrecAndDecimal v) <|>
-         ("decimal" ==> \v ->
-             decimalType <$> deserializePrecAndDecimal v) <|>
-         ("float" ==> \v ->
-             floatType <$> v .: "prec") <|>
-         ("time" ==> \v ->
-             timeType <$> v .: "prec" <*> v .: "timezone") <|>
-         ("timestamp" ==> \v ->
-             timestampType <$> v .: "prec" <*> v .: "timezone")
+--     deserializeSql92DataTypeObject =
+--       withObject "Sql92DataType" $ \o ->
+--       let (==>) = parseSub "Sql92DataType" o
+--       in (domainType <$> o .: "domain") <|>
+--          ("char" ==> \v ->
+--              charType <$> v .: "prec" <*> v .: "collation") <|>
+--          ("varchar" ==> \v ->
+--              varCharType <$> v .: "prec" <*> v .: "collation") <|>
+--          ("national-char" ==> \v ->
+--              nationalCharType <$> v .: "prec") <|>
+--          ("national-varchar" ==> \v ->
+--              nationalVarCharType <$> v .: "prec") <|>
+--          ("bit" ==> \v ->
+--              bitType <$> v .: "prec") <|>
+--          ("varbit" ==> \v ->
+--              varBitType <$> v .: "prec") <|>
+--          ("numeric" ==> \v ->
+--              numericType <$> deserializePrecAndDecimal v) <|>
+--          ("decimal" ==> \v ->
+--              decimalType <$> deserializePrecAndDecimal v) <|>
+--          ("float" ==> \v ->
+--              floatType <$> v .: "prec") <|>
+--          ("time" ==> \v ->
+--              timeType <$> v .: "prec" <*> v .: "timezone") <|>
+--          ("timestamp" ==> \v ->
+--              timestampType <$> v .: "prec" <*> v .: "timezone")
 
-    deserializePrecAndDecimal o =
-      Just <$> (((,) <$> o .: "prec" <*> (Just <$> o .: "decimal")) <|>
-                ((,Nothing) <$> o .: "prec")) <|>
-      pure Nothing
+--     deserializePrecAndDecimal o =
+--       Just <$> (((,) <$> o .: "prec" <*> (Just <$> o .: "decimal")) <|>
+--                 ((,Nothing) <$> o .: "prec")) <|>
+--       pure Nothing
 
-    deserializeSql92ConstraintDefinition :: BeamDeserializers -> Value
-                                         -> Parser ()
-    deserializeSql92ConstraintDefinition d =
-      withObject "Sql92ColumnConstraintDefinition" $ \o ->
-      constraintDefinitionSyntax <$> o .: "name"
-                                 <*> (beamDeserialize d =<< o .: "constraint")
-                                 <*> (beamDeserializeMaybe d =<< o .: "attributes")
+--     deserializeSql92ConstraintDefinition :: BeamDeserializers cmd' -> Value
+--                                          -> Parser (Sql92DdlCommandConstraintDefinitionSyntax cmd)
+--     deserializeSql92ConstraintDefinition d =
+--       withObject "Sql92ColumnConstraintDefinition" $ \o ->
+--       constraintDefinitionSyntax <$> o .: "name"
+--                                  <*> (beamDeserialize d =<< o .: "constraint")
+--                                  <*> (beamDeserializeMaybe d =<< o .: "attributes")
 
-    deserializeSql92Constraint :: BeamDeserializers -> Value
-                               -> Parser ()
-    deserializeSql92Constraint d o =
-      case o of
-        "not-null" -> pure notNullConstraintSyntax
-        "unique" -> pure uniqueColumnConstraintSyntax
-        _ -> withObject "Sql92ColumnConstraint" parseObject o
-      where
-        parseObject v =
-          let (==>) = parseSub "Sql92ColumnConstraint" v
-          in checkColumnConstraintSyntax <$> (beamDeserialize d =<< v .: "check-column") <|>
-             ("references" ==> \v' ->
-                 referencesConstraintSyntax <$> v' .: "table" <*> v' .: "fields"
-                                            <*> (beamDeserializeMaybe d =<< v' .: "match-type")
-                                            <*> (beamDeserializeMaybe d =<< v' .: "on-update")
-                                            <*> (beamDeserializeMaybe d =<< v' .: "on-delete"))
+--     deserializeSql92Constraint :: BeamDeserializers cmd' -> Value
+--                                -> Parser (Sql92DdlCommandColumnConstraintSyntax cmd)
+--     deserializeSql92Constraint d o =
+--       case o of
+--         "not-null" -> pure notNullConstraintSyntax
+--         "unique" -> pure uniqueColumnConstraintSyntax
+--         _ -> withObject "Sql92ColumnConstraint" parseObject o
+--       where
+--         parseObject v =
+--           let (==>) = parseSub "Sql92ColumnConstraint" v
+--           in checkColumnConstraintSyntax <$> (beamDeserialize d =<< v .: "check-column") <|>
+--              ("references" ==> \v' ->
+--                  referencesConstraintSyntax <$> v' .: "table" <*> v' .: "fields"
+--                                             <*> (beamDeserializeMaybe d =<< v' .: "match-type")
+--                                             <*> (beamDeserializeMaybe d =<< v' .: "on-update")
+--                                             <*> (beamDeserializeMaybe d =<< v' .: "on-delete"))
 
-    deserializeSql92MatchType :: BeamDeserializers -> Value
-                              -> Parser ( cmd)
-    deserializeSql92MatchType _ v =
-      case v of
-        "full" -> pure fullMatchSyntax
-        "partial" -> pure partialMatchSyntax
-        _ -> mzero
+--     deserializeSql92MatchType :: BeamDeserializers cmd' -> Value
+--                               -> Parser (Sql92DdlCommandMatchTypeSyntax cmd)
+--     deserializeSql92MatchType _ v =
+--       case v of
+--         "full" -> pure fullMatchSyntax
+--         "partial" -> pure partialMatchSyntax
+--         _ -> mzero
 
-    deserializeSql92ReferentialAction :: BeamDeserializers -> Value
-                                      -> Parser ()
-    deserializeSql92ReferentialAction _ v =
-      case v of
-        "cascade" -> pure referentialActionCascadeSyntax
-        "set-null" -> pure referentialActionSetNullSyntax
-        "set-default" -> pure referentialActionSetDefaultSyntax
-        "nothing" -> pure referentialActionNoActionSyntax
-        _ -> mzero
+--     deserializeSql92ReferentialAction :: BeamDeserializers cmd' -> Value
+--                                       -> Parser (Sql92DdlCommandReferentialActionSyntax cmd)
+--     deserializeSql92ReferentialAction _ v =
+--       case v of
+--         "cascade" -> pure referentialActionCascadeSyntax
+--         "set-null" -> pure referentialActionSetNullSyntax
+--         "set-default" -> pure referentialActionSetDefaultSyntax
+--         "nothing" -> pure referentialActionNoActionSyntax
+--         _ -> mzero
 
-    deserializeSql92Attributes :: BeamDeserializers -> Value
-                               -> Parser ()
-    deserializeSql92Attributes _ =
-      withArray "Sql92Attributes" $ \a ->
-      pure (foldr (\o accum ->
-                      case o of
-                        "initially-deferred" -> initiallyDeferredAttributeSyntax <> accum
-                        "initially-immediate" -> initiallyImmediateAttributeSyntax <> accum
-                        "not-deferrable" -> notDeferrableAttributeSyntax <> accum
-                        "deferrable" -> deferrableAttributeSyntax <> accum
-                        _ -> accum
-                  ) mempty a)
+--     deserializeSql92Attributes :: BeamDeserializers cmd' -> Value
+--                                -> Parser (Sql92DdlCommandConstraintAttributesSyntax cmd)
+--     deserializeSql92Attributes _ =
+--       withArray "Sql92Attributes" $ \a ->
+--       pure (foldr (\o accum ->
+--                       case o of
+--                         "initially-deferred" -> initiallyDeferredAttributeSyntax <> accum
+--                         "initially-immediate" -> initiallyImmediateAttributeSyntax <> accum
+--                         "not-deferrable" -> notDeferrableAttributeSyntax <> accum
+--                         "deferrable" -> deferrableAttributeSyntax <> accum
+--                         _ -> accum
+--                   ) mempty a)
 
--- | Deserializes data types that are instances of 'IsSql99DataTypeSyntax'
-sql99DataTypeDeserializers :: BeamDeserializers 
-sql99DataTypeDeserializers =
-  beamDeserializer $ \d v ->
-  case v of
-    "clob" -> pure characterLargeObjectType
-    "blob" -> pure binaryLargeObjectType
-    _ -> withObject "Sql99DataType" (parseObject d) v
-  where
-    parseObject d v =
-      arrayType <$> (beamDeserialize d =<< v .: "of") <*> v .: "count" <|>
-      rowType <$> (do rowTypes <- v .: "row"
-                      let parseArray a =
-                            forM (V.toList a) $ \a' -> do
-                            (nm, a'') <- parseJSON a'
-                            (nm,) <$> beamDeserialize d a''
-                      withArray "Sql99DataType.rowType" parseArray rowTypes)
+-- -- | Deserializes data types that are instances of 'IsSql99DataTypeSyntax'
+-- sql99DataTypeDeserializers
+--   :: forall cmd
+--    . ( IsSql92DdlCommandSyntax cmd
+--      , IsSql99DataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
+--   => BeamDeserializers cmd
+-- sql99DataTypeDeserializers =
+--   beamDeserializer $ \d v ->
+--   fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+--   case v of
+--     "clob" -> pure characterLargeObjectType
+--     "blob" -> pure binaryLargeObjectType
+--     _ -> withObject "Sql99DataType" (parseObject d) v
+--   where
+--     parseObject d v =
+--       arrayType <$> (beamDeserialize d =<< v .: "of") <*> v .: "count" <|>
+--       rowType <$> (do rowTypes <- v .: "row"
+--                       let parseArray a =
+--                             forM (V.toList a) $ \a' -> do
+--                             (nm, a'') <- parseJSON a'
+--                             (nm,) <$> beamDeserialize d a''
+--                       withArray "Sql99DataType.rowType" parseArray rowTypes)
 
--- | Deserialize data types that are instances of 'IsSql2003BinaryAndVarBinaryDataTypeSyntax'
-sql2003BinaryAndVarBinaryDataTypeDeserializers :: BeamDeserializers
-sql2003BinaryAndVarBinaryDataTypeDeserializers =
-  beamDeserializer $ \_ v ->
-  withObject "Sql2003DataType"
-    (\o -> (binaryType <$> o .: "binary") <|>
-           (varBinaryType <$> o .: "varbinary"))
-    v
+-- -- | Deserialize data types that are instances of 'IsSql2003BinaryAndVarBinaryDataTypeSyntax'
+-- sql2003BinaryAndVarBinaryDataTypeDeserializers
+--   :: forall cmd
+--    . ( IsSql92DdlCommandSyntax cmd
+--      , IsSql2003BinaryAndVarBinaryDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
+--   => BeamDeserializers cmd
+-- sql2003BinaryAndVarBinaryDataTypeDeserializers =
+--   beamDeserializer $ \_ v ->
+--   fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+--   withObject "Sql2003DataType"
+--     (\o -> (binaryType <$> o .: "binary") <|>
+--            (varBinaryType <$> o .: "varbinary"))
+--     v
 
--- | Deserialize data types that are instance of 'IsSql2008BigIntDataTypeSyntax'
-sql2008BigIntDataTypeDeserializers :: BeamDeserializers
-sql2008BigIntDataTypeDeserializers =
-  beamDeserializer $ \_ v ->
-  case v of
-    "bigint" -> pure bigIntType
-    _ -> fail "Sql2008DataType.bigint: expected 'bigint'"
+-- -- | Deserialize data types that are instance of 'IsSql2008BigIntDataTypeSyntax'
+-- sql2008BigIntDataTypeDeserializers
+--   :: forall cmd
+--    . ( IsSql92DdlCommandSyntax cmd
+--      , IsSql2008BigIntDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
+--   => BeamDeserializers cmd
+-- sql2008BigIntDataTypeDeserializers =
+--   beamDeserializer $ \_ v ->
+--   fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+--   case v of
+--     "bigint" -> pure bigIntType
+--     _ -> fail "Sql2008DataType.bigint: expected 'bigint'"
 
--- $serialization
---   Below we provide various instances of Beam SQL syntax types that produce an
---   aeson 'Value' that reflects the call tree. This allows us to read back
---   these data types in various syntaxes.
---
---   Because these are formatted as standard beam syntaxes, backends can easily
---   serialize their data to disk. For an example of what we mean by this, see
---   the instance of 'IsSql92DataTypeSyntax' for 'SqliteDataTypeSyntax' in
---   @beam-sqlite@.
+-- -- $serialization
+-- --   Below we provide various instances of Beam SQL syntax types that produce an
+-- --   aeson 'Value' that reflects the call tree. This allows us to read back
+-- --   these data types in various syntaxes.
+-- --
+-- --   Because these are formatted as standard beam syntaxes, backends can easily
+-- --   serialize their data to disk. For an example of what we mean by this, see
+-- --   the instance of 'IsSql92DataTypeSyntax' for 'SqliteDataTypeSyntax' in
+-- --   @beam-sqlite@.
 
 
--- $deserialization
---
---   Deserialization requires that knowledge of every type of data we can
---   deserialize is stored in one place. While this is not much of an issue when
---   compiling full Haskell applications, due to the type class mechanism,
---   beam-migrate tools load backends dynamically. This means that we need a
---   separate way to discover deserialization instances for types we care about.
---
---   Values of the 'BeamDeserializers' type represent a set of deserializers all
---   related to one kind of command syntax. You can ask for the deserializers to
---   deserialize any type from an aeson 'Value'. The deserialization will
---   succeed only if a deserializer for the requested type exists and the
---   deserializer was able to parse the 'Value'.
---
---   'BeamDeserializers' compose monoidally. Thus, you can extend any
---   'BeamDeserializers' with your own custom deserializers, by 'mappend'ing it
---   with a new 'BeamDeserializers', created by calling 'beamDeserializer'.
+-- -- $deserialization
+-- --
+-- --   Deserialization requires that knowledge of every type of data we can
+-- --   deserialize is stored in one place. While this is not much of an issue when
+-- --   compiling full Haskell applications, due to the type class mechanism,
+-- --   beam-migrate tools load backends dynamically. This means that we need a
+-- --   separate way to discover deserialization instances for types we care about.
+-- --
+-- --   Values of the 'BeamDeserializers' type represent a set of deserializers all
+-- --   related to one kind of command syntax. You can ask for the deserializers to
+-- --   deserialize any type from an aeson 'Value'. The deserialization will
+-- --   succeed only if a deserializer for the requested type exists and the
+-- --   deserializer was able to parse the 'Value'.
+-- --
+-- --   'BeamDeserializers' compose monoidally. Thus, you can extend any
+-- --   'BeamDeserializers' with your own custom deserializers, by 'mappend'ing it
+-- --   with a new 'BeamDeserializers', created by calling 'beamDeserializer'.

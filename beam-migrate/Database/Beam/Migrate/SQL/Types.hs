@@ -5,7 +5,6 @@ module Database.Beam.Migrate.SQL.Types
   ) where
 
 import Database.Beam.Migrate.Types.Predicates
-import Database.Beam.Migrate.SQL.SQL92
 
 import Data.Text (Text)
 
@@ -25,8 +24,8 @@ newtype FieldSchema syntax a = FieldSchema syntax
 -- mapping to the Haskell type @a@
 newtype DataType syntax a = DataType syntax
 
-instance Sql92DisplaySyntax syntax => Show (DataType syntax a) where
-  show (DataType syntax) = "DataType (" ++ displaySyntax syntax ++ ")"
+-- instance Sql92DisplaySyntax syntax => Show (DataType syntax a) where
+--   show (DataType syntax) = "DataType (" ++ displaySyntax syntax ++ ")"
 
 instance Eq syntax => Eq (DataType syntax a) where
   DataType a == DataType b = a == b
