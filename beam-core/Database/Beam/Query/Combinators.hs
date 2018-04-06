@@ -36,7 +36,7 @@ module Database.Beam.Query.Combinators
 
     , SqlJustable(..)
     , SqlDeconstructMaybe(..)
-    , SqlOrderable
+    , SqlOrderable(..)
     , QIfCond, QIfElse
 
     , limit_, offset_
@@ -44,7 +44,7 @@ module Database.Beam.Query.Combinators
     , as_
 
     -- ** Subqueries
-    , exists_, unique_, distinct_, subquery_
+    , exists_, unique_, subquery_
 
     -- ** Set operations
     -- |  'Q' values can be combined using a variety of set operations. See the
@@ -53,15 +53,8 @@ module Database.Beam.Query.Combinators
     , intersect_, intersectAll_
     , except_, exceptAll_
 
-    -- * Window functions
-    -- | See the corresponding
-    --   <https://tathougies.github.io/beam/user-guide/queries/window-functions manual section> for more.
-    , over_, frame_, bounds_, unbounded_, nrows_, fromBound_
-    , noBounds_, noOrder_, noPartition_
-    , partitionBy_, orderPartitionBy_, withWindow_
-
     -- * Ordering primitives
-    , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
+    , orderBy_, asc_, desc_
     ) where
 
 import Database.Beam.Syntax
@@ -300,10 +293,6 @@ exists_ q = QExpr (\tbl -> existsE (buildSqlQuery tbl q))
 unique_ :: Projectible ExpressionSyntax a => Q db s a -> QExpr s Bool
 unique_ q = QExpr (\tbl -> uniqueE (buildSqlQuery tbl q))
 
--- | Use the SQL99 @DISTINCT@ operator to determine if the given query produces a distinct result
-distinct_ :: Projectible ExpressionSyntax a => Q db s a -> QExpr s Bool
-distinct_ q = QExpr (\tbl -> distinctE (buildSqlQuery tbl q))
-
 -- | Project the (presumably) singular result of the given query as an expression
 subquery_ :: Projectible ExpressionSyntax a => Q db s (QExpr s a) -> QExpr s a
 subquery_ q =
@@ -505,86 +494,6 @@ instance ( Beamable table
 default_ :: ExpressionContext ctxt => QGenExpr ctxt s a
 default_ = QExpr (pure defaultE)
 
--- * Window functions
-
-noBounds_ :: QFrameBounds
-noBounds_ = QFrameBounds Nothing
-
-fromBound_ :: QFrameBound -> QFrameBounds
-fromBound_ start = bounds_ start Nothing
-
-bounds_ :: QFrameBound
-        -> Maybe QFrameBound 
-        -> QFrameBounds
-bounds_ (QFrameBound start) end =
-    QFrameBounds . Just $
-    fromToBoundSyntax start
-      (fmap (\(QFrameBound end') -> end') end)
-
-unbounded_ :: QFrameBound
-unbounded_ = QFrameBound unboundedSyntax
-
-nrows_ :: Int -> QFrameBound
-nrows_ x = QFrameBound (nrowsBoundSyntax x)
-
-noPartition_, noOrder_ :: Maybe (QOrd s Int)
-noOrder_ = Nothing
-noPartition_ = Nothing
-
-partitionBy_, orderPartitionBy_ :: partition -> Maybe partition
-partitionBy_  = Just
-orderPartitionBy_ = Just
-
--- | Specify a window frame with all the options
-frame_ :: ( SqlOrderable ordering
-          , Projectible ExpressionSyntax partition
-          )
-       => Maybe partition             {-^ PARTITION BY -}
-       -> Maybe ordering              {-^ ORDER BY -}
-       -> QFrameBounds {-^ RANGE / ROWS -}
-       -> QWindow s
-frame_ partition_ ordering_ (QFrameBounds bounds) =
-    QWindow $ \tblPfx ->
-    frameSyntax (case maybe [] (flip project tblPfx) partition_ of
-                   [] -> Nothing
-                   xs -> Just xs)
-                (case fmap makeSQLOrdering ordering_ of
-                   Nothing -> Nothing
-                   Just [] -> Nothing
-                   Just xs -> Just (sequenceA xs tblPfx))
-                bounds
-
--- | Produce a window expression given an aggregate function and a window.
-over_ :: QAgg s a -> QWindow s -> QWindowExpr s a
-over_ (QExpr a) (QWindow frame) = QExpr (overE <$> a <*> frame)
-
--- | Compute a query over windows.
---
---   The first function builds window frames using the 'frame_', 'partitionBy_',
---   etc functions. The return type can be a single frame, tuples of frame, or
---   any arbitrarily nested tuple of the above. Instances up to 8-tuples are
---   provided.
---
---   The second function builds the resulting projection using the result of the
---   subquery as well as the window frames built in the first function. In this
---   function, window expressions can be included in the output using the
---   'over_' function.
---
-withWindow_ :: forall window a s r db.
-               ( ProjectibleWithPredicate WindowFrameContext ExpressionSyntax window
-               , Projectible ExpressionSyntax r
-               , Projectible ExpressionSyntax a
-               , ContextRewritable a
-               , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
-               , ContextCompatible a QValueContext
-               )
-            => (r -> window)      -- ^ Window builder function
-            -> (r -> window -> a) -- ^ Projection builder function. Has access to the windows generated above
-            -> Q db (QNested s) r -- ^ Query to window over
-            -> Q db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
-withWindow_ mkWindow mkProjection (Q windowOver)=
-  Q (liftF (QWindowOver mkWindow mkProjection windowOver (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
-
 -- * Order bys
 
 class SqlOrderable a where
@@ -653,12 +562,6 @@ orderBy_ :: forall s a ordering db.
 orderBy_ orderer (Q q) =
     Q (liftF (QOrderBy (sequenceA . makeSQLOrdering . orderer) q (rewriteThread (Proxy @s))))
 
-nullsFirst_ :: QOrd s a -> QOrd s a
-nullsFirst_ (QExpr e) = QExpr (nullsFirstOrdering <$> e)
-
-nullsLast_ :: QOrd s a -> QOrd s a
-nullsLast_ (QExpr e) = QExpr (nullsLastOrdering <$> e)
-
 -- | Produce a 'QOrd' corresponding to a SQL @ASC@ ordering
 asc_ :: QExpr s a -> QOrd s a
 asc_ (QExpr e) = QExpr (ascOrdering <$> e)
@@ -687,7 +590,7 @@ class SqlJustable a b | b -> a where
 
 instance HasSqlValueSyntax SqlNull
 
-instance SqlJustable (QExpr s a) (QExpr s (Maybe a)) where 
+instance SqlJustable (QExpr s a) (QExpr s (Maybe a)) where
     just_ (QExpr e) = QExpr e
     nothing_ = QExpr (pure (valueE (sqlValueSyntax SqlNull)))
 
@@ -774,3 +677,4 @@ instance ( Beamable t, ExpressionContext ctxt )
           cond :: TablePrefix -> ContextSyntax ctxt
           QExpr cond = isJust_ tbl :: QGenExpr ctxt s Bool
       in QExpr (\tblPfx -> caseE [(cond tblPfx, onJust' tblPfx)] (onNothing tblPfx))
+

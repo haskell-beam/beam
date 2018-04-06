@@ -2,6 +2,7 @@
 module Database.Beam.Query
     ( -- * Query type
       module Database.Beam.Query.Types
+    , Beam.SqlBool
 
     -- ** Query expression contexts
     -- | A context is a type-level value that signifies where an expression can
@@ -16,7 +17,6 @@ module Database.Beam.Query
     , QGenExprTable, QExprTable
 
     , module Database.Beam.Query.Combinators
-    , module Database.Beam.Query.Extensions
 
     , module Database.Beam.Query.Relationships
 
@@ -81,7 +81,6 @@ import Database.Beam.Syntax
 import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
 import Database.Beam.Query.CustomSQL
-import Database.Beam.Query.Extensions
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Operator hiding (SqlBool)
 import qualified Database.Beam.Query.Operator as Beam

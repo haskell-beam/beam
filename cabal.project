@@ -3,3 +3,5 @@ packages:
     ./beam-migrate/*.cabal
     ./beam-postgres/*.cabal
     ./postgresql-simple/*.cabal
+    ./beam-sql99/*.cabal
+    ./beam-sql2003/*.cabal

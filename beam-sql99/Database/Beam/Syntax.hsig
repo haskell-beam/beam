@@ -1,0 +1,15 @@
+signature Database.Beam.Syntax where
+
+data SelectSyntax
+
+data ExpressionSyntax
+
+data AggregationSetQuantifierSyntax
+
+distinctE :: SelectSyntax -> ExpressionSyntax
+
+anyE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+someE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+everyE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax

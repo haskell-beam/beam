@@ -85,8 +85,6 @@ selectStmt :: SelectTableSyntax -> [ExpressionSyntax] -> Maybe Integer -> Maybe 
 
 uniqueE :: SelectSyntax -> ExpressionSyntax
 
-distinctE :: SelectSyntax -> ExpressionSyntax
-
 subqueryE :: SelectSyntax -> ExpressionSyntax
 
 charLengthE :: ExpressionSyntax -> ExpressionSyntax
@@ -99,20 +97,6 @@ upperE :: ExpressionSyntax -> ExpressionSyntax
 trimE :: ExpressionSyntax -> ExpressionSyntax
 
 class IsStringType a
-
-data WindowFrameBoundSyntax
-
-fromToBoundSyntax :: WindowFrameBoundSyntax -> Maybe WindowFrameBoundSyntax -> ExpressionSyntax
-
-unboundedSyntax :: WindowFrameBoundSyntax
-nrowsBoundSyntax :: Int -> WindowFrameBoundSyntax
-
-frameSyntax :: Maybe [ExpressionSyntax] -> Maybe [ExpressionSyntax] -> Maybe ExpressionSyntax -> ExpressionSyntax
-
-overE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-
-nullsFirstOrdering :: ExpressionSyntax -> ExpressionSyntax
-nullsLastOrdering :: ExpressionSyntax -> ExpressionSyntax
 
 ascOrdering :: ExpressionSyntax -> ExpressionSyntax
 descOrdering :: ExpressionSyntax -> ExpressionSyntax
@@ -172,19 +156,9 @@ minE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSy
 maxE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
 sumE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
 avgE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-anyE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-someE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-everyE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
 countE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
 
-filterAggE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-
-denseRankAggE :: ExpressionSyntax
-percentRankAggE :: ExpressionSyntax
-cumeDistAggE :: ExpressionSyntax
 countAllE :: ExpressionSyntax
-rankAggE :: ExpressionSyntax
-
 
 data CustomSqlSyntax
 
@@ -200,34 +174,6 @@ customExprSyntax :: CustomSqlSyntax -> ExpressionSyntax
 --   how that syntax would look when rendered in the backend.
 renderSyntax :: ExpressionSyntax -> CustomSqlSyntax
 
-regrSXYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrSYYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrSXXE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrAvgXE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrAvgYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrRSquaredE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrCountE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrInterceptE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-regrSlopeE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-corrE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-covarSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-covarPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-varSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-varPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-stddevSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-stddevPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
-powerE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-floorE :: ExpressionSyntax -> ExpressionSyntax
-ceilE :: ExpressionSyntax -> ExpressionSyntax
-sqrtE :: ExpressionSyntax -> ExpressionSyntax
-expE :: ExpressionSyntax -> ExpressionSyntax
-lnE :: ExpressionSyntax -> ExpressionSyntax
-nthValueE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
-lastValueE :: ExpressionSyntax -> ExpressionSyntax
-firstValueE :: ExpressionSyntax -> ExpressionSyntax
-ntileE :: ExpressionSyntax -> ExpressionSyntax
-leadE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax
-lagE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax
 
 -- | Requirements to marshal a certain type from a database of a particular backend
 class BackendFromField a
@@ -275,3 +221,7 @@ insertFromSql :: SelectSyntax -> InsertValuesSyntax
 -- binaryLargeObjectType :: DataTypeSyntax
 
 -- characterLargeObjectType :: DataTypeSyntax
+
+similarToE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+modE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax

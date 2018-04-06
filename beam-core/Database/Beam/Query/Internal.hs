@@ -214,10 +214,6 @@ instance Retaggable (QGenExpr ctxt s) (QGenExpr ctxt s t) where
   retag f e = case f (Columnar' e) of
                 Columnar' a -> a
 
-newtype QWindow s = QWindow (WithExprContext ExpressionSyntax)
-newtype QFrameBounds = QFrameBounds (Maybe ExpressionSyntax)
-newtype QFrameBound = QFrameBound WindowFrameBoundSyntax
-
 class ContextSyntax ctxt ~ ExpressionSyntax => ExpressionContext ctxt
 instance ContextSyntax ctxt ~ ExpressionSyntax => ExpressionContext ctxt
 

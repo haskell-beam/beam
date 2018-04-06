@@ -1,0 +1,87 @@
+signature Database.Beam.Syntax where
+
+data ExpressionSyntax
+
+data AggregationSetQuantifierSyntax
+
+data WindowFrameBoundSyntax
+
+nullsFirstOrdering :: ExpressionSyntax -> ExpressionSyntax
+
+nullsLastOrdering :: ExpressionSyntax -> ExpressionSyntax
+
+overE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+filterAggE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+rankAggE :: ExpressionSyntax
+
+denseRankAggE :: ExpressionSyntax
+
+percentRankAggE :: ExpressionSyntax
+
+cumeDistAggE :: ExpressionSyntax
+
+frameSyntax :: Maybe [ExpressionSyntax] -> Maybe [ExpressionSyntax] -> Maybe ExpressionSyntax -> ExpressionSyntax
+
+fromToBoundSyntax :: WindowFrameBoundSyntax -> Maybe WindowFrameBoundSyntax -> ExpressionSyntax
+
+unboundedSyntax :: WindowFrameBoundSyntax
+
+nrowsBoundSyntax :: Int -> WindowFrameBoundSyntax
+
+sqrtE :: ExpressionSyntax -> ExpressionSyntax
+
+lnE :: ExpressionSyntax -> ExpressionSyntax
+
+expE :: ExpressionSyntax -> ExpressionSyntax
+
+floorE :: ExpressionSyntax -> ExpressionSyntax
+
+ceilE :: ExpressionSyntax -> ExpressionSyntax
+
+powerE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+varSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+varPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+stddevSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+stddevPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrSXYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrSYYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrSXXE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrAvgXE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrAvgYE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrRSquaredE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrCountE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrInterceptE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+regrSlopeE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+corrE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+covarSampE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+covarPopE :: Maybe AggregationSetQuantifierSyntax -> ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+lastValueE :: ExpressionSyntax -> ExpressionSyntax
+
+firstValueE :: ExpressionSyntax -> ExpressionSyntax
+
+ntileE :: ExpressionSyntax -> ExpressionSyntax
+
+nthValueE :: ExpressionSyntax -> ExpressionSyntax -> ExpressionSyntax
+
+leadE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax
+
+lagE :: ExpressionSyntax -> Maybe ExpressionSyntax -> Maybe ExpressionSyntax -> ExpressionSyntax

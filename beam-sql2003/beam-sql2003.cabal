@@ -1,0 +1,16 @@
+name: beam-sql2003
+version: 0.1
+cabal-version: 2.0
+build-type: Simple
+            
+library
+    signatures: 
+      Database.Beam.Syntax
+    exposed-modules:
+      Database.Beam.Query.SQL2003
+    build-depends:
+      base,
+      beam-core,
+      free
+    default-language:
+      Haskell2010

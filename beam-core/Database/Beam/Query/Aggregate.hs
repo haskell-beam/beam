@@ -5,15 +5,11 @@ module Database.Beam.Query.Aggregate
     --   for more detail
 
     aggregate_
-  , filterWhere_, filterWhere_'
 
   , QGroupable(..)
 
     -- ** General-purpose aggregate functions #gp-agg-funcs#
   , sum_, avg_, min_, max_, count_, countAll_
-  , rank_, cumeDist_, percentRank_, denseRank_
-
-  , every_, any_, some_
 
     -- ** Quantified aggregate functions
     -- | These functions correspond one-to-one with the <#gp-agg-funcs
@@ -21,7 +17,6 @@ module Database.Beam.Query.Aggregate
     --   mandatory "set quantifier", which is any of the
     --   <#set-quantifiers set quantifier> values.
   , sumOver_, avgOver_, minOver_, maxOver_, countOver_
-  , everyOver_, anyOver_, someOver_
 
     -- *** Set quantifiers #set-quantifiers#
   , distinctInGroup_, allInGroup_, allInGroupExplicitly_
@@ -163,21 +158,6 @@ countAll_ = QExpr (pure countAllE)
 count_ :: ( Integral b ) => QExpr s a -> QAgg s b
 count_ (QExpr over) = QExpr (countE Nothing <$> over)
 
--- | SQL2003 @CUME_DIST@ function (Requires T612 Advanced OLAP operations support)
-cumeDist_ :: QAgg s Double
-cumeDist_ = QExpr (pure cumeDistAggE)
-
--- | SQL2003 @PERCENT_RANK@ function (Requires T612 Advanced OLAP operations support)
-percentRank_ :: QAgg s Double
-percentRank_ = QExpr (pure percentRankAggE)
-
-denseRank_ :: QAgg s Int
-denseRank_ = QExpr (pure denseRankAggE)
-
--- | SQL2003 @RANK@ function (Requires T611 Elementary OLAP operations support)
-rank_ :: QAgg s Int
-rank_ = QExpr (pure rankAggE)
-
 minOver_, maxOver_
   :: Maybe AggregationSetQuantifierSyntax
   -> QExpr s a -> QAgg s (Maybe a)
@@ -196,36 +176,3 @@ countOver_
   => Maybe AggregationSetQuantifierSyntax
   -> QExpr s a -> QAgg s b
 countOver_ q (QExpr a) = QExpr (countE q <$> a)
-
--- | SQL @EVERY@, @SOME@, and @ANY@ aggregates. Operates over
--- 'SqlBool' only, as the result can be @NULL@, even if all inputs are
--- known (no input rows).
-everyOver_, someOver_, anyOver_
-  :: Maybe AggregationSetQuantifierSyntax
-  -> QExpr s SqlBool -> QAgg s SqlBool
-everyOver_ q (QExpr a) = QExpr (everyE q <$> a)
-someOver_  q (QExpr a) = QExpr (someE  q <$> a)
-anyOver_   q (QExpr a) = QExpr (anyE   q <$> a)
-
--- | Support for FILTER (WHERE ...) syntax for aggregates.
---   Part of SQL2003 Advanced OLAP operations feature (T612).
---
--- See 'filterWhere_'' for a version that accepts 'SqlBool'.
-filterWhere_ :: QAgg s a -> QExpr s Bool -> QAgg s a
-filterWhere_ agg cond = filterWhere_' agg (sqlBool_ cond)
-
--- | Like 'filterWhere_' but accepting 'SqlBool'.
-filterWhere_' :: QAgg s a -> QExpr s SqlBool -> QAgg s a
-filterWhere_' (QExpr agg) (QExpr cond) = QExpr (liftA2 filterAggE agg cond)
-
--- | SQL99 @EVERY(ALL ..)@ function (but without the explicit ALL)
-every_ :: QExpr s SqlBool -> QAgg s SqlBool
-every_ = everyOver_ allInGroup_
-
--- | SQL99 @SOME(ALL ..)@ function (but without the explicit ALL)
-some_ :: QExpr s SqlBool -> QAgg s SqlBool
-some_  = someOver_  allInGroup_
-
--- | SQL99 @ANY(ALL ..)@ function (but without the explicit ALL)
-any_ :: QExpr s SqlBool -> QAgg s SqlBool
-any_   = anyOver_   allInGroup_
