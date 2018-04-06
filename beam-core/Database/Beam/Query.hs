@@ -51,7 +51,6 @@ module Database.Beam.Query
     , select, lookup_
     , runSelectReturningList
     , runSelectReturningOne
-    -- , dumpSqlSelect
 
     -- ** @INSERT@
     , SqlInsert(..)
@@ -72,8 +71,7 @@ module Database.Beam.Query
     -- ** @DELETE@
     , SqlDelete(..)
     , delete
-    , runDelete
-    ) where
+    , runDelete ) where
 
 import Prelude hiding (lookup)
 
@@ -86,7 +84,7 @@ import Database.Beam.Query.Operator hiding (SqlBool)
 import qualified Database.Beam.Query.Operator as Beam
 import Database.Beam.Query.Ord
 import Database.Beam.Query.Relationships
-import Database.Beam.Query.Types -- (QGenExpr) -- hide QGenExpr constructor
+import Database.Beam.Query.Types (QGenExpr) -- hide QGenExpr constructor
 import Database.Beam.Query.Types hiding (QGenExpr)
 
 import Database.Beam.Backend.Types
@@ -149,14 +147,6 @@ runSelectReturningOne ::
   SqlSelect a -> m (Maybe a)
 runSelectReturningOne (SqlSelect s) =
   runReturningOne (selectCmd s)
-
--- -- | Use a special debug syntax to print out an ANSI Standard @SELECT@ statement
--- --   that may be generated for a given 'Q'.
--- dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
---                  Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()
--- dumpSqlSelect q =
---     let SqlSelect s = select q
---     in putStrLn (renderSql s)
 
 -- * INSERT
 

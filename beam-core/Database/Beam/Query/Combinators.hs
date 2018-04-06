@@ -26,8 +26,7 @@ module Database.Beam.Query.Combinators
     , all_
     , allFromView_, join_, join_'
     , guard_, guard_', filter_, filter_'
-    -- , related_
-    , relatedBy_, relatedBy_'
+    , related_, relatedBy_, relatedBy_'
     , leftJoin_, leftJoin_'
     , perhaps_, outerJoin_, outerJoin_'
     , subselect_, references_
@@ -238,16 +237,16 @@ filter_' :: (r -> QExpr s SqlBool)
          -> Q db s r -> Q db s r
 filter_' mkExpr clause = clause >>= \x -> guard_' (mkExpr x) >> pure x
 
--- -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
--- related_ :: ( HasTableEquality (PrimaryKey rel)
---             , Database db
---             , Table rel
---             ) =>
---             DatabaseEntity db (TableEntity rel)
---          -> PrimaryKey rel (QExpr s)
---          -> Q db s (rel (QExpr s))
--- related_ relTbl relKey =
---   join_ relTbl (\rel -> relKey ==. primaryKey rel)
+-- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
+related_ :: ( HasTableEquality (PrimaryKey rel)
+            , Database db
+            , Table rel
+            ) =>
+            DatabaseEntity db (TableEntity rel)
+         -> PrimaryKey rel (QExpr s)
+         -> Q db s (rel (QExpr s))
+related_ relTbl relKey =
+  join_ relTbl (\rel -> relKey ==. primaryKey rel)
 
 -- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
 relatedBy_ :: ( Database db, Table rel )
