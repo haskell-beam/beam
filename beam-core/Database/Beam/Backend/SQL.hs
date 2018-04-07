@@ -15,9 +15,6 @@ import Control.Monad.IO.Class
 
 -- | A class that ties together a Sql syntax, backend, handle, and monad type.
 --
---   Functional dependencies mean that only the backend type or the handle need
---   to be specified.
---
 --   Intuitively, this allows you to write code that performs database commands
 --   without having to know the underlying API. As long as you have an
 --   appropriate handle from a database library that Beam can use, you can use
@@ -33,7 +30,7 @@ import Control.Monad.IO.Class
 --   are supported in individual backends. See the documentation of those
 --   backends for more details.
 class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
-  MonadBeam syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+  MonadBeam syntax be handle m | m -> syntax be handle where
 
   {-# MINIMAL withDatabaseDebug, runReturningMany #-}
 

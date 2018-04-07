@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeOperators #-}
@@ -24,6 +25,7 @@ module Database.Beam.Postgres.PgSpecific
     -- $json
   , PgJSON(..), PgJSONB(..)
   , IsPgJSON(..)
+  , PgJSONEach(..), PgJSONKey(..), PgJSONElement(..)
 
   , (@>), (<@), (->#), (->$)
   , (->>#), (->>$), (#>), (#>>)
@@ -46,12 +48,16 @@ module Database.Beam.Postgres.PgSpecific
   , pgSumMoneyOver_, pgAvgMoneyOver_
   , pgSumMoney_, pgAvgMoney_
 
+    -- ** Set-valued functions
+  , PgSetOf, pgUnnest
+  , pgUnnestArray, pgUnnestArrayWithOrdinality
+
     -- ** @ARRAY@ types
     -- $arrays
   , PgArrayValueContext, PgIsArrayContext
 
     -- *** Building @ARRAY@s
-  , array_, (++.)
+  , array_, arrayOf_, (++.)
   , pgArrayAgg, pgArrayAggOver
 
     -- *** Array operators and functions
@@ -72,14 +78,16 @@ module Database.Beam.Postgres.PgSpecific
 where
 
 import           Database.Beam
+import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate ( HasDefaultSqlDataType(..)
                                        , HasDefaultSqlDataTypeConstraints(..) )
-import           Database.Beam.Backend.SQL
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Query.Internal
+import           Database.Beam.Schema.Tables
 
 import           Control.Monad.Free
+import           Control.Monad.State.Strict (evalState, put, get)
 
 import           Data.Aeson
 import           Data.ByteString (ByteString)
@@ -361,6 +369,14 @@ array_ vs =
             , pgSepBy (emit ", ") <$> mapM (\(QExpr e) -> fromPgExpression <$> e) (toList vs)
             , pure (emit "]") ]
 
+-- | Build a 1-dimensional postgres array from a subquery
+arrayOf_ :: Q PgSelectSyntax db s (QExpr PgExpressionSyntax s a)
+         -> QGenExpr context PgExpressionSyntax s (V.Vector a)
+arrayOf_ q =
+  let QExpr sub = subquery_ q
+  in QExpr (\t -> let PgExpressionSyntax sub' = sub t
+                  in PgExpressionSyntax (emit "ARRAY(" <> sub' <> emit ")"))
+
 -- ** JSON
 
 -- | The Postgres @JSON@ type, which stores textual values that represent JSON
@@ -415,6 +431,19 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
     PgValueSyntax $
     emit "'" <> escapeString (BL.toStrict (encode a)) <> emit "'::jsonb"
 
+data PgJSONEach valType f
+  = PgJSONEach { pgJsonEachKey :: C f T.Text, pgJsonEachValue :: C f valType }
+  deriving Generic
+instance Beamable (PgJSONEach valType)
+
+data PgJSONKey f = PgJSONKey { pgJsonKey :: C f T.Text }
+  deriving Generic
+instance Beamable PgJSONKey
+
+data PgJSONElement a f = PgJSONElement { pgJsonElement :: C f a }
+  deriving Generic
+instance Beamable (PgJSONElement a)
+
 -- | Postgres provides separate @json_@ and @jsonb_@ functions. However, we know
 -- what we're dealing with based on the type of data, so we can be less obtuse.
 --
@@ -425,13 +454,31 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
 -- Note that @beam-postgres@ does not yet support @setof@ so some functions are
 -- missing. PRs to implement this functionality are welcome!
 class IsPgJSON (json :: * -> *) where
---  pgJsonEach     :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONTable (QGenExpr ctxt PgExpressionSyntax s))
---  pgJsonEachText :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONTable (QGenExpr ctxt PgExpressionSyntax s))
---  pgJsonKeys     :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONKeysTable (QGenExpr ctxt PgExpressionSyntax s))
---  pgJsonArrayElements :: QGenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONValuesTable (QGenExpr ctxt PgExpressionSyntax s))
---  pgJsonArrayElementsText :: GenExpr ctxt PgExpressionSyntax s (json a) -> Q PgSelectSyntax s (PgJSONValuesTextTable (QGenExpr ctxt PgExpressionSyntax s))
+  -- | The @json_each@ or @jsonb_each@ function. Values returned as @json@ or
+  -- @jsonb@ respectively. Use 'pgUnnest' to join against the result
+  pgJsonEach     :: QGenExpr ctxt PgExpressionSyntax s (json a)
+                 -> QGenExpr ctxt PgExpressionSyntax s (PgSetOf (PgJSONEach (json Value)))
+
+  -- | Like 'pgJsonEach', but returning text values instead
+  pgJsonEachText :: QGenExpr ctxt PgExpressionSyntax s (json a)
+                 -> QGenExpr ctxt PgExpressionSyntax s (PgSetOf (PgJSONEach T.Text))
+
+  -- | The @json_object_keys@ and @jsonb_object_keys@ function. Use 'pgUnnest'
+  -- to join against the result.
+  pgJsonKeys     :: QGenExpr ctxt PgExpressionSyntax s (json a)
+                 -> QGenExpr ctxt PgExpressionSyntax s (PgSetOf PgJSONKey)
+
+  -- | The @json_array_elements@ and @jsonb_array_elements@ function. Use
+  -- 'pgUnnest' to join against the result
+  pgJsonArrayElements :: QGenExpr ctxt PgExpressionSyntax s (json a)
+                      -> QGenExpr ctxt PgExpressionSyntax s (PgSetOf (PgJSONElement (json Value)))
+
+  -- | Like 'pgJsonArrayElements', but returning the values as 'T.Text'
+  pgJsonArrayElementsText :: QGenExpr ctxt PgExpressionSyntax s (json a)
+                          -> QGenExpr ctxt PgExpressionSyntax s (PgSetOf (PgJSONElement T.Text))
 --  pgJsonToRecord
 --  pgJsonToRecordSet
+
   -- | The @json_typeof@ or @jsonb_typeof@ function
   pgJsonTypeOf :: QGenExpr ctxt PgExpressionSyntax s (json a) -> QGenExpr ctxt PgExpressionSyntax s T.Text
 
@@ -447,6 +494,21 @@ class IsPgJSON (json :: * -> *) where
                   -> QAgg PgExpressionSyntax s (json a)
 
 instance IsPgJSON PgJSON where
+  pgJsonEach (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_each") . pgParens . fromPgExpression) a
+
+  pgJsonEachText (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_each_text") . pgParens . fromPgExpression) a
+
+  pgJsonKeys (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_object_keys") . pgParens . fromPgExpression) a
+
+  pgJsonArrayElements (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_array_elements") . pgParens . fromPgExpression) a
+
+  pgJsonArrayElementsText (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_array_elements_text") . pgParens . fromPgExpression) a
+
   pgJsonTypeOf (QExpr a) =
     QExpr $ fmap (PgExpressionSyntax . mappend (emit "json_typeof") . pgParens . fromPgExpression) a
 
@@ -462,6 +524,21 @@ instance IsPgJSON PgJSON where
                 , fromPgExpression <$> values ]
 
 instance IsPgJSON PgJSONB where
+  pgJsonEach (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_each") . pgParens . fromPgExpression) a
+
+  pgJsonEachText (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_each_text") . pgParens . fromPgExpression) a
+
+  pgJsonKeys (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_object_keys") . pgParens . fromPgExpression) a
+
+  pgJsonArrayElements (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_array_elements") . pgParens . fromPgExpression) a
+
+  pgJsonArrayElementsText (QExpr a) =
+    QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_array_elements_text") . pgParens . fromPgExpression) a
+
   pgJsonTypeOf (QExpr a) =
     QExpr $ fmap (PgExpressionSyntax . mappend (emit "jsonb_typeof") . pgParens . fromPgExpression) a
 
@@ -785,6 +862,59 @@ pgSumMoney_, pgAvgMoney_ :: QExpr PgExpressionSyntax s PgMoney
                          -> QExpr PgExpressionSyntax s PgMoney
 pgSumMoney_ = pgSumMoneyOver_ allInGroup_
 pgAvgMoney_ = pgAvgMoneyOver_ allInGroup_
+
+-- ** Set-valued functions
+
+data PgSetOf (tbl :: (* -> *) -> *)
+
+pgUnnest' :: forall tbl db s
+           . Beamable tbl
+          => (TablePrefix -> PgSyntax)
+          -> Q PgSelectSyntax db s (QExprTable PgExpressionSyntax s tbl)
+pgUnnest' q =
+  Q (liftF (QAll (\pfx alias ->
+                    PgFromSyntax . mconcat $
+                    [ q pfx, emit " "
+                    , pgQuotedIdentifier alias
+                    , pgParens (pgSepBy (emit ", ") (allBeamValues (\(Columnar' (TableField nm)) -> pgQuotedIdentifier nm) tblFields))
+                    ])
+                 tblFields
+                 (\_ -> Nothing) snd))
+  where
+    tblFields :: TableSettings tbl
+    tblFields =
+      evalState (zipBeamFieldsM (\_ _ ->
+                                   do i <- get
+                                      put (i + 1)
+                                      pure (Columnar' (TableField (fromString ("r" ++ show i)))))
+                                tblSkeleton tblSkeleton) (0 :: Int)
+
+pgUnnest :: forall tbl db s
+          . Beamable tbl
+         => QExpr PgExpressionSyntax s (PgSetOf tbl)
+         -> Q PgSelectSyntax db s (QExprTable PgExpressionSyntax s tbl)
+pgUnnest (QExpr q) =
+  pgUnnest' (\t -> pgParens (fromPgExpression (q t)))
+
+data PgUnnestArrayTbl a f = PgUnnestArrayTbl (C f a)
+  deriving Generic
+instance Beamable (PgUnnestArrayTbl a)
+
+pgUnnestArray :: QExpr PgExpressionSyntax s (V.Vector a)
+              -> Q PgSelectSyntax db s (QExpr PgExpressionSyntax s a)
+pgUnnestArray (QExpr q) =
+  fmap (\(PgUnnestArrayTbl x) -> x) $
+  pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)))
+
+data PgUnnestArrayWithOrdinalityTbl a f = PgUnnestArrayWithOrdinalityTbl (C f Int) (C f a)
+  deriving Generic
+instance Beamable (PgUnnestArrayWithOrdinalityTbl a)
+
+pgUnnestArrayWithOrdinality :: QExpr PgExpressionSyntax s (V.Vector a)
+                            -> Q PgSelectSyntax db s (QExpr PgExpressionSyntax s Int, QExpr PgExpressionSyntax s a)
+pgUnnestArrayWithOrdinality (QExpr q) =
+  fmap (\(PgUnnestArrayWithOrdinalityTbl i x) -> (i, x)) $
+  pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)) <> emit " WITH ORDINALITY")
 
 instance HasDefaultSqlDataType PgDataTypeSyntax TsQuery where
   defaultSqlDataType _ _ = pgTsQueryType

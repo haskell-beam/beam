@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.Beam.Migrate.SQL.Tables
   ( -- * Table manipulation
@@ -58,6 +59,7 @@ import Data.ByteString (ByteString)
 import Data.Typeable
 import Data.Time (LocalTime, TimeOfDay)
 import Data.Scientific (Scientific)
+import qualified Data.Kind as Kind (Constraint)
 
 import GHC.TypeLits
 
@@ -120,14 +122,16 @@ data ColumnMigration a
 -- | Monad representing a series of @ALTER TABLE@ statements
 newtype TableMigration syntax a
   = TableMigration (WriterT [Sql92DdlCommandAlterTableSyntax syntax] (State (Text, [TableCheck])) a)
+  deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
 renameTableTo :: Sql92SaneDdlCommandSyntax syntax
               => Text -> table ColumnMigration
               -> TableMigration syntax (table ColumnMigration)
 renameTableTo newName oldTbl = TableMigration $ do
-  (curNm, _) <- get
+  (curNm, chks) <- get
   tell [ alterTableSyntax curNm (renameTableToSyntax newName) ]
+  put (newName, chks)
   return oldTbl
 
 -- | @ALTER TABLE ... RENAME COLUMN ... TO ...@ command
@@ -268,10 +272,14 @@ newtype Constraint syntax
   = Constraint (Sql92ColumnConstraintDefinitionConstraintSyntax
                 (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax))
 
--- | The SQL92 @NOT NULL@ constraint
-notNull :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
-notNull = Constraint notNullConstraintSyntax
+newtype NotNullConstraint syntax
+  = NotNullConstraint (Constraint syntax)
 
+-- | The SQL92 @NOT NULL@ constraint
+notNull :: IsSql92ColumnSchemaSyntax syntax => NotNullConstraint syntax
+notNull = NotNullConstraint (Constraint notNullConstraintSyntax)
+
+-- | SQL @UNIQUE@ constraint
 unique :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
 unique = Constraint uniqueColumnConstraintSyntax
 
@@ -377,6 +385,12 @@ instance FieldReturnType defaultGiven collationGiven syntax resTy a =>
   field' defaultGiven collationGiven nm ty default_' collation constraints (Constraint e) =
     field' defaultGiven collationGiven nm ty default_' collation (constraints ++ [ constraintDefinitionSyntax Nothing e Nothing ])
 
+instance ( FieldReturnType defaultGiven collationGiven syntax resTy (Constraint syntax -> a)
+         , IsNotNull resTy ) =>
+  FieldReturnType defaultGiven collationGiven syntax resTy (NotNullConstraint syntax -> a) where
+  field' defaultGiven collationGiven nm ty default_' collation constraints (NotNullConstraint c) =
+    field' defaultGiven collationGiven nm ty default_' collation constraints c
+
 instance ( FieldReturnType 'True collationGiven syntax resTy a
          , TypeError ('Text "Only one DEFAULT clause can be given per 'field' invocation") ) =>
   FieldReturnType 'True collationGiven syntax resTy (DefaultValue syntax resTy -> a) where
@@ -399,3 +413,9 @@ instance ( Typeable syntax, Typeable (Sql92ColumnSchemaColumnTypeSyntax syntax)
     TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_' constraints collation)) checks
     where checks = [ FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableHasColumn tbl field'' ty :: TableHasColumn syntax)) ] ++
                    map (\cns -> FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableColumnHasConstraint tbl field'' cns :: TableColumnHasConstraint syntax))) constraints
+
+type family IsNotNull (x :: *) :: Kind.Constraint where
+  IsNotNull (Maybe x) = TypeError ('Text "You used Database.Beam.Migrate.notNull on a column with type" ':$$:
+                                   'ShowType (Maybe x) ':$$:
+                                   'Text "Either remove 'notNull' from your migration or 'Maybe' from your table")
+  IsNotNull x = ()

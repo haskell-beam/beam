@@ -182,6 +182,8 @@ in_ :: ( IsSql92ExpressionSyntax syntax
 in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
 in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
 
+infix 4 `between_`, `in_`
+
 -- | Class for expression types or expression containers for which there is a
 --   notion of equality.
 --

@@ -31,4 +31,4 @@ import Data.Text (Text)
 --   information.
 class IsSql92ColumnSchemaSyntax syntax =>
   IsBeamSerialColumnSchemaSyntax syntax where
-  genericSerial :: FieldReturnType 'False 'False syntax (SqlSerial Int) a => Text -> a
+  genericSerial :: FieldReturnType 'True 'False syntax (SqlSerial Int) a => Text -> a

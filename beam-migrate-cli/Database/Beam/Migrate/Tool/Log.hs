@@ -29,7 +29,7 @@ displayLog cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } = do
       res <- transact (migrationDbConnString db) $
              runSelectReturningList $ select $
              orderBy_ (desc_ . _logEntryId) $
-             all_ (_beamMigrateLogEntries (beamMigrateDb @be))
+             all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
       case res of
         Left err -> throwIO (CouldNotFetchLog err)
         Right entries ->

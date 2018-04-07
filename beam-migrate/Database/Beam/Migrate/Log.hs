@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 -- | Contains a schema for beam migration tools. Used by the CLI and
 -- the managed migrations support here.
 module Database.Beam.Migrate.Log where
@@ -68,14 +69,14 @@ beamMigratableDb :: forall cmd be hdl m
                     , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
                     , MonadBeam cmd be hdl m )
                  => CheckedDatabaseSettings be BeamMigrateDb
-beamMigratableDb = runMigrationSilenced beamMigrateDbMigration
+beamMigratableDb = runMigrationSilenced $ beamMigrateDbMigration @cmd @be @hdl @m
 
 beamMigrateDb :: forall be cmd hdl m
                . ( Sql92SaneDdlCommandSyntax cmd
                  , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
                  , MonadBeam cmd be hdl m )
                => DatabaseSettings be BeamMigrateDb
-beamMigrateDb = unCheckDatabase beamMigratableDb
+beamMigrateDb = unCheckDatabase $ beamMigratableDb @cmd @be @hdl @m
 
 beamMigrateDbMigration ::  forall cmd be hdl m
                         . ( Sql92SaneDdlCommandSyntax cmd
@@ -105,7 +106,7 @@ getLatestLogEntry =
   runSelectReturningOne (select $
                          limit_ 1 $
                          orderBy_ (desc_ . _logEntryId) $
-                         all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd)))
+                         all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m)))
 
 updateSchemaToCurrent :: forall be cmd hdl m
                        . ( IsSql92Syntax cmd
@@ -116,7 +117,7 @@ updateSchemaToCurrent :: forall be cmd hdl m
                          , MonadBeam cmd be hdl m )
                       => m ()
 updateSchemaToCurrent =
-  runInsert (insert (_beamMigrateVersionTbl (beamMigrateDb @be @cmd)) (insertValues [BeamMigrateVersion beamMigrateSchemaVersion]))
+  runInsert (insert (_beamMigrateVersionTbl (beamMigrateDb @be @cmd @hdl @m)) (insertValues [BeamMigrateVersion beamMigrateSchemaVersion]))
 
 recordCommit :: forall be cmd hdl m
              . ( IsSql92Syntax cmd
@@ -134,7 +135,7 @@ recordCommit commitId = do
   logEntry <- getLatestLogEntry
   let nextLogEntryId = maybe 0 (succ . _logEntryId) logEntry
 
-  runInsert (insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
+  runInsert (insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
                     (insertExpressions
                      [ LogEntry (val_ nextLogEntryId)
                                 (val_ commitIdTxt)
@@ -144,8 +145,7 @@ recordCommit commitId = do
 ensureBackendTables :: forall be cmd hdl m
                      . BeamMigrationBackend cmd be hdl m
                     -> m ()
-ensureBackendTables be@BeamMigrationBackend { backendRenderSyntax = renderBeSyntax
-                                            , backendGetDbConstraints = getCs } =
+ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } =
   do backendSchemaBuilt <- checkForBackendTables be
      if backendSchemaBuilt
        then continueMigrate
@@ -158,7 +158,7 @@ ensureBackendTables be@BeamMigrationBackend { backendRenderSyntax = renderBeSynt
       maxVersion <-
         runSelectReturningOne $ select $
         aggregate_ (\v -> max_ (_beamMigrateVersion v)) $
-        all_ (_beamMigrateVersionTbl (beamMigrateDb @be @cmd))
+        all_ (_beamMigrateVersionTbl (beamMigrateDb @be @cmd @hdl @m))
 
       case maxVersion of
         Nothing -> cleanAndCreateSchema
@@ -178,7 +178,7 @@ ensureBackendTables be@BeamMigrationBackend { backendRenderSyntax = renderBeSynt
         Just totalCnt <-
           runSelectReturningOne $ select $
           aggregate_ (\_ -> as_ @Int countAll_) $
-          all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
+          all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
         when (totalCnt > 0) (fail "beam-migrate: No versioning information, but log entries present")
         runNoReturn (dropTableCmd (dropTableSyntax "beam_migration"))
 
@@ -187,7 +187,7 @@ ensureBackendTables be@BeamMigrationBackend { backendRenderSyntax = renderBeSynt
       createSchema
 
     createSchema = do
-      _ <- executeMigration doStep (beamMigrateDbMigration @cmd @be)
+      _ <- executeMigration doStep (beamMigrateDbMigration @cmd @be @hdl @m)
       updateSchemaToCurrent
 
 checkForBackendTables :: BeamMigrationBackend cmd be hdl m -> m Bool
