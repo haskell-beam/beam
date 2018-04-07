@@ -287,16 +287,30 @@ fromPgSelectLockingClause s =
     emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
     emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
 
+-- | Specifies the level of lock that will be taken against a row. See
+-- <https://www.postgresql.org/docs/current/static/explicit-locking.html#LOCKING-ROWS the manual section>
+-- for more information.
 data PgSelectLockingStrength
   = PgSelectLockingStrengthUpdate
+  -- ^ @UPDATE@
   | PgSelectLockingStrengthNoKeyUpdate
+  -- ^ @NO KEY UPDATE@
   | PgSelectLockingStrengthShare
+  -- ^ @SHARE@
   | PgSelectLockingStrengthKeyShare
+  -- ^ @KEY SHARE@
   deriving (Show, Eq, Generic)
 
+-- | Specifies how we should handle lock conflicts.
+--
+-- See
+-- <https://www.postgresql.org/docs/9.5/static/sql-select.html#SQL-FOR-UPDATE-SHARE the manual section>
+-- for more information
 data PgSelectLockingOptions
   = PgSelectLockingOptionsNoWait
+  -- ^ @NOWAIT@. Report an error rather than waiting for the lock
   | PgSelectLockingOptionsSkipLocked
+  -- ^ @SKIP LOCKED@. Rather than wait for a lock, skip the row instead
   deriving (Show, Eq, Generic)
 
 data PgDataTypeDescr

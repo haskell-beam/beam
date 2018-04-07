@@ -34,13 +34,13 @@
 --
 -- As one final point, @beam-migrate@ can generate schemas in any beam-supported
 -- SQL DDL syntax. The @beam-migrate@ module provides a DDL syntax for Haskell
--- in 'Database.Beam.Haskell.Syntax'. This allows @beam-migrate@ to translate
+-- in "Database.Beam.Haskell.Syntax". This allows @beam-migrate@ to translate
 -- predicate sets into the corresponding Haskell schema and the corresponding
 -- Haskell migration script. This reflection allows tool based off of
 -- @beam-migrate@ to support schema generation from an existing database.
 --
 -- For more information on checked databases, see the
--- 'Database.Beam.Migrate.Checks' module.
+-- "Database.Beam.Migrate.Checks" module.
 --
 -- == Migrations
 --
@@ -58,12 +58,12 @@
 -- script in a given backend syntax, or generate an appropriate
 -- 'DatabaseSettings' object for use with the rest of the beam ecosystem.
 --
--- For more information in migrations see 'Database.Beam.Migrate.Types'
+-- For more information in migrations see "Database.Beam.Migrate.Types"
 --
 -- == Syntax
 --
 -- For low-level access to the underlying SQL syntax builders, see
--- 'Database.Beam.Migrate.Syntax'
+-- "Database.Beam.Migrate.SQL.SQL92"
 --
 -- == Advanced features
 --

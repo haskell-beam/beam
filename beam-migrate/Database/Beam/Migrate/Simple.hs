@@ -39,9 +39,15 @@ import qualified Data.Text as T
 data BringUpToDateHooks m
   = BringUpToDateHooks
   { runIrreversibleHook :: m Bool
+    -- ^ Called before we're about to run an irreversible migration step. Return
+    -- 'True' to run the step, or 'False' to abort immediately.
   , startStepHook       :: Int -> T.Text -> m ()
+    -- ^ Called at the beginning of each step with the step index and description
   , endStepHook         :: Int -> T.Text -> m ()
+    -- ^ Called at the end of each step with the step index and description
   , runCommandHook      :: Int -> String -> m ()
+    -- ^ Called before a command is about to run. The first argument is the step
+    -- index and the second is a string representing the command about to be run.
 
   , queryFailedHook     :: m ()
     -- ^ Called when a query fails
@@ -56,6 +62,8 @@ data BringUpToDateHooks m
     -- the number of entries passed the given migrations the database has.
   }
 
+-- | Default set of 'BringUpToDateHooks'. Refuses to run irreversible
+-- migrations, and fails in case of error, using 'fail'.
 defaultUpToDateHooks :: Monad m => BringUpToDateHooks m
 defaultUpToDateHooks =
   BringUpToDateHooks
@@ -76,9 +84,10 @@ defaultUpToDateHooks =
         fail ("The database is ahead of the known schema by " ++ show aheadBy ++ " migration(s)")
   }
 
--- | Check for the beam-migrate log. If it exists, use it and the supplied
--- migrations to bring the database up-to-date. Otherwise, create the log and
--- run all migrations.
+-- | Equivalent to calling 'bringUpToDateWithHooks' with 'defaultUpToDateHooks'.
+--
+-- Tries to bring the database up to date, using the database log and the given
+-- 'MigrationSteps'. Fails if the migration is irreversible, or an error occurs.
 bringUpToDate :: Database be db
               => BeamMigrationBackend cmd be hdl m
               -> MigrationSteps cmd () (CheckedDatabaseSettings be db)
@@ -86,6 +95,13 @@ bringUpToDate :: Database be db
 bringUpToDate be@BeamMigrationBackend {} =
   bringUpToDateWithHooks defaultUpToDateHooks be
 
+-- | Check for the beam-migrate log. If it exists, use it and the supplied
+-- migrations to bring the database up-to-date. Otherwise, create the log and
+-- run all migrations.
+--
+-- Accepts a set of hooks that can be used to customize behavior. See the
+-- documentation for 'BringUpToDateHooks' for more information. Calling this
+-- with 'defaultUpToDateHooks' is the same as using 'bringUpToDate'.
 bringUpToDateWithHooks :: forall db cmd be hdl m
                         . Database be db
                        => BringUpToDateHooks m
@@ -178,6 +194,10 @@ createSchema BeamMigrationBackend { backendActionProvider = actions } db =
     Just cmds ->
         mapM_ runNoReturn cmds
 
+-- | Given a 'BeamMigrationBackend', attempt to automatically bring the current
+-- database up-to-date with the given 'CheckedDatabaseSettings'. Fails (via
+-- 'fail') if this involves an irreversible migration (one that may result in
+-- data loss).
 autoMigrate :: Database be db
             => BeamMigrationBackend cmd be hdl m
             -> CheckedDatabaseSettings be db
