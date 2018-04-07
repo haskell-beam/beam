@@ -12,6 +12,9 @@ import           Database.Beam.Postgres.Full
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 
+import           Control.Exception.Lifted (finally)
+import           Control.Monad.Trans.Control (MonadBaseControl)
+
 import qualified Database.PostgreSQL.LibPQ as Pg hiding
   (Connection, escapeStringConn, escapeIdentifier, escapeByteaConn, exec)
 import qualified Database.PostgreSQL.Simple as Pg
@@ -26,47 +29,53 @@ import           Data.Monoid ((<>))
 -- * @SELECT@
 
 -- | Run a PostgreSQL @SELECT@ statement in any 'MonadIO'.
-runSelect :: ( MonadIO m, Functor m, FromBackendRow Postgres a ) =>
-             Pg.Connection -> SqlSelect PgSelectSyntax a -> C.ConduitT () a m ()
-runSelect conn (SqlSelect (PgSelectSyntax syntax)) = runQueryReturning conn syntax
+runSelect :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a )
+          => Pg.Connection -> SqlSelect PgSelectSyntax a
+          -> (C.ConduitT () a m () -> m b) -> m b
+runSelect conn (SqlSelect (PgSelectSyntax syntax)) withSrc =
+  runQueryReturning conn syntax withSrc
 
 -- * @INSERT@
 
 -- | Run a PostgreSQL @INSERT@ statement in any 'MonadIO'. Returns the number of
 -- rows affected.
-runInsert :: ( MonadIO m, Functor m ) => Pg.Connection -> SqlInsert PgInsertSyntax -> m Int64
+runInsert :: MonadIO m
+          => Pg.Connection -> SqlInsert PgInsertSyntax -> m Int64
 runInsert _ SqlInsertNoRows = pure 0
 runInsert conn (SqlInsert (PgInsertSyntax i)) =
   executeStatement conn i
 
 -- | Run a PostgreSQL @INSERT ... RETURNING ...@ statement in any 'MonadIO' and
 -- get a 'C.Source' of the newly inserted rows.
-runInsertReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
+runInsertReturning :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgInsertReturning a
-                   -> C.ConduitT () a m ()
-runInsertReturning _ PgInsertReturningEmpty = pure ()
-runInsertReturning conn (PgInsertReturning i) =
-    runQueryReturning conn i
+                   -> (C.ConduitT () a m () -> m b)
+                   -> m b
+runInsertReturning _ PgInsertReturningEmpty withSrc = withSrc (pure ())
+runInsertReturning conn (PgInsertReturning i) withSrc =
+    runQueryReturning conn i withSrc
 
 -- * @UPDATE@
 
 -- | Run a PostgreSQL @UPDATE@ statement in any 'MonadIO'. Returns the number of
 -- rows affected.
-runUpdate :: ( MonadIO m, Functor m ) => Pg.Connection -> SqlUpdate PgUpdateSyntax tbl -> m Int64
+runUpdate :: MonadIO m
+          => Pg.Connection -> SqlUpdate PgUpdateSyntax tbl -> m Int64
 runUpdate _ SqlIdentityUpdate = pure 0
 runUpdate conn (SqlUpdate (PgUpdateSyntax i)) =
     executeStatement conn i
 
 -- | Run a PostgreSQL @UPDATE ... RETURNING ...@ statement in any 'MonadIO' and
 -- get a 'C.Source' of the newly updated rows.
-runUpdateReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
+runUpdateReturning :: ( MonadIO m, MonadBaseControl IO m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgUpdateReturning a
-                   -> C.ConduitT () a m ()
-runUpdateReturning _ PgUpdateReturningEmpty = pure ()
-runUpdateReturning conn (PgUpdateReturning u) =
-  runQueryReturning conn u
+                   -> (C.ConduitT () a m () -> m b)
+                   -> m b
+runUpdateReturning _ PgUpdateReturningEmpty withSrc = withSrc (pure ())
+runUpdateReturning conn (PgUpdateReturning u) withSrc =
+  runQueryReturning conn u withSrc
 
 -- * @DELETE@
 
@@ -80,11 +89,11 @@ runDelete conn (SqlDelete (PgDeleteSyntax d)) =
 
 -- | Run a PostgreSQl @DELETE ... RETURNING ...@ statement in any
 -- 'MonadIO' and get a 'C.Source' of the deleted rows.
-runDeleteReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
+runDeleteReturning :: ( MonadIO m, MonadBaseControl IO m, FromBackendRow Postgres a )
                    => Pg.Connection -> PgDeleteReturning a
-                   -> C.ConduitT () a m ()
-runDeleteReturning conn (PgDeleteReturning d) =
-  runQueryReturning conn d
+                   -> (C.ConduitT () a m () -> m b) -> m b
+runDeleteReturning conn (PgDeleteReturning d) withSrc =
+  runQueryReturning conn d withSrc
 
 -- * Convenience functions
 
@@ -96,10 +105,12 @@ executeStatement conn x =
     Pg.execute_ conn (Pg.Query syntax)
 
 -- | Runs any query that returns a set of values
-runQueryReturning ::
-    ( MonadIO m, Functor m, FromBackendRow Postgres r ) =>
-    Pg.Connection -> PgSyntax -> C.ConduitT () r m ()
-runQueryReturning conn x = do
+runQueryReturning
+  :: ( MonadIO m, MonadBaseControl IO m, Functor m, FromBackendRow Postgres r )
+  => Pg.Connection -> PgSyntax
+  -> (C.ConduitT () r m () -> m b)
+  -> m b
+runQueryReturning conn x withSrc = do
   success <- liftIO $ do
     syntax <- pgRenderSyntax conn x
 
@@ -108,7 +119,8 @@ runQueryReturning conn x = do
   if success
     then do
       singleRowModeSet <- liftIO (Pg.withConnection conn Pg.setSingleRowMode)
-      if singleRowModeSet then streamResults Nothing
+      if singleRowModeSet
+         then withSrc (streamResults Nothing) `finally` gracefulShutdown
          else fail "Could not enable single row mode"
     else do
       errMsg <- fromMaybe "No libpq error provided" <$> liftIO (Pg.withConnection conn Pg.errorMessage)
@@ -138,11 +150,10 @@ runQueryReturning conn x = do
 
     bailEarly row errorString = do
       Pg.unsafeFreeResult row
-      cancelQuery
+      Pg.withConnection conn $ cancelQuery
       fail errorString
 
-    cancelQuery =
-      Pg.withConnection conn $ \conn' -> do
+    cancelQuery conn' = do
       cancel <- Pg.getCancel conn'
       case cancel of
         Nothing -> pure ()
@@ -157,3 +168,13 @@ runQueryReturning conn x = do
       case nextRow of
         Nothing -> pure ()
         Just _ -> finishQuery conn'
+
+    gracefulShutdown =
+      liftIO . Pg.withConnection conn $ \conn' ->
+      do sts <- Pg.transactionStatus conn'
+         case sts of
+           Pg.TransIdle -> pure ()
+           Pg.TransInTrans -> pure ()
+           Pg.TransInError -> pure ()
+           Pg.TransUnknown -> pure ()
+           Pg.TransActive -> cancelQuery conn'
