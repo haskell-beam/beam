@@ -19,14 +19,14 @@
 -- deserialize them from JSON. Finally, if your backend has custom
 -- 'DatabasePredicate's you will have to provide appropriate 'ActionProvider's
 -- to discover potential actions for your backend. See the documentation for
--- 'Database.Beam.Migrate.Actions' for more information.
+-- "Database.Beam.Migrate.Actions" for more information.
 --
 -- Tools may be interested in the 'SomeBeamMigrationBackend' data type which
 -- provides a monomorphic type to wrap the polymorphic 'BeamMigrationBackend'
 -- type. Currently, @beam-migrate-cli@ uses this type to get the underlying
 -- 'BeamMigrationBackend' via the @hint@ package.
 --
--- For an example migrate backend, see 'Database.Beam.Sqlite.Migrates'
+-- For an example migrate backend, see "Database.Beam.Sqlite.Migrate"
 module Database.Beam.Migrate.Backend
   ( BeamMigrationBackend(..)
   , DdlError

@@ -49,6 +49,7 @@ module Database.Beam.Postgres.PgSpecific
   , pgSumMoney_, pgAvgMoney_
 
     -- ** Set-valued functions
+    -- $set-valued-funs
   , PgSetOf, pgUnnest
   , pgUnnestArray, pgUnnestArrayWithOrdinality
 
@@ -431,15 +432,20 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
     PgValueSyntax $
     emit "'" <> escapeString (BL.toStrict (encode a)) <> emit "'::jsonb"
 
+-- | Key-value pair, used as output of 'pgJsonEachText' and 'pgJsonEach'
 data PgJSONEach valType f
-  = PgJSONEach { pgJsonEachKey :: C f T.Text, pgJsonEachValue :: C f valType }
-  deriving Generic
+  = PgJSONEach
+  { pgJsonEachKey :: C f T.Text
+  , pgJsonEachValue :: C f valType
+  } deriving Generic
 instance Beamable (PgJSONEach valType)
 
+-- | Output row of 'pgJsonKeys'
 data PgJSONKey f = PgJSONKey { pgJsonKey :: C f T.Text }
   deriving Generic
 instance Beamable PgJSONKey
 
+-- | Output row of 'pgJsonArrayElements' and 'pgJsonArrayElementsText'
 data PgJSONElement a f = PgJSONElement { pgJsonElement :: C f a }
   deriving Generic
 instance Beamable (PgJSONElement a)
@@ -451,8 +457,6 @@ instance Beamable (PgJSONElement a)
 -- section on
 -- <https://www.postgresql.org/docs/current/static/functions-json.html JSON>.
 --
--- Note that @beam-postgres@ does not yet support @setof@ so some functions are
--- missing. PRs to implement this functionality are welcome!
 class IsPgJSON (json :: * -> *) where
   -- | The @json_each@ or @jsonb_each@ function. Values returned as @json@ or
   -- @jsonb@ respectively. Use 'pgUnnest' to join against the result
@@ -984,4 +988,30 @@ instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (V.Vector a)
 --
 -- For more information on Psotgres json support see the postgres
 -- <https://www.postgresql.org/docs/current/static/functions-json.html manual>.
+
+
+-- $set-valued-funs
+--
+-- Postgres supports functions that returns /sets/. We can join directly against
+-- these sets or arrays. @beam-postgres@ supports this feature via the
+-- 'pgUnnest' and 'pgUnnestArray' functions.
+--
+-- Any function that returns a set can be typed as an expression returning
+-- 'PgSetOf'. This polymorphic type takes one argument, which is a 'Beamable'
+-- type that represents the shape of the data in the rows. For example, the
+-- @json_each@ function returns a key and a value, so the corresponding
+-- @beam-postgres@ function ('pgJsonEach') returns a value of type 'PgSetOf
+-- (PgJSONEach Value)', which represents a set containing 'PgJSONEach'
+-- rows. 'PgJSONEach' is a table with a column for keys ('pgJsonEachKey') and
+-- one for values ('pgJsonEachValue').
+--
+-- Any 'PgSetOf' value can be introduced into the 'Q' monad using the 'pgUnnest'
+-- function.
+--
+-- Postgres arrays (represented by the 'V.Vector' type) can also be joined
+-- against using the 'pgUnnestArray' function. This directly corresponds to the
+-- SQL @UNNEST@ keyword. Unlike sets, arrays have a sense of order. The
+-- 'pgUnnestArrayWithOrdinality' function allows you to join against the
+-- elements of an array along with its index. This corresponds to the
+-- @UNNEST .. WITH ORDINALITY@ clause.
 

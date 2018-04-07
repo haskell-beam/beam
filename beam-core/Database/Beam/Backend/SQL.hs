@@ -22,7 +22,7 @@ import Control.Monad.IO.Class
 --
 --   Provided here is a low-level interface. Most often, you'll only need the
 --   'withDatabase' and 'withDatabaseDebug' function. The 'run*' functions are
---   wrapped by the appropriate functions in 'Database.Beam.Query'.
+--   wrapped by the appropriate functions in "Database.Beam.Query".
 --
 --   This interface is very high-level and isn't meant to expose the full power
 --   of the underlying database. Namely, it only supports simple data retrieval
