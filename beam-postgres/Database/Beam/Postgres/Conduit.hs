@@ -27,7 +27,7 @@ import           Data.Monoid ((<>))
 
 -- | Run a PostgreSQL @SELECT@ statement in any 'MonadIO'.
 runSelect :: ( MonadIO m, Functor m, FromBackendRow Postgres a ) =>
-             Pg.Connection -> SqlSelect PgSelectSyntax a -> C.Source m a
+             Pg.Connection -> SqlSelect PgSelectSyntax a -> C.ConduitT () a m ()
 runSelect conn (SqlSelect (PgSelectSyntax syntax)) = runQueryReturning conn syntax
 
 -- * @INSERT@
@@ -44,7 +44,7 @@ runInsert conn (SqlInsert (PgInsertSyntax i)) =
 runInsertReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgInsertReturning a
-                   -> C.Source m a
+                   -> C.ConduitT () a m ()
 runInsertReturning _ PgInsertReturningEmpty = pure ()
 runInsertReturning conn (PgInsertReturning i) =
     runQueryReturning conn i
@@ -63,7 +63,7 @@ runUpdate conn (SqlUpdate (PgUpdateSyntax i)) =
 runUpdateReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgUpdateReturning a
-                   -> C.Source m a
+                   -> C.ConduitT () a m ()
 runUpdateReturning _ PgUpdateReturningEmpty = pure ()
 runUpdateReturning conn (PgUpdateReturning u) =
   runQueryReturning conn u
@@ -82,7 +82,7 @@ runDelete conn (SqlDelete (PgDeleteSyntax d)) =
 -- 'MonadIO' and get a 'C.Source' of the deleted rows.
 runDeleteReturning :: ( MonadIO m, Functor m, FromBackendRow Postgres a)
                    => Pg.Connection -> PgDeleteReturning a
-                   -> C.Source m a
+                   -> C.ConduitT () a m ()
 runDeleteReturning conn (PgDeleteReturning d) =
   runQueryReturning conn d
 
@@ -98,7 +98,7 @@ executeStatement conn x =
 -- | Runs any query that returns a set of values
 runQueryReturning ::
     ( MonadIO m, Functor m, FromBackendRow Postgres r ) =>
-    Pg.Connection -> PgSyntax -> C.Source m r
+    Pg.Connection -> PgSyntax -> C.ConduitT () r m ()
 runQueryReturning conn x = do
   success <- liftIO $ do
     syntax <- pgRenderSyntax conn x
