@@ -297,10 +297,10 @@ planned.
 | **S091 Basic array support**                                    | PARTIAL  | Supported in some backends (`beam-postgres` for example)                                                                                   |
 | **S092 Arrays of user-defined types**                           | TODO     | Depends on user-defined types                                                                                                              |
 | **S094 Arrays of reference types**                              | TODO     |                                                                                                                                            |
-| **S095 Array constructors by query**                            | TODO     |                                                                                                                                            |
+| **S095 Array constructors by query**                            | PARTIAL  |                                                                                                                                            |
 | **S096 Optional array bounds**                                  | PARTIAL  | Supported in `beam-postgres`                                                                                                               |
 | **S097 Array element assignment**                               | TODO     | Not yet, but should be easy enough in `beam-postgres`                                                                                      |
-| **S098 ARRAY_AGG**                                              | TODO     | Easily added to `beam-postgres` (Easy)                                                                                                     |
+| **S098 ARRAY_AGG**                                              | PARTIAL  | Supported in `beam-postgres`                                                                                                               |
 | **S111 ONLY in query expressions**                              | TODO     |                                                                                                                                            |
 | **S151 Type predicate**                                         | TODO     |                                                                                                                                            |
 | **S161 Subtype treatment**                                      | TODO     |                                                                                                                                            |
@@ -315,7 +315,7 @@ planned.
 | **S242 Alter transform statement**                              | TODO     |                                                                                                                                            |
 | **S251 User-defined orderings**                                 | TODO     |                                                                                                                                            |
 | **S261 Specific type method**                                   | TODO     |                                                                                                                                            |
-| **S271 Basic multiset support**                                 | TODO     |                                                                                                                                            |
+| **S271 Basic multiset support**                                 | PARTIAL  | Supported in `beam-postgres`                                                                                                               |
 | **S272 Multisets of user-defined types**                        | TODO     |                                                                                                                                            |
 | **S274 Multisets reference types**                              | TODO     |                                                                                                                                            |
 | **S275 Advanced multiset support**                              | TODO     |                                                                                                                                            |
@@ -328,9 +328,9 @@ planned.
 | **S404 TRIM_ARRAY**                                             | TODO     |                                                                                                                                            |
 | **T021 BINARY and VARBINARY data types**                        | FULL     |                                                                                                                                            |
 | **T022 Advanced support for BINARY and VARBINARY data types**   | TODO     |                                                                                                                                            |
-| **T023 Compound binary literals**                               | TODO     |                                                                                                                                            |
-| **T024 Spaces in binary literals**                              | TODO     |                                                                                                                                            |
-| **T031 Boolean data type**                                      | TODO     |                                                                                                                                            |
+| **T023 Compound binary literals**                               | N/A      | Beam handles serialization                                                                                                                 |
+| **T024 Spaces in binary literals**                              | N/A      | Beam handles serialization                                                                                                                 |
+| **T031 Boolean data type**                                      | FULL     |                                                                                                                                            |
 | **T041 Basic LOB data type support**                            | TODO     |                                                                                                                                            |
 | **T042 Extended LOB data type support**                         | TODO     |                                                                                                                                            |
 | **T043 Multiplier T**                                           | TODO     |                                                                                                                                            |
@@ -420,4 +420,4 @@ planned.
 | **T653 SQL-schema statements in external routines**             | TODO     |                                                                                                                                            |
 | **T654 SQL-dynamic statements in external routines**            | TODO     |                                                                                                                                            |
 | **T655 Cyclically dependent routines**                          | TODO     |                                                                                                                                            |
-   
+

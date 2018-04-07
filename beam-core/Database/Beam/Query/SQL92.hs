@@ -171,14 +171,14 @@ buildJoinTableSourceQuery tblPfx tblSource x qb =
 buildInnerJoinQuery
     :: forall select s table
      . (Beamable table, IsSql92SelectSyntax select)
-    => TablePrefix -> T.Text -> TableSettings table
+    => TablePrefix -> (TablePrefix -> T.Text -> Sql92SelectFromSyntax select) -> TableSettings table
     -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
     -> QueryBuilder select -> (T.Text, table (QExpr (Sql92SelectExpressionSyntax select) s), QueryBuilder select)
-buildInnerJoinQuery tblPfx tbl tblSettings mkOn qb =
+buildInnerJoinQuery tblPfx mkFrom tblSettings mkOn qb =
   let qb' = QueryBuilder (tblRef + 1) from' where'
       tblRef = qbNextTblRef qb
       newTblNm = tblPfx <> fromString (show tblRef)
-      newSource = fromTable (tableNamed tbl) (Just newTblNm)
+      newSource = mkFrom (nextTblPfx tblPfx) newTblNm
       (from', where') =
         case qbFrom qb of
           Nothing -> (Just newSource, andE' (qbWhere qb) (exprWithContext tblPfx <$> mkOn newTbl))
@@ -189,11 +189,11 @@ buildInnerJoinQuery tblPfx tbl tblSettings mkOn qb =
 
 nextTbl :: (IsSql92SelectSyntax select, Beamable table)
         => QueryBuilder select
-        -> TablePrefix -> T.Text -> TableSettings table
+        -> TablePrefix -> TableSettings table
         -> ( table (QExpr (Sql92SelectExpressionSyntax select) s)
            , T.Text
            , QueryBuilder select )
-nextTbl qb tblPfx _ tblSettings =
+nextTbl qb tblPfx tblSettings =
   let tblRef = qbNextTblRef qb
       newTblNm = tblPfx <> fromString (show tblRef)
       newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
@@ -438,16 +438,16 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                         Projectible (Sql92ProjectionExpressionSyntax projSyntax) x =>
                         Free (QF select db s) x -> QueryBuilder select -> SelectBuilder select db x
     buildJoinedQuery (Pure x) qb = SelectBuilderQ x qb
-    buildJoinedQuery (Free (QAll tbl tblSettings on next)) qb =
-        let (newTblNm, newTbl, qb') = buildInnerJoinQuery tblPfx tbl tblSettings on qb
+    buildJoinedQuery (Free (QAll mkFrom tblSettings on next)) qb =
+        let (newTblNm, newTbl, qb') = buildInnerJoinQuery tblPfx mkFrom tblSettings on qb
         in buildJoinedQuery (next (newTblNm, newTbl)) qb'
     buildJoinedQuery (Free (QArbitraryJoin q mkJoin on next)) qb =
       case fromF q of
-        Free (QAll dbTblNm dbTblSettings on' next')
-          | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbTblNm dbTblSettings,
+        Free (QAll mkDbFrom dbTblSettings on' next')
+          | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbTblSettings,
             Nothing <- exprWithContext tblPfx <$> on' newTbl,
             Pure proj <- next' (newTblNm, newTbl) ->
-            let newSource = fromTable (tableNamed dbTblNm) (Just newTblNm)
+            let newSource = mkDbFrom (nextTblPfx tblPfx) newTblNm
                 on'' = exprWithContext tblPfx <$> on proj
                 (from', where') =
                   case qbFrom qb' of
@@ -474,10 +474,10 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
     buildJoinedQuery (Free (QTwoWayJoin a b mkJoin on next)) qb =
       let (aProj, aSource, qb') =
             case fromF a of
-              Free (QAll dbTblNm dbTblSettings on' next')
-                | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbTblNm dbTblSettings,
+              Free (QAll mkDbFrom dbTblSettings on' next')
+                | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbTblSettings,
                   Nothing <- on' newTbl, Pure proj <- next' (newTblNm, newTbl) ->
-                    (proj, fromTable (tableNamed dbTblNm) (Just newTblNm), qb')
+                    (proj, mkDbFrom (nextTblPfx tblPfx) newTblNm, qb')
 
               a -> let sb = buildQuery a
                        tblSource = buildSelect tblPfx sb
@@ -489,10 +489,10 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
 
           (bProj, bSource, qb'') =
             case fromF b of
-              Free (QAll dbTblNm dbTblSettings on' next')
-                | (newTbl, newTblNm, qb'') <- nextTbl qb' tblPfx dbTblNm dbTblSettings,
+              Free (QAll mkDbFrom dbTblSettings on' next')
+                | (newTbl, newTblNm, qb'') <- nextTbl qb' tblPfx dbTblSettings,
                   Nothing <- on' newTbl, Pure proj <- next' (newTblNm, newTbl) ->
-                    (proj, fromTable (tableNamed dbTblNm) (Just newTblNm), qb'')
+                    (proj, mkDbFrom (nextTblPfx tblPfx) newTblNm, qb'')
 
               b -> let sb = buildQuery b
                        tblSource = buildSelect tblPfx sb
