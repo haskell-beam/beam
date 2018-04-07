@@ -73,6 +73,8 @@ similarTo_ ::
 similarTo_ (QExpr scrutinee) (QExpr search) =
   QExpr (liftA2 similarToE scrutinee search)
 
+infix 4 `like_`, `similarTo_`
+
 -- | SQL @NOT@ operator
 not_ :: forall syntax context s.
         IsSql92ExpressionSyntax syntax
@@ -92,6 +94,8 @@ div_ :: (Integral a, IsSql92ExpressionSyntax syntax)
      => QGenExpr context syntax s a -> QGenExpr context syntax s a
      -> QGenExpr context syntax s a
 div_ = qBinOpE divE
+
+infixl 7 `div_`, `mod_`
 
 -- | SQL @%@ operator
 mod_ :: (Integral a, IsSql92ExpressionSyntax syntax)
