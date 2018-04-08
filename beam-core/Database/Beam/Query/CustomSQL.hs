@@ -30,8 +30,8 @@
 --   is called with arguments representing SQL expressions, that, when
 --   evaluated, will evaluate to the result of the expressions supplied as
 --   arguments to 'customExpr_'. See the section on
---   <http://tathougies.github.io/beam/user-guide/extensibility/
---   extensibility> in the user guide for example usage.
+--   <http://tathougies.github.io/beam/user-guide/extensibility/ extensibility>
+--   in the user guide for example usage.
 module Database.Beam.Query.CustomSQL
   (
   -- * The 'customExpr_' function

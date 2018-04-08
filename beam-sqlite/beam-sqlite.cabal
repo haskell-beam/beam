@@ -16,7 +16,7 @@ build-type:          Simple
 extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
 bug-reports:          https://github.com/tathougies/beam/issues
-cabal-version:       >=1.18
+cabal-version:       1.18
 
 library
   exposed-modules:    Database.Beam.Sqlite
@@ -49,11 +49,11 @@ library
     ghc-options:       -Werror
 
   if os(windows)
-    ghc-options:      -DWINDOWS
-    build-depends:    Win32
+    cpp-options:      -DWINDOWS
+    build-depends:    Win32         >=2.4 && <2.8
   if os(freebsd) || os(netbsd) || os(darwin) || os(linux) || os(solaris)
-    ghc-options:      -DUNIX
-    build-depends:    unix
+    cpp-options:      -DUNIX
+    build-depends:    unix          >=2.0 && <2.8
 
 flag werror
   description: Enable -Werror during development

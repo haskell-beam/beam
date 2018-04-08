@@ -1,5 +1,14 @@
 # 0.7.0.0
 
+Note '0.7.1.0' was released because the signature of `delete` was too specific
+in '0.7.0.0' due to an error when uploading the package.
+
+## Weaker functional dependencies on `MonadBeam`
+
+The functional dependency on `MonadBeam` is now just `m -> syntax be
+handle`. This allows us to define `MonadBeam` instances atop monad transformers
+(although we don't have any yet!).
+
 ## Correct boolean handling
 
 Previous versions of beam used the SQL `=` operator to compare potentially
@@ -61,7 +70,6 @@ Now write
 ```haskell
 instance Database be MyDatabase
 ```
-
 
 ## Require backends to explicitly declare types that can be compared for equality
 
