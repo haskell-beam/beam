@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- | This module implements an AST type for SQL92. It allows us to realize
---   the call structure of the builders defined in 'Database.Beam.Backend.SQL92'
+--   the call structure of the builders defined in "Database.Beam.Backend.SQL.SQL92"
 module Database.Beam.Backend.SQL.AST where
 
 import Prelude hiding (Ordering)

@@ -15,16 +15,24 @@ import Data.Typeable
 
 -- * Convenience type synonyms
 
--- | Command syntaxes that can be used to issue DDL commands.
+-- | Syntax equalities that any reasonable DDL syntax would follow,
+-- including equalities between beam-migrate and beam-core types.
 type Sql92SaneDdlCommandSyntax cmd =
+  ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
+  , Sql92ColumnSchemaExpressionSyntax (Sql92DdlCommandColumnSchemaSyntax cmd) ~
+      Sql92ExpressionSyntax cmd )
+
+-- | Syntax equalities for any reasonable DDL syntax, only including
+-- types defined here.
+type Sql92SaneDdlCommandSyntaxMigrateOnly cmd =
   ( IsSql92DdlCommandSyntax cmd
   , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
   , Sql92SerializableConstraintDefinitionSyntax (Sql92DdlCommandConstraintDefinitionSyntax cmd)
   , Typeable (Sql92DdlCommandColumnSchemaSyntax cmd)
   , Sql92AlterTableColumnSchemaSyntax
       (Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax cmd)) ~
-      Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd) )
-
+      Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd)
+  )
 
 type Sql92DdlCommandDataTypeSyntax syntax =
   Sql92ColumnSchemaColumnTypeSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)

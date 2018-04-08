@@ -17,6 +17,7 @@ module Database.Beam.Migrate.Types
     --
     --    The functions in this section can be used to modify 'CheckedDatabaseSettings' objects.
   , CheckedFieldModification
+  , checkedFieldNamed
 
   , modifyCheckedTable
   , checkedTableModification
@@ -38,14 +39,11 @@ module Database.Beam.Migrate.Types
 
   , MigrationCommand(..), MigrationDataLoss(..)
 
-  , migrationStepsToMigration, runMigrationSilenced
-  , runMigrationVerbose, executeMigration
-  , eraseMigrationType, migrationStep, upDown
+  , runMigrationSteps, runMigrationSilenced
+  , executeMigration, eraseMigrationType, migrationStep
+  , upDown, migrationDataLoss
 
   , migrateScript, evaluateDatabase, stepNames ) where
-
-import Database.Beam
-import Database.Beam.Backend
 
 import Database.Beam.Migrate.Types.CheckedEntities
 import Database.Beam.Migrate.Types.Predicates
@@ -59,12 +57,18 @@ import Data.Text (Text)
 
 -- * Migration types
 
+-- | Represents a particular step in a migration
 data MigrationStep syntax next where
     MigrationStep :: Text -> Migration syntax a -> (a -> next) -> MigrationStep syntax next
 deriving instance Functor (MigrationStep syntax)
+
+-- | A series of 'MigrationStep's that take a database from the schema in @from@
+-- to the one in @to@. Use the 'migrationStep' function and the arrow interface
+-- to sequence 'MigrationSteps'.
 newtype MigrationSteps syntax from to = MigrationSteps (Kleisli (F (MigrationStep syntax)) from to)
   deriving (Category, Arrow)
 
+-- | Free monadic function for 'Migration's
 data MigrationF syntax next where
   MigrationRunCommand
     :: { _migrationUpCommand   :: syntax {-^ What to execute when applying the migration -}
@@ -72,6 +76,8 @@ data MigrationF syntax next where
        , _migrationNext :: next }
     -> MigrationF syntax next
 deriving instance Functor (MigrationF syntax)
+
+-- | A sequence of potentially reversible schema update commands
 type Migration syntax = F (MigrationF syntax)
 
 -- | Information on whether a 'MigrationCommand' loses data. You can
@@ -99,45 +105,54 @@ data MigrationCommand cmd
     -- ^ Information on whether the migration loses data
   } deriving Show
 
-migrationStepsToMigration :: Int -> Maybe Int
-                          -> MigrationSteps syntax () a
-                          -> (forall a'. Text -> Migration syntax a' -> IO a')
-                          -> IO a
-migrationStepsToMigration firstIdx lastIdx (MigrationSteps steps) runMigration =
+-- | Run the migration steps between the given indices, using a custom execution function.
+runMigrationSteps :: Monad m
+                  => Int -- ^ Zero-based index of the first step to run
+                  -> Maybe Int -- ^ Index of the last step to run, or 'Nothing' to run every step
+                  -> MigrationSteps syntax () a -- ^ The set of steps to run
+                  -> (forall a'. Int -> Text -> Migration syntax a' -> m a')
+                  -- ^ Callback for each step. Called with the step index, the
+                  -- step description and the migration.
+                  -> m a
+runMigrationSteps firstIdx lastIdx (MigrationSteps steps) runMigration =
   runF (runKleisli steps ()) finish step 0
   where finish x _ = pure x
         step (MigrationStep nm doStep next) i =
           if i >= firstIdx && maybe True (i <) lastIdx
-          then runMigration nm doStep >>= \x -> next x (i + 1)
+          then runMigration i nm doStep >>= \x -> next x (i + 1)
           else next (runMigrationSilenced doStep) (i + 1)
 
+-- | Get the result of a migration, without running any steps
 runMigrationSilenced :: Migration syntax a -> a
 runMigrationSilenced m = runF m id step
   where
     step (MigrationRunCommand _ _ next) = next
 
-runMigrationVerbose :: MonadBeam syntax be hdl m => (syntax -> String)
-                    -> Migration syntax a -> m a
-runMigrationVerbose renderMigrationSyntax steps =
-  runF steps finish step
-  where finish = pure
-        step (MigrationRunCommand up _ next) =
-          do liftIO (putStrLn (renderMigrationSyntax up))
-             runNoReturn up
-             next
-
+-- | Remove the explicit source and destination schemas from a 'MigrationSteps' object
 eraseMigrationType :: a -> MigrationSteps syntax a a' -> MigrationSteps syntax () ()
 eraseMigrationType a (MigrationSteps steps) = MigrationSteps (arr (const a) >>> steps >>> arr (const ()))
 
+-- | Create a 'MigrationSteps' from the given description and migration function.
 migrationStep :: Text -> (a -> Migration syntax a') -> MigrationSteps syntax a a'
 migrationStep stepName migration =
     MigrationSteps (Kleisli (\a -> liftF (MigrationStep stepName (migration a) id)))
 
+-- | Given a command in the forward direction, and an optional one in the
+-- reverse direction, construct a 'Migration' that performs the given
+-- command. Multiple commands can be sequenced monadically.
 upDown :: syntax -> Maybe syntax -> Migration syntax ()
 upDown up down = liftF (MigrationRunCommand up down ())
 
-migrateScript :: forall syntax m a.
-                 Monoid m => (Text -> m) -> (syntax -> m) -> MigrationSteps syntax () a -> m
+-- | Given functions to render a migration step description and the underlying
+-- syntax, create a script for the given 'MigrationSteps'.
+migrateScript :: forall syntax m a. Monoid m
+              => (Text -> m)
+              -- ^ Called at the beginning of each 'MigrationStep' with the step description
+              -> (syntax -> m)
+              -- ^ Called for each command in the migration step
+              -> MigrationSteps syntax () a
+              -- ^ The set of steps to run
+              -> m
 migrateScript renderMigrationHeader renderMigrationSyntax (MigrationSteps steps) =
   runF (runKleisli steps ()) (\_ x -> x)
     (\(MigrationStep header migration next) x ->
@@ -157,16 +172,26 @@ executeMigration runSyntax go = runF go pure doStep
     doStep (MigrationRunCommand cmd _ next) =
       runSyntax cmd *> next
 
+-- | Given a migration, get the potential data loss, if it's run top-down
+migrationDataLoss :: Migration syntax a -> MigrationDataLoss
+migrationDataLoss go = runF go (\_ -> MigrationKeepsData)
+                         (\(MigrationRunCommand _ x next) ->
+                            case x of
+                              Nothing -> MigrationLosesData
+                              _ -> next)
+
+-- | Run a 'MigrationSteps' without executing any of the commands against a
+-- database.
 evaluateDatabase :: forall syntax a. MigrationSteps syntax () a -> a
 evaluateDatabase (MigrationSteps f) = runF (runKleisli f ()) id (\(MigrationStep _ migration next) -> next (runMigration migration))
   where
     runMigration :: forall a'. Migration syntax a' -> a'
     runMigration migration = runF migration id (\(MigrationRunCommand _ _ next) -> next)
 
+-- | Collect the names of all steps in hte given 'MigrationSteps'
 stepNames :: forall syntax a. MigrationSteps syntax () a -> [Text]
 stepNames (MigrationSteps f) = runF (runKleisli f ()) (\_ x -> x) (\(MigrationStep nm migration next) x -> next (runMigration migration) (x ++ [nm])) []
   where
     runMigration :: forall a'. Migration syntax a' -> a'
     runMigration migration = runF migration id (\(MigrationRunCommand _ _ next) -> next)
 
--- * Checked database entities

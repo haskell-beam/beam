@@ -2,7 +2,7 @@
 -- | Top-level Beam module. This module re-exports all the symbols
 --   necessary for most common user operations.
 --
---   The most interesting modules are 'Database.Beam.Schema' and 'Database.Beam.Query'.
+--   The most interesting modules are "Database.Beam.Schema" and "Database.Beam.Query".
 --
 --   This is mainly reference documentation. Most users will want to consult the
 --   [manual](https://tathougies.github.io/beam).

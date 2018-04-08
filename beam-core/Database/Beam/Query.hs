@@ -355,7 +355,7 @@ newtype SqlDelete syntax (table :: (* -> *) -> *) = SqlDelete syntax
 delete :: IsSql92DeleteSyntax delete
        => DatabaseEntity be db (TableEntity table)
           -- ^ Table to delete from
-       -> (forall s. table (QExpr (Sql92DeleteExpressionSyntax delete) s) -> QExpr (Sql92DeleteExpressionSyntax delete) s Bool)
+       -> (forall s. (forall s'. table (QExpr (Sql92DeleteExpressionSyntax delete) s')) -> QExpr (Sql92DeleteExpressionSyntax delete) s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete delete table
 delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =

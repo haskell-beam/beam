@@ -26,7 +26,7 @@ import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
                                         , Query(..), SQLData(..), field
                                         , execute, execute_
                                         , withStatement, bind, nextRow
-                                        , query_, withConnection )
+                                        , query_, open, close )
 import           Database.SQLite.Simple.FromField ( FromField(..), ResultError(..)
                                                   , returnError, fieldData)
 import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
@@ -177,9 +177,10 @@ sqliteUriSyntax :: c SqliteCommandSyntax Sqlite Connection SqliteM
                 -> BeamURIOpeners c
 sqliteUriSyntax =
   mkUriOpener "sqlite:"
-    (\uri action -> do
-       let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
-       withConnection sqliteName action)
+    (\uri -> do
+        let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
+        hdl <- open sqliteName
+        pure (hdl, close hdl))
 
 instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
   withDatabase = withDatabaseDebug (\_ -> pure ())

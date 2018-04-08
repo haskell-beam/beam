@@ -1,17 +1,36 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
--- | Allows the creation of custom SQL expressions from arbitrary 'ByteStrings'.
+-- | Allows the creation of custom SQL expressions from arbitrary string-like values.
 --
---   Simply create a function with an arbitrary number of 'ByteString' arguments
---   that returns a 'ByteString'. Then, apply 'customExpr_' to your function.
---   This will result in a function with the same arity, that takes in
---   'QGenExpr's instead of 'ByteString's', and returns a 'QGenExpr' as well.
+--   Simply write a polymorphic function with an arbitrary number of arguments,
+--   all of the same type, and returns a value of the same type. The type will
+--   have instances of 'Monoid' and 'IsString'.
 --
---   Semantically, the expression builder function is called with arguments
---   representing SQL expressions, that, when evaluated, will evaluate to the
---   result of the expressions supplied as arguments to 'customExpr_'. See the
---   section on <http://tathougies.github.io/beam/user-guide/queries/custom-queries/  extensibility>
+--   For example, to implement a function @MYFUNC@ that takes three arguments
+--
+-- @
+-- myFuncImpl :: (Monoid a, IsString a) => a -> a -> a -> a
+-- @
+--
+--   Then, apply 'customExpr_' to your function.  This will result in a function
+--   with the same arity, that takes in and returns 'QGenExpr's instead of
+--   generic @a@s.
+--
+--   The returned function is polymorphic in the types of SQL expressions it
+--   will accept, but you can give it a more specific signature. For example, to
+--   mandate that we receive two 'Int's and a 'T.Text' and return a 'Bool'.
+--
+-- @
+-- myFunc_ :: QGenExpr e ctxt s Int -> QGenExpr e ctxt s Int -> QGenExpr e ctxt s T.Text -> QGenExpr e ctxt s Bool
+-- myFunc_ = customExpr_ myFuncImpl
+-- @
+--
+--   Semantically, the expression builder function (@myFuncImpl@ in this case)
+--   is called with arguments representing SQL expressions, that, when
+--   evaluated, will evaluate to the result of the expressions supplied as
+--   arguments to 'customExpr_'. See the section on
+--   <http://tathougies.github.io/beam/user-guide/extensibility/ extensibility>
 --   in the user guide for example usage.
 module Database.Beam.Query.CustomSQL
   (
@@ -40,11 +59,11 @@ class (Monoid (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
   IsCustomSqlSyntax syntax where
   data CustomSqlSyntax syntax :: *
 
-  -- | Given an arbitrary 'ByteString', produce a 'syntax' that represents the
+  -- | Given an arbitrary string-like expression, produce a 'syntax' that represents the
   --   'ByteString' as a SQL expression.
   customExprSyntax :: CustomSqlSyntax syntax -> syntax
 
-  -- | Given an arbitrary 'syntax', produce a 'ByteString' that corresponds to
+  -- | Given an arbitrary 'syntax', produce a string-like value that corresponds to
   --   how that syntax would look when rendered in the backend.
   renderSyntax :: syntax -> CustomSqlSyntax syntax
 
@@ -70,8 +89,6 @@ instance IsCustomSqlSyntax syntax => IsCustomExprFn (CustomSqlSnippet syntax) (Q
   customExpr_ (CustomSqlSnippet mkSyntax) = QExpr (customExprSyntax . mkSyntax)
 instance (IsCustomExprFn a res, IsCustomSqlSyntax syntax) => IsCustomExprFn (CustomSqlSnippet syntax -> a) (QGenExpr ctxt syntax s r -> res) where
   customExpr_ fn (QExpr e) = customExpr_ $ fn (CustomSqlSnippet (renderSyntax . e))
-
--- customExpr :: IsCustomExprFn 
 
 -- | Force a 'QGenExpr' to be typed as a value expression (a 'QExpr'). Useful
 --   for getting around type-inference errors with supplying the entire type.

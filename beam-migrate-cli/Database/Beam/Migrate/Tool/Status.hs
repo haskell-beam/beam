@@ -1,11 +1,11 @@
 module Database.Beam.Migrate.Tool.Status where
 
 import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.Tool.Backend
 import           Database.Beam.Migrate.Tool.CmdLine
 import           Database.Beam.Migrate.Tool.Diff
 import           Database.Beam.Migrate.Tool.Registry
-import           Database.Beam.Migrate.Tool.Schema
 
 import           Data.Monoid
 import           Data.Text (unpack)
@@ -75,6 +75,13 @@ showCommit atTime sch = do
       showMigrationFormats (registeredSchemaInfoFormats sch) ]
   putStrLn (T.unpack . T.unlines . map ("    " <>) .
              T.lines . registeredSchemaInfoMessage $ sch)
+
+hasBackendTables :: String -> BeamMigrationBackend cmd be hdl m -> IO Bool
+hasBackendTables connStr be@BeamMigrationBackend { backendTransact = transact } =
+  do res <- transact connStr (checkForBackendTables be)
+     case res of
+       Left err -> fail ("hasBackendTables: " ++ show err)
+       Right  x -> pure x
 
 displayStatus :: MigrateCmdLine -> IO ()
 displayStatus MigrateCmdLine { migrateDatabase = Nothing } =

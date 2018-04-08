@@ -49,7 +49,6 @@ import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..), Query(..))
 
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Exception (bracket)
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (toLazyByteString, byteString)
@@ -81,9 +80,10 @@ postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
                   -> BeamURIOpeners c
 postgresUriSyntax =
     mkUriOpener "postgresql:"
-        (\uri action -> do
+        (\uri -> do
             let pgConnStr = fromString (uriToString id uri "")
-            bracket (Pg.connectPostgreSQL pgConnStr) Pg.close action)
+            hdl <- Pg.connectPostgreSQL pgConnStr
+            pure (hdl, Pg.close hdl))
 
 -- * Syntax rendering
 

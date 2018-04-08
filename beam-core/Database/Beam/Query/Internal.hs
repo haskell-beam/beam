@@ -38,7 +38,7 @@ data QF select (db :: (* -> *) -> *) s next where
             -> QF select db s next
 
   QAll :: Beamable table
-       => T.Text -> TableSettings table
+       => (TablePrefix -> T.Text -> Sql92SelectFromSyntax select) -> TableSettings table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
        -> ((T.Text, table (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
 

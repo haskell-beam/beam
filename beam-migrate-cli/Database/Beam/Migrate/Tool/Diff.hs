@@ -3,10 +3,10 @@ module Database.Beam.Migrate.Tool.Diff where
 import           Database.Beam
 import           Database.Beam.Migrate hiding (timestamp)
 import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.Tool.Backend
 import           Database.Beam.Migrate.Tool.CmdLine
 import           Database.Beam.Migrate.Tool.Registry
-import           Database.Beam.Migrate.Tool.Schema
 
 import           Control.Exception
 import           Control.Monad
@@ -105,7 +105,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
                   runSelectReturningOne $ select $
                   limit_ 1 $ offset_ (fromIntegral fromHead) $
                   orderBy_ (desc_ . _logEntryId) $
-                  all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
+                  all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
 
       case logEntry of
         Left err -> throwIO (CouldNotFetchLog err)
