@@ -101,6 +101,8 @@ import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByte
 import qualified Data.ByteString.Char8 as B
 import           Data.ByteString.Lazy.Char8 (toStrict)
 import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.CaseInsensitive (CI)
+import qualified Data.CaseInsensitive as CI
 import           Data.Coerce
 import           Data.Functor.Classes
 import           Data.Hashable
@@ -1117,6 +1119,11 @@ DEFAULT_SQL_SYNTAX(Pg.LocalTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.UTCTimestamp)
 DEFAULT_SQL_SYNTAX(Scientific)
 
+instance HasSqlValueSyntax PgValueSyntax (CI T.Text) where
+  sqlValueSyntax = sqlValueSyntax . CI.original
+instance HasSqlValueSyntax PgValueSyntax (CI TL.Text) where
+  sqlValueSyntax = sqlValueSyntax . CI.original
+
 instance HasSqlValueSyntax PgValueSyntax SqlNull where
   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
 
@@ -1363,3 +1370,5 @@ PG_HAS_EQUALITY_CHECK(Scientific)
 PG_HAS_EQUALITY_CHECK(ByteString)
 PG_HAS_EQUALITY_CHECK(BL.ByteString)
 PG_HAS_EQUALITY_CHECK(V.Vector a)
+PG_HAS_EQUALITY_CHECK(CI T.Text)
+PG_HAS_EQUALITY_CHECK(CI TL.Text)

@@ -940,7 +940,7 @@ instance HasDefaultSqlDataType PgDataTypeSyntax PgMoney where
   defaultSqlDataType _ _ = pgMoneyType
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax PgMoney
 
-instance HasDefaultSqlDataType PgDataTypeSyntax a =>  HasDefaultSqlDataType PgDataTypeSyntax (V.Vector a) where
+instance HasDefaultSqlDataType PgDataTypeSyntax a => HasDefaultSqlDataType PgDataTypeSyntax (V.Vector a) where
   defaultSqlDataType _ embedded = pgUnboundedArrayType (defaultSqlDataType (Proxy :: Proxy a) embedded)
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (V.Vector a)
 

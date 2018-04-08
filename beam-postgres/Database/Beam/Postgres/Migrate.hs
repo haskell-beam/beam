@@ -111,17 +111,17 @@ postgresDataTypeDeserializers
 postgresDataTypeDeserializers =
   Db.beamDeserializer $ \_ v ->
   case v of
-    "bytea"       ->  pure pgByteaType
-    "smallserial" ->  pure pgSmallSerialType
-    "serial"      ->  pure pgSerialType
-    "bigserial"   ->  pure pgBigSerialType
-    "tsquery"     ->  pure pgTsQueryType
-    "tsvector"    ->  pure pgTsVectorType
-    "text"        ->  pure pgTextType
-    "json"        ->  pure pgJsonType
-    "jsonb"       ->  pure pgJsonbType
-    "uuid"        ->  pure pgUuidType
-    "money"       ->  pure pgMoneyType
+    "bytea"       -> pure pgByteaType
+    "smallserial" -> pure pgSmallSerialType
+    "serial"      -> pure pgSerialType
+    "bigserial"   -> pure pgBigSerialType
+    "tsquery"     -> pure pgTsQueryType
+    "tsvector"    -> pure pgTsVectorType
+    "text"        -> pure pgTextType
+    "json"        -> pure pgJsonType
+    "jsonb"       -> pure pgJsonbType
+    "uuid"        -> pure pgUuidType
+    "money"       -> pure pgMoneyType
     _             -> fail "Postgres data type"
 
 -- | Converts postgres 'DatabasePredicate's to 'DatabasePredicate's in the
@@ -205,6 +205,7 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
                             (HsType (tyConNamed "TsQuery")
                                     (importSome "Database.Beam.Postgres" [importTyNamed "TsQuery"]))
                             (pgDataTypeSerialized pgTsQueryType)
+
     _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
 -- | Turn a series of 'Db.MigrationSteps' into a line-by-line array of

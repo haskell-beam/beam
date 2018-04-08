@@ -9,7 +9,7 @@ author:               Travis Athougies
 maintainer:           travis@athougies.net
 category:             Database
 build-type:           Simple
-cabal-version:        >=1.18
+cabal-version:        1.18
 extra-doc-files:      ChangeLog.md
 bug-reports:          https://github.com/tathougies/beam/issues
 
