@@ -1,5 +1,8 @@
 # 0.7.0.0
 
+Note '0.7.1.0' was released because the signature of `delete` was too specific
+in '0.7.0.0' due to an error when uploading the package.
+
 ## Weaker functional dependencies on `MonadBeam`
 
 The functional dependency on `MonadBeam` is now just `m -> syntax be
