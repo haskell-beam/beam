@@ -68,7 +68,8 @@ jobs:
     - stage: build-doc-examples
       before_install:
         - ./ci/setup-stack
-        - ./ci/setup-mysql
+      services:
+        - mysql
       script: ./ci/build-docs-examples
       env: BEAM_DOC_BACKEND=beam-mysql
 
