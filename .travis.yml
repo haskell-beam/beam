@@ -27,7 +27,7 @@ addons:
       - sourceline: ppa:fkrull/deadsnakes-python2.7
     packages:
       - libgmp-dev
-      - python
+      - python2.7
 
 before_install:
 # Download and unpack the stack executable
