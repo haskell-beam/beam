@@ -1,0 +1,3 @@
+#!/bin/sh
+
+echo "Building docs for ${BEAM_DOC_BACKEND}"

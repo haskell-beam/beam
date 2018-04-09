@@ -1,0 +1,3 @@
+#!/bin/sh
+
+echo "Building documentation examples for ${BEAM_DOC_BACKEND}"

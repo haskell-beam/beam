@@ -1,0 +1,3 @@
+#!/bin/sh
+
+stack --no-terminal build --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror
