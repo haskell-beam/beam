@@ -16,14 +16,14 @@ references:
 jobs:
   build:
     docker:
-      - image: nixos/nix
+      - image: ubuntu/ubuntu
     steps:
       - checkout
       - restore_cache:
           key: stackage
       - run:
           name: Build and test
-          command: nix-shell --run ./ci/test
+          command: ./ci/test
       - save_cache:
           key: stackage
           when: always
