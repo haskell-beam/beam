@@ -2,7 +2,7 @@
 
 set -e
 
-source ${BEAM_DOCS_LIBRARY}
+. ${BEAM_DOCS_LIBRARY}
 
 SQLITE_DB=$1
 CHINOOK_SQLITE_URL="https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_Sqlite.sql"
