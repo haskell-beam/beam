@@ -19,5 +19,5 @@ PYTHONPATH="${PYTHONPATH}:." ./build-docs.sh builddocs
 echo "Setting up cache"
 BEAM_DOC_CACHE_ARCHIVE="${BEAM_DOC_BACKEND}-docs-cache.tar.gz"
 BEAM_DOC_CACHE="docs/${BEAM_DOC_CACHE_ARCHIVE}"
-ls docs/.beam-query-cache/ | grep "^[0-9a-f]\{32,32\}\(\.hs\)\?$" | xargs tar -c | gzip > $BEAM_DOC_CACHE
+ls docs/.beam-query-cache/ | grep "^\([A-Z][^\-]*\-\)\?[0-9a-f]\{32,32\}\(\.hs\)\?$" | xargs tar -c | gzip > $BEAM_DOC_CACHE
 aws s3 cp docs/${BEAM_DOC_CACHE} s3://beam-doc-cache/cache/${BEAM_DOC_CACHE_ARCHIVE}

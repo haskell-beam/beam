@@ -28,6 +28,7 @@ addons:
     packages:
       - libgmp-dev
       - python2.7
+      - pv
 
 before_install:
 # Download and unpack the stack executable
