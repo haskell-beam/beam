@@ -1,8 +1,13 @@
 #!/bin/bash
 
+set -ex
+
 echo "Setting up postgres"
 
-sudo apt-get install postgresql-9.6
+sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install postgresql-10
+
+/usr/lib/postgresql/10/bin/pg_ctl initdb -D pgdb
+/usr/lib/postgresql/10/bin/pg_ctl start -D pgdb
 
 # ubuntu automatically starts the server
 

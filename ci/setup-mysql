@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ex
+
 echo "Setting up MySQL"
 
 sudo apt-get install mysql-server
