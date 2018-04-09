@@ -2,6 +2,8 @@
 
 set -e
 
+rm -r $HOME/venv
+
 if [ ! -d "$HOME/venv/bin" ]; then
     echo "Creating virtual environment"
     virtualenv $HOME/venv

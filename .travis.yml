@@ -23,8 +23,11 @@ cache:
 # Ensure necessary system libraries are present
 addons:
   apt:
+    sources:
+      - sourceline: ppa:fkrull/deadsnakes-python2.7
     packages:
       - libgmp-dev
+      - python
 
 before_install:
 # Download and unpack the stack executable
