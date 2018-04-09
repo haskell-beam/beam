@@ -2,6 +2,9 @@
 
 set -e
 
+BEAM_DOC_CACHE_ARCHIVE="${BEAM_DOC_BACKEND}-docs-cache.tar.gz"
+BEAM_DOC_CACHE="docs/${BEAM_DOC_CACHE_ARCHIVE}"
+
 if [ ! -d "$HOME/venv/bin" ]; then
     echo "Creating virtual environment"
     virtualenv $HOME/venv
@@ -13,11 +16,21 @@ pip install mkdocs==0.17.2 mkdocs-material==2.6.0
 pip install --upgrade awscli
 pip install --upgrade sqlparse
 
+echo "Attempting to download cache"
+mkdir -p docs/.beam-query-cache
+aws s3 cp s3://beam-doc-cache/cache/${BEAM_DOC_CACHE_ARCHIVE} ./beam-doc-cache.tar.gz || true
+if [ -f ./beam-doc-cache.tar.gz ]; then
+    echo "Extracting cache"
+    tar zxvf ./beam-doc-cache.tar.gz
+
+    echo "Removing cached backend data"
+    ls -d docs/.beam-query-cache/* | grep "/[A-Z][^\-]*\-[0-9a-f]\{32,32\}$" | xargs rm
+fi
+
 echo "Building documentation examples for ${BEAM_DOC_BACKEND}"
 PYTHONPATH="${PYTHONPATH}:." ./build-docs.sh builddocs
 
 echo "Setting up cache"
-BEAM_DOC_CACHE_ARCHIVE="${BEAM_DOC_BACKEND}-docs-cache.tar.gz"
-BEAM_DOC_CACHE="docs/${BEAM_DOC_CACHE_ARCHIVE}"
+
 ls -d docs/.beam-query-cache/* | grep "/\([A-Z][^\-]*\-\)\?[0-9a-f]\{32,32\}\(\.hs\)\?$" | xargs tar -c | gzip > $BEAM_DOC_CACHE
 aws s3 cp ${BEAM_DOC_CACHE} s3://beam-doc-cache/cache/${BEAM_DOC_CACHE_ARCHIVE}
