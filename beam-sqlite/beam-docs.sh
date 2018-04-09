@@ -16,16 +16,16 @@ if [ -f $SQLITE_DB ]; then
 fi
 
 if [ ! -f chinook-data/Chinook_Sqlite.sql ]; then
-    status "Downloading Sqlite chinook data..."
+    beam_doc_status "Downloading Sqlite chinook data..."
     download "chinook-data/Chinook_Sqlite.sql" "$CHINOOK_SQLITE_URL" "$EXPECTED_SHA256" "tail -c +4"
 fi
 
-status "Creating temporary $SQLITE_DB..."
+beam_doc_status "Creating temporary $SQLITE_DB..."
 
 rm -f $SQLITE_DB.tmp
 (echo "BEGIN;"; pv chinook-data/Chinook_Sqlite.sql; echo "END;") | sqlite3 $SQLITE_DB.tmp
 
-status "Success, creating $SQLITE_DB"
+beam_doc_status "Success, creating $SQLITE_DB"
 sqlite3 $SQLITE_DB.tmp <<EOF
 ALTER TABLE [Invoice] RENAME TO [InvoiceTemp];
 CREATE TABLE [InvoiceNew]
