@@ -84,7 +84,7 @@ def setup_backend(cache_dir, base_dir, backend):
                                       backend_cmd + ' ' + opts],
                                      cwd=os.path.abspath(cache_dir), close_fds=True,
                                      stdout=subprocess.PIPE,
-                                     env=dict(os.environ, BASH_ENV=os.path.join(base_dir, 'docs/beam-docs-library.sh')))
+                                     env=dict(os.environ, BEAM_DOCS_LIBRARY=os.path.join(base_dir, 'docs/beam-docs-library.sh')))
         (out, _) = setup_cmd.communicate()
         retcode = setup_cmd.wait()
         if retcode == 0:
