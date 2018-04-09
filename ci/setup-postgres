@@ -2,3 +2,8 @@
 
 echo "Setting up postgres"
 
+sudo apt-get install postgresql postgresql-contrib
+pg_ctl initdb -D ./pgdb
+pg_ctl start -D ./pgdb
+
+echo "Postgres server started"
