@@ -7,7 +7,8 @@ if [ ! -d "$HOME/venv/bin" ]; then
     virtualenv $HOME/venv
 fi
 
-$HOME/venv/bin/activate
+ls -l $HOME/venv/bin
+source $HOME/venv/bin/activate
 
 pip install mkdocs-0.17.2 mkdocs-material-2.6.0
 pip install --upgrade awscli
