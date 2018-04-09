@@ -1,16 +1,15 @@
 #!/bin/bash
 
-set -ex
+set -e
 
 if [ ! -d "$HOME/venv/bin" ]; then
     echo "Creating virtual environment"
     virtualenv $HOME/venv
 fi
 
-ls -l $HOME/venv/bin
 source $HOME/venv/bin/activate
 
-pip install mkdocs-0.17.2 mkdocs-material-2.6.0
+pip install mkdocs==0.17.2 mkdocs-material==2.6.0
 pip install --upgrade awscli
 
 echo "Building documentation examples for ${BEAM_DOC_BACKEND}"
