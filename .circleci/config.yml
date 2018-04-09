@@ -16,7 +16,7 @@ references:
 jobs:
   build:
     docker:
-      - image: ubuntu
+      - image: fpco/stack-build
     steps:
       - checkout
       - run:
@@ -29,13 +29,16 @@ jobs:
       - restore_cache:
           key: stackage
       - run:
-          name: Build and test
-          command: ./ci/test
+          name: Build dependencies
+          command: ./ci/build-deps
       - save_cache:
           key: stackage
           when: always
           paths:
             - ~/.stack-work
+      - run:
+          name: Build and test
+          command: ./ci/test
 
 workflows:
   version: 2
