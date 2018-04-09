@@ -1,5 +1,0 @@
-#!/bin/sh
-
-set -e
-
-stack --no-terminal build --only-dependencies --system-ghc --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror
