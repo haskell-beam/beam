@@ -20,6 +20,9 @@ import zipfile
 
 import sys
 
+def check_ci():
+    return os.environ.get("CI", 'false') == 'true' and 'BEAM_DOC_BACKEND' in os.environ
+
 def fetch_backend_src(backend_name, cache_dir, base_dir, src):
     if 'file' in src:
         return (os.path.join(base_dir, src['file']), {})
@@ -211,8 +214,9 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
         source_hdl.write(u"\n".join(template_data).encode('utf-8'))
 
     build_command = 'stack runhaskell ' + build_options + ' ' + source_file
+    is_ci = check_ci()
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(cache_dir), close_fds=True,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE if not is_ci else None,
                             env=dict(os.environ, **stack_env))
 
     (out, err) = proc.communicate()
@@ -230,8 +234,12 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
         save_cached_file(cache_dir, lines_hash, out)
         return out.split("\n")
     else:
-        print "Error in source file", source_file
-        return err.split()
+        if is_ci:
+            print "Error in source file", source_file
+            sys.exit(1)
+        else:
+            print "Error in source file", source_file
+            return err.split()
 
 def run_example(template_path, cache_dir, example_lines):
     template_data, options = read_template(template_path, { 'PLACEHOLDER': example_lines })
@@ -250,8 +258,10 @@ def run_example(template_path, cache_dir, example_lines):
     if build_command is None:
         return ["No BUILD_COMMAND specified"] + example_lines
 
+    is_ci = check_ci()
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(build_dir), close_fds=True,
-                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE if not is_ci else None)
 
     (out, err) = proc.communicate(u"\n".join(template_data).encode('utf-8'))
     out = unicode(out, 'utf-8')
@@ -264,7 +274,11 @@ def run_example(template_path, cache_dir, example_lines):
         save_cached_file(cache_dir, lines_hash, out)
         return out.split("\n")
     else:
-        return err.split()
+        if is_ci:
+            print "Error processing file", lines_hash
+            sys.exit(1)
+        else:
+            return err.split()
 
 class BeamQueryBlockProcessor(Preprocessor):
     def __init__(self, *args, **kwargs):
@@ -373,7 +387,7 @@ class BeamQueryExtension(Extension):
             conf = yaml.load(f)
 
         backends = conf['backends']
-        is_ci = os.environ.get("CI", 'false') == 'true' and 'BEAM_DOC_BACKEND' in os.environ
+        is_ci = check_ci()
         enabled_backends = self.getConfig('enabled_backends') if not is_ci else [ os.environ['BEAM_DOC_BACKEND'] ]
         if len(enabled_backends) > 0:
             all_backends = backends.keys()
