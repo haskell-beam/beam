@@ -1,15 +1,15 @@
 #!/bin/sh
 
-set -e
+set -ex
 
-if [ ! -d $HOME/venv ]; then
+if [ ! -d "$HOME/venv/bin" ]; then
+    echo "Creating virtual environment"
     virtualenv $HOME/venv
 fi
 
 $HOME/venv/bin/activate
 
-pip install mkdocs-0.17.2
-pip install mkdocs-material-2.6.0
+pip install mkdocs-0.17.2 mkdocs-material-2.6.0
 
 echo "Building documentation examples for ${BEAM_DOC_BACKEND}"
 sh ./build-docs.sh builddocs
