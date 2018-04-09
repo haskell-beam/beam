@@ -223,7 +223,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
     out = unicode(out, 'utf-8')
 
     retcode = proc.wait()
-    print out, err
+    print "Ran backend example", lines_hash
     if retcode == 0:
         # Success!!
         os.remove(source_file)
@@ -236,6 +236,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
     else:
         if is_ci:
             print "Error in source file", source_file
+            print "Example is\n", "\n".join(example_lines)
             sys.exit(1)
         else:
             print "Error in source file", source_file
@@ -268,7 +269,7 @@ def run_example(template_path, cache_dir, example_lines):
 
     retcode = proc.wait()
 
-    print out, err
+    print "Ran example", lines_hash
     if retcode == 0:
         out = sqlparse.format(out, reindent=True)
         save_cached_file(cache_dir, lines_hash, out)
@@ -276,6 +277,7 @@ def run_example(template_path, cache_dir, example_lines):
     else:
         if is_ci:
             print "Error processing file", lines_hash
+            print "Example is\n", "\n".join(example_lines)
             sys.exit(1)
         else:
             return err.split()
