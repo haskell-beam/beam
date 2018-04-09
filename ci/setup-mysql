@@ -4,4 +4,6 @@ echo "Setting up MySQL"
 
 sudo apt-get install mysql-server
 
-mysqld --initialize-insecure --datadir=./mydb --daemonize
+# mkdir ./mydb
+# mysqld --initialize-insecure --datadir=./mydb --daemonize
+#

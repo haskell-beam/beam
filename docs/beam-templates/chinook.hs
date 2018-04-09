@@ -16,6 +16,8 @@ import Data.Monoid ((<>))
 
 import Chinook.Schema
 
+import System.IO
+
 data BeamDone = BeamDone
   deriving (Show)
 instance Exception BeamDone
@@ -25,6 +27,13 @@ BEAM_BACKEND_EXTRA
 exampleQuery :: Q BEAM_SELECT_SYNTAX ChinookDb s _
 exampleQuery =
   BEAM_PLACEHOLDER
+
+displayStmtList display stmtsV =
+  do mkStmtList <- readIORef stmtsV
+     let stmtList = mkStmtList []
+
+     forM_ stmtList $ \stmt ->
+       display stmt
 
 main :: IO ()
 main =
@@ -38,13 +47,10 @@ main =
          record :: BEAM_BACKEND_MONAD a -> IO a
          record = withDatabaseDebug onStmt chinook
 
-     handle (\BeamDone -> pure ()) $
+     flip onException (displayStmtList (hPutStrLn stderr) stmts) $
+       handle (\BeamDone -> pure ()) $
        docsWithTransaction chinook $ do
          record $ runSelectReturningList $ select $ exampleQuery
          throwIO BeamDone
 
-     mkStmtList <- readIORef stmts
-     let stmtList = mkStmtList []
-
-     forM_ stmtList $ \stmt -> do
-       putStrLn stmt
+     displayStmtList putStrLn stmts
