@@ -46,16 +46,24 @@ stages:
 
 jobs:
   include:
-    - stage: compile-and-test
+    - stage: compile
       script: ./ci/compile
     - stage: test
       script: ./ci/test
+
     - stage: build-doc-examples
-      before_install: ./ci/setup-docs
+      before_install: ./ci/setup-postgres
       script: ./ci/build-docs-examples
-      env:
-        - BEAM_DOC_BACKEND=Postgres
-        - BEAM_DOC_BACKEND=Sqlite
-        - BEAM_DOC_BACKEND=MySQL
+      env: BEAM_DOC_BACKEND=Postgres
+
+    - stage: build-doc-examples
+      script: ./ci/build-docs-examples
+      env: BEAM_DOC_BACKEND=Sqlite
+
+    - stage: build-doc-examples
+      before_install: ./ci/setup-mysql
+      script: ./ci/build-docs-expamples
+      env: BEAM_DOC_BACKEND=MySQL
+
     - stage: build-docs
       script: ./ci/build-docs
