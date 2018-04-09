@@ -18,13 +18,13 @@ language: generic
 cache:
   directories:
   - $HOME/.stack
-  - $TRAVIS_BUILD_DIR/docs/.beam-query-cache
 
 # Ensure necessary system libraries are present
 addons:
   apt:
     packages:
       - libgmp-dev
+      - gist
 
 before_install:
 # Download and unpack the stack executable
