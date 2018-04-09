@@ -13,7 +13,7 @@ backends:
   beam-postgres:
     backend-name: Postgres
     backend-module: Database.Beam.Postgres
-    backend-options: '"" beam_docs_chinook'
+    backend-options: '"host=localhost port=5432 user=postgres" beam_docs_chinook'
     src:
       file: ./beam-postgres
     haskell-names:
