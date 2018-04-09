@@ -50,9 +50,16 @@ jobs:
       script: ./ci/test
 
     - stage: build-doc-examples
+      addons:
+        postgresql: "10"
+        apt:
+          packages:
+            - postgresql-10
+            - postgresql-client-10
+
       before_install:
         - ./ci/setup-stack
-        - ./ci/setup-postgres
+
       script: ./ci/build-docs-examples
       env: BEAM_DOC_BACKEND=beam-postgres
 

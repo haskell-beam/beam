@@ -6,6 +6,7 @@ echo "Setting up postgres"
 
 sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install postgresql-10
 
+sudo /etc/init.d/postgresql stop
 /usr/lib/postgresql/10/bin/pg_ctl initdb -D pgdb
 /usr/lib/postgresql/10/bin/pg_ctl start -D pgdb
 
