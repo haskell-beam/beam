@@ -2,9 +2,5 @@
 
 set -e
 
-echo "Downloading build cache"
-
 echo "Building documentation examples for ${BEAM_DOC_BACKEND}"
 sh ./build-docs.sh builddocs
-
-ls $TRAVIS_BUILD_DIR/docs/.beam-query-cache/ | grep "^[0-9a-f]\{32,32\}\(\.hs\)\?$" | xargs
