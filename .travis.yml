@@ -25,6 +25,8 @@ addons:
   apt:
     sources:
       - sourceline: ppa:fkrull/deadsnakes-python2.7
+      - sourceline: deb https://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main
+        key_url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
     packages:
       - libgmp-dev
       - python2.7

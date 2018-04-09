@@ -2,7 +2,7 @@
 
 echo "Setting up postgres"
 
-sudo apt-get install postgresql postgresql-contrib
+sudo apt-get install postgresql-9.6
 pg_ctl initdb -D ./pgdb
 pg_ctl start -D ./pgdb
 
