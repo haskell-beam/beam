@@ -1,7 +1,8 @@
+#! /bin/bash
+
 beam_doc_status() {
     echo "$@" 1>&2
 }
-export -f beam_doc_status
 
 sha256() {
     if which sha256sum 2>/dev/null >/dev/null; then
@@ -14,7 +15,6 @@ sha256() {
     fi
     /bin/sh -c "$SHA256SUM"
 }
-export -f sha256
 
 download () {
     CACHED_FILE=$1
@@ -47,7 +47,6 @@ download () {
         beam_doc_status "Finished downloading"
     fi
 }
-export -f download
 
 if ! which pv >/dev/null 2>/dev/null; then
     beam_doc_status "No 'pv' command found, no progress indication available"
@@ -55,5 +54,4 @@ if ! which pv >/dev/null 2>/dev/null; then
         beam_doc_status "Starting upload of $@"
         cat "$@"
     }
-    export -f pv
 fi
