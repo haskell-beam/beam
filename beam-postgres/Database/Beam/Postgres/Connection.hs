@@ -14,6 +14,8 @@ module Database.Beam.Postgres.Connection
   ( PgRowReadError(..), PgError(..)
   , Pg(..), PgF(..)
 
+  , runBeamPostgres, runBeamPostgresDebug
+
   , pgRenderSyntax, runPgRowReader, getFields
 
   , withPgDebug
@@ -300,11 +302,16 @@ newtype Pg a = Pg { runPg :: F PgF a }
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)
 
+runBeamPostgresDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO a
+runBeamPostgresDebug dbg conn action =
+    withPgDebug dbg conn action >>= either throwIO pure
+
+runBeamPostgres :: Pg.Connection -> Pg a -> IO a
+runBeamPostgres = runBeamPostgresDebug (\_ -> pure ())
+
 instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
-    withDatabase conn action =
-      withPgDebug (\_ -> pure ()) conn action >>= either throwIO pure
-    withDatabaseDebug dbg conn action =
-      withPgDebug dbg conn action >>= either throwIO pure
+    withDatabase = runBeamPostgres
+    withDatabaseDebug = runBeamPostgresDebug
 
     runReturningMany cmd consume =
         liftF (PgRunReturning cmd consume id)

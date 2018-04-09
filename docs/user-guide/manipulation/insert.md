@@ -128,7 +128,7 @@ qualified.
 
 !beam-query
 ```haskell
-!example chinookdml
+!example chinookdml !on:MySQL
 [newInvoice] <-
   BeamExtensions.runInsertReturningList (invoice chinookDb) $
   insertExpressions [ Invoice default_ -- Ask the database to give us a default id

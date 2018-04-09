@@ -12,7 +12,7 @@ module Main where
 #include "employee3common.hs"
 
      [ jamesOrder1, bettyOrder1, jamesOrder2 ] <-
-       withDatabase conn $ do
+       runBeamSqlite conn $ do
          runInsertReturningList $
            insertReturning (shoppingCartDb ^. shoppingCartOrders) $
            insertExpressions $
@@ -29,7 +29,7 @@ module Main where
 
                      , LineItem (pk jamesOrder2) (pk mathTextbook) 1 ]
 
-     withDatabase conn $ do
+     runBeamSqlite conn $ do
        runInsert $ insert (shoppingCartDb ^. shoppingCartLineItems) $
          insertValues lineItems
 #include "employee3commonsql.hs"

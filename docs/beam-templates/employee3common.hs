@@ -225,7 +225,7 @@ main =
                     , Product default_ (val_ "Suitcase") (val_ "A hard durable suitcase") (val_ 15000) ]
 
      (jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase) <-
-       withDatabase conn $ do
+       runBeamSqlite conn $ do
          runInsert $ insert (shoppingCartDb ^. shoppingCartUsers) $
            insertValues users
 
@@ -240,7 +240,7 @@ main =
          pure ( jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase )
 
      bettyShippingInfo <-
-       withDatabase conn $ do
+       runBeamSqlite conn $ do
          [bettyShippingInfo] <-
            runInsertReturningList $
            insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
