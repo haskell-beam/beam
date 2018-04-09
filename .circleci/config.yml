@@ -16,7 +16,7 @@ references:
 jobs:
   build:
     docker:
-      - image: ubuntu
+      - image: ubuntu/ubuntu
     steps:
       - checkout
       - restore_cache:
