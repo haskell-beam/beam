@@ -370,7 +370,8 @@ class BeamQueryExtension(Extension):
             conf = yaml.load(f)
 
         backends = conf['backends']
-        enabled_backends = self.getConfig('enabled_backends')
+        is_ci = os.environ.get("CI", 'false') == 'true' and 'BEAM_DOC_BACKEND' in os.environ
+        enabled_backends = self.getConfig('enabled_backends') if not is_ci else [ os.environ['BEAM_DOC_BACKEND'] ]
         if len(enabled_backends) > 0:
             all_backends = backends.keys()
             for backend_name in all_backends:

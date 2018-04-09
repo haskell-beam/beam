@@ -1,3 +1,0 @@
-#!/bin/sh
-
-echo "Setup docs for ${BEAM_DOC_BACKEND}"
