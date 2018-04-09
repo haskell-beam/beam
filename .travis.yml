@@ -34,7 +34,8 @@ before_install:
 - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
 stages:
-  - test
+  - name: test
+    if: NOT (branch = docs-master)
   - name: build-doc-examples
     if: tag =~ ^docs OR branch = docs-master
   - name: build-docs

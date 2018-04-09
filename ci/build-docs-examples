@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -ex
 
@@ -10,6 +10,7 @@ fi
 $HOME/venv/bin/activate
 
 pip install mkdocs-0.17.2 mkdocs-material-2.6.0
+pip install --upgrade awscli
 
 echo "Building documentation examples for ${BEAM_DOC_BACKEND}"
 sh ./build-docs.sh builddocs
