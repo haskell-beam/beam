@@ -77,6 +77,9 @@ def setup_backend(cache_dir, base_dir, backend):
 
     if not os.path.exists(status_file):
         # Set up the database
+        print "bash environment is", \
+            ['/usr/bin/env', 'bash', '-c', backend_cmd + ' ' + opts], \
+             os.path.join(base_dir, 'docs/beam-docs-library.sh')
         setup_cmd = subprocess.Popen(['/usr/bin/env', 'bash', '-c',
                                       backend_cmd + ' ' + opts],
                                      cwd=os.path.abspath(cache_dir), close_fds=True,
