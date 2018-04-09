@@ -1,41 +1,37 @@
 <img src="img/logo.svg" width="250px"/>
 
-Beam is a highly-general library for accessing any kind of database
-with Haskell. It supports several backends. `beam-postgres` and
-`beam-sqlite` are included in the main beam repository. Others are
-hosted and maintained independently, such as `beam-mysql` and
-`beam-firebird`. The documentation here shows examples in all known backends.
+Beam is a highly-general library for accessing any kind of database with
+Haskell. It supports several backends. `beam-postgres` and `beam-sqlite` are
+included in the main beam repository. Others are hosted and maintained
+independently, such as `beam-mysql` and `beam-firebird`. The documentation here
+shows examples in all known backends.
 
-Beam is highly extensible and other backends can be shipped
-independently without requiring any changes in the core libraries.For
-information on creating additional SQL backends, see
-the [manual section](user-guide/custom-backends.md) for more.
+Beam is highly extensible and other backends can be shipped independently
+without requiring any changes in the core libraries.For information on creating
+additional SQL backends, see the [manual section](user-guide/custom-backends.md)
+for more.
 
 Beam features
 
 * __Easy schema generation__ from existing databases
-* __A basic migration infrastructure__ for working with multiple versions of your
-  database schema.
+* __A basic migration infrastructure__ for working with multiple versions of
+  your database schema.
 * __Support for most SQL92, SQL99, and SQL2003 features__ across backends that
   support them, including aggregations, subqueries, and window functions.
 * __A straightforward Haskell-friendly query syntax__. You can use Beam's `Q`
   monad much like you would interact with the `[]` monad.
-* __No Template Haskell__ Beam uses the GHC Haskell type system and nothing else.
-  The types have been designed to be easily-inferrable by the compiler, and
-  appropriate functions to refine types have been provided for the where the
+* __No Template Haskell__ Beam uses the GHC Haskell type system and nothing
+  else.  The types have been designed to be easily-inferrable by the compiler,
+  and appropriate functions to refine types have been provided for the where the
   compiler may need more help.
 
 ## How to install
 
-Beam is available via Hackage (Stack too, soon, I promise), and can be
-included in your stack project by adding `beam-core` and an
-appropriate beam backend to your `stack.yaml` as an `extra-dep`. Some
-projects may want to follow the latest master, for the newest
-features. If so, put the following in your `stack.yaml` to build and
-use beam in your project!
-
-!!! tip "Tip"
-    `beam-postgres` is not yet available on Hackage, but will be soon!
+Beam is available via Hackage and Stackage, and can be included in your stack
+project by adding `beam-core` and an appropriate beam backend to your
+`stack.yaml` as an `extra-dep`. Some projects may want to follow the latest
+master, for the newest features. If so, put the following in your `stack.yaml`
+to build and use beam in your project!
 
 ```yaml
 packages:
@@ -90,23 +86,6 @@ If you're interested if beam supports your favorite database feature, refer to
 the documentation for your backend or take a look at
 the [compatibility matrix](about/compatibility.md).
 
-
-<!-- If you already have a database schema, you can use the `beam-migrate` command to -->
-<!-- automatically generate appropriate Beam data definitions. -->
-
-<!-- ```bash -->
-<!-- beam-migrate --backend <backend-module> <backend-options> new <output-module-name> -->
-<!-- ``` -->
-
-<!-- For example, to generate a schema for the Postgres database `employees` at -->
-<!-- `localhost:5000` with the user `beam`, run the following command. -->
-
-<!-- ```bash -->
-<!-- beam-migrate --backend Database.Beam.Postgres.Migrate --pgconnect postgres://beam@localhost:5000/employees new BeamTutorial.Schema -->
-<!-- ``` -->
-
-<!-- This will generate a -->
-
 ## How to Contribute
 
 We always welcome contributions, especially to cover more database features or
@@ -124,7 +103,7 @@ Group. The following is a quick step-by-step guide of contributing a new feature
 5. When the maintainer feels comfortable with your patch, he will commit it to
    the `master` branch and it will be included in the next minor version.
    API-breaking changes will not be included until the next major version.
-   
+
 !!! tip "Tip"
     Be sure to add your name to
     the
@@ -142,16 +121,18 @@ Group. The following is a quick step-by-step guide of contributing a new feature
 ## Why Beam?
 
 Beam is the most feature-complete, turnkey Haskell database solution out there.
-It supports the entire breadth of the SQL92, SQL99, SQL2003, SQL2006, SQL2008,
-SQL2011, and SQL2016 specifications, as well as the entire breadth of features
-of each of its backends. See the [compatibility matrix](about/compatibility.md).
-You will rarely be forced to write a SQL query 'by hand' when using Beam
+It supports the bulk of the SQL92, SQL99, SQL2003, SQL2006, SQL2008, SQL2011,
+and SQL2016 specifications, as well as the entire breadth of features of each of
+its backends. See the [compatibility matrix](about/compatibility.md).  You will
+rarely be forced to write a SQL query 'by hand' when using Beam
 (but [you can](user-guide/extensibility.md)).
 
 Additionally, Beam plays nice with the rest of the Haskell ecosystem, the
-standard Beam backends are all implemented in terms of the underlying
-`<db>-simple` packages. Beam provides only minimum support for querying data
-across multiple databases. It is assumed that you have chosen you RDBMS with
-much care, and we want to support you in that. Beam's main purpose is to marshal
-data back and forth, to serve as the source of truth for the DB schema, and to
-generate properly formed SQL from Haskell expressions.
+standard Beam backends are all implemented in terms of pre-existing Haskell
+packages. Beam does not intend to make every query work across every database,
+and you are free to write queries in beam's DSL that only work on particular
+backends, using type classes to restrict which backends work. It is assumed that
+you have chosen you RDBMS with much care, and we want to support you in
+that. Beam's main purpose is to marshal data back and forth, to serve as the
+source of truth for the DB schema, and to generate properly formed SQL from
+Haskell expressions.

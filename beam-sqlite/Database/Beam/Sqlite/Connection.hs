@@ -7,10 +7,12 @@ module Database.Beam.Sqlite.Connection
   ( Sqlite(..), SqliteM(..)
   , sqliteUriSyntax
 
+  , runBeamSqlite, runBeamSqliteDebug
+
     -- * Emulated @INSERT RETURNING@ support
   , SqliteInsertReturning
   , insertReturning, runInsertReturningList
-  , ) where
+  ) where
 
 import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL
@@ -182,9 +184,15 @@ sqliteUriSyntax =
         hdl <- open sqliteName
         pure (hdl, close hdl))
 
+runBeamSqliteDebug :: (String -> IO ()) -> Connection -> SqliteM a -> IO a
+runBeamSqliteDebug debugStmt conn x = runReaderT (runSqliteM x) (debugStmt, conn)
+
+runBeamSqlite :: Connection -> SqliteM a -> IO a
+runBeamSqlite = runBeamSqliteDebug (\_ -> pure ())
+
 instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
-  withDatabase = withDatabaseDebug (\_ -> pure ())
-  withDatabaseDebug printStmt conn x = runReaderT (runSqliteM x) (printStmt, conn)
+  withDatabase = runBeamSqlite
+  withDatabaseDebug = runBeamSqliteDebug
 
   runNoReturn (SqliteCommandSyntax (SqliteSyntax cmd vals)) =
     SqliteM $ do

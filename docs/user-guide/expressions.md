@@ -183,7 +183,7 @@ in either Los Angeles or Manila:
 
 !beam-query
 ```haskell
-!example chinook !on:Sqlite
+!example chinook !on:Sqlite !on:MySQL
 filter_ (\c ->  unknownAs_ False (addressCity (customerAddress c) ==*. anyIn_ [ just_ "Los Angeles", just_ "Manila" ])) $
      all_ (customer chinookDb)
 ```

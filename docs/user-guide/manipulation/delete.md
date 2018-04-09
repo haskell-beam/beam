@@ -22,7 +22,7 @@ For example, to delete any invoice with more than five invoice lines
 
 !beam-query
 ```haskell
-!example chinookdml !on:Postgres
+!example chinookdml !on:Postgres !on:MySQL
 runDelete $ delete (invoice chinookDb)
   (\i -> 5 <. subquery_ (aggregate_ (\_ -> countAll_) $
                          invoiceLines i))
@@ -30,5 +30,5 @@ runDelete $ delete (invoice chinookDb)
 
 !!! note "Note"
     The example above was only given for SQLite because it violates a
-    foreign key constraint in the underlying database, and Postgres is
-    more pedantic
+    foreign key constraint in the underlying database, and other
+    backends are more pedantic

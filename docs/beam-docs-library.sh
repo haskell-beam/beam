@@ -29,18 +29,19 @@ download () {
         DIR=$(dirname $TMP_FILE)
         mkdir -p $DIR
 
-        if [ -z $CONV ]; then
-	    curl $URL | sed -e 's/\r$//' > $TMP_FILE
-	else
-	    curl $URL | $CONV | sed -e 's/\r$//' > $TMP_FILE
-	fi
+        curl $URL > $TMP_FILE
 
         ACTUAL_SUM=$(sha256 $TMP_FILE)
         if [ "$ACTUAL_SUM" != "$EXPECTED_SHA256" ]; then
             status "Sum mismatch, got $ACTUAL_SUM, expected $EXPECTED_SHA256"
             exit 1
         else
-            mv $TMP_FILE $CACHED_FILE
+            if [ -z $CONV ]; then
+	        cat $TMP_FILE | sed -e 's/\r$//' > $CACHED_FILE
+	    else
+                cat $TMP_FILE | bash -c "$CONV" | sed -e 's/\r$//' > $CACHED_FILE
+	    fi
+            rm $TMP_FILE
         fi
 
         status "Finished downloading"
