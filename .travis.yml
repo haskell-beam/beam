@@ -32,9 +32,7 @@ addons:
 
 before_install:
 # Download and unpack the stack executable
-- mkdir -p ~/.local/bin
-- export PATH=$HOME/.local/bin:$PATH
-- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+- ./ci/setup-stack
 
 stages:
   - name: test
@@ -50,16 +48,22 @@ jobs:
       script: ./ci/test
 
     - stage: build-doc-examples
-      before_install: ./ci/setup-postgres
+      before_install:
+        - ./ci/setup-stack
+        - ./ci/setup-postgres
       script: ./ci/build-docs-examples
       env: BEAM_DOC_BACKEND=beam-postgres
 
     - stage: build-doc-examples
+      before_install:
+        - ./ci/setup-stack
       script: ./ci/build-docs-examples
       env: BEAM_DOC_BACKEND=beam-sqlite
 
     - stage: build-doc-examples
-      before_install: ./ci/setup-mysql
+      before_install:
+        - ./ci/setup-stack
+        - ./ci/setup-mysql
       script: ./ci/build-docs-examples
       env: BEAM_DOC_BACKEND=beam-mysql
 
