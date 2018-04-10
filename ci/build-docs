@@ -2,4 +2,20 @@
 
 set -e
 
+fetch_archive() {
+    BEAM_DOC_BACKEND=$1
+    BEAM_DOC_CACHE_ARCHIVE="${BEAM_DOC_BACKEND}-docs-cache.tar.gz"
+    mkdir -p docs/.beam-query-cache
+    echo "Fetch ${BEAM_DOC_CACHE_ARCHIVE}"
+    aws s3 cp s3://beam-doc-cache/cache/${BEAM_DOC_CACHE_ARCHIVE} ./${BEAM_DOC_CACHE_ARCHIVE}
+    tar zxvf ./${BEAM_DOC_CACHE_ARCHIVE}
+}
+
 echo "Building docs for ${BEAM_DOC_BACKEND}"
+
+echo "Attempting to download caches"
+for backend in ${BEAM_DOC_BACKEND}; do
+    fetch_archive $backend
+done
+
+PYTHONPATH="${PYTHONPATH}:." ./build-docs.sh builddocs

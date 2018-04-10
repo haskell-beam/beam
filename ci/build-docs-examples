@@ -18,6 +18,7 @@ pip install --upgrade sqlparse
 
 echo "Attempting to download cache"
 mkdir -p docs/.beam-query-cache
+
 aws s3 cp s3://beam-doc-cache/cache/${BEAM_DOC_CACHE_ARCHIVE} ./beam-doc-cache.tar.gz || true
 if [ -f ./beam-doc-cache.tar.gz ]; then
     echo "Extracting cache"
