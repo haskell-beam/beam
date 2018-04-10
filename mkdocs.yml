@@ -1,6 +1,8 @@
 site_name: Beam Documentation
 theme: material #readthedocs
 theme_dir: docs/theme
+extra_css:
+  - docs/theme/css/beam.css
 pages:
   - Home: 'index.md'
   - Frequently Asked Questions: 'about/faq.md'
