@@ -25,8 +25,8 @@ fetch_archive() {
 echo "Building docs for ${BEAM_DOC_BACKEND}"
 
 echo "Attempting to download caches"
-for backend in ${BEAM_DOC_BACKEND}; do
+for backend in $BEAM_DOC_BACKENDS; do
     fetch_archive $backend
 done
 
-PYTHONPATH="${PYTHONPATH}:." ./build-docs.sh builddocs
+BEAM_DOC_BACKEND="${BEAM_DOC_BACKENDS}" PYTHONPATH="${PYTHONPATH}:." ./build-docs.sh builddocs

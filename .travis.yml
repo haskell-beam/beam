@@ -74,6 +74,7 @@ jobs:
 
     - stage: build-docs
       script: ./ci/build-docs
+      env: BEAM_DOC_BACKENDS="beam-mysql beam-sqlite beam-postgres"
       deploy:
         provider: pages
         skip-cleanup: true
