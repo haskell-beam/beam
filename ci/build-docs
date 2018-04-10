@@ -2,6 +2,11 @@
 
 set -e
 
+if [ ! -d "$HOME/venv/bin" ]; then
+    echo "Creating virtual environment"
+    virtualenv $HOME/venv
+fi
+
 source $HOME/venv/bin/activate
 
 pip install mkdocs==0.17.2 mkdocs-material==2.6.0

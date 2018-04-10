@@ -82,3 +82,12 @@ jobs:
         local-dir: site
         on:
           branch: docs-master
+      notifications:
+        irc:
+          channels:
+            - "chat.freenode.net#haskell-beam"
+          on_failure: never
+          on_success: always
+          template:
+            - "Hello, #haskell-beam! New documentation is available! %{author}: %{commit_subject}. https://tathougies.github.io/beam"
+          use_notice: true
