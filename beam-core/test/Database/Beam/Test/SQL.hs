@@ -878,7 +878,8 @@ selectCombinators =
   where
     basicUnion =
       testCase "Basic UNION support" $
-      do let hireDates = do e <- all_ (_employees employeeDbSettings)
+      do let leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s (Maybe _) )
+             hireDates = do e <- all_ (_employees employeeDbSettings)
                             pure (as_ @Text $ val_ "hire", just_ (_employeeHireDate e))
              leaveDates = do e <- all_ (_employees employeeDbSettings)
                              guard_ (isJust_ (_employeeLeaveDate e))
@@ -899,7 +900,8 @@ selectCombinators =
 
     fieldNamesCapturedCorrectly =
       testCase "UNION field names are propagated correctly" $
-      do let hireDates = do e <- all_ (_employees employeeDbSettings)
+      do let leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Int, QExpr Expression s (Maybe _) )
+             hireDates = do e <- all_ (_employees employeeDbSettings)
                             pure (as_ @Text $ val_ "hire", _employeeAge e, just_ (_employeeHireDate e))
              leaveDates = do e <- all_ (_employees employeeDbSettings)
                              guard_ (isJust_ (_employeeLeaveDate e))
@@ -961,7 +963,8 @@ selectCombinators =
 
     equalProjectionsDontHaveSubSelects =
       testCase "Equal projections dont have sub-selects" $
-      do let hireDates = do e <- all_ (_employees employeeDbSettings)
+      do let leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Text, QExpr Expression s Int )
+             hireDates = do e <- all_ (_employees employeeDbSettings)
                             pure (_employeeFirstName e, _employeeLastName e, _employeeAge e)
              leaveDates = do e <- all_ (_employees employeeDbSettings)
                              guard_ (isJust_ (_employeeLeaveDate e))
@@ -974,7 +977,8 @@ selectCombinators =
 
     unionWithGuards =
       testCase "UNION with guards" $
-      do let hireDates = do e <- all_ (_employees employeeDbSettings)
+      do let leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Int, QExpr Expression s (Maybe _) )
+             hireDates = do e <- all_ (_employees employeeDbSettings)
                             pure (as_ @Text $ val_ "hire", _employeeAge e, just_ (_employeeHireDate e))
              leaveDates = do e <- all_ (_employees employeeDbSettings)
                              guard_ (isJust_ (_employeeLeaveDate e))

@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Beam.Migrate.Types
   ( -- * Checked database entities
@@ -52,7 +53,9 @@ import Control.Monad.Free.Church
 import Control.Arrow
 import Control.Category (Category)
 
-import Data.Monoid
+#if !MIN_VERSION_base(4, 11, 0)
+import Data.Semigroup
+#endif
 import Data.Text (Text)
 
 -- * Migration types
@@ -89,6 +92,9 @@ data MigrationDataLoss
   | MigrationKeepsData
     -- ^ The command keeps all data
   deriving Show
+
+instance Semigroup MigrationDataLoss where
+    (<>) = mappend
 
 instance Monoid MigrationDataLoss where
     mempty = MigrationKeepsData
@@ -145,7 +151,7 @@ upDown up down = liftF (MigrationRunCommand up down ())
 
 -- | Given functions to render a migration step description and the underlying
 -- syntax, create a script for the given 'MigrationSteps'.
-migrateScript :: forall syntax m a. Monoid m
+migrateScript :: forall syntax m a. (Monoid m, Semigroup m)
               => (Text -> m)
               -- ^ Called at the beginning of each 'MigrationStep' with the step description
               -> (syntax -> m)

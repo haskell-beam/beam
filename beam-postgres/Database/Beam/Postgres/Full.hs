@@ -1,6 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 
 -- | Module providing (almost) full support for Postgres query and data
 -- manipulation statements. These functions shadow the functions in
@@ -51,8 +52,10 @@ import           Database.Beam.Postgres.Syntax
 
 import           Control.Monad.Free.Church
 
-import           Data.Monoid ((<>))
 import qualified Data.Text as T
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 -- * @SELECT@
 

@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors#-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.Internal where
 
@@ -12,6 +13,9 @@ import qualified Data.Text as T
 import qualified Data.DList as DList
 import           Data.Typeable
 import           Data.Vector.Sized (Vector)
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import           Control.Monad.Free.Church
 import           Control.Monad.State
@@ -117,7 +121,7 @@ data QField s ty
 
 newtype QAssignment fieldName expr s
   = QAssignment [(fieldName, expr)]
-  deriving (Show, Eq, Ord, Monoid)
+  deriving (Show, Eq, Ord, Monoid, Semigroup)
 
 -- * QGenExpr type
 

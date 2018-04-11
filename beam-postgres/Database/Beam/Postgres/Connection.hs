@@ -9,6 +9,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Beam.Postgres.Connection
   ( PgRowReadError(..), PgError(..)
@@ -55,11 +56,13 @@ import           Control.Monad.State
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (toLazyByteString, byteString)
 import qualified Data.ByteString.Lazy as BL
-import           Data.Monoid
 import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import           Foreign.C.Types
 
