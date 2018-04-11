@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
 
 -- | Migrations support for beam-postgres. See "Database.Beam.Migrate" for more
@@ -56,14 +57,16 @@ import           Data.Maybe
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
-import           Data.Monoid
 import           Data.String
 import           Data.Int
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
-import           Data.UUID (UUID)
+import           Data.UUID.Types (UUID)
 import           Data.Typeable
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
 migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax Postgres Pg.Connection Pg
@@ -176,7 +179,7 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
       | Pg.typoid Pg.uuid        == oid ->
           Just $ HsDataType (hsVarFrom "uuid" "Database.Beam.Postgres")
                             (HsType (tyConNamed "UUID")
-                                    (importSome "Data.UUID" [importTyNamed "UUID"]))
+                                    (importSome "Data.UUID.Types" [importTyNamed "UUID"]))
                             (pgDataTypeSerialized pgUuidType)
       | Pg.typoid Pg.money       == oid ->
           Just $ HsDataType (hsVarFrom "money" "Database.Beam.Postgres")

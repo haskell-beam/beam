@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 
 -- | Serialization and deserialization helpers for beam data types.
 --
@@ -40,10 +41,12 @@ import           Data.Aeson
 import           Data.Aeson.Types (Parser)
 import qualified Data.Dependent.Map as D
 import qualified Data.GADT.Compare as D
-import           Data.Monoid ((<>))
 import           Data.Text (Text, unpack)
 import           Data.Typeable (Typeable, (:~:)( Refl ), eqT, typeRep, typeOf)
 import qualified Data.Vector as V
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 -- * Serialization helpers
 
@@ -119,7 +122,7 @@ newtype BeamSerializedConstraintDefinition
 newtype BeamSerializedConstraintAttributes
   = BeamSerializedConstraintAttributes
   { fromBeamSerializedConstraintAttributes :: [ Value ]
-  } deriving (Show, Eq, Monoid)
+  } deriving (Show, Eq, Monoid, Semigroup)
 
 -- | 'IsSql92ColumnConstraintSyntax' type for JSON
 newtype BeamSerializedConstraint
@@ -238,11 +241,17 @@ newtype BeamDeserializers cmd
   { beamArbitraryDeserializers :: D.DMap BeamDeserializerLabel BeamDeserializer
   }
 
+instance Semigroup (BeamDeserializer cmd) where
+  (<>) = mappend
+
 instance Monoid (BeamDeserializer cmd) where
   mempty = BeamDeserializer (const (const mzero))
   mappend (BeamDeserializer a) (BeamDeserializer b) =
     BeamDeserializer $ \d o ->
     a d o <|> b d o
+
+instance Semigroup (BeamDeserializers cmd) where
+  (<>) = mappend
 
 instance Monoid (BeamDeserializers cmd) where
   mempty = BeamDeserializers mempty

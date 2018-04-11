@@ -45,6 +45,15 @@ jobs:
   include:
     - stage: test
       script: ./ci/test
+      env: BEAM_RESOLVER=lts-9.0
+
+    - stage: test
+      script: ./ci/test
+      env: BEAM_RESOLVER=lts-10.3
+
+    - stage: test
+      script: ./ci/test
+      env: BEAM_RESOLVER=lts-11.2
 
     - stage: build-doc-examples
       addons:

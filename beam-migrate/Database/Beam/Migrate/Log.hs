@@ -13,7 +13,7 @@ import Control.Monad (when)
 import Data.String (fromString)
 import Data.Text (Text)
 import Data.Time (LocalTime)
-import Data.UUID (UUID)
+import Data.UUID.Types (UUID)
 
 data LogEntryT f
   = LogEntry

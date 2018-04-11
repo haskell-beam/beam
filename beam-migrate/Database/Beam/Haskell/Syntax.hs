@@ -1,5 +1,6 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 
 -- | Instances that allow us to use Haskell as a backend syntax. This allows us
 -- to use migrations defined a la 'Database.Beam.Migrate.SQL' to generate a beam
@@ -22,10 +23,12 @@ import           Data.Hashable
 import           Data.List (find, nub)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Monoid
 import qualified Data.Set as S
 import           Data.String
 import qualified Data.Text as T
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import qualified Language.Haskell.Exts as Hs
 
@@ -46,6 +49,8 @@ newtype HsEntityName = HsEntityName { getHsEntityName :: String } deriving (Show
 data HsImport = HsImportAll | HsImportSome (S.Set (Hs.ImportSpec ()))
   deriving (Show, Eq, Generic)
 instance Hashable HsImport
+instance Semigroup HsImport where
+  (<>) = mappend
 instance Monoid HsImport where
   mempty = HsImportSome mempty
   mappend HsImportAll _ = HsImportAll
@@ -67,6 +72,8 @@ newtype HsImports = HsImports (M.Map (Hs.ModuleName ()) HsImport)
   deriving (Show, Eq)
 instance Hashable HsImports where
   hashWithSalt s (HsImports a) = hashWithSalt s (M.assocs a)
+instance Semigroup HsImports where
+  (<>) = mappend
 instance Monoid HsImports where
   mempty = HsImports mempty
   mappend (HsImports a) (HsImports b) =
@@ -126,6 +133,8 @@ data HsAction
   , hsSyntaxEntities  :: [ HsEntity ]
   }
 
+instance Semigroup HsAction where
+  (<>) = mappend
 instance Monoid HsAction where
   mempty = HsAction [] []
   mappend (HsAction ma ea) (HsAction mb eb) =
@@ -138,6 +147,8 @@ data HsBeamBackend f
   | HsBeamBackendConstrained [ HsBackendConstraint ]
   | HsBeamBackendNone
 
+instance Semigroup (HsBeamBackend f) where
+  (<>) = mappend
 instance Monoid (HsBeamBackend f) where
   mempty = HsBeamBackendConstrained []
   mappend (HsBeamBackendSingle aTy aExp) (HsBeamBackendSingle bTy _)
@@ -172,6 +183,9 @@ data HsTableConstraintDecls
     , hsTableConstraintDecls    :: [ HsDecl ]
     }
 
+instance Semigroup HsTableConstraintDecls where
+  (<>) = mappend
+
 instance Monoid HsTableConstraintDecls where
   mempty = HsTableConstraintDecls [] []
   mappend (HsTableConstraintDecls ai ad) (HsTableConstraintDecls bi bd) =
@@ -195,19 +209,47 @@ unqual = Hs.UnQual () . Hs.Ident ()
 entityDbFieldName :: HsEntity -> String
 entityDbFieldName entity = "_" ++ getHsEntityName (hsEntityName entity)
 
+derivingDecl :: [Hs.InstRule ()] -> Hs.Deriving ()
+derivingDecl =
+#if MIN_VERSION_haskell_src_exts(1,20,0)
+  Hs.Deriving () Nothing
+#else
+  Hs.Deriving ()
+#endif
+
+dataDecl :: Hs.DeclHead ()
+         -> [Hs.QualConDecl ()]
+         -> Maybe (Hs.Deriving ())
+         -> Hs.Decl ()
+dataDecl declHead cons deriving_ =
+#if MIN_VERSION_haskell_src_exts(1,20,0)
+  Hs.DataDecl () (Hs.DataType ()) Nothing declHead cons (maybeToList deriving_)
+#else
+  Hs.DataDecl () (Hs.DataType ()) Nothing declHead cons deriving_
+#endif
+
+insDataDecl :: Hs.Type ()
+            -> [Hs.QualConDecl ()]
+            -> Maybe (Hs.Deriving ())
+            -> Hs.InstDecl ()
+insDataDecl declHead cons deriving_ =
+#if MIN_VERSION_haskell_src_exts(1,20,0)
+   Hs.InsData () (Hs.DataType ()) declHead cons (maybeToList deriving_)
+#else
+   Hs.InsData () (Hs.DataType ()) declHead cons deriving_
+#endif
+
 databaseTypeDecl :: [ HsEntity ] -> Hs.Decl ()
 databaseTypeDecl entities =
-  Hs.DataDecl () (Hs.DataType ()) Nothing
-              declHead [ conDecl ]
-              [deriving_]
+  dataDecl declHead [ conDecl ] (Just deriving_)
   where
     declHead = Hs.DHApp () (Hs.DHead () (Hs.Ident () "Db"))
                            (Hs.UnkindedVar () (Hs.Ident () "entity"))
     conDecl = Hs.QualConDecl () Nothing Nothing
                 (Hs.RecDecl () (Hs.Ident () "Db") (mkField <$> entities))
-    deriving_ = Hs.Deriving () Nothing [ Hs.IRule () Nothing Nothing $
-                                         Hs.IHCon () $ Hs.UnQual () $
-                                         Hs.Ident () "Generic" ]
+    deriving_ = derivingDecl [ Hs.IRule () Nothing Nothing $
+                               Hs.IHCon () $ Hs.UnQual () $
+                               Hs.Ident () "Generic" ]
 
     mkField entity = Hs.FieldDecl () [ Hs.Ident () (entityDbFieldName entity) ]
                                      (buildHsDbField (hsEntityDbDecl entity) $
@@ -381,6 +423,8 @@ renderHsSchema (HsModule modNm entities migrations) =
 data HsNone = HsNone deriving (Show, Eq, Ord, Generic)
 instance Hashable HsNone
 
+instance Semigroup HsNone where
+  (<>) = mappend
 instance Monoid HsNone where
   mempty = HsNone
   mappend _ _ = HsNone
@@ -472,8 +516,7 @@ instance IsSql92CreateTableSyntax HsAction where
 
       imports = foldMap (\(_, ty) -> hsTypeImports (hsColumnSchemaType ty)) fields
 
-      tblDecl = Hs.DataDecl () (Hs.DataType ()) Nothing
-                  tblDeclHead [ tblConDecl ] [deriving_]
+      tblDecl = dataDecl tblDeclHead [ tblConDecl ] (Just deriving_)
       tblDeclHead = Hs.DHApp () (Hs.DHead () (Hs.Ident () tyName))
                                 (Hs.UnkindedVar () (Hs.Ident () "f"))
       tblConDecl = Hs.QualConDecl () Nothing Nothing (Hs.RecDecl () (Hs.Ident () tyConName) tyConFieldDecls)
@@ -485,7 +528,7 @@ instance IsSql92CreateTableSyntax HsAction where
                                                    [ tyVarNamed "f"
                                                    , hsTypeSyntax (hsColumnSchemaType ty) ])) fields
 
-      deriving_ = Hs.Deriving () Nothing [ inst "Generic" ]
+      deriving_ = derivingDecl [ inst "Generic" ]
 
       tblBeamable = hsInstance "Beamable" [ tyConNamed tyName ] []
       tblPun = Hs.TypeDecl () (Hs.DHead () (Hs.Ident () tyConName))
@@ -516,7 +559,7 @@ instance IsSql92ColumnSchemaSyntax HsColumnSchema where
 instance IsSql92TableConstraintSyntax HsTableConstraint where
   primaryKeyConstraintSyntax fields =
     HsTableConstraint $ \tblNm tblFields ->
-    let primaryKeyDataDecl = Hs.InsData () (Hs.DataType ()) primaryKeyType [ primaryKeyConDecl ] [ primaryKeyDeriving ]
+    let primaryKeyDataDecl = insDataDecl primaryKeyType [ primaryKeyConDecl ] (Just primaryKeyDeriving)
 
         tableTypeNm = tblNm <> "T"
         tableTypeKeyNm = tblNm <> "Key"
@@ -525,7 +568,7 @@ instance IsSql92TableConstraintSyntax HsTableConstraint where
 
         primaryKeyType = tyApp (tyConNamed "PrimaryKey") [ tyConNamed (T.unpack tableTypeNm), tyVarNamed "f" ]
         primaryKeyConDecl  = Hs.QualConDecl () Nothing Nothing (Hs.ConDecl () (Hs.Ident () (T.unpack tableTypeKeyNm)) fieldTys)
-        primaryKeyDeriving = Hs.Deriving () Nothing [ inst "Generic" ]
+        primaryKeyDeriving = derivingDecl [ inst "Generic" ]
 
         primaryKeyTypeDecl = Hs.TypeDecl () (Hs.DHead () (Hs.Ident () (T.unpack tableTypeKeyNm)))
                                             (tyApp (tyConNamed "PrimaryKey")
@@ -867,7 +910,12 @@ hsInstance classNm params decls =
     instHead = foldl (Hs.IHApp ()) (Hs.IHCon () (Hs.UnQual () (Hs.Ident () (T.unpack classNm)))) params
 
 hsDerivingInstance :: T.Text -> [ Hs.Type () ] -> Hs.Decl ()
-hsDerivingInstance classNm params = Hs.DerivDecl () Nothing Nothing (Hs.IRule () Nothing Nothing instHead)
+hsDerivingInstance classNm params =
+#if MIN_VERSION_haskell_src_exts(1,20,0)
+  Hs.DerivDecl () Nothing Nothing (Hs.IRule () Nothing Nothing instHead)
+#else
+  Hs.DerivDecl () Nothing (Hs.IRule () Nothing Nothing instHead)
+#endif
   where
     instHead = foldl (Hs.IHApp ()) (Hs.IHCon () (Hs.UnQual () (Hs.Ident () (T.unpack classNm)))) params
 
@@ -958,7 +1006,9 @@ instance Hashable (Hs.BangType ())
 instance Hashable (Hs.ImportSpec ())
 instance Hashable (Hs.Namespace ())
 instance Hashable (Hs.CName ())
+#if MIN_VERSION_haskell_src_exts(1,20,0)
 instance Hashable (Hs.DerivStrategy ())
 instance Hashable (Hs.MaybePromotedName ())
+#endif
 instance Hashable a => Hashable (S.Set a) where
   hashWithSalt s a = hashWithSalt s (S.toList a)

@@ -89,8 +89,9 @@ the [compatibility matrix](about/compatibility.md).
 ## How to Contribute
 
 We always welcome contributions, especially to cover more database features or
-to add support for a new backend. Help is available on the `beam-users` Google
-Group. The following is a quick step-by-step guide of contributing a new feature:
+to add support for a new backend. Help is available on the
+[`beam-discussion` Google Group](https://groups.google.com/forum/#!forum/beam-discussion).
+The following is a quick step-by-step guide of contributing a new feature:
 
 1. Fork the github repository at `https://github.com/tathougies/beam`
    and clone the fork to a local directory.

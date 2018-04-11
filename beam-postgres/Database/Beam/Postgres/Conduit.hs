@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 
 -- | More efficient query execution functions for @beam-postgres@. These
@@ -24,14 +25,22 @@ import qualified Database.PostgreSQL.Simple.Types as Pg (Query(..))
 import qualified Data.Conduit as C
 import           Data.Int (Int64)
 import           Data.Maybe (fromMaybe)
-import           Data.Monoid ((<>))
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
+
+#if MIN_VERSION_conduit(1,3,0)
+#define CONDUIT_TRANSFORMER C.ConduitT
+#else
+#define CONDUIT_TRANSFORMER C.ConduitM
+#endif
 
 -- * @SELECT@
 
 -- | Run a PostgreSQL @SELECT@ statement in any 'MonadIO'.
 runSelect :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a )
           => Pg.Connection -> SqlSelect PgSelectSyntax a
-          -> (C.ConduitT () a m () -> m b) -> m b
+          -> (CONDUIT_TRANSFORMER () a m () -> m b) -> m b
 runSelect conn (SqlSelect (PgSelectSyntax syntax)) withSrc =
   runQueryReturning conn syntax withSrc
 
@@ -50,7 +59,7 @@ runInsert conn (SqlInsert (PgInsertSyntax i)) =
 runInsertReturning :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgInsertReturning a
-                   -> (C.ConduitT () a m () -> m b)
+                   -> (CONDUIT_TRANSFORMER () a m () -> m b)
                    -> m b
 runInsertReturning _ PgInsertReturningEmpty withSrc = withSrc (pure ())
 runInsertReturning conn (PgInsertReturning i) withSrc =
@@ -71,7 +80,7 @@ runUpdate conn (SqlUpdate (PgUpdateSyntax i)) =
 runUpdateReturning :: ( MonadIO m, MonadBaseControl IO m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgUpdateReturning a
-                   -> (C.ConduitT () a m () -> m b)
+                   -> (CONDUIT_TRANSFORMER () a m () -> m b)
                    -> m b
 runUpdateReturning _ PgUpdateReturningEmpty withSrc = withSrc (pure ())
 runUpdateReturning conn (PgUpdateReturning u) withSrc =
@@ -91,7 +100,7 @@ runDelete conn (SqlDelete (PgDeleteSyntax d)) =
 -- 'MonadIO' and get a 'C.Source' of the deleted rows.
 runDeleteReturning :: ( MonadIO m, MonadBaseControl IO m, FromBackendRow Postgres a )
                    => Pg.Connection -> PgDeleteReturning a
-                   -> (C.ConduitT () a m () -> m b) -> m b
+                   -> (CONDUIT_TRANSFORMER () a m () -> m b) -> m b
 runDeleteReturning conn (PgDeleteReturning d) withSrc =
   runQueryReturning conn d withSrc
 
@@ -108,7 +117,7 @@ executeStatement conn x =
 runQueryReturning
   :: ( MonadIO m, MonadBaseControl IO m, Functor m, FromBackendRow Postgres r )
   => Pg.Connection -> PgSyntax
-  -> (C.ConduitT () r m () -> m b)
+  -> (CONDUIT_TRANSFORMER () r m () -> m b)
   -> m b
 runQueryReturning conn x withSrc = do
   success <- liftIO $ do

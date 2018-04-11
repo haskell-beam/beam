@@ -29,7 +29,7 @@ import           Data.Scientific (Scientific, toBoundedInteger)
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime(..))
-import           Data.UUID (UUID)
+import           Data.UUID.Types (UUID)
 import           Data.Vector (Vector)
 import           Data.Word
 
