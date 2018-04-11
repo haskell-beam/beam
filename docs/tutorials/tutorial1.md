@@ -250,13 +250,13 @@ conn <- open "shoppingcart1.db"
     See [the appropriate documentation](../schema-guide/migrations.md)
 
 Now let's add a few users. We'll give each user an MD5 encoded password too.
-We'll use the `withBeamSqliteDebug` function (supplied by `beam-sqlite`) to
+We'll use the `runBeamSqliteDebug` function (supplied by `beam-sqlite`) to
 output the statements that beam would normally run. In production, you'd use the
-`withBeamSqlite` function, or use the backend integration packages to directly
+`runBeamSqlite` function, or use the backend integration packages to directly
 use the underlying backend library.
 
 ```haskell
-withBeamSqliteDebug putStrLn {- for debug output -} conn $ runInsert $
+runBeamSqliteDebug putStrLn {- for debug output -} conn $ runInsert $
 insert (_shoppingCartUsers shoppingCartDb) $
 insertValues [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
              , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
@@ -291,7 +291,7 @@ added. Click between the tabs to see the SQL and console output generated
 !employee1out output
 let allUsers = all_ (_shoppingCartUsers shoppingCartDb)
 
-withBeamSqliteDebug putStrLn conn $ do
+runBeamSqliteDebug putStrLn conn $ do
   users <- runSelectReturningList $ select allUsers
   mapM_ (liftIO . putStrLn . show) users
 ```
@@ -311,7 +311,7 @@ order the query results. This is similar to the `sortBy` function for lists.
 !employee1out output
 let sortUsersByFirstName = orderBy_ (\u -> (asc_ (_userFirstName u), desc_ (_userLastName u))) (all_ (_shoppingCartUsers shoppingCartDb))
 
-withBeamSqliteDebug putStrLn conn $ do
+runBeamSqliteDebug putStrLn conn $ do
   users <- runSelectReturningList $ select sortUsersByFirstName
   mapM_ (liftIO . putStrLn . show) users
 ```
@@ -328,7 +328,7 @@ let boundedQuery :: Q SqliteSelectSyntax _ _ _
                    orderBy_ (asc_ . _userFirstName) $
                    all_ (_shoppingCartUsers shoppingCartDb)
 
-withBeamSqliteDebug putStrLn conn $ do
+runBeamSqliteDebug putStrLn conn $ do
   users <- runSelectReturningList (select boundedQuery :: SqlSelect SqliteSelectSyntax _)
   mapM_ (liftIO . putStrLn . show) users
 ```
@@ -361,7 +361,7 @@ record from the database.
 !employee1out output
 let userCount = aggregate_ (\u -> as_ @Int countAll_) (all_ (_shoppingCartUsers shoppingCartDb))
 
-withBeamSqliteDebug putStrLn conn $ do
+runBeamSqliteDebug putStrLn conn $ do
   Just c <- runSelectReturningOne $ select userCount
   liftIO $ putStrLn ("We have " ++ show c ++ " users in the database")
 ```
@@ -378,7 +378,7 @@ more users to our database. We'll demonstrate using `withDatabase` to silence th
 !beam-query
 ```haskell
 !employee1sql sql
-withBeamSqliteDebug putStrLn conn $
+runBeamSqliteDebug putStrLn conn $
   runInsert $
   insert (_shoppingCartUsers shoppingCartDb) $
   insertValues [ User "james@pallo.com" "James" "Pallo" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
@@ -399,7 +399,7 @@ the number of users.
 let numberOfUsersByName = aggregate_ (\u -> (group_ (_userFirstName u), as_ @Int countAll_)) $
                           all_ (_shoppingCartUsers shoppingCartDb)
 
-withBeamSqliteDebug putStrLn conn $ do
+runBeamSqliteDebug putStrLn conn $ do
   countedByName <- runSelectReturningList $ select numberOfUsersByName
   mapM_ (liftIO . putStrLn . show) countedByName
 ```
