@@ -56,7 +56,6 @@ import qualified Data.DList as DL
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Proxy (Proxy(..))
 import           Data.Scientific
 import           Data.String
@@ -65,6 +64,9 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import           Data.Time
 import           Data.Word
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import           Database.SQLite.Simple (SQLData(..))
 
@@ -93,6 +95,9 @@ instance Show SqliteSyntax where
 
 instance Sql92DisplaySyntax SqliteSyntax where
   displaySyntax = BL.unpack . sqliteRenderSyntaxScript
+
+instance Semigroup SqliteSyntax where
+  (<>) = mappend
 
 instance Monoid SqliteSyntax where
   mempty = SqliteSyntax (\_ -> mempty) mempty
@@ -698,7 +703,7 @@ instance HasSqlValueSyntax SqliteValueSyntax x =>
 instance IsCustomSqlSyntax SqliteExpressionSyntax where
   newtype CustomSqlSyntax SqliteExpressionSyntax =
     SqliteCustomExpressionSyntax { fromSqliteCustomExpression :: SqliteSyntax }
-    deriving Monoid
+    deriving (Monoid, Semigroup)
 
   customExprSyntax = SqliteExpressionSyntax . fromSqliteCustomExpression
   renderSyntax = SqliteCustomExpressionSyntax . fromSqliteExpression

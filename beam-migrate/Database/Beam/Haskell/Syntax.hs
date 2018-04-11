@@ -1,5 +1,6 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 
 -- | Instances that allow us to use Haskell as a backend syntax. This allows us
 -- to use migrations defined a la 'Database.Beam.Migrate.SQL' to generate a beam
@@ -22,10 +23,12 @@ import           Data.Hashable
 import           Data.List (find, nub)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Monoid
 import qualified Data.Set as S
 import           Data.String
 import qualified Data.Text as T
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import qualified Language.Haskell.Exts as Hs
 
@@ -46,6 +49,8 @@ newtype HsEntityName = HsEntityName { getHsEntityName :: String } deriving (Show
 data HsImport = HsImportAll | HsImportSome (S.Set (Hs.ImportSpec ()))
   deriving (Show, Eq, Generic)
 instance Hashable HsImport
+instance Semigroup HsImport where
+  (<>) = mappend
 instance Monoid HsImport where
   mempty = HsImportSome mempty
   mappend HsImportAll _ = HsImportAll
@@ -67,6 +72,8 @@ newtype HsImports = HsImports (M.Map (Hs.ModuleName ()) HsImport)
   deriving (Show, Eq)
 instance Hashable HsImports where
   hashWithSalt s (HsImports a) = hashWithSalt s (M.assocs a)
+instance Semigroup HsImports where
+  (<>) = mappend
 instance Monoid HsImports where
   mempty = HsImports mempty
   mappend (HsImports a) (HsImports b) =
@@ -126,6 +133,8 @@ data HsAction
   , hsSyntaxEntities  :: [ HsEntity ]
   }
 
+instance Semigroup HsAction where
+  (<>) = mappend
 instance Monoid HsAction where
   mempty = HsAction [] []
   mappend (HsAction ma ea) (HsAction mb eb) =
@@ -138,6 +147,8 @@ data HsBeamBackend f
   | HsBeamBackendConstrained [ HsBackendConstraint ]
   | HsBeamBackendNone
 
+instance Semigroup (HsBeamBackend f) where
+  (<>) = mappend
 instance Monoid (HsBeamBackend f) where
   mempty = HsBeamBackendConstrained []
   mappend (HsBeamBackendSingle aTy aExp) (HsBeamBackendSingle bTy _)
@@ -171,6 +182,9 @@ data HsTableConstraintDecls
     { hsTableConstraintInstance :: [ Hs.InstDecl () ]
     , hsTableConstraintDecls    :: [ HsDecl ]
     }
+
+instance Semigroup HsTableConstraintDecls where
+  (<>) = mappend
 
 instance Monoid HsTableConstraintDecls where
   mempty = HsTableConstraintDecls [] []
@@ -381,6 +395,8 @@ renderHsSchema (HsModule modNm entities migrations) =
 data HsNone = HsNone deriving (Show, Eq, Ord, Generic)
 instance Hashable HsNone
 
+instance Semigroup HsNone where
+  (<>) = mappend
 instance Monoid HsNone where
   mempty = HsNone
   mappend _ _ = HsNone

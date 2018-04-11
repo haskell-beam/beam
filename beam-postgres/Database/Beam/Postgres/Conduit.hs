@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 
 -- | More efficient query execution functions for @beam-postgres@. These
@@ -24,7 +25,9 @@ import qualified Database.PostgreSQL.Simple.Types as Pg (Query(..))
 import qualified Data.Conduit as C
 import           Data.Int (Int64)
 import           Data.Maybe (fromMaybe)
-import           Data.Monoid ((<>))
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 -- * @SELECT@
 

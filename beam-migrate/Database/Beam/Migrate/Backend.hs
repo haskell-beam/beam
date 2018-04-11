@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
 
 -- | Definitions of interest to those implement a new beam backend.
 --
@@ -56,7 +57,9 @@ import           Control.Applicative
 
 
 import qualified Data.ByteString.Lazy as BL
-import           Data.Monoid
+#if ! MIN_VERSION_base(4,11,0)
+import           Data.Semigroup
+#endif
 import           Data.Text (Text)
 import           Data.Time
 
@@ -111,6 +114,9 @@ data SomeBeamMigrationBackend where
 -- backends can choose to drop any predicate (simply return 'Nothing').
 newtype HaskellPredicateConverter
   = HaskellPredicateConverter (SomeDatabasePredicate -> Maybe SomeDatabasePredicate)
+
+instance Semigroup HaskellPredicateConverter where
+  (<>) = mappend
 
 -- | 'HaskellPredicateConverter's can be combined monoidally.
 instance Monoid HaskellPredicateConverter where

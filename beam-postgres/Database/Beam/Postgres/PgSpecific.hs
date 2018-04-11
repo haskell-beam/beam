@@ -8,6 +8,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE CPP #-}
 
 -- | Postgres-specific types, functions, and operators
 module Database.Beam.Postgres.PgSpecific
@@ -97,7 +98,6 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
 import           Data.Hashable
-import           Data.Monoid
 import           Data.Proxy
 import           Data.Scientific (Scientific, formatScientific, FPFormat(Fixed))
 import           Data.String
@@ -105,6 +105,9 @@ import qualified Data.Text as T
 import           Data.Time (LocalTime)
 import           Data.Type.Bool
 import qualified Data.Vector as V
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
