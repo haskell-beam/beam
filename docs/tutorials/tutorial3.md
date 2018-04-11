@@ -209,7 +209,7 @@ let users@[james, betty, sam] =
                , Product default_ (val_ "Suitcase") "A hard durable suitcase" 15000 ]
 
 (jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase) <-
-  withDatabaseDebug putStrLn conn $ do
+  withBeamSqliteDebug putStrLn conn $ do
     runInsert $ insert (shoppingCartDb ^. shoppingCartUsers) $
                 insertValues users
 
@@ -250,7 +250,7 @@ contains the `ShippingCarrier` enumeration.
 
 ```haskell
 bettyShippingInfo <-
-  withDatabaseDebug putStrLn conn $ do
+  withBeamSqliteDebug putStrLn conn $ do
     [bettyShippingInfo] <-
       runInsertReturningList $
       insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
@@ -278,7 +278,7 @@ If you run this, you'll get an error from GHCi.
               pure bettyShippingInfo }''
       In the first argument of 'GHC.GHCi.ghciStepIO ::
                                   forall a. IO a -> IO a', namely
-        'withDatabaseDebug putStrLn conn
+        'withBeamSqliteDebug putStrLn conn
          $ do { [bettyShippingInfo] <- runInsertReturningList
                                        $ insertReturning
                                            (shoppingCartDb ^. shoppingCartShippingInfos)
@@ -366,7 +366,7 @@ Now, if we try to insert the shipping info again, it works.
 
 ```haskell
 bettyShippingInfo <-
-  withDatabaseDebug putStrLn conn $ do
+  withBeamSqliteDebug putStrLn conn $ do
     [bettyShippingInfo] <-
       runInsertReturningList $
       insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
@@ -393,7 +393,7 @@ resulting rows have a timestamp set by the database.
 !employee3sql sql
 !employee3out console
 [ jamesOrder1, bettyOrder1, jamesOrder2 ] <-
-  withDatabaseDebug putStrLn conn $ do
+  withBeamSqliteDebug putStrLn conn $ do
     runInsertReturningList $
       insertReturning (shoppingCartDb ^. shoppingCartOrders) $
       insertExpressions $
@@ -420,7 +420,7 @@ let lineItems = [ LineItem (pk jamesOrder1) (pk redBall) 10
 
                 , LineItem (pk jamesOrder2) (pk mathTextbook) 1 ]
 
-withDatabaseDebug putStrLn conn $ do
+withBeamSqliteDebug putStrLn conn $ do
   runInsert $ insert (shoppingCartDb ^. shoppingCartLineItems) $
     insertValues lineItems
 ```
@@ -440,7 +440,7 @@ orders.
 !employee3sql-2 sql
 !employee3out-2 out
 usersAndOrders <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $ do
       user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
@@ -464,7 +464,7 @@ find users who have no associated orders.
 !employee3sql-2 sql
 !employee3out-2 out
 usersWithNoOrders <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $ do
       user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
@@ -484,7 +484,7 @@ We can also use the `exists_` combinator to utilize the SQL `EXISTS` clause.
 !employee3sql-2 sql
 !employee3out-2 out
 usersWithNoOrders <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $ do
       user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
@@ -505,7 +505,7 @@ order.
 !employee3out-2 out
 
 ordersWithCostOrdered <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $
     orderBy_ (\(order, total) -> desc_ total) $
@@ -537,7 +537,7 @@ With that in mind, we can write the query to get the total spent by user
 !employee3out-2 out
 
 allUsersAndTotals <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $
     orderBy_ (\(user, total) -> desc_ total) $
@@ -570,7 +570,7 @@ Suppose we want to find all orders who have not been shipped. We can do this by 
 !employee3out-2 out
 
 allUnshippedOrders <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $
     filter_ (isNothing_ . _orderShippingInfo) $
@@ -587,7 +587,7 @@ Let's count up all shipped and unshipped orders by user, including users who hav
 !employee3out-2 out
 
 shippingInformationByUser <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $
     aggregate_ (\(user, order) ->
@@ -624,7 +624,7 @@ One way to work around this issue in the above query is to use subselects.
 !employee3out-2 out
 
 shippingInformationByUser <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
@@ -663,7 +663,7 @@ generation of a sub `SELECT`.
 !employee3out-2 out
 
 shippingInformationByUser <-
-  withDatabaseDebug putStrLn conn $
+  withBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
     select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
