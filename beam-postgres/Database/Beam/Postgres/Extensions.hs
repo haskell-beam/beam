@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 
 -- | Postgres extensions are run-time loadable plugins that can extend Postgres
 -- functionality. Extensions are part of the database schema.
@@ -23,9 +24,11 @@ import           Control.Monad
 import           Data.Aeson
 import qualified Data.HashSet as HS
 import           Data.Hashable (Hashable)
-import           Data.Monoid
 import           Data.Proxy
 import           Data.Text (Text)
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 -- *** Embedding extensions in databases
 

@@ -1,5 +1,6 @@
--- | Convenience methods for constructing backend-agnostic applications
+{-# LANGUAGE CPP #-}
 
+-- | Convenience methods for constructing backend-agnostic applications
 module Database.Beam.Backend.URI where
 
 import           Database.Beam.Backend.SQL
@@ -7,6 +8,9 @@ import           Database.Beam.Backend.SQL
 import           Control.Exception
 
 import qualified Data.Map as M
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import           Network.URI
 
@@ -26,6 +30,9 @@ data BeamURIOpener c where
                 -> BeamURIOpener c
 newtype BeamURIOpeners c where
   BeamURIOpeners :: M.Map String (BeamURIOpener c) -> BeamURIOpeners c
+
+instance Semigroup (BeamURIOpeners c) where
+  (<>) = mappend
 
 instance Monoid (BeamURIOpeners c) where
   mempty = BeamURIOpeners mempty

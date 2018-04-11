@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE CPP #-}
 
 -- | DDL syntax instances for 'SqlSyntaxBuilder'
 module Database.Beam.Migrate.SQL.Builder where
@@ -11,7 +12,10 @@ import           Control.Applicative
 
 import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BCL
-import           Data.Monoid
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
+
 
 -- | Options for @CREATE TABLE@. Given as a separate ADT because the options may
 -- go in different places syntactically.
@@ -112,6 +116,9 @@ data SqlConstraintAttributesBuilder
   { _sqlConstraintAttributeTiming :: Maybe ConstraintAttributeTiming
   , _sqlConstraintAttributeDeferrable :: Maybe Bool }
   deriving (Show, Eq)
+
+instance Semigroup SqlConstraintAttributesBuilder where
+  (<>) = mappend
 
 instance Monoid SqlConstraintAttributesBuilder where
   mempty = SqlConstraintAttributesBuilder Nothing Nothing

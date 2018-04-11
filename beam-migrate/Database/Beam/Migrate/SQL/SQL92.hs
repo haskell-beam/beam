@@ -1,4 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
+
 -- | Finally-tagless encoding of SQL92 DDL commands.
 --
 --  If you're writing a beam backend driver and you want to support migrations,
@@ -12,6 +14,9 @@ import Data.Aeson (Value)
 import Data.Hashable
 import Data.Text (Text)
 import Data.Typeable
+#if ! MIN_VERSION_base(4,11,0)
+import Data.Semigroup
+#endif
 
 -- * Convenience type synonyms
 
@@ -154,7 +159,7 @@ class ( IsSql92ColumnConstraintSyntax (Sql92ColumnConstraintDefinitionConstraint
                              -> Maybe (Sql92ColumnConstraintDefinitionAttributesSyntax constraint)
                              -> constraint
 
-class (Monoid attrs, Typeable attrs) => IsSql92ConstraintAttributesSyntax attrs where
+class (Semigroup attrs, Monoid attrs, Typeable attrs) => IsSql92ConstraintAttributesSyntax attrs where
   initiallyDeferredAttributeSyntax :: attrs
   initiallyImmediateAttributeSyntax :: attrs
   notDeferrableAttributeSyntax :: attrs

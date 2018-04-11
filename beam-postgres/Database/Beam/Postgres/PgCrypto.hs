@@ -14,7 +14,7 @@ import Database.Beam.Postgres.Extensions
 import Data.Text (Text)
 import Data.ByteString (ByteString)
 import Data.Vector (Vector)
-import Data.UUID (UUID)
+import Data.UUID.Types (UUID)
 
 type PgExpr ctxt s = QGenExpr ctxt PgExpressionSyntax s
 

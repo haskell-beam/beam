@@ -1,5 +1,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 
 -- | Allows the creation of custom SQL expressions from arbitrary string-like values.
 --
@@ -49,13 +50,15 @@ import           Database.Beam.Backend.SQL.Builder
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (byteString, toLazyByteString)
 import           Data.ByteString.Lazy (toStrict)
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
-import           Data.Monoid
 import           Data.String
 import qualified Data.Text as T
 
 -- | A type-class for expression syntaxes that can embed custom expressions.
-class (Monoid (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
+class (Monoid (CustomSqlSyntax syntax), Semigroup (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
   IsCustomSqlSyntax syntax where
   data CustomSqlSyntax syntax :: *
 
@@ -69,12 +72,14 @@ class (Monoid (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
 
 instance IsCustomSqlSyntax SqlSyntaxBuilder where
   newtype CustomSqlSyntax SqlSyntaxBuilder = SqlSyntaxBuilderCustom ByteString
-    deriving (IsString, Monoid)
+    deriving (IsString, Monoid, Semigroup)
 
   customExprSyntax (SqlSyntaxBuilderCustom bs) = SqlSyntaxBuilder (byteString bs)
   renderSyntax = SqlSyntaxBuilderCustom . toStrict . toLazyByteString . buildSql
 
 newtype CustomSqlSnippet syntax = CustomSqlSnippet (T.Text -> CustomSqlSyntax syntax)
+instance IsCustomSqlSyntax syntax => Semigroup (CustomSqlSnippet syntax) where
+  (<>) = mappend
 instance IsCustomSqlSyntax syntax => Monoid (CustomSqlSnippet syntax) where
   mempty = CustomSqlSnippet (pure mempty)
   mappend (CustomSqlSnippet a) (CustomSqlSnippet b) =

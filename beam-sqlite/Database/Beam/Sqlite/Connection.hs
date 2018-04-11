@@ -48,7 +48,6 @@ import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
 import           Data.Int
-import           Data.Monoid
 import           Data.Scientific (Scientific)
 import           Data.String (fromString)
 import qualified Data.Text as T
@@ -56,6 +55,9 @@ import qualified Data.Text.Lazy as TL
 import           Data.Time ( LocalTime, UTCTime, Day
                            , utc, utcToLocalTime )
 import           Data.Word
+#if !MIN_VERSION_base(4,11,0)
+import           Data.Semigroup
+#endif
 
 import           Network.URI
 
