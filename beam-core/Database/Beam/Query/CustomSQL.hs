@@ -45,6 +45,7 @@ module Database.Beam.Query.CustomSQL
   , IsCustomSqlSyntax(..) ) where
 
 import           Database.Beam.Query.Internal
+import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.Builder
 
 import           Data.ByteString (ByteString)
@@ -77,31 +78,35 @@ instance IsCustomSqlSyntax SqlSyntaxBuilder where
   customExprSyntax (SqlSyntaxBuilderCustom bs) = SqlSyntaxBuilder (byteString bs)
   renderSyntax = SqlSyntaxBuilderCustom . toStrict . toLazyByteString . buildSql
 
-newtype CustomSqlSnippet syntax = CustomSqlSnippet (T.Text -> CustomSqlSyntax syntax)
-instance IsCustomSqlSyntax syntax => Semigroup (CustomSqlSnippet syntax) where
+newtype CustomSqlSnippet be = CustomSqlSnippet (T.Text -> CustomSqlSyntax (BeamSqlBackendExpressionSyntax be))
+instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => Semigroup (CustomSqlSnippet be) where
   (<>) = mappend
-instance IsCustomSqlSyntax syntax => Monoid (CustomSqlSnippet syntax) where
+instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => Monoid (CustomSqlSnippet be) where
   mempty = CustomSqlSnippet (pure mempty)
   mappend (CustomSqlSnippet a) (CustomSqlSnippet b) =
     CustomSqlSnippet $ \pfx -> a pfx <> b pfx
-instance IsCustomSqlSyntax syntax => IsString (CustomSqlSnippet syntax) where
+instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => IsString (CustomSqlSnippet be) where
   fromString s = CustomSqlSnippet $ \_ -> fromString s
 
 class IsCustomExprFn fn res | res -> fn where
   customExpr_ :: fn -> res
 
-instance IsCustomSqlSyntax syntax => IsCustomExprFn (CustomSqlSnippet syntax) (QGenExpr ctxt syntax s res) where
+type BeamSqlBackendHasCustomSyntax be = IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be)
+
+instance BeamSqlBackendHasCustomSyntax be => IsCustomExprFn (CustomSqlSnippet be) (QGenExpr ctxt be s res) where
   customExpr_ (CustomSqlSnippet mkSyntax) = QExpr (customExprSyntax . mkSyntax)
-instance (IsCustomExprFn a res, IsCustomSqlSyntax syntax) => IsCustomExprFn (CustomSqlSnippet syntax -> a) (QGenExpr ctxt syntax s r -> res) where
+
+instance (IsCustomExprFn a res, BeamSqlBackendHasCustomSyntax be) =>
+  IsCustomExprFn (CustomSqlSnippet be -> a) (QGenExpr ctxt be s r -> res) where
   customExpr_ fn (QExpr e) = customExpr_ $ fn (CustomSqlSnippet (renderSyntax . e))
 
 -- | Force a 'QGenExpr' to be typed as a value expression (a 'QExpr'). Useful
 --   for getting around type-inference errors with supplying the entire type.
-valueExpr_ :: QExpr syntax s a -> QExpr syntax s a
+valueExpr_ :: QExpr be s a -> QExpr be s a
 valueExpr_ = id
 
 -- | Force a 'QGenExpr' to be typed as an aggregate. Useful for defining custom
 --   aggregates for use in 'aggregate_'.
-agg_ :: QAgg syntax s a -> QAgg syntax s a
+agg_ :: QAgg be s a -> QAgg be s a
 agg_ = id
 

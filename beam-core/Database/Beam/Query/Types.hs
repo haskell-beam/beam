@@ -1,7 +1,8 @@
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Query.Types
-  ( Q, QExpr, QGenExpr(..), QExprToIdentity, QExprToField, QWindow, QWindowFrame
+  ( Q, QExpr, QGenExpr(..), QExprToIdentity, QExprToField, QWindow
 
-  , Projectible, Aggregation
+  , Projectible
 
   , HasQBuilder(..) ) where
 
@@ -10,9 +11,9 @@ import Database.Beam.Query.SQL92
 
 import Database.Beam.Schema.Tables
 
-import Database.Beam.Backend.SQL.Builder
-import Database.Beam.Backend.SQL.AST
-import Database.Beam.Backend.SQL.SQL92
+import Database.Beam.Backend.SQL
+-- import Database.Beam.Backend.SQL.Builder
+-- import Database.Beam.Backend.SQL.AST
 
 import Control.Monad.Identity
 import Data.Vector.Sized (Vector)
@@ -56,10 +57,10 @@ type instance QExprToField (a, b, c, d, e, f, g, h) =
   , QExprToField e, QExprToField f, QExprToField g, QExprToField h)
 type instance QExprToField (Vector n a) = Vector n (QExprToField a)
 
-class IsSql92SelectSyntax selectSyntax => HasQBuilder selectSyntax where
-  buildSqlQuery :: Projectible (Sql92SelectExpressionSyntax selectSyntax) a =>
-                   TablePrefix -> Q selectSyntax db s a -> selectSyntax
-instance HasQBuilder SqlSyntaxBuilder where
+class BeamSqlBackend be => HasQBuilder be where
+  buildSqlQuery :: Projectible be a
+                => TablePrefix -> Q be db s a -> BeamSqlBackendSelectSyntax be
+instance BeamSqlBackend (MockSqlBackend cmd) => HasQBuilder (MockSqlBackend cmd) where
   buildSqlQuery = buildSql92Query' True
-instance HasQBuilder Select where
-  buildSqlQuery = buildSql92Query' True
+-- instance HasQBuilder Select where
+--   buildSqlQuery = buildSql92Query' True

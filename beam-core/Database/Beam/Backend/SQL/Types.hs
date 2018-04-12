@@ -6,9 +6,6 @@ import Database.Beam.Backend.Types
 import qualified Data.Aeson as Json
 import           Data.Bits
 
-class ( BeamBackend be ) =>
-      BeamSqlBackend be where
-
 data SqlNull = SqlNull
   deriving (Show, Eq, Ord, Bounded, Enum)
 newtype SqlBitString = SqlBitString Integer

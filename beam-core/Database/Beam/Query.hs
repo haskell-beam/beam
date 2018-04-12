@@ -13,9 +13,11 @@ module Database.Beam.Query
     , QAggregateContext, QGroupingContext, QValueContext
     , QWindowingContext, QWindowFrameContext
 
-    , QueryableSqlSyntax
-
     , QGenExprTable, QExprTable
+
+    , QAssignment, QField
+
+    , QBaseScope
 
     , module Database.Beam.Query.Combinators
     , module Database.Beam.Query.Extensions
@@ -103,50 +105,38 @@ import Data.Proxy
 
 -- * Query
 
-data QueryInaccessible
+data QBaseScope
 
 -- | A version of the table where each field is a 'QGenExpr'
-type QGenExprTable ctxt syntax s tbl = tbl (QGenExpr ctxt syntax s)
+type QGenExprTable ctxt be s tbl = tbl (QGenExpr ctxt be s)
 
-type QExprTable syntax s tbl = QGenExprTable QValueContext syntax s tbl
+type QExprTable be s tbl = QGenExprTable QValueContext be s tbl
 
 -- * SELECT
 
--- | Represents a select statement over the syntax 'select' that will return
---   rows of type 'a'.
-newtype SqlSelect select a
-    = SqlSelect select
-
-type QueryableSqlSyntax cmd =
-  ( IsSql92Syntax cmd
-  , Sql92SanityCheck cmd
-  , HasQBuilder (Sql92SelectSyntax cmd) )
+-- | Represents a select statement in the given backend, returning
+-- rows of type 'a'.
+newtype SqlSelect be a
+    = SqlSelect (BeamSqlBackendSelectSyntax be)
 
 -- | Build a 'SqlSelect' for the given 'Q'.
-select :: forall syntax db res.
-          ( ProjectibleInSelectSyntax syntax res
-          , IsSql92SelectSyntax syntax
-          , HasQBuilder syntax ) =>
-          Q syntax db QueryInaccessible res -> SqlSelect syntax (QExprToIdentity res)
+select :: forall be db res.
+          ( BeamSqlBackend be, HasQBuilder be, Projectible be res )
+       => Q be db QBaseScope res -> SqlSelect be (QExprToIdentity res)
 select q =
   SqlSelect (buildSqlQuery "t" q)
 
 -- | Convenience function to generate a 'SqlSelect' that looks up a table row
 --   given a primary key.
-lookup_ :: ( HasQBuilder syntax
-           , Sql92SelectSanityCheck syntax
+lookup_ :: ( Database be db, Table table
 
-           , SqlValableTable (PrimaryKey table) (Sql92SelectExpressionSyntax syntax)
-           , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-
-           , HasTableEquality (Sql92SelectExpressionSyntax syntax) (PrimaryKey table)
-
-           , Beamable table, Table table
-
-           , Database be db )
+           , BeamSqlBackend be, HasQBuilder be
+           , SqlValableTable (PrimaryKey table) be
+           , HasTableEquality be (PrimaryKey table)
+           )
         => DatabaseEntity be db (TableEntity table)
         -> PrimaryKey table Identity
-        -> SqlSelect syntax (table Identity)
+        -> SqlSelect be (table Identity)
 lookup_ tbl tblKey =
   select $
   filter_ (\t -> pk t ==. val_ tblKey) $
@@ -154,8 +144,8 @@ lookup_ tbl tblKey =
 
 -- | Run a 'SqlSelect' in a 'MonadBeam' and get the results as a list
 runSelectReturningList ::
-  (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
-  SqlSelect (Sql92SelectSyntax cmd) a -> m [ a ]
+  (MonadBeam be hdl m, BeamSqlBackend be, FromBackendRow be a) =>
+  SqlSelect be a -> m [ a ]
 runSelectReturningList (SqlSelect s) =
   runReturningList (selectCmd s)
 
@@ -163,15 +153,15 @@ runSelectReturningList (SqlSelect s) =
 --   one. Both no results as well as more than one result cause this to return
 --   'Nothing'.
 runSelectReturningOne ::
-  (IsSql92Syntax cmd, MonadBeam cmd be hdl m, FromBackendRow be a) =>
-  SqlSelect (Sql92SelectSyntax cmd) a -> m (Maybe a)
+  (MonadBeam be hdl m, BeamSqlBackend be, FromBackendRow be a) =>
+  SqlSelect be a -> m (Maybe a)
 runSelectReturningOne (SqlSelect s) =
   runReturningOne (selectCmd s)
 
 -- | Use a special debug syntax to print out an ANSI Standard @SELECT@ statement
 --   that may be generated for a given 'Q'.
-dumpSqlSelect :: ProjectibleInSelectSyntax SqlSyntaxBuilder res =>
-                 Q SqlSyntaxBuilder db QueryInaccessible res -> IO ()
+dumpSqlSelect :: Projectible (MockSqlBackend SqlSyntaxBuilder) res
+              => Q (MockSqlBackend SqlSyntaxBuilder) db QBaseScope res -> IO ()
 dumpSqlSelect q =
     let SqlSelect s = select q
     in putStrLn (renderSql s)
@@ -179,54 +169,53 @@ dumpSqlSelect q =
 -- * INSERT
 
 -- | Represents a SQL @INSERT@ command that has not yet been run
-data SqlInsert syntax
-  = SqlInsert syntax
+data SqlInsert be
+  = SqlInsert (BeamSqlBackendInsertSyntax be)
   | SqlInsertNoRows
 
 -- | Generate a 'SqlInsert' over only certain fields of a table
-insertOnly :: ( IsSql92InsertSyntax syntax, Projectible Text (QExprToField r) )
+insertOnly :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (QExprToField r) )
            => DatabaseEntity be db (TableEntity table)
               -- ^ Table to insert into
            -> (table (QField s) -> QExprToField r)
-           -> SqlInsertValues (Sql92InsertValuesSyntax syntax) r
+           -> SqlInsertValues be r
               -- ^ Values to insert. See 'insertValues', 'insertExpressions', 'insertData', and 'insertFrom' for possibilities.
-           -> SqlInsert syntax
+           -> SqlInsert be
 insertOnly _ _ SqlInsertValuesEmpty = SqlInsertNoRows
 insertOnly (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkProj (SqlInsertValues vs) =
     SqlInsert (insertStmt tblNm proj vs)
   where
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
-    proj = execWriter (project' (Proxy @AnyType) (\_ f -> tell [f ""] >> pure f)
+    proj = execWriter (project' (Proxy @AnyType) (Proxy @((), Text))
+                                (\_ _ f -> tell [f] >> pure f)
                                 (mkProj tblFields))
 
 -- | Generate a 'SqlInsert' given a table and a source of values.
-insert :: ( IsSql92InsertSyntax syntax, Projectible Text (table (QField s)) )
+insert :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (table (QField s)) )
        => DatabaseEntity be db (TableEntity table)
           -- ^ Table to insert into
-       -> SqlInsertValues (Sql92InsertValuesSyntax syntax) (table (QExpr (Sql92InsertExpressionSyntax syntax) s))
+       -> SqlInsertValues be (table (QExpr be s))
           -- ^ Values to insert. See 'insertValues', 'insertExpressions', and 'insertFrom' for possibilities.
-       -> SqlInsert syntax
+       -> SqlInsert be
 insert tbl values = insertOnly tbl id values
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
-runInsert :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
-          => SqlInsert (Sql92InsertSyntax cmd) -> m ()
+runInsert :: (BeamSqlBackend be, MonadBeam be hdl m)
+          => SqlInsert be -> m ()
 runInsert SqlInsertNoRows = pure ()
 runInsert (SqlInsert i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
 --   'tbl'.
-data SqlInsertValues insertValues proj --(tbl :: (* -> *) -> *)
-    = SqlInsertValues insertValues
+data SqlInsertValues be proj --(tbl :: (* -> *) -> *)
+    = SqlInsertValues (BeamSqlBackendInsertValuesSyntax be)
     | SqlInsertValuesEmpty
 
 -- | Build a 'SqlInsertValues' from series of expressions in tables
-insertExpressions ::
-    forall syntax table s.
-    ( Beamable table
-    , IsSql92InsertValuesSyntax syntax ) =>
-    (forall s'. [ table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s') ]) ->
-    SqlInsertValues syntax (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s))
+insertExpressions :: forall be table s
+                   . ( BeamSqlBackend be, Beamable table )
+                  => (forall s'. [ table (QExpr be s') ])
+                  -> SqlInsertValues be (table (QExpr be s))
 insertExpressions tbls =
   case sqlExprs of
     [] -> SqlInsertValuesEmpty
@@ -234,45 +223,38 @@ insertExpressions tbls =
     where
       sqlExprs = map mkSqlExprs tbls
 
-      mkSqlExprs :: forall s'. table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s') -> [Sql92InsertValuesExpressionSyntax syntax]
+      mkSqlExprs :: forall s'. table (QExpr be s') -> [ BeamSqlBackendExpressionSyntax be ]
       mkSqlExprs = allBeamValues (\(Columnar' (QExpr x)) -> x "t")
 
 -- | Build a 'SqlInsertValues' from concrete table values
-insertValues ::
-    forall table syntax s.
-    ( Beamable table
-    , IsSql92InsertValuesSyntax syntax
-    , FieldsFulfillConstraint (HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax syntax))) table) =>
-    [ table Identity ] -> SqlInsertValues syntax (table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s))
-insertValues x = insertExpressions (map val_ x :: forall s'. [table (QExpr (Sql92InsertValuesExpressionSyntax syntax) s') ])
+insertValues :: forall be table s
+              . ( BeamSqlBackend be, Beamable table
+                , FieldsFulfillConstraint (BeamSqlBackendCanSerialize be) table )
+             => [ table Identity ]
+             -> SqlInsertValues be (table (QExpr be s))
+insertValues x = insertExpressions (map val_ x :: forall s'. [table (QExpr be s') ])
 
 -- | Build a 'SqlInsertValues' from arbitrarily shaped data containing expressions
-insertData :: forall syntax r
-            . ( Projectible (Sql92InsertValuesExpressionSyntax syntax) r
-              , IsSql92InsertValuesSyntax syntax )
-           => [ r ] -> SqlInsertValues syntax r
+insertData :: forall be r
+            . ( Projectible be r, BeamSqlBackend be )
+           => [ r ] -> SqlInsertValues be r
 insertData rows =
   case rows of
     [] -> SqlInsertValuesEmpty
-    _  -> SqlInsertValues (insertSqlExpressions (map mkSqlExprs rows))
-  where
-    mkSqlExprs :: r -> [Sql92InsertValuesExpressionSyntax syntax]
-    mkSqlExprs r = execWriter (project' (Proxy @AnyType) (\_ s -> tell [ s "t" ] >> pure s) r)
+    _  -> SqlInsertValues (insertSqlExpressions (map (\row -> project (Proxy @be) row "t") rows))
 
 -- | Build a 'SqlInsertValues' from a 'SqlSelect' that returns the same table
-insertFrom
-    :: ( IsSql92InsertValuesSyntax syntax
-       , HasQBuilder (Sql92InsertValuesSelectSyntax syntax)
-       , Projectible (Sql92SelectExpressionSyntax (Sql92InsertValuesSelectSyntax syntax)) r )
-    => Q (Sql92InsertValuesSelectSyntax syntax) db QueryInaccessible r
-    -> SqlInsertValues syntax r
+insertFrom :: ( BeamSqlBackend be, HasQBuilder be
+              , Projectible be r )
+           => Q be db QBaseScope r
+           -> SqlInsertValues be r
 insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 
 -- * UPDATE
 
 -- | Represents a SQL @UPDATE@ statement for the given @table@.
-data SqlUpdate syntax (table :: (* -> *) -> *)
-  = SqlUpdate syntax
+data SqlUpdate be (table :: (* -> *) -> *)
+  = SqlUpdate (BeamSqlBackendUpdateSyntax be)
   | SqlIdentityUpdate -- An update with no assignments
 
 -- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
@@ -283,15 +265,14 @@ data SqlUpdate syntax (table :: (* -> *) -> *)
 --   represents the left hand side of assignments. Sometimes, you'd like to also
 --   get the current value of a particular column. You can use the 'current_'
 --   function to convert a 'QField' to a 'QExpr'.
-update :: ( Beamable table
-          , IsSql92UpdateSyntax syntax) =>
-          DatabaseEntity be db (TableEntity table)
+update :: ( BeamSqlBackend be, Beamable table )
+       => DatabaseEntity be db (TableEntity table)
           -- ^ The table to insert into
-       -> (forall s. table (QField s) -> [ QAssignment (Sql92UpdateFieldNameSyntax syntax) (Sql92UpdateExpressionSyntax syntax) s ])
+       -> (forall s. table (QField s) -> [ QAssignment be s ])
           -- ^ A sequence of assignments to make.
-       -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax syntax) s) -> QExpr (Sql92UpdateExpressionSyntax syntax) s Bool)
+       -> (forall s. table (QExpr be s) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
-       -> SqlUpdate syntax table
+       -> SqlUpdate be table
 update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere =
   case assignments of
     [] -> SqlIdentityUpdate
@@ -309,22 +290,20 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
 --   the row where each primary key field is exactly what is given.
 --
 --   Note: This is a pure SQL @UPDATE@ command. This does not upsert or merge values.
-save :: forall table syntax be db.
+save :: forall table be db.
         ( Table table
-        , IsSql92UpdateSyntax syntax
+        , BeamSqlBackend be
 
-        , SqlValableTable (PrimaryKey table) (Sql92UpdateExpressionSyntax syntax)
-        , SqlValableTable table (Sql92UpdateExpressionSyntax syntax)
+        , SqlValableTable (PrimaryKey table) be
+        , SqlValableTable table be
 
-        , HasTableEquality (Sql92UpdateExpressionSyntax syntax) (PrimaryKey table)
-
-        , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax syntax)) Bool
+        , HasTableEquality be (PrimaryKey table)
         )
      => DatabaseEntity be db (TableEntity table)
         -- ^ Table to update
      -> table Identity
         -- ^ Value to set to
-     -> SqlUpdate syntax table
+     -> SqlUpdate be table
 save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
   update tbl (\(tblField :: table (QField s)) ->
                 execWriter $
@@ -333,7 +312,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
                      do when (qFieldName field `notElem` primaryKeyFieldNames) $
                           tell [ field <-. value ]
                         pure c)
-                  tblField (val_ v :: table (QExpr (Sql92UpdateExpressionSyntax syntax) s)))
+                  tblField (val_ v :: table (QExpr be s)))
              (\tblE -> primaryKey tblE ==. val_ (primaryKey v))
 
   where
@@ -341,29 +320,29 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
       allBeamValues (\(Columnar' (TableField fieldNm)) -> fieldNm) (primaryKey tblSettings)
 
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
-runUpdate :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
-          => SqlUpdate (Sql92UpdateSyntax cmd) tbl -> m ()
+runUpdate :: (BeamSqlBackend be, MonadBeam be hdl m)
+          => SqlUpdate be tbl -> m ()
 runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
 runUpdate SqlIdentityUpdate = pure ()
 
 -- * DELETE
 
 -- | Represents a SQL @DELETE@ statement for the given @table@
-newtype SqlDelete syntax (table :: (* -> *) -> *) = SqlDelete syntax
+newtype SqlDelete be (table :: (* -> *) -> *) = SqlDelete (BeamSqlBackendDeleteSyntax be)
 
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause
-delete :: IsSql92DeleteSyntax delete
+delete :: BeamSqlBackend be
        => DatabaseEntity be db (TableEntity table)
           -- ^ Table to delete from
-       -> (forall s. (forall s'. table (QExpr (Sql92DeleteExpressionSyntax delete) s')) -> QExpr (Sql92DeleteExpressionSyntax delete) s Bool)
+       -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
-       -> SqlDelete delete table
+       -> SqlDelete be table
 delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
   SqlDelete (deleteStmt tblNm (Just (where_ "t")))
   where
     QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField name))))) tblSettings)
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
-runDelete :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)
-          => SqlDelete (Sql92DeleteSyntax cmd) table -> m ()
+runDelete :: (BeamSqlBackend be, MonadBeam be hdl m)
+          => SqlDelete be table -> m ()
 runDelete (SqlDelete d) = runNoReturn (deleteCmd d)

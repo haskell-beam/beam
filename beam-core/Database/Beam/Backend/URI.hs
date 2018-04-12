@@ -24,8 +24,8 @@ data BeamOpenURIUnsupportedScheme = BeamOpenURIUnsupportedScheme String deriving
 instance Exception BeamOpenURIUnsupportedScheme
 
 data BeamURIOpener c where
-  BeamURIOpener :: MonadBeam syntax be hdl m
-                => c syntax be hdl m
+  BeamURIOpener :: MonadBeam be hdl m
+                => c be hdl m
                 -> (URI -> IO (hdl, IO ()))
                 -> BeamURIOpener c
 newtype BeamURIOpeners c where
@@ -41,23 +41,23 @@ instance Monoid (BeamURIOpeners c) where
 
 data OpenedBeamConnection c where
   OpenedBeamConnection
-    :: MonadBeam syntax be hdl m
-    => { openedBeamDatabase :: c syntax be hdl m
+    :: MonadBeam be hdl m
+    => { openedBeamDatabase :: c be hdl m
        , openedBeamHandle   :: hdl
        , closeBeamConnection :: IO ()
      } -> OpenedBeamConnection c
 
-mkUriOpener :: MonadBeam syntax be hdl m
+mkUriOpener :: MonadBeam be hdl m
             => String
             -> (URI -> IO (hdl, IO ()))
-            -> c syntax be hdl m
+            -> c be hdl m
             -> BeamURIOpeners c
 mkUriOpener schemeNm opener c = BeamURIOpeners (M.singleton schemeNm (BeamURIOpener c opener))
 
 withDbFromUri :: forall c a
                . BeamURIOpeners c
               -> String
-              -> (forall syntax be hdl m. MonadBeam syntax be hdl m => c syntax be hdl m -> m a)
+              -> (forall be hdl m. MonadBeam be hdl m => c be hdl m -> m a)
               -> IO a
 withDbFromUri protos uri actionWithDb =
   withDbConnection protos uri (\c hdl -> withDatabase hdl (actionWithDb c))
@@ -65,8 +65,8 @@ withDbFromUri protos uri actionWithDb =
 withDbConnection :: forall c a
                   . BeamURIOpeners c
                  -> String
-                 -> (forall syntax be hdl m. MonadBeam syntax be hdl m =>
-                      c syntax be hdl m -> hdl -> IO a)
+                 -> (forall be hdl m. MonadBeam be hdl m =>
+                      c be hdl m -> hdl -> IO a)
                  -> IO a
 withDbConnection protos uri actionWithDb =
   bracket (openDbConnection protos uri) closeBeamConnection $

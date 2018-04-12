@@ -282,8 +282,6 @@ data Expression
   | ExpressionCurrentTimestamp
   deriving (Show, Eq)
 
-instance IsSqlExpressionSyntaxStringType Expression Text
-
 instance IsSql92ExpressionSyntax Expression where
   type Sql92ExpressionQuantifierSyntax Expression = ComparatorQuantifier
   type Sql92ExpressionValueSyntax Expression = Value

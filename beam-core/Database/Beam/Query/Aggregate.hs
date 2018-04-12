@@ -40,6 +40,9 @@ import Control.Monad.Free
 
 import Data.Typeable
 
+type Aggregable be a =
+  ProjectibleWithPredicate AggregateContext be (WithExprContext (BeamSqlBackendExpressionSyntax' be)) a
+
 -- | Compute an aggregate over a query.
 --
 --   The supplied aggregate projection should return an aggregate expression (an
@@ -58,27 +61,27 @@ import Data.Typeable
 --
 --   For usage examples, see
 --   <https://tathougies.github.io/beam/user-guide/queries/aggregates/ the manual>.
-aggregate_ :: forall select a r db s.
-              ( ProjectibleWithPredicate AggregateContext (Sql92SelectExpressionSyntax select) a
-              , Projectible (Sql92SelectExpressionSyntax select) r
-              , Projectible (Sql92SelectExpressionSyntax select) a
+aggregate_ :: forall be a r db s.
+              ( BeamSqlBackend be
+              , Aggregable be a, Projectible be r, Projectible be a
 
               , ContextRewritable a
               , ThreadRewritable (QNested s) (WithRewrittenContext a QValueContext)
-
-              , IsSql92SelectSyntax select )
+              )
            => (r -> a)                  -- ^ Aggregate projection
-           -> Q select db (QNested s) r -- ^ Query to aggregate over
-           -> Q select db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
+           -> Q be db (QNested s) r -- ^ Query to aggregate over
+           -> Q be db s (WithRewrittenThread (QNested s) s (WithRewrittenContext a QValueContext))
 aggregate_ mkAggregation (Q aggregating) =
   Q (liftF (QAggregate mkAggregation' aggregating (rewriteThread (Proxy @s) . rewriteContext (Proxy @QValueContext))))
   where
     mkAggregation' x tblPfx =
       let agg = mkAggregation x
-          doProject :: AggregateContext c => Proxy c -> WithExprContext (Sql92SelectExpressionSyntax select)
-                    -> Writer [WithExprContext (Sql92SelectExpressionSyntax select)]
-                              (WithExprContext (Sql92SelectExpressionSyntax select))
-          doProject p expr =
+          doProject :: AggregateContext c
+                    => Proxy c -> Proxy be
+                    -> WithExprContext (BeamSqlBackendExpressionSyntax' be)
+                    -> Writer [WithExprContext (BeamSqlBackendExpressionSyntax' be)]
+                              (WithExprContext (BeamSqlBackendExpressionSyntax' be))
+          doProject p _ expr =
             case cast p of
               Just (Proxy :: Proxy QGroupingContext) ->
                 tell [ expr ] >> pure expr
@@ -88,7 +91,9 @@ aggregate_ mkAggregation (Q aggregating) =
                     pure expr
                   Nothing -> error "aggregate_: impossible"
 
-          groupingExprs = execWriter (project' (Proxy @AggregateContext) doProject agg)
+          groupingExprs =
+            fmap (fmap fromBeamSqlBackendExpressionSyntax) $
+            execWriter (project' (Proxy @AggregateContext) (Proxy @(be, WithExprContext (BeamSqlBackendExpressionSyntax' be))) doProject agg)
       in case groupingExprs of
            [] -> (Nothing, agg)
            _ -> (Just (groupByExpressions (sequenceA groupingExprs tblPfx)), agg)
@@ -101,14 +106,14 @@ class QGroupable expr grouped | expr -> grouped, grouped -> expr where
   group_ :: expr -> grouped
 
 -- | 'group_' for simple value expressions.
-instance QGroupable (QExpr expr s a) (QGroupExpr expr s a) where
+instance QGroupable (QExpr be s a) (QGroupExpr be s a) where
   group_ (QExpr a) = QExpr a
 
 -- | 'group_' for any 'Beamable' type. Adds every field in the type to the
 --   grouping key. This is the equivalent of including the grouping expression
 --   of each field in the type as part of the aggregate projection
 instance Beamable tbl =>
-  QGroupable (tbl (QExpr expr s)) (tbl (QGroupExpr expr s)) where
+  QGroupable (tbl (QExpr be s)) (tbl (QGroupExpr be s)) where
   group_ = changeBeamRep (\(Columnar' (QExpr x)) -> Columnar' (QExpr x))
 
 -- | Compute an aggregate over all values in a group. Corresponds semantically
@@ -132,7 +137,7 @@ distinctInGroup_ = Just setQuantifierDistinct
 --   'allInGroup_' has the same semantic meaning, but does not produce an
 --   explicit @ALL@.
 allInGroupExplicitly_ :: IsSql92AggregationSetQuantifierSyntax s
-                     => Maybe s
+                      => Maybe s
 allInGroupExplicitly_ = Just setQuantifierAll
 
 -- ** Aggregations
@@ -141,110 +146,108 @@ allInGroupExplicitly_ = Just setQuantifierAll
 --    `countAll_`) because empty aggregates return SQL @NULL@ values.
 
 -- | SQL @MIN(ALL ..)@ function (but without the explicit ALL)
-min_ :: IsSql92AggregationExpressionSyntax expr
-     => QExpr expr s a -> QAgg expr s (Maybe a)
+min_ :: BeamSqlBackend be
+     => QExpr be s a -> QAgg be s (Maybe a)
 min_ = minOver_ allInGroup_
 
 -- | SQL @MAX(ALL ..)@ function (but without the explicit ALL)
-max_ :: IsSql92AggregationExpressionSyntax expr
-     => QExpr expr s a -> QAgg expr s (Maybe a)
+max_ :: BeamSqlBackend be
+     => QExpr be s a -> QAgg be s (Maybe a)
 max_ = maxOver_ allInGroup_
 
 -- | SQL @AVG(ALL ..)@ function (but without the explicit ALL)
-avg_ :: ( IsSql92AggregationExpressionSyntax expr, Num a )
-     => QExpr expr s a -> QAgg expr s (Maybe a)
+avg_ :: ( BeamSqlBackend be, Num a )
+     => QExpr be s a -> QAgg be s (Maybe a)
 avg_ = avgOver_ allInGroup_
 
 -- | SQL @SUM(ALL ..)@ function (but without the explicit ALL)
-sum_ :: ( IsSql92AggregationExpressionSyntax expr, Num a )
-     => QExpr expr s a -> QAgg expr s (Maybe a)
+sum_ :: ( BeamSqlBackend be, Num a )
+     => QExpr be s a -> QAgg be s (Maybe a)
 sum_ = sumOver_ allInGroup_
 
 -- | SQL @COUNT(*)@ function
-countAll_ :: IsSql92AggregationExpressionSyntax expr => QAgg expr s Int
+countAll_ :: BeamSqlBackend be => QAgg be s Int
 countAll_ = QExpr (pure countAllE)
 
 -- | SQL @COUNT(ALL ..)@ function (but without the explicit ALL)
-count_ :: ( IsSql92AggregationExpressionSyntax expr
-          , Integral b ) => QExpr expr s a -> QAgg expr s b
+count_ :: ( BeamSqlBackend be, Integral b )
+       => QExpr be s a -> QAgg be s b
 count_ (QExpr over) = QExpr (countE Nothing <$> over)
 
 -- | SQL2003 @CUME_DIST@ function (Requires T612 Advanced OLAP operations support)
-cumeDist_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
-          => QAgg expr s Double
+cumeDist_ :: BeamSqlT612Backend be
+          => QAgg be s Double
 cumeDist_ = QExpr (pure cumeDistAggE)
 
 -- | SQL2003 @PERCENT_RANK@ function (Requires T612 Advanced OLAP operations support)
-percentRank_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
-             => QAgg expr s Double
+percentRank_ :: BeamSqlT612Backend be
+             => QAgg be s Double
 percentRank_ = QExpr (pure percentRankAggE)
 
-denseRank_ :: IsSql2003ExpressionAdvancedOLAPOperationsSyntax expr
-           => QAgg expr s Int
+denseRank_ :: BeamSqlT612Backend be
+           => QAgg be s Int
 denseRank_ = QExpr (pure denseRankAggE)
 
 -- | SQL2003 @RANK@ function (Requires T611 Elementary OLAP operations support)
-rank_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
-      => QAgg expr s Int
+rank_ :: BeamSqlT611Backend be
+      => QAgg be s Int
 rank_ = QExpr (pure rankAggE)
 
 minOver_, maxOver_
-  :: IsSql92AggregationExpressionSyntax expr
-  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s a -> QAgg expr s (Maybe a)
+  :: BeamSqlBackend be
+  => Maybe (BeamSqlBackendAggregationQuantifierSyntax be)
+  -> QExpr be s a -> QAgg be s (Maybe a)
 minOver_ q (QExpr a) = QExpr (minE q <$> a)
 maxOver_ q (QExpr a) = QExpr (maxE q <$> a)
 
 avgOver_, sumOver_
-  :: ( IsSql92AggregationExpressionSyntax expr
-     , Num a )
-  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s a -> QAgg expr s (Maybe a)
+  :: ( BeamSqlBackend be, Num a )
+  => Maybe (BeamSqlBackendAggregationQuantifierSyntax be)
+  -> QExpr be s a -> QAgg be s (Maybe a)
 avgOver_ q (QExpr a) = QExpr (avgE q <$> a)
 sumOver_ q (QExpr a) = QExpr (sumE q <$> a)
 
 countOver_
-  :: ( IsSql92AggregationExpressionSyntax expr
-     , Integral b )
-  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s a -> QAgg expr s b
+  :: ( BeamSqlBackend be, Integral b )
+  => Maybe (BeamSqlBackendAggregationQuantifierSyntax be)
+  -> QExpr be s a -> QAgg be s b
 countOver_ q (QExpr a) = QExpr (countE q <$> a)
 
 -- | SQL @EVERY@, @SOME@, and @ANY@ aggregates. Operates over
 -- 'SqlBool' only, as the result can be @NULL@, even if all inputs are
 -- known (no input rows).
 everyOver_, someOver_, anyOver_
-  :: IsSql99AggregationExpressionSyntax expr
-  => Maybe (Sql92AggregationSetQuantifierSyntax expr)
-  -> QExpr expr s SqlBool -> QAgg expr s SqlBool
+  :: BeamSql99AggregationBackend be
+  => Maybe (BeamSqlBackendAggregationQuantifierSyntax be)
+  -> QExpr be s SqlBool -> QAgg be s SqlBool
 everyOver_ q (QExpr a) = QExpr (everyE q <$> a)
 someOver_  q (QExpr a) = QExpr (someE  q <$> a)
 anyOver_   q (QExpr a) = QExpr (anyE   q <$> a)
 
 -- | Support for FILTER (WHERE ...) syntax for aggregates.
---   Part of SQL2003 Advanced OLAP operations feature (T612).
+--   Part of SQL2003 Elementary OLAP operations feature (T611).
 --
 -- See 'filterWhere_'' for a version that accepts 'SqlBool'.
-filterWhere_ :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
-             => QAgg expr s a -> QExpr expr s Bool -> QAgg expr s a
+filterWhere_ :: BeamSqlT611Backend be
+             => QAgg be s a -> QExpr be s Bool -> QAgg be s a
 filterWhere_ agg cond = filterWhere_' agg (sqlBool_ cond)
 
 -- | Like 'filterWhere_' but accepting 'SqlBool'.
-filterWhere_' :: IsSql2003ExpressionElementaryOLAPOperationsSyntax expr
-              => QAgg expr s a -> QExpr expr s SqlBool -> QAgg expr s a
+filterWhere_' :: BeamSqlT611Backend be
+              => QAgg be s a -> QExpr be s SqlBool -> QAgg be s a
 filterWhere_' (QExpr agg) (QExpr cond) = QExpr (liftA2 filterAggE agg cond)
 
 -- | SQL99 @EVERY(ALL ..)@ function (but without the explicit ALL)
-every_ :: IsSql99AggregationExpressionSyntax expr
-       => QExpr expr s SqlBool -> QAgg expr s SqlBool
+every_ :: BeamSql99AggregationBackend be
+       => QExpr be s SqlBool -> QAgg be s SqlBool
 every_ = everyOver_ allInGroup_
 
 -- | SQL99 @SOME(ALL ..)@ function (but without the explicit ALL)
-some_ :: IsSql99AggregationExpressionSyntax expr
-      => QExpr expr s SqlBool -> QAgg expr s SqlBool
+some_ :: BeamSql99AggregationBackend be
+      => QExpr be s SqlBool -> QAgg be s SqlBool
 some_  = someOver_  allInGroup_
 
 -- | SQL99 @ANY(ALL ..)@ function (but without the explicit ALL)
-any_ :: IsSql99AggregationExpressionSyntax expr
-     => QExpr expr s SqlBool -> QAgg expr s SqlBool
+any_ :: BeamSql99AggregationBackend be
+     => QExpr be s SqlBool -> QAgg be s SqlBool
 any_   = anyOver_   allInGroup_

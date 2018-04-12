@@ -12,14 +12,10 @@ import Data.Text (Text)
 import Data.Time (LocalTime)
 import Data.Typeable
 
-class ( BeamSqlBackend be ) =>
-      BeamSql92Backend be where
-
 -- * Finally tagless style
 
 class HasSqlValueSyntax expr ty where
   sqlValueSyntax :: ty -> expr
-class IsSqlExpressionSyntaxStringType expr ty
 
 autoSqlValueSyntax :: (HasSqlValueSyntax expr String, Show a) => a -> expr
 autoSqlValueSyntax = sqlValueSyntax . show
@@ -45,12 +41,30 @@ type Sql92SelectSanityCheck select =
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
   , Sql92OrderingExpressionSyntax (Sql92SelectOrderingSyntax select) ~
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))
-type Sql92SanityCheck cmd = ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd)
-                            , Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd))) ~ Sql92ValueSyntax cmd
-                            , Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)) ~ Sql92ValueSyntax cmd
-                            , Sql92ExpressionValueSyntax (Sql92DeleteExpressionSyntax (Sql92DeleteSyntax cmd)) ~ Sql92ValueSyntax cmd
-                            , Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax (Sql92SelectSyntax cmd)) ~
-                              Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd)) )
+type Sql92SanityCheck cmd =
+  ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd)
+  , Sql92ExpressionValueSyntax (Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd))) ~ Sql92ValueSyntax cmd
+  , Sql92ExpressionValueSyntax (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)) ~ Sql92ValueSyntax cmd
+  , Sql92ExpressionValueSyntax (Sql92DeleteExpressionSyntax (Sql92DeleteSyntax cmd)) ~ Sql92ValueSyntax cmd
+
+  , Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax (Sql92SelectSyntax cmd)) ~
+    Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd))
+
+  , Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax (Sql92SelectSyntax cmd)) ~
+    Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)
+
+  , Sql92DeleteExpressionSyntax (Sql92DeleteSyntax cmd) ~
+    Sql92UpdateExpressionSyntax (Sql92UpdateSyntax cmd)
+
+  , Sql92ExpressionSelectSyntax (Sql92InsertExpressionSyntax (Sql92InsertSyntax cmd)) ~
+    Sql92SelectSyntax cmd
+
+  , Sql92InsertValuesSelectSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd)) ~
+    Sql92SelectSyntax cmd
+
+  , Sql92UpdateFieldNameSyntax (Sql92UpdateSyntax cmd) ~
+    Sql92ExpressionFieldNameSyntax (Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax (Sql92InsertSyntax cmd)))
+  )
 
 type Sql92ReasonableMarshaller be =
    ( FromBackendRow be Int, FromBackendRow be SqlNull
@@ -326,4 +340,3 @@ class IsSql92FromSyntax from =>
 instance HasSqlValueSyntax vs t => HasSqlValueSyntax vs (Tagged tag t) where
   sqlValueSyntax = sqlValueSyntax . untag
 
-instance IsSqlExpressionSyntaxStringType e t => IsSqlExpressionSyntaxStringType e (Tagged tag t)

@@ -14,9 +14,7 @@ module Database.Beam.Backend.SQL.BeamExtensions
   ) where
 
 import Database.Beam.Backend
-import Database.Beam.Backend.SQL
 import Database.Beam.Query
-import Database.Beam.Query.Internal
 import Database.Beam.Schema
 
 import Control.Monad.Identity
@@ -25,39 +23,38 @@ import Control.Monad.Identity
 
 -- | 'MonadBeam's that support returning the newly created rows of an @INSERT@ statement.
 --   Useful for discovering the real value of a defaulted value.
-class MonadBeam syntax be handle m =>
-  MonadBeamInsertReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+class MonadBeam be handle m =>
+  MonadBeamInsertReturning be handle m | m -> be handle where
   runInsertReturningList
     :: ( Beamable table
-       , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
+       , Projectible be (table (QExpr be ()))
        , FromBackendRow be (table Identity) )
     => DatabaseEntity be db (TableEntity table)
-    -> SqlInsertValues (Sql92InsertValuesSyntax (Sql92InsertSyntax syntax))
-                       (table (QExpr (Sql92InsertExpressionSyntax (Sql92InsertSyntax syntax)) s))
+    -> SqlInsertValues be (table (QExpr be s))
     -> m [table Identity]
 
 -- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.
 --   Useful for discovering the new values of the updated rows.
-class MonadBeam syntax be handle m =>
-  MonadBeamUpdateReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+class MonadBeam be handle m =>
+  MonadBeamUpdateReturning be handle m | m -> be handle where
   runUpdateReturningList
     :: ( Beamable table
-       , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
+       , Projectible be (table (QExpr be ()))
        , FromBackendRow be (table Identity) )
     => DatabaseEntity be db (TableEntity table)
-    -> (forall s. table (QField s) -> [ QAssignment (Sql92UpdateFieldNameSyntax (Sql92UpdateSyntax syntax)) (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s ])
-    -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s) -> QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s Bool)
+    -> (forall s. table (QField s) -> [ QAssignment be s ])
+    -> (forall s. table (QExpr be s) -> QExpr be s Bool)
     -> m [table Identity]
 
 -- | 'MonadBeam's that suppert returning rows that will be deleted by the given
 -- @DELETE@ statement. Useful for deallocating resources based on the value of
 -- deleted rows.
-class MonadBeam syntax be handle m =>
-  MonadBeamDeleteReturning syntax be handle m | m -> syntax be handle, be -> m, handle -> m where
+class MonadBeam be handle m =>
+  MonadBeamDeleteReturning be handle m | m -> be handle where
   runDeleteReturningList
     :: ( Beamable table
-       , Projectible (Sql92ExpressionSyntax syntax) (table (QExpr (Sql92ExpressionSyntax syntax) ()))
+       , Projectible be (table (QExpr be ()))
        , FromBackendRow be (table Identity) )
     => DatabaseEntity be db (TableEntity table)
-    -> (forall s. table (QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s) -> QExpr (Sql92UpdateExpressionSyntax (Sql92UpdateSyntax syntax)) s Bool)
+    -> (forall s. table (QExpr be s) -> QExpr be s Bool)
     -> m [table Identity]

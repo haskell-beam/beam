@@ -62,16 +62,14 @@ type OneToManyOptional db s tbl rel =
 --   to fetch, a way to extract the foreign key from that table, and the table to
 --   relate to.
 oneToMany_, oneToOne_
-  :: ( IsSql92SelectSyntax syntax
-     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-     , Database be db
-     , HasTableEquality (Sql92SelectExpressionSyntax syntax) (PrimaryKey tbl)
+  :: ( Database be db, BeamSqlBackend be
+     , HasTableEquality be (PrimaryKey tbl)
      , Table tbl, Table rel )
   => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch (many) -}
-  -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> (rel (QExpr be s) -> PrimaryKey tbl (QExpr be s))
      {-^ Foreign key -}
-  -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
-  -> Q syntax db s (rel (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> tbl (QExpr be s)
+  -> Q be db s (rel (QExpr be s))
 oneToMany_ rel getKey tbl =
   join_ rel (\rel' -> getKey rel' ==. pk tbl)
 oneToOne_ = oneToMany_
@@ -80,17 +78,14 @@ oneToOne_ = oneToMany_
 --   foreign key. Takes the table to fetch, a way to extract the foreign key
 --   from that table, and the table to relate to.
 oneToManyOptional_, oneToMaybe_
-  :: ( IsSql92SelectSyntax syntax
-     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) Bool
-     , HasSqlValueSyntax (Sql92ExpressionValueSyntax (Sql92SelectExpressionSyntax syntax)) SqlNull
-     , HasTableEqualityNullable (Sql92SelectExpressionSyntax syntax) (PrimaryKey tbl)
-     , Database be db
-     , Table tbl, Table rel )
+  :: ( BeamSqlBackend be, Database be db
+     , Table tbl, Table rel
+     , HasTableEqualityNullable be (PrimaryKey tbl) )
   => DatabaseEntity be db (TableEntity rel) {-^ Table to fetch -}
-  -> (rel (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey tbl (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
+  -> (rel (QExpr be s) -> PrimaryKey tbl (Nullable (QExpr be s)))
      {-^ Foreign key -}
-  -> tbl (QExpr (Sql92SelectExpressionSyntax syntax) s)
-  -> Q syntax db s (rel (Nullable (QExpr (Sql92SelectExpressionSyntax syntax) s)))
+  -> tbl (QExpr be s)
+  -> Q be db s (rel (Nullable (QExpr be s)))
 oneToManyOptional_ rel getKey tbl =
   leftJoin_ (all_ rel) (\rel' -> getKey rel' ==. just_ (pk tbl))
 oneToMaybe_ = oneToManyOptional_
@@ -132,18 +127,17 @@ type ManyToManyThrough db through left right =
 --   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
 --   for more indformation.
 manyToMany_
-  :: ( Database be db, Table joinThrough
-     , Table left, Table right
-     , Sql92SelectSanityCheck syntax
-     , IsSql92SelectSyntax syntax
+  :: ( Database be db
+     , Table joinThrough, Table left, Table right
+     , BeamSqlBackend be
 
-     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
-     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s)) )
+     , SqlEq (QExpr be s) (PrimaryKey left (QExpr be s))
+     , SqlEq (QExpr be s) (PrimaryKey right (QExpr be s)) )
   => DatabaseEntity be db (TableEntity joinThrough)
-  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
-  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s))
-  -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s)) -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s))
-  -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s), right (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> (joinThrough (QExpr be s) -> PrimaryKey left (QExpr be s))
+  -> (joinThrough (QExpr be s) -> PrimaryKey right (QExpr be s))
+  -> Q be db s (left (QExpr be s)) -> Q be db s (right (QExpr be s))
+  -> Q be db s (left (QExpr be s), right (QExpr be s))
 manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, l, r) -> (l, r)) $
                                                   manyToManyPassthrough_ joinTbl leftKey rightKey left right
 
@@ -154,21 +148,21 @@ manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, l, r) -> (l, r)) $
 --   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
 --   for more indformation.
 manyToManyPassthrough_
-  :: ( Database be db, Table joinThrough
-     , Table left, Table right
-     , Sql92SelectSanityCheck syntax
-     , IsSql92SelectSyntax syntax
+  :: ( Database be db
+     , Table joinThrough, Table left, Table right
 
-     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
-     , SqlEq (QExpr (Sql92SelectExpressionSyntax syntax) s) (PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s)) )
+     , BeamSqlBackend be
+
+     , SqlEq (QExpr be s) (PrimaryKey left (QExpr be s))
+     , SqlEq (QExpr be s) (PrimaryKey right (QExpr be s)) )
   => DatabaseEntity be db (TableEntity joinThrough)
-  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey left (QExpr (Sql92SelectExpressionSyntax syntax) s))
-  -> (joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s) -> PrimaryKey right (QExpr (Sql92SelectExpressionSyntax syntax) s))
-  -> Q syntax db s (left (QExpr (Sql92SelectExpressionSyntax syntax) s))
-  -> Q syntax db s (right (QExpr (Sql92SelectExpressionSyntax syntax) s))
-  -> Q syntax db s ( joinThrough (QExpr (Sql92SelectExpressionSyntax syntax) s)
-                   , left (QExpr (Sql92SelectExpressionSyntax syntax) s)
-                  , right (QExpr (Sql92SelectExpressionSyntax syntax) s))
+  -> (joinThrough (QExpr be s) -> PrimaryKey left (QExpr be s))
+  -> (joinThrough (QExpr be s) -> PrimaryKey right (QExpr be s))
+  -> Q be db s (left (QExpr be s))
+  -> Q be db s (right (QExpr be s))
+  -> Q be db s ( joinThrough (QExpr be s)
+               , left (QExpr be s)
+               , right (QExpr be s))
 manyToManyPassthrough_ joinTbl leftKey rightKey left right =
   do left_ <- left
      right_ <- right

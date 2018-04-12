@@ -11,7 +11,9 @@ module Database.Beam.Backend.Types
 
   , FromBackendRow(..)
 
-  , Exposed, Nullable ) where
+  , Exposed, Nullable
+
+  ) where
 
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
@@ -19,13 +21,13 @@ import           Data.Tagged
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
-import Data.Proxy
+import           Data.Proxy
 
-import GHC.Generics
-import GHC.TypeLits
-import GHC.Types
+import           GHC.Generics
+import           GHC.TypeLits
+import           GHC.Types
 
--- | Class for all beam backends
+-- | Class for all Beam backends
 class BeamBackend be where
   -- | Requirements to marshal a certain type from a database of a particular backend
   type BackendFromField be :: * -> Constraint

@@ -13,14 +13,15 @@
 --   Always use the provided backends to submit queries and data manipulation
 --   commands to the database.
 module Database.Beam.Backend.SQL.Builder
-  ( SqlSyntaxBuilder(..), SqlSyntaxBackend
+  ( SqlSyntaxBuilder(..) --, SqlSyntaxBackend
   , buildSepBy
   , quoteSql
   , renderSql ) where
 
 import           Database.Beam.Backend.SQL
+--import           Database.Beam.Backend.Types
 
-import           Control.Monad.IO.Class
+--import           Control.Monad.IO.Class
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
@@ -175,8 +176,6 @@ instance IsSql92FieldNameSyntax SqlSyntaxBuilder where
   unqualifiedField a =
     SqlSyntaxBuilder $
     byteString "`" <> stringUtf8 (T.unpack a) <> byteString "`"
-
-instance IsSqlExpressionSyntaxStringType SqlSyntaxBuilder Text
 
 instance IsSql92QuantifierSyntax SqlSyntaxBuilder where
   quantifyOverAll = SqlSyntaxBuilder "ALL"
@@ -495,17 +494,20 @@ sqlFuncOp fun a =
 
 -- * Fake 'MonadBeam' instance (for using 'SqlSyntaxBuilder' with migrations mainly)
 
-data SqlSyntaxBackend
+-- data SqlSyntaxBackend
 
-class Trivial a
-instance Trivial a
+-- class Trivial a
+-- instance Trivial a
 
-instance BeamBackend SqlSyntaxBackend where
-  type BackendFromField SqlSyntaxBackend = Trivial
+-- instance BeamBackend SqlSyntaxBackend where
+--   type BackendFromField SqlSyntaxBackend = Trivial
+-- instance BeamSqlBackend SqlSyntaxBackend where
+--   type BeamSqlBackendSyntax SqlSyntaxBackend = SqlSyntaxBuilder
+-- instance BeamSqlBackendIsString SqlSyntaxBackend Text
 
-newtype SqlSyntaxM a = SqlSyntaxM (IO a)
-  deriving (Applicative, Functor, Monad, MonadIO)
+-- newtype SqlSyntaxM a = SqlSyntaxM (IO a)
+--   deriving (Applicative, Functor, Monad, MonadIO)
 
-instance MonadBeam SqlSyntaxBuilder SqlSyntaxBackend SqlSyntaxBackend SqlSyntaxM where
-  withDatabaseDebug _ _ _ = fail "absurd"
-  runReturningMany _ _ = fail "absurd"
+-- instance MonadBeam SqlSyntaxBackend SqlSyntaxBackend SqlSyntaxM where
+--   withDatabaseDebug _ _ _ = fail "absurd"
+--   runReturningMany _ _ = fail "absurd"

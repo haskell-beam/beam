@@ -41,68 +41,74 @@ import Database.Beam.Query.Aggregate
 
 import Database.Beam.Backend.SQL
 
-ntile_ :: (Integral a, IsSql2003NtileExpressionSyntax syntax)
-       => QExpr syntax s Int -> QAgg syntax s a
+ntile_ :: (BeamSqlBackend be, BeamSqlT614Backend be)
+       => QExpr be s Int -> QAgg be s a
 ntile_ (QExpr a) = QExpr (ntileE <$> a)
 
-lead1_, lag1_ :: IsSql2003LeadAndLagExpressionSyntax syntax
-              => QExpr syntax s a -> QAgg syntax s a
+lead1_, lag1_
+  :: (BeamSqlBackend be, BeamSqlT615Backend be)
+  => QExpr be s a -> QAgg be s a
 lead1_ (QExpr a) = QExpr (leadE <$> a <*> pure Nothing <*> pure Nothing)
 lag1_ (QExpr a) = QExpr (lagE <$> a <*> pure Nothing <*> pure Nothing)
 
-lead_, lag_ :: IsSql2003LeadAndLagExpressionSyntax syntax
-            => QExpr syntax s a -> QExpr syntax s Int -> QAgg syntax s a
+lead_, lag_
+  :: (BeamSqlBackend be, BeamSqlT615Backend be)
+  => QExpr be s a -> QExpr be s Int -> QAgg be s a
 lead_ (QExpr a) (QExpr n) = QExpr (leadE <$> a <*> (Just <$> n) <*> pure Nothing)
 lag_ (QExpr a) (QExpr n) = QExpr (lagE <$> a <*> (Just <$> n) <*> pure Nothing)
 
 leadWithDefault_, lagWithDefault_
-  :: IsSql2003LeadAndLagExpressionSyntax syntax
-  => QExpr syntax s a -> QExpr syntax s Int -> QExpr syntax s a
-  -> QAgg syntax s a
+  :: (BeamSqlBackend be, BeamSqlT615Backend be)
+  => QExpr be s a -> QExpr be s Int -> QExpr be s a
+  -> QAgg be s a
 leadWithDefault_ (QExpr a) (QExpr n) (QExpr def) =
   QExpr (leadE <$> a <*> fmap Just n <*> fmap Just def)
 lagWithDefault_ (QExpr a) (QExpr n) (QExpr def) =
   QExpr (lagE <$> a <*> fmap Just n <*> fmap Just def)
 
 -- TODO the first 'a' should be nullable, and the second one not
-firstValue_, lastValue_ :: IsSql2003FirstValueAndLastValueExpressionSyntax syntax
-                        => QExpr syntax s a -> QAgg syntax s a
+firstValue_, lastValue_
+  :: (BeamSqlBackend be, BeamSqlT616Backend be)
+  => QExpr be s a -> QAgg be s a
 firstValue_ (QExpr a) = QExpr (firstValueE <$> a)
 lastValue_ (QExpr a) = QExpr (lastValueE <$> a)
 
 -- TODO see comment for 'firstValue_' and 'lastValue_'
-nthValue_ :: IsSql2003NthValueExpressionSyntax syntax
-          => QExpr syntax s a -> QExpr syntax s Int -> QAgg syntax s a
+nthValue_
+  :: (BeamSqlBackend be, BeamSqlT618Backend be)
+  => QExpr be s a -> QExpr be s Int -> QAgg be s a
 nthValue_ (QExpr a) (QExpr n) = QExpr (nthValueE <$> a <*> n)
 
-ln_, exp_, sqrt_ :: (Floating a, IsSql2003EnhancedNumericFunctionsExpressionSyntax syntax)
-                 => QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a
+ln_, exp_, sqrt_
+  :: (Floating a, BeamSqlBackend be, BeamSqlT621Backend be)
+  => QGenExpr ctxt be s a -> QGenExpr ctxt be s a
 ln_ (QExpr a) = QExpr (lnE <$> a)
 exp_ (QExpr a) = QExpr (expE <$> a)
 sqrt_ (QExpr a) = QExpr (sqrtE <$> a)
 
-ceiling_, floor_ :: (RealFrac a, Integral b, IsSql2003EnhancedNumericFunctionsExpressionSyntax syntax)
-                 => QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s b
+ceiling_, floor_
+  :: (RealFrac a, Integral b, BeamSqlBackend be, BeamSqlT621Backend be)
+  => QGenExpr ctxt be s a -> QGenExpr ctxt be s b
 ceiling_ (QExpr a) = QExpr (ceilE <$> a)
 floor_ (QExpr a) = QExpr (floorE <$> a)
 
 infixr 8 **.
-(**.) :: (Floating a, IsSql2003EnhancedNumericFunctionsExpressionSyntax syntax)
-      => QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a -> QGenExpr ctxt syntax s a
+(**.) :: (Floating a, BeamSqlBackend be, BeamSqlT621Backend be)
+      => QGenExpr ctxt be s a -> QGenExpr ctxt be s a -> QGenExpr ctxt be s a
 QExpr a **. QExpr b = QExpr (powerE <$> a <*> b)
 
 stddevPopOver_, stddevSampOver_, varPopOver_, varSampOver_
-  :: (Num a, Floating b, IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax syntax)
-  => Maybe (Sql92AggregationSetQuantifierSyntax syntax) -> QExpr syntax s a
-  -> QAgg syntax s b
+  :: (Num a, Floating b, BeamSqlBackend be, BeamSqlT621Backend be)
+  => Maybe (BeamSqlBackendAggregationQuantifierSyntax be) -> QExpr be s a
+  -> QAgg be s b
 stddevPopOver_ q (QExpr x) = QExpr (stddevPopE q <$> x)
 stddevSampOver_ q (QExpr x) = QExpr (stddevSampE q <$> x)
 varPopOver_ q (QExpr x) = QExpr (varPopE q <$> x)
 varSampOver_ q (QExpr x) = QExpr (varSampE q <$> x)
 
 stddevPop_, stddevSamp_, varPop_, varSamp_
-  :: (Num a, Floating b, IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax syntax)
-  => QExpr syntax s a -> QAgg syntax s b
+  :: (Num a, Floating b, BeamSqlBackend be, BeamSqlT621Backend be)
+  => QExpr be s a -> QAgg be s b
 stddevPop_ = stddevPopOver_ allInGroup_
 stddevSamp_ = stddevSampOver_ allInGroup_
 varPop_ = varPopOver_ allInGroup_
@@ -111,9 +117,9 @@ varSamp_ = varSampOver_ allInGroup_
 covarPopOver_, covarSampOver_, corrOver_, regrSlopeOver_, regrInterceptOver_,
   regrCountOver_, regrRSquaredOver_, regrAvgYOver_, regrAvgXOver_,
   regrSXXOver_, regrSXYOver_, regrSYYOver_
-  :: (Num a, Floating b, IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax syntax)
-  => Maybe (Sql92AggregationSetQuantifierSyntax syntax) -> QExpr syntax s a -> QExpr syntax s a
-  -> QExpr syntax s b
+  :: (Num a, Floating b, BeamSqlBackend be, BeamSqlT621Backend be)
+  => Maybe (BeamSqlBackendAggregationQuantifierSyntax be) -> QExpr be s a -> QExpr be s a
+  -> QExpr be s b
 covarPopOver_ q (QExpr x) (QExpr y) = QExpr (covarPopE q <$> x <*> y)
 covarSampOver_ q (QExpr x) (QExpr y) = QExpr (covarSampE q <$> x <*> y)
 corrOver_ q (QExpr x) (QExpr y) = QExpr (corrE q <$> x <*> y)
@@ -129,8 +135,8 @@ regrSXYOver_ q (QExpr x) (QExpr y) = QExpr (regrSXYE q <$> x <*> y)
 
 covarPop_, covarSamp_, corr_, regrSlope_, regrIntercept_, regrCount_,
   regrRSquared_, regrAvgY_, regrAvgX_, regrSXX_, regrSXY_, regrSYY_
-  :: (Num a, Floating b, IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax syntax)
-  => QExpr syntax s a -> QExpr syntax s a -> QExpr syntax s b
+  :: (Num a, Floating b, BeamSqlBackend be, BeamSqlT621Backend be)
+  => QExpr be s a -> QExpr be s a -> QExpr be s b
 covarPop_ = covarPopOver_ allInGroup_
 covarSamp_ = covarSampOver_ allInGroup_
 corr_ = corrOver_ allInGroup_
