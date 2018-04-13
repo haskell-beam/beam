@@ -84,8 +84,7 @@ import Data.Time (LocalTime)
 import GHC.Generics
 
 -- | Introduce all entries of a table into the 'Q' monad
-all_ :: forall be (db :: (* -> *) -> *) table s.
-        ( Database be db, Table table
+all_ :: ( Database be db, Table table
         , BeamSqlBackend be )
        => DatabaseEntity be db (TableEntity table)
        -> Q be db s (table (QExpr be s))
@@ -93,8 +92,7 @@ all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
     Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a view into the 'Q' monad
-allFromView_ :: forall be (db :: (* -> *) -> *) table s.
-                ( Database be db, Beamable table
+allFromView_ :: ( Database be db, Beamable table
                 , BeamSqlBackend be )
                => DatabaseEntity be db (ViewEntity table)
                -> Q be db s (table (QExpr be s))

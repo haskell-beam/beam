@@ -248,53 +248,53 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm tbl
 --                            (field "hiredDate" (maybeType timestamp)))
 --   return (EmployeeDb employees)
 -- @
-field :: ( IsSql92ColumnSchemaSyntax syntax ) =>
-  FieldReturnType 'False 'False syntax resTy a => Text -> DataType (Sql92ColumnSchemaColumnTypeSyntax syntax) resTy -> a
+field :: ( BeamMigrateSqlBackend be
+         , FieldReturnType 'False 'False be resTy a )
+      => Text -> DataType be resTy -> a
 field name (DataType ty) = field' (Proxy @'False) (Proxy @'False) name ty Nothing Nothing []
 
 -- ** Default values
 
 -- | Represents the default value of a field with a given column schema syntax and type
-newtype DefaultValue syntax a = DefaultValue (Sql92ColumnSchemaExpressionSyntax syntax)
+newtype DefaultValue be a = DefaultValue (BeamSqlBackendExpressionSyntax be)
 
 -- | Build a 'DefaultValue' from a 'QExpr'. GHC will complain if you supply more
 -- than one default value.
-defaultTo_ :: IsSql92ExpressionSyntax (Sql92ColumnSchemaExpressionSyntax syntax) =>
-              (forall s. QExpr (Sql92ColumnSchemaExpressionSyntax syntax) s a)
-           -> DefaultValue syntax a
+defaultTo_ :: BeamMigrateSqlBackend be
+           => (forall s. QExpr be s a)
+           -> DefaultValue be a
 defaultTo_ (QExpr e) =
   DefaultValue (e "t")
 
 -- ** Constraints
 
 -- | Represents a constraint in the given column schema syntax
-newtype Constraint syntax
-  = Constraint (Sql92ColumnConstraintDefinitionConstraintSyntax
-                (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax))
+newtype Constraint be
+  = Constraint (BeamSqlBackendConstraintSyntax be)
 
-newtype NotNullConstraint syntax
-  = NotNullConstraint (Constraint syntax)
+newtype NotNullConstraint be
+  = NotNullConstraint (Constraint be)
 
 -- | The SQL92 @NOT NULL@ constraint
-notNull :: IsSql92ColumnSchemaSyntax syntax => NotNullConstraint syntax
+notNull :: BeamMigrateSqlBackend be => NotNullConstraint be
 notNull = NotNullConstraint (Constraint notNullConstraintSyntax)
 
 -- | SQL @UNIQUE@ constraint
-unique :: IsSql92ColumnSchemaSyntax syntax => Constraint syntax
+unique :: BeamMigrateSqlBackend be => Constraint be
 unique = Constraint uniqueColumnConstraintSyntax
 
 -- ** Data types
 
 -- | SQL92 @INTEGER@ data type
-int :: (IsSql92DataTypeSyntax syntax, Integral a) => DataType syntax a
+int :: (BeamMigrateSqlBackend be, Integral a) => DataType be a
 int = DataType intType
 
 -- | SQL92 @SMALLINT@ data type
-smallint :: (IsSql92DataTypeSyntax syntax, Integral a) => DataType syntax a
+smallint :: (BeamMigrateSqlBackend be, Integral a) => DataType be a
 smallint = DataType smallIntType
 
 -- | SQL2008 Optional @BIGINT@ data type
-bigint :: (IsSql2008BigIntDataTypeSyntax syntax, Integral a) => DataType syntax a
+bigint :: (BeamMigrateSql2008Backend be, Integral a) => DataType be a
 bigint = DataType bigIntType
 
 -- TODO is Integer the right type to use here?
@@ -310,15 +310,15 @@ varbinary prec = DataType (varBinaryType prec)
 
 -- TODO should this be Day or something?
 -- | SQL92 @DATE@ data type
-date :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
+date :: BeamMigrateSqlBackend be => DataType be LocalTime
 date = DataType dateType
 
 -- | SQL92 @CHAR@ data type
-char :: IsSql92DataTypeSyntax syntax => Maybe Word -> DataType syntax Text
+char :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
 char prec = DataType (charType prec Nothing)
 
 -- | SQL92 @VARCHAR@ data type
-varchar :: IsSql92DataTypeSyntax syntax => Maybe Word -> DataType syntax Text
+varchar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
 varchar prec = DataType (varCharType prec Nothing)
 
 -- | SQL92 @DOUBLE@ data type
@@ -366,53 +366,48 @@ maybeType (DataType sqlTy) = DataType sqlTy
 
 -- ** 'field' variable arity classes
 
-class FieldReturnType (defaultGiven :: Bool) (collationGiven :: Bool) syntax resTy a | a -> syntax resTy where
-  field' :: IsSql92ColumnSchemaSyntax syntax =>
-            Proxy defaultGiven -> Proxy collationGiven
+class FieldReturnType (defaultGiven :: Bool) (collationGiven :: Bool) be resTy a | a -> be resTy where
+  field' :: BeamMigrateSqlBackend be
+         => Proxy defaultGiven -> Proxy collationGiven
          -> Text
-         -> Sql92ColumnSchemaColumnTypeSyntax syntax
-         -> Maybe (Sql92ColumnSchemaExpressionSyntax syntax)
-         -> Maybe Text -> [ Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax ]
+         -> BeamSqlBackendDataTypeSyntax be
+         -> Maybe (BeamSqlBackendExpressionSyntax be)
+         -> Maybe Text -> [ BeamSqlBackendColumnConstraintDefinitionSyntax be ]
          -> a
 
-instance FieldReturnType 'True collationGiven syntax resTy a =>
-  FieldReturnType 'False collationGiven syntax resTy (DefaultValue syntax resTy -> a) where
+instance FieldReturnType 'True collationGiven be resTy a =>
+  FieldReturnType 'False collationGiven be resTy (DefaultValue be resTy -> a) where
   field' _ collationGiven nm ty _ collation constraints (DefaultValue e) =
     field' (Proxy @'True) collationGiven nm ty (Just e) collation constraints
 
-instance FieldReturnType defaultGiven collationGiven syntax resTy a =>
-  FieldReturnType defaultGiven collationGiven syntax resTy (Constraint syntax -> a) where
+instance FieldReturnType defaultGiven collationGiven be resTy a =>
+  FieldReturnType defaultGiven collationGiven be resTy (Constraint be -> a) where
   field' defaultGiven collationGiven nm ty default_' collation constraints (Constraint e) =
     field' defaultGiven collationGiven nm ty default_' collation (constraints ++ [ constraintDefinitionSyntax Nothing e Nothing ])
 
-instance ( FieldReturnType defaultGiven collationGiven syntax resTy (Constraint syntax -> a)
+instance ( FieldReturnType defaultGiven collationGiven be resTy (Constraint be -> a)
          , IsNotNull resTy ) =>
-  FieldReturnType defaultGiven collationGiven syntax resTy (NotNullConstraint syntax -> a) where
+  FieldReturnType defaultGiven collationGiven be resTy (NotNullConstraint be -> a) where
   field' defaultGiven collationGiven nm ty default_' collation constraints (NotNullConstraint c) =
     field' defaultGiven collationGiven nm ty default_' collation constraints c
 
-instance ( FieldReturnType 'True collationGiven syntax resTy a
+instance ( FieldReturnType 'True collationGiven be resTy a
          , TypeError ('Text "Only one DEFAULT clause can be given per 'field' invocation") ) =>
-  FieldReturnType 'True collationGiven syntax resTy (DefaultValue syntax resTy -> a) where
+  FieldReturnType 'True collationGiven be resTy (DefaultValue be resTy -> a) where
 
   field' = error "Unreachable because of GHC Custom Type Errors"
 
-instance ( FieldReturnType defaultGiven collationGiven syntax resTy a
+instance ( FieldReturnType defaultGiven collationGiven be resTy a
          , TypeError ('Text "Only one type declaration allowed per 'field' invocation")) =>
-  FieldReturnType defaultGiven collationGiven syntax resTy (DataType syntax' x -> a) where
+  FieldReturnType defaultGiven collationGiven be resTy (DataType be' x -> a) where
   field' = error "Unreachable because of GHC Custom Type Errors"
 
-instance ( Typeable syntax, Typeable (Sql92ColumnSchemaColumnTypeSyntax syntax)
-         , Sql92DisplaySyntax (Sql92ColumnSchemaColumnTypeSyntax syntax), Eq (Sql92ColumnSchemaColumnTypeSyntax syntax)
-         , Sql92DisplaySyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax), Eq (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
-         , IsSql92ColumnSchemaSyntax syntax
-         , Sql92SerializableConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax syntax)
-         , Sql92SerializableDataTypeSyntax (Sql92ColumnSchemaColumnTypeSyntax syntax) ) =>
-  FieldReturnType defaultGiven collationGiven syntax resTy (TableFieldSchema syntax resTy) where
+instance BeamMigrateSqlBackend be =>
+  FieldReturnType defaultGiven collationGiven be resTy (TableFieldSchema be resTy) where
   field' _ _ nm ty default_' collation constraints =
     TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_' constraints collation)) checks
-    where checks = [ FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableHasColumn tbl field'' ty :: TableHasColumn syntax)) ] ++
-                   map (\cns -> FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableColumnHasConstraint tbl field'' cns :: TableColumnHasConstraint syntax))) constraints
+    where checks = [ FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableHasColumn tbl field'' ty :: TableHasColumn be)) ] ++
+                   map (\cns -> FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableColumnHasConstraint tbl field'' cns :: TableColumnHasConstraint be))) constraints
 
 type family IsNotNull (x :: *) :: Kind.Constraint where
   IsNotNull (Maybe x) = TypeError ('Text "You used Database.Beam.Migrate.notNull on a column with type" ':$$:

@@ -20,7 +20,6 @@ import           Data.Semigroup
 
 import GHC.Generics (Generic)
 
-
 -- * Table checks
 
 -- | Asserts that a table with the given name exists in a database
