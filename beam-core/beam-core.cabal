@@ -49,6 +49,7 @@ library
                        Database.Beam.Query.Operator
                        Database.Beam.Query.Ord
                        Database.Beam.Query.Relationships
+                       Database.Beam.Schema.Tables.GPrimaryKeyOf
 
                        Database.Beam.Schema.Lenses
   build-depends:       base         >=4.7     && <5.0,
