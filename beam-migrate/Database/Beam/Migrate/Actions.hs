@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE CPP #-}
 
 -- | Data types and functions to discover sequences of DDL commands to go from
 -- one database state to another. Used for migration generation.
@@ -101,12 +102,14 @@ import           Data.Foldable
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
-import           Data.Monoid
 import qualified Data.PQueue.Min as PQ
 import qualified Data.Sequence as Seq
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Typeable
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import           GHC.Generics
 
@@ -185,6 +188,9 @@ data PotentialAction cmd
     -- path through the graph.
   }
 
+instance Semigroup (PotentialAction cmd) where
+  (<>) = mappend
+
 -- | 'PotentialAction's can represent edges or paths. Monadically combining two
 -- 'PotentialAction's results in the path between the source of the first and
 -- the destination of the second. 'mempty' here returns the action that does
@@ -242,6 +248,9 @@ type ActionProviderFn cmd =
 newtype ActionProvider cmd
   = ActionProvider { getPotentialActions :: ActionProviderFn cmd }
 
+instance Semigroup (ActionProvider cmd) where
+  (<>) = mappend
+
 instance Monoid (ActionProvider cmd) where
   mempty = ActionProvider (\_ _ -> [])
   mappend (ActionProvider a) (ActionProvider b) =
@@ -273,7 +282,7 @@ justOne_ _ = []
 
 -- | Action provider for SQL92 @CREATE TABLE@ actions.
 createTableActionProvider :: forall cmd
-                           . ( Sql92SaneDdlCommandSyntax cmd
+                           . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
                              , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                           => ActionProvider cmd
 createTableActionProvider =
@@ -322,7 +331,7 @@ createTableActionProvider =
 
 -- | Action provider for SQL92 @DROP TABLE@ actions
 dropTableActionProvider :: forall cmd
-                        . ( Sql92SaneDdlCommandSyntax cmd
+                        . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
                           , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                         => ActionProvider cmd
 dropTableActionProvider =
@@ -350,7 +359,7 @@ dropTableActionProvider =
 
 -- | Action provider for SQL92 @ALTER TABLE ... ADD COLUMN ...@ actions
 addColumnProvider :: forall cmd
-                   . ( Sql92SaneDdlCommandSyntax cmd
+                   . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
                      , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                    => ActionProvider cmd
 addColumnProvider =
@@ -376,7 +385,7 @@ addColumnProvider =
 
 -- | Action provider for SQL92 @ALTER TABLE ... DROP COLUMN ...@ actions
 dropColumnProvider :: forall cmd
-                    . ( Sql92SaneDdlCommandSyntax cmd
+                    . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
                       , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                    => ActionProvider cmd
 dropColumnProvider = ActionProvider provider
@@ -406,7 +415,7 @@ dropColumnProvider = ActionProvider provider
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET NULL@
 addColumnNullProvider :: forall cmd
-                       . Sql92SaneDdlCommandSyntax cmd
+                       . Sql92SaneDdlCommandSyntaxMigrateOnly cmd
                       => ActionProvider cmd
 addColumnNullProvider = ActionProvider provider
   where
@@ -429,7 +438,7 @@ addColumnNullProvider = ActionProvider provider
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET  NOT NULL@
 dropColumnNullProvider :: forall cmd
-                        . Sql92SaneDdlCommandSyntax cmd
+                        . Sql92SaneDdlCommandSyntaxMigrateOnly cmd
                        => ActionProvider cmd
 dropColumnNullProvider = ActionProvider provider
   where
@@ -459,7 +468,7 @@ dropColumnNullProvider = ActionProvider provider
 --  * ALTER TABLE ... ADD COLUMN ...
 --  * ALTER TABLE ... DROP COLUMN ...
 --  * ALTER TABLE ... ALTER COLUMN ... SET [NOT] NULL
-defaultActionProvider :: ( Sql92SaneDdlCommandSyntax cmd
+defaultActionProvider :: ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
                          , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
                       => ActionProvider cmd
 defaultActionProvider =

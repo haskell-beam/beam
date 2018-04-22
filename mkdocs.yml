@@ -1,6 +1,8 @@
 site_name: Beam Documentation
 theme: material #readthedocs
 theme_dir: docs/theme
+extra_css:
+  - docs/theme/css/beam.css
 pages:
   - Home: 'index.md'
   - Frequently Asked Questions: 'about/faq.md'
@@ -47,7 +49,7 @@ markdown_extensions:
       cache_dir: 'docs/.beam-query-cache'
       conf: 'docs/beam.yaml'
       base_dir: '.'
-#      enabled_backends: [ beam-postgres, beam-sqlite ]
+      enabled_backends: [ beam-postgres, beam-sqlite, beam-mysql ]
   - docs.markdown.markdown_fenced_code_tabs
   - def_list
   - codehilite

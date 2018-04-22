@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors#-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.Internal where
 
@@ -12,6 +13,9 @@ import qualified Data.Text as T
 import qualified Data.DList as DList
 import           Data.Typeable
 import           Data.Vector.Sized (Vector)
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import           Control.Monad.Free.Church
 import           Control.Monad.State
@@ -38,7 +42,7 @@ data QF select (db :: (* -> *) -> *) s next where
             -> QF select db s next
 
   QAll :: Beamable table
-       => T.Text -> TableSettings table
+       => (TablePrefix -> T.Text -> Sql92SelectFromSyntax select) -> TableSettings table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> Maybe (WithExprContext (Sql92SelectExpressionSyntax select)))
        -> ((T.Text, table (QExpr (Sql92SelectExpressionSyntax select) s)) -> next) -> QF select db s next
 
@@ -117,7 +121,7 @@ data QField s ty
 
 newtype QAssignment fieldName expr s
   = QAssignment [(fieldName, expr)]
-  deriving (Show, Eq, Ord, Monoid)
+  deriving (Show, Eq, Ord, Monoid, Semigroup)
 
 -- * QGenExpr type
 

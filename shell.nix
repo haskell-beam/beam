@@ -86,7 +86,7 @@ in
     inherit ghc;
     name = "beam-env";
     buildInputs = [ postgresql python27Packages.ghp-import bash
-                    (python27.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse markdown-fenced-code-tabs ]))
+                    (python27.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ]))
                     ncurses libcxx icu gcc mysql zlib openssl stack gnupg dos2unix vim pcre ];
     LANG = "en_us.UTF-8";
   }

@@ -21,10 +21,8 @@ resolveFormats reg fromId toId [] = do
           commonFormats = S.intersection fromFormats toFormats
       in if S.null commonFormats
          then fail "The schemas have no formats in common"
-         else pure (S.toList commonFormats)           
-           
-resolveFormats _ _ _ fmts = pure fmts  
-                         
+         else pure (S.toList commonFormats)
+resolveFormats _ _ _ fmts = pure fmts
 
 newMigrationCmd :: MigrateCmdLine -> Text -> Text
                 -> Bool -> Bool -> [MigrationFormat]

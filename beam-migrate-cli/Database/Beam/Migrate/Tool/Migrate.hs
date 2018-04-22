@@ -13,6 +13,7 @@ import           Control.Monad
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.Char
+import qualified Data.Char as Char
 import           Data.Graph.Inductive.Graph
 import qualified Data.Graph.Inductive.Query as Gr
 import qualified Data.HashSet as HS
@@ -140,9 +141,9 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
       showCommands cmds'
 
   putStrLn ("Should I run these commands?")
-  ack <- getLine
+  ack <- fmap Char.toLower <$> getLine
 
-  if Char.toLower <$> ack /= "yes"
+  if ack /= "yes"
     then fail "Exiting due to user request..."
     else do
-      
+      fail "Unimplemented"

@@ -57,6 +57,7 @@ import Data.Proxy
 import Data.Kind
 import Data.Word
 import Data.Int
+import Data.Tagged
 import Data.Text (Text)
 import Data.Time (UTCTime, LocalTime, Day, TimeOfDay)
 
@@ -181,6 +182,8 @@ in_ :: ( IsSql92ExpressionSyntax syntax
     -> QGenExpr context syntax s Bool
 in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
 in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
+
+infix 4 `between_`, `in_`
 
 -- | Class for expression types or expression containers for which there is a
 --   notion of equality.
@@ -384,6 +387,8 @@ instance HasSqlEqualityCheck Expression UTCTime
 instance HasSqlEqualityCheck Expression LocalTime
 instance HasSqlEqualityCheck Expression Day
 instance HasSqlEqualityCheck Expression TimeOfDay
+instance HasSqlEqualityCheck Expression a =>
+  HasSqlEqualityCheck Expression (Tagged t a)
 
 instance HasSqlQuantifiedEqualityCheck Expression Text
 instance HasSqlQuantifiedEqualityCheck Expression Integer
@@ -404,6 +409,8 @@ instance HasSqlQuantifiedEqualityCheck Expression UTCTime
 instance HasSqlQuantifiedEqualityCheck Expression LocalTime
 instance HasSqlQuantifiedEqualityCheck Expression Day
 instance HasSqlQuantifiedEqualityCheck Expression TimeOfDay
+instance HasSqlQuantifiedEqualityCheck Expression a =>
+  HasSqlQuantifiedEqualityCheck Expression (Tagged t a)
 
 instance HasSqlEqualityCheck SqlSyntaxBuilder Text
 instance HasSqlEqualityCheck SqlSyntaxBuilder Integer
@@ -424,6 +431,8 @@ instance HasSqlEqualityCheck SqlSyntaxBuilder UTCTime
 instance HasSqlEqualityCheck SqlSyntaxBuilder LocalTime
 instance HasSqlEqualityCheck SqlSyntaxBuilder Day
 instance HasSqlEqualityCheck SqlSyntaxBuilder TimeOfDay
+instance HasSqlEqualityCheck SqlSyntaxBuilder a =>
+  HasSqlEqualityCheck SqlSyntaxBuilder (Tagged t a)
 
 instance HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder Text
 instance HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder Integer
@@ -444,3 +453,5 @@ instance HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder UTCTime
 instance HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder LocalTime
 instance HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder Day
 instance HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder TimeOfDay
+instance HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder a =>
+  HasSqlQuantifiedEqualityCheck SqlSyntaxBuilder (Tagged t a)

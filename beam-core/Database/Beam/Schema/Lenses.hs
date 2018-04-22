@@ -25,11 +25,18 @@ instance (GTableLenses t m a aLens, GTableLenses t m b bLens) => GTableLenses t 
               rightLenses = gTableLenses (Proxy :: Proxy b) (\f -> lensToHere (\(a :*: b) -> (a :*:) <$> f b))
 instance Generic (t m) => GTableLenses t m (K1 R x) (K1 R (LensFor (t m) x)) where
     gTableLenses _ lensToHere = K1 (LensFor (\f -> lensToHere (\(K1 x) -> K1 <$> f x)))
-instance ( Generic (PrimaryKey rel m)
-         , Generic (PrimaryKey rel (Lenses t m))
-         , GTableLenses t m (Rep (PrimaryKey rel m)) (Rep (PrimaryKey rel (Lenses t m))) ) =>
-         GTableLenses t m (K1 R (PrimaryKey rel m)) (K1 R (PrimaryKey rel (Lenses t m))) where
-    gTableLenses _ lensToHere = K1 (to (gTableLenses (Proxy :: Proxy (Rep (PrimaryKey rel m))) (\f -> lensToHere (\(K1 x) -> K1 . to <$> f (from x)))))
+
+instance ( Generic (sub m)
+         , Generic (sub (Lenses t m))
+         , GTableLenses t m (Rep (sub m)) (Rep (sub (Lenses t m))) ) =>
+         GTableLenses t m (K1 R (sub m)) (K1 R (sub (Lenses t m))) where
+    gTableLenses _ lensToHere = K1 (to (gTableLenses (Proxy :: Proxy (Rep (sub m))) (\f -> lensToHere (\(K1 x) -> K1 . to <$> f (from x)))))
+
+instance ( Generic (sub (Nullable m))
+         , Generic (sub (Nullable (Lenses t m)))
+         , GTableLenses t m (Rep (sub (Nullable m))) (Rep (sub (Nullable (Lenses t m))))) =>
+         GTableLenses t m (K1 R (sub (Nullable m))) (K1 R (sub (Nullable (Lenses t m)))) where
+    gTableLenses _ lensToHere = K1 (to (gTableLenses (Proxy :: Proxy (Rep (sub (Nullable m)))) (\f -> lensToHere (\(K1 x) -> K1 . to <$> f (from x)))))
 
 tableLenses' :: ( lensType ~ Lenses t f
                 , Generic (t lensType)

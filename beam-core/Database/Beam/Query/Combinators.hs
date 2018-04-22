@@ -96,7 +96,7 @@ all_ :: forall be (db :: (* -> *) -> *) table select s.
        => DatabaseEntity be db (TableEntity table)
        -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
-    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) snd)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a view into the 'Q' monad
 allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
@@ -110,7 +110,7 @@ allFromView_ :: forall be (db :: (* -> *) -> *) table select s.
                => DatabaseEntity be db (ViewEntity table)
                -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
-    Q $ liftF (QAll tblNm tblSettings (\_ -> Nothing) snd)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a table into the 'Q' monad based on the
 --   given QExpr. The join condition is expected to return a
@@ -138,7 +138,7 @@ join_' :: ( Database be db, Table table
        -> (table (QExpr (Sql92SelectExpressionSyntax select) s) -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s SqlBool)
        -> Q select db s (table (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s))
 join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
-    Q $ liftF (QAll tblNm tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
 
 -- | Introduce a table using a left join with no ON clause. Because this is not
 --   an inner join, the resulting table is made nullable. This means that each
@@ -379,7 +379,7 @@ subquery_ ::
   , ProjectibleInSelectSyntax select (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
   , Sql92ExpressionSelectSyntax (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) ~ select) =>
   Q select (db :: (* -> *) -> *) s (QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a)
-  -> QExpr (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
+  -> QGenExpr ctxt (Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)) s a
 subquery_ q =
   QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
@@ -838,11 +838,11 @@ instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Id
 data QIfCond context expr s a = QIfCond (QGenExpr context expr s SqlBool) (QGenExpr context expr s a)
 newtype QIfElse context expr s a = QIfElse (QGenExpr context expr s a)
 
-then_ :: QGenExpr context expr s SqlBool -> QGenExpr context expr s a -> QIfCond context expr s a
-then_ cond res = QIfCond cond res
+then_ :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_ cond res = QIfCond (sqlBool_ cond) res
 
-then_' :: QGenExpr context expr s Bool -> QGenExpr context expr s a -> QIfCond context expr s a
-then_' cond res = QIfCond (sqlBool_ cond) res
+then_' :: QGenExpr context expr s SqlBool -> QGenExpr context expr s a -> QIfCond context expr s a
+then_' cond res = QIfCond cond res
 
 else_ :: QGenExpr context expr s a -> QIfElse context expr s a
 else_ = QIfElse

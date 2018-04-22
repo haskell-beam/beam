@@ -1,7 +1,8 @@
-status() {
+#! /bin/bash
+
+beam_doc_status() {
     echo "$@" 1>&2
 }
-export -f status
 
 sha256() {
     if which sha256sum 2>/dev/null >/dev/null; then
@@ -9,12 +10,11 @@ sha256() {
     elif which openssl 2>/dev/null >/dev/null; then
         SHA256SUM="openssl dgst -sha256 $1 | awk '{print \$2}'"
     else
-        status "Cannot find sha256sum or openssl"
+        beam_doc_status "Cannot find sha256sum or openssl"
         exit 1
     fi
     /bin/sh -c "$SHA256SUM"
 }
-export -f sha256
 
 download () {
     CACHED_FILE=$1
@@ -24,35 +24,34 @@ download () {
 
     if [ ! -f $CACHED_FILE ]; then
         TMP_FILE="${CACHED_FILE}.tmp"
-        status "Downloading $URL to $CACHED_FILE.tmp..."
+        beam_doc_status "Downloading $URL to $CACHED_FILE.tmp..."
 
         DIR=$(dirname $TMP_FILE)
         mkdir -p $DIR
 
-        if [ -z $CONV ]; then
-	    curl $URL | sed -e 's/\r$//' > $TMP_FILE
-	else
-	    curl $URL | $CONV | sed -e 's/\r$//' > $TMP_FILE
-	fi
+        curl $URL > $TMP_FILE
 
         ACTUAL_SUM=$(sha256 $TMP_FILE)
         if [ "$ACTUAL_SUM" != "$EXPECTED_SHA256" ]; then
-            status "Sum mismatch, got $ACTUAL_SUM, expected $EXPECTED_SHA256"
+            beam_doc_status "Sum mismatch, got $ACTUAL_SUM, expected $EXPECTED_SHA256"
             exit 1
         else
-            mv $TMP_FILE $CACHED_FILE
+            if [ -z $CONV ]; then
+	        cat $TMP_FILE | sed -e 's/\r$//' > $CACHED_FILE
+	    else
+                cat $TMP_FILE | bash -c "$CONV" | sed -e 's/\r$//' > $CACHED_FILE
+	    fi
+            rm $TMP_FILE
         fi
 
-        status "Finished downloading"
+        beam_doc_status "Finished downloading"
     fi
 }
-export -f download
 
 if ! which pv >/dev/null 2>/dev/null; then
-    status "No 'pv' command found, no progress indication available"
+    beam_doc_status "No 'pv' command found, no progress indication available"
     pv () {
-        status "Starting upload of $@"
+        beam_doc_status "Starting upload of $@"
         cat "$@"
     }
-    export -f pv
 fi

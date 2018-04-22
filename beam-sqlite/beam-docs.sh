@@ -1,10 +1,12 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 set -e
 
+. ${BEAM_DOCS_LIBRARY}
+
 SQLITE_DB=$1
 CHINOOK_SQLITE_URL="https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_Sqlite.sql"
-EXPECTED_SHA256="40215158e0dc3443d16565e3ae96c2f5d640ff00a92de3910568dc34fa086a82"
+EXPECTED_SHA256="b2e430ec8cb389509d25ec5bda2f958bbf6f0ca42e276fa5eb3de45eb816a460"
 
 print_open_statement() {
     echo "chinook <- open \"chinook.db\""
@@ -16,16 +18,16 @@ if [ -f $SQLITE_DB ]; then
 fi
 
 if [ ! -f chinook-data/Chinook_Sqlite.sql ]; then
-    status "Downloading Sqlite chinook data..."
+    beam_doc_status "Downloading Sqlite chinook data..."
     download "chinook-data/Chinook_Sqlite.sql" "$CHINOOK_SQLITE_URL" "$EXPECTED_SHA256" "tail -c +4"
 fi
 
-status "Creating temporary $SQLITE_DB..."
+beam_doc_status "Creating temporary $SQLITE_DB..."
 
 rm -f $SQLITE_DB.tmp
 (echo "BEGIN;"; pv chinook-data/Chinook_Sqlite.sql; echo "END;") | sqlite3 $SQLITE_DB.tmp
 
-status "Success, creating $SQLITE_DB"
+beam_doc_status "Success, creating $SQLITE_DB"
 sqlite3 $SQLITE_DB.tmp <<EOF
 ALTER TABLE [Invoice] RENAME TO [InvoiceTemp];
 CREATE TABLE [InvoiceNew]

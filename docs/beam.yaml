@@ -13,7 +13,7 @@ backends:
   beam-postgres:
     backend-name: Postgres
     backend-module: Database.Beam.Postgres
-    backend-options: '"" beam_docs_chinook'
+    backend-options: '"host=localhost port=5432 user=postgres" beam_docs_chinook'
     src:
       file: ./beam-postgres
     haskell-names:
@@ -66,8 +66,8 @@ backends:
     backend-options: "127.0.0.1 3306 root '' beam_docs_chinook"
     src:
       github: tathougies/beam-mysql
-      revision: a55d9ce7aa4b8c11f232da4bcd3b2a61c650df22
-      sha256: d39a5b43a13c7cb96dac0d5ad066288d01fdfc576fd537265f3712746457510f
+      revision: 9ed52d636b5ba5a2395e0f7a0262eab8507b5cd1
+      sha256: 050de4dc3e77705dc69e697e9b8e384fbdd5dbd035c16ec82557e3b480aea440
     haskell-names:
       package: beam-mysql
       backend: MySQL

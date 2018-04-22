@@ -133,6 +133,9 @@ data CheckedFieldModification tbl a
       (TableField tbl a -> TableField tbl a)
       ([FieldCheck] -> [FieldCheck])
 
+checkedFieldNamed :: Text -> CheckedFieldModification tbl a
+checkedFieldNamed t = CheckedFieldModification (\_ -> TableField t) id
+
 instance IsString (CheckedFieldModification tbl a) where
   fromString s = CheckedFieldModification (const . TableField . fromString $ s) id
 

@@ -271,7 +271,7 @@ Before we add addresses, we need to add some users that we can reference.
 let james = User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
     betty = User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
     sam = User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"
-withDatabaseDebug putStrLn conn $ runInsert $
+runBeamSqliteDebug putStrLn conn $ runInsert $
   insert (_shoppingCartUsers shoppingCartDb) $
   insertValues [ james, betty, sam ]
 ```
@@ -291,7 +291,7 @@ let addresses = [ Address default_ (val_ "123 Little Street") (val_ Nothing) (va
                 , Address default_ (val_ "222 Main Street") (val_ (Just "Ste 1")) (val_ "Houston") (val_ "TX") (val_ "8888") (pk betty)
                 , Address default_ (val_ "9999 Residence Ave") (val_ Nothing) (val_ "Sugarland") (val_ "TX") (val_ "8989") (pk betty) ]
 
-withDatabaseDebug putStrLn conn $ runInsert $
+runBeamSqliteDebug putStrLn conn $ runInsert $
   insert (_shoppingCartUserAddresses shoppingCartDb) $
   insertExpressions addresses
 ```
@@ -322,7 +322,7 @@ First, let's use the new lenses we made. Make sure to import `Lens.Micro` or
 !employee2out console
 -- import Lens.Micro
 -- import Control.Lens
-addresses <- withDatabaseDebug putStrLn conn $
+addresses <- runBeamSqliteDebug putStrLn conn $
              runSelectReturningList $
              select (all_ (shoppingCartDb ^. shoppingCartUserAddresses))
 mapM_ print addresses
@@ -390,7 +390,7 @@ For example, to retrieve every pair of user and address, we can write the follow
 ```haskell
 !employee2sql sql
 !employee2out console
-allPairs <- withDatabaseDebug putStrLn conn $
+allPairs <- runBeamSqliteDebug putStrLn conn $
             runSelectReturningList $ select $ do
               user <- all_ (shoppingCartDb ^. shoppingCartUsers)
               address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
@@ -412,7 +412,7 @@ bools.
 !employee2sql sql
 !employee2out console
 usersAndRelatedAddresses <-
-  withDatabaseDebug putStrLn conn $
+  runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $ select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
        address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
@@ -432,7 +432,7 @@ expression that can match primary keys together.
 !employee2sql sql
 !employee2out console
 usersAndRelatedAddressesUsingReferences <-
-  withDatabaseDebug putStrLn conn $
+  runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $ select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
        address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
@@ -454,7 +454,7 @@ combinator to pull related tables directly into the query monad.
 !employee2sql sql
 !employee2out console
 usersAndRelatedAddressesUsingRelated <-
-  withDatabaseDebug putStrLn conn $
+  runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $ select $
     do address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
        user <- related_ (shoppingCartDb ^. shoppingCartUsers) (_addressForUser address)
@@ -476,7 +476,7 @@ We can also query the addresses for a particular user given a `UserId`.
 let bettyId = UserId "betty@example.com" :: UserId
 
 bettysAddresses <-
-  withDatabaseDebug putStrLn conn $
+  runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $ select $
     do address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
        guard_ (_addressForUser address ==. val_ bettyId)
@@ -518,7 +518,7 @@ update the corresponding record in the database.
 !employee2out console
 
 [james] <-
-  withDatabaseDebug putStrLn conn $
+  runBeamSqliteDebug putStrLn conn $
     do runUpdate $
          save (shoppingCartDb ^. shoppingCartUsers) (james { _userPassword = "52a516ca6df436828d9c0d26e31ef704" })
 
@@ -550,7 +550,7 @@ to use the new name and ZIP code.
 !employee2out console
 
 addresses <-
-  withDatabaseDebug putStrLn conn $
+  runBeamSqliteDebug putStrLn conn $
     do runUpdate $
          update (shoppingCartDb ^. shoppingCartUserAddresses)
                 (\address -> [ address ^. addressCity <-. val_ "Sugarville"
@@ -573,7 +573,7 @@ Now suppose that Betty has decided to give up her place in Houston. We can use
 ```haskell
 !employee2sql sql
 
-withDatabaseDebug putStrLn conn $
+runBeamSqliteDebug putStrLn conn $
   runDelete $
   delete (shoppingCartDb ^. shoppingCartUserAddresses)
          (\address -> address ^. addressCity ==. "Houston" &&.

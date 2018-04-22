@@ -46,7 +46,7 @@ main =
   do conn <- open ":memory:"
      execute_ conn "CREATE TABLE cart_users (email VARCHAR NOT NULL, first_name VARCHAR NOT NULL, last_name VARCHAR NOT NULL, password VARCHAR NOT NULL, PRIMARY KEY( email ));"
 
-     withDatabase conn $ runInsert $
+     runBeamSqlite conn $ runInsert $
        insert (_shoppingCartUsers shoppingCartDb) $
        insertValues [ User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c" {- james -}
                     , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
@@ -55,7 +55,7 @@ main =
      stmts <- newIORef id
      let onStmt s = modifyIORef stmts (. (s:))
 
-         withDatabaseDebug _ q = Beam.withDatabaseDebug onStmt q
+         withDatabaseDebug _ q = runBeamSqliteDebug onStmt q
          putStrLn :: String -> IO ()
          putStrLn _ = pure ()
 

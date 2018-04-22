@@ -29,8 +29,7 @@ import           Control.Exception
 import           Control.Monad.Reader
 
 import           Database.SQLite.Simple
-                    ( Connection, Only(..)
-                    , open, close, query_ )
+                    ( Connection, open, close, query_ )
 
 import           Data.Aeson
 import           Data.Attoparsec.Text (asciiCI, skipSpace)
@@ -40,7 +39,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char (isSpace)
 import           Data.Int (Int64)
 import           Data.List (sortBy)
-import           Data.Maybe (mapMaybe)
+import           Data.Maybe (mapMaybe, isJust)
 import           Data.Monoid (Endo(..), (<>))
 import           Data.Ord (comparing)
 import           Data.String (fromString)
@@ -130,6 +129,7 @@ parseSqliteDataType txt =
                                     (Db.BeamSerializedDataType $
                                      Db.beamSerializeJSON "sqlite"
                                        (toJSON txt))
+                                    False
     Right x -> x
   where
     dtParser = charP <|> varcharP <|>
@@ -183,10 +183,10 @@ parseSqliteDataType txt =
       intTypeP
       pure intType
     smallIntP = do
-      asciiCI "INT2" <|> (asciiCI "SMALL" >> ws >> intTypeP)
+      asciiCI "INT2" <|> (asciiCI "SMALL" >> optional ws >> intTypeP)
       pure smallIntType
     bigIntP = do
-      asciiCI "INT8" <|> (asciiCI "BIG" >> ws >> intTypeP)
+      asciiCI "INT8" <|> (asciiCI "BIG" >> optional ws >> intTypeP)
       pure sqliteBigIntType
     dateP = dateType <$ asciiCI "DATE"
     timeP = do
@@ -235,16 +235,31 @@ parseSqliteDataType txt =
 getDbConstraints :: SqliteM [Db.SomeDatabasePredicate]
 getDbConstraints =
   SqliteM . ReaderT $ \(_, conn) -> do
-    tblNames <- query_ conn "SELECT name from sqlite_master where type='table'"
+    tblNames <- query_ conn "SELECT name, sql from sqlite_master where type='table'"
     tblPreds <-
-      fmap mconcat . forM tblNames $ \(Only tblName) -> do
+      fmap mconcat . forM tblNames $ \(tblName, sql) -> do
         columns <- fmap (sortBy (comparing (\(cid, _, _, _, _, _) -> cid :: Int))) $
                    query_ conn (fromString ("PRAGMA table_info('" <> T.unpack tblName <> "')"))
 
         let columnPreds =
               foldMap
                 (\(_ ::Int, nm, typStr, notNull, _, _) ->
-                     let dtType = parseSqliteDataType typStr
+                     let dtType = if isAutoincrement then sqliteSerialType else parseSqliteDataType typStr
+                         isAutoincrement = isJust (A.maybeResult (A.parse autoincrementParser sql))
+
+                         autoincrementParser = do
+                           A.manyTill A.anyChar $ do
+                             hadQuote <- optional (A.char '"')
+                             A.string nm
+                             maybe (pure ()) (\_ -> void $ A.char '"') hadQuote
+                             A.many1 A.space
+                             asciiCI "INTEGER"
+                             A.many1 A.space
+                             asciiCI "PRIMARY"
+                             A.many1 A.space
+                             asciiCI "KEY"
+                             A.many1 A.space
+                             asciiCI "AUTOINCREMENT"
 
                          notNullPred =
                            if notNull
@@ -253,6 +268,7 @@ getDbConstraints =
                                        (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
                                          :: Db.TableColumnHasConstraint SqliteColumnSchemaSyntax) ]
                            else []
+
                      in [ Db.SomeDatabasePredicate
                             (Db.TableHasColumn tblName nm dtType ::
                                Db.TableHasColumn SqliteColumnSchemaSyntax) ] ++

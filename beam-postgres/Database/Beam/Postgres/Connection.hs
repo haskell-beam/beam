@@ -9,10 +9,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Beam.Postgres.Connection
   ( PgRowReadError(..), PgError(..)
   , Pg(..), PgF(..)
+
+  , runBeamPostgres, runBeamPostgresDebug
 
   , pgRenderSyntax, runPgRowReader, getFields
 
@@ -49,16 +52,17 @@ import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..), Query(..))
 
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Exception (bracket)
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (toLazyByteString, byteString)
 import qualified Data.ByteString.Lazy as BL
-import           Data.Monoid
 import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import           Foreign.C.Types
 
@@ -81,9 +85,10 @@ postgresUriSyntax :: c PgCommandSyntax Postgres Pg.Connection Pg
                   -> BeamURIOpeners c
 postgresUriSyntax =
     mkUriOpener "postgresql:"
-        (\uri action -> do
+        (\uri -> do
             let pgConnStr = fromString (uriToString id uri "")
-            bracket (Pg.connectPostgreSQL pgConnStr) Pg.close action)
+            hdl <- Pg.connectPostgreSQL pgConnStr
+            pure (hdl, Pg.close hdl))
 
 -- * Syntax rendering
 
@@ -300,11 +305,16 @@ newtype Pg a = Pg { runPg :: F PgF a }
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)
 
+runBeamPostgresDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO a
+runBeamPostgresDebug dbg conn action =
+    withPgDebug dbg conn action >>= either throwIO pure
+
+runBeamPostgres :: Pg.Connection -> Pg a -> IO a
+runBeamPostgres = runBeamPostgresDebug (\_ -> pure ())
+
 instance MonadBeam PgCommandSyntax Postgres Pg.Connection Pg where
-    withDatabase conn action =
-      withPgDebug (\_ -> pure ()) conn action >>= either throwIO pure
-    withDatabaseDebug dbg conn action =
-      withPgDebug dbg conn action >>= either throwIO pure
+    withDatabase = runBeamPostgres
+    withDatabaseDebug = runBeamPostgresDebug
 
     runReturningMany cmd consume =
         liftF (PgRunReturning cmd consume id)

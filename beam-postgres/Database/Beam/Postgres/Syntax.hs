@@ -69,7 +69,7 @@ module Database.Beam.Postgres.Syntax
     , pgMoneyType
     , pgTsQueryTypeInfo, pgTsVectorTypeInfo
 
-    , pgByteaType, pgTextType
+    , pgByteaType, pgTextType, pgUnboundedArrayType
     , pgSerialType, pgSmallSerialType, pgBigSerialType
 
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
@@ -94,27 +94,33 @@ import           Database.Beam.Migrate.Generics
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
-import           Data.Aeson (Value)
+import           Data.Aeson (Value, object, (.=))
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByteString)
 import qualified Data.ByteString.Char8 as B
 import           Data.ByteString.Lazy.Char8 (toStrict)
 import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.CaseInsensitive (CI)
+import qualified Data.CaseInsensitive as CI
 import           Data.Coerce
+import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
+import           Data.Tagged
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
-import           Data.UUID (UUID)
+import           Data.UUID.Types (UUID)
 import qualified Data.Vector as V
 import           Data.Word
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
@@ -134,18 +140,21 @@ data PgSyntaxF f where
   EscapeIdentifier :: ByteString -> f -> PgSyntaxF f
 deriving instance Functor PgSyntaxF
 
+instance Eq1 PgSyntaxF where
+  liftEq eq (EmitByteString b1 next1) (EmitByteString b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq eq (EmitBuilder b1 next1) (EmitBuilder b2 next2) =
+      toLazyByteString b1 == toLazyByteString b2 && next1 `eq` next2
+  liftEq eq (EscapeString b1 next1) (EscapeString b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq eq (EscapeBytea b1 next1) (EscapeBytea b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq eq (EscapeIdentifier b1 next1) (EscapeIdentifier b2 next2) =
+      b1 == b2 && next1 `eq` next2
+  liftEq _ _ _ = False
+
 instance Eq f => Eq (PgSyntaxF f) where
-  EmitByteString b1 next1 == EmitByteString b2 next2 =
-      b1 == b2 && next1 == next2
-  EmitBuilder b1 next1 == EmitBuilder b2 next2 =
-      toLazyByteString b1 == toLazyByteString b2 && next1 == next2
-  EscapeString b1 next1 == EscapeString b2 next2 =
-      b1 == b2 && next1 == next2
-  EscapeBytea b1 next1 == EscapeBytea b2 next2 =
-      b1 == b2 && next1 == next2
-  EscapeIdentifier b1 next1 == EscapeIdentifier b2 next2 =
-      b1 == b2 && next1 == next2
-  _ == _ = False
+  (==) = eq1
 
 instance Hashable PgSyntax where
   hashWithSalt salt (PgSyntax s) = runF s finish step salt
@@ -167,6 +176,9 @@ type PgSyntaxM = F PgSyntaxF
 -- 'emit', 'emitBuilder', 'escapeString', 'escapBytea', and 'escapeIdentifier'.
 newtype PgSyntax
   = PgSyntax { buildPgSyntax :: PgSyntaxM () }
+
+instance Semigroup PgSyntax where
+  (<>) = mappend
 
 instance Monoid PgSyntax where
   mempty = PgSyntax (pure ())
@@ -283,16 +295,30 @@ fromPgSelectLockingClause s =
     emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
     emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
 
+-- | Specifies the level of lock that will be taken against a row. See
+-- <https://www.postgresql.org/docs/current/static/explicit-locking.html#LOCKING-ROWS the manual section>
+-- for more information.
 data PgSelectLockingStrength
   = PgSelectLockingStrengthUpdate
+  -- ^ @UPDATE@
   | PgSelectLockingStrengthNoKeyUpdate
+  -- ^ @NO KEY UPDATE@
   | PgSelectLockingStrengthShare
+  -- ^ @SHARE@
   | PgSelectLockingStrengthKeyShare
+  -- ^ @KEY SHARE@
   deriving (Show, Eq, Generic)
 
+-- | Specifies how we should handle lock conflicts.
+--
+-- See
+-- <https://www.postgresql.org/docs/9.5/static/sql-select.html#SQL-FOR-UPDATE-SHARE the manual section>
+-- for more information
 data PgSelectLockingOptions
   = PgSelectLockingOptionsNoWait
+  -- ^ @NOWAIT@. Report an error rather than waiting for the lock
   | PgSelectLockingOptionsSkipLocked
+  -- ^ @SKIP LOCKED@. Rather than wait for a lock, skip the row instead
   deriving (Show, Eq, Generic)
 
 data PgDataTypeDescr
@@ -556,6 +582,12 @@ pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALL
 pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL") (pgDataTypeJSON "serial")
 pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL") (pgDataTypeJSON "bigserial")
 
+pgUnboundedArrayType :: PgDataTypeSyntax -> PgDataTypeSyntax
+pgUnboundedArrayType (PgDataTypeSyntax _ syntax serialized) =
+    PgDataTypeSyntax (error "Can't do array migrations yet")
+                     (syntax <> emit "[]")
+                     (pgDataTypeJSON (object [ "unbounded-array" .= fromBeamSerializedDataType serialized ]))
+
 pgTsQueryTypeInfo :: Pg.TypeInfo
 pgTsQueryTypeInfo = Pg.Basic (Pg.Oid 3615) 'U' ',' "tsquery"
 
@@ -594,7 +626,7 @@ mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. 
 instance IsCustomSqlSyntax PgExpressionSyntax where
   newtype CustomSqlSyntax PgExpressionSyntax =
     PgCustomExpressionSyntax { fromPgCustomExpression :: PgSyntax }
-    deriving Monoid
+    deriving (Monoid, Semigroup)
   customExprSyntax = PgExpressionSyntax . fromPgCustomExpression
   renderSyntax = PgCustomExpressionSyntax . pgParens . fromPgExpression
 
@@ -1093,6 +1125,11 @@ DEFAULT_SQL_SYNTAX(Pg.LocalTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.UTCTimestamp)
 DEFAULT_SQL_SYNTAX(Scientific)
 
+instance HasSqlValueSyntax PgValueSyntax (CI T.Text) where
+  sqlValueSyntax = sqlValueSyntax . CI.original
+instance HasSqlValueSyntax PgValueSyntax (CI TL.Text) where
+  sqlValueSyntax = sqlValueSyntax . CI.original
+
 instance HasSqlValueSyntax PgValueSyntax SqlNull where
   sqlValueSyntax _ = defaultPgValueSyntax Pg.Null
 
@@ -1336,4 +1373,13 @@ PG_HAS_EQUALITY_CHECK(Pg.ZonedTimestamp)
 PG_HAS_EQUALITY_CHECK(Pg.LocalTimestamp)
 PG_HAS_EQUALITY_CHECK(Pg.UTCTimestamp)
 PG_HAS_EQUALITY_CHECK(Scientific)
+PG_HAS_EQUALITY_CHECK(ByteString)
+PG_HAS_EQUALITY_CHECK(BL.ByteString)
 PG_HAS_EQUALITY_CHECK(V.Vector a)
+PG_HAS_EQUALITY_CHECK(CI T.Text)
+PG_HAS_EQUALITY_CHECK(CI TL.Text)
+
+instance HasSqlEqualityCheck PgExpressionSyntax a =>
+  HasSqlEqualityCheck PgExpressionSyntax (Tagged t a)
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax a =>
+  HasSqlQuantifiedEqualityCheck PgExpressionSyntax (Tagged t a)

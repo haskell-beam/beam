@@ -109,14 +109,14 @@ main =
      let james = User "james@example.com" "James" "Smith" "b4cc344d25a2efe540adbf2678e2304c"
          betty = User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f"
          sam = User "sam@example.com" "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c"
-     withDatabase conn $ runInsert $
+     runBeamSqlite conn $ runInsert $
        insert (_shoppingCartUsers shoppingCartDb) $
        insertValues [ james, betty, sam ]
 
      stmts <- newIORef id
      let onStmt s = modifyIORef stmts (. (s:))
 
-         withDatabaseDebug _ q = Beam.withDatabaseDebug onStmt q
+         withDatabaseDebug _ q = runBeamSqliteDebug onStmt q
          putStrLn :: String -> IO ()
          putStrLn _ = pure ()
          print :: a -> IO ()
@@ -126,7 +126,7 @@ main =
                      , Address default_ (val_ "222 Main Street") (val_ (Just "Ste 1")) (val_ "Houston") (val_ "TX") (val_ "8888") (pk betty)
                      , Address default_ (val_ "9999 Residence Ave") (val_ Nothing) (val_ "Sugarland") (val_ "TX") (val_ "8989") (pk betty) ]
 
-     withDatabase conn $ runInsert $
+     runBeamSqlite conn $ runInsert $
        insert (_shoppingCartUserAddresses shoppingCartDb) $
        insertExpressions addresses
 

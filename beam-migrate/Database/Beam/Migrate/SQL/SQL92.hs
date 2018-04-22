@@ -1,4 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
+
 -- | Finally-tagless encoding of SQL92 DDL commands.
 --
 --  If you're writing a beam backend driver and you want to support migrations,
@@ -12,19 +14,30 @@ import Data.Aeson (Value)
 import Data.Hashable
 import Data.Text (Text)
 import Data.Typeable
+#if ! MIN_VERSION_base(4,11,0)
+import Data.Semigroup
+#endif
 
 -- * Convenience type synonyms
 
--- | Command syntaxes that can be used to issue DDL commands.
+-- | Syntax equalities that any reasonable DDL syntax would follow,
+-- including equalities between beam-migrate and beam-core types.
 type Sql92SaneDdlCommandSyntax cmd =
+  ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
+  , Sql92ColumnSchemaExpressionSyntax (Sql92DdlCommandColumnSchemaSyntax cmd) ~
+      Sql92ExpressionSyntax cmd )
+
+-- | Syntax equalities for any reasonable DDL syntax, only including
+-- types defined here.
+type Sql92SaneDdlCommandSyntaxMigrateOnly cmd =
   ( IsSql92DdlCommandSyntax cmd
   , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd)
   , Sql92SerializableConstraintDefinitionSyntax (Sql92DdlCommandConstraintDefinitionSyntax cmd)
   , Typeable (Sql92DdlCommandColumnSchemaSyntax cmd)
   , Sql92AlterTableColumnSchemaSyntax
       (Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax cmd)) ~
-      Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd) )
-
+      Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd)
+  )
 
 type Sql92DdlCommandDataTypeSyntax syntax =
   Sql92ColumnSchemaColumnTypeSyntax (Sql92DdlCommandColumnSchemaSyntax syntax)
@@ -146,7 +159,7 @@ class ( IsSql92ColumnConstraintSyntax (Sql92ColumnConstraintDefinitionConstraint
                              -> Maybe (Sql92ColumnConstraintDefinitionAttributesSyntax constraint)
                              -> constraint
 
-class (Monoid attrs, Typeable attrs) => IsSql92ConstraintAttributesSyntax attrs where
+class (Semigroup attrs, Monoid attrs, Typeable attrs) => IsSql92ConstraintAttributesSyntax attrs where
   initiallyDeferredAttributeSyntax :: attrs
   initiallyImmediateAttributeSyntax :: attrs
   notDeferrableAttributeSyntax :: attrs

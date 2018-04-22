@@ -2,6 +2,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
 
 -- | Migrations support for beam-postgres. See "Database.Beam.Migrate" for more
@@ -55,14 +58,16 @@ import           Data.Maybe
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
-import           Data.Monoid
 import           Data.String
 import           Data.Int
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
-import           Data.UUID (UUID)
+import           Data.UUID.Types (UUID)
 import           Data.Typeable
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
 migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax Postgres Pg.Connection Pg
@@ -109,17 +114,17 @@ postgresDataTypeDeserializers
 postgresDataTypeDeserializers =
   Db.beamDeserializer $ \_ v ->
   case v of
-    "bytea"       ->  pure pgByteaType
-    "smallserial" ->  pure pgSmallSerialType
-    "serial"      ->  pure pgSerialType
-    "bigserial"   ->  pure pgBigSerialType
-    "tsquery"     ->  pure pgTsQueryType
-    "tsvector"    ->  pure pgTsVectorType
-    "text"        ->  pure pgTextType
-    "json"        ->  pure pgJsonType
-    "jsonb"       ->  pure pgJsonbType
-    "uuid"        ->  pure pgUuidType
-    "money"       ->  pure pgMoneyType
+    "bytea"       -> pure pgByteaType
+    "smallserial" -> pure pgSmallSerialType
+    "serial"      -> pure pgSerialType
+    "bigserial"   -> pure pgBigSerialType
+    "tsquery"     -> pure pgTsQueryType
+    "tsvector"    -> pure pgTsVectorType
+    "text"        -> pure pgTextType
+    "json"        -> pure pgJsonType
+    "jsonb"       -> pure pgJsonbType
+    "uuid"        -> pure pgUuidType
+    "money"       -> pure pgMoneyType
     _             -> fail "Postgres data type"
 
 -- | Converts postgres 'DatabasePredicate's to 'DatabasePredicate's in the
@@ -174,7 +179,7 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
       | Pg.typoid Pg.uuid        == oid ->
           Just $ HsDataType (hsVarFrom "uuid" "Database.Beam.Postgres")
                             (HsType (tyConNamed "UUID")
-                                    (importSome "Data.UUID" [importTyNamed "UUID"]))
+                                    (importSome "Data.UUID.Types" [importTyNamed "UUID"]))
                             (pgDataTypeSerialized pgUuidType)
       | Pg.typoid Pg.money       == oid ->
           Just $ HsDataType (hsVarFrom "money" "Database.Beam.Postgres")
@@ -203,6 +208,7 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
                             (HsType (tyConNamed "TsQuery")
                                     (importSome "Database.Beam.Postgres" [importTyNamed "TsQuery"]))
                             (pgDataTypeSerialized pgTsQueryType)
+
     _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
 -- | Turn a series of 'Db.MigrationSteps' into a line-by-line array of
@@ -322,9 +328,8 @@ bytea = Db.DataType pgByteaType
 unboundedArray :: forall a. Typeable a
                => Db.DataType PgDataTypeSyntax a
                -> Db.DataType PgDataTypeSyntax (V.Vector a)
-unboundedArray (Db.DataType (PgDataTypeSyntax _ syntax serialized)) =
-  Db.DataType (PgDataTypeSyntax (error "Can't do array migrations yet") (syntax <> emit "[]")
-                                (pgDataTypeJSON (object [ "unbounded-array" .= Db.fromBeamSerializedDataType serialized])))
+unboundedArray (Db.DataType elTy) =
+  Db.DataType (pgUnboundedArrayType elTy)
 
 -- | 'Db.DataType' for @JSON@. See 'PgJSON' for more information
 json :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSON a)
@@ -352,5 +357,11 @@ smallserial = Db.DataType pgSmallSerialType
 serial = Db.DataType pgSerialType
 bigserial = Db.DataType pgBigSerialType
 
+data PgHasDefault = PgHasDefault
+instance Db.FieldReturnType 'True 'False PgColumnSchemaSyntax resTy a =>
+         Db.FieldReturnType 'False 'False PgColumnSchemaSyntax resTy (PgHasDefault -> a) where
+  field' _ _ nm ty _ collation constraints PgHasDefault =
+    Db.field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
+
 instance IsBeamSerialColumnSchemaSyntax PgColumnSchemaSyntax where
-  genericSerial nm = Db.field nm serial
+  genericSerial nm = Db.field nm serial PgHasDefault

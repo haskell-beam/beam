@@ -1,12 +1,14 @@
 module Database.Beam.Migrate.Tool.Diff where
 
+import           Prelude hiding (pred)
+
 import           Database.Beam
-import           Database.Beam.Migrate hiding (timestamp)
+import           Database.Beam.Migrate hiding (timestamp, p)
 import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.Tool.Backend
 import           Database.Beam.Migrate.Tool.CmdLine
 import           Database.Beam.Migrate.Tool.Registry
-import           Database.Beam.Migrate.Tool.Schema
 
 import           Control.Exception
 import           Control.Monad
@@ -77,11 +79,11 @@ genDiffFromSources cmdLine reg actualSource expSource =
 
 filterBeamMigratePreds :: SomeBeamMigrationBackend -> [SomeDatabasePredicate] -> [SomeDatabasePredicate]
 filterBeamMigratePreds (SomeBeamMigrationBackend (BeamMigrationBackend {} :: BeamMigrationBackend cmd be hdl m)) preds =
-  let beamMigrateDbSchema = collectChecks (beamMigratableDb @cmd @be @hdl)
-  in foldr (\pred@(SomeDatabasePredicate pred') preds ->
-              if pred `elem` preds
-              then filter (\p@(SomeDatabasePredicate p') -> p /= pred && not (predicateCascadesDropOn p' pred')) preds
-              else preds)
+  let beamMigrateDbSchema = collectChecks (beamMigratableDb @cmd @be @hdl @m)
+  in foldr (\pred@(SomeDatabasePredicate pred') preds' ->
+              if pred `elem` preds'
+              then filter (\p@(SomeDatabasePredicate p') -> p /= pred && not (predicateCascadesDropOn p' pred')) preds'
+              else preds')
            preds beamMigrateDbSchema
 
 getPredicatesFromSpec :: MigrateCmdLine -> MigrationRegistry
@@ -113,7 +115,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
                   runSelectReturningOne $ select $
                   limit_ 1 $ offset_ (fromIntegral fromHead) $
                   orderBy_ (desc_ . _logEntryId) $
-                  all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd))
+                  all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
 
       case logEntry of
         Left err -> throwIO (CouldNotFetchLog err)

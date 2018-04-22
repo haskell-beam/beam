@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -e
+
+stack --no-terminal test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver $BEAM_RESOLVER

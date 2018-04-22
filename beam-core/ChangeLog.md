@@ -1,4 +1,19 @@
+# 0.7.2.0
+
+Add compatibility with GHC 8.4 and stack nightly
+
+# 0.7.1.0
+
+Note '0.7.1.0' was released because the signature of `delete` was too specific
+in '0.7.0.0' due to an error when uploading the package.
+
 # 0.7.0.0
+
+## Weaker functional dependencies on `MonadBeam`
+
+The functional dependency on `MonadBeam` is now just `m -> syntax be
+handle`. This allows us to define `MonadBeam` instances atop monad transformers
+(although we don't have any yet!).
 
 ## Correct boolean handling
 
@@ -61,7 +76,6 @@ Now write
 ```haskell
 instance Database be MyDatabase
 ```
-
 
 ## Require backends to explicitly declare types that can be compared for equality
 

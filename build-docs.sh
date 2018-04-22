@@ -3,7 +3,7 @@
 set -e
 
 get_pythonpath () {
-    export PYTHONPATH=$(python -c "import sys; print ':'.join(['.'] + [p for p in sys.path if p != ''])")
+    export PYTHONPATH="`python -c "import sys; print ':'.join([s for s in sys.path if len(s) > 0])"`:."
 }
 
 servedocs () {
@@ -14,6 +14,11 @@ servedocs () {
 ghpages () {
     get_pythonpath
     mkdocs gh-deploy
+}
+
+builddocs () {
+    get_pythonpath
+    mkdocs build
 }
 
 cleandocs () {
@@ -27,14 +32,17 @@ usage () {
     echo "Usage: build-docs <command>"
     echo
     echo "Where <command> is one of"
-    echo "    servedocs - serve documents on 8000"
+    echo "    builddocs - build docs in site/ directory"
     echo "    ghpages   - build ghpages branch"
+    echo "    servedocs - serve documents on 8000"
 }
 
 case $1 in
     clean) cleandocs ;;
     servedocs)
 	servedocs ;;
+    builddocs)
+        builddocs ;;
     ghpages)
 	ghpages ;;
     *) usage ;;

@@ -20,6 +20,9 @@ import zipfile
 
 import sys
 
+def check_ci():
+    return os.environ.get("CI", 'false') == 'true' and 'BEAM_DOC_BACKEND' in os.environ
+
 def fetch_backend_src(backend_name, cache_dir, base_dir, src):
     if 'file' in src:
         return (os.path.join(base_dir, src['file']), {})
@@ -77,11 +80,14 @@ def setup_backend(cache_dir, base_dir, backend):
 
     if not os.path.exists(status_file):
         # Set up the database
+        print "bash environment is", \
+            ['/usr/bin/env', 'bash', '-c', backend_cmd + ' ' + opts], \
+             os.path.join(base_dir, 'docs/beam-docs-library.sh')
         setup_cmd = subprocess.Popen(['/usr/bin/env', 'bash', '-c',
                                       backend_cmd + ' ' + opts],
                                      cwd=os.path.abspath(cache_dir), close_fds=True,
                                      stdout=subprocess.PIPE,
-                                     env=dict(os.environ, BASH_ENV=os.path.join(base_dir, 'docs/beam-docs-library.sh')))
+                                     env=dict(os.environ, BEAM_DOCS_LIBRARY=os.path.join(base_dir, 'docs/beam-docs-library.sh')))
         (out, _) = setup_cmd.communicate()
         retcode = setup_cmd.wait()
         if retcode == 0:
@@ -208,15 +214,16 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
         source_hdl.write(u"\n".join(template_data).encode('utf-8'))
 
     build_command = 'stack runhaskell ' + build_options + ' ' + source_file
+    is_ci = check_ci()
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(cache_dir), close_fds=True,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE if not is_ci else None,
                             env=dict(os.environ, **stack_env))
 
     (out, err) = proc.communicate()
     out = unicode(out, 'utf-8')
 
     retcode = proc.wait()
-    print out, err
+    print "Ran backend example", lines_hash
     if retcode == 0:
         # Success!!
         os.remove(source_file)
@@ -227,8 +234,13 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
         save_cached_file(cache_dir, lines_hash, out)
         return out.split("\n")
     else:
-        print "Error in source file", source_file
-        return err.split()
+        if is_ci:
+            print "Error in source file", source_file
+            print "Example is\n", "\n".join(example_lines)
+            sys.exit(1)
+        else:
+            print "Error in source file", source_file
+            return err.split()
 
 def run_example(template_path, cache_dir, example_lines):
     template_data, options = read_template(template_path, { 'PLACEHOLDER': example_lines })
@@ -247,21 +259,28 @@ def run_example(template_path, cache_dir, example_lines):
     if build_command is None:
         return ["No BUILD_COMMAND specified"] + example_lines
 
+    is_ci = check_ci()
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(build_dir), close_fds=True,
-                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE if not is_ci else None)
 
     (out, err) = proc.communicate(u"\n".join(template_data).encode('utf-8'))
     out = unicode(out, 'utf-8')
 
     retcode = proc.wait()
 
-    print out, err
+    print "Ran example", lines_hash
     if retcode == 0:
         out = sqlparse.format(out, reindent=True)
         save_cached_file(cache_dir, lines_hash, out)
         return out.split("\n")
     else:
-        return err.split()
+        if is_ci:
+            print "Error processing file", lines_hash
+            print "Example is\n", "\n".join(example_lines)
+            sys.exit(1)
+        else:
+            return err.split()
 
 class BeamQueryBlockProcessor(Preprocessor):
     def __init__(self, *args, **kwargs):
@@ -370,7 +389,9 @@ class BeamQueryExtension(Extension):
             conf = yaml.load(f)
 
         backends = conf['backends']
-        enabled_backends = self.getConfig('enabled_backends')
+        is_ci = check_ci()
+        enabled_backends = self.getConfig('enabled_backends') if not is_ci else os.environ['BEAM_DOC_BACKEND'].split()
+        print "Enabled backends are", enabled_backends
         if len(enabled_backends) > 0:
             all_backends = backends.keys()
             for backend_name in all_backends:

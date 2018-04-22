@@ -1,6 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 
 -- | Module providing (almost) full support for Postgres query and data
 -- manipulation statements. These functions shadow the functions in
@@ -51,8 +52,10 @@ import           Database.Beam.Postgres.Syntax
 
 import           Control.Monad.Free.Church
 
-import           Data.Monoid ((<>))
 import qualified Data.Text as T
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 -- * @SELECT@
 
@@ -64,6 +67,8 @@ instance Monoid (PgLockedTables s) where
   mempty = PgLockedTables []
   mappend (PgLockedTables a) (PgLockedTables b) = PgLockedTables (a <> b)
 
+-- | Combines the result of a query along with a set of locked tables. Used as a
+-- return value for the 'lockingFor_' function.
 data PgWithLocking s a = PgWithLocking (PgLockedTables s) a
 instance ProjectibleWithPredicate c syntax a => ProjectibleWithPredicate c syntax (PgWithLocking s a) where
   project' p mutateM (PgWithLocking tbls a) =
@@ -73,7 +78,7 @@ instance ProjectibleWithPredicate c syntax a => ProjectibleWithPredicate c synta
 lockAll_ :: a -> PgWithLocking s a
 lockAll_ = PgWithLocking mempty
 
--- | Return and lock the given tables. Typically used as an infix operator. See
+-- | Return and lock the given tables. Typically used as an infix operator. See the
 -- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ the user guide> for usage
 -- examples
 withLocks_ :: a -> PgLockedTables s -> PgWithLocking s a
@@ -84,13 +89,13 @@ withLocks_ = flip PgWithLocking
 locked_ :: Database Postgres db
         => DatabaseEntity Postgres db (TableEntity tbl)
         -> Q PgSelectSyntax db s (PgLockedTables s, tbl (QExpr PgExpressionSyntax s))
-locked_ tbl@(DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
-  (nm, joined) <- Q (liftF (QAll tblNm tblSettings (\_ -> Nothing) id))
+locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
+  (nm, joined) <- Q (liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\_ -> Nothing) id))
   pure (PgLockedTables [nm], joined)
 
 -- | Lock some tables during the execution of a query. This is rather complicated, and there are
--- several usage examples in <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/
--- the user guide>
+-- several usage examples in
+-- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ the user guide>
 --
 -- The Postgres locking clause is rather complex, and beam currently does not check several
 -- pre-conditions. It is assumed you kinda know what you're doing.
@@ -115,7 +120,7 @@ lockingFor_ :: ( Database Postgres db, Projectible PgExpressionSyntax a )
             -> Q PgSelectSyntax db (QNested s) (PgWithLocking (QNested s) a)
             -> Q PgSelectSyntax db s a
 lockingFor_ lockStrength mLockOptions (Q q) =
-  Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) r) tbl ords limit offset ->
+  Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) _) tbl ords limit offset ->
                             let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
                             in pgSelectStmt tbl ords limit offset (Just locking))
                          q (\(PgWithLocking _ a) -> a)))
