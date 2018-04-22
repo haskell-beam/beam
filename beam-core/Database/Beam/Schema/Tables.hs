@@ -56,7 +56,8 @@ module Database.Beam.Schema.Tables
     where
 
 import           Database.Beam.Backend.Types
-import           Database.Beam.Schema.Tables.GPrimaryKeyOf(GPrimaryKeyOf,gPrimaryKey)
+import           Database.Beam.Schema.Tables.GPrimaryKeyOf(IsKeyDerivableFrom,derivedPrimaryKey)
+
 
 import           Control.Arrow (first)
 import           Control.Monad.Identity
@@ -525,11 +526,9 @@ class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (ta
     --   Whenever `PrimaryKey table column` and `table column` are generic, and the first rows from `PrimaryKey table column`
     --   match those from `table column`, this function can be auto derived.
     primaryKey :: table column -> PrimaryKey table column
-    default primaryKey :: ( Generic (table column)
-                          , Generic (PrimaryKey table column)
-                          , GPrimaryKeyOf (Rep (PrimaryKey table column)) (Rep (table column))
+    default primaryKey :: ( PrimaryKey table column `IsKeyDerivableFrom` table column
                           ) => table column -> PrimaryKey table column
-    primaryKey = to . fst . gPrimaryKey . from 
+    primaryKey = derivedPrimaryKey
 
 -- | Provides a number of introspection routines for the beam library. Allows us
 --   to "zip" tables with different column tags together. Always instantiate an
