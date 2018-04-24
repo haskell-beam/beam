@@ -303,8 +303,6 @@ haskellSchema BeamMigrationBackend { backendGetDbConstraints = getCs
 
       solver = heuristicSolver (defaultActionProvider @HsAction) [] hsConstraints
 
-  liftIO (putStrLn ("Constraints are " ++ show hsConstraints))
-
   case finalSolution solver of
     Solved cmds   ->
       let hsModule = hsActionsToModule "NewBeamSchema" (map migrationCommand cmds)
