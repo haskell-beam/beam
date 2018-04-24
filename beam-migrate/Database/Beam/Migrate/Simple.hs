@@ -279,7 +279,22 @@ backendMigrationScript render mig =
 
 -- | Given a 'BeamMigrationBackend', get a string representing a Haskell module
 -- that would be a good starting point for further development.
-haskellSchema :: BeamMigrationBackend cmd be handle m
+--
+-- For example, for a postgres database named @chinook@
+--
+-- > import Database.Beam.Migrate.Simple
+-- > import Database.Beam.Postgres (runBeamPostgres)
+-- > import Database.Beam.Postgres.Migrate (migrationBackend)
+-- > import Database.PostgreSQL.Simple
+-- >
+-- > getSchema :: IO String
+-- > getSchema = do pg <- connectPostgreSQL
+-- >                runBeamPostgres pg (haskellSchema migrationBackend)
+--
+-- Backends that have a migration backend typically export it under the module
+-- name @Database.Beam./Backend/.Migrate@.
+haskellSchema :: MonadBeam cmd be hdl m
+              => BeamMigrationBackend cmd be handle m
               -> m String
 haskellSchema BeamMigrationBackend { backendGetDbConstraints = getCs
                                    , backendConvertToHaskell = HaskellPredicateConverter conv2Hs } = do
