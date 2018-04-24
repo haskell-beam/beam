@@ -70,11 +70,11 @@ import GHC.TypeLits
 --   The first argument is the name of the table.
 --
 --   The second argument is a table containing a 'FieldSchema' for each field.
---   See documentation on the 'Field' command for more information.
+--   See documentation on the 'Field' command for more information.c
 createTable :: ( Beamable table, Table table
-               , IsSql92DdlCommandSyntax syntax ) =>
-               Text -> TableSchema (Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax syntax)) table
-            -> Migration syntax (CheckedDatabaseEntity be db (TableEntity table))
+               , BeamMigrateSqlBackend be ) =>
+               Text -> TableSchema be  table
+            -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
 createTable newTblName tblSettings =
   do let createTableCommand =
            createTableSyntax Nothing newTblName
@@ -99,16 +99,16 @@ createTable newTblName tblSettings =
      pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable newTblName tbl') tblChecks fieldChecks) [])
 
 -- | Add a @DROP TABLE@ statement to this migration.
-dropTable :: IsSql92DdlCommandSyntax syntax
+dropTable :: BeamMigrateSqlBackend be
           => CheckedDatabaseEntity be db (TableEntity table)
-          -> Migration syntax ()
+          -> Migration be ()
 dropTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm _) _ _) _) =
   let command = dropTableCmd (dropTableSyntax tblNm)
   in upDown command Nothing
 
 -- | Copy a table schema from one database to another
 preserve :: CheckedDatabaseEntity be db e
-         -> Migration syntax (CheckedDatabaseEntity be db' e)
+         -> Migration be (CheckedDatabaseEntity be db' e)
 preserve (CheckedDatabaseEntity desc checks) = pure (CheckedDatabaseEntity desc checks)
 
 -- * Alter table
@@ -120,14 +120,14 @@ data ColumnMigration a
   , columnMigrationFieldChecks :: [FieldCheck] }
 
 -- | Monad representing a series of @ALTER TABLE@ statements
-newtype TableMigration syntax a
-  = TableMigration (WriterT [Sql92DdlCommandAlterTableSyntax syntax] (State (Text, [TableCheck])) a)
+newtype TableMigration be a
+  = TableMigration (WriterT [Sql92DdlCommandAlterTableSyntax (BeamSqlBackendSyntax be)] (State (Text, [TableCheck])) a)
   deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
-renameTableTo :: Sql92SaneDdlCommandSyntax syntax
+renameTableTo :: BeamMigrateSqlBackend be
               => Text -> table ColumnMigration
-              -> TableMigration syntax (table ColumnMigration)
+              -> TableMigration be (table ColumnMigration)
 renameTableTo newName oldTbl = TableMigration $ do
   (curNm, chks) <- get
   tell [ alterTableSyntax curNm (renameTableToSyntax newName) ]
@@ -135,9 +135,9 @@ renameTableTo newName oldTbl = TableMigration $ do
   return oldTbl
 
 -- | @ALTER TABLE ... RENAME COLUMN ... TO ...@ command
-renameColumnTo :: Sql92SaneDdlCommandSyntax syntax
+renameColumnTo :: BeamMigrateSqlBackend be
                => Text -> ColumnMigration a
-               -> TableMigration syntax (ColumnMigration a)
+               -> TableMigration be (ColumnMigration a)
 renameColumnTo newName column = TableMigration $ do
   (curTblNm, _) <- get
   tell [ alterTableSyntax curTblNm
@@ -145,16 +145,16 @@ renameColumnTo newName column = TableMigration $ do
   pure column { columnMigrationFieldName = newName }
 
 -- | @ALTER TABLE ... DROP COLUMN ...@ command
-dropColumn :: Sql92SaneDdlCommandSyntax syntax
-           => ColumnMigration a -> TableMigration syntax ()
+dropColumn :: BeamMigrateSqlBackend be
+           => ColumnMigration a -> TableMigration be ()
 dropColumn column = TableMigration $ do
   (curTblNm, _)<- get
   tell [ alterTableSyntax curTblNm (dropColumnSyntax (columnMigrationFieldName column)) ]
 
 -- | @ALTER TABLE ... ADD COLUMN ...@ command
-addColumn :: Sql92SaneDdlCommandSyntax syntax
-          => TableFieldSchema (Sql92DdlCommandColumnSchemaSyntax syntax) a
-          -> TableMigration syntax (ColumnMigration a)
+addColumn :: BeamMigrateSqlBackend be
+          => TableFieldSchema be a
+          -> TableMigration be (ColumnMigration a)
 addColumn (TableFieldSchema nm (FieldSchema fieldSchemaSyntax) checks) =
   TableMigration $
   do (curTblNm, _) <- get
@@ -185,10 +185,10 @@ addColumn (TableFieldSchema nm (FieldSchema fieldSchemaSyntax) checks) =
 -- @
 --
 alterTable :: forall be db db' table table' syntax
-            . (Table table', IsSql92DdlCommandSyntax syntax)
+            . (Table table', BeamMigrateSqlBackend be)
            => CheckedDatabaseEntity be db (TableEntity table)
-           -> (table ColumnMigration -> TableMigration syntax (table' ColumnMigration))
-           -> Migration syntax (CheckedDatabaseEntity be db' (TableEntity table'))
+           -> (table ColumnMigration -> TableMigration be (table' ColumnMigration))
+           -> Migration be (CheckedDatabaseEntity be db' (TableEntity table'))
 alterTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm tbl) tblChecks tblFieldChecks) entityChecks) alterColumns =
  let initialTbl = runIdentity $
                   zipBeamFieldsM
@@ -299,13 +299,13 @@ bigint = DataType bigIntType
 
 -- TODO is Integer the right type to use here?
 -- | SQL2003 Optional @BINARY@ data type
-binary :: IsSql2003BinaryAndVarBinaryDataTypeSyntax syntax
-       => Maybe Word -> DataType syntax Integer
+binary :: BeamSqlT021Backend be
+       => Maybe Word -> DataType be Integer
 binary prec = DataType (binaryType prec)
 
 -- | SQL2003 Optional @VARBINARY@ data type
-varbinary :: IsSql2003BinaryAndVarBinaryDataTypeSyntax syntax
-          => Maybe Word -> DataType syntax Integer
+varbinary :: BeamSqlT021Backend be
+          => Maybe Word -> DataType be Integer
 varbinary prec = DataType (varBinaryType prec)
 
 -- TODO should this be Day or something?
@@ -322,11 +322,11 @@ varchar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
 varchar prec = DataType (varCharType prec Nothing)
 
 -- | SQL92 @DOUBLE@ data type
-double :: IsSql92DataTypeSyntax syntax => DataType syntax Double
+double :: BeamMigrateSqlBackend be => DataType be Double
 double = DataType doubleType
 
 -- | SQL92 @NUMERIC@ data type
-numeric :: IsSql92DataTypeSyntax syntax => Maybe (Word, Maybe Word) -> DataType syntax Scientific
+numeric ::  BeamMigrateSqlBackend be => Maybe (Word, Maybe Word) -> DataType be Scientific
 numeric x = DataType (numericType x)
 
 -- | SQL92 @TIMESTAMP WITH TIME ZONE@ data type

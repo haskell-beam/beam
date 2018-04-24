@@ -110,7 +110,7 @@ data QBaseScope
 -- | A version of the table where each field is a 'QGenExpr'
 type QGenExprTable ctxt be s tbl = tbl (QGenExpr ctxt be s)
 
-type QExprTable be s tbl = QGenExprTable QValueContext be s tbl
+type QExprTable
 
 -- * SELECT
 

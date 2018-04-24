@@ -1,19 +1,12 @@
-!!! warning "Warning"
-    The `beam-migrations` package is still a WIP. The following manual
-    represents both planned and implemented features. If you'd like to help
-    guide development, please join
-    the
-    [`beam-discussion` mailing list](https://groups.google.com/forum/#!forum/beam-discussion).
-
 In the User Guide we saw how to declare a schema for an already created database
 and use it to perform queries. Beam can also manage a database schema based on
 Haskell datatypes you feed it.
 
-The Beam Migrations Framework is meant to be a robust, modular, and opinionated
-way of managing schema changes. It is an optional part of beam provided in the
-`beam-migrate` package.
+The migrations framework is meant to be a robust and modular way of
+managing schema changes. It is an optional part of beam provided in
+the `beam-migrate` package.
 
-Install the migrations framework and tool by running
+Install the migrations framework by running.
 
 ```
 $ cabal install beam-migrate
@@ -21,20 +14,13 @@ $ cabal install beam-migrate
 $ stack install beam-migrate
 ```
 
-This installs the `beam-migrate` library as well as a CLI tool (named
-`beam-migrate` as well) which automates common tasks.
-
-If you use `stack` make sure you always use `stack exec -- beam-migrate` instead
-of the typical `beam-migrate` command in order to have the package path
-automatically and correctly set for you.
-
 ## Basic concepts
 
 In the user guide, we saw how we can use `defaultDbSettings` to generate default
 metadata that can be used to access the database. This default metadata is
-enough to query, but not enough for `beam-migrate`. Thus, `beam-migrate` offers
-the `defaultMigratableDbSettings` function, which annotates the database schema
-with additional information. Whereas `defaultDbSettings` yields a value of type
+enough to query, but not enough for `beam-migrate`. `beam-migrate` offers the
+`defaultMigratableDbSettings` function, which annotates the database schema with
+additional information. Whereas `defaultDbSettings` yields a value of type
 `DatabaseSettings be db`, `defaultMigratableDbSettings` yields a value of type
 `CheckedDatabaseSettings be db`. You can recover a `DatabaseSettings be db` from
 a `CheckedDatabaseSettings be db` value by applying the `unCheckDatabase`
@@ -58,6 +44,36 @@ checked type becomes `[TableExistsPredicate "table", TableHasColumn "table"
     class. The predicates can be stored in a list because they are wrapped in
     the `SomeDatabasePredicate` GADT that holds the type class instance as well.
 
+
+## Usage modes
+
+`beam-migrate` can be used as a library or a command-line tool in *managed* or
+*unmanaged* mode.
+
+### The `beam-migrate` library
+
+The `beam-migrate` library provides syntax definitions for common SQL DDL tasks.
+It also provides types for expressing migrations as transformations of one or
+more schemas to another. `beam-migrate` offers a built-in way to apply these
+migrations to a production database, running only those migrations that are
+necessary. You can also directly interpret the `beam-migrate` DSL to hook your
+Haskell migrations into your own system.
+
+`beam-migrate` is described in more detail in the [`beam-migrate` migrations
+guide](schema-guide/library.md)
+
+### The `beam-migrate` tool
+
+There is an optional `beam-migrate` command line tool, available in the
+`beam-migrate-cli` package.
+
+The `beam-migrate` tool can generate a beam schema from a pre-existing database,
+manage migrations for several production databases, automatically generate
+migrations between two schemas, and much more. It is rather opinionated, and is
+described in more detail in the [`beam-migrate` CLI guide](schema-guide/tool.md)
+
+
+
 ### Automatic migration generation
 
 Given two `CheckedDatabaseSettings` values, `beam-migrate` can generate a set of
@@ -79,20 +95,12 @@ predicates.
     will change with the introduction of linear types). Thus, migrations written
     in Haskell are not checked by GHC for linear-ness, but `beam-migrate` will
     validate such migrations at run-time to the best of its ability.
-    
+
 The migration prover may not be able to find a migration in a sufficiently short
 period of time. `beam-migrate`'s algorithm is designed to terminate, but this
 may take a while. Additionally, the prover will not automatically generate steps
 for some migrations. For example, `beam-migrate` will never rename a table
 without explicit instructions.
-
-For these cases, the `beam-migrate` command line interface offers an
-*interactive* mode. Here, it presents both database types for the user's
-inspection, as well as a list of steps `beam-migrate` thinks it can take based
-on these types. The user can choose to let `beam-migrate` guess the next step,
-or the user can select a step that `beam-migrate` offers as the next step, or
-the user can enter his/her own step and select which predicates are consumed and
-generated.
 
 ### Advantages of checked migrations
 
@@ -100,38 +108,6 @@ Unlike other database migration frameworks, the checking process allows
 `beam-migrate` to be sure that the migration you specify will result in the
 database type you want. Also, checked migrations allow the programmer to verify
 that the database they are accessing indeed matches what their schema expects.
-
-## Usage modes
-
-`beam-migrate` can be used as a library or a command-line tool in *managed* or
-*unmanaged* mode.
-
-### The `beam-migrate` library
-
-The `beam-migrate` library provides syntax definitions for common SQL DDL tasks.
-It also provides types for expressing migrations as transformations of one or
-more schemas to another. The library exports types for database backends to hook
-into automated migration tools (including the `beam-migrate` tool). Finally, it
-also implements the migration solver. Its use is described in the next section.
-
-### The `beam-migrate` tool
-
-In *unmanaged* mode, the `beam-migrate` tool offers a set of convenience
-functionality for generating migrations, checking databases, etc based off of a
-schema. It is useful for performing one-off tasks (such as generating a
-migration script) that you don't want to recompile your project for.
-
-*Managed* mode extends the functionality of *unmanaged* mode with tools for
-managing sets of schemas and migrations between them. In this mode,
-`beam-migrate` can be used to update a production or development database
-schema. This mode supports schema branching and version-control integration but
-forces you to adopt `beam-migrate`'s conventions.
-
-!!! tip "Tip"
-    If you're worried about a `beam-migrate` dependency in a production
-    application, `beam-migrate` can be used to freeze a particular checked
-    database settings object. This means you get a `DatabaseSettings` value
-    which can be used in an application with only a `beam-core` dependency.
 
 [^1]:
     Linear logic is a type of logic first described by Jean-Yves Gerard. In

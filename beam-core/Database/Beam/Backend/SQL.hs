@@ -15,6 +15,7 @@ module Database.Beam.Backend.SQL
   , BeamSql99ConcatExpressionBackend
   , BeamSql2003ExpressionBackend
 
+  , BeamSqlT021Backend
   , BeamSqlT611Backend
   , BeamSqlT612Backend
   , BeamSqlT614Backend
@@ -196,6 +197,7 @@ type BeamSql2003ExpressionBackend be = ( IsSql2003ExpressionSyntax (BeamSqlBacke
 
 type BeamSqlBackendSupportsOuterJoin be = IsSql92FromOuterJoinSyntax (BeamSqlBackendFromSyntax be)
 
+type BeamSqlT021Backend be = IsSql2003BinaryAndVarBinaryDataTypeSyntax (BeamSqlBackendDataTypeSyntax be)
 type BeamSqlT611Backend be = IsSql2003ExpressionElementaryOLAPOperationsSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlT612Backend be = IsSql2003ExpressionAdvancedOLAPOperationsSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlT614Backend be = IsSql2003NtileExpressionSyntax (BeamSqlBackendExpressionSyntax be)
@@ -210,6 +212,7 @@ type BeamSqlBackendSelectSyntax be = Sql92SelectSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendInsertSyntax be = Sql92InsertSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendInsertValuesSyntax be = Sql92InsertValuesSyntax (BeamSqlBackendInsertSyntax be)
 type BeamSqlBackendExpressionSyntax be = Sql92ExpressionSyntax (BeamSqlBackendSyntax be)
+type BeamSqlBackendDataTypeSyntax be = Sql92ExpressionCastTargetSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendFieldNameSyntax be = Sql92ExpressionFieldNameSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendUpdateSyntax be = Sql92UpdateSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendDeleteSyntax be = Sql92DeleteSyntax (BeamSqlBackendSyntax be)
