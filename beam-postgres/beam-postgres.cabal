@@ -1,5 +1,5 @@
 name:                 beam-postgres
-version:              0.3.2.0
+version:              0.3.2.1
 synopsis:             Connection layer between beam and postgres
 description:          Beam driver for <https://www.postgresql.org/ PostgreSQL>, an advanced open-source RDBMS
 homepage:             http://tathougies.github.io/beam/user-guide/backends/beam-postgres
@@ -43,7 +43,7 @@ library
                       monad-control        >=1.0  && <1.1,
                       mtl                  >=2.1  && <2.3,
                       conduit              >=1.2  && <1.4,
-                      aeson                >=0.11 && <1.3,
+                      aeson                >=0.11 && <1.4,
                       uuid-types           >=1.0  && <1.1,
                       case-insensitive     >=1.2  && <1.3,
                       scientific           >=0.3  && <0.4,
