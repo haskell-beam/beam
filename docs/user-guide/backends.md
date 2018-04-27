@@ -64,7 +64,7 @@ Now, back in GHCi, we can create a connection to this database.
 
 ```
 Prelude Database.Beam.Sqlite> basics <- open "basics.db"
-Prelude Database.Beam.Sqlite> withDatabase basics $ runSelectReturningList (select (all_ (persons exampleDb)))
+Prelude Database.Beam.Sqlite> runBeamSqlite basics $ runSelectReturningList (select (all_ (persons exampleDb)))
 [ .. ]
 ```
 
@@ -92,20 +92,21 @@ directly against the database using `sqlite-simple` functionality:
 Prelude Schema> execute_ conn "CREATE TABLE persons ( first_name TEXT NOT NULL, last_name TEXT NOT NULL, age INT NOT NULL, PRIMARY KEY(first_name, last_name) )"
 ```
 
-Now we can insert some data into our database. Beam ships with a
-function `withDatabase`, with the following signature:
+Now we can insert some data into our database. `beam-sqlite` ships with a
+function `runBeamSqlite`, with the following signature:
 
 ```haskell
-withDatabase :: MonadBeam syntax be hdl m => hdl -> m a -> IO a
+runBeamSqlite :: Connection -> SqliteM a -> IO a
 ```
 
-`MonadBeam` is a type class that relates a particular SQL syntax (`syntax`) to a
-backend (`be`), command monad (`m`), and database handle (`hdl`) type. Inside
-the `m` monad, we can execute data query and manipulation commands. The `hdl`
-type is usually the type of the connection in the underlying backend library.
+`beam-sqlite` uses the `sqlite-simple` library, so its handle type is
+`Connection` from `Database.SQLite.Simple`.
 
-For example, `beam-sqlite` uses the `sqlite-simple` library, so its handle type
-is `Connection` from `Database.SQLite.Simple`.
+`SqliteM` is a monad implementing `MonadBeam` which we can use to construct
+database actions from individual SQL commands (select, insert, update, delete).
+`MonadBeam` is a type class that relates a particular SQL syntax (`syntax`) to a
+backend (`be`), and a command monad (`m`). Inside the `m` monad, we can execute
+data query and manipulation commands.
 
 Let's insert some data into our database. We are going to use the `runInsert`
 function from `MonadBeam`. INSERTs are discussed in more detail in
@@ -113,7 +114,7 @@ the [data manipulation guide](manipulation/insert.md).
 
 ```text
 Prelude Schema> :{
-Prelude Schema| withDatabase conn $ do
+Prelude Schema| runBeamSqlite conn $ do
 Prelude Schema|   runInsert $ insert (persons exampleDb) $
 Prelude Schema|               insertValues [ Person "Bob" "Smith" 50
 Prelude Schema|                            , Person "Alice" "Wong" 55
@@ -124,7 +125,7 @@ Prelude Schema| :}
 The `runInsert` function has the type signature
 
 ```haskell
-runInsert :: MonadBeam syntax be hdl m => SqlInsert syntax -> m ()
+runInsert :: MonadBeam syntax be m => SqlInsert syntax -> m ()
 ```
 
 `SqlInsert syntax` represents a SQL `INSERT` command in the given
@@ -151,11 +152,11 @@ Now, we can query the database, using the `runSelect` function. Like `runInsert`
 and `insert`, we use the `select` function to construct a value of type
 `SqlSelect syntax`, which can be run inside `MonadBeam`.
 
-We can use the `withDatabaseDebug` function to install a hook that beam will
+We can use the `runBeamSqliteDebug` function to install a hook that beam will
 call with every SQL command it is about to run. In the following example, beam
 will print its query to stdout via `putStrLn`. You can use this functionality to hook beam in to a logging framework.
 
 ```text
-Prelude Schema> withDatabaseDebug putStrLn conn $ runSelect (select (all_ (persons exampleDb)))
+Prelude Schema> runBeamSqliteDebug putStrLn conn $ runSelect (select (all_ (persons exampleDb)))
 [ Person { personFirstName = "Bob", personLastName="Smith", personAge=50 }, ... ]
 ```
