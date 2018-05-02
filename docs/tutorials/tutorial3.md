@@ -438,7 +438,7 @@ orders.
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 usersAndOrders <-
   runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
@@ -462,7 +462,7 @@ find users who have no associated orders.
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 usersWithNoOrders <-
   runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
@@ -482,7 +482,7 @@ We can also use the `exists_` combinator to utilize the SQL `EXISTS` clause.
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 usersWithNoOrders <-
   runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $
@@ -502,7 +502,7 @@ order.
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 
 ordersWithCostOrdered <-
   runBeamSqliteDebug putStrLn conn $
@@ -534,7 +534,7 @@ With that in mind, we can write the query to get the total spent by user
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 
 allUsersAndTotals <-
   runBeamSqliteDebug putStrLn conn $
@@ -567,7 +567,7 @@ Suppose we want to find all orders who have not been shipped. We can do this by 
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 
 allUnshippedOrders <-
   runBeamSqliteDebug putStrLn conn $
@@ -621,7 +621,7 @@ One way to work around this issue in the above query is to use subselects.
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 
 shippingInformationByUser <-
   runBeamSqliteDebug putStrLn conn $
@@ -660,7 +660,7 @@ generation of a sub `SELECT`.
 !beam-query
 ```haskell
 !employee3sql-2 sql
-!employee3out-2 out
+!employee3out-2 output
 
 shippingInformationByUser <-
   runBeamSqliteDebug putStrLn conn $

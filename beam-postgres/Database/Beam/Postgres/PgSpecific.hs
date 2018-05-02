@@ -21,6 +21,7 @@ module Database.Beam.Postgres.PgSpecific
 
     -- *** @TSQUERY@ data type
   , TsQuery(..), (@@)
+  , toTsQuery
 
     -- ** @JSON@ and @JSONB@ data types
     -- $json
@@ -180,10 +181,10 @@ toTsVector :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
 toTsVector Nothing (QExpr x) =
   QExpr (fmap (\(PgExpressionSyntax x') ->
                  PgExpressionSyntax $
-                 emit "to_tsquery(" <> x' <> emit ")") x)
+                 emit "to_tsvector(" <> x' <> emit ")") x)
 toTsVector (Just (TsVectorConfig configNm)) (QExpr x) =
   QExpr (fmap (\(PgExpressionSyntax x') -> PgExpressionSyntax $
-                 emit "to_tsquery('" <> escapeString configNm <> emit "', " <> x' <> emit ")") x)
+                 emit "to_tsvector('" <> escapeString configNm <> emit "', " <> x' <> emit ")") x)
 
 -- | Determine if the given @TSQUERY@ matches the document represented by the
 -- @TSVECTOR@. Behaves exactly like the similarly-named operator in postgres.
@@ -214,6 +215,19 @@ instance Pg.FromField TsQuery where
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
 
 instance FromBackendRow Postgres TsQuery
+
+-- | The Postgres @to_tsquery@ function. Given a configuration and string,
+-- return the @TSQUERY@ that represents the contents of the string.
+toTsQuery :: IsSqlExpressionSyntaxStringType PgExpressionSyntax str
+           => Maybe TsVectorConfig -> QGenExpr context PgExpressionSyntax s str
+           -> QGenExpr context PgExpressionSyntax s TsQuery
+toTsQuery Nothing (QExpr x) =
+  QExpr (fmap (\(PgExpressionSyntax x') ->
+                 PgExpressionSyntax $
+                 emit "to_tsquery(" <> x' <> emit ")") x)
+toTsQuery (Just (TsVectorConfig configNm)) (QExpr x) =
+  QExpr (fmap (\(PgExpressionSyntax x') -> PgExpressionSyntax $
+                 emit "to_tsquery('" <> escapeString configNm <> emit "', " <> x' <> emit ")") x)
 
 -- ** Array operators
 

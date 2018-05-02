@@ -4,13 +4,15 @@
 
 -- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core --package microlens -- -fglasgow-exts -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XPartialTypeSignatures -fno-warn-partial-type-signatures
 -- ! BUILD_DIR: beam-sqlite/examples/
+-- ! FORMAT: console
 module Main where
 
 import Prelude hiding (lookup)
 
 import Database.Beam hiding (withDatabaseDebug)
 import qualified Database.Beam as Beam
-import Database.Beam.Sqlite
+import Database.Beam.Sqlite hiding (runBeamSqliteDebug)
+import qualified Database.Beam.Sqlite as Sqlite
 import Database.SQLite.Simple
 
 import Lens.Micro
@@ -65,7 +67,6 @@ data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers         :: f (TableEntity UserT)
                       , _shoppingCartUserAddresses :: f (TableEntity AddressT) }
                         deriving Generic
-
 instance Database be ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings Sqlite ShoppingCartDb
@@ -114,15 +115,6 @@ main =
        insert (_shoppingCartUsers shoppingCartDb) $
        insertValues [ james, betty, sam ]
 
-     let onStmt s = pure ()
-
-         withDatabaseDebug _ q = runBeamSqliteDebug onStmt q
-         putStrLn :: String -> IO ()
-         putStrLn x = putStr (concatMap (\x -> if x == '\n' then "\n\n" else [x]) x ++ "\n --\n")
-
-         print :: Show a => a -> IO ()
-         print = putStrLn . show
-
      let addresses = [ Address default_ (val_ "123 Little Street") (val_ Nothing) (val_ "Boston") (val_ "MA") (val_ "12345") (pk james)
                      , Address default_ (val_ "222 Main Street") (val_ (Just "Ste 1")) (val_ "Houston") (val_ "TX") (val_ "8888") (pk betty)
                      , Address default_ (val_ "9999 Residence Ave") (val_ Nothing) (val_ "Sugarland") (val_ "TX") (val_ "8989") (pk betty) ]
@@ -131,4 +123,7 @@ main =
       insert (_shoppingCartUserAddresses shoppingCartDb) $
       insertExpressions addresses
 
+     let runBeamSqliteDebug _ = Sqlite.runBeamSqlite
+
      BEAM_PLACEHOLDER
+

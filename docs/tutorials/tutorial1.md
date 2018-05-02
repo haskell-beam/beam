@@ -15,7 +15,7 @@ here (found in the `beam-sqlite` package). Now, open up a GHCi prompt for us to
 use. Make sure to get the `beam-core` and `beam-sqlite` packages.
 
 ```console
-$ stack repl --package beam-core --package beam-sqlite --package sqlite-simple
+$ stack repl --package beam-core --package beam-sqlite --package sqlite-simple --package beam-migrate
 ```
 
 This will put you into a GHCi prompt with the `beam-core` and `beam-sqlite`
