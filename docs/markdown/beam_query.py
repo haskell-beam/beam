@@ -248,6 +248,7 @@ def run_example(template_path, cache_dir, example_lines):
     build_dir = options.get('BUILD_DIR', '.')
     build_command = options.get('BUILD_COMMAND')
     extra_deps = options.get('EXTRA_DEPS', "").split()
+    out_format = options.get('FORMAT', 'sql')
 
     lines_hash = hash_template("$$TEMPLATEPATH$$" + template_path +
                                u"".join(example_lines).encode('ascii', 'xmlcharrefreplace'),
@@ -271,7 +272,8 @@ def run_example(template_path, cache_dir, example_lines):
 
     print "Ran example", lines_hash
     if retcode == 0:
-        out = sqlparse.format(out, reindent=True)
+        if out_format == 'sql':
+            out = sqlparse.format(out, reindent=True)
         save_cached_file(cache_dir, lines_hash, out)
         return out.split("\n")
     else:

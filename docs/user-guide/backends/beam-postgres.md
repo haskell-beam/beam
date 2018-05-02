@@ -13,8 +13,15 @@ with these easier.
 
 ### The `tsvector` and `tsquery` types
 
-The `tsvector` and `tsquery` types form the basis of full-text search in
-Postgres.
+The `tsvector` and `tsquery` types form the basis of full-text search
+in Postgres. They correspond to the haskell types `TsVector` and
+`TsQuery`, which are just newtype-wrappers over `ByteString`.
+
+!beam-query
+```haskell
+!example chinook only:Postgres
+pure (Pg.toTsVector (Just Pg.english) (as_ @String (val_ "The quick brown fox jumps over the lazy dog")))
+```
 
 ## Postgres extensions
 

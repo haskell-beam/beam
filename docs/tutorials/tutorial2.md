@@ -319,7 +319,7 @@ First, let's use the new lenses we made. Make sure to import `Lens.Micro` or
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 -- import Lens.Micro
 -- import Control.Lens
 addresses <- runBeamSqliteDebug putStrLn conn $
@@ -389,7 +389,7 @@ For example, to retrieve every pair of user and address, we can write the follow
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 allPairs <- runBeamSqliteDebug putStrLn conn $
             runSelectReturningList $ select $ do
               user <- all_ (shoppingCartDb ^. shoppingCartUsers)
@@ -410,7 +410,7 @@ bools.
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 usersAndRelatedAddresses <-
   runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $ select $
@@ -430,7 +430,7 @@ expression that can match primary keys together.
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 usersAndRelatedAddressesUsingReferences <-
   runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $ select $
@@ -452,7 +452,7 @@ combinator to pull related tables directly into the query monad.
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 usersAndRelatedAddressesUsingRelated <-
   runBeamSqliteDebug putStrLn conn $
     runSelectReturningList $ select $
@@ -468,7 +468,7 @@ We can also query the addresses for a particular user given a `UserId`.
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 -- This is a contrived example to show how we can use an arbitrary UserId to fetch a particular user.
 -- We don't always have access to the full 'User' lying around. For example we may be in a function that
 -- only accepts 'UserId's.
@@ -515,7 +515,7 @@ update the corresponding record in the database.
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 
 [james] <-
   runBeamSqliteDebug putStrLn conn $
@@ -547,7 +547,7 @@ to use the new name and ZIP code.
 !beam-query
 ```haskell
 !employee2sql sql
-!employee2out console
+!employee2out output
 
 addresses <-
   runBeamSqliteDebug putStrLn conn $
