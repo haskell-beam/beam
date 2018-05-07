@@ -1,0 +1,55 @@
+.code-nav-container {
+    padding: 0 0 0 0;
+    background-color: white;
+    color: white;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px 0 rgba(0,0,0,.2), 0 1px 1px 0 rgba(0,0,0,.14), 0 2px 1px -1px rgba(0,0,0,.12);
+}
+
+.code-nav-container ul.nav-tabs {
+    list-style: none;
+    padding: 0 0 0 0;
+}
+
+.code-nav-container .nav-tabs .nav-item {
+    padding: 6px 12px;
+    margin: 0;
+    display: inline-block;
+    border-bottom: 2px solid transparent;
+}
+.code-nav-container .nav-tabs .nav-item.active {
+    border-bottom: 2px solid #ff1744;
+}
+.code-nav-container .nav-tabs .nav-item.active a {
+    font-weight: bold;
+    color: #2196f3;;
+}
+
+.code-nav-container .nav-tabs .nav-item a {
+     cursor: pointer;
+    text-transform: uppercase;
+    font-size: 11pt;
+    font-weight: normal;
+    color: rgba(0,0,0, 0.5);
+
+    transition: font-weight 0.2s;
+}
+
+div.tab-content {
+    padding: 0 0 5px 0;
+    overflow: hidden;
+}
+
+div.tab-content .tab-pane {
+    display: none;
+}
+
+div.tab-content .tab-pane.active {
+    display: block;
+}
+
+div.tab-content .codehilite {
+    background-color: rgb(250,250,250);
+    border-radius: 0;
+    margin: 0;
+}

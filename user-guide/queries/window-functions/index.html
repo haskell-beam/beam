@@ -1,0 +1,1197 @@
+
+
+
+
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      
+      
+      
+      
+        <meta name="lang:clipboard.copy" content="Copy to clipboard">
+      
+        <meta name="lang:clipboard.copied" content="Copied to clipboard">
+      
+        <meta name="lang:search.language" content="en">
+      
+        <meta name="lang:search.pipeline.stopwords" content="True">
+      
+        <meta name="lang:search.pipeline.trimmer" content="True">
+      
+        <meta name="lang:search.result.none" content="No matching documents">
+      
+        <meta name="lang:search.result.one" content="1 matching document">
+      
+        <meta name="lang:search.result.other" content="# matching documents">
+      
+        <meta name="lang:search.tokenizer" content="[\s\-]+">
+      
+      <link rel="shortcut icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-0.17.2, mkdocs-material-2.6.0">
+    
+    
+      
+        <title>Window functions - Beam Documentation</title>
+      
+    
+    
+
+      <link rel="stylesheet" href="../../../assets/stylesheets/application.aa3de92b.css">
+      
+    
+<link rel="stylesheet" type="text/css" href="../../../css/beam.css"/>
+
+    
+      <script src="../../../assets/javascripts/modernizr.1aa3b519.js"></script>
+    
+    
+      
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
+        <style>body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}</style>
+      
+      <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    
+    
+      <link rel="stylesheet" href="../../../docs/theme/css/beam.css">
+    
+    
+  </head>
+  
+    <body dir="ltr">
+  
+    <svg class="md-svg">
+      <defs>
+        
+        
+          <svg xmlns="http://www.w3.org/2000/svg" width="416" height="448"
+    viewBox="0 0 416 448" id="github">
+  <path fill="currentColor" d="M160 304q0 10-3.125 20.5t-10.75 19-18.125
+        8.5-18.125-8.5-10.75-19-3.125-20.5 3.125-20.5 10.75-19 18.125-8.5
+        18.125 8.5 10.75 19 3.125 20.5zM320 304q0 10-3.125 20.5t-10.75
+        19-18.125 8.5-18.125-8.5-10.75-19-3.125-20.5 3.125-20.5 10.75-19
+        18.125-8.5 18.125 8.5 10.75 19 3.125 20.5zM360
+        304q0-30-17.25-51t-46.75-21q-10.25 0-48.75 5.25-17.75 2.75-39.25
+        2.75t-39.25-2.75q-38-5.25-48.75-5.25-29.5 0-46.75 21t-17.25 51q0 22 8
+        38.375t20.25 25.75 30.5 15 35 7.375 37.25 1.75h42q20.5 0
+        37.25-1.75t35-7.375 30.5-15 20.25-25.75 8-38.375zM416 260q0 51.75-15.25
+        82.75-9.5 19.25-26.375 33.25t-35.25 21.5-42.5 11.875-42.875 5.5-41.75
+        1.125q-19.5 0-35.5-0.75t-36.875-3.125-38.125-7.5-34.25-12.875-30.25-20.25-21.5-28.75q-15.5-30.75-15.5-82.75
+        0-59.25 34-99-6.75-20.5-6.75-42.5 0-29 12.75-54.5 27 0 47.5 9.875t47.25
+        30.875q36.75-8.75 77.25-8.75 37 0 70 8 26.25-20.5
+        46.75-30.25t47.25-9.75q12.75 25.5 12.75 54.5 0 21.75-6.75 42 34 40 34
+        99.5z" />
+</svg>
+        
+      </defs>
+    </svg>
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="drawer">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="search">
+    <label class="md-overlay" data-md-component="overlay" for="drawer"></label>
+    
+      <a href="#the-withwindow_-function" tabindex="1" class="md-skip">
+        Skip to content
+      </a>
+    
+    
+      <header class="md-header" data-md-component="header">
+  <nav class="md-header-nav md-grid">
+    <div class="md-flex">
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <a href="../../.." title="Beam Documentation" class="md-header-nav__button md-logo">
+          
+            <i class="md-icon"></i>
+          
+        </a>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <label class="md-icon md-icon--menu md-header-nav__button" for="drawer"></label>
+      </div>
+      <div class="md-flex__cell md-flex__cell--stretch">
+        <div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
+          
+            
+              <span class="md-header-nav__topic">
+                Beam Documentation
+              </span>
+              <span class="md-header-nav__topic">
+                Window functions
+              </span>
+            
+          
+        </div>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        
+          
+            <label class="md-icon md-icon--search md-header-nav__button" for="search"></label>
+            
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="query" data-md-state="active">
+      <label class="md-icon md-search__icon" for="search"></label>
+      <button type="reset" class="md-icon md-search__icon" data-md-component="reset" tabindex="-1">
+        &#xE5CD;
+      </button>
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="result">
+          <div class="md-search-result__meta">
+            Type to start searching
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+          
+        
+      </div>
+      
+        <div class="md-flex__cell md-flex__cell--shrink">
+          <div class="md-header-nav__source">
+            
+
+
+  
+
+
+  <a href="https://github.com/tathougies/beam/" title="Go to repository" class="md-source" data-md-source="github">
+    
+      <div class="md-source__icon">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <use xlink:href="#github" width="24" height="24"></use>
+        </svg>
+      </div>
+    
+    <div class="md-source__repository">
+      tathougies/beam
+    </div>
+  </a>
+
+          </div>
+        </div>
+      
+    </div>
+  </nav>
+</header>
+    
+    <div class="md-container">
+      
+        
+      
+      
+      <main class="md-main">
+        <div class="md-main__inner md-grid" data-md-component="container">
+          
+            
+              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    <nav class="md-nav md-nav--primary" data-md-level="0">
+  <label class="md-nav__title md-nav__title--site" for="drawer">
+    <span class="md-nav__button md-logo">
+      
+        <i class="md-icon"></i>
+      
+    </span>
+    Beam Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      
+
+
+  
+
+
+  <a href="https://github.com/tathougies/beam/" title="Go to repository" class="md-source" data-md-source="github">
+    
+      <div class="md-source__icon">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <use xlink:href="#github" width="24" height="24"></use>
+        </svg>
+      </div>
+    
+    <div class="md-source__repository">
+      tathougies/beam
+    </div>
+  </a>
+
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../../.." title="Home" class="md-nav__link">
+      Home
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../../../about/faq/" title="Frequently Asked Questions" class="md-nav__link">
+      Frequently Asked Questions
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-3" type="checkbox" id="nav-3">
+    
+    <label class="md-nav__link" for="nav-3">
+      Tutorial
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-3">
+        Tutorial
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../tutorials/tutorial1/" title="Part 1" class="md-nav__link">
+      Part 1
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../tutorials/tutorial2/" title="Part 2" class="md-nav__link">
+      Part 2
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../tutorials/tutorial3/" title="Part 3" class="md-nav__link">
+      Part 3
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4" type="checkbox" id="nav-4" checked>
+    
+    <label class="md-nav__link" for="nav-4">
+      User Guide
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-4">
+        User Guide
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../models/" title="Models" class="md-nav__link">
+      Models
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../databases/" title="Databases" class="md-nav__link">
+      Databases
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../backends/" title="Backends" class="md-nav__link">
+      Backends
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../expressions/" title="Expressions" class="md-nav__link">
+      Expressions
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4-5" type="checkbox" id="nav-4-5" checked>
+    
+    <label class="md-nav__link" for="nav-4-5">
+      Queries
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="2">
+      <label class="md-nav__title" for="nav-4-5">
+        Queries
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../basic/" title="Basic Queries" class="md-nav__link">
+      Basic Queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../select/" title="More complex SELECTs" class="md-nav__link">
+      More complex SELECTs
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../ordering/" title="Ordering" class="md-nav__link">
+      Ordering
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../relationships/" title="Relationships" class="md-nav__link">
+      Relationships
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../aggregates/" title="Aggregates" class="md-nav__link">
+      Aggregates
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../combining-queries/" title="Combining queries" class="md-nav__link">
+      Combining queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-toggle md-nav__toggle" data-md-toggle="toc" type="checkbox" id="toc">
+    
+    
+      <label class="md-nav__link md-nav__link--active" for="toc">
+        Window functions
+      </label>
+    
+    <a href="./" title="Window functions" class="md-nav__link md-nav__link--active">
+      Window functions
+    </a>
+    
+      
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-withwindow_-function" title="The withWindow_ function" class="md-nav__link">
+    The withWindow_ function
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#frame-syntax" title="Frame syntax" class="md-nav__link">
+    Frame syntax
+  </a>
+  
+</li>
+      
+      
+      
+    </ul>
+  
+</nav>
+    
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../advanced-features/" title="Advanced features" class="md-nav__link">
+      Advanced features
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../extensibility/" title="Custom queries" class="md-nav__link">
+      Custom queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4-7" type="checkbox" id="nav-4-7">
+    
+    <label class="md-nav__link" for="nav-4-7">
+      Data Manipulation
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="2">
+      <label class="md-nav__title" for="nav-4-7">
+        Data Manipulation
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../manipulation/insert/" title="INSERT" class="md-nav__link">
+      INSERT
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../manipulation/update/" title="UPDATE" class="md-nav__link">
+      UPDATE
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../manipulation/delete/" title="DELETE" class="md-nav__link">
+      DELETE
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-5" type="checkbox" id="nav-5">
+    
+    <label class="md-nav__link" for="nav-5">
+      Schema management
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-5">
+        Schema management
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../schema-guide/migrations/" title="The Migrations Framework" class="md-nav__link">
+      The Migrations Framework
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../schema-guide/tool/" title="The beam-migrate tool" class="md-nav__link">
+      The beam-migrate tool
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
+      Supported migrations
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-6" type="checkbox" id="nav-6">
+    
+    <label class="md-nav__link" for="nav-6">
+      Backends
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-6">
+        Backends
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../backends/beam-postgres/" title="beam-postgres" class="md-nav__link">
+      beam-postgres
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../backends/beam-sqlite/" title="beam-sqlite" class="md-nav__link">
+      beam-sqlite
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../custom-backends/" title="Writing a Custom Backend" class="md-nav__link">
+      Writing a Custom Backend
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-7" type="checkbox" id="nav-7">
+    
+    <label class="md-nav__link" for="nav-7">
+      About
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-7">
+        About
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../about/compatibility/" title="Compatibility Matrix" class="md-nav__link">
+      Compatibility Matrix
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../about/license/" title="License" class="md-nav__link">
+      License
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../../about/release-notes/" title="Release Notes" class="md-nav__link">
+      Release Notes
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-withwindow_-function" title="The withWindow_ function" class="md-nav__link">
+    The withWindow_ function
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#frame-syntax" title="Frame syntax" class="md-nav__link">
+    Frame syntax
+  </a>
+  
+</li>
+      
+      
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                  <a href="https://github.com/tathougies/beam/edit/master/docs/user-guide/queries/window-functions.md" title="Edit this page" class="md-icon md-content__icon">&#xE3C9;</a>
+                
+                
+                  <h1>Window functions</h1>
+                
+                <p>Window functions allow you to calculate aggregates over portions of your result
+set. They are defined in SQL2003. Some databases use the alternative
+nomenclature <em>analytic functions</em>. They are expressed in SQL with the <code>OVER</code>
+clause. The
+<a href="https://www.postgresql.org/docs/9.1/static/tutorial-window.html">Postgres documentation</a>
+offers a good overview of window functions.</p>
+<h2 id="the-withwindow_-function">The <code>withWindow_</code> function</h2>
+<p>When you want to add windows to a query, use the <code>withWindow_</code> function to
+introduce your frames, and compute the projection. You may notice that this is a
+departure from SQL syntax, where you can define window expressions inline. Beam
+seeks to be type-safe. Queries with window functions follow slightly different
+rules. Wrapping such a query with a special function allows beam to enforce
+these rules.</p>
+<p>For example, to get each invoice along with the average invoice total by each
+customer, use <code>withWindow_</code> as follows.</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-0-Haskell" aria-controls="tab-0-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-0-Postgres" aria-controls="tab-0-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-0-Haskell">
+            <div class="codehilite"><pre><span></span><span class="nf">withWindow_</span> <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="ow">-&gt;</span> <span class="n">frame_</span> <span class="p">(</span><span class="n">partitionBy_</span> <span class="p">(</span><span class="n">invoiceCustomer</span> <span class="n">i</span><span class="p">))</span> <span class="n">noOrder_</span> <span class="n">noBounds_</span><span class="p">)</span>
+            <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="n">w</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">avg_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">w</span><span class="p">))</span>
+            <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">invoice</span> <span class="n">chinookDb</span><span class="p">))</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-0-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+       <span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span><span class="n">PARTITION</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res9&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Invoice&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>Or to get each invoice along with the ranking of each invoice by total per
+customer <em>and</em> the overall ranking,</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-1-Haskell" aria-controls="tab-1-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-1-Postgres" aria-controls="tab-1-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-1-Haskell">
+            <div class="codehilite"><pre><span></span><span class="nf">withWindow_</span> <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="ow">-&gt;</span> <span class="p">(</span> <span class="n">frame_</span> <span class="n">noPartition_</span> <span class="p">(</span><span class="n">orderPartitionBy_</span> <span class="p">(</span><span class="n">asc_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)))</span> <span class="n">noBounds_</span>
+                   <span class="p">,</span> <span class="n">frame_</span> <span class="p">(</span><span class="n">partitionBy_</span> <span class="p">(</span><span class="n">invoiceCustomer</span> <span class="n">i</span><span class="p">))</span> <span class="p">(</span><span class="n">orderPartitionBy_</span> <span class="p">(</span><span class="n">asc_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)))</span> <span class="n">noBounds_</span> <span class="p">))</span>
+            <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="p">(</span><span class="n">allInvoices</span><span class="p">,</span> <span class="n">customerInvoices</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">rank_</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">allInvoices</span><span class="p">,</span> <span class="n">rank_</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">customerInvoices</span><span class="p">))</span>
+            <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">invoice</span> <span class="n">chinookDb</span><span class="p">))</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-1-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+       <span class="n">RANK</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span>
+                    <span class="k">ORDER</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">ASC</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res9&quot;</span><span class="p">,</span>
+                   <span class="n">RANK</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span><span class="n">PARTITION</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span>
+                                <span class="k">ORDER</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">ASC</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res10&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Invoice&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>rank_</code> is only available in backends that implement the optional SQL2003
+T611 feature "Elementary OLAP operations". Beam syntaxes that implement this
+functionality implement the
+<code>IsSql2003ExpressionElementaryOLAPOperationsSyntax</code> type class.</p>
+</div>
+<p>Notice that aggregates over the result of the window expression work as you'd
+expect. Beam automatically generates a subquery once a query has been windowed.
+For example, to get the sum of the totals of the invoices, by rank.</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-2-Haskell" aria-controls="tab-2-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-2-Postgres" aria-controls="tab-2-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-2-Haskell">
+            <div class="codehilite"><pre><span></span><span class="nf">orderBy_</span> <span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">rank</span><span class="p">,</span> <span class="kr">_</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">asc_</span> <span class="n">rank</span><span class="p">)</span> <span class="o">$</span>
+<span class="nf">aggregate_</span> <span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">rank</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="n">group_</span> <span class="n">rank</span><span class="p">,</span> <span class="n">sum_</span> <span class="o">$</span> <span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">))</span> <span class="o">$</span>
+<span class="nf">withWindow_</span> <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="ow">-&gt;</span> <span class="n">frame_</span> <span class="p">(</span><span class="n">partitionBy_</span> <span class="p">(</span><span class="n">invoiceCustomer</span> <span class="n">i</span><span class="p">))</span> <span class="p">(</span><span class="n">orderPartitionBy_</span> <span class="p">(</span><span class="n">asc_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)))</span> <span class="n">noBounds_</span><span class="p">)</span>
+            <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="n">w</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">rank_</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">w</span><span class="p">))</span>
+            <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">invoice</span> <span class="n">chinookDb</span><span class="p">))</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-2-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="k">SUM</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res8&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span>
+<span class="k">FROM</span>
+  <span class="p">(</span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+          <span class="n">RANK</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span><span class="n">PARTITION</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span>
+                       <span class="k">ORDER</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">ASC</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res9&quot;</span>
+   <span class="k">FROM</span> <span class="ss">&quot;Invoice&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span> <span class="k">ASC</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<h2 id="frame-syntax">Frame syntax</h2>
+<p>The <code>frame_</code> function takes a partition, ordering, and bounds parameter, all of
+which are optional. To specify no partition, use <code>noPartition_</code>. For no
+ordering, use <code>noOrder_</code>. For no bounds, use <code>noBounds_</code>.</p>
+<p>To specify a partition, use <code>partitionBy_</code> with an expression or a tuple of
+expressions. To specify an ordering use <code>orderPartitionBy_</code> with an ordering
+expression or a tuple of ordering expressions. Ordering expressions are scalar
+expressions passed to either <code>asc_</code> or <code>desc_</code>. Finally, to specify bounds, use
+<code>bounds_</code> or <code>fromBound_</code>. <code>fromBound_</code> starts the window at the specified
+position, which can be <code>unbounded_</code> (the default) to include all rows seen thus
+far. <code>bounds_</code> lets you specify an optional ending bound, which can be <code>Nothing</code>
+(the default), <code>Just unbounded_</code> (the semantic default, but producing an
+explicit bound syntactically), or <code>Just (nrows_ x)</code>, where <code>x</code> is an integer
+expression, specifying the number of rows before or after to include in the
+calculation.</p>
+<p>The following query illustrates some of these features. Along with each invoice, it returns</p>
+<ul>
+<li>The average total of all invoices, given by the frame with no partition, ordering, and bounds.</li>
+<li>The average total of all invoices, by customer.</li>
+<li>The rank of each invoice over all the rows, when ordered by total.</li>
+<li>The average of the totals of the invoices starting at the two immediately
+  preceding and ending with the two immediately succeeding invoices, when
+  ordered by date.</li>
+</ul>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-8-Haskell" aria-controls="tab-8-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-8-Postgres" aria-controls="tab-8-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-8-Haskell">
+            <div class="codehilite"><pre><span></span><span class="nf">withWindow_</span> <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="ow">-&gt;</span> <span class="p">(</span> <span class="n">frame_</span> <span class="n">noPartition_</span> <span class="n">noOrder_</span> <span class="n">noBounds_</span>
+                   <span class="p">,</span> <span class="n">frame_</span> <span class="p">(</span><span class="n">partitionBy_</span> <span class="p">(</span><span class="n">invoiceCustomer</span> <span class="n">i</span><span class="p">))</span> <span class="n">noOrder_</span> <span class="n">noBounds_</span>
+                   <span class="p">,</span> <span class="n">frame_</span> <span class="n">noPartition_</span> <span class="p">(</span><span class="n">orderPartitionBy_</span> <span class="p">(</span><span class="n">asc_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)))</span> <span class="n">noBounds_</span>
+                   <span class="p">,</span> <span class="n">frame_</span> <span class="n">noPartition_</span> <span class="p">(</span><span class="n">orderPartitionBy_</span> <span class="p">(</span><span class="n">asc_</span> <span class="p">(</span><span class="n">invoiceDate</span> <span class="n">i</span><span class="p">)))</span> <span class="p">(</span><span class="n">bounds_</span> <span class="p">(</span><span class="n">nrows_</span> <span class="mi">2</span><span class="p">)</span> <span class="p">(</span><span class="kt">Just</span> <span class="p">(</span><span class="n">nrows_</span> <span class="mi">2</span><span class="p">)))))</span>
+            <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="p">(</span><span class="n">allRows_</span><span class="p">,</span> <span class="n">sameCustomer_</span><span class="p">,</span> <span class="n">totals_</span><span class="p">,</span> <span class="n">fourInvoicesAround_</span><span class="p">)</span> <span class="ow">-&gt;</span>
+                 <span class="p">(</span> <span class="n">i</span>
+                 <span class="p">,</span> <span class="n">avg_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">allRows_</span>
+                 <span class="p">,</span> <span class="n">avg_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">sameCustomer_</span>
+                 <span class="p">,</span> <span class="n">rank_</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">totals_</span>
+                 <span class="p">,</span> <span class="n">avg_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">fourInvoicesAround_</span> <span class="p">))</span>
+            <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">invoice</span> <span class="n">chinookDb</span><span class="p">))</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-8-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+       <span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">()</span> <span class="k">AS</span> <span class="ss">&quot;res9&quot;</span><span class="p">,</span>
+                              <span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span><span class="n">PARTITION</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res10&quot;</span><span class="p">,</span>
+                                                     <span class="n">RANK</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span>
+                                                                  <span class="k">ORDER</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span> <span class="k">ASC</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res11&quot;</span><span class="p">,</span>
+                                                                 <span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+                                                                                         <span class="k">ORDER</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span> <span class="k">ASC</span> <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="mi">2</span> <span class="n">PRECEDING</span> <span class="k">AND</span> <span class="mi">2</span> <span class="n">FOLLOWING</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res12&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Invoice&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+                
+                  
+                
+              
+              
+                
+              
+            </article>
+          </div>
+        </div>
+      </main>
+      
+        
+<footer class="md-footer">
+  
+    <div class="md-footer-nav">
+      <nav class="md-footer-nav__inner md-grid">
+        
+          <a href="../combining-queries/" title="Combining queries" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+            <div class="md-flex__cell md-flex__cell--shrink">
+              <i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
+            </div>
+            <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
+              <span class="md-flex__ellipsis">
+                <span class="md-footer-nav__direction">
+                  Previous
+                </span>
+                Combining queries
+              </span>
+            </div>
+          </a>
+        
+        
+          <a href="../advanced-features/" title="Advanced features" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
+            <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
+              <span class="md-flex__ellipsis">
+                <span class="md-footer-nav__direction">
+                  Next
+                </span>
+                Advanced features
+              </span>
+            </div>
+            <div class="md-flex__cell md-flex__cell--shrink">
+              <i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
+            </div>
+          </a>
+        
+      </nav>
+    </div>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+        powered by
+        <a href="http://www.mkdocs.org">MkDocs</a>
+        and
+        <a href="https://squidfunk.github.io/mkdocs-material/">
+          Material for MkDocs</a>
+      </div>
+      
+        
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    
+
+      <script src="../../../assets/javascripts/application.9fb73e57.js"></script>
+      
+      <script>app.initialize({version:"0.17.2",url:{base:"../../.."}})</script>
+      
+    
+<script type="text/javascript" language="javascript"  src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<script type="text/javascript" language="javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script type="text/javascript" language="javascript">
+ $(document.body).tab();
+ $(".nav-item:first-child").tab("show");
+</script>
+
+    
+      
+    
+  </body>
+</html>

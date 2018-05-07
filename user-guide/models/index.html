@@ -1,0 +1,1508 @@
+
+
+
+
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      
+      
+      
+      
+        <meta name="lang:clipboard.copy" content="Copy to clipboard">
+      
+        <meta name="lang:clipboard.copied" content="Copied to clipboard">
+      
+        <meta name="lang:search.language" content="en">
+      
+        <meta name="lang:search.pipeline.stopwords" content="True">
+      
+        <meta name="lang:search.pipeline.trimmer" content="True">
+      
+        <meta name="lang:search.result.none" content="No matching documents">
+      
+        <meta name="lang:search.result.one" content="1 matching document">
+      
+        <meta name="lang:search.result.other" content="# matching documents">
+      
+        <meta name="lang:search.tokenizer" content="[\s\-]+">
+      
+      <link rel="shortcut icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-0.17.2, mkdocs-material-2.6.0">
+    
+    
+      
+        <title>Models - Beam Documentation</title>
+      
+    
+    
+
+      <link rel="stylesheet" href="../../assets/stylesheets/application.aa3de92b.css">
+      
+    
+<link rel="stylesheet" type="text/css" href="../../css/beam.css"/>
+
+    
+      <script src="../../assets/javascripts/modernizr.1aa3b519.js"></script>
+    
+    
+      
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
+        <style>body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}</style>
+      
+      <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    
+    
+      <link rel="stylesheet" href="../../docs/theme/css/beam.css">
+    
+    
+  </head>
+  
+    <body dir="ltr">
+  
+    <svg class="md-svg">
+      <defs>
+        
+        
+          <svg xmlns="http://www.w3.org/2000/svg" width="416" height="448"
+    viewBox="0 0 416 448" id="github">
+  <path fill="currentColor" d="M160 304q0 10-3.125 20.5t-10.75 19-18.125
+        8.5-18.125-8.5-10.75-19-3.125-20.5 3.125-20.5 10.75-19 18.125-8.5
+        18.125 8.5 10.75 19 3.125 20.5zM320 304q0 10-3.125 20.5t-10.75
+        19-18.125 8.5-18.125-8.5-10.75-19-3.125-20.5 3.125-20.5 10.75-19
+        18.125-8.5 18.125 8.5 10.75 19 3.125 20.5zM360
+        304q0-30-17.25-51t-46.75-21q-10.25 0-48.75 5.25-17.75 2.75-39.25
+        2.75t-39.25-2.75q-38-5.25-48.75-5.25-29.5 0-46.75 21t-17.25 51q0 22 8
+        38.375t20.25 25.75 30.5 15 35 7.375 37.25 1.75h42q20.5 0
+        37.25-1.75t35-7.375 30.5-15 20.25-25.75 8-38.375zM416 260q0 51.75-15.25
+        82.75-9.5 19.25-26.375 33.25t-35.25 21.5-42.5 11.875-42.875 5.5-41.75
+        1.125q-19.5 0-35.5-0.75t-36.875-3.125-38.125-7.5-34.25-12.875-30.25-20.25-21.5-28.75q-15.5-30.75-15.5-82.75
+        0-59.25 34-99-6.75-20.5-6.75-42.5 0-29 12.75-54.5 27 0 47.5 9.875t47.25
+        30.875q36.75-8.75 77.25-8.75 37 0 70 8 26.25-20.5
+        46.75-30.25t47.25-9.75q12.75 25.5 12.75 54.5 0 21.75-6.75 42 34 40 34
+        99.5z" />
+</svg>
+        
+      </defs>
+    </svg>
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="drawer">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="search">
+    <label class="md-overlay" data-md-component="overlay" for="drawer"></label>
+    
+      <a href="#the-table-type-class" tabindex="1" class="md-skip">
+        Skip to content
+      </a>
+    
+    
+      <header class="md-header" data-md-component="header">
+  <nav class="md-header-nav md-grid">
+    <div class="md-flex">
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <a href="../.." title="Beam Documentation" class="md-header-nav__button md-logo">
+          
+            <i class="md-icon"></i>
+          
+        </a>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <label class="md-icon md-icon--menu md-header-nav__button" for="drawer"></label>
+      </div>
+      <div class="md-flex__cell md-flex__cell--stretch">
+        <div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
+          
+            
+              <span class="md-header-nav__topic">
+                Beam Documentation
+              </span>
+              <span class="md-header-nav__topic">
+                Models
+              </span>
+            
+          
+        </div>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        
+          
+            <label class="md-icon md-icon--search md-header-nav__button" for="search"></label>
+            
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="query" data-md-state="active">
+      <label class="md-icon md-search__icon" for="search"></label>
+      <button type="reset" class="md-icon md-search__icon" data-md-component="reset" tabindex="-1">
+        &#xE5CD;
+      </button>
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="result">
+          <div class="md-search-result__meta">
+            Type to start searching
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+          
+        
+      </div>
+      
+        <div class="md-flex__cell md-flex__cell--shrink">
+          <div class="md-header-nav__source">
+            
+
+
+  
+
+
+  <a href="https://github.com/tathougies/beam/" title="Go to repository" class="md-source" data-md-source="github">
+    
+      <div class="md-source__icon">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <use xlink:href="#github" width="24" height="24"></use>
+        </svg>
+      </div>
+    
+    <div class="md-source__repository">
+      tathougies/beam
+    </div>
+  </a>
+
+          </div>
+        </div>
+      
+    </div>
+  </nav>
+</header>
+    
+    <div class="md-container">
+      
+        
+      
+      
+      <main class="md-main">
+        <div class="md-main__inner md-grid" data-md-component="container">
+          
+            
+              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    <nav class="md-nav md-nav--primary" data-md-level="0">
+  <label class="md-nav__title md-nav__title--site" for="drawer">
+    <span class="md-nav__button md-logo">
+      
+        <i class="md-icon"></i>
+      
+    </span>
+    Beam Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      
+
+
+  
+
+
+  <a href="https://github.com/tathougies/beam/" title="Go to repository" class="md-source" data-md-source="github">
+    
+      <div class="md-source__icon">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <use xlink:href="#github" width="24" height="24"></use>
+        </svg>
+      </div>
+    
+    <div class="md-source__repository">
+      tathougies/beam
+    </div>
+  </a>
+
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../.." title="Home" class="md-nav__link">
+      Home
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../../about/faq/" title="Frequently Asked Questions" class="md-nav__link">
+      Frequently Asked Questions
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-3" type="checkbox" id="nav-3">
+    
+    <label class="md-nav__link" for="nav-3">
+      Tutorial
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-3">
+        Tutorial
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../tutorials/tutorial1/" title="Part 1" class="md-nav__link">
+      Part 1
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../tutorials/tutorial2/" title="Part 2" class="md-nav__link">
+      Part 2
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../tutorials/tutorial3/" title="Part 3" class="md-nav__link">
+      Part 3
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4" type="checkbox" id="nav-4" checked>
+    
+    <label class="md-nav__link" for="nav-4">
+      User Guide
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-4">
+        User Guide
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-toggle md-nav__toggle" data-md-toggle="toc" type="checkbox" id="toc">
+    
+    
+      <label class="md-nav__link md-nav__link--active" for="toc">
+        Models
+      </label>
+    
+    <a href="./" title="Models" class="md-nav__link md-nav__link--active">
+      Models
+    </a>
+    
+      
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-table-type-class" title="The Table type class" class="md-nav__link">
+    The Table type class
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-identity-trick" title="The Identity trick" class="md-nav__link">
+    The Identity trick
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#allowed-data-types" title="Allowed data types" class="md-nav__link">
+    Allowed data types
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#maybe-types" title="Maybe types" class="md-nav__link">
+    Maybe types
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#column-tags" title="Column tags" class="md-nav__link">
+    Column tags
+  </a>
+  
+    <nav class="md-nav">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#converting-between-tags" title="Converting between tags" class="md-nav__link">
+    Converting between tags
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-beamable-type-class" title="The Beamable type class" class="md-nav__link">
+    The Beamable type class
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-table-type-class_1" title="The Table type class" class="md-nav__link">
+    The Table type class
+  </a>
+  
+    <nav class="md-nav">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-about-tables-without-primary-keys" title="What about tables without primary keys?" class="md-nav__link">
+    What about tables without primary keys?
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#foreign-references" title="Foreign references" class="md-nav__link">
+    Foreign references
+  </a>
+  
+    <nav class="md-nav">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nullable-foreign-references" title="Nullable foreign references" class="md-nav__link">
+    Nullable foreign references
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#more-complicated-relationships" title="More complicated relationships" class="md-nav__link">
+    More complicated relationships
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#embedding" title="Embedding" class="md-nav__link">
+    Embedding
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#defaults" title="Defaults" class="md-nav__link">
+    Defaults
+  </a>
+  
+</li>
+      
+      
+      
+    </ul>
+  
+</nav>
+    
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../databases/" title="Databases" class="md-nav__link">
+      Databases
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../backends/" title="Backends" class="md-nav__link">
+      Backends
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../expressions/" title="Expressions" class="md-nav__link">
+      Expressions
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4-5" type="checkbox" id="nav-4-5">
+    
+    <label class="md-nav__link" for="nav-4-5">
+      Queries
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="2">
+      <label class="md-nav__title" for="nav-4-5">
+        Queries
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/basic/" title="Basic Queries" class="md-nav__link">
+      Basic Queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/select/" title="More complex SELECTs" class="md-nav__link">
+      More complex SELECTs
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/ordering/" title="Ordering" class="md-nav__link">
+      Ordering
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/relationships/" title="Relationships" class="md-nav__link">
+      Relationships
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/aggregates/" title="Aggregates" class="md-nav__link">
+      Aggregates
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/combining-queries/" title="Combining queries" class="md-nav__link">
+      Combining queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/window-functions/" title="Window functions" class="md-nav__link">
+      Window functions
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/advanced-features/" title="Advanced features" class="md-nav__link">
+      Advanced features
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../extensibility/" title="Custom queries" class="md-nav__link">
+      Custom queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4-7" type="checkbox" id="nav-4-7">
+    
+    <label class="md-nav__link" for="nav-4-7">
+      Data Manipulation
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="2">
+      <label class="md-nav__title" for="nav-4-7">
+        Data Manipulation
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../manipulation/insert/" title="INSERT" class="md-nav__link">
+      INSERT
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../manipulation/update/" title="UPDATE" class="md-nav__link">
+      UPDATE
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../manipulation/delete/" title="DELETE" class="md-nav__link">
+      DELETE
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-5" type="checkbox" id="nav-5">
+    
+    <label class="md-nav__link" for="nav-5">
+      Schema management
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-5">
+        Schema management
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../schema-guide/migrations/" title="The Migrations Framework" class="md-nav__link">
+      The Migrations Framework
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../schema-guide/tool/" title="The beam-migrate tool" class="md-nav__link">
+      The beam-migrate tool
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
+      Supported migrations
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-6" type="checkbox" id="nav-6">
+    
+    <label class="md-nav__link" for="nav-6">
+      Backends
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-6">
+        Backends
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../backends/beam-postgres/" title="beam-postgres" class="md-nav__link">
+      beam-postgres
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../backends/beam-sqlite/" title="beam-sqlite" class="md-nav__link">
+      beam-sqlite
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../custom-backends/" title="Writing a Custom Backend" class="md-nav__link">
+      Writing a Custom Backend
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-7" type="checkbox" id="nav-7">
+    
+    <label class="md-nav__link" for="nav-7">
+      About
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-7">
+        About
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../about/compatibility/" title="Compatibility Matrix" class="md-nav__link">
+      Compatibility Matrix
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../about/license/" title="License" class="md-nav__link">
+      License
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../about/release-notes/" title="Release Notes" class="md-nav__link">
+      Release Notes
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-table-type-class" title="The Table type class" class="md-nav__link">
+    The Table type class
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-identity-trick" title="The Identity trick" class="md-nav__link">
+    The Identity trick
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#allowed-data-types" title="Allowed data types" class="md-nav__link">
+    Allowed data types
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#maybe-types" title="Maybe types" class="md-nav__link">
+    Maybe types
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#column-tags" title="Column tags" class="md-nav__link">
+    Column tags
+  </a>
+  
+    <nav class="md-nav">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#converting-between-tags" title="Converting between tags" class="md-nav__link">
+    Converting between tags
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-beamable-type-class" title="The Beamable type class" class="md-nav__link">
+    The Beamable type class
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-table-type-class_1" title="The Table type class" class="md-nav__link">
+    The Table type class
+  </a>
+  
+    <nav class="md-nav">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-about-tables-without-primary-keys" title="What about tables without primary keys?" class="md-nav__link">
+    What about tables without primary keys?
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#foreign-references" title="Foreign references" class="md-nav__link">
+    Foreign references
+  </a>
+  
+    <nav class="md-nav">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nullable-foreign-references" title="Nullable foreign references" class="md-nav__link">
+    Nullable foreign references
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#more-complicated-relationships" title="More complicated relationships" class="md-nav__link">
+    More complicated relationships
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#embedding" title="Embedding" class="md-nav__link">
+    Embedding
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#defaults" title="Defaults" class="md-nav__link">
+    Defaults
+  </a>
+  
+</li>
+      
+      
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                  <a href="https://github.com/tathougies/beam/edit/master/docs/user-guide/models.md" title="Edit this page" class="md-icon md-content__icon">&#xE3C9;</a>
+                
+                
+                  <h1>Models</h1>
+                
+                <p>A beam model is any single-constructer Haskell record type parameterized by a
+type of kind <code>* -&gt; *</code>. The model must have an instance of <code>Generic</code>, <code>Beamable</code>,
+and <code>Table</code>. <code>Generic</code> can be derived using the <code>DeriveGeneric</code> extension of
+GHC. <code>Beamable</code> must be given an empty instance declaration (<code>instance Beamable
+Tbl</code> for a table of type <code>Tbl</code>). <code>Table</code> is discussed next.</p>
+<p>Each field in the record type must either be a sub-table (another parameterized
+type with a <code>Beamable</code> instance) or an explicit column. A column is specified
+using the <code>Columnar</code> type family applied to the type's parameter and the
+underlying Haskell type of the field.</p>
+<h2 id="the-table-type-class">The <code>Table</code> type class</h2>
+<p><code>Table</code> is a type class that must be instantiated for all types that you would
+like to use as a table. It has one associated <code>data</code> instance and one function.</p>
+<p>You must create a type to represent the primary key of the table. The primary
+key of a table <code>Tbl</code> is the associated data type <code>PrimaryKey Tbl</code>. Like <code>Tbl</code>,
+it takes one type parameter of kind <code>* -&gt; *</code>. It must have only one constructor
+which can hold all fields in the primary key. The constructor need not be a
+record constructor (although it can be).</p>
+<p>You must also write a function <code>primaryKey</code> that takes an instance of <code>Tbl</code>
+(parameterized over any functor <code>f</code>) and returns the associated <code>PrimaryKey</code>
+type. It is sometimes easiest to use the <code>Applicative</code> instance for <code>r -&gt;</code> to
+write this function. For example, if <code>tblField1</code> and <code>tblField2</code> are part of the
+primary key, you can write</p>
+<div class="codehilite"><pre><span></span><span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">Tbl</span> <span class="kr">where</span>
+  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">Tbl</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span>
+  <span class="n">primaryKey</span> <span class="n">t</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="p">(</span><span class="n">tblField1</span> <span class="n">t</span><span class="p">)</span> <span class="p">(</span><span class="n">tblField2</span> <span class="n">t</span><span class="p">)</span>
+</pre></div>
+
+
+<p>more simply as</p>
+<div class="codehilite"><pre><span></span><span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">Tbl</span> <span class="kr">where</span>
+  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">Tbl</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span>
+  <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="o">&lt;$&gt;</span> <span class="n">tblField1</span> <span class="o">&lt;*&gt;</span> <span class="n">tblField2</span>
+</pre></div>
+
+
+<h2 id="the-identity-trick">The <code>Identity</code> trick</h2>
+<p>Beam table types are commonly prefixed by a <code>T</code> to indicate the name of the
+generic table type. Usually, a type synonym named by leaving out the <code>T</code> is
+defined by applying the table to <code>Identity</code>. Recall each field in the table is
+either another table or an application of <code>Columnar</code> to the type parameter. When
+the type is parameterized by <code>Identity</code>, every column is also parameterized by
+<code>Identity</code>.</p>
+<p><code>Columnar</code> is a type family defined such that <code>Columnar Identity x ~ x</code>. Thus,
+when parameterized over <code>Identity</code>, every field in the table type takes on the
+underlying Haskell type.</p>
+<p>Suppose you have a table type <code>ModelT</code> and a type synonym <code>type Model = ModelT
+Identity</code>. Notice that deriving <code>Show</code>, <code>Eq</code>, and other standard Haskell type
+classes won't generally work for <code>ModelT</code>. However, you can use the standalone
+deriving mechanism to derive these instances for <code>Model</code>.</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">ModelT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">Model</span> <span class="p">{</span> <span class="o">..</span> <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">ModelT</span>
+
+<span class="c1">-- deriving instance Show (ModelT f) -- Won&#39;t work because GHC won&#39;t get the constraints right</span>
+
+<span class="kr">type</span> <span class="kt">Model</span> <span class="ow">=</span> <span class="kt">ModelT</span> <span class="kt">Identity</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Model</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">Model</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Ord</span> <span class="kt">Model</span>
+</pre></div>
+
+
+<h2 id="allowed-data-types">Allowed data types</h2>
+<p>Any data type can be used within a <code>Columnar</code>. Beam does no checking that a
+field can be used against a particular database when the data type is defined.
+Instead, type errors will occur when the table is being used as a query. For
+example, the following is allowed, even though many backends will not work with
+array data types.</p>
+<div class="codehilite"><pre><span></span><span class="kr">import</span> <span class="k">qualified</span> <span class="nn">Data.Vector</span> <span class="k">as</span> <span class="n">V</span>
+
+<span class="kr">data</span> <span class="kt">ArrayTable</span> <span class="n">f</span>
+    <span class="ow">=</span> <span class="kt">ArrayTable</span>
+    <span class="p">{</span> <span class="n">arrayTablePoints</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">V</span><span class="o">.</span><span class="kt">Vector</span> <span class="kt">Int32</span><span class="p">)</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+</pre></div>
+
+
+<p>You can construct values of type <code>ArrayTable Identity</code> and even write queries
+over it (relying on type inference to get the constraints right). However, if
+you attempt to solve the constraints over a database that doesn't support
+columns of type <code>V.Vector Int32</code>, GHC will throw an error. Thus, it's important
+to understand the limits of your backend when deciding which types to use. In
+general, numeric, floating-point, and text types are well supported.</p>
+<h2 id="maybe-types"><code>Maybe</code> types</h2>
+<p>Optional fields (those that allow a SQL <code>NULL</code>) can usually be given a <code>Maybe</code>
+type. However, you cannot use <code>Maybe</code> around an embedded table (you will be
+unable to instantiate <code>Beamable</code>).</p>
+<p>Beam offers a way around this. Instead of embedding the table applied to the
+type parameter <code>f</code>, apply it to <code>Nullable f</code>. <code>Columnar (Nullable f) a ~ Maybe
+(Columnar f a)</code> for all <code>a</code>. Thus, this will make every column in the embedded
+table take on the corresponding <code>Maybe</code> type.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><code>Nullable</code> will nest <code>Maybe</code>s. That is <code>Columnar (Nullable f) (Maybe a) ~
+Maybe (Maybe a)</code>. This is bad from a SQL perspective, since SQL has no
+concept of a nested optional type. Beam treats a <code>Nothing</code> at any 'layer' of
+the <code>Maybe</code> stack as a corresponding SQL <code>NULL</code>. When marshalling data back,
+a SQL <code>NULL</code> is read in as a top-level <code>Nothing</code>.</p>
+<p>The reasons for this misfeature is basically code simplicity. Fixing this is
+a top priority of future versions of beam.</p>
+</div>
+<h2 id="column-tags">Column tags</h2>
+<p>Above, we saw that applying <code>Identity</code> to a table type results in a type whose
+columns are the underlying Haskell type. Beam uses other column tags for
+querying and describing databases. Below is a table of common column tags and
+their meaning.</p>
+<h3 id="converting-between-tags">Converting between tags</h3>
+<p>Suppose you have a <code>Beamable</code> type paramaterized over a tag <code>f</code> and needed one
+parameterized over a tag <code>g</code>. Given a function <code>conv :: forall a. Columnar f a
+-&gt; Columnar g a</code>, you can use <code>changeBeamRep</code> to convert between the tables.</p>
+<p>There is one caveat however -- since <code>Columnar</code> is a type family, the type of
+<code>conv</code> is actually ambiguous. We need a way to carry the type of <code>f</code>, <code>g</code>, and
+<code>a</code> into the code. For this reason, <code>conv</code> must actually be written over the
+<code>Columnar'</code>(notice the tick) <code>newtype</code>. <code>Columnar'</code> is a newtype defined as such</p>
+<div class="codehilite"><pre><span></span><span class="kr">newtype</span> <span class="kt">Columnar&#39;</span> <span class="n">f</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Columnar&#39;</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="n">a</span><span class="p">)</span>
+</pre></div>
+
+
+<p>Notice that, unlinke <code>Columnar</code> (a non-injective type family), <code>Columnar'</code> is a
+full type. The type of <code>conv' :: forall a. Columnar' f a -&gt; Columnar' g a</code> is
+now unambiguous. You can easily use <code>conv</code> to implement <code>conv'</code>:</p>
+<div class="codehilite"><pre><span></span><span class="nf">conv&#39;</span> <span class="p">(</span><span class="kt">Columnar&#39;</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Columnar&#39;</span> <span class="p">(</span><span class="n">conv</span> <span class="n">a</span><span class="p">)</span>
+</pre></div>
+
+
+<h2 id="the-beamable-type-class">The <code>Beamable</code> type class</h2>
+<p>All beam tables, primary keys, and shared data fields must be instances of the
+<code>Beamable</code> class. You cannot override the methods of <code>Beamable</code>. Rather, they
+are derived using GHC's generics mechanism. Once you've declared your data type,
+you can simply write <code>instance Beamable &lt;your-type-name&gt;</code> to instantiate the
+correct <code>Beamable</code> instance for your type.</p>
+<h2 id="the-table-type-class_1">The <code>Table</code> type class</h2>
+<p>All <code>Beamable</code> data types that you want to include as a <code>TableEntity</code> in your
+database must be members of the <code>Table</code> type class. The <code>Table</code> type class
+defines one associated type family <code>PrimaryKey</code> and a function <code>primaryKey</code> that
+takes a table over an arbitrary column tag and produces that table's
+<code>PrimaryKey</code>. For example, if you have a model</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">PersonT</span> <span class="n">f</span>
+    <span class="ow">=</span> <span class="kt">Person</span>
+    <span class="p">{</span> <span class="n">personEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+    <span class="p">,</span> <span class="n">personFirstName</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+    <span class="p">,</span> <span class="n">personLastName</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+    <span class="p">,</span> <span class="n">personAge</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">PersonT</span>
+</pre></div>
+
+
+<p>and you want the <code>personEmail</code> field to form the primary key, you would define a <code>Table</code> instance as such</p>
+<div class="codehilite"><pre><span></span><span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">PersonT</span> <span class="kr">where</span>
+  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="n">f</span>
+      <span class="ow">=</span> <span class="kt">PersonKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span><span class="p">)</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+  <span class="n">primaryKey</span> <span class="n">person</span> <span class="ow">=</span> <span class="kt">PersonKey</span> <span class="o">&lt;$&gt;</span> <span class="n">personEmail</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">PersonT</span><span class="p">)</span> <span class="c1">-- PrimaryKey&#39;s must be &#39;Beamable&#39;</span>
+</pre></div>
+
+
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Many people find it useful to use the <code>Applicative</code> instance for <code>(-&gt;) a</code> to
+write <code>primaryKey</code>. For example, we could have written the above <code>primaryKey
+person = PersonKey (personFirstName person) (personLastName person)</code> as
+<code>primaryKey = PersonKey &lt;$&gt; personFirstName &lt;*&gt; personLastName</code>.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Typing <code>Columnar</code> may become tiresome. <code>Database.Beam</code> also exports <code>C</code> as a
+type alias for <code>Columnar</code>, which may make writing models easier. Since <code>C</code>
+may cause name clashes, all examples are given using <code>Columnar</code>.</p>
+</div>
+<p>Many also like defining type synonyms for their table and primary key types. For
+example, for the table <code>PersonT</code> above, a programmer may define.</p>
+<div class="codehilite"><pre><span></span><span class="kr">type</span> <span class="kt">Person</span> <span class="ow">=</span> <span class="kt">PersonT</span> <span class="kt">Identity</span>
+<span class="kr">type</span> <span class="kt">PersonKey</span> <span class="ow">=</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="kt">Identity</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Person</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">Person</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">PersonKey</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">PersonKey</span>
+</pre></div>
+
+
+<p>By convention, beam table types are suffixed with <code>T</code> to distinguish their type
+names from the same type parameterized over <code>Identity</code> (the 'regular' Haskell
+data type).</p>
+<h3 id="what-about-tables-without-primary-keys">What about tables without primary keys?</h3>
+<p>Tables without primary keys are considered bad style. However, sometimes you
+need to use beam with a schema that you have no control over. To declare a table
+without a primary key, simply instantiate the <code>Table</code> class and set <code>PrimaryKey
+tbl</code> to a type with no fields. Then just produce this type in <code>primaryKey</code>.</p>
+<p>For example</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">BadT</span> <span class="n">f</span>
+  <span class="ow">=</span> <span class="kt">BadT</span>
+  <span class="p">{</span> <span class="n">badFirstName</span> <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">badLastName</span>  <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">BadT</span>
+<span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">BadT</span> <span class="kr">where</span>
+  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">BadT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">BadNoId</span>
+  <span class="n">primaryKey</span> <span class="kr">_</span> <span class="ow">=</span> <span class="kt">BadNoId</span>
+</pre></div>
+
+
+<h2 id="foreign-references">Foreign references</h2>
+<p>Foreign references are also easily supported in models by simply
+embedding the <code>PrimaryKey</code> of the referred to table directly in the
+parent. For example, suppose we want to create a new model
+representing a post by a user.</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">PostT</span> <span class="n">f</span>
+    <span class="ow">=</span> <span class="kt">Post</span>
+    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Auto</span> <span class="kt">Int</span><span class="p">)</span>
+    <span class="p">,</span> <span class="n">postPostedAt</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">LocalTime</span>
+    <span class="p">,</span> <span class="n">postContent</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+    <span class="p">,</span> <span class="n">postPoster</span>   <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="n">f</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">PostT</span>
+
+<span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">PostT</span> <span class="kr">where</span>
+  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">PostT</span> <span class="n">f</span>
+      <span class="ow">=</span> <span class="kt">PostId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Auto</span> <span class="kt">Int</span><span class="p">))</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+  <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">PostId</span> <span class="o">.</span> <span class="n">postId</span>
+
+<span class="kr">type</span> <span class="kt">Post</span> <span class="ow">=</span> <span class="kt">PostT</span> <span class="kt">Identity</span>
+<span class="kr">type</span> <span class="kt">PostId</span> <span class="ow">=</span> <span class="kt">PrimaryKey</span> <span class="kt">PostT</span> <span class="kt">Identity</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Post</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">Post</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">PostId</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">PostId</span>
+</pre></div>
+
+
+<h3 id="nullable-foreign-references">Nullable foreign references</h3>
+<p>Above, any non-bottom value of type <code>PostT Identity</code> must carry a concrete value
+of <code>PrimaryKey PersonT Identity</code>. Sometimes, you may want to optionally include
+a foreign key. You can make a foreign key nullable by embedding the primary key
+and adding the <code>Nullable</code> column tag modifier.</p>
+<p>For example, to make the poster optional above.</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">PostT</span> <span class="n">f</span>
+    <span class="ow">=</span> <span class="kt">Post</span>
+    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Auto</span> <span class="kt">Int</span><span class="p">)</span>
+    <span class="p">,</span> <span class="n">postPostedAt</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">LocalTime</span>
+    <span class="p">,</span> <span class="n">postContent</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+    <span class="p">,</span> <span class="n">postPoster</span>   <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">PostT</span>
+</pre></div>
+
+
+<h3 id="more-complicated-relationships">More complicated relationships</h3>
+<p>This is the extent of beam's support for defining models. Although
+similar packages in other languages provide support for declaring
+one-to-many, many-to-one, and many-to-many relationships, beam's
+focused is providing a direct mapping of relational database concepts
+to Haskell, not on abstracting away the complexities of database
+querying. Thus, beam does not use 'lazy-loading' or other tricks that
+obfuscate performance. Because of this, the bulk of the functionality
+dealing with different types of relations is found in the querying
+support, rather than in the model declarations.</p>
+<p>Also, notice that beam does not allow you to specify any kind of reference
+constraints between tables in your data types. This is because references are a
+property of the database, not a particular table schema. Such relationships can
+be defined using the <code>beam-migrate</code> package.</p>
+<h2 id="embedding">Embedding</h2>
+<p>Sometimes, we want to declare multiple models with fields in common. Beam allows
+you to simple embed such fields in common types and embed those directly into
+models. For example, in
+the
+<a href="https://github.com/tathougies/beam/blob/master/beam-sqlite/examples/Chinook/Schema.hs">Chinook example schema</a>,
+we define the following structure for addresses.</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">AddressMixin</span> <span class="n">f</span>
+  <span class="ow">=</span> <span class="kt">Address</span>
+  <span class="p">{</span> <span class="n">address</span>           <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">addressCity</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">addressState</span>      <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">addressCountry</span>    <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">addressPostalCode</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">AddressMixin</span>
+<span class="kr">type</span> <span class="kt">Address</span> <span class="ow">=</span> <span class="kt">AddressMixin</span> <span class="kt">Identity</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="p">(</span><span class="kt">AddressMixin</span> <span class="kt">Identity</span><span class="p">)</span>
+</pre></div>
+
+
+<p>We can then use <code>AddressMixin</code> in our models.</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">EmployeeT</span> <span class="n">f</span>
+  <span class="ow">=</span> <span class="kt">Employee</span>
+  <span class="p">{</span> <span class="n">employeeId</span>        <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int32</span>
+  <span class="p">,</span> <span class="n">employeeLastName</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">employeeFirstName</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">employeeTitle</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">employeeReportsTo</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">EmployeeT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">employeeBirthDate</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">LocalTime</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">employeeHireDate</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">LocalTime</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">employeeAddress</span>   <span class="ow">::</span> <span class="kt">AddressMixin</span> <span class="n">f</span>
+  <span class="p">,</span> <span class="n">employeePhone</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">employeeFax</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">employeeEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="c1">-- ...</span>
+<span class="kr">data</span> <span class="kt">CustomerT</span> <span class="n">f</span>
+  <span class="ow">=</span> <span class="kt">Customer</span>
+  <span class="p">{</span> <span class="n">customerId</span>        <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int32</span>
+  <span class="p">,</span> <span class="n">customerFirstName</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">customerLastName</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">customerCompany</span>   <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">customerAddress</span>   <span class="ow">::</span> <span class="kt">AddressMixin</span> <span class="n">f</span>
+  <span class="p">,</span> <span class="n">customerPhone</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">customerFax</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">customerEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">customerSupportRep</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">EmployeeT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+</pre></div>
+
+
+<h2 id="defaults">Defaults</h2>
+<p>Based on your data type declarations, beam can already guess a lot
+about your tables. For example, it already assumes that the
+<code>personFirstName</code> field is accessible in SQL as <code>first_name</code>. This
+defaulting behavior makes it very easy to interact with typical
+databases.</p>
+<p>For the easiest user experience, it's best to follow beam's
+conventions for declaring models. In particular, the defaulting
+mechanisms rely on each table type declaring only one constructor
+which has fields named in the camelCase style.</p>
+<p>When defaulting the name of a table field or column, beam
+un-camelCases the field name (after dropping leading underscores) and
+drops the first word. The remaining words are joined with
+underscores. If there is only one component, it is not
+dropped. Trailing and internal underscores are preserved in the name
+and if the name consists solely of underscores, beam makes no
+changes. A summary of these rules is given in the table below.</p>
+<table>
+<thead>
+<tr>
+<th align="left">Haskell field name</th>
+<th align="left">Beam defaulted column name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>personFirstName</code></td>
+<td align="left"><code>first_name</code></td>
+</tr>
+<tr>
+<td align="left"><code>_personLastName</code></td>
+<td align="left"><code>last_name</code></td>
+</tr>
+<tr>
+<td align="left"><code>name</code></td>
+<td align="left"><code>name</code></td>
+</tr>
+<tr>
+<td align="left"><code>first_name</code></td>
+<td align="left"><code>first_name</code></td>
+</tr>
+<tr>
+<td align="left"><code>_first_name</code></td>
+<td align="left"><code>first_name</code></td>
+</tr>
+<tr>
+<td align="left"><code>___</code> (three underscores)</td>
+<td align="left"><code>___</code> (no changes)</td>
+</tr>
+</tbody>
+</table>
+<p>Note that beam only uses lower case in field names. While typically
+case does not matter for SQL queries, beam always quotes
+identifiers. Many DBMS's are case-sensitive for quoted
+identifiers. Thus, queries can sometimes fail if your tables use
+mixtures of lower- and upper-case to distinguish between fields.</p>
+<p>For information on modifying the defaults, see the <a href="../databases/">next section</a>.</p>
+                
+                  
+                
+              
+              
+                
+              
+            </article>
+          </div>
+        </div>
+      </main>
+      
+        
+<footer class="md-footer">
+  
+    <div class="md-footer-nav">
+      <nav class="md-footer-nav__inner md-grid">
+        
+          <a href="../../tutorials/tutorial3/" title="Part 3" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+            <div class="md-flex__cell md-flex__cell--shrink">
+              <i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
+            </div>
+            <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
+              <span class="md-flex__ellipsis">
+                <span class="md-footer-nav__direction">
+                  Previous
+                </span>
+                Part 3
+              </span>
+            </div>
+          </a>
+        
+        
+          <a href="../databases/" title="Databases" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
+            <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
+              <span class="md-flex__ellipsis">
+                <span class="md-footer-nav__direction">
+                  Next
+                </span>
+                Databases
+              </span>
+            </div>
+            <div class="md-flex__cell md-flex__cell--shrink">
+              <i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
+            </div>
+          </a>
+        
+      </nav>
+    </div>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+        powered by
+        <a href="http://www.mkdocs.org">MkDocs</a>
+        and
+        <a href="https://squidfunk.github.io/mkdocs-material/">
+          Material for MkDocs</a>
+      </div>
+      
+        
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    
+
+      <script src="../../assets/javascripts/application.9fb73e57.js"></script>
+      
+      <script>app.initialize({version:"0.17.2",url:{base:"../.."}})</script>
+      
+    
+<script type="text/javascript" language="javascript"  src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<script type="text/javascript" language="javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script type="text/javascript" language="javascript">
+ $(document.body).tab();
+ $(".nav-item:first-child").tab("show");
+</script>
+
+    
+      
+    
+  </body>
+</html>
