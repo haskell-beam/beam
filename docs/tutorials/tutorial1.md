@@ -146,7 +146,7 @@ top-level functions to use the `User` type.
 
 ## Teaching Beam about our table
 
-We've defined a type that can represent our the data in our table. Now, let's
+We've defined a type that can represent the data in our table. Now, let's
 inform beam that we'd like to use `UserT` as a table.
 
 All beam tables need to implement the `Beamable` type class. Due to GHC's
