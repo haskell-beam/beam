@@ -192,15 +192,68 @@ ruleBasedRenaming =
 
      deptFieldNames @?= [ "name", "head__first_name", "head__last_name", "head__created" ]
 
+-- * Ensure it is possible to use nested paremetrized beams
+
+data DepartamentRelatedT metaInfo prop f = DepartamentPropertyT
+      { _departament  :: PrimaryKey DepartmentT f
+      , _relatesTo    :: prop f                -- checking we can nest both, nullable and non-nullable beams.
+      , _metaInfo     :: metaInfo (Nullable f)
+      } deriving Generic
+
+
+instance (Beamable metaInfo, Beamable  prop) => Beamable (DepartamentRelatedT metaInfo prop)
+
+instance (Table metaInfo, Table  prop) => Table    (DepartamentRelatedT metaInfo prop) where
+  data PrimaryKey (DepartamentRelatedT metaInfo prop) f = DepReKey (PrimaryKey DepartmentT f) 
+                                                                   (PrimaryKey prop f) 
+                                                                   deriving(Generic)
+  primaryKey = DepReKey <$> _departament <*> (primaryKey._relatesTo)
+
+instance (Table metaInfo, Table prop) => Beamable (PrimaryKey (DepartamentRelatedT metaInfo prop))
+
+
+
+data VehiculeT f = VehiculeT
+      { _vehiculeId     :: C f Text
+      , _vehiculeType   :: C f Text
+      , _numberOfWheels :: C f Int
+      } deriving Generic
+
+instance Beamable VehiculeT
+instance Beamable (PrimaryKey VehiculeT)
+
+instance Table VehiculeT where
+     data PrimaryKey VehiculeT f = VehiculeId  (C f Text) deriving(Generic)
+     primaryKey = VehiculeId <$> _vehiculeId
+
+data VehiculeInformationT f = VehiculeInformationT
+      { _price          :: C f Double
+      } deriving Generic
+
+
+instance Beamable VehiculeInformationT
+instance Beamable (PrimaryKey VehiculeInformationT)
+
+instance Table VehiculeInformationT where
+     data PrimaryKey VehiculeInformationT f = VehiculeInformationKey  deriving(Generic)
+     primaryKey _ = VehiculeInformationKey
+
+type DepartmentVehicule  = DepartmentVehiculeT Identity
+type DepartmentVehiculeT = DepartamentRelatedT VehiculeInformationT VehiculeT
+
+
+
+
 -- * Database schema is derived correctly
 
 data EmployeeDb f
   = EmployeeDb
-    { _employees   :: f (TableEntity EmployeeT)
-    , _departments :: f (TableEntity DepartmentT)
-    , _roles       :: f (TableEntity RoleT)
-    , _funny       :: f (TableEntity FunnyT) }
-    deriving Generic
+    { _employees           :: f (TableEntity EmployeeT)
+    , _departments         :: f (TableEntity DepartmentT)
+    , _roles               :: f (TableEntity RoleT)
+    , _funny               :: f (TableEntity FunnyT) 
+    , _departmentVehicules :: f (TableEntity DepartmentVehiculeT)
+    } deriving Generic
 instance Database be EmployeeDb
 
 employeeDbSettings :: DatabaseSettings be EmployeeDb
