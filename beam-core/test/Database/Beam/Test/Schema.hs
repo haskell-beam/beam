@@ -31,6 +31,8 @@ tests :: TestTree
 tests = testGroup "Schema Tests"
                   [ basicSchemaGeneration
                   , ruleBasedRenaming
+                  , parametricBeamSchemaGeneration
+                  , parametricAndFixedNestedBeamsAreEquivalent
 --                  , automaticNestedFieldsAreUnset
 --                  , nullableForeignKeysGivenMaybeType
                   , underscoresAreHandledGracefully ]
@@ -192,22 +194,62 @@ ruleBasedRenaming =
 
      deptFieldNames @?= [ "name", "head__first_name", "head__last_name", "head__created" ]
 
--- * Ensure it is possible to use nested paremetrized beams
+-- * Ensure it is possible to use nested paremetric beams
+parametricBeamSchemaGeneration :: TestTree
+parametricBeamSchemaGeneration =
+  testCase "Parametric schema generation" $
+  do let (DatabaseEntity (DatabaseTable _ deptVehiculesA)) = _departmentVehiculesA employeeDbSettings
+         deptVehiculesFieldNamesA = allBeamValues (\(Columnar' f) -> _fieldName f) deptVehiculesA
 
-data DepartamentRelatedT metaInfo prop f = DepartamentPropertyT
-      { _departament  :: PrimaryKey DepartmentT f
-      , _relatesTo    :: prop f                -- checking we can nest both, nullable and non-nullable beams.
-      , _metaInfo     :: metaInfo (Nullable f)
+     deptVehiculesFieldNamesA @?= [ "departament__name"
+                                  , "relates_to__id"
+                                  , "relates_to__type"
+                                  , "relates_to__of_wheels"
+                                  , "meta_info__price"
+                                  ]
+
+-- * Ensure it doesn't matter whether we abstract over a beam's parameters, or if we them fixed.
+parametricAndFixedNestedBeamsAreEquivalent :: TestTree
+parametricAndFixedNestedBeamsAreEquivalent =
+  testCase "Parametric and fixed nested beams are equivalent" $
+  do let (DatabaseEntity (DatabaseTable _ deptVehiculesA)) = _departmentVehiculesA employeeDbSettings
+         (DatabaseEntity (DatabaseTable _ deptVehiculesB)) = _departmentVehiculesB employeeDbSettings
+         deptVehiculesFieldNamesA = allBeamValues (\(Columnar' f) -> _fieldName f) deptVehiculesA
+         deptVehiculesFieldNamesB = allBeamValues (\(Columnar' f) -> _fieldName f) deptVehiculesB
+         
+     deptVehiculesFieldNamesB @?= deptVehiculesFieldNamesA
+
+
+-- `ADepartmentVehiculeT` and `BDepartmentVehiculeT` are equivalent, but one was using params while
+-- the other had its sub-beams fixed.
+
+type ADepartmentVehicule   = ADepartmentVehiculeT Identity
+type ADepartmentVehiculeT  = DepartamentRelatedT VehiculeInformationT VehiculeT
+data DepartamentRelatedT metaInfo prop f = DepartamentProperty
+      { _aDepartament  :: PrimaryKey DepartmentT f
+      , _aRelatesTo    :: prop f                -- checking we can nest both, nullable and non-nullable beams.
+      , _aMetaInfo     :: metaInfo (Nullable f)
       } deriving Generic
+
+type BDepartmentVehicule    = BDepartmentVehiculeT Identity
+data BDepartmentVehiculeT f = BDepartmentVehicule
+      { _bDepartament  :: PrimaryKey DepartmentT f
+      , _bRelatesTo    :: VehiculeT f                
+      , _bMetaInfo     :: VehiculeInformationT (Nullable f)
+      } deriving Generic
+-- 
+-- ["departament__name","relates_to__id","relates_to__type","relates_to__of_wheels","meta_info__price"]
+
 
 
 instance (Beamable metaInfo, Beamable  prop) => Beamable (DepartamentRelatedT metaInfo prop)
 
+
 instance (Table metaInfo, Table  prop) => Table    (DepartamentRelatedT metaInfo prop) where
-  data PrimaryKey (DepartamentRelatedT metaInfo prop) f = DepReKey (PrimaryKey DepartmentT f) 
-                                                                   (PrimaryKey prop f) 
-                                                                   deriving(Generic)
-  primaryKey = DepReKey <$> _departament <*> (primaryKey._relatesTo)
+  data PrimaryKey (DepartamentRelatedT metaInfo prop) f = DepReKeyA (PrimaryKey DepartmentT f) 
+                                                                    (PrimaryKey prop f) 
+                                                                    deriving(Generic)
+  primaryKey = DepReKeyA <$> _aDepartament <*> (primaryKey._aRelatesTo)
 
 instance (Table metaInfo, Table prop) => Beamable (PrimaryKey (DepartamentRelatedT metaInfo prop))
 
@@ -238,9 +280,17 @@ instance Table VehiculeInformationT where
      data PrimaryKey VehiculeInformationT f = VehiculeInformationKey  deriving(Generic)
      primaryKey _ = VehiculeInformationKey
 
-type DepartmentVehicule  = DepartmentVehiculeT Identity
-type DepartmentVehiculeT = DepartamentRelatedT VehiculeInformationT VehiculeT
 
+
+
+
+instance Beamable BDepartmentVehiculeT 
+instance Beamable (PrimaryKey BDepartmentVehiculeT)
+instance Table BDepartmentVehiculeT where
+  data PrimaryKey BDepartmentVehiculeT f = DepReKeyB (PrimaryKey DepartmentT f) 
+                                                     (PrimaryKey VehiculeT   f) 
+                                                     deriving(Generic)
+  primaryKey = DepReKeyB <$> _bDepartament <*> (primaryKey._bRelatesTo)
 
 
 
@@ -248,11 +298,12 @@ type DepartmentVehiculeT = DepartamentRelatedT VehiculeInformationT VehiculeT
 
 data EmployeeDb f
   = EmployeeDb
-    { _employees           :: f (TableEntity EmployeeT)
-    , _departments         :: f (TableEntity DepartmentT)
-    , _roles               :: f (TableEntity RoleT)
-    , _funny               :: f (TableEntity FunnyT) 
-    , _departmentVehicules :: f (TableEntity DepartmentVehiculeT)
+    { _employees            :: f (TableEntity EmployeeT)
+    , _departments          :: f (TableEntity DepartmentT)
+    , _roles                :: f (TableEntity RoleT)
+    , _funny                :: f (TableEntity FunnyT) 
+    , _departmentVehiculesA :: f (TableEntity ADepartmentVehiculeT)
+    , _departmentVehiculesB :: f (TableEntity BDepartmentVehiculeT)
     } deriving Generic
 instance Database be EmployeeDb
 
