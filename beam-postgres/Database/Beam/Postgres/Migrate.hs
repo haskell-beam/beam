@@ -276,7 +276,7 @@ getDbConstraints conn =
 
      columnChecks <-
        fmap mconcat . forM tbls $ \(oid, tbl) ->
-       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, pg_catalog.format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute att WHERE att.attrelid=? AND att.attnum>0"
+       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, pg_catalog.format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute att WHERE att.attrelid=? AND att.attnum>0 AND att.attisdropped='f'"
                        (Pg.Only (oid :: Pg.Oid))
           let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: ByteString) ->
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
