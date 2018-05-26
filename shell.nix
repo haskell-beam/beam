@@ -42,6 +42,7 @@ let
     };
 
     propagatedBuildInputs = with python27Packages; [ markdown ];
+    doCheck = false;
 
     meta = {
       homepage = https://github.com/facelessuser/pymdown-extensions;
