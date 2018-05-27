@@ -27,6 +27,7 @@ module Database.Beam.Migrate.SQL.Tables
   , defaultTo_, notNull, unique
   , int, smallint, bigint
   , char, varchar, double
+  , nationalVarchar, nationalChar
   , characterLargeObject, binaryLargeObject, array
   , boolean, numeric, date, time
   , timestamp, timestamptz
@@ -56,7 +57,7 @@ import Control.Monad.State
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.Typeable
-import Data.Time (LocalTime, TimeOfDay)
+import Data.Time (LocalTime, TimeOfDay, Day)
 import Data.Scientific (Scientific)
 import qualified Data.Kind as Kind (Constraint)
 
@@ -309,7 +310,7 @@ varbinary prec = DataType (varBinaryType prec)
 
 -- TODO should this be Day or something?
 -- | SQL92 @DATE@ data type
-date :: BeamMigrateSqlBackend be => DataType be LocalTime
+date :: BeamMigrateSqlBackend be => DataType be Day
 date = DataType dateType
 
 -- | SQL92 @CHAR@ data type
@@ -319,6 +320,14 @@ char prec = DataType (charType prec Nothing)
 -- | SQL92 @VARCHAR@ data type
 varchar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
 varchar prec = DataType (varCharType prec Nothing)
+
+-- | SQL92 @NATIONAL CHARACTER VARYING@ data type
+nationalVarchar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
+nationalVarchar prec = DataType (nationalVarCharType prec)
+
+-- | SQL92 @NATIONAL CHARACTER@ data type
+nationalChar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
+nationalChar prec = DataType (nationalCharType prec)
 
 -- | SQL92 @DOUBLE@ data type
 double :: BeamMigrateSqlBackend be => DataType be Double

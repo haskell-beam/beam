@@ -5,7 +5,7 @@ module Database.Beam.Backend.SQL
 
   , MonadBeam(..)
 
-  , BeamSqlBackend(..)
+  , BeamSqlBackend
   , BeamSqlBackendSyntax
   , MockSqlBackend
 

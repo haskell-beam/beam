@@ -8,6 +8,8 @@ import           Database.Beam.Migrate.Tool.Diff
 import           Database.Beam.Migrate.Tool.Registry
 import           Database.Beam.Migrate.Log
 
+import           Database.Beam.Backend.SQL
+
 import           Database.Beam.Migrate ( SomeDatabasePredicate(..)
                                        , DatabasePredicate(..)
                                        , PredicateSpecificity(..)
@@ -166,7 +168,7 @@ showSimpleSchema cmdLine backend connStr = do
                      Nothing -> putStrLn ("Tossing constraint " ++ show c)
                      Just {} -> pure ()
                    pure c'
-          case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs'' of
+          case finalSolution $ heuristicSolver (defaultActionProvider @HsMigrateBackend) [] cs'' of
             Candidates {} -> fail "Could not form haskell schema"
             Solved actions ->
               case renderHsSchema (hsActionsToModule "Schema" (fmap migrationCommand actions)) of
@@ -174,7 +176,7 @@ showSimpleSchema cmdLine backend connStr = do
                 Right sch -> putStrLn sch
 
 writeSchema :: MigrateCmdLine -> MigrationRegistry
-             -> UUID -> BeamMigrationBackend cmd be hdl m
+             -> UUID -> BeamMigrationBackend be hdl m
              -> [SomeDatabasePredicate]
              -> IO FilePath
 writeSchema cmdLine registry commitId be cs = do
@@ -190,7 +192,7 @@ writeHsSchema :: MigrateCmdLine -> MigrationRegistry
               -> Schema
               -> [MigrationFormat] -> IO FilePath
 writeHsSchema cmdLine registry commitId cs dbSchema fmts =
-  case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs of
+  case finalSolution $ heuristicSolver (defaultActionProvider @HsMigrateBackend) [] cs of
     Candidates [] -> fail "Could not form haskell schema"
     Candidates (x:_) ->
       let allSolved = dbStateCurrentState x
@@ -207,9 +209,9 @@ writeHsSchema cmdLine registry commitId cs dbSchema fmts =
                           metadataComment "--" metadata
 
 writeMigration :: MigrateCmdLine -> MigrationRegistry
-               -> BeamMigrationBackend cmd be hdl m
+               -> BeamMigrationBackend be hdl m
                -> UUID -> UUID
-               -> [ cmd ]
+               -> [ BeamSqlBackendSyntax be ]
                -> IO FilePath
 writeMigration cmdLine reg be fromId toId cmds =
   case be of

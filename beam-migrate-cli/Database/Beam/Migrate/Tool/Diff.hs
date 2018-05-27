@@ -91,7 +91,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
   SomeBeamMigrationBackend
     (BeamMigrationBackend { backendGetDbConstraints = getCs
                           , backendTransact = transact } ::
-        BeamMigrationBackend cmd be hdl m) <-
+        BeamMigrationBackend be hdl m) <-
     loadBackend' cmdLine modName
 
   case ref of
@@ -105,7 +105,7 @@ getPredicatesFromSpec cmdLine reg (PredicateFetchSourceDbHead (MigrationDatabase
                   runSelectReturningOne $ select $
                   limit_ 1 $ offset_ (fromIntegral fromHead) $
                   orderBy_ (desc_ . _logEntryId) $
-                  all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
+                  all_ (_beamMigrateLogEntries (beamMigrateDb @be @hdl @m))
 
       case logEntry of
         Left err -> throwIO (CouldNotFetchLog err)

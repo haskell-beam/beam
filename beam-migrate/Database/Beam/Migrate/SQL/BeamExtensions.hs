@@ -7,7 +7,6 @@ module Database.Beam.Migrate.SQL.BeamExtensions where
 
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate.SQL.Types
-import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.SQL.Tables
 
 import Data.Text (Text)

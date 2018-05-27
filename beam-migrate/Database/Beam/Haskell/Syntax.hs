@@ -165,7 +165,6 @@ instance Monoid (HsBeamBackend f) where
 data HsEntity
     = HsEntity
     { hsEntityBackend :: HsBeamBackend HsExpr
-    , hsEntitySyntax  :: HsBeamBackend ()
 
     , hsEntityName    :: HsEntityName
 
@@ -256,17 +255,10 @@ databaseTypeDecl entities =
                                      (buildHsDbField (hsEntityDbDecl entity) $
                                       Hs.TyVar () (Hs.Ident () "entity"))
 
-migrationTypeDecl :: HsBeamBackend HsExpr -> HsBeamBackend () -> [Hs.Type ()] -> Hs.Decl ()
-migrationTypeDecl be syntax inputs =
+migrationTypeDecl :: HsBeamBackend HsExpr -> [Hs.Type ()] -> Hs.Decl ()
+migrationTypeDecl be inputs =
   Hs.TypeSig () [Hs.Ident () "migration"] migrationType
   where
-    (syntaxAssts, syntaxVar) =
-      case syntax of
-        HsBeamBackendNone -> error "No syntax matches"
-        HsBeamBackendSingle ty _ -> ([], hsTypeSyntax ty)
-        HsBeamBackendConstrained cs ->
-          ( map (flip buildHsBackendConstraint syntaxVar) cs
-          , tyVarNamed "syntax" )
     (beAssts, beVar) =
       case be of
         HsBeamBackendNone -> error "No backend matches"
@@ -276,7 +268,7 @@ migrationTypeDecl be syntax inputs =
           , tyVarNamed "be" )
 
     resultType = tyApp (tyConNamed "Migration")
-                       [ syntaxVar
+                       [ beVar
                        , tyApp (tyConNamed "CheckedDatabaseSettings")
                                [ beVar
                                , tyConNamed "Db" ] ]
@@ -285,7 +277,7 @@ migrationTypeDecl be syntax inputs =
       | [] <- inputs = resultType
       | otherwise    = functionTy (tyTuple inputs) resultType
 
-    constraints = nub (syntaxAssts ++ beAssts)
+    constraints = nub beAssts
     migrationType
       | [] <- constraints  = migrationUnconstrainedType
       | [c] <- constraints = Hs.TyForall () Nothing (Just (Hs.CxSingle () c)) migrationUnconstrainedType
@@ -305,17 +297,19 @@ migrationDecl _ _ migrations entities =
     finalReturn = hsApp (hsVar "pure")
                         [ hsRecCon "Db" (map (\e -> (fromString (entityDbFieldName e), hsEntityExp e)) entities) ]
 
-dbTypeDecl :: HsBeamBackend HsExpr -> HsBeamBackend () -> Hs.Decl ()
-dbTypeDecl be syntax =
+dbTypeDecl :: HsBeamBackend HsExpr -> Hs.Decl ()
+dbTypeDecl be =
   Hs.TypeSig () [ Hs.Ident () "db" ] dbType
   where
     unconstrainedDbType = tyApp (tyConNamed "DatabaseSettings")
                                 [ beVar, tyConNamed "Db" ]
     dbType
+      | []  <- constraints, [] <- bindings = unconstrainedDbType
+      | []  <- constraints  = Hs.TyForall () (Just bindings) Nothing unconstrainedDbType
       | [c] <- constraints = Hs.TyForall () (Just bindings) (Just (Hs.CxSingle () c)) unconstrainedDbType
       | otherwise          = Hs.TyForall () (Just bindings) (Just (Hs.CxTuple () constraints)) unconstrainedDbType
 
-    constraints = monadBeamConstraint:nub (beAssts ++ syntaxAssts)
+    constraints = nub beAssts
     (bindings, beAssts, beVar) =
       case be of
         HsBeamBackendNone -> error "No backend matches"
@@ -325,34 +319,23 @@ dbTypeDecl be syntax =
           , map (flip buildHsBackendConstraint beVar) cs
           , tyVarNamed "be" )
 
-    (standardBindings, syntaxAssts, syntaxVar) =
-      case syntax of
-        HsBeamBackendNone -> error "No syntax matches"
-        HsBeamBackendSingle ty _ -> ( [tyVarBind "hdl", tyVarBind "m"]
-                                    , []
-                                    , hsTypeSyntax ty )
-        HsBeamBackendConstrained cs ->
-          ( [tyVarBind "syntax", tyVarBind "hdl", tyVarBind "m"]
-          , map (flip buildHsBackendConstraint syntaxVar) cs
-          , tyVarNamed "syntax" )
+    standardBindings = []
 
     tyVarBind nm = Hs.UnkindedVar () (Hs.Ident () nm)
 
-    monadBeamConstraint = Hs.ClassA () (Hs.UnQual () (Hs.Ident () "MonadBeam")) [ syntaxVar, beVar, tyVarNamed "hdl", tyVarNamed "m" ]
-
-dbDecl :: HsBeamBackend HsExpr -> HsBeamBackend () -> [HsExpr] -> Hs.Decl ()
-dbDecl _ syntax params =
+dbDecl :: HsBeamBackend HsExpr -> [HsExpr] -> Hs.Decl ()
+dbDecl backend params =
   Hs.FunBind () [ Hs.Match () (Hs.Ident () "db") [] (Hs.UnGuardedRhs () body) Nothing ]
   where
-    syntaxVar = case syntax of
-                  HsBeamBackendNone -> error "No syntax matches"
-                  HsBeamBackendSingle ty _ -> hsTypeSyntax ty
-                  HsBeamBackendConstrained _ -> tyVarNamed "syntax"
+    backendVar = case backend of
+                   HsBeamBackendNone -> error "No syntax matches"
+                   HsBeamBackendSingle ty _ -> hsTypeSyntax ty
+                   HsBeamBackendConstrained _ -> tyVarNamed "be"
 
     body = hsExprSyntax $
            hsApp (hsVar "unCheckDatabase")
                  [ hsApp (hsVarFrom "runMigrationSilenced" "Database.Beam.Migrate")
-                   [ hsApp (hsVisibleTyApp (hsVar "migration") syntaxVar) $
+                   [ hsApp (hsVisibleTyApp (hsVar "migration") backendVar) $
                      case params of
                        [] -> []
                        _  -> [ hsTuple params ]
@@ -382,7 +365,7 @@ renderHsSchema (HsModule modNm entities migrations) =
                                                  hsExprImports (hsEntityExp e)) entities <>
                                   foldMap (hsExprImports . snd) migrations <>
                                   importSome "Database.Beam.Migrate" [ importTyNamed "CheckedDatabaseSettings", importTyNamed "Migration"
-                                                                     , importTyNamed "Sql92SaneDdlCommandSyntax"
+                                                                     , importTyNamed "BeamMigrateSqlBackend"
                                                                      , importVarNamed "runMigrationSilenced"
                                                                      , importVarNamed "unCheckDatabase" ]
       imports = commonImports <>
@@ -399,7 +382,6 @@ renderHsSchema (HsModule modNm entities migrations) =
                       , Hs.ImportDecl () (Hs.ModuleName () "Control.Applicative") False False False Nothing Nothing Nothing ]
 
       backend = foldMap hsEntityBackend entities
-      syntax  = foldMap hsEntitySyntax entities
 
       backendHs = case backend of
                     HsBeamBackendNone -> error "Can't instantiate Database instance: No backend matches"
@@ -409,13 +391,13 @@ renderHsSchema (HsModule modNm entities migrations) =
       decls = foldMap (map hsDeclSyntax . hsEntityDecls) entities ++
               [ databaseTypeDecl entities
 
-              , migrationTypeDecl backend syntax []
+              , migrationTypeDecl backend []
               , migrationDecl backend [] migrations entities
 
               , hsInstance "Database" [ backendHs, tyConNamed "Db" ] []
 
-              , dbTypeDecl backend syntax
-              , dbDecl backend syntax [] ]
+              , dbTypeDecl backend
+              , dbDecl backend [] ]
 
   in Right (render (Hs.prettyPrim hsMod))
 
@@ -500,15 +482,14 @@ instance IsSql92CreateTableSyntax HsAction where
               , hsApp (hsTyCon (fromString tyConName))
                       (map (\(fieldNm, ty) -> mkHsColumnSchema ty fieldNm) fields) ]
       entity = HsEntity
-             { hsEntityBackend = HsBeamBackendConstrained []
-             , hsEntitySyntax = HsBeamBackendConstrained [ sql92SaneDdlCommandSyntax ]
+             { hsEntityBackend = HsBeamBackendConstrained [ beamMigrateSqlBackend ]
 
              , hsEntityName    = HsEntityName varName
              , hsEntityDecls   = [ HsDecl tblDecl imports
                                           [ Hs.EThingWith () (Hs.EWildcard () 0) (unqual tyName) [] ]
                                  , HsDecl tblBeamable imports []
 
-                                 , HsDecl tblPun imports [ Hs.EVar () (unqual tyName) ]
+                                 , HsDecl tblPun imports [ Hs.EVar () (unqual tyConName) ]
 
                                  , HsDecl tblShowInstance imports []
                                  , HsDecl tblEqInstance imports []
@@ -938,10 +919,10 @@ hsTuple = foldl (combineHsExpr addTuple) (HsExpr (Hs.Tuple () Hs.Boxed []) mempt
 inst :: String -> Hs.InstRule ()
 inst = Hs.IRule () Nothing Nothing . Hs.IHCon () . Hs.UnQual () . Hs.Ident ()
 
-sql92SaneDdlCommandSyntax :: HsBackendConstraint
-sql92SaneDdlCommandSyntax =
-  HsBackendConstraint $ \syntaxTy ->
-  Hs.ClassA () (Hs.UnQual () (Hs.Ident () "Sql92SaneDdlCommandSyntax")) [ syntaxTy ]
+beamMigrateSqlBackend :: HsBackendConstraint
+beamMigrateSqlBackend =
+  HsBackendConstraint $ \beTy ->
+  Hs.ClassA () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend")) [ beTy ]
 
 -- * Orphans
 
