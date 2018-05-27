@@ -181,7 +181,7 @@ instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeS
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax SqlBitString
 
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Double where
-  defaultSqlDataType _ _ = realType
+  defaultSqlDataType _ _ = doubleType
 instance IsSql92ColumnSchemaSyntax columnSchemaSyntax => HasDefaultSqlDataTypeConstraints columnSchemaSyntax Double
 instance IsSql92DataTypeSyntax dataTypeSyntax => HasDefaultSqlDataType dataTypeSyntax Scientific where
   defaultSqlDataType _ _ = numericType (Just (20, Just 10))
