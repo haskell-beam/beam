@@ -135,7 +135,7 @@ getPgExtension (DatabaseEntity (PgDatabaseExtension _ ext)) = ext
 -- 'DatabaseEntity'.
 pgCreateExtension :: forall extension db
                    . IsPgExtension extension
-                  => Migration PgCommandSyntax (CheckedDatabaseEntity Postgres db (PgExtensionEntity extension))
+                  => Migration Postgres (CheckedDatabaseEntity Postgres db (PgExtensionEntity extension))
 pgCreateExtension =
   let entity = checkedDbEntityAuto (Proxy @PgCommandSyntax) ""
       extName = pgExtensionName (Proxy @extension)
@@ -147,7 +147,7 @@ pgCreateExtension =
 -- Unfortunately, without linear types, we cannot check this.
 pgDropExtension :: forall extension
                  . CheckedDatabaseEntityDescriptor Postgres (PgExtensionEntity extension)
-                -> Migration PgCommandSyntax ()
+                -> Migration Postgres ()
 pgDropExtension (CheckedPgExtension (PgDatabaseExtension {})) =
   upDown (pgDropExtensionSyntax (pgExtensionName (Proxy @extension))) Nothing
 
@@ -165,10 +165,10 @@ instance DatabasePredicate PgHasExtension where
   serializePredicate (PgHasExtension nm) =
     object [ "has-postgres-extension" .= nm ]
 
-pgExtensionActionProvider :: ActionProvider PgCommandSyntax
+pgExtensionActionProvider :: ActionProvider Postgres
 pgExtensionActionProvider = pgCreateExtensionProvider <> pgDropExtensionProvider
 
-pgCreateExtensionProvider, pgDropExtensionProvider :: ActionProvider PgCommandSyntax
+pgCreateExtensionProvider, pgDropExtensionProvider :: ActionProvider Postgres
 
 pgCreateExtensionProvider =
   ActionProvider $ \findPre findPost ->

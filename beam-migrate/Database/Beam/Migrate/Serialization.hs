@@ -427,13 +427,12 @@ sql92Deserializers = mconcat
 
 -- | Deserializes data types that are instances of 'IsSql99DataTypeSyntax'
 sql99DataTypeDeserializers
-  :: forall cmd
-   . ( IsSql92DdlCommandSyntax cmd
-     , IsSql99DataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-  => BeamDeserializers cmd
+  :: forall be
+   . BeamMigrateSql99Backend be
+  => BeamDeserializers be
 sql99DataTypeDeserializers =
   beamDeserializer $ \d v ->
-  fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+  fmap (id @(BeamSqlBackendDataTypeSyntax be)) $
   case v of
     "clob" -> pure characterLargeObjectType
     "blob" -> pure binaryLargeObjectType
@@ -450,13 +449,12 @@ sql99DataTypeDeserializers =
 
 -- | Deserialize data types that are instances of 'IsSql2003BinaryAndVarBinaryDataTypeSyntax'
 sql2003BinaryAndVarBinaryDataTypeDeserializers
-  :: forall cmd
-   . ( IsSql92DdlCommandSyntax cmd
-     , IsSql2003BinaryAndVarBinaryDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-  => BeamDeserializers cmd
+  :: forall be
+   . BeamMigrateSqlT021Backend be
+  => BeamDeserializers be
 sql2003BinaryAndVarBinaryDataTypeDeserializers =
   beamDeserializer $ \_ v ->
-  fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+  fmap (id @(BeamSqlBackendDataTypeSyntax be)) $
   withObject "Sql2003DataType"
     (\o -> (binaryType <$> o .: "binary") <|>
            (varBinaryType <$> o .: "varbinary"))
@@ -464,13 +462,12 @@ sql2003BinaryAndVarBinaryDataTypeDeserializers =
 
 -- | Deserialize data types that are instance of 'IsSql2008BigIntDataTypeSyntax'
 sql2008BigIntDataTypeDeserializers
-  :: forall cmd
-   . ( IsSql92DdlCommandSyntax cmd
-     , IsSql2008BigIntDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-  => BeamDeserializers cmd
+  :: forall be
+   . BeamMigrateSqlT071Backend be
+  => BeamDeserializers be
 sql2008BigIntDataTypeDeserializers =
   beamDeserializer $ \_ v ->
-  fmap (id @(Sql92DdlCommandDataTypeSyntax cmd)) $
+  fmap (id @(BeamSqlBackendDataTypeSyntax be)) $
   case v of
     "bigint" -> pure bigIntType
     _ -> fail "Sql2008DataType.bigint: expected 'bigint'"

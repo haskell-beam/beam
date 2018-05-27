@@ -38,14 +38,10 @@ module Database.Beam.Sqlite.Syntax
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Haskell.Syntax
-import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
-import           Database.Beam.Migrate.SQL (DataType(..), FieldReturnType(..), field)
-import           Database.Beam.Migrate.SQL.BeamExtensions
 import           Database.Beam.Migrate.Serialization
 import           Database.Beam.Query
-import           Database.Beam.Query.SQL92
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -56,7 +52,6 @@ import qualified Data.DList as DL
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
-import           Data.Proxy (Proxy(..))
 import           Data.Scientific
 import           Data.String
 import qualified Data.Text as T
@@ -179,9 +174,6 @@ fromSqliteCommand (SqliteCommandInsert (SqliteInsertSyntax tbl fields values)) =
 
 -- | SQLite @SELECT@ syntax
 newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSyntax }
-instance HasQBuilder SqliteSelectSyntax where
-  buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
-
 
 -- | SQLite @INSERT@ syntax. This doesn't directly wrap 'SqliteSyntax' because
 -- we need to do some processing on @INSERT@ statements to deal with @AUTO
@@ -657,8 +649,6 @@ instance IsSql92OrderingSyntax SqliteOrderingSyntax where
   ascOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " ASC")
   descOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " DESC")
 
-instance IsSqlExpressionSyntaxStringType SqliteExpressionSyntax T.Text
-instance IsSqlExpressionSyntaxStringType SqliteExpressionSyntax String
 instance HasSqlValueSyntax SqliteValueSyntax Int where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Int8 where
@@ -879,30 +869,6 @@ sqliteSerialType = SqliteDataTypeSyntax (emit "INTEGER PRIMARY KEY AUTOINCREMENT
                                         (BeamSerializedDataType (beamSerializeJSON "sqlite" "serial"))
                                         True
 
-data SqliteHasDefault = SqliteHasDefault
-instance FieldReturnType 'True 'False SqliteColumnSchemaSyntax resTy a =>
-         FieldReturnType 'False 'False SqliteColumnSchemaSyntax resTy (SqliteHasDefault -> a) where
-  field' _ _ nm ty _ collation constraints SqliteHasDefault =
-    field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
-
-instance IsBeamSerialColumnSchemaSyntax SqliteColumnSchemaSyntax where
-  genericSerial nm = field nm (DataType sqliteSerialType) SqliteHasDefault
-
-instance HasDefaultSqlDataType SqliteDataTypeSyntax (SqlSerial Int) where
-  defaultSqlDataType _ False = sqliteSerialType
-  defaultSqlDataType _ True = intType
-instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax (SqlSerial Int) where
-  defaultSqlDataTypeConstraints _ _ _ = []
-
-instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where
-  -- TODO we should somehow allow contsraints based on backend
-  defaultSqlDataType _ _ = sqliteBlobType
-instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax ByteString
-
-instance HasDefaultSqlDataType SqliteDataTypeSyntax LocalTime where
-  defaultSqlDataType _ _ = timestampType Nothing False
-instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax LocalTime
-
 instance HasSqlValueSyntax SqliteValueSyntax ByteString where
   sqlValueSyntax bs = SqliteValueSyntax (emitValue (SQLBlob bs))
 
@@ -914,32 +880,3 @@ instance HasSqlValueSyntax SqliteValueSyntax Day where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
     where tmStr = formatTime defaultTimeLocale (iso8601DateFormat Nothing) tm
 
--- * Equality checks
-#define HAS_SQLITE_EQUALITY_CHECK(ty)                       \
-  instance HasSqlEqualityCheck SqliteExpressionSyntax (ty); \
-  instance HasSqlQuantifiedEqualityCheck SqliteExpressionSyntax (ty);
-
-HAS_SQLITE_EQUALITY_CHECK(Int)
-HAS_SQLITE_EQUALITY_CHECK(Int8)
-HAS_SQLITE_EQUALITY_CHECK(Int16)
-HAS_SQLITE_EQUALITY_CHECK(Int32)
-HAS_SQLITE_EQUALITY_CHECK(Int64)
-HAS_SQLITE_EQUALITY_CHECK(Word)
-HAS_SQLITE_EQUALITY_CHECK(Word8)
-HAS_SQLITE_EQUALITY_CHECK(Word16)
-HAS_SQLITE_EQUALITY_CHECK(Word32)
-HAS_SQLITE_EQUALITY_CHECK(Word64)
-HAS_SQLITE_EQUALITY_CHECK(Double)
-HAS_SQLITE_EQUALITY_CHECK(Float)
-HAS_SQLITE_EQUALITY_CHECK(Bool)
-HAS_SQLITE_EQUALITY_CHECK(String)
-HAS_SQLITE_EQUALITY_CHECK(T.Text)
-HAS_SQLITE_EQUALITY_CHECK(TL.Text)
-HAS_SQLITE_EQUALITY_CHECK(B.ByteString)
-HAS_SQLITE_EQUALITY_CHECK(BL.ByteString)
-HAS_SQLITE_EQUALITY_CHECK(UTCTime)
-HAS_SQLITE_EQUALITY_CHECK(LocalTime)
-HAS_SQLITE_EQUALITY_CHECK(ZonedTime)
-HAS_SQLITE_EQUALITY_CHECK(Char)
-HAS_SQLITE_EQUALITY_CHECK(Integer)
-HAS_SQLITE_EQUALITY_CHECK(Scientific)

@@ -69,7 +69,7 @@ import           Data.Semigroup
 #endif
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
-migrationBackend :: Tool.BeamMigrationBackend PgCommandSyntax Postgres Pg.Connection Pg
+migrationBackend :: Tool.BeamMigrationBackend Postgres Pg.Connection Pg
 migrationBackend = Tool.BeamMigrationBackend
                         "postgres"
                         (unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"
@@ -110,7 +110,7 @@ migrationBackend = Tool.BeamMigrationBackend
 --    * 'money'
 --
 postgresDataTypeDeserializers
-  :: Db.BeamDeserializers PgCommandSyntax
+  :: Db.BeamDeserializers Postgres
 postgresDataTypeDeserializers =
   Db.beamDeserializer $ \_ v ->
   case v of
@@ -131,12 +131,12 @@ postgresDataTypeDeserializers =
 -- Haskell syntax. Allows automatic generation of Haskell schemas from postgres
 -- constraints.
 pgPredConverter :: Tool.HaskellPredicateConverter
-pgPredConverter = Tool.sql92HsPredicateConverters @PgColumnSchemaSyntax pgTypeToHs <>
+pgPredConverter = Tool.sql92HsPredicateConverters @Postgres pgTypeToHs <>
                   Tool.hsPredicateConverter pgHasColumnConstraint
   where
-    pgHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c :: Db.TableColumnHasConstraint PgColumnSchemaSyntax)
+    pgHasColumnConstraint (Db.TableColumnHasConstraint tblNm colNm c :: Db.TableColumnHasConstraint Postgres)
       | c == Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing =
-          Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) :: Db.TableColumnHasConstraint HsColumnSchema))
+          Just (Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tblNm colNm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing) :: Db.TableColumnHasConstraint HsMigrateBackend))
       | otherwise = Nothing
 
 -- | Turn a 'PgDataTypeSyntax' into the corresponding 'HsDataType'. This is a
@@ -213,7 +213,7 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
 
 -- | Turn a series of 'Db.MigrationSteps' into a line-by-line array of
 -- 'BL.ByteString's suitable for writing to a script.
-migrateScript :: Db.MigrationSteps PgCommandSyntax () a' -> [BL.ByteString]
+migrateScript :: Db.MigrationSteps Postgres () a' -> [BL.ByteString]
 migrateScript steps =
   "-- CAUTION: beam-postgres currently escapes postgres string literals somewhat\n"                 :
   "--          haphazardly when generating scripts (but not when generating commands)\n"            :
@@ -233,12 +233,12 @@ migrateScript steps =
       Endo ((pgRenderSyntaxScript (fromPgCommand command) <> ";\n"):)
 
 -- | Write the migration given by the 'Db.MigrationSteps' to a file.
-writeMigrationScript :: FilePath -> Db.MigrationSteps PgCommandSyntax () a -> IO ()
+writeMigrationScript :: FilePath -> Db.MigrationSteps Postgres () a -> IO ()
 writeMigrationScript fp steps =
   let stepBs = migrateScript steps
   in BL.writeFile fp (BL.concat stepBs)
 
-pgExpandDataType :: Db.DataType PgDataTypeSyntax a -> PgDataTypeSyntax
+pgExpandDataType :: Db.DataType Postgres a -> PgDataTypeSyntax
 pgExpandDataType (Db.DataType pg) = pg
 
 pgDataTypeFromAtt :: ByteString -> Pg.Oid -> Maybe Int32 -> PgDataTypeSyntax
@@ -247,9 +247,9 @@ pgDataTypeFromAtt _ oid pgMod
   | Pg.typoid Pg.bytea == oid = pgExpandDataType Db.binaryLargeObject
   | Pg.typoid Pg.char == oid = pgExpandDataType (Db.char Nothing) -- TODO length
   -- TODO Pg.name
-  | Pg.typoid Pg.int8 == oid = pgExpandDataType (Db.bigint :: Db.DataType PgDataTypeSyntax Int64)
-  | Pg.typoid Pg.int4 == oid = pgExpandDataType (Db.int :: Db.DataType PgDataTypeSyntax Int32)
-  | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType PgDataTypeSyntax Int16)
+  | Pg.typoid Pg.int8 == oid = pgExpandDataType (Db.bigint :: Db.DataType Postgres Int64)
+  | Pg.typoid Pg.int4 == oid = pgExpandDataType (Db.int :: Db.DataType Postgres Int32)
+  | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType Postgres Int16)
   | Pg.typoid Pg.varchar == oid = pgExpandDataType (Db.varchar Nothing)
   | Pg.typoid Pg.timestamp == oid = pgExpandDataType Db.timestamp
   | Pg.typoid Pg.numeric == oid =
@@ -282,11 +282,11 @@ getDbConstraints conn =
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
                                         pgDataType = pgDataTypeFromAtt typ typId typmod'
 
-                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm pgDataType :: Db.TableHasColumn PgColumnSchemaSyntax)) columns
+                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm pgDataType :: Db.TableHasColumn Postgres)) columns
               notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
                                            if isNotNull then
                                             [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tbl nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
-                                              :: Db.TableColumnHasConstraint PgColumnSchemaSyntax)]
+                                              :: Db.TableColumnHasConstraint Postgres)]
                                            else [] ) columns
 
           pure (columnChecks ++ notNullChecks)
@@ -305,63 +305,63 @@ getDbConstraints conn =
 -- * Postgres-specific data types
 
 -- | 'Db.DataType' for @tsquery@. See 'TsQuery' for more information
-tsquery :: Db.DataType PgDataTypeSyntax TsQuery
+tsquery :: Db.DataType Postgres TsQuery
 tsquery = Db.DataType pgTsQueryType
 
 -- | 'Db.DataType' for @tsvector@. See 'TsVector' for more information
-tsvector :: Db.DataType PgDataTypeSyntax TsVector
+tsvector :: Db.DataType Postgres TsVector
 tsvector = Db.DataType pgTsVectorType
 
 -- | 'Db.DataType' for Postgres @TEXT@. 'characterLargeObject' is also mapped to
 -- this data type
-text :: Db.DataType PgDataTypeSyntax T.Text
+text :: Db.DataType Postgres T.Text
 text = Db.DataType pgTextType
 
 -- | 'Db.DataType' for Postgres @BYTEA@. 'binaryLargeObject' is also mapped to
 -- this data type
-bytea :: Db.DataType PgDataTypeSyntax ByteString
+bytea :: Db.DataType Postgres ByteString
 bytea = Db.DataType pgByteaType
 
 -- | 'Db.DataType' for a Postgres array without any bounds.
 --
 -- Note that array support in @beam-migrate@ is still incomplete.
 unboundedArray :: forall a. Typeable a
-               => Db.DataType PgDataTypeSyntax a
-               -> Db.DataType PgDataTypeSyntax (V.Vector a)
+               => Db.DataType Postgres a
+               -> Db.DataType Postgres (V.Vector a)
 unboundedArray (Db.DataType elTy) =
   Db.DataType (pgUnboundedArrayType elTy)
 
 -- | 'Db.DataType' for @JSON@. See 'PgJSON' for more information
-json :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSON a)
+json :: (ToJSON a, FromJSON a) => Db.DataType Postgres (PgJSON a)
 json = Db.DataType pgJsonType
 
 -- | 'Db.DataType' for @JSONB@. See 'PgJSON' for more information
-jsonb :: (ToJSON a, FromJSON a) => Db.DataType PgDataTypeSyntax (PgJSONB a)
+jsonb :: (ToJSON a, FromJSON a) => Db.DataType Postgres (PgJSONB a)
 jsonb = Db.DataType pgJsonbType
 
 -- | 'Db.DataType' for @UUID@ columns. The 'pgCryptoGenRandomUUID' function in
 -- the 'PgCrypto' extension can be used to generate UUIDs at random.
-uuid :: Db.DataType PgDataTypeSyntax UUID
+uuid :: Db.DataType Postgres UUID
 uuid = Db.DataType pgUuidType
 
 -- | 'Db.DataType' for @MONEY@ columns.
-money :: Db.DataType PgDataTypeSyntax PgMoney
+money :: Db.DataType Postgres PgMoney
 money = Db.DataType pgMoneyType
 
 -- * Pseudo-data types
 
 -- | Postgres @SERIAL@ data types. Automatically generates an appropriate
 -- @DEFAULT@ clause and sequence
-smallserial, serial, bigserial :: Integral a => Db.DataType PgDataTypeSyntax (SqlSerial a)
+smallserial, serial, bigserial :: Integral a => Db.DataType Postgres (SqlSerial a)
 smallserial = Db.DataType pgSmallSerialType
 serial = Db.DataType pgSerialType
 bigserial = Db.DataType pgBigSerialType
 
 data PgHasDefault = PgHasDefault
-instance Db.FieldReturnType 'True 'False PgColumnSchemaSyntax resTy a =>
-         Db.FieldReturnType 'False 'False PgColumnSchemaSyntax resTy (PgHasDefault -> a) where
+instance Db.FieldReturnType 'True 'False Postgres resTy a =>
+         Db.FieldReturnType 'False 'False Postgres resTy (PgHasDefault -> a) where
   field' _ _ nm ty _ collation constraints PgHasDefault =
     Db.field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
 
-instance IsBeamSerialColumnSchemaSyntax PgColumnSchemaSyntax where
+instance BeamSqlBackendHasSerial Postgres where
   genericSerial nm = Db.field nm serial PgHasDefault

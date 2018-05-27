@@ -39,7 +39,7 @@ import           Data.Semigroup
 
 -- | Run a PostgreSQL @SELECT@ statement in any 'MonadIO'.
 runSelect :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a )
-          => Pg.Connection -> SqlSelect PgSelectSyntax a
+          => Pg.Connection -> SqlSelect Postgres a
           -> (CONDUIT_TRANSFORMER () a m () -> m b) -> m b
 runSelect conn (SqlSelect (PgSelectSyntax syntax)) withSrc =
   runQueryReturning conn syntax withSrc
@@ -49,7 +49,7 @@ runSelect conn (SqlSelect (PgSelectSyntax syntax)) withSrc =
 -- | Run a PostgreSQL @INSERT@ statement in any 'MonadIO'. Returns the number of
 -- rows affected.
 runInsert :: MonadIO m
-          => Pg.Connection -> SqlInsert PgInsertSyntax -> m Int64
+          => Pg.Connection -> SqlInsert Postgres -> m Int64
 runInsert _ SqlInsertNoRows = pure 0
 runInsert conn (SqlInsert (PgInsertSyntax i)) =
   executeStatement conn i
@@ -70,7 +70,7 @@ runInsertReturning conn (PgInsertReturning i) withSrc =
 -- | Run a PostgreSQL @UPDATE@ statement in any 'MonadIO'. Returns the number of
 -- rows affected.
 runUpdate :: MonadIO m
-          => Pg.Connection -> SqlUpdate PgUpdateSyntax tbl -> m Int64
+          => Pg.Connection -> SqlUpdate Postgres tbl -> m Int64
 runUpdate _ SqlIdentityUpdate = pure 0
 runUpdate conn (SqlUpdate (PgUpdateSyntax i)) =
     executeStatement conn i
@@ -91,7 +91,7 @@ runUpdateReturning conn (PgUpdateReturning u) withSrc =
 -- | Run a PostgreSQL @DELETE@ statement in any 'MonadIO'. Returns the number of
 -- rows affected.
 runDelete :: MonadIO m
-          => Pg.Connection -> SqlDelete PgDeleteSyntax tbl
+          => Pg.Connection -> SqlDelete Postgres tbl
           -> m Int64
 runDelete conn (SqlDelete (PgDeleteSyntax d)) =
     executeStatement conn d

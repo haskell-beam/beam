@@ -8,7 +8,7 @@ module Database.Beam.Postgres.PgCrypto
 import Database.Beam
 import Database.Beam.Backend.SQL
 
-import Database.Beam.Postgres.Syntax
+import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.Extensions
 
 import Data.Text (Text)
@@ -16,7 +16,7 @@ import Data.ByteString (ByteString)
 import Data.Vector (Vector)
 import Data.UUID.Types (UUID)
 
-type PgExpr ctxt s = QGenExpr ctxt PgExpressionSyntax s
+type PgExpr ctxt s = QGenExpr ctxt Postgres s
 
 type family LiftPg ctxt s fn where
   LiftPg ctxt s (Maybe a -> b) = Maybe (PgExpr ctxt s a) -> LiftPg ctxt s b

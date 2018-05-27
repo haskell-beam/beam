@@ -75,15 +75,12 @@ type DdlError = String
 data BeamMigrationBackend be hdl m where
   BeamMigrationBackend ::
     ( MonadBeam be hdl m
-    , Typeable be
     , HasQBuilder be
     , BeamMigrateSqlBackend be
-    , HasQBuilder (Sql92SelectSyntax commandSyntax)
+    , BeamSqlBackendCanSerialize be LocalTime
+    , BeamSqlBackendCanSerialize be (Maybe LocalTime)
     , BeamSqlBackendCanSerialize be Text
-    , HasSqlValueSyntax (BeamSqlBackendDataTypeSyntax be) LocalTime
-    , HasSqlValueSyntax (BeamSqlBackendDataTypeSyntax be) (Maybe LocalTime)
-    , HasSqlValueSyntax (BeamSqlBackendDataTypeSyntax be) Text
-    , HasSqlValueSyntax (BeamSqlBackendDataTypeSyntax be) SqlNull
+    , BeamSqlBackendCanSerialize be SqlNull
     , Sql92ReasonableMarshaller be ) =>
     { backendName :: String
     , backendConnStringExplanation :: String
