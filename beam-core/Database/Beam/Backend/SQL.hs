@@ -6,6 +6,7 @@ module Database.Beam.Backend.SQL
   , MonadBeam(..)
 
   , BeamSqlBackend(..)
+  , BeamSqlBackendSyntax
   , MockSqlBackend
 
   , BeamSqlBackendIsString
@@ -157,9 +158,9 @@ class ( -- Every SQL backend must be a beam backend
 
         -- Needed for the Eq instance on QGenExpr
       , Eq (BeamSqlBackendExpressionSyntax be)
-      ) => BeamSqlBackend be where
+      ) => BeamSqlBackend be
 
-  type BeamSqlBackendSyntax be :: *
+type family BeamSqlBackendSyntax be :: *
 
 -- | Fake backend that cannot deserialize anything, but is useful for testing
 data MockSqlBackend syntax
@@ -179,8 +180,8 @@ instance ( IsSql92Syntax syntax
 
            -- Needed for the Eq instance on QGenExpr
          , Eq (Sql92ExpressionSyntax syntax)
-         ) => BeamSqlBackend (MockSqlBackend syntax) where
-  type BeamSqlBackendSyntax (MockSqlBackend syntax) = syntax
+         ) => BeamSqlBackend (MockSqlBackend syntax)
+type instance BeamSqlBackendSyntax (MockSqlBackend syntax) = syntax
 
 -- | Type class for things which are text-like in this backend
 class BeamSqlBackendIsString be text

@@ -16,6 +16,7 @@ import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Migrate.SQL.SQL92
+import           Database.Beam.Migrate.SQL.Types
 import           Database.Beam.Migrate.Serialization
 
 import           Data.Char (toLower, toUpper)
@@ -428,6 +429,11 @@ instance Semigroup HsNone where
 instance Monoid HsNone where
   mempty = HsNone
   mappend _ _ = HsNone
+
+data HsMigrateBackend = HsMigrateBackend
+
+instance BeamMigrateOnlySqlBackend HsMigrateBackend
+type instance BeamSqlBackendSyntax HsMigrateBackend = HsAction
 
 instance IsSql92DdlCommandSyntax HsAction where
   type Sql92DdlCommandCreateTableSyntax HsAction = HsAction
