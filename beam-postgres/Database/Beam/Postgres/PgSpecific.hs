@@ -413,7 +413,7 @@ arrayOf_ q =
 -- The 'defaultMigratableDbSettings' function automatically assigns the postgres
 -- @JSON@ type to fields with this type.
 newtype PgJSON a = PgJSON a
-  deriving ( Show, Eq, Ord, Hashable, Monoid )
+  deriving ( Show, Eq, Ord, Hashable, Monoid, Semigroup )
 
 instance HasSqlEqualityCheck Postgres (PgJSON a)
 instance HasSqlQuantifiedEqualityCheck Postgres (PgJSON a)
@@ -438,7 +438,7 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
 --
 -- Fields with this type are automatically given the Postgres @JSONB@ type
 newtype PgJSONB a = PgJSONB a
-  deriving ( Show, Eq, Ord, Hashable, Monoid )
+  deriving ( Show, Eq, Ord, Hashable, Monoid, Semigroup )
 
 instance HasSqlEqualityCheck Postgres (PgJSONB a)
 instance HasSqlQuantifiedEqualityCheck Postgres (PgJSONB a)
