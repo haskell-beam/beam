@@ -16,6 +16,8 @@ module Database.Beam.Migrate.Simple
   , defaultUpToDateHooks
   , bringUpToDate, bringUpToDateWithHooks
 
+  , haskellSchema
+
   , module Database.Beam.Migrate.Actions
   , module Database.Beam.Migrate.Types ) where
 
@@ -27,6 +29,7 @@ import           Database.Beam.Migrate.Backend
 import           Database.Beam.Migrate.Types
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.Log
+import           Database.Beam.Haskell.Syntax
 
 import           Control.Monad.Cont
 import           Control.Monad.Writer
@@ -273,3 +276,37 @@ backendMigrationScript :: (cmd -> String)
                        -> String
 backendMigrationScript render mig =
   migrateScript ((++"\n") . T.unpack) ((++"\n") . render) (migrationStep "Migration Script" (\() -> mig))
+
+-- | Given a 'BeamMigrationBackend', get a string representing a Haskell module
+-- that would be a good starting point for further development.
+--
+-- For example, for a postgres database named @chinook@
+--
+-- > import Database.Beam.Migrate.Simple
+-- > import Database.Beam.Postgres (runBeamPostgres)
+-- > import Database.Beam.Postgres.Migrate (migrationBackend)
+-- > import Database.PostgreSQL.Simple
+-- >
+-- > getSchema :: IO String
+-- > getSchema = do pg <- connectPostgreSQL
+-- >                runBeamPostgres pg (haskellSchema migrationBackend)
+--
+-- Backends that have a migration backend typically export it under the module
+-- name @Database.Beam./Backend/.Migrate@.
+haskellSchema :: MonadBeam cmd be hdl m
+              => BeamMigrationBackend cmd be handle m
+              -> m String
+haskellSchema BeamMigrationBackend { backendGetDbConstraints = getCs
+                                   , backendConvertToHaskell = HaskellPredicateConverter conv2Hs } = do
+  constraints <- getCs
+  let hsConstraints = [ hsConstraint | c <- constraints, Just hsConstraint <- [ conv2Hs c ] ]
+
+      solver = heuristicSolver (defaultActionProvider @HsAction) [] hsConstraints
+
+  case finalSolution solver of
+    Solved cmds   ->
+      let hsModule = hsActionsToModule "NewBeamSchema" (map migrationCommand cmds)
+      in case renderHsSchema hsModule of
+           Left err -> fail ("Error writing Haskell schema: " ++ err)
+           Right modStr -> pure modStr
+    Candidates {} -> fail "Could not form Haskell schema"

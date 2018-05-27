@@ -15,7 +15,7 @@ here (found in the `beam-sqlite` package). Now, open up a GHCi prompt for us to
 use. Make sure to get the `beam-core` and `beam-sqlite` packages.
 
 ```console
-$ stack repl --package beam-core --package beam-sqlite --package sqlite-simple
+$ stack repl --package beam-core --package beam-sqlite --package sqlite-simple --package beam-migrate
 ```
 
 This will put you into a GHCi prompt with the `beam-core` and `beam-sqlite`
@@ -146,7 +146,7 @@ top-level functions to use the `User` type.
 
 ## Teaching Beam about our table
 
-We've defined a type that can represent our the data in our table. Now, let's
+We've defined a type that can represent the data in our table. Now, let's
 inform beam that we'd like to use `UserT` as a table.
 
 All beam tables need to implement the `Beamable` type class. Due to GHC's

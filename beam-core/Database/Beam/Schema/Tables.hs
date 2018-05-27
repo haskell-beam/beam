@@ -478,8 +478,15 @@ from' = from
 to' :: Generic x => Rep x () -> x
 to' = to
 
-type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed)) (Rep (table f)) (Rep (table g)) (Rep (table h))
-                                 , Generic (table f), Generic (table g), Generic (table h) )
+type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed))
+                                                    (Rep (table f))
+                                                    (Rep (table g))
+                                                    (Rep (table h))
+
+                                 , Generic (table f)
+                                 , Generic (table g)
+                                 , Generic (table h)
+                                 )
 
 -- | The big Kahuna! All beam tables implement this class.
 --
@@ -532,15 +539,24 @@ class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (ta
 class Beamable table where
     zipBeamFieldsM :: Applicative m =>
                       (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+
     default zipBeamFieldsM :: ( HasBeamFields table f g h
-                              , Applicative m ) =>
-                             (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> table f -> table g -> m (table h)
+                              , Applicative m
+
+                              ) => (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a))
+                                -> table f
+                                -> table g
+                                -> m (table h)
+
     zipBeamFieldsM combine (f :: table f) g =
         to' <$> gZipTables (Proxy :: Proxy (Rep (table Exposed))) combine (from' f) (from' g)
 
     tblSkeleton :: TableSkeleton table
+
     default tblSkeleton :: ( Generic (TableSkeleton table)
-                           , GTableSkeleton (Rep (TableSkeleton table)) ) => TableSkeleton table
+                           , GTableSkeleton (Rep (TableSkeleton table))
+                           ) => TableSkeleton table
+
     tblSkeleton = withProxy $ \proxy -> to' (gTblSkeleton proxy)
         where withProxy :: (Proxy (Rep (TableSkeleton table)) -> TableSkeleton table) -> TableSkeleton table
               withProxy f = f Proxy
@@ -701,44 +717,61 @@ defTblFieldSettings = withProxy $ \proxy -> to' (gDefTblFieldSettings proxy)
           withProxy f = f Proxy
 
 class GZipTables f g h (exposedRep :: * -> *) fRep gRep hRep where
-    gZipTables :: Applicative m => Proxy exposedRep -> (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a)) -> fRep () -> gRep () -> m (hRep ())
+    gZipTables :: Applicative m => Proxy exposedRep
+                                -> (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a))
+                                -> fRep ()
+                                -> gRep ()
+                                -> m (hRep ())
+
 instance ( GZipTables f g h exp1 f1 g1 h1
-         , GZipTables f g h exp2 f2 g2 h2) =>
-    GZipTables f g h (exp1 :*: exp2) (f1 :*: f2) (g1 :*: g2) (h1 :*: h2) where
+         , GZipTables f g h exp2 f2 g2 h2
+         ) => GZipTables f g h (exp1 :*: exp2) (f1 :*: f2) (g1 :*: g2) (h1 :*: h2)
+   where
 
         gZipTables _ combine ~(f1 :*: f2) ~(g1 :*: g2) =
             (:*:) <$> gZipTables (Proxy :: Proxy exp1) combine f1 g1
                   <*> gZipTables (Proxy :: Proxy exp2) combine f2 g2
+
 instance GZipTables f g h exp fRep gRep hRep =>
     GZipTables f g h (M1 x y exp) (M1 x y fRep) (M1 x y gRep) (M1 x y hRep) where
         gZipTables _ combine ~(M1 f) ~(M1 g) = M1 <$> gZipTables (Proxy :: Proxy exp) combine f g
+
 instance ( fa ~ Columnar f a
          , ga ~ Columnar g a
+         , ha ~ Columnar h a
          , ha ~ Columnar h a) =>
     GZipTables f g h (K1 Generic.R (Exposed a)) (K1 Generic.R fa) (K1 Generic.R ga) (K1 Generic.R ha) where
         gZipTables _ combine ~(K1 f) ~(K1 g) = (\(Columnar' h) -> K1 h) <$> combine (Columnar' f :: Columnar' f a) (Columnar' g :: Columnar' g a)
-instance ( Generic (tbl f)
-         , Generic (tbl g)
-         , Generic (tbl h)
 
-         , GZipTables f g h (Rep (tbl Exposed)) (Rep (tbl f)) (Rep (tbl g)) (Rep (tbl h))) =>
-    GZipTables f g h (K1 Generic.R (tbl Exposed)) (K1 Generic.R (tbl f)) (K1 Generic.R (tbl g)) (K1 Generic.R (tbl h)) where
-    gZipTables _ combine ~(K1 f) ~(K1 g) = K1 . to' <$> gZipTables (Proxy :: Proxy (Rep (tbl Exposed))) combine (from' f) (from' g)
+instance ( Beamable tbl
+         ) => GZipTables f g h (K1 Generic.R (tbl Exposed)) (K1 Generic.R (tbl f))
+                                                            (K1 Generic.R (tbl g))
+                                                            (K1 Generic.R (tbl h))
+   where
+    gZipTables _ combine ~(K1 f) ~(K1 g) = K1 <$> zipBeamFieldsM combine f g
+
 
 instance GZipTables f g h U1 U1 U1 U1 where
   gZipTables _ _ _ _ = pure U1
 
-instance  ( Generic (tbl (Nullable f))
-          , Generic (tbl (Nullable g))
-          , Generic (tbl (Nullable h))
+instance  ( Beamable tbl
+          ) => GZipTables f g h (K1 Generic.R (tbl (Nullable Exposed)))
+                                (K1 Generic.R (tbl (Nullable f)))
+                                (K1 Generic.R (tbl (Nullable g)))
+                                (K1 Generic.R (tbl (Nullable h)))
+   where
 
-          , GZipTables f g h (Rep (tbl (Nullable Exposed))) (Rep (tbl (Nullable f))) (Rep (tbl (Nullable g))) (Rep (tbl (Nullable h)))) =>
-         GZipTables f g h
-                    (K1 Generic.R (tbl (Nullable Exposed)))
-                    (K1 Generic.R (tbl (Nullable f)))
-                    (K1 Generic.R (tbl (Nullable g)))
-                    (K1 Generic.R (tbl (Nullable h))) where
-    gZipTables _ combine ~(K1 f) ~(K1 g) = K1 . to' <$> gZipTables (Proxy :: Proxy (Rep (tbl (Nullable Exposed)))) combine (from' f) (from' g)
+    gZipTables _ combine ~(K1 f) ~(K1 g) =  K1 <$> zipBeamFieldsM (adapt combine) f g
+      where
+        adapt :: Applicative m => (forall a . Columnar' f a            -> Columnar' g a            -> m (Columnar' h a)           )
+                               -> (forall a . Columnar' (Nullable f) a -> Columnar' (Nullable g) a -> m (Columnar' (Nullable h) a))
+        adapt func x y = toNullable <$> func ( fromNullable x ) ( fromNullable y )
+
+        fromNullable :: Columnar' (Nullable w) a -> Columnar' w (Maybe a)
+        fromNullable ~(Columnar' x) = Columnar' x
+
+        toNullable   :: Columnar' w (Maybe a) -> Columnar' (Nullable w) a
+        toNullable ~(Columnar' x) = Columnar' x
 
 class GDefaultTableFieldSettings x where
     gDefTblFieldSettings :: Proxy x -> x
@@ -837,23 +870,38 @@ instance TagReducesTo f f' => TagReducesTo (Nullable f) f' where
 
 class GTableSkeleton x where
     gTblSkeleton :: Proxy x -> x ()
+
 instance GTableSkeleton p => GTableSkeleton (M1 t f p) where
     gTblSkeleton (_ :: Proxy (M1 t f p)) = M1 (gTblSkeleton (Proxy :: Proxy p))
+
 instance GTableSkeleton U1 where
     gTblSkeleton _ = U1
+
 instance (GTableSkeleton a, GTableSkeleton b) =>
     GTableSkeleton (a :*: b) where
         gTblSkeleton _ = gTblSkeleton (Proxy :: Proxy a) :*: gTblSkeleton (Proxy :: Proxy b)
+
 instance GTableSkeleton (K1 Generic.R (Ignored field)) where
     gTblSkeleton _ = K1 Ignored
-instance ( Generic (tbl Ignored)
-         , GTableSkeleton (Rep (tbl Ignored)) ) =>
-    GTableSkeleton (K1 Generic.R (tbl Ignored)) where
-    gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (tbl Ignored)))))
-instance ( Generic (tbl (Nullable Ignored))
-         , GTableSkeleton (Rep (tbl (Nullable Ignored))) ) =>
-    GTableSkeleton (K1 Generic.R (tbl (Nullable Ignored))) where
-    gTblSkeleton _ = K1 (to' (gTblSkeleton (Proxy :: Proxy (Rep (tbl (Nullable Ignored))))))
+
+instance ( Beamable tbl
+         ) => GTableSkeleton (K1 Generic.R (tbl Ignored))
+   where
+    gTblSkeleton _ = K1 (tblSkeleton :: TableSkeleton tbl)
+
+instance ( Beamable tbl
+         ) => GTableSkeleton (K1 Generic.R (tbl (Nullable Ignored)))
+   where
+    gTblSkeleton _ = K1 . runIdentity
+                   $ zipBeamFieldsM transform
+                                    (tblSkeleton :: TableSkeleton tbl)
+                                    (tblSkeleton :: TableSkeleton tbl)
+        where
+          transform :: Columnar' Ignored a
+                    -> Columnar' Ignored a
+                    -> Identity (Columnar' (Nullable Ignored) a)
+          transform _ _ = Identity (Columnar' Ignored)
+
 
 -- * Internal functions
 

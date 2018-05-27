@@ -7,6 +7,7 @@
 -- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core --package microlens -- -fglasgow-exts -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XPartialTypeSignatures  -I../../docs/beam-templates
 -- ! BUILD_DIR: beam-sqlite/examples/
 -- ! EXTRA_DEPS: employee3common.hs employee3commonsql.hs
+-- ! FORMAT: sql
 module Main where
 
 #include "employee3common.hs"
@@ -21,8 +22,10 @@ module Main where
            , Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ ]
 #include "employee3commonsql.hs"
 
-     BEAM_PLACEHOLDER
+     (do let putStrLn :: String -> IO ()
+             putStrLn _ = pure ()
 
-     stmts_ <- readIORef stmts
-     forM_ (stmts_ []) $ \stmt ->
-       putStr (stmt ++ "\n")
+             print _ = pure ()
+
+         BEAM_PLACEHOLDER
+       )

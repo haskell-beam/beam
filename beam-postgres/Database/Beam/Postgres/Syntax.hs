@@ -110,6 +110,7 @@ import           Data.Int
 import           Data.Maybe
 import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
+import           Data.Tagged
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
@@ -1377,3 +1378,8 @@ PG_HAS_EQUALITY_CHECK(BL.ByteString)
 PG_HAS_EQUALITY_CHECK(V.Vector a)
 PG_HAS_EQUALITY_CHECK(CI T.Text)
 PG_HAS_EQUALITY_CHECK(CI TL.Text)
+
+instance HasSqlEqualityCheck PgExpressionSyntax a =>
+  HasSqlEqualityCheck PgExpressionSyntax (Tagged t a)
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax a =>
+  HasSqlQuantifiedEqualityCheck PgExpressionSyntax (Tagged t a)
