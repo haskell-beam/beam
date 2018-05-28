@@ -264,6 +264,7 @@ data Expression
   | ExpressionUpper Expression
   | ExpressionTrim Expression
 
+  | ExpressionNamedFunction Text
   | ExpressionFunctionCall Expression [ Expression ]
   | ExpressionInstanceField Expression Text
   | ExpressionRefField Expression Text
@@ -349,10 +350,13 @@ instance IsSql92ExpressionSyntax Expression where
   defaultE = ExpressionDefault
   inE = ExpressionIn
 
+instance IsSql99FunctionExpressionSyntax Expression where
+  functionNameE = ExpressionNamedFunction
+  functionCallE = ExpressionFunctionCall
+
 instance IsSql99ExpressionSyntax Expression where
   distinctE = ExpressionDistinct
   similarToE = ExpressionBinOp "SIMILAR TO"
-  functionCallE = ExpressionFunctionCall
   instanceFieldE = ExpressionInstanceField
   refFieldE = ExpressionRefField
 

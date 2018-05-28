@@ -704,14 +704,16 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   inE e es = PgExpressionSyntax $ pgParens (fromPgExpression e) <> emit " IN " <>
                                   pgParens (pgSepBy (emit ", ") (map fromPgExpression es))
 
-instance IsSql99ExpressionSyntax PgExpressionSyntax where
-  distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
-  similarToE = pgBinOp "SIMILAR TO"
-
+instance IsSql99FunctionExpressionSyntax PgExpressionSyntax where
   functionCallE name args =
     PgExpressionSyntax $
     fromPgExpression name <>
     pgParens (pgSepBy (emit ", ") (map fromPgExpression args))
+  functionNameE nm = PgExpressionSyntax (emit (TE.encodeUtf8 nm))
+
+instance IsSql99ExpressionSyntax PgExpressionSyntax where
+  distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
+  similarToE = pgBinOp "SIMILAR TO"
 
   instanceFieldE i nm =
     PgExpressionSyntax $

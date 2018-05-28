@@ -779,6 +779,12 @@ instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
     SqliteExpressionSyntax $ parens $
     foldl (\a b -> a <> emit " || " <> parens (fromSqliteExpression b)) (fromSqliteExpression x) xs
 
+instance IsSql99FunctionExpressionSyntax SqliteExpressionSyntax where
+  functionCallE fn args =
+    SqliteExpressionSyntax $
+    fromSqliteExpression fn <> parens (commas (fmap fromSqliteExpression args))
+  functionNameE nm = SqliteExpressionSyntax (emit (TE.encodeUtf8 nm))
+
 binOp :: ByteString -> SqliteExpressionSyntax -> SqliteExpressionSyntax -> SqliteExpressionSyntax
 binOp op a b =
   SqliteExpressionSyntax $

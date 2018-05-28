@@ -261,16 +261,18 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   inE a es = SqlSyntaxBuilder (byteString "(" <> buildSql a <> byteString ") IN (" <>
                                buildSepBy (byteString ", ") (map buildSql es))
 
-instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
-  distinctE = sqlUnOp "DISTINCT"
-  similarToE = sqlBinOp "SIMILAR TO"
-
+instance IsSql99FunctionExpressionSyntax SqlSyntaxBuilder where
+  functionNameE fn = SqlSyntaxBuilder (byteString (TE.encodeUtf8 fn))
   functionCallE function args =
     SqlSyntaxBuilder $
     buildSql function <>
     byteString "(" <>
     buildSepBy (byteString ", ") (map buildSql args) <>
     byteString ")"
+
+instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
+  distinctE = sqlUnOp "DISTINCT"
+  similarToE = sqlBinOp "SIMILAR TO"
 
   instanceFieldE e fieldNm =
     SqlSyntaxBuilder $
