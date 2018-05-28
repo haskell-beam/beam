@@ -23,6 +23,7 @@ module Database.Beam.Postgres.Migrate
   , unboundedArray, uuid, money
   , json, jsonb
   , smallserial, serial, bigserial
+  , point, line, lineSegment, box
   ) where
 
 import           Database.Beam.Backend.SQL
@@ -125,6 +126,10 @@ postgresDataTypeDeserializers =
     "jsonb"       -> pure pgJsonbType
     "uuid"        -> pure pgUuidType
     "money"       -> pure pgMoneyType
+    "point"       -> pure pgPointType
+    "line"        -> pure pgLineType
+    "lseg"        -> pure pgLineSegmentType
+    "box"         -> pure pgBoxType
     _             -> fail "Postgres data type"
 
 -- | Converts postgres 'DatabasePredicate's to 'DatabasePredicate's in the
@@ -209,6 +214,27 @@ pgTypeToHs (PgDataTypeSyntax tyDescr _ _) =
                                     (importSome "Database.Beam.Postgres" [importTyNamed "TsQuery"]))
                             (pgDataTypeSerialized pgTsQueryType)
 
+      | Pg.typoid Pg.point   == oid ->
+          Just $ HsDataType (hsVarFrom "point" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "PgPoint")
+                                    (importSome "Database.Beam.Postgres" [ importTyNamed "PgPoint" ]))
+                            (pgDataTypeSerialized pgPointType)
+      | Pg.typoid Pg.line    == oid ->
+          Just $ HsDataType (hsVarFrom "line" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "PgLine")
+                                    (importSome "Database.Beam.Postgres" [ importTyNamed "PgLine" ]))
+                            (pgDataTypeSerialized pgLineType)
+      | Pg.typoid Pg.lseg    == oid ->
+          Just $ HsDataType (hsVarFrom "lineSegment" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "PgLineSegment")
+                                    (importSome "Database.Beam.Postgres" [ importTyNamed "PgLineSegment" ]))
+                            (pgDataTypeSerialized pgLineSegmentType)
+      | Pg.typoid Pg.box     == oid ->
+          Just $ HsDataType (hsVarFrom "box" "Database.Beam.Postgres")
+                            (HsType (tyConNamed "PgBox")
+                                    (importSome "Database.Beam.Postgres" [ importTyNamed "PgBox" ]))
+                            (pgDataTypeSerialized pgBoxType)
+
     _ -> Just (hsErrorType ("PG type " ++ show tyDescr))
 
 -- | Turn a series of 'Db.MigrationSteps' into a line-by-line array of
@@ -252,6 +278,10 @@ pgDataTypeFromAtt _ oid pgMod
   | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType Postgres Int16)
   | Pg.typoid Pg.varchar == oid = pgExpandDataType (Db.varchar Nothing)
   | Pg.typoid Pg.timestamp == oid = pgExpandDataType Db.timestamp
+  | Pg.typoid Pg.point == oid = pgPointType
+  | Pg.typoid Pg.line == oid = pgLineType
+  | Pg.typoid Pg.lseg == oid = pgLineSegmentType
+  | Pg.typoid Pg.box == oid = pgBoxType
   | Pg.typoid Pg.numeric == oid =
       let precAndDecimal =
             case pgMod of
@@ -347,6 +377,18 @@ uuid = Db.DataType pgUuidType
 -- | 'Db.DataType' for @MONEY@ columns.
 money :: Db.DataType Postgres PgMoney
 money = Db.DataType pgMoneyType
+
+point :: Db.DataType Postgres PgPoint
+point = Db.DataType pgPointType
+
+line :: Db.DataType Postgres PgLine
+line = Db.DataType pgLineType
+
+lineSegment :: Db.DataType Postgres PgLineSegment
+lineSegment = Db.DataType pgLineSegmentType
+
+box :: Db.DataType Postgres PgBox
+box = Db.DataType pgBoxType
 
 -- * Pseudo-data types
 

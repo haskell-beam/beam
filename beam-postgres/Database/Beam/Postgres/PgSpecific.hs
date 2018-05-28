@@ -50,6 +50,11 @@ module Database.Beam.Postgres.PgSpecific
   , pgSumMoneyOver_, pgAvgMoneyOver_
   , pgSumMoney_, pgAvgMoney_
 
+    -- ** Geometry types (not PostGIS)
+  , PgPoint(..), PgLine(..), PgLineSegment(..)
+  , PgBox(..), PgPath(..), PgPolygon(..)
+  , PgCircle(..)
+
     -- ** Set-valued functions
     -- $set-valued-funs
   , PgSetOf, pgUnnest
@@ -99,6 +104,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
 import           Data.Hashable
+import qualified Data.List.NonEmpty as NE
 import           Data.Proxy
 import           Data.Scientific (Scientific, formatScientific, FPFormat(Fixed))
 import           Data.String
@@ -889,6 +895,55 @@ pgSumMoney_, pgAvgMoney_ :: QExpr Postgres s PgMoney
 pgSumMoney_ = pgSumMoneyOver_ allInGroup_
 pgAvgMoney_ = pgAvgMoneyOver_ allInGroup_
 
+-- ** Geometry types
+
+data PgPoint = PgPoint {-# UNPACK #-} !Double {-# UNPACK #-} !Double
+  deriving (Show, Eq, Ord)
+
+data PgLine = PgLine {-# UNPACK #-} !Double -- A
+                     {-# UNPACK #-} !Double -- B
+                     {-# UNPACK #-} !Double -- C
+  deriving (Show, Eq, Ord)
+
+data PgLineSegment = PgLineSegment {-# UNPACK #-} !PgPoint {-# UNPACK #-} !PgPoint
+  deriving (Show, Eq, Ord)
+
+data PgBox = PgBox {-# UNPACK #-} !PgPoint {-# UNPACK #-} !PgPoint
+  deriving (Show, Eq, Ord)
+
+data PgPath
+  = PgPathOpen   (NE.NonEmpty PgPoint)
+  | PgPathClosed (NE.NonEmpty PgPoint)
+  deriving (Show, Eq, Ord)
+
+data PgPolygon
+  = PgPolygon (NE.NonEmpty PgPoint)
+  deriving (Show, Eq, Ord)
+
+data PgCircle = PgCircle {-# UNPACK #-} !PgPoint {-# UNPACK #-} !Double
+  deriving (Show, Eq, Ord)
+
+encodePgPoint :: PgPoint -> Builder
+encodePgPoint (PgPoint x y) =
+  "(" <> doubleDec x <> "," <> doubleDec y <> ")"
+
+instance HasSqlValueSyntax PgValueSyntax PgPoint where
+  sqlValueSyntax pt =
+    PgValueSyntax $ emitBuilder ("'" <> encodePgPoint pt <> "'")
+instance HasSqlValueSyntax PgValueSyntax PgLine where
+  sqlValueSyntax (PgLine a b c) =
+    PgValueSyntax $ emitBuilder ("'{" <> doubleDec a <> "," <> doubleDec b <> "," <> doubleDec c <> "}'")
+instance HasSqlValueSyntax PgValueSyntax PgLineSegment where
+  sqlValueSyntax (PgLineSegment a b) =
+    PgValueSyntax $ emitBuilder ("'(" <> encodePgPoint a <> "," <> encodePgPoint b <> ")'")
+instance HasSqlValueSyntax PgValueSyntax PgBox where
+  sqlValueSyntax (PgBox a b) =
+    PgValueSyntax $ emitBuilder ("'(" <> encodePgPoint a <> "," <> encodePgPoint b <> ")'")
+
+-- TODO Pg polygon and such
+
+-- TODO frombackendrow
+
 -- ** Set-valued functions
 
 data PgSetOf (tbl :: (* -> *) -> *)
@@ -941,6 +996,22 @@ pgUnnestArrayWithOrdinality :: QExpr Postgres s (V.Vector a)
 pgUnnestArrayWithOrdinality (QExpr q) =
   fmap (\(PgUnnestArrayWithOrdinalityTbl i x) -> (i, x)) $
   pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)) <> emit " WITH ORDINALITY")
+
+instance HasDefaultSqlDataType Postgres PgPoint where
+  defaultSqlDataType _ _ _ = pgPointType
+instance HasDefaultSqlDataTypeConstraints Postgres PgPoint
+
+instance HasDefaultSqlDataType Postgres PgLine where
+  defaultSqlDataType _ _ _ = pgLineType
+instance HasDefaultSqlDataTypeConstraints Postgres PgLine
+
+instance HasDefaultSqlDataType Postgres PgLineSegment where
+  defaultSqlDataType _ _ _ = pgLineSegmentType
+instance HasDefaultSqlDataTypeConstraints Postgres PgLineSegment
+
+instance HasDefaultSqlDataType Postgres PgBox where
+  defaultSqlDataType _ _ _ = pgBoxType
+instance HasDefaultSqlDataTypeConstraints Postgres PgBox
 
 instance HasDefaultSqlDataType Postgres TsQuery where
   defaultSqlDataType _ _ _ = pgTsQueryType

@@ -71,6 +71,8 @@ module Database.Beam.Postgres.Syntax
     , pgByteaType, pgTextType, pgUnboundedArrayType
     , pgSerialType, pgSmallSerialType, pgBigSerialType
 
+    , pgPointType, pgLineType, pgLineSegmentType, pgBoxType
+
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
     , pgRenderSyntaxScript, pgBuildAction
 
@@ -572,6 +574,12 @@ pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
 pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL") (pgDataTypeJSON "smallserial")
 pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL") (pgDataTypeJSON "serial")
 pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL") (pgDataTypeJSON "bigserial")
+
+pgPointType, pgLineType, pgLineSegmentType, pgBoxType :: PgDataTypeSyntax
+pgPointType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.point) Nothing) (emit "POINT") (pgDataTypeJSON "point")
+pgLineType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.line) Nothing) (emit "LINE") (pgDataTypeJSON "line")
+pgLineSegmentType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.lseg) Nothing) (emit "LSEG") (pgDataTypeJSON "lseg")
+pgBoxType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.box) Nothing) (emit "BOX") (pgDataTypeJSON "box")
 
 pgUnboundedArrayType :: PgDataTypeSyntax -> PgDataTypeSyntax
 pgUnboundedArrayType (PgDataTypeSyntax _ syntax serialized) =
