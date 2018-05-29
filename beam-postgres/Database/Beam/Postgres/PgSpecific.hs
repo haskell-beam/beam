@@ -98,6 +98,8 @@ import           Control.Monad.Free
 import           Control.Monad.State.Strict (evalState, put, get)
 
 import           Data.Aeson
+import           Data.Attoparsec.ByteString
+import           Data.Attoparsec.ByteString.Char8
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Char8 as BC
@@ -909,7 +911,12 @@ data PgLineSegment = PgLineSegment {-# UNPACK #-} !PgPoint {-# UNPACK #-} !PgPoi
   deriving (Show, Eq, Ord)
 
 data PgBox = PgBox {-# UNPACK #-} !PgPoint {-# UNPACK #-} !PgPoint
-  deriving (Show, Eq, Ord)
+  deriving (Show)
+
+instance Eq PgBox where
+    PgBox a1 b1 == PgBox a2 b2 =
+        (a1 == a2 && b1 == b2) ||
+        (a1 == b2 && b1 == a2)
 
 data PgPath
   = PgPathOpen   (NE.NonEmpty PgPoint)
@@ -943,6 +950,35 @@ instance HasSqlValueSyntax PgValueSyntax PgBox where
 -- TODO Pg polygon and such
 
 -- TODO frombackendrow
+
+instance Pg.FromField PgPoint where
+    fromField field Nothing = Pg.returnError Pg.UnexpectedNull field ""
+    fromField field (Just d) =
+        if Pg.typeOid field /= Pg.typoid Pg.point
+        then Pg.returnError Pg.Incompatible field ""
+        else case parseOnly pgPointParser d of
+               Left err -> Pg.returnError Pg.ConversionFailed field ("PgPoint: " ++ err)
+               Right pt -> pure pt
+instance FromBackendRow Postgres PgPoint
+
+pgPointParser :: Parser PgPoint
+pgPointParser = PgPoint <$> (char '(' *> double <* char ',')
+                        <*> (double <* char ')')
+
+instance Pg.FromField PgBox where
+    fromField field Nothing = Pg.returnError Pg.UnexpectedNull field ""
+    fromField field (Just d) =
+        if Pg.typeOid field /= Pg.typoid Pg.box
+        then Pg.returnError Pg.Incompatible field ""
+        else case parseOnly boxParser d of
+               Left  err -> Pg.returnError Pg.ConversionFailed field ("PgBox: " ++ err)
+               Right box -> pure box
+
+        where
+          boxParser = PgBox <$> (pgPointParser <* char ',')
+                            <*> pgPointParser
+instance FromBackendRow Postgres PgBox
+
 
 -- ** Set-valued functions
 

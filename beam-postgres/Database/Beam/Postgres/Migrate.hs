@@ -36,10 +36,11 @@ import qualified Database.Beam.Migrate.Serialization as Db
 import qualified Database.Beam.Migrate.Types as Db
 
 import           Database.Beam.Postgres.Connection
+import           Database.Beam.Postgres.CustomTypes
+import           Database.Beam.Postgres.Extensions
 import           Database.Beam.Postgres.PgSpecific
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
-import           Database.Beam.Postgres.Extensions
 
 import           Database.Beam.Haskell.Syntax
 
@@ -88,7 +89,8 @@ migrationBackend = Tool.BeamMigrationBackend
                          postgresDataTypeDeserializers <>
                          Db.beamCheckDeserializers)
                         (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand) "postgres.sql"
-                        pgPredConverter (defaultActionProvider <> pgExtensionActionProvider)
+                        pgPredConverter (defaultActionProvider <> pgExtensionActionProvider <>
+                                         pgCustomEnumActionProvider)
                         (\options action ->
                             bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
                               left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
@@ -330,7 +332,15 @@ getDbConstraints conn =
                                            , "JOIN pg_class c ON c.oid=i.indrelid"
                                            , "WHERE c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
 
-     pure (tblsExist ++ columnChecks ++ primaryKeys)
+     enumerations <-
+       map (\(enumNm, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) <$>
+       Pg.query_ conn
+         (fromString (unlines
+                      [ "SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortorder)"
+                      , "FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid"
+                      , "GROUP BY t.typname" ]))
+
+     pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations)
 
 -- * Postgres-specific data types
 

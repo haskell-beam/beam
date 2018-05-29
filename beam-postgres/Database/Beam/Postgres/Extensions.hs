@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE CPP #-}
 
 -- | Postgres extensions are run-time loadable plugins that can extend Postgres
@@ -109,13 +110,13 @@ instance IsDatabaseEntity Postgres (PgExtensionEntity extension) where
 instance IsCheckedDatabaseEntity Postgres (PgExtensionEntity extension) where
   newtype CheckedDatabaseEntityDescriptor Postgres (PgExtensionEntity extension) =
     CheckedPgExtension (DatabaseEntityDescriptor Postgres (PgExtensionEntity extension))
-  type CheckedDatabaseEntityDefaultRequirements Postgres (PgExtensionEntity extension) syntax =
+  type CheckedDatabaseEntityDefaultRequirements Postgres (PgExtensionEntity extension) =
     DatabaseEntityRegularRequirements Postgres (PgExtensionEntity extension)
 
   unCheck (CheckedPgExtension ext) = ext
   collectEntityChecks (CheckedPgExtension (PgDatabaseExtension {})) =
     [ SomeDatabasePredicate (PgHasExtension (pgExtensionName (Proxy @extension))) ]
-  checkedDbEntityAuto _ = CheckedPgExtension . dbEntityAuto
+  checkedDbEntityAuto = CheckedPgExtension . dbEntityAuto
 
 -- | Get the extension record from a database entity. See the documentation for
 -- 'PgExtensionEntity'.
@@ -137,7 +138,7 @@ pgCreateExtension :: forall extension db
                    . IsPgExtension extension
                   => Migration Postgres (CheckedDatabaseEntity Postgres db (PgExtensionEntity extension))
 pgCreateExtension =
-  let entity = checkedDbEntityAuto (Proxy @PgCommandSyntax) ""
+  let entity = checkedDbEntityAuto ""
       extName = pgExtensionName (Proxy @extension)
   in upDown (pgCreateExtensionSyntax extName) Nothing >>
      pure (CheckedDatabaseEntity entity (collectEntityChecks entity))

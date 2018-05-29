@@ -56,6 +56,7 @@ module Database.Beam.Postgres.Syntax
     , PgDataTypeDescr(..)
 
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
+    , pgCreateEnumSyntax, pgDropTypeSyntax
 
     , pgSimpleMatchSyntax
 
@@ -1257,6 +1258,17 @@ pgCreateExtensionSyntax extName =
 pgDropExtensionSyntax :: T.Text -> PgCommandSyntax
 pgDropExtensionSyntax extName =
   PgCommandSyntax PgCommandTypeDdl $ emit "DROP EXTENSION " <> pgQuotedIdentifier extName
+
+pgCreateEnumSyntax :: T.Text -> [PgValueSyntax] -> PgCommandSyntax
+pgCreateEnumSyntax enumName vals =
+    PgCommandSyntax PgCommandTypeDdl $
+    emit "CREATE TYPE " <> pgQuotedIdentifier enumName <> emit " AS ENUM(" <>
+    pgSepBy (emit ", ") (fmap fromPgValue vals) <> emit ")"
+
+pgDropTypeSyntax :: T.Text -> PgCommandSyntax
+pgDropTypeSyntax typeName =
+    PgCommandSyntax PgCommandTypeDdl $
+    emit "DROP TYPE " <> pgQuotedIdentifier typeName
 
 -- -- * Pg-specific Q monad
 

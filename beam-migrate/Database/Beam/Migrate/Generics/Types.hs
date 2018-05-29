@@ -7,22 +7,22 @@ import qualified Data.Text as T
 
 import           GHC.Generics
 
-class GAutoMigratableDb syntax x where
-  defaultMigratableDbSettings' :: Proxy syntax -> x ()
+class GAutoMigratableDb be x where
+  defaultMigratableDbSettings' :: Proxy be -> x ()
 
-instance GAutoMigratableDb syntax x => GAutoMigratableDb syntax (D1 f x) where
-  defaultMigratableDbSettings' syntax = M1 $ defaultMigratableDbSettings' syntax
+instance GAutoMigratableDb be x => GAutoMigratableDb be (D1 f x) where
+  defaultMigratableDbSettings' be = M1 $ defaultMigratableDbSettings' be
 
-instance GAutoMigratableDb syntax x => GAutoMigratableDb syntax (C1 f x) where
-  defaultMigratableDbSettings' syntax = M1 $ defaultMigratableDbSettings' syntax
+instance GAutoMigratableDb be x => GAutoMigratableDb be (C1 f x) where
+  defaultMigratableDbSettings' be = M1 $ defaultMigratableDbSettings' be
 
-instance (GAutoMigratableDb syntax x, GAutoMigratableDb syntax y) =>
-  GAutoMigratableDb syntax (x :*: y) where
-  defaultMigratableDbSettings' syntax = defaultMigratableDbSettings' syntax :*: defaultMigratableDbSettings' syntax
+instance (GAutoMigratableDb be x, GAutoMigratableDb be y) =>
+  GAutoMigratableDb be (x :*: y) where
+  defaultMigratableDbSettings' be = defaultMigratableDbSettings' be :*: defaultMigratableDbSettings' be
 
 instance ( Selector f, IsCheckedDatabaseEntity be x
-         , CheckedDatabaseEntityDefaultRequirements be x syntax ) =>
-  GAutoMigratableDb syntax (S1 f (Rec0 (CheckedDatabaseEntity be db x))) where
+         , CheckedDatabaseEntityDefaultRequirements be x ) =>
+  GAutoMigratableDb be (S1 f (Rec0 (CheckedDatabaseEntity be db x))) where
 
-  defaultMigratableDbSettings' syntax = M1 (K1 (CheckedDatabaseEntity (checkedDbEntityAuto syntax name) []))
+  defaultMigratableDbSettings' be = M1 (K1 (CheckedDatabaseEntity (checkedDbEntityAuto name) []))
     where name = T.pack (selName (undefined :: S1 f (Rec0 (CheckedDatabaseEntity be db x)) ()))

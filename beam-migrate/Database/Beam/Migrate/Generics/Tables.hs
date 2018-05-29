@@ -10,6 +10,8 @@ module Database.Beam.Migrate.Generics.Tables
 
   -- * Internal
   , GMigratableTableSettings(..)
+
+  , HasNullableConstraint, NullableStatus
   ) where
 
 import Database.Beam
