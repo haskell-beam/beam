@@ -64,10 +64,8 @@ main = do
     MigrateCommandAbort force ->
       abortEdits cmdLine force
 
-    MigrateCommandSimple (SimpleCommandHsSchema backend connStr) ->
-      showSimpleSchema cmdLine backend connStr
-    MigrateCommandSimple (SimpleCommandDumpSchema backend connStr) ->
-      dumpSchema cmdLine backend connStr
+    MigrateCommandSimple (SimpleCommandSchema backend connStr schemaKind) ->
+      showSimpleSchema cmdLine backend connStr schemaKind
 
     MigrateCommandMigrate ->
       doMigrateDatabase cmdLine
