@@ -57,6 +57,7 @@ import           Data.Maybe
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
+import           Data.Monoid (Endo(..))
 import           Data.String
 import           Data.Int
 import qualified Data.Text as T
