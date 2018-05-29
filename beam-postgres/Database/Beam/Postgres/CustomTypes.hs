@@ -10,6 +10,8 @@ module Database.Beam.Postgres.CustomTypes
 
     , PgHasEnum(..)
 
+    , HasSqlValueSyntax, FromBackendRow
+
     , pgCustomEnumSchema, pgBoundedEnumSchema
 
     , pgCustomEnumActionProvider
@@ -18,6 +20,8 @@ module Database.Beam.Postgres.CustomTypes
 
     , pgChecksForTypeSchema
 
+    , pgEnumValueSyntax, pgParseEnum
+
     , createEnum
     , beamTypeForCustomPg
     ) where
@@ -25,6 +29,7 @@ module Database.Beam.Postgres.CustomTypes
 import           Database.Beam
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax
@@ -161,6 +166,20 @@ createEnum nm = do
   pure (PgTypeDescriptor nm (PgDataTypeSyntax (PgDataTypeDescrDomain nm)
                                               (pgQuotedIdentifier nm)
                                               (pgDataTypeJSON (object [ "customType" .= nm ]))))
+
+
+pgEnumValueSyntax :: (a -> String) -> a -> PgValueSyntax
+pgEnumValueSyntax namer = sqlValueSyntax . namer
+
+pgParseEnum :: (Enum a, Bounded a) => (a -> String)
+            -> FromBackendRowM Postgres a
+pgParseEnum namer =
+  let allNames = map (\x -> (namer x, x)) [minBound..maxBound]
+  in do
+    name <- fromBackendRow
+    case lookup name allNames of
+      Nothing -> fail ("Invalid postgres enumeration value: " ++ name)
+      Just  v -> pure v
 
 beamTypeForCustomPg :: DatabaseEntityDescriptor Postgres (PgType a) -> DataType Postgres a
 beamTypeForCustomPg (PgTypeDescriptor _ dt) = DataType dt
