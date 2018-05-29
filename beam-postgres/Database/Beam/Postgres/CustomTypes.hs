@@ -155,10 +155,10 @@ instance IsCheckedDatabaseEntity Postgres (PgType a) where
 instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor Postgres (PgType a))) where
     renamingFields _ = FieldRenamer id
 
-createEnum :: forall a
+createEnum :: forall a db
             . ( HasSqlValueSyntax PgValueSyntax a
               , Enum a, Bounded a )
-           => Text -> Migration Postgres (CheckedDatabaseEntityDescriptor Postgres (PgType a))
+           => Text -> Migration Postgres (CheckedDatabaseEntity Postgres db (PgType a))
 createEnum nm = do
   upDown (pgCreateEnumSyntax nm (fmap sqlValueSyntax [minBound..(maxBound::a)]))
          (Just (pgDropTypeSyntax nm))
@@ -168,8 +168,10 @@ createEnum nm = do
                                 (pgQuotedIdentifier nm)
                                 (pgDataTypeJSON (object [ "customType" .= nm ]))
 
-  pure (CheckedPgTypeDescriptor tyDesc
-                                (pgChecksForTypeSchema (PgDataTypeEnum [minBound..maxBound::a])))
+  pure (CheckedDatabaseEntity
+          (CheckedPgTypeDescriptor tyDesc
+             (pgChecksForTypeSchema (PgDataTypeEnum [minBound..maxBound::a])))
+          [])
 
 
 pgEnumValueSyntax :: (a -> String) -> a -> PgValueSyntax
@@ -185,5 +187,6 @@ pgParseEnum namer =
       Nothing -> fail ("Invalid postgres enumeration value: " ++ name)
       Just  v -> pure v
 
-beamTypeForCustomPg :: DatabaseEntityDescriptor Postgres (PgType a) -> DataType Postgres a
-beamTypeForCustomPg (PgTypeDescriptor _ dt) = DataType dt
+beamTypeForCustomPg :: CheckedDatabaseEntity Postgres db (PgType a) -> DataType Postgres a
+beamTypeForCustomPg (CheckedDatabaseEntity (CheckedPgTypeDescriptor (PgTypeDescriptor _ dt) _) _)
+    = DataType dt
