@@ -158,14 +158,18 @@ instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor Postgres (PgT
 createEnum :: forall a
             . ( HasSqlValueSyntax PgValueSyntax a
               , Enum a, Bounded a )
-           => Text -> Migration Postgres (DatabaseEntityDescriptor Postgres (PgType a))
+           => Text -> Migration Postgres (CheckedDatabaseEntityDescriptor Postgres (PgType a))
 createEnum nm = do
   upDown (pgCreateEnumSyntax nm (fmap sqlValueSyntax [minBound..(maxBound::a)]))
          (Just (pgDropTypeSyntax nm))
 
-  pure (PgTypeDescriptor nm (PgDataTypeSyntax (PgDataTypeDescrDomain nm)
-                                              (pgQuotedIdentifier nm)
-                                              (pgDataTypeJSON (object [ "customType" .= nm ]))))
+  let tyDesc = PgTypeDescriptor nm $
+               PgDataTypeSyntax (PgDataTypeDescrDomain nm)
+                                (pgQuotedIdentifier nm)
+                                (pgDataTypeJSON (object [ "customType" .= nm ]))
+
+  pure (CheckedPgTypeDescriptor tyDesc
+                                (pgChecksForTypeSchema (PgDataTypeEnum [minBound..maxBound::a])))
 
 
 pgEnumValueSyntax :: (a -> String) -> a -> PgValueSyntax
