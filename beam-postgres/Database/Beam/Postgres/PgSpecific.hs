@@ -7,6 +7,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE CPP #-}
 
@@ -71,6 +72,28 @@ module Database.Beam.Postgres.PgSpecific
 
   , isSupersetOf_, isSubsetOf_
 
+    -- ** @RANGE@ types
+    -- $ranges
+  , PgRange(..), PgRangeBound(..), PgBoundType(..)
+  , PgIsRange(..)
+  , PgInt4Range, PgInt8Range, PgNumRange
+  , PgTsRange, PgTsTzRange, PgDateRange
+
+    -- *** Building ranges from expressions
+  , range_
+  
+    -- *** Building @PgRangeBound@s
+  , inclusive, exclusive
+
+    -- *** Range operators and functions
+  , (-@>-), (-@>), (-<@-), (<@-)
+  , (-&&-), (-<<-), (->>-)
+  , (-&<-), (-&>-), (--|--)
+  , (-+-), (-*-), (-.-)
+  , rLower_, rUpper_, isEmpty_
+  , lowerInc_, upperInc_, lowerInf_, upperInf_
+  , rangeMerge_
+  
     -- ** Postgres functions and aggregates
   , pgBoolOr, pgBoolAnd, pgStringAgg, pgStringAggOver
 
@@ -113,6 +136,7 @@ import           Data.Semigroup
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
+import qualified Database.PostgreSQL.Simple.Range as Pg
 
 import           GHC.TypeLits
 import           GHC.Exts hiding (toList)
@@ -394,6 +418,261 @@ arrayOf_ q =
   let QExpr sub = subquery_ q
   in QExpr (\t -> let PgExpressionSyntax sub' = sub t
                   in PgExpressionSyntax (emit "ARRAY(" <> sub' <> emit ")"))
+
+-- ** Ranges
+
+-- | Represents the types of bounds a range can have. A range can and often does have mis-matched
+-- bound types.
+data PgBoundType
+  = Inclusive
+  | Exclusive
+  deriving (Show, Generic)
+instance Hashable PgBoundType
+
+lBound :: PgBoundType -> ByteString
+lBound Inclusive = "["
+lBound Exclusive = "("
+
+uBound :: PgBoundType -> ByteString
+uBound Inclusive = "]"
+uBound Exclusive = ")"
+
+-- | Represents a single bound on a Range. A bound always has a type, but may not have a value
+-- (the absense of a value represents unbounded).
+data PgRangeBound a = PgRangeBound PgBoundType (Maybe a) deriving (Show, Generic)
+
+inclusive :: Maybe a -> PgRangeBound a
+inclusive = PgRangeBound Inclusive
+
+exclusive :: Maybe a -> PgRangeBound a
+exclusive = PgRangeBound Exclusive
+
+-- | A range of a given Haskell type (represented by @a@) stored as a given Postgres Range Type
+-- (represented by @n@).
+--
+-- A reasonable example might be @Range PgInt8Range Int64@.
+-- This represents a range of Haskell @Int64@ values stored as a range of 'bigint' in Postgres.
+data PgRange n a
+  = PgEmptyRange
+  | PgRange (PgRangeBound a) (PgRangeBound a)
+  deriving (Show, Generic)
+
+instance Hashable a => Hashable (PgRangeBound a)
+
+instance Hashable a => Hashable (PgRange n a)
+
+-- | A class representing Postgres Range types and how to refer to them when speaking to the
+-- database.
+--
+-- For custom Range types, create an uninhabited type, and make it an instance of this class.
+class PgIsRange n where
+  -- | The range type name in the database.
+  rangeName :: ByteString
+
+data PgInt4Range
+instance PgIsRange PgInt4Range where
+  rangeName = "int4range"
+
+data PgInt8Range
+instance PgIsRange PgInt8Range where
+  rangeName = "int8range"
+
+data PgNumRange
+instance PgIsRange PgNumRange where
+  rangeName = "numrange"
+
+data PgTsRange
+instance PgIsRange PgTsRange where
+  rangeName = "tsrange"
+
+data PgTsTzRange
+instance PgIsRange PgTsTzRange where
+  rangeName = "tstzrange"
+
+data PgDateRange
+instance PgIsRange PgDateRange where
+  rangeName = "daterange"
+
+instance (Pg.FromField a, Typeable a, Ord a) => Pg.FromField (PgRange n a) where
+  fromField field d = do
+    pgR :: Pg.PGRange a <- Pg.fromField field d
+    if Pg.isEmpty pgR
+    then pure PgEmptyRange
+    else let Pg.PGRange lRange rRange = pgR
+         in pure $ PgRange (boundConv lRange) (boundConv rRange)
+
+-- According to Postgres docs, there is no such thing as an inclusive infinite bound.
+-- https://www.postgresql.org/docs/10/static/rangetypes.html#RANGETYPES-INFINITE
+boundConv :: Pg.RangeBound a -> PgRangeBound a
+boundConv Pg.NegInfinity = PgRangeBound Exclusive Nothing
+boundConv Pg.PosInfinity = PgRangeBound Exclusive Nothing
+boundConv (Pg.Inclusive a) = PgRangeBound Inclusive (Just a)
+boundConv (Pg.Exclusive a) = PgRangeBound Exclusive (Just a)
+
+instance (Pg.ToField (Pg.PGRange a)) => Pg.ToField (PgRange n a) where
+  toField PgEmptyRange = Pg.toField (Pg.empty :: Pg.PGRange a)
+  toField (PgRange (PgRangeBound lt lb) (PgRangeBound ut ub)) = Pg.toField r'
+    where
+      r' = Pg.PGRange lb' ub'
+      lb' = case (lt, lb) of (_, Nothing) -> Pg.NegInfinity
+                             (Inclusive, Just a) -> Pg.Inclusive a
+                             (Exclusive, Just a) -> Pg.Exclusive a
+      ub' = case (ut, ub) of (_, Nothing) -> Pg.PosInfinity
+                             (Inclusive, Just a) -> Pg.Inclusive a
+                             (Exclusive, Just a) -> Pg.Exclusive a
+
+instance HasSqlEqualityCheck PgExpressionSyntax (PgRange n a)
+instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax (PgRange n a)
+
+instance (Pg.FromField a, Typeable a, Ord a) => FromBackendRow Postgres (PgRange n a)
+instance (HasSqlValueSyntax PgValueSyntax a, PgIsRange n) =>
+  HasSqlValueSyntax PgValueSyntax (PgRange n a) where
+  sqlValueSyntax PgEmptyRange =
+    PgValueSyntax $
+    emit "'empty'::" <> escapeIdentifier (rangeName @n)
+  sqlValueSyntax (PgRange (PgRangeBound lbt mlBound) (PgRangeBound rbt muBound)) =
+    PgValueSyntax $
+    escapeIdentifier (rangeName @n) <> pgParens (pgSepBy (emit ", ") [lb, rb, bounds])
+    where
+      lb = sqlValueSyntax' mlBound
+      rb = sqlValueSyntax' muBound
+      bounds = emit "'" <> emit (lBound lbt <> uBound rbt) <> emit "'"
+      sqlValueSyntax' = fromPgValue . sqlValueSyntax
+
+
+binOpDefault :: ByteString
+             -> QGenExpr context PgExpressionSyntax s a
+             -> QGenExpr context PgExpressionSyntax s b
+             -> QGenExpr context PgExpressionSyntax s c
+binOpDefault symbol (QExpr r1) (QExpr r2)  = QExpr (pgBinOp symbol <$> r1 <*> r2)
+
+(-@>-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s Bool
+(-@>-) = binOpDefault "@>"
+
+(-@>) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s a
+      -> QGenExpr context PgExpressionSyntax s Bool
+(-@>) = binOpDefault "@>"
+
+(-<@-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s Bool
+(-<@-) = binOpDefault "<@"
+
+(<@-) :: QGenExpr context PgExpressionSyntax s a
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s Bool
+(<@-) = binOpDefault "<@"
+
+(-&&-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s Bool
+(-&&-) = binOpDefault "&&"
+
+(-<<-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s Bool
+(-<<-) = binOpDefault "<<"
+
+(->>-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s Bool
+(->>-) = binOpDefault ">>"
+
+(-&<-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s Bool
+(-&<-) = binOpDefault "&<"
+
+(-&>-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s Bool
+(-&>-) = binOpDefault "&>"
+
+(--|--) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+        -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+        -> QGenExpr context PgExpressionSyntax s Bool
+(--|--) = binOpDefault "-|-"
+
+(-+-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+(-+-) = binOpDefault "+"
+
+(-*-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+(-*-) = binOpDefault "*"
+
+-- | The postgres range operator @-@ .
+(-.-) :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+      -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+(-.-) = binOpDefault "-"
+
+defUnaryFn :: ByteString
+           -> QGenExpr context PgExpressionSyntax s a
+           -> QGenExpr context PgExpressionSyntax s b
+defUnaryFn fn (QExpr s) = QExpr (pgExprFrom <$> s)
+  where
+    pgExprFrom s' = PgExpressionSyntax (emit fn <> emit "(" <> fromPgExpression s' <> emit ")")
+
+rLower_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (Maybe a)
+rLower_ = defUnaryFn "LOWER"
+
+rUpper_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+       -> QGenExpr context PgExpressionSyntax s (Maybe a)
+rUpper_ = defUnaryFn "UPPER"
+
+isEmpty_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+         -> QGenExpr context PgExpressionSyntax s Bool
+isEmpty_ = defUnaryFn "ISEMPTY"
+
+lowerInc_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+          -> QGenExpr context PgExpressionSyntax s Bool
+lowerInc_ = defUnaryFn "LOWER_INC"
+
+upperInc_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+          -> QGenExpr context PgExpressionSyntax s Bool
+upperInc_ = defUnaryFn "UPPER_INC"
+
+lowerInf_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+          -> QGenExpr context PgExpressionSyntax s Bool
+lowerInf_ = defUnaryFn "LOWER_INF"
+
+upperInf_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+          -> QGenExpr context PgExpressionSyntax s Bool
+upperInf_ = defUnaryFn "UPPER_INF"
+
+rangeMerge_ :: QGenExpr context PgExpressionSyntax s (PgRange n a)
+            -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+            -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+rangeMerge_ (QExpr r1) (QExpr r2) = QExpr (pgExprFrom <$> r1 <*> r2)
+  where
+    pgExprFrom r1' r2' =
+      PgExpressionSyntax
+      (emit "RANGE_MERGE(" <>
+       fromPgExpression r1' <>
+       emit ", " <>
+       fromPgExpression r2' <>
+       emit ")")
+
+range_ :: forall n a context s. PgIsRange n
+       => PgBoundType -- ^ Lower bound type
+       -> PgBoundType -- ^ Upper bound type
+       -> QGenExpr context PgExpressionSyntax s (Maybe a) -- ^. Lower bound value
+       -> QGenExpr context PgExpressionSyntax s (Maybe a) -- ^. Lower bound value
+       -> QGenExpr context PgExpressionSyntax s (PgRange n a)
+range_ lbt ubt (QExpr e1) (QExpr e2) = QExpr (pgExprFrom <$> e1 <*> e2)
+  where
+    bounds = emit "'" <> emit (lBound lbt <> uBound ubt) <> emit "'"
+    pgExprFrom e1' e2' =
+      PgExpressionSyntax
+      (escapeIdentifier (rangeName @n) <>
+       pgParens (pgSepBy (emit ", ") [fromPgExpression e1', fromPgExpression e2', bounds]))
 
 -- ** JSON
 
@@ -991,6 +1270,23 @@ instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (V.Vector a)
 --
 -- For more information on Postgres array support, refer to the postgres
 -- <https://www.postgresql.org/docs/current/static/functions-array.html manual>.
+
+-- $ranges
+--
+-- Postgres supports storing Range types in columns. There are serveral
+-- predefined Range types and users may create their own. @beam-postgres@
+-- fully supports these types, including user-defined range types. In general,
+-- the names of functions in this section closely match names of the native
+-- Postgres functions they map to. As with most beam expression functions,
+-- names are suffixed with an underscore and CamelCased. Where ambiguous,
+-- functions are prefixed with an @r@. Operators closely match their native
+-- Postgres counterparts, except they are prefixed and/or suffixed with an @-@
+-- to indicate the expression on that side is a Range. For example @-<\@-@ maps
+-- to the native operator @<\@@ when both arguments are Ranges, while @<\@-@ maps
+-- to the same operator when the first argument is an element, not a range.
+--
+-- For more information on Postgres range support, refer to the postgres
+-- <https://www.postgresql.org/docs/current/static/rangetypes.html manual>.
 
 -- $json
 --
