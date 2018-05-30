@@ -83,7 +83,7 @@ module Database.Beam.Postgres.PgSpecific
   , range_
   
     -- *** Building @PgRangeBound@s
-  , inclusive, exclusive
+  , inclusive, exclusive, unbounded
 
     -- *** Range operators and functions
   , (-@>-), (-@>), (-<@-), (<@-)
@@ -441,11 +441,14 @@ uBound Exclusive = ")"
 -- (the absense of a value represents unbounded).
 data PgRangeBound a = PgRangeBound PgBoundType (Maybe a) deriving (Show, Generic)
 
-inclusive :: Maybe a -> PgRangeBound a
-inclusive = PgRangeBound Inclusive
+inclusive :: a -> PgRangeBound a
+inclusive = PgRangeBound Inclusive . Just
 
-exclusive :: Maybe a -> PgRangeBound a
-exclusive = PgRangeBound Exclusive
+exclusive :: a -> PgRangeBound a
+exclusive = PgRangeBound Exclusive . Just
+
+unbounded :: PgRangeBound a
+unbounded = PgRangeBound Exclusive Nothing
 
 -- | A range of a given Haskell type (represented by @a@) stored as a given Postgres Range Type
 -- (represented by @n@).
