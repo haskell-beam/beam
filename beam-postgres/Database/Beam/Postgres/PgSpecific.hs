@@ -455,7 +455,7 @@ unbounded = PgRangeBound Exclusive Nothing
 --
 -- A reasonable example might be @Range PgInt8Range Int64@.
 -- This represents a range of Haskell @Int64@ values stored as a range of 'bigint' in Postgres.
-data PgRange n a
+data PgRange (n :: *) a
   = PgEmptyRange
   | PgRange (PgRangeBound a) (PgRangeBound a)
   deriving (Show, Generic)
