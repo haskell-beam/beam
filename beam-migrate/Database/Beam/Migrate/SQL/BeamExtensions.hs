@@ -16,7 +16,7 @@ import Data.Text (Text)
 --   Usage:
 --
 -- @
--- field "Key" int genericSerial
+-- field "Key" genericSerial
 -- @
 --
 --   Then, when inserting into the table, you can use 'default_' to request the
