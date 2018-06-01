@@ -323,7 +323,7 @@ createTableActionProvider =
 
          let postConditions = [ p tblP, p primaryKeyP ] ++ concat columnsP
              cmd = createTableCmd (createTableSyntax Nothing postTblNm colsSyntax tblConstraints)
-             tblConstraints = [ primaryKeyConstraintSyntax primaryKey ]
+             tblConstraints = if null primaryKey then [] else [ primaryKeyConstraintSyntax primaryKey ]
              colsSyntax = map (\(colNm, type_, cs) -> (colNm, columnSchemaSyntax type_ Nothing cs Nothing)) columns
          pure (PotentialAction mempty (HS.fromList postConditions)
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
