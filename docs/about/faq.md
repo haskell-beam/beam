@@ -151,7 +151,7 @@ Suppose you had the following code to run a query over an arbitrary backend that
 supported the SQL92 syntax.
 
 ```haskell
-listEmployees :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m) => m [Employee]
+listEmployees :: (IsSql92Syntax cmd, MonadBeam cmd be m) => m [Employee]
 listEmployees = runSelectReturningList $ select (all_ (employees employeeDb))
 ```
 
@@ -186,7 +186,7 @@ equalities that a sane SQL92 syntax would support. Thus the code above becomes.
 
 ```haskell
 listEmployees :: ( IsSql92Syntax cmd, Sql92SanityCheck cmd
-                 , MonadBeam cmd be hdl m)
+                 , MonadBeam cmd be m)
               => m [Employee]
 listEmployees = runSelectReturningList $ select (all_ (employees employeeDb))
 ```

@@ -24,5 +24,5 @@ instance ( Selector f, IsCheckedDatabaseEntity be x
          , CheckedDatabaseEntityDefaultRequirements be x ) =>
   GAutoMigratableDb be (S1 f (Rec0 (CheckedDatabaseEntity be db x))) where
 
-  defaultMigratableDbSettings' be = M1 (K1 (CheckedDatabaseEntity (checkedDbEntityAuto name) []))
+  defaultMigratableDbSettings' _ = M1 (K1 (CheckedDatabaseEntity (checkedDbEntityAuto name) []))
     where name = T.pack (selName (undefined :: S1 f (Rec0 (CheckedDatabaseEntity be db x)) ()))

@@ -71,7 +71,7 @@ import           Data.Semigroup
 #endif
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
-migrationBackend :: Tool.BeamMigrationBackend Postgres Pg.Connection Pg
+migrationBackend :: Tool.BeamMigrationBackend Postgres Pg
 migrationBackend = Tool.BeamMigrationBackend
                         "postgres"
                         (unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"

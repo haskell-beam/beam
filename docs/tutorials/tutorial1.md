@@ -373,7 +373,7 @@ runBeamSqliteDebug putStrLn conn $ do
 Maybe we'd like something a little more interesting, such as the number of users
 for each unique first name. We can also express these aggregations using the
 `aggregate_` function. In order to get interesting results, we'll need to add
-more users to our database. We'll demonstrate using `withDatabase` to silence the debug messages.
+more users to our database.
 
 !beam-query
 ```haskell

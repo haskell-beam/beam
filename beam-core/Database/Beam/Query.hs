@@ -144,7 +144,7 @@ lookup_ tbl tblKey =
 
 -- | Run a 'SqlSelect' in a 'MonadBeam' and get the results as a list
 runSelectReturningList ::
-  (MonadBeam be hdl m, BeamSqlBackend be, FromBackendRow be a) =>
+  (MonadBeam be m, BeamSqlBackend be, FromBackendRow be a) =>
   SqlSelect be a -> m [ a ]
 runSelectReturningList (SqlSelect s) =
   runReturningList (selectCmd s)
@@ -153,7 +153,7 @@ runSelectReturningList (SqlSelect s) =
 --   one. Both no results as well as more than one result cause this to return
 --   'Nothing'.
 runSelectReturningOne ::
-  (MonadBeam be hdl m, BeamSqlBackend be, FromBackendRow be a) =>
+  (MonadBeam be m, BeamSqlBackend be, FromBackendRow be a) =>
   SqlSelect be a -> m (Maybe a)
 runSelectReturningOne (SqlSelect s) =
   runReturningOne (selectCmd s)
@@ -200,7 +200,7 @@ insert :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (table (
 insert tbl values = insertOnly tbl id values
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
-runInsert :: (BeamSqlBackend be, MonadBeam be hdl m)
+runInsert :: (BeamSqlBackend be, MonadBeam be m)
           => SqlInsert be -> m ()
 runInsert SqlInsertNoRows = pure ()
 runInsert (SqlInsert i) = runNoReturn (insertCmd i)
@@ -320,7 +320,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
       allBeamValues (\(Columnar' (TableField fieldNm)) -> fieldNm) (primaryKey tblSettings)
 
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
-runUpdate :: (BeamSqlBackend be, MonadBeam be hdl m)
+runUpdate :: (BeamSqlBackend be, MonadBeam be m)
           => SqlUpdate be tbl -> m ()
 runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
 runUpdate SqlIdentityUpdate = pure ()
@@ -343,6 +343,6 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
     QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField name))))) tblSettings)
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
-runDelete :: (BeamSqlBackend be, MonadBeam be hdl m)
+runDelete :: (BeamSqlBackend be, MonadBeam be m)
           => SqlDelete be table -> m ()
 runDelete (SqlDelete d) = runNoReturn (deleteCmd d)

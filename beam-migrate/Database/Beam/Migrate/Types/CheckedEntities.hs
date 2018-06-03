@@ -9,7 +9,6 @@ import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Checks
 import Database.Beam.Migrate.Generics.Tables
-import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.Types.Predicates
 
 import Control.Applicative

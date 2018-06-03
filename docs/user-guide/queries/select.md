@@ -24,7 +24,7 @@ One more thing, before we see more complex examples, let's define a quick
 utility function.
 
 ```haskell
-Prelude Chinook.Schema> let withConnectionTutorial = withDatabaseDebug putStrLn chinook
+Prelude Chinook.Schema> let withConnectionTutorial = runBeamSqliteDebug putStrLn chinook
 ```
 
 Let's test it!

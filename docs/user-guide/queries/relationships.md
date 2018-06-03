@@ -21,7 +21,7 @@ Prelude Chinook.Schema> chinook <- open "chinook.db"
 One more thing, before we explore how beam handles relationships. Before we do, let's define a quick utility function.
 
 ```haskell
-Prelude Chinook.Schema> let withConnectionTutorial = withDatabaseDebug putStrLn chinook
+Prelude Chinook.Schema> let withConnectionTutorial = runBeamSqliteDebug putStrLn chinook
 ```
 
 This function prints each of our queries to standard output before running them.

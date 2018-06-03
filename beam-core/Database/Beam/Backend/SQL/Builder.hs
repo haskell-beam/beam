@@ -509,7 +509,3 @@ sqlFuncOp fun a =
 
 -- newtype SqlSyntaxM a = SqlSyntaxM (IO a)
 --   deriving (Applicative, Functor, Monad, MonadIO)
-
--- instance MonadBeam SqlSyntaxBackend SqlSyntaxBackend SqlSyntaxM where
---   withDatabaseDebug _ _ _ = fail "absurd"
---   runReturningMany _ _ = fail "absurd"
