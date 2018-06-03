@@ -3,8 +3,6 @@
 -- | Convenience methods for constructing backend-agnostic applications
 module Database.Beam.Backend.URI where
 
-import           Database.Beam.Backend.SQL
-
 import           Control.Exception
 
 import qualified Data.Map as M
@@ -24,8 +22,8 @@ data BeamOpenURIUnsupportedScheme = BeamOpenURIUnsupportedScheme String deriving
 instance Exception BeamOpenURIUnsupportedScheme
 
 data BeamURIOpener c where
-  BeamURIOpener :: MonadBeam be hdl m
-                => c be hdl m
+  BeamURIOpener :: c be hdl m
+                -> (forall a. hdl -> m a -> IO a)
                 -> (URI -> IO (hdl, IO ()))
                 -> BeamURIOpener c
 newtype BeamURIOpeners c where
@@ -41,45 +39,45 @@ instance Monoid (BeamURIOpeners c) where
 
 data OpenedBeamConnection c where
   OpenedBeamConnection
-    :: MonadBeam be hdl m
-    => { openedBeamDatabase :: c be hdl m
-       , openedBeamHandle   :: hdl
+    :: { beamRunner          :: (forall a. hdl -> m a -> IO a)
+       , openedBeamDatabase  :: c be hdl m
+       , openedBeamHandle    :: hdl
        , closeBeamConnection :: IO ()
      } -> OpenedBeamConnection c
 
-mkUriOpener :: MonadBeam be hdl m
-            => String
+mkUriOpener :: (forall a. hdl -> m a -> IO a)
+            -> String
             -> (URI -> IO (hdl, IO ()))
             -> c be hdl m
             -> BeamURIOpeners c
-mkUriOpener schemeNm opener c = BeamURIOpeners (M.singleton schemeNm (BeamURIOpener c opener))
+mkUriOpener runner schemeNm opener c = BeamURIOpeners (M.singleton schemeNm (BeamURIOpener c runner opener))
 
 withDbFromUri :: forall c a
                . BeamURIOpeners c
               -> String
-              -> (forall be hdl m. MonadBeam be hdl m => c be hdl m -> m a)
+              -> (forall be hdl m. (forall r. hdl -> m r -> IO r) -> c be hdl m -> m a)
               -> IO a
 withDbFromUri protos uri actionWithDb =
-  withDbConnection protos uri (\c hdl -> withDatabase hdl (actionWithDb c))
+  withDbConnection protos uri (\runner c hdl -> runner hdl (actionWithDb runner c))
 
 withDbConnection :: forall c a
                   . BeamURIOpeners c
                  -> String
-                 -> (forall be hdl m. MonadBeam be hdl m =>
+                 -> (forall be hdl m. (forall r. hdl -> m r -> IO r) ->
                       c be hdl m -> hdl -> IO a)
                  -> IO a
 withDbConnection protos uri actionWithDb =
   bracket (openDbConnection protos uri) closeBeamConnection $
-  \(OpenedBeamConnection c hdl _) -> actionWithDb c hdl
+  \(OpenedBeamConnection runner c hdl _) -> actionWithDb runner c hdl
 
 openDbConnection :: forall c
                   . BeamURIOpeners c
                  -> String
                  -> IO (OpenedBeamConnection c)
 openDbConnection protos uri = do
-  (parsedUri, BeamURIOpener c openURI) <- findURIOpener protos uri
+  (parsedUri, BeamURIOpener c runner openURI) <- findURIOpener protos uri
   (hdl, closeHdl) <- openURI parsedUri
-  pure (OpenedBeamConnection c hdl closeHdl)
+  pure (OpenedBeamConnection runner c hdl closeHdl)
 
 findURIOpener :: BeamURIOpeners c -> String -> IO (URI, BeamURIOpener c)
 findURIOpener (BeamURIOpeners protos) uri =

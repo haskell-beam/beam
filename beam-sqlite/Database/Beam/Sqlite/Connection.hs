@@ -252,7 +252,7 @@ instance HasDefaultSqlDataTypeConstraints Sqlite LocalTime
 sqliteUriSyntax :: c Sqlite Connection SqliteM
                 -> BeamURIOpeners c
 sqliteUriSyntax =
-  mkUriOpener "sqlite:"
+  mkUriOpener runBeamSqlite "sqlite:"
     (\uri -> do
         let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
         hdl <- open sqliteName
@@ -264,10 +264,7 @@ runBeamSqliteDebug debugStmt conn x = runReaderT (runSqliteM x) (debugStmt, conn
 runBeamSqlite :: Connection -> SqliteM a -> IO a
 runBeamSqlite = runBeamSqliteDebug (\_ -> pure ())
 
-instance MonadBeam Sqlite Connection SqliteM where
-  withDatabase = runBeamSqlite
-  withDatabaseDebug = runBeamSqliteDebug
-
+instance MonadBeam Sqlite SqliteM where
   runNoReturn (SqliteCommandSyntax (SqliteSyntax cmd vals)) =
     SqliteM $ do
       (logger, conn) <- ask
@@ -298,14 +295,14 @@ instance MonadBeam Sqlite Connection SqliteM where
       , "rows from an insert, use Database.Beam.Sqlite.insertReturning "
       , "for emulation" ]
 
-instance Beam.MonadBeamInsertReturning Sqlite Connection SqliteM where
+instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
   runInsertReturningList tbl values =
     runInsertReturningList (insertReturning tbl values)
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
 runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
     -- If all expressions are simple expressions (no default), then just
-    -- run the INSERT normally
+
   | SqliteInsertExpressions es <- vs, any (any (== SqliteExpressionDefault)) es =
       forM_ es $ \row -> do
         let (fields', row') = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row

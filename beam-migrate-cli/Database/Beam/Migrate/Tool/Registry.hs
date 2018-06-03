@@ -517,7 +517,7 @@ withoutMetadata =
     takeWhile (/="-- + BEAM-MIGRATE")
 
 readSchemaMetaData :: MigrationRegistry
-                   -> BeamMigrationBackend be hdl m
+                   -> BeamMigrationBackend be m
                    -> UUID
                    -> IO SchemaMetaData
 readSchemaMetaData reg BeamMigrationBackend { backendPredicateParsers = parsers } commitId = do

@@ -23,8 +23,8 @@ import Control.Monad.Identity
 
 -- | 'MonadBeam's that support returning the newly created rows of an @INSERT@ statement.
 --   Useful for discovering the real value of a defaulted value.
-class MonadBeam be handle m =>
-  MonadBeamInsertReturning be handle m | m -> be handle where
+class MonadBeam be m =>
+  MonadBeamInsertReturning be m | m -> be where
   runInsertReturningList
     :: ( Beamable table
        , Projectible be (table (QExpr be ()))
@@ -35,8 +35,8 @@ class MonadBeam be handle m =>
 
 -- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.
 --   Useful for discovering the new values of the updated rows.
-class MonadBeam be handle m =>
-  MonadBeamUpdateReturning be handle m | m -> be handle where
+class MonadBeam be m =>
+  MonadBeamUpdateReturning be m | m -> be where
   runUpdateReturningList
     :: ( Beamable table
        , Projectible be (table (QExpr be ()))
@@ -49,8 +49,8 @@ class MonadBeam be handle m =>
 -- | 'MonadBeam's that suppert returning rows that will be deleted by the given
 -- @DELETE@ statement. Useful for deallocating resources based on the value of
 -- deleted rows.
-class MonadBeam be handle m =>
-  MonadBeamDeleteReturning be handle m | m -> be handle where
+class MonadBeam be m =>
+  MonadBeamDeleteReturning be m | m -> be where
   runDeleteReturningList
     :: ( Beamable table
        , Projectible be (table (QExpr be ()))

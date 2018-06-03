@@ -56,7 +56,16 @@ import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
-import Control.Monad.IO.Class
+import Control.Monad.Cont
+import Control.Monad.Except
+import Control.Monad.List
+import qualified Control.Monad.RWS.Lazy as Lazy
+import qualified Control.Monad.RWS.Strict as Strict
+import Control.Monad.Reader
+import qualified Control.Monad.State.Lazy as Lazy
+import qualified Control.Monad.Writer.Lazy as Lazy
+import qualified Control.Monad.State.Strict as Strict
+import qualified Control.Monad.Writer.Strict as Strict
 
 import Data.Tagged (Tagged)
 import Data.Text (Text)
@@ -65,35 +74,17 @@ import Data.Text (Text)
 
 -- | A class that ties together a monad with a particular backend
 --
---   Intuitively, this allows you to write code that performs database commands
---   without having to know the underlying API. As long as you have an
---   appropriate handle from a database library that Beam can use, you can use
---   the 'MonadBeam' methods to execute the query.
---
---   Provided here is a low-level interface. Most often, you'll only need the
---   'withDatabase' and 'withDatabaseDebug' function. The 'run*' functions are
---   wrapped by the appropriate functions in "Database.Beam.Query".
+--   Provided here is a low-level interface for executing commands. The 'run*'
+--   functions are wrapped by the appropriate functions in 'Database.Beam.Query'.
 --
 --   This interface is very high-level and isn't meant to expose the full power
 --   of the underlying database. Namely, it only supports simple data retrieval
 --   strategies. More complicated strategies (for example, Postgres's @COPY@)
 --   are supported in individual backends. See the documentation of those
 --   backends for more details.
-class (BeamBackend be, MonadIO m) =>
-  MonadBeam be handle m | m -> be handle where
-
-  {-# MINIMAL withDatabaseDebug, runReturningMany #-}
-
-  -- | Run a database action, and log debugging information about statements
-  --   executed using the specified 'IO' action.
-  withDatabaseDebug :: (String -> IO ()) -- ^ Database statement logging function
-                    -> handle            -- ^ The database connection handle against which to execute the action
-                    -> m a               -- ^ The database action
-                    -> IO a
-  withDatabase :: handle -> m a -> IO a
-
-  -- | Run a database action, but don't report any debug information
-  withDatabase = withDatabaseDebug (\_ -> pure ())
+class (BeamBackend be, Monad m) =>
+  MonadBeam be m | m -> be where
+  {-# MINIMAL runReturningMany #-}
 
   -- | Run a query determined by the given syntax, providing an action that will
   --   be called to consume the results from the database (if any). The action
@@ -141,6 +132,76 @@ class (BeamBackend be, MonadIO m) =>
                   Nothing -> pure (acc [])
                   Just x -> collectM (acc . (x:))
           in collectM id
+
+instance MonadBeam be m => MonadBeam be (ExceptT e m) where
+    runReturningMany s a = ExceptT $ runReturningMany s (\nextRow -> runExceptT (a (lift nextRow)))
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (ListT m) where
+    runReturningMany s a = ListT $ do
+                             x <- runReturningMany s (\nextRow -> runListT (a (lift nextRow)))
+                             pure x
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (ContT r m) where
+    runReturningMany s a = ContT $ \r ->
+                           runReturningMany s (\nextRow -> runContT (a (lift nextRow)) r)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (ReaderT r m) where
+    runReturningMany s a = ReaderT $ \r ->
+                           runReturningMany s (\nextRow -> runReaderT (a (lift nextRow)) r)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (Lazy.StateT s m) where
+    runReturningMany s a = Lazy.StateT $ \st ->
+                           runReturningMany s (\nextRow -> Lazy.runStateT (a (lift nextRow)) st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (Strict.StateT s m) where
+    runReturningMany s a = Strict.StateT $ \st ->
+                           runReturningMany s (\nextRow -> Strict.runStateT (a (lift nextRow)) st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid s) => MonadBeam be (Lazy.WriterT s m) where
+    runReturningMany s a = Lazy.WriterT $
+                           runReturningMany s (\nextRow -> Lazy.runWriterT (a (lift nextRow)))
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid s) => MonadBeam be (Strict.WriterT s m) where
+    runReturningMany s a = Strict.WriterT $
+                           runReturningMany s (\nextRow -> Strict.runWriterT (a (lift nextRow)))
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid w) => MonadBeam be (Lazy.RWST r w s m) where
+    runReturningMany s a = Lazy.RWST $ \r st ->
+                           runReturningMany s (\nextRow -> Lazy.runRWST (a (lift nextRow)) r st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid w) => MonadBeam be (Strict.RWST r w s m) where
+    runReturningMany s a = Strict.RWST $ \r st ->
+                           runReturningMany s (\nextRow -> Strict.runRWST (a (lift nextRow)) r st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
 
 -- * BeamSqlBackend
 
