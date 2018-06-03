@@ -280,10 +280,14 @@ pgDataTypeFromAtt _ oid pgMod
   | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType Postgres Int16)
   | Pg.typoid Pg.varchar == oid = pgExpandDataType (Db.varchar Nothing)
   | Pg.typoid Pg.timestamp == oid = pgExpandDataType Db.timestamp
+  | Pg.typoid Pg.text  == oid = pgTextType
+  | Pg.typoid Pg.json  == oid = pgJsonType
+  | Pg.typoid Pg.jsonb == oid = pgJsonbType
+  | Pg.typoid Pg.uuid  == oid = pgUuidType
   | Pg.typoid Pg.point == oid = pgPointType
-  | Pg.typoid Pg.line == oid = pgLineType
-  | Pg.typoid Pg.lseg == oid = pgLineSegmentType
-  | Pg.typoid Pg.box == oid = pgBoxType
+  | Pg.typoid Pg.line  == oid = pgLineType
+  | Pg.typoid Pg.lseg  == oid = pgLineSegmentType
+  | Pg.typoid Pg.box   == oid = pgBoxType
   | Pg.typoid Pg.numeric == oid =
       let precAndDecimal =
             case pgMod of
