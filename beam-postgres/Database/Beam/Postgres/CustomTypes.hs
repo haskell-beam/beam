@@ -37,6 +37,7 @@ import           Database.Beam.Postgres.Syntax
 import           Control.Monad
 import           Control.Monad.Free.Church
 import           Data.Aeson (object, (.=))
+import qualified Data.ByteString.Char8 as BC
 import           Data.Functor.Const
 import qualified Data.HashSet as HS
 import           Data.Hashable (Hashable)
@@ -44,6 +45,8 @@ import           Data.Proxy (Proxy(..))
 import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as TE
+
+import qualified Database.PostgreSQL.Simple.FromField as Pg
 
 data PgType a
 newtype PgTypeCheck = PgTypeCheck (Text -> SomeDatabasePredicate)
@@ -177,12 +180,18 @@ createEnum nm = do
 pgEnumValueSyntax :: (a -> String) -> a -> PgValueSyntax
 pgEnumValueSyntax namer = sqlValueSyntax . namer
 
+newtype PgRawString = PgRawString String
+instance FromBackendRow Postgres PgRawString
+instance Pg.FromField PgRawString where
+    fromField f Nothing = Pg.returnError Pg.UnexpectedNull f "When parsing enumeration string"
+    fromField _ (Just d) = pure (PgRawString (BC.unpack d))
+
 pgParseEnum :: (Enum a, Bounded a) => (a -> String)
             -> FromBackendRowM Postgres a
 pgParseEnum namer =
   let allNames = map (\x -> (namer x, x)) [minBound..maxBound]
   in do
-    name <- fromBackendRow
+    PgRawString name <- fromBackendRow
     case lookup name allNames of
       Nothing -> fail ("Invalid postgres enumeration value: " ++ name)
       Just  v -> pure v
