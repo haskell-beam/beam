@@ -117,6 +117,7 @@ instance IsSql92UpdateSyntax Update where
 data Delete
   = Delete
   { deleteTable :: Text
+  , deleteAlias :: Maybe Text
   , deleteWhere :: Maybe Expression }
   deriving (Show, Eq)
 
@@ -124,6 +125,7 @@ instance IsSql92DeleteSyntax Delete where
   type Sql92DeleteExpressionSyntax Delete = Expression
 
   deleteStmt = Delete
+  deleteSupportsAlias _ = True
 
 data FieldName
   = QualifiedField Text Text

@@ -163,10 +163,13 @@ instance IsSql92UpdateSyntax SqlSyntaxBuilder where
 instance IsSql92DeleteSyntax SqlSyntaxBuilder where
   type Sql92DeleteExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  deleteStmt tbl where_ =
+  deleteStmt tbl alias where_ =
     SqlSyntaxBuilder $
     byteString "DELETE FROM " <> quoteSql tbl <>
+    maybe mempty (\alias_ -> byteString " AS " <> quoteSql alias_) alias <>
     maybe mempty (\where_ -> byteString " WHERE " <> buildSql where_) where_
+
+  deleteSupportsAlias _ = True
 
 instance IsSql92FieldNameSyntax SqlSyntaxBuilder where
   qualifiedField a b =
