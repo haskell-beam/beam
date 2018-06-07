@@ -27,6 +27,7 @@ library
                        Database.Beam.Query
                        Database.Beam.Query.Internal
                        Database.Beam.Query.CustomSQL
+                       Database.Beam.Query.CTE
                        Database.Beam.Query.SQL92
                        Database.Beam.Query.Types
 

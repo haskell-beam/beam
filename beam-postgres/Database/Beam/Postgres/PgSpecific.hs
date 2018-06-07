@@ -995,7 +995,7 @@ pgUnnest' q =
                     , pgQuotedIdentifier alias
                     , pgParens (pgSepBy (emit ", ") (allBeamValues (\(Columnar' (TableField nm)) -> pgQuotedIdentifier nm) tblFields))
                     ])
-                 tblFields
+                 (tableFieldsToExpressions tblFields)
                  (\_ -> Nothing) snd))
   where
     tblFields :: TableSettings tbl

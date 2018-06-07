@@ -8,8 +8,6 @@ module Database.Beam.Query.SQL92
 import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
 
-import           Database.Beam.Schema.Tables
-
 import           Control.Monad.Free.Church
 import           Control.Monad.Free
 import           Control.Monad.Writer
@@ -168,12 +166,13 @@ buildJoinTableSourceQuery tblPfx tblSource x qb =
   in (reproject (Proxy @be) (fieldNameFunc (qualifiedField newTblNm)) x, qb')
 
 buildInnerJoinQuery
-  :: forall be s table
-   . (Beamable table, BeamSqlBackend be)
-  => TablePrefix -> (TablePrefix -> T.Text -> BeamSqlBackendFromSyntax be) -> TableSettings table
-  -> (table (QExpr be s) -> Maybe (WithExprContext (BeamSqlBackendExpressionSyntax be)))
-  -> QueryBuilder be -> (T.Text, table (QExpr be s), QueryBuilder be)
-buildInnerJoinQuery tblPfx mkFrom tblSettings mkOn qb =
+  :: forall be r
+   . BeamSqlBackend be
+  => TablePrefix -> (TablePrefix -> T.Text -> BeamSqlBackendFromSyntax be)
+  -> (T.Text -> r)
+  -> (r-> Maybe (WithExprContext (BeamSqlBackendExpressionSyntax be)))
+  -> QueryBuilder be -> (T.Text, r, QueryBuilder be)
+buildInnerJoinQuery tblPfx mkFrom mkTbl mkOn qb =
   let qb' = QueryBuilder (tblRef + 1) from' where'
       tblRef = qbNextTblRef qb
       newTblNm = tblPfx <> fromString (show tblRef)
@@ -183,17 +182,17 @@ buildInnerJoinQuery tblPfx mkFrom tblSettings mkOn qb =
           Nothing -> (Just newSource, andE' (qbWhere qb) (exprWithContext tblPfx <$> mkOn newTbl))
           Just oldFrom -> (Just (innerJoin oldFrom newSource (exprWithContext tblPfx <$> mkOn newTbl)), qbWhere qb)
 
-      newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
+      newTbl = mkTbl newTblNm
   in (newTblNm, newTbl, qb')
 
-nextTbl :: (BeamSqlBackend be, Beamable table)
-        => QueryBuilder be -> TablePrefix -> TableSettings table
-        -> ( table (QExpr be s)
-           , T.Text, QueryBuilder be )
-nextTbl qb tblPfx tblSettings =
+nextTbl :: BeamSqlBackend be
+        => QueryBuilder be -> TablePrefix
+        -> (T.Text -> r)
+        -> ( r, T.Text, QueryBuilder be )
+nextTbl qb tblPfx mkTbl =
   let tblRef = qbNextTblRef qb
       newTblNm = tblPfx <> fromString (show tblRef)
-      newTbl = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
+      newTbl = mkTbl newTblNm
   in (newTbl, newTblNm, qb { qbNextTblRef = qbNextTblRef qb + 1})
 
 projOrder :: Projectible be x
@@ -426,13 +425,13 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                         Projectible be x =>
                         Free (QF be db s) x -> QueryBuilder be -> SelectBuilder be db x
     buildJoinedQuery (Pure x) qb = SelectBuilderQ x qb
-    buildJoinedQuery (Free (QAll mkFrom tblSettings on next)) qb =
-        let (newTblNm, newTbl, qb') = buildInnerJoinQuery tblPfx mkFrom tblSettings on qb
+    buildJoinedQuery (Free (QAll mkFrom mkTbl on next)) qb =
+        let (newTblNm, newTbl, qb') = buildInnerJoinQuery tblPfx mkFrom mkTbl on qb
         in buildJoinedQuery (next (newTblNm, newTbl)) qb'
     buildJoinedQuery (Free (QArbitraryJoin q mkJoin on next)) qb =
       case fromF q of
-        Free (QAll mkDbFrom dbTblSettings on' next')
-          | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbTblSettings,
+        Free (QAll mkDbFrom dbMkTbl on' next')
+          | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbMkTbl,
             Nothing <- exprWithContext tblPfx <$> on' newTbl,
             Pure proj <- next' (newTblNm, newTbl) ->
             let newSource = mkDbFrom (nextTblPfx tblPfx) newTblNm
@@ -462,8 +461,8 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
     buildJoinedQuery (Free (QTwoWayJoin a b mkJoin on next)) qb =
       let (aProj, aSource, qb') =
             case fromF a of
-              Free (QAll mkDbFrom dbTblSettings on' next')
-                | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbTblSettings,
+              Free (QAll mkDbFrom dbMkTbl on' next')
+                | (newTbl, newTblNm, qb') <- nextTbl qb tblPfx dbMkTbl,
                   Nothing <- on' newTbl, Pure proj <- next' (newTblNm, newTbl) ->
                     (proj, mkDbFrom (nextTblPfx tblPfx) newTblNm, qb')
 
@@ -477,8 +476,8 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
 
           (bProj, bSource, qb'') =
             case fromF b of
-              Free (QAll mkDbFrom dbTblSettings on' next')
-                | (newTbl, newTblNm, qb'') <- nextTbl qb' tblPfx dbTblSettings,
+              Free (QAll mkDbFrom dbMkTbl on' next')
+                | (newTbl, newTblNm, qb'') <- nextTbl qb' tblPfx dbMkTbl,
                   Nothing <- on' newTbl, Pure proj <- next' (newTblNm, newTbl) ->
                     (proj, mkDbFrom (nextTblPfx tblPfx) newTblNm, qb'')
 
@@ -512,8 +511,8 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
              Free (QF be db s) x
           -> (forall a'. Projectible be a' => Free (QF be db s) a' -> (a' -> Free (QF be db s) x) -> SelectBuilder be db x)
           -> SelectBuilder be db x
-    onlyQ (Free (QAll entityNm entitySettings mkOn next)) f =
-      f (Free (QAll entityNm entitySettings mkOn (Pure . PreserveLeft))) (next . unPreserveLeft)
+    onlyQ (Free (QAll entityNm mkTbl mkOn next)) f =
+      f (Free (QAll entityNm mkTbl mkOn (Pure . PreserveLeft))) (next . unPreserveLeft)
     onlyQ (Free (QArbitraryJoin entity mkJoin mkOn next)) f =
       f (Free (QArbitraryJoin entity mkJoin mkOn Pure)) next
     onlyQ (Free (QTwoWayJoin a b mkJoin mkOn next)) f =

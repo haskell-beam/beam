@@ -116,6 +116,13 @@ instance Beamable tbl =>
   QGroupable (tbl (QExpr be s)) (tbl (QGroupExpr be s)) where
   group_ = changeBeamRep (\(Columnar' (QExpr x)) -> Columnar' (QExpr x))
 
+-- | 'group_' for any 'Beamable' type. Adds every field in the type to the
+--   grouping key. This is the equivalent of including the grouping expression
+--   of each field in the type as part of the aggregate projection
+instance Beamable tbl =>
+  QGroupable (tbl (Nullable (QExpr be s))) (tbl (Nullable (QGroupExpr be s))) where
+  group_ = changeBeamRep (\(Columnar' (QExpr x)) -> Columnar' (QExpr x))
+
 -- | Compute an aggregate over all values in a group. Corresponds semantically
 --   to the @AGG(ALL ..)@ syntax, but doesn't produce an explicit @ALL@. To
 --   produce @ALL@ expicitly, see 'allInGroupExplicitly_'.

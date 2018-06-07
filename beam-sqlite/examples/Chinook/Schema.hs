@@ -63,7 +63,8 @@ instance Beamable (PrimaryKey AlbumT)
 type AlbumId = PrimaryKey AlbumT Identity; deriving instance Show AlbumId
 deriving instance Show (PrimaryKey AlbumT (Nullable Identity))
 
-artistAlbums :: OneToMany ChinookDb s ArtistT AlbumT
+artistAlbums :: HasSqlEqualityCheck be Int32
+             => OneToMany be ChinookDb s ArtistT AlbumT
 artistAlbums = oneToMany_ (album chinookDb) albumArtist
 
 -- * Employee
@@ -154,7 +155,8 @@ instance Table InvoiceT where
 instance Beamable (PrimaryKey InvoiceT)
 type InvoiceId = PrimaryKey InvoiceT Identity; deriving instance Show InvoiceId
 
-invoiceLines :: OneToMany ChinookDb s InvoiceT InvoiceLineT
+invoiceLines :: HasSqlEqualityCheck be Int32
+             => OneToMany be ChinookDb s InvoiceT InvoiceLineT
 invoiceLines = oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice
 
 -- * InvoiceLine
@@ -225,7 +227,8 @@ instance Table PlaylistTrackT where
 instance Beamable (PrimaryKey PlaylistTrackT)
 type PlaylistTrackId = PrimaryKey PlaylistTrackT Identity; deriving instance Show PlaylistTrackId
 
-playlistTrackRelationship :: ManyToMany ChinookDb PlaylistT TrackT
+playlistTrackRelationship :: HasSqlEqualityCheck be Int32
+                          => ManyToMany be ChinookDb PlaylistT TrackT
 playlistTrackRelationship =
  manyToMany_ (playlistTrack chinookDb)
              playlistTrackPlaylistId
@@ -254,13 +257,16 @@ instance Table TrackT where
 instance Beamable (PrimaryKey TrackT)
 type TrackId = PrimaryKey TrackT Identity; deriving instance Show TrackId
 
-genreTracks :: OneToManyOptional ChinookDb s GenreT TrackT
+genreTracks :: HasSqlEqualityCheck be Int32
+            => OneToManyOptional be ChinookDb s GenreT TrackT
 genreTracks = oneToManyOptional_ (track chinookDb) trackGenreId
 
-mediaTypeTracks :: OneToMany ChinookDb s MediaTypeT TrackT
+mediaTypeTracks :: HasSqlEqualityCheck be Int32
+                => OneToMany be ChinookDb s MediaTypeT TrackT
 mediaTypeTracks = oneToMany_ (track chinookDb) trackMediaTypeId
 
-albumTracks :: OneToManyOptional ChinookDb s AlbumT TrackT
+albumTracks :: HasSqlEqualityCheck be Int32
+            => OneToManyOptional be ChinookDb s AlbumT TrackT
 albumTracks = oneToManyOptional_ (track chinookDb) trackAlbumId
 
 -- * database

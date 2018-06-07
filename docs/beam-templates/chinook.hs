@@ -24,7 +24,7 @@ instance Exception BeamDone
 
 BEAM_BACKEND_EXTRA
 
-exampleQuery :: Q BEAM_SELECT_SYNTAX ChinookDb s _
+exampleQuery :: Q BEAM_BACKEND ChinookDb s _
 exampleQuery =
   BEAM_PLACEHOLDER
 
@@ -45,7 +45,7 @@ main =
      let onStmt s = modifyIORef stmts (. (s:))
 
          record :: BEAM_BACKEND_MONAD a -> IO a
-         record = withDatabaseDebug onStmt chinook
+         record = BEAM_WITH_DATABASE_DEBUG onStmt chinook
 
      flip onException (displayStmtList (hPutStrLn stderr) stmts) $
        handle (\BeamDone -> pure ()) $

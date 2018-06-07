@@ -7,6 +7,9 @@ module Database.Beam.Backend.SQL.SQL99
   , IsSql99ExpressionSyntax(..)
   , IsSql99ConcatExpressionSyntax(..)
   , IsSql99AggregationExpressionSyntax(..)
+  , IsSql99CommonTableExpressionSelectSyntax(..)
+  , IsSql99CommonTableExpressionSyntax(..)
+  , IsSql99RecursiveCommonTableExpressionSelectSyntax(..)
   , IsSql99SelectSyntax(..)
   , IsSql99DataTypeSyntax(..) ) where
 
@@ -47,3 +50,19 @@ class IsSql92DataTypeSyntax dataType =>
   booleanType :: dataType
   arrayType :: dataType -> Int -> dataType
   rowType :: [ (Text, dataType) ] -> dataType
+
+class IsSql92SelectSyntax syntax =>
+  IsSql99CommonTableExpressionSelectSyntax syntax where
+  type Sql99SelectCTESyntax syntax :: *
+
+  withSyntax :: [ Sql99SelectCTESyntax syntax ] -> syntax -> syntax
+
+class IsSql99CommonTableExpressionSelectSyntax syntax
+    => IsSql99RecursiveCommonTableExpressionSelectSyntax syntax where
+
+  withRecursiveSyntax :: [ Sql99SelectCTESyntax syntax ] -> syntax -> syntax
+
+class IsSql99CommonTableExpressionSyntax syntax where
+  type Sql99CTESelectSyntax syntax :: *
+
+  cteSubquerySyntax :: Text -> [Text] -> Sql99CTESelectSyntax syntax -> syntax

@@ -57,6 +57,67 @@ withWindow_ (\i -> frame_ (partitionBy_ (invoiceCustomer i)) (orderPartitionBy_ 
             (all_ (invoice chinookDb))
 ```
 
+## More examples
+
+Windows and aggregates can be combined freely. For example, suppose
+you wanted to find, for each album, the single genre that represented
+most of the tracks on that album.
+
+We can begin by finding the number of tracks in a given genre on a
+given album using `countAll_` and `aggregate_`, like so
+
+!beam-query
+```haskell
+!example chinook
+aggregate_ (\t -> ( group_ (trackAlbumId t)
+                  , group_ (trackGenreId t)
+                  , as_ @Int countAll_ )) $
+all_ (track chinookDb)
+```
+
+Now, we want to find, for each album, which genre has the most
+tracks. We can do this by windowing over the album ID.
+
+!beam-query
+```haskell
+!example chinook window
+let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
+                                , group_ (trackGenreId t)
+                                , as_ @Int countAll_ )) $
+                     all_ (track chinookDb)
+in withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
+               (\(albumId, genreId, trackCnt) albumWindow ->
+                   (albumId, genreId, trackCnt, max_ trackCnt `over_` albumWindow)) $
+   albumGenreCnts
+```
+
+We're almost there. Now, our query returns tuples of
+
+1. an album ID,
+2. a genre ID,
+3. the number of tracks in that genre for that album, and
+4. the number of tracks for the genre with the most tracks in that album
+
+To get just the genre with the most tracks, we have to find the genres
+wher the number of tracks (#3) matches #4. We can do this using
+`filter_`. Because `max_` can return `NULL` if there are no items in
+the window, we use `filter_'` and the nullable ordering operators.
+
+!beam-query
+```haskell
+!example chinook window
+let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
+                                , group_ (trackGenreId t)
+                                , as_ @Int countAll_ )) $
+                     all_ (track chinookDb)
+
+    withMaxCounts = withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
+                                (\(albumId, genreId, trackCnt) albumWindow ->
+                                    (albumId, genreId, trackCnt, max_ trackCnt `over_` albumWindow)) $
+                    albumGenreCnts
+in filter_' (\(_, _, trackCnt, maxTrackCntPerAlbum) -> just_ trackCnt ==?. maxTrackCntPerAlbum) withMaxCounts
+```
+
 ## Frame syntax
 
 The `frame_` function takes a partition, ordering, and bounds parameter, all of

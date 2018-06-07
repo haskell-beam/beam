@@ -13,7 +13,7 @@ backends:
   beam-postgres:
     backend-name: Postgres
     backend-module: Database.Beam.Postgres
-    backend-options: '"host=localhost port=5432 user=postgres" beam_docs_chinook'
+    backend-options: '"host=localhost port=5432 user=tathougies" beam_docs_chinook'
     src:
       file: ./beam-postgres
     haskell-names:
@@ -22,6 +22,7 @@ backends:
       monad: Pg
       select-syntax: PgSelectSyntax
       mnemonic: Pg
+      with-database-debug: runBeamPostgresDebug
     extra-packages:
       - postgresql-simple
     extra-imports:
@@ -36,6 +37,7 @@ backends:
       - window
       - intersect
       - except
+      - cte
 
   beam-sqlite:
     backend-name: Sqlite
@@ -49,6 +51,7 @@ backends:
       monad: SqliteM
       select-syntax: SqliteSelectSyntax
       mnemonic: Sqlite
+      with-database-debug: runBeamSqliteDebug
     extra-packages:
       - sqlite-simple
     extra-imports:

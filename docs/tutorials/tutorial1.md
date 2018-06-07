@@ -323,13 +323,13 @@ We can use `limit_` and `offset_` in a similar manner to `take` and `drop` respe
 ```haskell
 !employee1sql sql
 !employee1out output
-let boundedQuery :: Q SqliteSelectSyntax _ _ _
+let boundedQuery :: Q Sqlite _ _ _
     boundedQuery = limit_ 1 $ offset_ 1 $
                    orderBy_ (asc_ . _userFirstName) $
                    all_ (_shoppingCartUsers shoppingCartDb)
 
 runBeamSqliteDebug putStrLn conn $ do
-  users <- runSelectReturningList (select boundedQuery :: SqlSelect SqliteSelectSyntax _)
+  users <- runSelectReturningList (select boundedQuery :: SqlSelect Sqlite _)
   mapM_ (liftIO . putStrLn . show) users
 ```
 

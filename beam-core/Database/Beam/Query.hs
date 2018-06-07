@@ -24,6 +24,8 @@ module Database.Beam.Query
 
     , module Database.Beam.Query.Relationships
 
+    , module Database.Beam.Query.CTE
+
     -- * Operators
     , module Database.Beam.Query.Operator
 
@@ -52,7 +54,7 @@ module Database.Beam.Query
     -- * SQL Command construction and execution
     -- ** @SELECT@
     , SqlSelect(..)
-    , select, lookup_
+    , select, selectWith, lookup_
     , runSelectReturningList
     , runSelectReturningOne
     , dumpSqlSelect
@@ -82,6 +84,8 @@ import Prelude hiding (lookup)
 
 import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
+import Database.Beam.Query.CTE ( With, ReusableQ, selecting, reuse )
+import qualified Database.Beam.Query.CTE as CTE
 import Database.Beam.Query.CustomSQL
 import Database.Beam.Query.Extensions
 import Database.Beam.Query.Internal
@@ -99,6 +103,7 @@ import Database.Beam.Schema.Tables
 
 import Control.Monad.Identity
 import Control.Monad.Writer
+import Control.Monad.State.Strict
 
 import Data.Text (Text)
 import Data.Proxy
@@ -120,11 +125,25 @@ newtype SqlSelect be a
     = SqlSelect (BeamSqlBackendSelectSyntax be)
 
 -- | Build a 'SqlSelect' for the given 'Q'.
-select :: forall be db res.
-          ( BeamSqlBackend be, HasQBuilder be, Projectible be res )
+select :: forall be db res
+        . ( BeamSqlBackend be, HasQBuilder be, Projectible be res )
        => Q be db QBaseScope res -> SqlSelect be (QExprToIdentity res)
 select q =
   SqlSelect (buildSqlQuery "t" q)
+
+-- | Create a 'SqlSelect' for a query which may have common table
+-- expressions. See the documentation of 'With' for more details.
+selectWith :: forall be db res
+            . ( BeamSqlBackend be, BeamSql99CommonTableExpressionBackend be
+              , HasQBuilder be, Projectible be res )
+           => With be db (Q be db QBaseScope res) -> SqlSelect be (QExprToIdentity res)
+selectWith (CTE.With mkQ) =
+    let (q, (recursiveness, ctes)) = evalState (runWriterT mkQ) 0
+    in case recursiveness of
+         CTE.Nonrecursive -> SqlSelect (withSyntax ctes
+                                                   (buildSqlQuery "t" q))
+         CTE.Recursive    -> SqlSelect (withRecursiveSyntax ctes
+                                                            (buildSqlQuery "t" q))
 
 -- | Convenience function to generate a 'SqlSelect' that looks up a table row
 --   given a primary key.

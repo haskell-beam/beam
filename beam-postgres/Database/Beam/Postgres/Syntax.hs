@@ -260,6 +260,8 @@ data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrder
 data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLockingClauseStrength :: PgSelectLockingStrength
                                                                , pgSelectLockingTables :: [T.Text]
                                                                , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
+newtype PgCommonTableExpressionSyntax
+    = PgCommonTableExpressionSyntax { fromPgCommonTableExpression :: PgSyntax }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
 fromPgOrdering (PgOrderingSyntax s Nothing) = s
@@ -547,6 +549,30 @@ instance IsSql99DataTypeSyntax PgDataTypeSyntax where
                      (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]")
                      (arrayType serialized sz)
   rowType = error "rowType"
+
+instance IsSql99CommonTableExpressionSelectSyntax PgSelectSyntax where
+    type Sql99SelectCTESyntax PgSelectSyntax = PgCommonTableExpressionSyntax
+
+    withSyntax ctes (PgSelectSyntax select) =
+        PgSelectSyntax $
+        emit "WITH " <>
+        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
+        select
+
+instance IsSql99RecursiveCommonTableExpressionSelectSyntax PgSelectSyntax where
+    withRecursiveSyntax ctes (PgSelectSyntax select) =
+        PgSelectSyntax $
+        emit "WITH RECURSIVE " <>
+        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
+        select
+
+instance IsSql99CommonTableExpressionSyntax PgCommonTableExpressionSyntax where
+    type Sql99CTESelectSyntax PgCommonTableExpressionSyntax = PgSelectSyntax
+
+    cteSubquerySyntax tbl fields (PgSelectSyntax select) =
+        PgCommonTableExpressionSyntax $
+        pgQuotedIdentifier tbl <> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier fields)) <>
+        emit " AS " <> pgParens select
 
 instance IsSql2008BigIntDataTypeSyntax PgDataTypeSyntax where
   bigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT") bigIntType

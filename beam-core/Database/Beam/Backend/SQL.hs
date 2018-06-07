@@ -14,6 +14,8 @@ module Database.Beam.Backend.SQL
   , BeamSql99ExpressionBackend
   , BeamSql99AggregationBackend
   , BeamSql99ConcatExpressionBackend
+  , BeamSql99CommonTableExpressionBackend
+  , BeamSql99RecursiveCTEBackend
   , BeamSql2003ExpressionBackend
 
   , BeamSqlT611Backend
@@ -46,6 +48,8 @@ module Database.Beam.Backend.SQL
   , BeamSqlBackendWindowFrameSyntax
   , BeamSqlBackendWindowFrameBoundsSyntax
   , BeamSqlBackendWindowFrameBoundSyntax
+
+  , BeamSql99BackendCTESyntax
 
   , BeamSqlBackendCanSerialize
   , BeamSqlBackendCanDeserialize
@@ -252,6 +256,14 @@ instance BeamSqlBackendIsString (MockSqlBackend cmd) [Char]
 
 type BeamSql99ExpressionBackend be = IsSql99ExpressionSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSql99ConcatExpressionBackend be = IsSql99ConcatExpressionSyntax (BeamSqlBackendExpressionSyntax be)
+type BeamSql99CommonTableExpressionBackend be =
+    ( BeamSqlBackend be
+    , IsSql99CommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be)
+    , IsSql99CommonTableExpressionSyntax (BeamSql99BackendCTESyntax be)
+    , Sql99CTESelectSyntax (BeamSql99BackendCTESyntax be) ~ BeamSqlBackendSelectSyntax be )
+type BeamSql99RecursiveCTEBackend be=
+    ( BeamSql99CommonTableExpressionBackend be
+    , IsSql99RecursiveCommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be) )
 type BeamSql99AggregationBackend be = IsSql99AggregationExpressionSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSql2003ExpressionBackend be = ( IsSql2003ExpressionSyntax (BeamSqlBackendExpressionSyntax be)
                                        , Sql2003SanityCheck (BeamSqlBackendSyntax be) )
@@ -287,6 +299,8 @@ type BeamSqlBackendGroupingSyntax be = Sql92SelectTableGroupingSyntax (BeamSqlBa
 type BeamSqlBackendWindowFrameSyntax be = Sql2003ExpressionWindowFrameSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendWindowFrameBoundsSyntax be = Sql2003WindowFrameBoundsSyntax (BeamSqlBackendWindowFrameSyntax be)
 type BeamSqlBackendWindowFrameBoundSyntax be = Sql2003WindowFrameBoundsBoundSyntax (BeamSqlBackendWindowFrameBoundsSyntax be)
+
+type BeamSql99BackendCTESyntax be = Sql99SelectCTESyntax (BeamSqlBackendSelectSyntax be)
 
 type BeamSqlBackendCanSerialize be = HasSqlValueSyntax (BeamSqlBackendValueSyntax be)
 type BeamSqlBackendCanDeserialize be = FromBackendRow be

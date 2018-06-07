@@ -89,7 +89,9 @@ all_ :: ( Database be db, Table table
        => DatabaseEntity be db (TableEntity table)
        -> Q be db s (table (QExpr be s))
 all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\_ -> Nothing) snd)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
+                    (tableFieldsToExpressions tblSettings)
+                    (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a view into the 'Q' monad
 allFromView_ :: ( Database be db, Beamable table
@@ -97,7 +99,9 @@ allFromView_ :: ( Database be db, Beamable table
                => DatabaseEntity be db (ViewEntity table)
                -> Q be db s (table (QExpr be s))
 allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\_ -> Nothing) snd)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
+                    (tableFieldsToExpressions tblSettings)
+                    (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a table into the 'Q' monad based on the
 --   given QExpr. The join condition is expected to return a
@@ -117,7 +121,9 @@ join_' :: ( Database be db, Table table, BeamSqlBackend be )
        -> (table (QExpr be s) -> QExpr be s SqlBool)
        -> Q be db s (table (QExpr be s))
 join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just) tblSettings (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
+                    (tableFieldsToExpressions tblSettings)
+                    (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
 
 -- | Introduce a table using a left join with no ON clause. Because this is not
 --   an inner join, the resulting table is made nullable. This means that each
@@ -564,9 +570,11 @@ nrows_ :: BeamSql2003ExpressionBackend be
        => Int -> QFrameBound be
 nrows_ x = QFrameBound (nrowsBoundSyntax x)
 
-noPartition_, noOrder_ :: BeamSql2003ExpressionBackend be => Maybe (QOrd be s Int)
-noOrder_ = Nothing
+noPartition_ :: Maybe (QExpr be s Int)
 noPartition_ = Nothing
+
+noOrder_ :: Maybe (QOrd be s Int)
+noOrder_ = Nothing
 
 partitionBy_, orderPartitionBy_ :: partition -> Maybe partition
 partitionBy_  = Just
