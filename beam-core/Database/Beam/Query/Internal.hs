@@ -615,3 +615,22 @@ tableFieldsToExpressions :: ( BeamSqlBackend be, Beamable table )
                          => TableSettings table -> T.Text -> table (QGenExpr ctxt be s)
 tableFieldsToExpressions tblSettings newTblNm =
     changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
+
+mkFieldsSkeleton :: forall be res m
+                  . (Projectible be res, MonadState Int m)
+                 => (Int -> m (WithExprContext (BeamSqlBackendExpressionSyntax' be))) -> m res
+mkFieldsSkeleton go =
+    projectSkeleton' (Proxy @AnyType) (Proxy @(be, WithExprContext (BeamSqlBackendExpressionSyntax' be))) $ \_ _ ->
+    do i <- get
+       put (i + 1)
+       go i
+
+mkFieldNames :: forall be res
+              . ( BeamSqlBackend be, Projectible be res )
+             => (T.Text -> BeamSqlBackendFieldNameSyntax be) -> (res, [ T.Text ])
+mkFieldNames mkField =
+    runWriter . flip evalStateT 0 $
+    mkFieldsSkeleton @be @res $ \i -> do
+      let fieldName' = fromString ("res" ++ show i)
+      tell [ fieldName' ]
+      pure (\_ -> BeamSqlBackendExpressionSyntax' (fieldE (mkField fieldName')))

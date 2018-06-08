@@ -600,8 +600,9 @@ instance IsSql92FromSyntax SqliteFromSyntax where
   type Sql92FromTableSourceSyntax SqliteFromSyntax = SqliteTableSourceSyntax
 
   fromTable tableSrc Nothing = SqliteFromSyntax (fromSqliteTableSource tableSrc)
-  fromTable tableSrc (Just nm) =
-    SqliteFromSyntax (fromSqliteTableSource tableSrc <> emit " AS " <> quotedIdentifier nm)
+  fromTable tableSrc (Just (nm, colNms)) =
+    SqliteFromSyntax (fromSqliteTableSource tableSrc <> emit " AS " <> quotedIdentifier nm <>
+                      maybe mempty (\colNms' -> parens (commas (map quotedIdentifier colNms'))) colNms)
 
   innerJoin = _join "INNER JOIN"
   leftJoin = _join "LEFT JOIN"
@@ -631,10 +632,14 @@ instance IsSql92FieldNameSyntax SqliteFieldNameSyntax where
 
 instance IsSql92TableSourceSyntax SqliteTableSourceSyntax where
   type Sql92TableSourceSelectSyntax SqliteTableSourceSyntax = SqliteSelectSyntax
+  type Sql92TableSourceExpressionSyntax SqliteTableSourceSyntax = SqliteExpressionSyntax
 
   tableNamed = SqliteTableSourceSyntax . quotedIdentifier
   tableFromSubSelect s =
     SqliteTableSourceSyntax (parens (fromSqliteSelect s))
+  tableFromValues vss = SqliteTableSourceSyntax . parens $
+                        emit "VALUES " <>
+                        commas (map (\vs -> parens (commas (map fromSqliteExpression vs))) vss)
 
 instance IsSql92GroupingSyntax SqliteGroupingSyntax where
   type Sql92GroupingExpressionSyntax SqliteGroupingSyntax = SqliteExpressionSyntax

@@ -379,6 +379,8 @@ instance IsSql92OrderingSyntax SqlSyntaxBuilder where
 
 instance IsSql92TableSourceSyntax SqlSyntaxBuilder where
   type Sql92TableSourceSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92TableSourceExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
   tableNamed t = SqlSyntaxBuilder (quoteSql t)
   tableFromSubSelect query = SqlSyntaxBuilder (byteString "(" <> buildSql query <> byteString ")")
 
@@ -387,7 +389,9 @@ instance IsSql92FromSyntax SqlSyntaxBuilder where
     type Sql92FromExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
     fromTable t Nothing = t
-    fromTable t (Just nm) = SqlSyntaxBuilder (buildSql t <> byteString " AS " <> quoteSql nm)
+    fromTable t (Just (nm, colNms)) =
+        SqlSyntaxBuilder (buildSql t <> byteString " AS " <> quoteSql nm <>
+                          maybe mempty (\colNms' -> byteString "(" <> buildSepBy (byteString ", ") (map quoteSql colNms') <> byteString ")") colNms)
 
     innerJoin = join "INNER JOIN"
     leftJoin = join "LEFT JOIN"

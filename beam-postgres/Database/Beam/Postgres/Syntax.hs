@@ -470,9 +470,10 @@ instance IsSql92FromSyntax PgFromSyntax where
   type Sql92FromTableSourceSyntax PgFromSyntax = PgTableSourceSyntax
 
   fromTable tableSrc Nothing = coerce tableSrc
-  fromTable tableSrc (Just nm) =
+  fromTable tableSrc (Just (nm, colNms)) =
       PgFromSyntax $
-      coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm
+      coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm <>
+      maybe mempty (\colNms' -> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier colNms'))) colNms
 
   innerJoin a b Nothing = PgFromSyntax (fromPgFrom a <> emit " CROSS JOIN " <> fromPgFrom b)
   innerJoin a b (Just e) = pgJoin "INNER JOIN" a b (Just e)
@@ -923,8 +924,15 @@ instance IsSql92FieldNameSyntax PgFieldNameSyntax where
 
 instance IsSql92TableSourceSyntax PgTableSourceSyntax where
   type Sql92TableSourceSelectSyntax PgTableSourceSyntax = PgSelectSyntax
+  type Sql92TableSourceExpressionSyntax PgTableSourceSyntax = PgExpressionSyntax
+
   tableNamed = PgTableSourceSyntax . pgQuotedIdentifier
   tableFromSubSelect s = PgTableSourceSyntax $ emit "(" <> fromPgSelect s <> emit ")"
+  tableFromValues vss = PgTableSourceSyntax . pgParens $
+                        emit "VALUES " <>
+                        pgSepBy (emit ", ")
+                                (map (\vs -> pgParens (pgSepBy (emit ", ")
+                                                               (map fromPgExpression vs))) vss)
 
 instance IsSql92ProjectionSyntax PgProjectionSyntax where
   type Sql92ProjectionExpressionSyntax PgProjectionSyntax = PgExpressionSyntax

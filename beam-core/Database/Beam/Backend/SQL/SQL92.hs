@@ -40,6 +40,8 @@ type Sql92SelectSanityCheck select =
   , Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)) ~
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
   , Sql92OrderingExpressionSyntax (Sql92SelectOrderingSyntax select) ~
+    Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+  , Sql92TableSourceExpressionSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ~
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))
 type Sql92SanityCheck cmd =
   ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd)
@@ -311,8 +313,11 @@ class IsSql92OrderingSyntax ord where
 
 class IsSql92TableSourceSyntax tblSource where
   type Sql92TableSourceSelectSyntax tblSource :: *
+  type Sql92TableSourceExpressionSyntax tblSource :: *
+
   tableNamed :: Text -> tblSource
   tableFromSubSelect :: Sql92TableSourceSelectSyntax tblSource -> tblSource
+  tableFromValues :: [ [ Sql92TableSourceExpressionSyntax tblSource ] ] -> tblSource
 
 class IsSql92GroupingSyntax grouping where
   type Sql92GroupingExpressionSyntax grouping :: *
@@ -326,7 +331,7 @@ class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
   type Sql92FromExpressionSyntax from :: *
 
   fromTable :: Sql92FromTableSourceSyntax from
-            -> Maybe Text
+            -> Maybe (Text, Maybe [Text])
             -> from
 
   innerJoin, leftJoin, rightJoin

@@ -41,25 +41,6 @@ data QAnyScope
 data ReusableQ be db res where
     ReusableQ :: Proxy res -> (forall s. Proxy s -> Q be db s (WithRewrittenThread QAnyScope s res)) -> ReusableQ be db res
 
-mkFieldsSkeleton :: forall be res m
-                  . (Projectible be res, MonadState Int m)
-                 => (Int -> m (WithExprContext (BeamSqlBackendExpressionSyntax' be))) -> m res
-mkFieldsSkeleton go =
-    projectSkeleton' (Proxy @AnyType) (Proxy @(be, WithExprContext (BeamSqlBackendExpressionSyntax' be))) $ \_ _ ->
-    do i <- get
-       put (i + 1)
-       go i
-
-mkFieldNames :: forall be res
-              . ( BeamSqlBackend be, Projectible be res )
-             => Text -> ( res, [ Text ])
-mkFieldNames tblNm =
-    runWriter . flip evalStateT 0 $
-    mkFieldsSkeleton @be @res $ \i -> do
-      let fieldName = fromString ("res" ++ show i)
-      tell [ fieldName ]
-      pure (\_ -> BeamSqlBackendExpressionSyntax' (fieldE (qualifiedField tblNm fieldName)))
-
 reusableForCTE :: forall be res db
                 . ( ThreadRewritable QAnyScope res
                   , Projectible be res
@@ -68,8 +49,8 @@ reusableForCTE :: forall be res db
 reusableForCTE tblNm =
     ReusableQ (Proxy @res)
               (\proxyS ->
-                 Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
-                                 (\tblNm' -> fst $ mkFieldNames @be @res tblNm')
+                 Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (, Nothing))
+                                 (\tblNm' -> fst $ mkFieldNames @be @res (qualifiedField tblNm'))
                                  (\_ -> Nothing)
                                  (rewriteThread @QAnyScope @res proxyS . snd)))
 
@@ -85,7 +66,7 @@ selecting q =
 
     let tblNm = fromString ("cte" ++ show cteId)
 
-        (_ :: res, fieldNames) = mkFieldNames @be tblNm
+        (_ :: res, fieldNames) = mkFieldNames @be (qualifiedField tblNm)
     tell (Nonrecursive, [ cteSubquerySyntax tblNm fieldNames (buildSqlQuery (tblNm <> "_") q) ])
 
     pure (reusableForCTE tblNm)

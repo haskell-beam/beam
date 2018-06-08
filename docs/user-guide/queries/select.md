@@ -209,3 +209,24 @@ the unique postal codes where our customers live.
 nub_ $ fmap (addressPostalCode . customerAddress) $
   all_ (customer chinookDb)
 ```
+
+## `VALUES` support
+
+Sometimes you want to select from an explicit group of values. This is
+most helpful if you want to join against a set of values that isn't in
+the database.
+
+For example, to get all customers we know to be in New York, California, and Texas.
+
+!beam-query
+```haskell
+!example chinook !on:Sqlite
+do c <- all_ (customer chinookDb)
+   st <- values_ [ "NY", "CA", "TX" ]
+   guard_' (just_ st ==?. addressState (customerAddress c))
+   pure c
+```
+
+!!! note "Note"
+    `beam-sqlite` does not support `VALUES` clauses anywhere within a
+    query, but only within a common table expression.

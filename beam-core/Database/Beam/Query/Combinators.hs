@@ -22,7 +22,7 @@ module Database.Beam.Query.Combinators
 
     -- * General query combinators
 
-    , all_
+    , all_, values_
     , allFromView_, join_, join_'
     , guard_, guard_', filter_, filter_'
     , related_, relatedBy_, relatedBy_'
@@ -89,7 +89,7 @@ all_ :: ( Database be db, Table table
        => DatabaseEntity be db (TableEntity table)
        -> Q be db s (table (QExpr be s))
 all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (,Nothing))
                     (tableFieldsToExpressions tblSettings)
                     (\_ -> Nothing) snd)
 
@@ -99,9 +99,20 @@ allFromView_ :: ( Database be db, Beamable table
                => DatabaseEntity be db (ViewEntity table)
                -> Q be db s (table (QExpr be s))
 allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (,Nothing))
                     (tableFieldsToExpressions tblSettings)
                     (\_ -> Nothing) snd)
+
+values_ :: forall be db s a
+         . ( Projectible be a
+           , BeamSqlBackend be )
+        => [ a ] -> Q be db s a
+values_ rows =
+    Q $ liftF (QAll (\tblPfx -> fromTable (tableFromValues (map (\row -> project (Proxy @be) row tblPfx) rows)) . Just . (,Just fieldNames))
+                    (\tblNm' -> fst $ mkFieldNames (qualifiedField tblNm'))
+                    (\_ -> Nothing) snd)
+    where
+      fieldNames = snd $ mkFieldNames @be @a unqualifiedField
 
 -- | Introduce all entries of a table into the 'Q' monad based on the
 --   given QExpr. The join condition is expected to return a
@@ -121,7 +132,7 @@ join_' :: ( Database be db, Table table, BeamSqlBackend be )
        -> (table (QExpr be s) -> QExpr be s SqlBool)
        -> Q be db s (table (QExpr be s))
 join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (, Nothing))
                     (tableFieldsToExpressions tblSettings)
                     (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
 

@@ -116,7 +116,7 @@ selectBuilderToQueryBuilder pfx sb =
     let select = buildSelect pfx sb
         x' = reproject (Proxy @be) (fieldNameFunc (qualifiedField t0)) (sbProj sb)
         t0 = pfx <> "0"
-    in (x', QueryBuilder 1 (Just (fromTable (tableFromSubSelect select) (Just t0))) Nothing)
+    in (x', QueryBuilder 1 (Just (fromTable (tableFromSubSelect select) (Just (t0, Nothing)))) Nothing)
 
 emptyQb :: QueryBuilder select
 emptyQb = QueryBuilder 0 Nothing Nothing
@@ -161,7 +161,7 @@ buildJoinTableSourceQuery tblPfx tblSource x qb =
       from' = case qbFrom qb of
                 Nothing -> Just newSource
                 Just oldFrom -> Just (innerJoin oldFrom newSource Nothing)
-      newSource = fromTable (tableFromSubSelect tblSource) (Just newTblNm)
+      newSource = fromTable (tableFromSubSelect tblSource) (Just (newTblNm, Nothing))
       newTblNm = tblPfx <> fromString (show tblRef)
   in (reproject (Proxy @be) (fieldNameFunc (qualifiedField newTblNm)) x, qb')
 
@@ -446,7 +446,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                   tblSource = buildSelect tblPfx sb
                   newTblNm = tblPfx <> fromString (show (qbNextTblRef qb))
 
-                  newSource = fromTable (tableFromSubSelect tblSource) (Just newTblNm)
+                  newSource = fromTable (tableFromSubSelect tblSource) (Just (newTblNm, Nothing))
 
                   proj' = reproject be (fieldNameFunc (qualifiedField newTblNm)) (sbProj sb)
                   on' = exprWithContext tblPfx <$> on proj'
@@ -472,7 +472,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                        newTblNm = tblPfx <> fromString (show (qbNextTblRef qb))
 
                        proj' = reproject be (fieldNameFunc (qualifiedField newTblNm)) (sbProj sb)
-                   in (proj', fromTable (tableFromSubSelect tblSource) (Just newTblNm), qb { qbNextTblRef = qbNextTblRef qb + 1 })
+                   in (proj', fromTable (tableFromSubSelect tblSource) (Just (newTblNm, Nothing)), qb { qbNextTblRef = qbNextTblRef qb + 1 })
 
           (bProj, bSource, qb'') =
             case fromF b of
@@ -487,7 +487,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                        newTblNm = tblPfx <> fromString (show (qbNextTblRef qb))
 
                        proj' = reproject be (fieldNameFunc (qualifiedField newTblNm)) (sbProj sb)
-                   in (proj', fromTable (tableFromSubSelect tblSource) (Just newTblNm), qb { qbNextTblRef = qbNextTblRef qb + 1 })
+                   in (proj', fromTable (tableFromSubSelect tblSource) (Just (newTblNm, Nothing)), qb { qbNextTblRef = qbNextTblRef qb + 1 })
 
           abSource = mkJoin aSource bSource (exprWithContext tblPfx <$> on (aProj, bProj))
 

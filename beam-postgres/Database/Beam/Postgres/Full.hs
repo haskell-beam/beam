@@ -94,7 +94,7 @@ locked_ :: Database Postgres db
         => DatabaseEntity Postgres db (TableEntity tbl)
         -> Q Postgres db s (PgLockedTables s, tbl (QExpr Postgres s))
 locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
-  (nm, joined) <- Q (liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just)
+  (nm, joined) <- Q (liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (,Nothing))
                                  (tableFieldsToExpressions tblSettings)
                                  (\_ -> Nothing) id))
   pure (PgLockedTables [nm], joined)

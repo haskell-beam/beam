@@ -456,16 +456,19 @@ instance IsSql92GroupingSyntax Grouping where
 data TableSource
   = TableNamed Text
   | TableFromSubSelect Select
+  | TableFromValues [ [ Expression ] ]
   deriving (Show, Eq)
 
 instance IsSql92TableSourceSyntax TableSource where
   type Sql92TableSourceSelectSyntax TableSource = Select
+  type Sql92TableSourceExpressionSyntax TableSource = Expression
 
   tableNamed = TableNamed
   tableFromSubSelect = TableFromSubSelect
+  tableFromValues = TableFromValues
 
 data From
-  = FromTable TableSource (Maybe Text)
+  = FromTable TableSource (Maybe (Text, Maybe [Text]))
   | InnerJoin From From (Maybe Expression)
   | LeftJoin From From (Maybe Expression)
   | RightJoin From From (Maybe Expression)
