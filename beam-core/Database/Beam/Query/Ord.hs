@@ -32,6 +32,7 @@ module Database.Beam.Query.Ord
   , isUnknown_, isNotUnknown_
   , unknownAs_, sqlBool_
   , possiblyNullBool_
+  , fromPossiblyNullBool_
 
   , anyOf_, anyIn_
   , allOf_, allIn_
@@ -114,6 +115,10 @@ unknownAs_ True  = isNotFalse_ -- If unknown is being treated as true, then retu
 -- that both @NULL@ and @UNKNOWN@ will be returned as 'Nothing'.
 possiblyNullBool_ :: QGenExpr context be s SqlBool -> QGenExpr context be s (Maybe Bool)
 possiblyNullBool_ (QExpr e) = QExpr e
+
+-- | Convert a possibly @NULL@ 'Bool' to a 'SqlBool'.
+fromPossiblyNullBool_ :: QGenExpr context be s (Maybe Bool) -> QGenExpr context be s SqlBool
+fromPossiblyNullBool_ (QExpr e) = QExpr e
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
