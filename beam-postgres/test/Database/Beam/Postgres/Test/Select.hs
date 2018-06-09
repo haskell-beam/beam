@@ -1,4 +1,4 @@
-module Database.Beam.Postgres.Test.CTE where
+module Database.Beam.Postgres.Test.Select where
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
@@ -33,4 +33,4 @@ import           Unsafe.Coerce
 
 tests :: IO ByteString -> TestTree
 tests postgresConn =
-    testGroup "Postgres CTE Tests" 
+    testGroup "Postgres Select Tests" []
