@@ -352,16 +352,23 @@ runUpdate SqlIdentityUpdate = pure ()
 newtype SqlDelete syntax (table :: (* -> *) -> *) = SqlDelete syntax
 
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause
-delete :: IsSql92DeleteSyntax delete
+delete :: forall be db delete table
+        . IsSql92DeleteSyntax delete
        => DatabaseEntity be db (TableEntity table)
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr (Sql92DeleteExpressionSyntax delete) s')) -> QExpr (Sql92DeleteExpressionSyntax delete) s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete delete table
 delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
-  SqlDelete (deleteStmt tblNm (Just (where_ "t")))
+  SqlDelete (deleteStmt tblNm alias (Just (where_ "t")))
   where
-    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField name))))) tblSettings)
+    supportsAlias = deleteSupportsAlias (Proxy @delete)
+
+    tgtName = "delete_target"
+    alias = if supportsAlias then Just tgtName else Nothing
+    mkField = if supportsAlias then qualifiedField tgtName else unqualifiedField
+
+    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (mkField name))))) tblSettings)
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
 runDelete :: (IsSql92Syntax cmd, MonadBeam cmd be hdl m)

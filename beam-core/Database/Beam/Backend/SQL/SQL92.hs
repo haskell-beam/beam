@@ -151,9 +151,13 @@ class IsSql92ExpressionSyntax (Sql92DeleteExpressionSyntax delete) =>
   IsSql92DeleteSyntax delete where
   type Sql92DeleteExpressionSyntax delete :: *
 
-  deleteStmt :: Text
+  deleteStmt :: Text -> Maybe Text
              -> Maybe (Sql92DeleteExpressionSyntax delete)
              -> delete
+
+  -- | Whether or not the @DELETE@ command supports aliases
+  deleteSupportsAlias :: Proxy delete -> Bool
+  deleteSupportsAlias _ = False -- Delete aliases are a non-standard feature
 
 class IsSql92FieldNameSyntax fn where
   qualifiedField :: Text -> Text -> fn
