@@ -35,6 +35,8 @@ module Database.Beam.Query
     , isFalse_, isNotFalse_
     , isUnknown_, isNotUnknown_
     , unknownAs_, sqlBool_
+    , possiblyNullBool_
+    , fromPossiblyNullBool_
 
     -- ** Unquantified comparison operators
     , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
