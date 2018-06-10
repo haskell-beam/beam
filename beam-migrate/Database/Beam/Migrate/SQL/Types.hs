@@ -3,13 +3,11 @@
 -- | Some common SQL data types
 module Database.Beam.Migrate.SQL.Types
   ( TableSchema, TableFieldSchema(..)
-  , FieldSchema(..), DataType(..)
+  , FieldSchema(..)
 
   , BeamMigrateOnlySqlBackend
   , BeamMigrateSqlBackend
   , BeamMigrateSql99Backend
-  , BeamMigrateSqlT021Backend
-  , BeamMigrateSqlT071Backend
   , BeamSqlBackendConstraintSyntax
   , BeamSqlBackendColumnConstraintDefinitionSyntax
   , BeamSqlBackendDataTypeSyntax
@@ -39,16 +37,6 @@ data TableFieldSchema be a
 newtype FieldSchema be a = FieldSchema (BeamSqlBackendColumnSchemaSyntax be)
 deriving instance BeamMigrateOnlySqlBackend be => Eq (FieldSchema be a)
 
--- | A data type in a given 'IsSql92DataTypeSyntax' which describes a SQL type
--- mapping to the Haskell type @a@
-newtype DataType be a = DataType (BeamSqlBackendDataTypeSyntax be)
-
-instance BeamMigrateOnlySqlBackend be => Show (DataType be a) where
-  show (DataType syntax) = "DataType (" ++ displaySyntax syntax ++ ")"
-
-instance BeamMigrateOnlySqlBackend be => Eq (DataType be a) where
-  DataType a == DataType b = a == b
-
 class ( IsSql92DdlCommandSyntax (BeamSqlBackendSyntax be)
       , Sql92SaneDdlCommandSyntaxMigrateOnly (BeamSqlBackendSyntax be)
 
@@ -72,19 +60,13 @@ type BeamMigrateSqlBackend be =
 type BeamMigrateSql99Backend be =
   ( BeamMigrateSqlBackend be
   , IsSql99DataTypeSyntax (BeamSqlBackendDataTypeSyntax be))
-type BeamMigrateSqlT021Backend be =
-  ( BeamMigrateSqlBackend be
-  , IsSql2003BinaryAndVarBinaryDataTypeSyntax (BeamSqlBackendDataTypeSyntax be) )
-type BeamMigrateSqlT071Backend be =
-  ( BeamMigrateSqlBackend be
-  , IsSql2008BigIntDataTypeSyntax (BeamSqlBackendDataTypeSyntax be) )
 
 type BeamSqlBackendConstraintSyntax be
   = Sql92DdlCommandColumnConstraintSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendColumnConstraintDefinitionSyntax be
   = Sql92DdlCommandConstraintDefinitionSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendDataTypeSyntax be
-  = Sql92ColumnSchemaColumnTypeSyntax (BeamSqlBackendColumnSchemaSyntax be)
+  = Sql92DdlCommandDataTypeSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendColumnSchemaSyntax be
   = Sql92DdlCommandColumnSchemaSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendAlterTableSyntax be

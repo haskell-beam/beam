@@ -212,6 +212,21 @@ if_ [ cond1 `then_` result1, cond2 `then_` result2, ... ] (else_ elseResult)
 where `cond<n>` are `QGenExpr` of type `Bool`, and `result1`, `result2`, and
 `elseResult` are `QGenExprs` of the same type.
 
+## Manipulating types with `CAST`
+
+Oftentimes, you want to cast data between two different types. SQL
+provides the `CAST` function for this purpose. Beam exposes this
+functionality through the `cast_` function which takes an expression
+and a datatype. For example, to select all line items where the first
+digit of the quantity is 2:
+
+!beam-query
+```haskell
+!example chinook
+filter_ (\ln -> cast_ (invoiceLineQuantity ln) (varchar Nothing) `like_` "2%") $
+  all_ (invoiceLine chinookDb)
+```
+
 ## SQL Functions and operators
 
 | SQL construct                                            | SQL standard   | Beam equivalent                    | Notes                                                                         |

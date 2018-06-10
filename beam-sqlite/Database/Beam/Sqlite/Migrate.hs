@@ -16,6 +16,7 @@ module Database.Beam.Sqlite.Migrate
   ) where
 
 import qualified Database.Beam.Migrate as Db
+import qualified Database.Beam.Query.DataTypes as Db
 import qualified Database.Beam.Migrate.Backend as Tool
 import qualified Database.Beam.Migrate.Serialization as Db
 

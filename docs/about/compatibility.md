@@ -182,7 +182,7 @@ planned.
 | **F191 Referential delete actions**                             | TODO     |                                                                                                                                            |
 | **F181 Multiple module support**                                | N/A      |                                                                                                                                            |
 | **F200 TRUNCATE TABLE statement**                               | TODO     | May be added in the future                                                                                                                 |
-| **F201 CAST function**                                          | TODO     |                                                                                                                                            |
+| **F201 CAST function**                                          | FULL     | See `cast_`                                                                                                                                |
 | **F202 TRUNCATE TABLE: identity column restart option**         | TODO     | Depends on F200                                                                                                                            |
 | **F221 Explicit defaults**                                      | FULL     | Use `default_` and `insertExpressions` when inserting                                                                                      |
 | **F222 INSERT statement: DEFAULT VALUES clause**                | TODO     |                                                                                                                                            |

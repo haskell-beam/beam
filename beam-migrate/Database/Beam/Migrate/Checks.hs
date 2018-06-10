@@ -5,10 +5,11 @@
 -- | Defines common 'DatabasePredicate's that are shared among backends
 module Database.Beam.Migrate.Checks where
 
+import Database.Beam.Backend.SQL.SQL92
+import Database.Beam.Migrate.SQL.SQL92
+import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.Serialization
 import Database.Beam.Migrate.Types.Predicates
-import Database.Beam.Migrate.SQL.Types
-import Database.Beam.Migrate.SQL.SQL92
 
 import Data.Aeson ((.:), (.=), withObject, object)
 import Data.Aeson.Types (Parser, Value)
@@ -16,7 +17,7 @@ import Data.Hashable (Hashable(..))
 import Data.Text (Text)
 import Data.Typeable (Typeable, cast)
 #if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
+import Data.Semigroup
 #endif
 
 import GHC.Generics (Generic)

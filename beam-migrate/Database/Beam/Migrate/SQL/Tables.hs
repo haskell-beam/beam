@@ -25,15 +25,6 @@ module Database.Beam.Migrate.SQL.Tables
   , field
 
   , defaultTo_, notNull, unique
-  , int, smallint, bigint
-  , char, varchar, double
-  , nationalVarchar, nationalChar
-  , characterLargeObject, binaryLargeObject, array
-  , boolean, numeric, date, time
-  , timestamp, timestamptz
-  , binary, varbinary
-
-  , maybeType
 
     -- ** Internal classes
     --    Provided without documentation for use in type signatures
@@ -55,10 +46,7 @@ import Control.Monad.Writer.Strict
 import Control.Monad.State
 
 import Data.Text (Text)
-import Data.Vector (Vector)
 import Data.Typeable
-import Data.Time (LocalTime, TimeOfDay, Day)
-import Data.Scientific (Scientific)
 import qualified Data.Kind as Kind (Constraint)
 
 import GHC.TypeLits
@@ -282,95 +270,6 @@ notNull = NotNullConstraint (Constraint notNullConstraintSyntax)
 -- | SQL @UNIQUE@ constraint
 unique :: BeamMigrateSqlBackend be => Constraint be
 unique = Constraint uniqueColumnConstraintSyntax
-
--- ** Data types
-
--- | SQL92 @INTEGER@ data type
-int :: (BeamMigrateSqlBackend be, Integral a) => DataType be a
-int = DataType intType
-
--- | SQL92 @SMALLINT@ data type
-smallint :: (BeamMigrateSqlBackend be, Integral a) => DataType be a
-smallint = DataType smallIntType
-
--- | SQL2008 Optional @BIGINT@ data type
-bigint :: (BeamMigrateSqlT071Backend be, Integral a) => DataType be a
-bigint = DataType bigIntType
-
--- TODO is Integer the right type to use here?
--- | SQL2003 Optional @BINARY@ data type
-binary :: BeamMigrateSqlT021Backend be
-       => Maybe Word -> DataType be Integer
-binary prec = DataType (binaryType prec)
-
--- | SQL2003 Optional @VARBINARY@ data type
-varbinary :: BeamMigrateSqlT021Backend be
-          => Maybe Word -> DataType be Integer
-varbinary prec = DataType (varBinaryType prec)
-
--- TODO should this be Day or something?
--- | SQL92 @DATE@ data type
-date :: BeamMigrateSqlBackend be => DataType be Day
-date = DataType dateType
-
--- | SQL92 @CHAR@ data type
-char :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
-char prec = DataType (charType prec Nothing)
-
--- | SQL92 @VARCHAR@ data type
-varchar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
-varchar prec = DataType (varCharType prec Nothing)
-
--- | SQL92 @NATIONAL CHARACTER VARYING@ data type
-nationalVarchar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
-nationalVarchar prec = DataType (nationalVarCharType prec)
-
--- | SQL92 @NATIONAL CHARACTER@ data type
-nationalChar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
-nationalChar prec = DataType (nationalCharType prec)
-
--- | SQL92 @DOUBLE@ data type
-double :: BeamMigrateSqlBackend be => DataType be Double
-double = DataType doubleType
-
--- | SQL92 @NUMERIC@ data type
-numeric :: BeamMigrateSqlBackend be => Maybe (Word, Maybe Word) -> DataType be Scientific
-numeric x = DataType (numericType x)
-
--- | SQL92 @TIMESTAMP WITH TIME ZONE@ data type
-timestamptz :: BeamMigrateSqlBackend be => DataType be LocalTime
-timestamptz = DataType (timestampType Nothing True)
-
--- | SQL92 @TIMESTAMP WITHOUT TIME ZONE@ data type
-timestamp :: BeamMigrateSqlBackend be => DataType be LocalTime
-timestamp = DataType (timestampType Nothing False)
-
--- | SQL92 @TIME@ data type
-time :: BeamMigrateSqlBackend be => Maybe Word -> DataType be TimeOfDay
-time prec = DataType (timeType prec False)
-
--- | SQL99 @BOOLEAN@ data type
-boolean :: BeamMigrateSql99Backend be => DataType be Bool
-boolean = DataType booleanType
-
--- | SQL99 @CLOB@ data type
-characterLargeObject :: BeamMigrateSql99Backend be => DataType be Text
-characterLargeObject = DataType characterLargeObjectType
-
--- | SQL99 @BLOB@ data type
-binaryLargeObject :: BeamMigrateSql99Backend be => DataType be Text
-binaryLargeObject = DataType binaryLargeObjectType
-
--- | SQL99 array data types
-array :: (Typeable a, BeamMigrateSql99Backend be)
-      => DataType be a -> Int
-      -> DataType be (Vector a)
-array (DataType ty) sz = DataType (arrayType ty sz)
-
--- | Haskell requires 'DataType's to match exactly. Use this function to convert
--- a 'DataType' that expects a concrete value to one expecting a 'Maybe'
-maybeType :: DataType be a -> DataType be (Maybe a)
-maybeType (DataType sqlTy) = DataType sqlTy
 
 -- ** 'field' variable arity classes
 

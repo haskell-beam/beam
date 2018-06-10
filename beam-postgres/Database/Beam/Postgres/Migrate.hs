@@ -30,10 +30,11 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Actions (defaultActionProvider)
 import qualified Database.Beam.Migrate.Backend as Tool
 import qualified Database.Beam.Migrate.Checks as Db
-import           Database.Beam.Migrate.SQL.BeamExtensions
 import qualified Database.Beam.Migrate.SQL as Db
+import           Database.Beam.Migrate.SQL.BeamExtensions
 import qualified Database.Beam.Migrate.Serialization as Db
 import qualified Database.Beam.Migrate.Types as Db
+import qualified Database.Beam.Query.DataTypes as Db
 
 import           Database.Beam.Postgres.Connection
 import           Database.Beam.Postgres.CustomTypes

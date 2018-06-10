@@ -85,7 +85,7 @@ module Database.Beam.Postgres.PgSpecific
   )
 where
 
-import           Database.Beam
+import           Database.Beam hiding (char, double)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate ( HasDefaultSqlDataType(..)
                                        , HasDefaultSqlDataTypeConstraints(..) )

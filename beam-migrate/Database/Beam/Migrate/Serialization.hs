@@ -450,7 +450,7 @@ sql99DataTypeDeserializers =
 -- | Deserialize data types that are instances of 'IsSql2003BinaryAndVarBinaryDataTypeSyntax'
 sql2003BinaryAndVarBinaryDataTypeDeserializers
   :: forall be
-   . BeamMigrateSqlT021Backend be
+   . ( BeamMigrateSqlBackend be, BeamSqlT021Backend be )
   => BeamDeserializers be
 sql2003BinaryAndVarBinaryDataTypeDeserializers =
   beamDeserializer $ \_ v ->
@@ -463,7 +463,7 @@ sql2003BinaryAndVarBinaryDataTypeDeserializers =
 -- | Deserialize data types that are instance of 'IsSql2008BigIntDataTypeSyntax'
 sql2008BigIntDataTypeDeserializers
   :: forall be
-   . BeamMigrateSqlT071Backend be
+   . ( BeamMigrateSqlBackend be, BeamSqlT071Backend be )
   => BeamDeserializers be
 sql2008BigIntDataTypeDeserializers =
   beamDeserializer $ \_ v ->

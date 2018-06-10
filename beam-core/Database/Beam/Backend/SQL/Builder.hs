@@ -383,6 +383,13 @@ instance IsSql92TableSourceSyntax SqlSyntaxBuilder where
 
   tableNamed t = SqlSyntaxBuilder (quoteSql t)
   tableFromSubSelect query = SqlSyntaxBuilder (byteString "(" <> buildSql query <> byteString ")")
+  tableFromValues vss =
+      SqlSyntaxBuilder $
+      byteString "VALUES " <>
+      buildSepBy (byteString ", ")
+       (map (\vs -> byteString "(" <>
+                    buildSepBy (byteString ", ") (map buildSql vs) <>
+                    byteString ")") vss)
 
 instance IsSql92FromSyntax SqlSyntaxBuilder where
     type Sql92FromTableSourceSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

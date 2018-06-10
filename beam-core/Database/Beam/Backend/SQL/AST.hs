@@ -157,11 +157,6 @@ data ExtractField
   | ExtractFieldDateTimeSecond
   deriving (Show, Eq)
 
-data CastTarget
-  = CastTargetDataType DataType
-  | CastTargetDomainName Text
-  deriving (Show, Eq)
-
 data DataType
   = DataTypeChar Bool {- Varying -} (Maybe Word) (Maybe Text)
   | DataTypeNationalChar Bool (Maybe Word)
@@ -256,7 +251,7 @@ data Expression
   | ExpressionUnOp Text Expression
 
   | ExpressionPosition Expression Expression
-  | ExpressionCast Expression CastTarget
+  | ExpressionCast Expression DataType
   | ExpressionExtract ExtractField Expression
   | ExpressionCharLength Expression
   | ExpressionOctetLength Expression
@@ -290,7 +285,7 @@ instance IsSql92ExpressionSyntax Expression where
   type Sql92ExpressionValueSyntax Expression = Value
   type Sql92ExpressionSelectSyntax Expression = Select
   type Sql92ExpressionFieldNameSyntax Expression = FieldName
-  type Sql92ExpressionCastTargetSyntax Expression = CastTarget
+  type Sql92ExpressionCastTargetSyntax Expression = DataType
   type Sql92ExpressionExtractFieldSyntax Expression = ExtractField
 
   valueE = ExpressionValue

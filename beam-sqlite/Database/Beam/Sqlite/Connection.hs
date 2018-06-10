@@ -19,13 +19,13 @@ import           Database.Beam.Backend
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import           Database.Beam.Backend.URI
 import           Database.Beam.Migrate.Generics
-import           Database.Beam.Migrate.SQL ( BeamMigrateOnlySqlBackend
-                                           , DataType(..), FieldReturnType(..) )
+import           Database.Beam.Migrate.SQL ( BeamMigrateOnlySqlBackend, FieldReturnType(..) )
 import qualified Database.Beam.Migrate.SQL as Beam
 import           Database.Beam.Migrate.SQL.BeamExtensions
 import           Database.Beam.Query ( QExpr, SqlInsert(..), SqlInsertValues(..)
                                      , HasQBuilder(..), HasSqlEqualityCheck
                                      , HasSqlQuantifiedEqualityCheck
+                                     , DataType(..)
                                      , insert )
 import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( DatabaseEntity(..)

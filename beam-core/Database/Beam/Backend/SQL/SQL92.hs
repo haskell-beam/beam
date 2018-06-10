@@ -75,6 +75,13 @@ type Sql92ReasonableMarshaller be =
    , FromBackendRow be Int16, FromBackendRow be Int32, FromBackendRow be Int64
    , FromBackendRow be LocalTime )
 
+-- | Type classes for syntaxes which can be displayed
+class Sql92DisplaySyntax syntax where
+
+  -- | Render the syntax as a 'String', representing the SQL expression it
+  -- stands for
+  displaySyntax :: syntax -> String
+
 class ( IsSql92SelectSyntax (Sql92SelectSyntax cmd)
       , IsSql92InsertSyntax (Sql92InsertSyntax cmd)
       , IsSql92UpdateSyntax (Sql92UpdateSyntax cmd)
@@ -207,6 +214,7 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
       , HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Bool
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
       , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr)
+      , IsSql92DataTypeSyntax (Sql92ExpressionCastTargetSyntax expr)
       , Typeable expr ) =>
     IsSql92ExpressionSyntax expr where
   type Sql92ExpressionQuantifierSyntax expr :: *

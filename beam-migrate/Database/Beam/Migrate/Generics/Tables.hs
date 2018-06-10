@@ -15,6 +15,7 @@ module Database.Beam.Migrate.Generics.Tables
   ) where
 
 import Database.Beam
+import Database.Beam.Backend.SQL
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.SQL.SQL2003
 
@@ -156,7 +157,7 @@ instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Int32
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int16 where
   defaultSqlDataType _ _ _ = intType
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Int16
-instance BeamMigrateSqlT071Backend be => HasDefaultSqlDataType be Int64 where
+instance ( BeamMigrateSqlBackend be, BeamSqlT071Backend be ) => HasDefaultSqlDataType be Int64 where
     defaultSqlDataType _ _ _ = bigIntType
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Int64
 

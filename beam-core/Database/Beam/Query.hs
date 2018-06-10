@@ -53,6 +53,8 @@ module Database.Beam.Query
 
     , module Database.Beam.Query.CustomSQL
 
+    , module Database.Beam.Query.DataTypes
+
     -- * SQL Command construction and execution
     -- ** @SELECT@
     , SqlSelect(..)
@@ -89,6 +91,7 @@ import Database.Beam.Query.Combinators
 import Database.Beam.Query.CTE ( With, ReusableQ, selecting, reuse )
 import qualified Database.Beam.Query.CTE as CTE
 import Database.Beam.Query.CustomSQL
+import Database.Beam.Query.DataTypes
 import Database.Beam.Query.Extensions
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Operator hiding (SqlBool)
