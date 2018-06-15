@@ -901,12 +901,20 @@ instance HasDefaultSqlDataType SqliteDataTypeSyntax ByteString where
   defaultSqlDataType _ _ = sqliteBlobType
 instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax ByteString
 
+instance HasDefaultSqlDataType SqliteDataTypeSyntax UTCTime where
+  defaultSqlDataType _ _ = timestampType Nothing False
+instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax UTCTime
+
 instance HasDefaultSqlDataType SqliteDataTypeSyntax LocalTime where
   defaultSqlDataType _ _ = timestampType Nothing False
 instance HasDefaultSqlDataTypeConstraints SqliteColumnSchemaSyntax LocalTime
 
 instance HasSqlValueSyntax SqliteValueSyntax ByteString where
   sqlValueSyntax bs = SqliteValueSyntax (emitValue (SQLBlob bs))
+
+instance HasSqlValueSyntax SqliteValueSyntax UTCTime where
+  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
+    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S%Q")) tm
 
 instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
