@@ -111,7 +111,7 @@ values of type `User`. We can use the `StandaloneDeriving` and
 'regular' datatype.
 
 ```
-> :set -XStandaloneDeriving -XTypeSynonymInstances
+> :set -XStandaloneDeriving -XTypeSynonymInstances -XMultiParamTypeClasses
 ```
 
 Now we can derive `Show` and `Eq` instances.
