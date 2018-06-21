@@ -215,6 +215,24 @@ newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
 newtype PgConflictAction (tbl :: (* -> *) -> *) =
     PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
 
+lateral_ :: forall s a b db
+          . ( ThreadRewritable s a, ThreadRewritable (QNested s) b, Projectible Postgres b )
+         => a -> (WithRewrittenThread s (QNested s) a -> Q Postgres db (QNested s) b)
+         -> Q Postgres db s (WithRewrittenThread (QNested s) s b)
+lateral_ using mkSubquery = do
+  let Q subquery = mkSubquery (rewriteThread (Proxy @(QNested s)) using)
+  Q (liftF (QArbitraryJoin subquery
+                           (\a b on' ->
+                              case on' of
+                                Nothing ->
+                                  PgFromSyntax $
+                                  fromPgFrom a <> emit " CROSS JOIN LATERAL " <> fromPgFrom b
+                                Just on'' ->
+                                  PgFromSyntax $
+                                  fromPgFrom a <> emit " JOIN LATERAL " <> fromPgFrom b <> emit " ON " <> fromPgExpression on'')
+                           (\_ -> Nothing)
+                           (rewriteThread (Proxy @s))))
+
 -- | By default, Postgres will throw an error when a conflict is detected. This
 -- preserves that functionality.
 onConflictDefault :: PgInsertOnConflict tbl
