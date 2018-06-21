@@ -17,6 +17,9 @@ module Database.Beam.Postgres.Full
 
   , locked_, lockAll_, withLocks_
 
+  -- ** Lateral joins
+  , lateral_
+
   -- * @INSERT@ and @INSERT RETURNING@
   , insert, insertReturning
   , insertDefaults
