@@ -32,6 +32,7 @@ module Database.Beam.Query.Ord
   , isUnknown_, isNotUnknown_
   , unknownAs_, sqlBool_
   , possiblyNullBool_
+  , fromPossiblyNullBool_
 
   , anyOf_, anyIn_
   , allOf_, allIn_
@@ -57,6 +58,7 @@ import Data.Proxy
 import Data.Kind
 import Data.Word
 import Data.Int
+import Data.Tagged
 import Data.Text (Text)
 import Data.Time (UTCTime, LocalTime, Day, TimeOfDay)
 
@@ -113,6 +115,10 @@ unknownAs_ True  = isNotFalse_ -- If unknown is being treated as true, then retu
 -- that both @NULL@ and @UNKNOWN@ will be returned as 'Nothing'.
 possiblyNullBool_ :: QGenExpr context be s SqlBool -> QGenExpr context be s (Maybe Bool)
 possiblyNullBool_ (QExpr e) = QExpr e
+
+-- | Convert a possibly @NULL@ 'Bool' to a 'SqlBool'.
+fromPossiblyNullBool_ :: QGenExpr context be s (Maybe Bool) -> QGenExpr context be s SqlBool
+fromPossiblyNullBool_ (QExpr e) = QExpr e
 
 -- | A 'QQuantified' representing a SQL @ALL(..)@ for use with a
 --   <#quantified-comparison-operator quantified comparison operator>
@@ -365,46 +371,6 @@ instance BeamSqlBackend be =>
   a >*. QQuantified q b = qBinOpE (gtE (Just q)) a (QExpr b)
   a >=*. QQuantified q b = qBinOpE (geE (Just q)) a (QExpr b)
 
--- instance HasSqlEqualityCheck Expression Text
--- instance HasSqlEqualityCheck Expression Integer
--- instance HasSqlEqualityCheck Expression Int
--- instance HasSqlEqualityCheck Expression Int8
--- instance HasSqlEqualityCheck Expression Int16
--- instance HasSqlEqualityCheck Expression Int32
--- instance HasSqlEqualityCheck Expression Int64
--- instance HasSqlEqualityCheck Expression Word
--- instance HasSqlEqualityCheck Expression Word8
--- instance HasSqlEqualityCheck Expression Word16
--- instance HasSqlEqualityCheck Expression Word32
--- instance HasSqlEqualityCheck Expression Word64
--- instance HasSqlEqualityCheck Expression Double
--- instance HasSqlEqualityCheck Expression Float
--- instance HasSqlEqualityCheck Expression Bool
--- instance HasSqlEqualityCheck Expression UTCTime
--- instance HasSqlEqualityCheck Expression LocalTime
--- instance HasSqlEqualityCheck Expression Day
--- instance HasSqlEqualityCheck Expression TimeOfDay
--- 
--- instance HasSqlQuantifiedEqualityCheck Expression Text
--- instance HasSqlQuantifiedEqualityCheck Expression Integer
--- instance HasSqlQuantifiedEqualityCheck Expression Int
--- instance HasSqlQuantifiedEqualityCheck Expression Int8
--- instance HasSqlQuantifiedEqualityCheck Expression Int16
--- instance HasSqlQuantifiedEqualityCheck Expression Int32
--- instance HasSqlQuantifiedEqualityCheck Expression Int64
--- instance HasSqlQuantifiedEqualityCheck Expression Word
--- instance HasSqlQuantifiedEqualityCheck Expression Word8
--- instance HasSqlQuantifiedEqualityCheck Expression Word16
--- instance HasSqlQuantifiedEqualityCheck Expression Word32
--- instance HasSqlQuantifiedEqualityCheck Expression Word64
--- instance HasSqlQuantifiedEqualityCheck Expression Double
--- instance HasSqlQuantifiedEqualityCheck Expression Float
--- instance HasSqlQuantifiedEqualityCheck Expression Bool
--- instance HasSqlQuantifiedEqualityCheck Expression UTCTime
--- instance HasSqlQuantifiedEqualityCheck Expression LocalTime
--- instance HasSqlQuantifiedEqualityCheck Expression Day
--- instance HasSqlQuantifiedEqualityCheck Expression TimeOfDay
-
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlEqualityCheck (MockSqlBackend cmd) Text
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlEqualityCheck (MockSqlBackend cmd) Integer
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlEqualityCheck (MockSqlBackend cmd) Int
@@ -424,6 +390,9 @@ instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlEqualityCheck (MockSqlBack
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlEqualityCheck (MockSqlBackend cmd) LocalTime
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlEqualityCheck (MockSqlBackend cmd) Day
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlEqualityCheck (MockSqlBackend cmd) TimeOfDay
+instance ( BeamSqlBackend (MockSqlBackend cmd)
+         , HasSqlEqualityCheck (MockSqlBackend cmd) a
+         ) => HasSqlEqualityCheck (MockSqlBackend cmd) (Tagged t a)
 
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlQuantifiedEqualityCheck (MockSqlBackend cmd) Text
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlQuantifiedEqualityCheck (MockSqlBackend cmd) Integer
@@ -444,3 +413,7 @@ instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlQuantifiedEqualityCheck (M
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlQuantifiedEqualityCheck (MockSqlBackend cmd) LocalTime
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlQuantifiedEqualityCheck (MockSqlBackend cmd) Day
 instance BeamSqlBackend (MockSqlBackend cmd) => HasSqlQuantifiedEqualityCheck (MockSqlBackend cmd) TimeOfDay
+instance ( BeamSqlBackend (MockSqlBackend cmd)
+         , HasSqlQuantifiedEqualityCheck (MockSqlBackend cmd) a
+         ) => HasSqlQuantifiedEqualityCheck (MockSqlBackend cmd) (Tagged t a)
+

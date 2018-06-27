@@ -24,6 +24,8 @@ import Data.Semigroup
 -- including equalities between beam-migrate and beam-core types.
 type Sql92SaneDdlCommandSyntax cmd =
   ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
+  , Sql92ExpressionCastTargetSyntax (Sql92ExpressionSyntax cmd) ~
+      Sql92DdlCommandDataTypeSyntax cmd
   , Sql92ColumnSchemaExpressionSyntax (Sql92DdlCommandColumnSchemaSyntax cmd) ~
       Sql92ExpressionSyntax cmd )
 
@@ -56,13 +58,6 @@ type Sql92DdlCommandConstraintAttributesSyntax syntax =
   Sql92ColumnConstraintDefinitionAttributesSyntax (Sql92DdlCommandConstraintDefinitionSyntax syntax)
 type Sql92DdlCommandAlterTableActionSyntax syntax =
   Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax syntax)
-
--- | Type classes for syntaxes which can be displayed
-class Sql92DisplaySyntax syntax where
-
-  -- | Render the syntax as a 'String', representing the SQL expression it
-  -- stands for
-  displaySyntax :: syntax -> String
 
 class ( IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
       , IsSql92DropTableSyntax (Sql92DdlCommandDropTableSyntax syntax)

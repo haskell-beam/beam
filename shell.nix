@@ -25,7 +25,8 @@ let
       sha256 = "18d3m9iws5shlbg0yj5xwiy68bliiz70v32y5pa8wi274c36nssa";
     };
 
-    propagatedBuildInputs = with python27Packages; [ tornado livereload click pyyaml markdown jinja2 ];
+    propagatedBuildInputs = with python27Packages;
+    [ tornado livereload click pyyaml markdown jinja2 ];
 
     meta = {
       homepage = http://www.mkdocs.org/;
@@ -42,6 +43,7 @@ let
     };
 
     propagatedBuildInputs = with python27Packages; [ markdown ];
+    doCheck = false;
 
     meta = {
       homepage = https://github.com/facelessuser/pymdown-extensions;
@@ -86,6 +88,7 @@ in
     inherit ghc;
     name = "beam-env";
     buildInputs = [ postgresql python27Packages.ghp-import bash
+                    mkdocs
                     (python27.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ]))
                     ncurses libcxx icu gcc mysql zlib openssl stack gnupg dos2unix vim pcre ];
     LANG = "en_us.UTF-8";

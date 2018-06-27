@@ -72,39 +72,34 @@ type DdlError = String
 -- | Backends should create a value of this type and export it in an exposed
 -- module under the name 'migrationBackend'. See the module documentation for
 -- more details.
-data BeamMigrationBackend commandSyntax be hdl m where
+data BeamMigrationBackend be m where
   BeamMigrationBackend ::
-    ( MonadBeam commandSyntax be hdl m
-    , Typeable be
-    , HasQBuilder (Sql92SelectSyntax commandSyntax)
-    , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) LocalTime
-    , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) (Maybe LocalTime)
-    , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) Text
-    , HasSqlValueSyntax (Sql92ValueSyntax commandSyntax) SqlNull
-    , IsSql92Syntax commandSyntax
-    , Sql92SanityCheck commandSyntax, Sql92SaneDdlCommandSyntax commandSyntax
-    , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax commandSyntax)
+    ( MonadBeam be m
+    , HasQBuilder be
+    , BeamMigrateSqlBackend be
+    , BeamSqlBackendCanSerialize be LocalTime
+    , BeamSqlBackendCanSerialize be (Maybe LocalTime)
+    , BeamSqlBackendCanSerialize be Text
+    , BeamSqlBackendCanSerialize be SqlNull
     , Sql92ReasonableMarshaller be ) =>
     { backendName :: String
     , backendConnStringExplanation :: String
-    , backendRenderSteps :: forall a. MigrationSteps commandSyntax () a -> BL.ByteString
+    , backendRenderSteps :: forall a. MigrationSteps be () a -> BL.ByteString
     , backendGetDbConstraints :: m [ SomeDatabasePredicate ]
-    , backendPredicateParsers :: BeamDeserializers commandSyntax
-    , backendRenderSyntax :: commandSyntax -> String
+    , backendPredicateParsers :: BeamDeserializers be
+    , backendRenderSyntax :: BeamSqlBackendSyntax be -> String
     , backendFileExtension :: String
     , backendConvertToHaskell :: HaskellPredicateConverter
-    , backendActionProvider :: ActionProvider commandSyntax
+    , backendActionProvider :: ActionProvider be
     , backendTransact :: forall a. String -> m a -> IO (Either DdlError a)
-    } -> BeamMigrationBackend commandSyntax be hdl m
+    } -> BeamMigrationBackend be m
 
 -- | Monomorphic wrapper for use with plugin loaders that cannot handle
 -- polymorphism
 data SomeBeamMigrationBackend where
-  SomeBeamMigrationBackend :: ( Typeable commandSyntax
-                              , IsSql92DdlCommandSyntax commandSyntax
-                              , IsSql92Syntax commandSyntax
-                              , Sql92SanityCheck commandSyntax ) =>
-                              BeamMigrationBackend commandSyntax be hdl m
+  SomeBeamMigrationBackend :: ( BeamMigrateSqlBackend be
+                              , Typeable be )
+                           => BeamMigrationBackend be m
                            -> SomeBeamMigrationBackend
 
 -- | In order to support Haskell schema generation, backends need to provide a
@@ -127,25 +122,25 @@ instance Monoid HaskellPredicateConverter where
 -- | Converters for the 'TableExistsPredicate', 'TableHasPrimaryKey', and
 -- 'TableHasColumn' (when supplied with a function to convert a backend data
 -- type to a haskell one).
-sql92HsPredicateConverters :: forall columnSchemaSyntax
-                             . Typeable columnSchemaSyntax
-                            => (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax -> Maybe HsDataType)
+sql92HsPredicateConverters :: forall fromBe
+                             . Typeable fromBe
+                            => (BeamSqlBackendDataTypeSyntax fromBe -> Maybe HsDataType)
                             -> HaskellPredicateConverter
 sql92HsPredicateConverters convType =
   trivialHsConverter @TableExistsPredicate <>
   trivialHsConverter @TableHasPrimaryKey   <>
-  hasColumnConverter @columnSchemaSyntax convType
+  hasColumnConverter @fromBe convType
 
 -- | Converter for 'TableHasColumn', when given a function to convert backend
 -- data type to a haskell one.
-hasColumnConverter :: forall columnSchemaSyntax
-                    . Typeable columnSchemaSyntax
-                   => (Sql92ColumnSchemaColumnTypeSyntax columnSchemaSyntax -> Maybe HsDataType)
+hasColumnConverter :: forall fromBe
+                    . Typeable fromBe
+                   => (BeamSqlBackendDataTypeSyntax fromBe -> Maybe HsDataType)
                    -> HaskellPredicateConverter
 hasColumnConverter convType =
   hsPredicateConverter $
-  \(TableHasColumn tbl col ty :: TableHasColumn columnSchemaSyntax) ->
-    fmap SomeDatabasePredicate (TableHasColumn tbl col <$> convType ty :: Maybe (TableHasColumn HsColumnSchema))
+  \(TableHasColumn tbl col ty :: TableHasColumn fromBe) ->
+    fmap SomeDatabasePredicate (TableHasColumn tbl col <$> convType ty :: Maybe (TableHasColumn HsMigrateBackend))
 
 -- | Some predicates have no dependence on a backend. For example, 'TableExistsPredicate' has no parameters that
 -- depend on the backend. It can be converted straightforwardly:

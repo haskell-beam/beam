@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -15,10 +16,18 @@ module Database.Beam.Sqlite.Connection
   ) where
 
 import           Database.Beam.Backend
-import           Database.Beam.Backend.SQL
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import           Database.Beam.Backend.URI
-import           Database.Beam.Query (QExpr, SqlInsert(..), SqlInsertValues(..), insert)
+import           Database.Beam.Migrate.Generics
+import           Database.Beam.Migrate.SQL ( BeamMigrateOnlySqlBackend, FieldReturnType(..) )
+import qualified Database.Beam.Migrate.SQL as Beam
+import           Database.Beam.Migrate.SQL.BeamExtensions
+import           Database.Beam.Query ( QExpr, SqlInsert(..), SqlInsertValues(..)
+                                     , HasQBuilder(..), HasSqlEqualityCheck
+                                     , HasSqlQuantifiedEqualityCheck
+                                     , DataType(..)
+                                     , insert )
+import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( DatabaseEntity(..)
                                              , DatabaseEntityDescriptor(..)
                                              , TableEntity)
@@ -43,17 +52,18 @@ import           Control.Monad.Identity (Identity)
 import           Control.Monad.Reader (ReaderT, MonadReader(..), runReaderT)
 import           Control.Monad.State.Strict (MonadState(..), runStateT)
 
-import qualified Data.ByteString.Char8 as BS
 import           Data.ByteString.Builder (toLazyByteString)
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
 import           Data.Int
+import           Data.Proxy (Proxy(..))
 import           Data.Scientific (Scientific)
 import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import           Data.Time ( LocalTime, UTCTime, Day
-                           , utc, utcToLocalTime )
+                           , ZonedTime, utc, utcToLocalTime )
 import           Data.Word
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
@@ -79,6 +89,12 @@ data Sqlite = Sqlite
 
 instance BeamBackend Sqlite where
   type BackendFromField Sqlite = FromField
+
+instance HasQBuilder Sqlite where
+  buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
+
+instance BeamSqlBackendIsString Sqlite T.Text
+instance BeamSqlBackendIsString Sqlite String
 
 instance FromBackendRow Sqlite Bool
 instance FromBackendRow Sqlite Double
@@ -134,7 +150,17 @@ instance FromField SqliteScientific where
           Just s'  -> pure s'
 
 instance BeamSqlBackend Sqlite
-instance BeamSql92Backend Sqlite
+instance BeamMigrateOnlySqlBackend Sqlite
+type instance BeamSqlBackendSyntax Sqlite = SqliteCommandSyntax
+
+data SqliteHasDefault = SqliteHasDefault
+instance FieldReturnType 'True 'False Sqlite resTy a =>
+         FieldReturnType 'False 'False Sqlite resTy (SqliteHasDefault -> a) where
+  field' _ _ nm ty _ collation constraints SqliteHasDefault =
+    field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
+
+instance BeamSqlBackendHasSerial Sqlite where
+  genericSerial nm = Beam.field nm (DataType sqliteSerialType) SqliteHasDefault
 
 -- | 'MonadBeam' instance inside whiche SQLite queries are run. See the
 -- <https://tathougies.github.io/beam/ user guide> for more information
@@ -175,12 +201,58 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
                      unRP (next True)
                 _ -> unRP (next False)
 
+-- * Equality checks
+#define HAS_SQLITE_EQUALITY_CHECK(ty)                       \
+  instance HasSqlEqualityCheck Sqlite (ty); \
+  instance HasSqlQuantifiedEqualityCheck Sqlite (ty);
+
+HAS_SQLITE_EQUALITY_CHECK(Int)
+HAS_SQLITE_EQUALITY_CHECK(Int8)
+HAS_SQLITE_EQUALITY_CHECK(Int16)
+HAS_SQLITE_EQUALITY_CHECK(Int32)
+HAS_SQLITE_EQUALITY_CHECK(Int64)
+HAS_SQLITE_EQUALITY_CHECK(Word)
+HAS_SQLITE_EQUALITY_CHECK(Word8)
+HAS_SQLITE_EQUALITY_CHECK(Word16)
+HAS_SQLITE_EQUALITY_CHECK(Word32)
+HAS_SQLITE_EQUALITY_CHECK(Word64)
+HAS_SQLITE_EQUALITY_CHECK(Double)
+HAS_SQLITE_EQUALITY_CHECK(Float)
+HAS_SQLITE_EQUALITY_CHECK(Bool)
+HAS_SQLITE_EQUALITY_CHECK(String)
+HAS_SQLITE_EQUALITY_CHECK(T.Text)
+HAS_SQLITE_EQUALITY_CHECK(TL.Text)
+HAS_SQLITE_EQUALITY_CHECK(BS.ByteString)
+HAS_SQLITE_EQUALITY_CHECK(BL.ByteString)
+HAS_SQLITE_EQUALITY_CHECK(UTCTime)
+HAS_SQLITE_EQUALITY_CHECK(LocalTime)
+HAS_SQLITE_EQUALITY_CHECK(ZonedTime)
+HAS_SQLITE_EQUALITY_CHECK(Char)
+HAS_SQLITE_EQUALITY_CHECK(Integer)
+HAS_SQLITE_EQUALITY_CHECK(Scientific)
+
+instance HasDefaultSqlDataType Sqlite (SqlSerial Int) where
+  defaultSqlDataType _ _ False = sqliteSerialType
+  defaultSqlDataType _ _ True = intType
+instance HasDefaultSqlDataTypeConstraints Sqlite (SqlSerial Int) where
+  defaultSqlDataTypeConstraints _ _ _ = []
+
+instance HasDefaultSqlDataType Sqlite BS.ByteString where
+  -- TODO we should somehow allow contsraints based on backend
+  defaultSqlDataType _ _ _ = sqliteBlobType
+instance HasDefaultSqlDataTypeConstraints Sqlite BS.ByteString
+
+instance HasDefaultSqlDataType Sqlite LocalTime where
+  defaultSqlDataType _ _ _ = timestampType Nothing False
+instance HasDefaultSqlDataTypeConstraints Sqlite LocalTime
+
+
 -- | URI syntax for use with 'withDbConnection'. See documentation for
 -- 'BeamURIOpeners' for more information.
-sqliteUriSyntax :: c SqliteCommandSyntax Sqlite Connection SqliteM
+sqliteUriSyntax :: c Sqlite Connection SqliteM
                 -> BeamURIOpeners c
 sqliteUriSyntax =
-  mkUriOpener "sqlite:"
+  mkUriOpener runBeamSqlite "sqlite:"
     (\uri -> do
         let sqliteName = if null (uriPath uri) then ":memory:" else uriPath uri
         hdl <- open sqliteName
@@ -192,10 +264,7 @@ runBeamSqliteDebug debugStmt conn x = runReaderT (runSqliteM x) (debugStmt, conn
 runBeamSqlite :: Connection -> SqliteM a -> IO a
 runBeamSqlite = runBeamSqliteDebug (\_ -> pure ())
 
-instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
-  withDatabase = runBeamSqlite
-  withDatabaseDebug = runBeamSqliteDebug
-
+instance MonadBeam Sqlite SqliteM where
   runNoReturn (SqliteCommandSyntax (SqliteSyntax cmd vals)) =
     SqliteM $ do
       (logger, conn) <- ask
@@ -226,14 +295,14 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
       , "rows from an insert, use Database.Beam.Sqlite.insertReturning "
       , "for emulation" ]
 
-instance Beam.MonadBeamInsertReturning SqliteCommandSyntax Sqlite Connection SqliteM where
+instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
   runInsertReturningList tbl values =
     runInsertReturningList (insertReturning tbl values)
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
 runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
     -- If all expressions are simple expressions (no default), then just
-    -- run the INSERT normally
+
   | SqliteInsertExpressions es <- vs, any (any (== SqliteExpressionDefault)) es =
       forM_ es $ \row -> do
         let (fields', row') = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row
@@ -259,8 +328,8 @@ data SqliteInsertReturning (table :: (* -> *) -> *)
 
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
 -- into the given table. Use 'runInsertReturningList'
-insertReturning :: DatabaseEntity be db (TableEntity table)
-                -> SqlInsertValues SqliteInsertValuesSyntax (table (QExpr SqliteExpressionSyntax s))
+insertReturning :: DatabaseEntity Sqlite db (TableEntity table)
+                -> SqlInsertValues Sqlite (table (QExpr Sqlite s))
                 -> SqliteInsertReturning table
 insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
   case insert tbl vs of

@@ -11,7 +11,11 @@ module Database.Beam.Postgres.Types
   ( Postgres(..) ) where
 
 import           Database.Beam
-import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend
+import           Database.Beam.Migrate.Generics
+import           Database.Beam.Migrate.SQL (BeamMigrateOnlySqlBackend)
+import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Query.SQL92
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreMap, HStoreList)
@@ -26,9 +30,10 @@ import           Data.CaseInsensitive (CI)
 import           Data.Int
 import           Data.Ratio (Ratio)
 import           Data.Scientific (Scientific, toBoundedInteger)
+import           Data.Tagged
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as TL
-import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, ZonedTime(..))
+import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, NominalDiffTime, ZonedTime(..))
 import           Data.UUID.Types (UUID)
 import           Data.Vector (Vector)
 import           Data.Word
@@ -149,4 +154,80 @@ instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGRange a)
 instance (Pg.FromField a, Pg.FromField b) => FromBackendRow Postgres (Either a b)
 
 instance BeamSqlBackend Postgres
-instance BeamSql92Backend Postgres
+instance BeamMigrateOnlySqlBackend Postgres
+type instance BeamSqlBackendSyntax Postgres = PgCommandSyntax
+
+instance BeamSqlBackendIsString Postgres String
+instance BeamSqlBackendIsString Postgres Text
+
+instance HasQBuilder Postgres where
+  buildSqlQuery = buildSql92Query' True
+
+-- * Instances for 'HasDefaultSqlDataType'
+
+instance HasDefaultSqlDataType Postgres ByteString where
+  defaultSqlDataType _ _ _ = pgByteaType
+instance HasDefaultSqlDataTypeConstraints Postgres ByteString
+
+instance HasDefaultSqlDataType Postgres LocalTime where
+  defaultSqlDataType _ _ _ = timestampType Nothing False
+instance HasDefaultSqlDataTypeConstraints Postgres LocalTime
+
+instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
+  defaultSqlDataType _ _ False = pgSerialType
+  defaultSqlDataType _ _ _ = intType
+instance HasDefaultSqlDataTypeConstraints Postgres (SqlSerial Int)
+
+instance HasDefaultSqlDataType Postgres UUID where
+  defaultSqlDataType _ _ _ = pgUuidType
+instance HasDefaultSqlDataTypeConstraints Postgres UUID
+
+-- * Instances for 'HasSqlEqualityCheck'
+
+#define PG_HAS_EQUALITY_CHECK(ty)                                 \
+  instance HasSqlEqualityCheck Postgres (ty);           \
+  instance HasSqlQuantifiedEqualityCheck Postgres (ty);
+
+PG_HAS_EQUALITY_CHECK(Bool)
+PG_HAS_EQUALITY_CHECK(Double)
+PG_HAS_EQUALITY_CHECK(Float)
+PG_HAS_EQUALITY_CHECK(Int)
+PG_HAS_EQUALITY_CHECK(Int8)
+PG_HAS_EQUALITY_CHECK(Int16)
+PG_HAS_EQUALITY_CHECK(Int32)
+PG_HAS_EQUALITY_CHECK(Int64)
+PG_HAS_EQUALITY_CHECK(Integer)
+PG_HAS_EQUALITY_CHECK(Word)
+PG_HAS_EQUALITY_CHECK(Word8)
+PG_HAS_EQUALITY_CHECK(Word16)
+PG_HAS_EQUALITY_CHECK(Word32)
+PG_HAS_EQUALITY_CHECK(Word64)
+PG_HAS_EQUALITY_CHECK(Text)
+PG_HAS_EQUALITY_CHECK(TL.Text)
+PG_HAS_EQUALITY_CHECK(UTCTime)
+PG_HAS_EQUALITY_CHECK(Value)
+PG_HAS_EQUALITY_CHECK(Pg.Oid)
+PG_HAS_EQUALITY_CHECK(LocalTime)
+PG_HAS_EQUALITY_CHECK(ZonedTime)
+PG_HAS_EQUALITY_CHECK(TimeOfDay)
+PG_HAS_EQUALITY_CHECK(NominalDiffTime)
+PG_HAS_EQUALITY_CHECK(Day)
+PG_HAS_EQUALITY_CHECK(UUID)
+PG_HAS_EQUALITY_CHECK([Char])
+PG_HAS_EQUALITY_CHECK(Pg.HStoreMap)
+PG_HAS_EQUALITY_CHECK(Pg.HStoreList)
+PG_HAS_EQUALITY_CHECK(Pg.Date)
+PG_HAS_EQUALITY_CHECK(Pg.ZonedTimestamp)
+PG_HAS_EQUALITY_CHECK(Pg.LocalTimestamp)
+PG_HAS_EQUALITY_CHECK(Pg.UTCTimestamp)
+PG_HAS_EQUALITY_CHECK(Scientific)
+PG_HAS_EQUALITY_CHECK(ByteString)
+PG_HAS_EQUALITY_CHECK(BL.ByteString)
+PG_HAS_EQUALITY_CHECK(Vector a)
+PG_HAS_EQUALITY_CHECK(CI Text)
+PG_HAS_EQUALITY_CHECK(CI TL.Text)
+
+instance HasSqlEqualityCheck Postgres a =>
+  HasSqlEqualityCheck Postgres (Tagged t a)
+instance HasSqlQuantifiedEqualityCheck Postgres a =>
+  HasSqlQuantifiedEqualityCheck Postgres (Tagged t a)

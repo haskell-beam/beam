@@ -4,6 +4,7 @@
 -- | DDL syntax instances for 'SqlSyntaxBuilder'
 module Database.Beam.Migrate.SQL.Builder where
 
+import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Serialization

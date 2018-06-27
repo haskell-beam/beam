@@ -16,17 +16,20 @@ module Database.Beam.Migrate.Simple
   , defaultUpToDateHooks
   , bringUpToDate, bringUpToDateWithHooks
 
+  , haskellSchema
+
   , module Database.Beam.Migrate.Actions
   , module Database.Beam.Migrate.Types ) where
 
 import           Prelude hiding (log)
 
 import           Database.Beam
-import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend
 import           Database.Beam.Migrate.Backend
 import           Database.Beam.Migrate.Types
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.Log
+import           Database.Beam.Haskell.Syntax
 
 import           Control.Monad.Cont
 import           Control.Monad.Writer
@@ -89,8 +92,8 @@ defaultUpToDateHooks =
 -- Tries to bring the database up to date, using the database log and the given
 -- 'MigrationSteps'. Fails if the migration is irreversible, or an error occurs.
 bringUpToDate :: Database be db
-              => BeamMigrationBackend cmd be hdl m
-              -> MigrationSteps cmd () (CheckedDatabaseSettings be db)
+              => BeamMigrationBackend be m
+              -> MigrationSteps be () (CheckedDatabaseSettings be db)
               -> m (Maybe (CheckedDatabaseSettings be db))
 bringUpToDate be@BeamMigrationBackend {} =
   bringUpToDateWithHooks defaultUpToDateHooks be
@@ -102,18 +105,18 @@ bringUpToDate be@BeamMigrationBackend {} =
 -- Accepts a set of hooks that can be used to customize behavior. See the
 -- documentation for 'BringUpToDateHooks' for more information. Calling this
 -- with 'defaultUpToDateHooks' is the same as using 'bringUpToDate'.
-bringUpToDateWithHooks :: forall db cmd be hdl m
+bringUpToDateWithHooks :: forall db be m
                         . Database be db
                        => BringUpToDateHooks m
-                       -> BeamMigrationBackend cmd be hdl m
-                       -> MigrationSteps cmd () (CheckedDatabaseSettings be db)
+                       -> BeamMigrationBackend be m
+                       -> MigrationSteps be () (CheckedDatabaseSettings be db)
                        -> m (Maybe (CheckedDatabaseSettings be db))
 bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = renderSyntax' }) steps = do
   ensureBackendTables be
 
   entries <- runSelectReturningList $ select $
-             all_ (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m))
-  let verifyMigration :: Int -> T.Text -> Migration cmd a -> StateT [LogEntry] (WriterT (Max Int) m) a
+             all_ (_beamMigrateLogEntries (beamMigrateDb @be @m))
+  let verifyMigration :: Int -> T.Text -> Migration be a -> StateT [LogEntry] (WriterT (Max Int) m) a
       verifyMigration stepIx stepNm step =
         do log <- get
            case log of
@@ -158,7 +161,7 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
                          runNoReturn cmd)
                      step
 
-                 runInsert $ insert (_beamMigrateLogEntries (beamMigrateDb @be @cmd @hdl @m)) $
+                 runInsert $ insert (_beamMigrateLogEntries (beamMigrateDb @be @m)) $
                    insertExpressions [ LogEntry (val_ stepIx) (val_ stepName) currentTimestamp_ ]
                  endStepHook hooks stepIx stepName
 
@@ -170,9 +173,9 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
 -- you have chosen the wrong 'ActionProvider', or the backend you're using is
 -- buggy.
 simpleSchema :: Database be db
-             => ActionProvider cmd
+             => ActionProvider be
              -> CheckedDatabaseSettings be db
-             -> Maybe [cmd]
+             -> Maybe [BeamSqlBackendSyntax be]
 simpleSchema provider settings =
   let allChecks = collectChecks settings
       solver    = heuristicSolver provider [] allChecks
@@ -185,7 +188,7 @@ simpleSchema provider settings =
 --
 -- May 'fail' if we cannot find a schema
 createSchema :: Database be db
-             => BeamMigrationBackend cmd be hdl m
+             => BeamMigrationBackend be m
              -> CheckedDatabaseSettings be db
              -> m ()
 createSchema BeamMigrationBackend { backendActionProvider = actions } db =
@@ -199,7 +202,7 @@ createSchema BeamMigrationBackend { backendActionProvider = actions } db =
 -- 'fail') if this involves an irreversible migration (one that may result in
 -- data loss).
 autoMigrate :: Database be db
-            => BeamMigrationBackend cmd be hdl m
+            => BeamMigrationBackend be m
             -> CheckedDatabaseSettings be db
             -> m ()
 autoMigrate BeamMigrationBackend { backendActionProvider = actions
@@ -221,15 +224,16 @@ autoMigrate BeamMigrationBackend { backendActionProvider = actions
 --
 -- 'BeamMigrationBackend's can usually be found in a module named
 -- @Database.Beam.<Backend>.Migrate@ with the name@migrationBackend@
-simpleMigration :: ( MonadBeam cmd be handle m
+simpleMigration :: ( MonadBeam be m
                  ,   Database be db )
-                => BeamMigrationBackend cmd be handle m
+                => (forall a. handle -> m a -> IO a)
+                -> BeamMigrationBackend be m
                 -> handle
                 -> CheckedDatabaseSettings be db
-                -> IO (Maybe [cmd])
-simpleMigration BeamMigrationBackend { backendGetDbConstraints = getCs
-                                     , backendActionProvider = action } hdl db = do
-  pre <- withDatabase hdl getCs
+                -> IO (Maybe [BeamSqlBackendSyntax be])
+simpleMigration runner BeamMigrationBackend { backendGetDbConstraints = getCs
+                                            , backendActionProvider = action } hdl db = do
+  pre <- runner hdl getCs
 
   let post = collectChecks db
       solver = heuristicSolver action pre post
@@ -247,8 +251,8 @@ data VerificationResult
 -- | Verify that the given, beam database matches the actual
 -- schema. On success, returns 'VerificationSucceeded', on failure,
 -- returns 'VerificationFailed' and a list of missing predicates.
-verifySchema :: ( Database be db, MonadBeam cmd be handle m )
-             => BeamMigrationBackend cmd be handle m
+verifySchema :: ( Database be db, MonadBeam be m )
+             => BeamMigrationBackend be m
              -> CheckedDatabaseSettings be db
              -> m VerificationResult
 verifySchema BeamMigrationBackend { backendGetDbConstraints = getConstraints } db =
@@ -260,16 +264,52 @@ verifySchema BeamMigrationBackend { backendGetDbConstraints = getConstraints } d
        else pure (VerificationFailed (HS.toList missingPredicates))
 
 -- | Run a sequence of commands on a database
-runSimpleMigration :: forall cmd be hdl m . MonadBeam cmd be hdl m
-                   => hdl -> [cmd] -> IO ()
-runSimpleMigration hdl =
-  withDatabase @cmd @be @hdl @m hdl . mapM_ runNoReturn
+
+runSimpleMigration :: MonadBeam be m
+                   => (forall a. hdl -> m a -> IO a)
+                   -> hdl -> [BeamSqlBackendSyntax be] -> IO ()
+runSimpleMigration runner hdl =
+  runner hdl . mapM_ runNoReturn
 
 -- | Given a function to convert a command to a 'String', produce a script that
 -- will execute the given migration. Usually, the function you provide
 -- eventually calls 'displaySyntax' to rendere the command.
-backendMigrationScript :: (cmd -> String)
-                       -> Migration cmd a
+backendMigrationScript :: (BeamSqlBackendSyntax be -> String)
+                       -> Migration be a
                        -> String
 backendMigrationScript render mig =
   migrateScript ((++"\n") . T.unpack) ((++"\n") . render) (migrationStep "Migration Script" (\() -> mig))
+
+-- | Given a 'BeamMigrationBackend', get a string representing a Haskell module
+-- that would be a good starting point for further development.
+--
+-- For example, for a postgres database named @chinook@
+--
+-- > import Database.Beam.Migrate.Simple
+-- > import Database.Beam.Postgres (runBeamPostgres)
+-- > import Database.Beam.Postgres.Migrate (migrationBackend)
+-- > import Database.PostgreSQL.Simple
+-- >
+-- > getSchema :: IO String
+-- > getSchema = do pg <- connectPostgreSQL
+-- >                runBeamPostgres pg (haskellSchema migrationBackend)
+--
+-- Backends that have a migration backend typically export it under the module
+-- name @Database.Beam./Backend/.Migrate@.
+haskellSchema :: MonadBeam be m
+              => BeamMigrationBackend be m
+              -> m String
+haskellSchema BeamMigrationBackend { backendGetDbConstraints = getCs
+                                   , backendConvertToHaskell = HaskellPredicateConverter conv2Hs } = do
+  constraints <- getCs
+  let hsConstraints = [ hsConstraint | c <- constraints, Just hsConstraint <- [ conv2Hs c ] ]
+
+      solver = heuristicSolver (defaultActionProvider @HsMigrateBackend) [] hsConstraints
+
+  case finalSolution solver of
+    Solved cmds   ->
+      let hsModule = hsActionsToModule "NewBeamSchema" (map migrationCommand cmds)
+      in case renderHsSchema hsModule of
+           Left err -> fail ("Error writing Haskell schema: " ++ err)
+           Right modStr -> pure modStr
+    Candidates {} -> fail "Could not form Haskell schema"

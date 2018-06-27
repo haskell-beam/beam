@@ -2,12 +2,14 @@
 
 -- ! BUILD_COMMAND: stack runhaskell --package sqlite-simple --package beam-sqlite --package beam-core -- -fglasgow-exts -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XPartialTypeSignatures -fno-warn-partial-type-signatures
 -- ! BUILD_DIR: beam-sqlite/examples/
+-- ! FORMAT: console
 module Main where
 
 import Database.Beam hiding (withDatabaseDebug)
 import qualified Database.Beam as Beam
 import Database.Beam.Backend.SQL.SQL92
-import Database.Beam.Sqlite
+import Database.Beam.Sqlite hiding (runBeamSqliteDebug)
+import qualified Database.Beam.Sqlite as Sqlite
 import Database.SQLite.Simple
 
 import Data.Text (Text)
@@ -36,7 +38,6 @@ instance Beamable (PrimaryKey UserT)
 data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers :: f (TableEntity UserT) }
                         deriving Generic
-
 instance Database be ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings Sqlite ShoppingCartDb
@@ -53,11 +54,7 @@ main =
                     , User "betty@example.com" "Betty" "Jones" "82b054bd83ffad9b6cf8bdb98ce3cc2f" {- betty -}
                     , User "sam@example.com"   "Sam" "Taylor" "332532dcfaa1cbf61e2a266bd723612c" {- sam -} ]
 
-     let onStmt s = pure ()
-
-         withDatabaseDebug _ q = runBeamSqliteDebug onStmt q
-         putStrLn :: String -> IO ()
-         putStrLn x = putStr (concatMap (\x -> if x == '\n' then "\n\n" else [x]) x ++ "\n --\n")
+     let runBeamSqliteDebug _ = Sqlite.runBeamSqlite
 
      BEAM_PLACEHOLDER
 

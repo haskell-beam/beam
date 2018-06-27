@@ -173,7 +173,9 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
     backend_haskell_names = backend['haskell-names']
     module = backend['backend-module']
     mnemonic = backend_haskell_names['mnemonic']
+    with_database_debug = '%s.%s' % (mnemonic, backend_haskell_names['with-database-debug'])
     select_syntax = '%s.%s' % (mnemonic, backend_haskell_names['select-syntax'])
+    backend_type = '%s.%s' % (mnemonic, backend_haskell_names['backend'])
     backend_monad = '%s.%s' % (mnemonic, backend_haskell_names['monad'])
     extra_imports = backend.get('extra-imports', [])
 
@@ -195,7 +197,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
     packages = [ "--package %s" % pkgname for pkgname in packages ]
     decl_options = options.get('BUILD_OPTIONS', '').replace("$$BEAM_SOURCE$$", base_dir)
     build_options = " ".join(packages) + \
-                    " -- -XCPP -DBEAM_SELECT_SYNTAX=%s -DBEAM_BACKEND_MONAD=%s " % (select_syntax, backend_monad) + \
+                    " -- -XCPP -DBEAM_BACKEND=%s -DBEAM_BACKEND_MONAD=%s -DBEAM_WITH_DATABASE_DEBUG=%s " % (backend_type, backend_monad, with_database_debug) + \
                     decl_options
     extra_deps = options.get('EXTRA_DEPS', '').split()
     output_format = options.get('OUTPUT_FORMAT', 'sql')
@@ -240,6 +242,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
             sys.exit(1)
         else:
             print "Error in source file", source_file
+            print err
             return err.split()
 
 def run_example(template_path, cache_dir, example_lines):
@@ -248,6 +251,7 @@ def run_example(template_path, cache_dir, example_lines):
     build_dir = options.get('BUILD_DIR', '.')
     build_command = options.get('BUILD_COMMAND')
     extra_deps = options.get('EXTRA_DEPS', "").split()
+    out_format = options.get('FORMAT', 'sql')
 
     lines_hash = hash_template("$$TEMPLATEPATH$$" + template_path +
                                u"".join(example_lines).encode('ascii', 'xmlcharrefreplace'),
@@ -271,7 +275,8 @@ def run_example(template_path, cache_dir, example_lines):
 
     print "Ran example", lines_hash
     if retcode == 0:
-        out = sqlparse.format(out, reindent=True)
+        if out_format == 'sql':
+            out = sqlparse.format(out, reindent=True)
         save_cached_file(cache_dir, lines_hash, out)
         return out.split("\n")
     else:
@@ -280,6 +285,7 @@ def run_example(template_path, cache_dir, example_lines):
             print "Example is\n", "\n".join(example_lines)
             sys.exit(1)
         else:
+            print err
             return err.split()
 
 class BeamQueryBlockProcessor(Preprocessor):

@@ -37,9 +37,12 @@ data DatabaseCommand
   | DatabaseCommandRename DatabaseName DatabaseName
   deriving Show
 
+data SchemaKind
+    = HsSchema | YamlSchema | BackendSchema
+      deriving Show
+
 data SimpleCommand
-  = SimpleCommandHsSchema ModuleName String
-  | SimpleCommandDumpSchema ModuleName String
+  = SimpleCommandSchema ModuleName String SchemaKind
   deriving Show
 
 data BranchCommand
@@ -184,20 +187,21 @@ migrationArgParser =
         newParser = SchemaCommandNew <$> (fromString <$> strArgument (metavar "FROM" <> help "Schema to iterate on" <> value "HEAD"))
                                      <*> strOption (long "tmp-file" <> metavar "TMPFILE" <> help "Temporary file to edit schema" <> value "BeamMigrateSchema.hs")
 
-    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand
-                                                               , command "dump"   dumpSchemaCommand ])
+    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand ])
 
     backendOption = ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use")
     connectionOption = strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend")
 
     simpleSchemaCommand =
       info (simpleSchemaParser <**> helper) (fullDesc <> progDesc "Extract a haskell schema from the given database")
-      where simpleSchemaParser = SimpleCommandHsSchema <$> backendOption
-                                                       <*> connectionOption
-    dumpSchemaCommand =
-      info (dumpSchemaParser <**> helper) (fullDesc <> progDesc "Dump the given database schema in machine-readable format")
-      where dumpSchemaParser = SimpleCommandDumpSchema <$> backendOption
-                                                       <*> connectionOption
+      where simpleSchemaParser = SimpleCommandSchema <$> backendOption
+                                                     <*> connectionOption
+                                                     <*> ( flag' YamlSchema
+                                                                 (long "yaml-schema" <> help "Dump schema in yaml format") <|>
+                                                           flag' BackendSchema
+                                                                 (long "native-schema" <> help "Dump the schema in the native backend format") <|>
+                                                           flag HsSchema HsSchema
+                                                                 (long "haskell-schema" <> help "Dump schema in Haskell format"))
 
     migrateParser = pure MigrateCommandMigrate
 

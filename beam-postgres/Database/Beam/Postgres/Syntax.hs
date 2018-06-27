@@ -56,8 +56,8 @@ module Database.Beam.Postgres.Syntax
     , PgDataTypeDescr(..)
 
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
+    , pgCreateEnumSyntax, pgDropTypeSyntax
 
-    , insertDefaults
     , pgSimpleMatchSyntax
 
     , pgSelectSetQuantifierDistinctOn
@@ -72,6 +72,8 @@ module Database.Beam.Postgres.Syntax
     , pgByteaType, pgTextType, pgUnboundedArrayType
     , pgSerialType, pgSmallSerialType, pgBigSerialType
 
+    , pgPointType, pgLineType, pgLineSegmentType, pgBoxType
+
     , pgQuotedIdentifier, pgSepBy, pgDebugRenderSyntax
     , pgRenderSyntaxScript, pgBuildAction
 
@@ -83,13 +85,9 @@ module Database.Beam.Postgres.Syntax
 
 import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Query.SQL92
-
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.Serialization
-
-import           Database.Beam.Migrate.Generics
 
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
@@ -115,7 +113,6 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
 import           Data.UUID.Types (UUID)
-import qualified Data.Vector as V
 import           Data.Word
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
@@ -231,8 +228,6 @@ data PgCommandSyntax
 
 -- | 'IsSql92SelectSyntax' for Postgres
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
-instance HasQBuilder PgSelectSyntax where
-  buildSqlQuery = buildSql92Query' True
 
 newtype PgSelectTableSyntax = PgSelectTableSyntax { fromPgSelectTable :: PgSyntax }
 
@@ -265,6 +260,8 @@ data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrder
 data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLockingClauseStrength :: PgSelectLockingStrength
                                                                , pgSelectLockingTables :: [T.Text]
                                                                , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
+newtype PgCommonTableExpressionSyntax
+    = PgCommonTableExpressionSyntax { fromPgCommonTableExpression :: PgSyntax }
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
 fromPgOrdering (PgOrderingSyntax s Nothing) = s
@@ -424,10 +421,13 @@ instance IsSql92UpdateSyntax PgUpdateSyntax where
 instance IsSql92DeleteSyntax PgDeleteSyntax where
   type Sql92DeleteExpressionSyntax PgDeleteSyntax = PgExpressionSyntax
 
-  deleteStmt tbl where_ =
+  deleteStmt tbl alias where_ =
     PgDeleteSyntax $
     emit "DELETE FROM " <> pgQuotedIdentifier tbl <>
+    maybe mempty (\alias_ -> emit " AS " <> pgQuotedIdentifier alias_) alias <>
     maybe mempty (\where_ -> emit " WHERE " <> fromPgExpression where_) where_
+
+  deleteSupportsAlias _ = True
 
 instance IsSql92SelectSyntax PgSelectSyntax where
   type Sql92SelectSelectTableSyntax PgSelectSyntax = PgSelectTableSyntax
@@ -470,9 +470,10 @@ instance IsSql92FromSyntax PgFromSyntax where
   type Sql92FromTableSourceSyntax PgFromSyntax = PgTableSourceSyntax
 
   fromTable tableSrc Nothing = coerce tableSrc
-  fromTable tableSrc (Just nm) =
+  fromTable tableSrc (Just (nm, colNms)) =
       PgFromSyntax $
-      coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm
+      coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm <>
+      maybe mempty (\colNms' -> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier colNms'))) colNms
 
   innerJoin a b Nothing = PgFromSyntax (fromPgFrom a <> emit " CROSS JOIN " <> fromPgFrom b)
   innerJoin a b (Just e) = pgJoin "INNER JOIN" a b (Just e)
@@ -550,6 +551,30 @@ instance IsSql99DataTypeSyntax PgDataTypeSyntax where
                      (arrayType serialized sz)
   rowType = error "rowType"
 
+instance IsSql99CommonTableExpressionSelectSyntax PgSelectSyntax where
+    type Sql99SelectCTESyntax PgSelectSyntax = PgCommonTableExpressionSyntax
+
+    withSyntax ctes (PgSelectSyntax select) =
+        PgSelectSyntax $
+        emit "WITH " <>
+        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
+        select
+
+instance IsSql99RecursiveCommonTableExpressionSelectSyntax PgSelectSyntax where
+    withRecursiveSyntax ctes (PgSelectSyntax select) =
+        PgSelectSyntax $
+        emit "WITH RECURSIVE " <>
+        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
+        select
+
+instance IsSql99CommonTableExpressionSyntax PgCommonTableExpressionSyntax where
+    type Sql99CTESelectSyntax PgCommonTableExpressionSyntax = PgSelectSyntax
+
+    cteSubquerySyntax tbl fields (PgSelectSyntax select) =
+        PgCommonTableExpressionSyntax $
+        pgQuotedIdentifier tbl <> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier fields)) <>
+        emit " AS " <> pgParens select
+
 instance IsSql2008BigIntDataTypeSyntax PgDataTypeSyntax where
   bigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT") bigIntType
 
@@ -580,6 +605,12 @@ pgSmallSerialType, pgSerialType, pgBigSerialType :: PgDataTypeSyntax
 pgSmallSerialType = PgDataTypeSyntax (pgDataTypeDescr smallIntType) (emit "SMALLSERIAL") (pgDataTypeJSON "smallserial")
 pgSerialType = PgDataTypeSyntax (pgDataTypeDescr intType) (emit "SERIAL") (pgDataTypeJSON "serial")
 pgBigSerialType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGSERIAL") (pgDataTypeJSON "bigserial")
+
+pgPointType, pgLineType, pgLineSegmentType, pgBoxType :: PgDataTypeSyntax
+pgPointType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.point) Nothing) (emit "POINT") (pgDataTypeJSON "point")
+pgLineType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.line) Nothing) (emit "LINE") (pgDataTypeJSON "line")
+pgLineSegmentType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.lseg) Nothing) (emit "LSEG") (pgDataTypeJSON "lseg")
+pgBoxType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.box) Nothing) (emit "BOX") (pgDataTypeJSON "box")
 
 pgUnboundedArrayType :: PgDataTypeSyntax -> PgDataTypeSyntax
 pgUnboundedArrayType (PgDataTypeSyntax _ syntax serialized) =
@@ -712,17 +743,16 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
   inE e es = PgExpressionSyntax $ pgParens (fromPgExpression e) <> emit " IN " <>
                                   pgParens (pgSepBy (emit ", ") (map fromPgExpression es))
 
-instance IsSqlExpressionSyntaxStringType PgExpressionSyntax String
-instance IsSqlExpressionSyntaxStringType PgExpressionSyntax T.Text
-
-instance IsSql99ExpressionSyntax PgExpressionSyntax where
-  distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
-  similarToE = pgBinOp "SIMILAR TO"
-
+instance IsSql99FunctionExpressionSyntax PgExpressionSyntax where
   functionCallE name args =
     PgExpressionSyntax $
     fromPgExpression name <>
     pgParens (pgSepBy (emit ", ") (map fromPgExpression args))
+  functionNameE nm = PgExpressionSyntax (emit (TE.encodeUtf8 nm))
+
+instance IsSql99ExpressionSyntax PgExpressionSyntax where
+  distinctE select = PgExpressionSyntax (emit "DISTINCT (" <> fromPgSelect select <> emit ")")
+  similarToE = pgBinOp "SIMILAR TO"
 
   instanceFieldE i nm =
     PgExpressionSyntax $
@@ -894,8 +924,15 @@ instance IsSql92FieldNameSyntax PgFieldNameSyntax where
 
 instance IsSql92TableSourceSyntax PgTableSourceSyntax where
   type Sql92TableSourceSelectSyntax PgTableSourceSyntax = PgSelectSyntax
+  type Sql92TableSourceExpressionSyntax PgTableSourceSyntax = PgExpressionSyntax
+
   tableNamed = PgTableSourceSyntax . pgQuotedIdentifier
   tableFromSubSelect s = PgTableSourceSyntax $ emit "(" <> fromPgSelect s <> emit ")"
+  tableFromValues vss = PgTableSourceSyntax . pgParens $
+                        emit "VALUES " <>
+                        pgSepBy (emit ", ")
+                                (map (\vs -> pgParens (pgSepBy (emit ", ")
+                                                               (map fromPgExpression vs))) vss)
 
 instance IsSql92ProjectionSyntax PgProjectionSyntax where
   type Sql92ProjectionExpressionSyntax PgProjectionSyntax = PgExpressionSyntax
@@ -926,9 +963,6 @@ instance IsSql92InsertValuesSyntax PgInsertValuesSyntax where
               (map (\es -> emit "(" <> pgSepBy (emit ", ") (coerce es) <> emit ")")
                    es)
   insertFromSql (PgSelectSyntax a) = PgInsertValuesSyntax a
-
-insertDefaults :: SqlInsertValues PgInsertValuesSyntax tbl
-insertDefaults = SqlInsertValues (PgInsertValuesSyntax (emit "DEFAULT VALUES"))
 
 instance IsSql92DropTableSyntax PgDropTableSyntax where
   dropTableSyntax tblNm =
@@ -1262,6 +1296,17 @@ pgDropExtensionSyntax :: T.Text -> PgCommandSyntax
 pgDropExtensionSyntax extName =
   PgCommandSyntax PgCommandTypeDdl $ emit "DROP EXTENSION " <> pgQuotedIdentifier extName
 
+pgCreateEnumSyntax :: T.Text -> [PgValueSyntax] -> PgCommandSyntax
+pgCreateEnumSyntax enumName vals =
+    PgCommandSyntax PgCommandTypeDdl $
+    emit "CREATE TYPE " <> pgQuotedIdentifier enumName <> emit " AS ENUM(" <>
+    pgSepBy (emit ", ") (fmap fromPgValue vals) <> emit ")"
+
+pgDropTypeSyntax :: T.Text -> PgCommandSyntax
+pgDropTypeSyntax typeName =
+    PgCommandSyntax PgCommandTypeDdl $
+    emit "DROP TYPE " <> pgQuotedIdentifier typeName
+
 -- -- * Pg-specific Q monad
 
 
@@ -1313,67 +1358,3 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
         quoteIdentifierChar '"' = char8 '"' <> char8 '"'
         quoteIdentifierChar c = char8 c
 
-
--- * Instances for 'HasDefaultSqlDataType'
-
-instance HasDefaultSqlDataType PgDataTypeSyntax ByteString where
-  defaultSqlDataType _ _ = pgByteaType
-instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax ByteString
-
-instance HasDefaultSqlDataType PgDataTypeSyntax LocalTime where
-  defaultSqlDataType _ _ = timestampType Nothing False
-instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax LocalTime
-
-instance HasDefaultSqlDataType PgDataTypeSyntax (SqlSerial Int) where
-  defaultSqlDataType _ False = pgSerialType
-  defaultSqlDataType _ _ = intType
-instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax (SqlSerial Int)
-
-instance HasDefaultSqlDataType PgDataTypeSyntax UUID where
-  defaultSqlDataType _ _ = pgUuidType
-instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UUID
-
--- * Instances for 'HasSqlEqualityCheck'
-
-#define PG_HAS_EQUALITY_CHECK(ty)                                 \
-  instance HasSqlEqualityCheck PgExpressionSyntax (ty);           \
-  instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax (ty);
-
-PG_HAS_EQUALITY_CHECK(Bool)
-PG_HAS_EQUALITY_CHECK(Double)
-PG_HAS_EQUALITY_CHECK(Float)
-PG_HAS_EQUALITY_CHECK(Int)
-PG_HAS_EQUALITY_CHECK(Int8)
-PG_HAS_EQUALITY_CHECK(Int16)
-PG_HAS_EQUALITY_CHECK(Int32)
-PG_HAS_EQUALITY_CHECK(Int64)
-PG_HAS_EQUALITY_CHECK(Integer)
-PG_HAS_EQUALITY_CHECK(Word)
-PG_HAS_EQUALITY_CHECK(Word8)
-PG_HAS_EQUALITY_CHECK(Word16)
-PG_HAS_EQUALITY_CHECK(Word32)
-PG_HAS_EQUALITY_CHECK(Word64)
-PG_HAS_EQUALITY_CHECK(T.Text)
-PG_HAS_EQUALITY_CHECK(TL.Text)
-PG_HAS_EQUALITY_CHECK(UTCTime)
-PG_HAS_EQUALITY_CHECK(Value)
-PG_HAS_EQUALITY_CHECK(Pg.Oid)
-PG_HAS_EQUALITY_CHECK(LocalTime)
-PG_HAS_EQUALITY_CHECK(ZonedTime)
-PG_HAS_EQUALITY_CHECK(TimeOfDay)
-PG_HAS_EQUALITY_CHECK(NominalDiffTime)
-PG_HAS_EQUALITY_CHECK(Day)
-PG_HAS_EQUALITY_CHECK(UUID)
-PG_HAS_EQUALITY_CHECK([Char])
-PG_HAS_EQUALITY_CHECK(Pg.HStoreMap)
-PG_HAS_EQUALITY_CHECK(Pg.HStoreList)
-PG_HAS_EQUALITY_CHECK(Pg.Date)
-PG_HAS_EQUALITY_CHECK(Pg.ZonedTimestamp)
-PG_HAS_EQUALITY_CHECK(Pg.LocalTimestamp)
-PG_HAS_EQUALITY_CHECK(Pg.UTCTimestamp)
-PG_HAS_EQUALITY_CHECK(Scientific)
-PG_HAS_EQUALITY_CHECK(ByteString)
-PG_HAS_EQUALITY_CHECK(BL.ByteString)
-PG_HAS_EQUALITY_CHECK(V.Vector a)
-PG_HAS_EQUALITY_CHECK(CI T.Text)
-PG_HAS_EQUALITY_CHECK(CI TL.Text)

@@ -40,6 +40,8 @@ type Sql92SelectSanityCheck select =
   , Sql92ProjectionExpressionSyntax (Sql92SelectTableProjectionSyntax (Sql92SelectSelectTableSyntax select)) ~
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
   , Sql92OrderingExpressionSyntax (Sql92SelectOrderingSyntax select) ~
+    Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select)
+  , Sql92TableSourceExpressionSyntax (Sql92FromTableSourceSyntax (Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select))) ~
     Sql92SelectTableExpressionSyntax (Sql92SelectSelectTableSyntax select))
 type Sql92SanityCheck cmd =
   ( Sql92SelectSanityCheck (Sql92SelectSyntax cmd)
@@ -72,6 +74,13 @@ type Sql92ReasonableMarshaller be =
    , FromBackendRow be Char
    , FromBackendRow be Int16, FromBackendRow be Int32, FromBackendRow be Int64
    , FromBackendRow be LocalTime )
+
+-- | Type classes for syntaxes which can be displayed
+class Sql92DisplaySyntax syntax where
+
+  -- | Render the syntax as a 'String', representing the SQL expression it
+  -- stands for
+  displaySyntax :: syntax -> String
 
 class ( IsSql92SelectSyntax (Sql92SelectSyntax cmd)
       , IsSql92InsertSyntax (Sql92InsertSyntax cmd)
@@ -165,9 +174,13 @@ class IsSql92ExpressionSyntax (Sql92DeleteExpressionSyntax delete) =>
   IsSql92DeleteSyntax delete where
   type Sql92DeleteExpressionSyntax delete :: *
 
-  deleteStmt :: Text
+  deleteStmt :: Text -> Maybe Text
              -> Maybe (Sql92DeleteExpressionSyntax delete)
              -> delete
+
+  -- | Whether or not the @DELETE@ command supports aliases
+  deleteSupportsAlias :: Proxy delete -> Bool
+  deleteSupportsAlias _ = False -- Delete aliases are a non-standard feature
 
 class IsSql92FieldNameSyntax fn where
   qualifiedField :: Text -> Text -> fn
@@ -201,6 +214,7 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
       , HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Bool
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
       , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr)
+      , IsSql92DataTypeSyntax (Sql92ExpressionCastTargetSyntax expr)
       , Typeable expr ) =>
     IsSql92ExpressionSyntax expr where
   type Sql92ExpressionQuantifierSyntax expr :: *
@@ -307,8 +321,11 @@ class IsSql92OrderingSyntax ord where
 
 class IsSql92TableSourceSyntax tblSource where
   type Sql92TableSourceSelectSyntax tblSource :: *
+  type Sql92TableSourceExpressionSyntax tblSource :: *
+
   tableNamed :: Text -> tblSource
   tableFromSubSelect :: Sql92TableSourceSelectSyntax tblSource -> tblSource
+  tableFromValues :: [ [ Sql92TableSourceExpressionSyntax tblSource ] ] -> tblSource
 
 class IsSql92GroupingSyntax grouping where
   type Sql92GroupingExpressionSyntax grouping :: *
@@ -322,7 +339,7 @@ class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
   type Sql92FromExpressionSyntax from :: *
 
   fromTable :: Sql92FromTableSourceSyntax from
-            -> Maybe Text
+            -> Maybe (Text, Maybe [Text])
             -> from
 
   innerJoin, leftJoin, rightJoin

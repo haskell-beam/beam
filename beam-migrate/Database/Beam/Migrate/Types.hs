@@ -49,6 +49,7 @@ module Database.Beam.Migrate.Types
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate.Types.CheckedEntities
 import Database.Beam.Migrate.Types.Predicates
+import Database.Beam.Backend.SQL
 
 import Control.Monad.Free.Church
 import Control.Arrow
@@ -75,8 +76,15 @@ newtype MigrationSteps be from to = MigrationSteps (Kleisli (F (MigrationStep be
 -- | Free monadic function for 'Migration's
 data MigrationF be next where
   MigrationRunCommand
+<<<<<<< HEAD
     :: { _migrationUpCommand   :: BeamSqlBackendSyntax be {-^ What to execute when applying the migration -}
        , _migrationDownCommand :: Maybe (BeamSqlBackendSyntax be) {-^ What to execute when unapplying the migration -}
+=======
+    :: { _migrationUpCommand   :: BeamSqlBackendSyntax be
+       -- ^ What to execute when applying the migration -}
+       , _migrationDownCommand :: Maybe (BeamSqlBackendSyntax be)
+       -- ^ What to execute when unapplying the migration
+>>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
        , _migrationNext :: next }
     -> MigrationF be next
 deriving instance Functor (MigrationF be)
@@ -103,7 +111,11 @@ instance Monoid MigrationDataLoss where
     mappend _ MigrationLosesData = MigrationLosesData
     mappend MigrationKeepsData MigrationKeepsData = MigrationKeepsData
 
+<<<<<<< HEAD
 -- | A migration command along with metadata on whether the command can lose data
+=======
+-- | A migration command along with metadata on wheth
+>>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
 data MigrationCommand be
   = MigrationCommand
   { migrationCommand :: BeamSqlBackendSyntax be
@@ -111,6 +123,10 @@ data MigrationCommand be
   , migrationCommandDataLossPossible :: MigrationDataLoss
     -- ^ Information on whether the migration loses data
   }
+<<<<<<< HEAD
+=======
+deriving instance Show (BeamSqlBackendSyntax be) => Show (MigrationCommand be)
+>>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
 
 -- | Run the migration steps between the given indices, using a custom execution function.
 runMigrationSteps :: Monad m

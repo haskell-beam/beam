@@ -6,7 +6,9 @@ import Prelude hiding (lookup)
 import Database.Beam hiding (withDatabaseDebug)
 import qualified Database.Beam as Beam
 import Database.Beam.Backend.SQL
-import Database.Beam.Sqlite
+import Database.Beam.Backend.Types
+import Database.Beam.Sqlite hiding (runBeamSqliteDebug)
+import qualified Database.Beam.Sqlite as Sqlite
 import Database.SQLite.Simple
 import Database.SQLite.Simple.FromField
 import Text.Read

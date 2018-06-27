@@ -8,11 +8,13 @@ import           Database.Beam.Backend.Types
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Schema.Tables
 
+import qualified Data.DList as DList
+import           Data.Functor.Const
 import           Data.String
 import qualified Data.Text as T
-import qualified Data.DList as DList
 import           Data.Typeable
 import           Data.Vector.Sized (Vector)
+import qualified Data.Vector.Sized as VS
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
@@ -36,10 +38,11 @@ data QF be (db :: (* -> *) -> *) s next where
             => (r -> WithExprContext (BeamSqlBackendSetQuantifierSyntax be))
             -> QM be db s r -> (r -> next) -> QF be db s next
 
-  QAll :: Beamable table
-       => (TablePrefix -> T.Text -> BeamSqlBackendFromSyntax be) -> TableSettings table
-       -> (table (QExpr be s) -> Maybe (WithExprContext (BeamSqlBackendExpressionSyntax be)))
-       -> ((T.Text, table (QExpr be s)) -> next) -> QF be db s next
+  QAll :: Projectible be r
+       => (TablePrefix -> T.Text -> BeamSqlBackendFromSyntax be)
+       -> (T.Text -> r)
+       -> (r -> Maybe (WithExprContext (BeamSqlBackendExpressionSyntax be)))
+       -> ((T.Text, r) -> next) -> QF be db s next
 
   QArbitraryJoin :: Projectible be r
                  => QM be db (QNested s) r
@@ -425,15 +428,30 @@ class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) be res a | 
                Proxy context -> Proxy be -> res -> m res)
            -> a -> m a
 
+  projectSkeleton' :: Monad m => Proxy contextPredicate -> Proxy (be, res)
+                   -> (forall context. contextPredicate context =>
+                       Proxy context -> Proxy be -> m res)
+                   -> m a
+
 instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate be (WithExprContext (BeamSqlBackendExpressionSyntax' be)) (t (QGenExpr context be s)) where
   project' _ _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
                       Columnar' . QExpr . fmap fromBeamSqlBackendExpressionSyntax <$> mutateM (Proxy @context) (Proxy @be) (BeamSqlBackendExpressionSyntax' . e)) a a
 
+  projectSkeleton' _ _ mkM =
+    zipBeamFieldsM (\_ _ -> Columnar' . QExpr . fmap fromBeamSqlBackendExpressionSyntax <$> mkM (Proxy @context)(Proxy @be))
+                   (tblSkeleton :: TableSkeleton t)
+                   (tblSkeleton :: TableSkeleton t)
+
 instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate contextPredicate be (WithExprContext (BeamSqlBackendExpressionSyntax' be)) (t (Nullable (QGenExpr context be s))) where
   project' _ _ mutateM a =
     zipBeamFieldsM (\(Columnar' (QExpr e)) _ ->
                       Columnar' . QExpr . fmap fromBeamSqlBackendExpressionSyntax <$> mutateM (Proxy @context) (Proxy @be) (BeamSqlBackendExpressionSyntax' . e)) a a
+
+  projectSkeleton' _ _ mkM =
+    zipBeamFieldsM (\_ _ -> Columnar' . QExpr . fmap fromBeamSqlBackendExpressionSyntax <$> mkM (Proxy @context)(Proxy @be))
+                   (tblSkeleton :: TableSkeleton t)
+                   (tblSkeleton :: TableSkeleton t)
 
 -- instance ProjectibleWithPredicate WindowFrameContext be (QWindow be s) where
 --   project' _ be mutateM (QWindow a) =
@@ -441,24 +459,37 @@ instance (Beamable t, contextPredicate context) => ProjectibleWithPredicate cont
 
 instance contextPredicate context => ProjectibleWithPredicate contextPredicate be (WithExprContext (BeamSqlBackendExpressionSyntax' be)) (QGenExpr context be s a) where
   project' _ _ mkE (QExpr a) = QExpr . fmap fromBeamSqlBackendExpressionSyntax <$> mkE (Proxy @context) (Proxy @be) (BeamSqlBackendExpressionSyntax' . a)
+  projectSkeleton' _ _ mkM = QExpr . fmap fromBeamSqlBackendExpressionSyntax <$> mkM (Proxy @context) (Proxy @be)
 
-instance ProjectibleWithPredicate contextPredicate be res a => ProjectibleWithPredicate contextPredicate be res [a] where
-  project' context be mkE as = traverse (project' context be mkE) as
+instance contextPredicate QWindowFrameContext => ProjectibleWithPredicate contextPredicate be (WithExprContext (BeamSqlBackendWindowFrameSyntax' be)) (QWindow be s) where
+  project' _ _ mkW (QWindow w) = QWindow . fmap fromBeamSqlBackendWindowFrameSyntax <$> mkW (Proxy @QWindowFrameContext) (Proxy @be) (BeamSqlBackendWindowFrameSyntax' . w)
+  projectSkeleton' _ _ mkM = QWindow . fmap fromBeamSqlBackendWindowFrameSyntax <$> mkM (Proxy @QWindowFrameContext) (Proxy @be)
+
+-- instance ProjectibleWithPredicate contextPredicate be res a => ProjectibleWithPredicate contextPredicate be res [a] where
+--   project' context be mkE as = traverse (project' context be mkE) as
 
 instance (ProjectibleWithPredicate contextPredicate be res a, KnownNat n) => ProjectibleWithPredicate contextPredicate be res (Vector n a) where
   project' context be mkE as = traverse (project' context be mkE) as
+  projectSkeleton' context be mkM = VS.replicateM (projectSkeleton' context be mkM)
 
 instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPredicate contextPredicate be res b ) =>
   ProjectibleWithPredicate contextPredicate be res (a, b) where
 
   project' context be mkE (a, b) =
     (,) <$> project' context be mkE a <*> project' context be mkE b
+  projectSkeleton' context be mkM =
+    (,) <$> projectSkeleton' context be mkM
+        <*> projectSkeleton' context be mkM
 
 instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPredicate contextPredicate be res b, ProjectibleWithPredicate contextPredicate be res c ) =>
   ProjectibleWithPredicate contextPredicate be res (a, b, c) where
 
   project' context be mkE (a, b, c) =
     (,,) <$> project' context be mkE a <*> project' context be mkE b <*> project' context be mkE c
+  projectSkeleton' context be mkM =
+    (,,) <$> projectSkeleton' context be mkM
+         <*> projectSkeleton' context be mkM
+         <*> projectSkeleton' context be mkM
 
 instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPredicate contextPredicate be res b, ProjectibleWithPredicate contextPredicate be res c
          , ProjectibleWithPredicate contextPredicate be res d ) =>
@@ -467,6 +498,11 @@ instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPr
   project' context be mkE (a, b, c, d) =
     (,,,) <$> project' context be mkE a <*> project' context be mkE b <*> project' context be mkE c
           <*> project' context be mkE d
+  projectSkeleton' context be mkM =
+    (,,,) <$> projectSkeleton' context be mkM
+          <*> projectSkeleton' context be mkM
+          <*> projectSkeleton' context be mkM
+          <*> projectSkeleton' context be mkM
 
 instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPredicate contextPredicate be res b, ProjectibleWithPredicate contextPredicate be res c
          , ProjectibleWithPredicate contextPredicate be res d, ProjectibleWithPredicate contextPredicate be res e ) =>
@@ -475,6 +511,12 @@ instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPr
   project' context be mkE (a, b, c, d, e) =
     (,,,,) <$> project' context be mkE a <*> project' context be mkE b <*> project' context be mkE c
            <*> project' context be mkE d <*> project' context be mkE e
+  projectSkeleton' context be mkM =
+    (,,,,) <$> projectSkeleton' context be mkM
+           <*> projectSkeleton' context be mkM
+           <*> projectSkeleton' context be mkM
+           <*> projectSkeleton' context be mkM
+           <*> projectSkeleton' context be mkM
 
 instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPredicate contextPredicate be res b, ProjectibleWithPredicate contextPredicate be res c
          , ProjectibleWithPredicate contextPredicate be res d, ProjectibleWithPredicate contextPredicate be res e, ProjectibleWithPredicate contextPredicate be res f ) =>
@@ -483,6 +525,13 @@ instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPr
   project' context be  mkE (a, b, c, d, e, f) =
     (,,,,,) <$> project' context be mkE a <*> project' context be mkE b <*> project' context be mkE c
             <*> project' context be mkE d <*> project' context be mkE e <*> project' context be mkE f
+  projectSkeleton' context be mkM =
+    (,,,,,) <$> projectSkeleton' context be mkM
+            <*> projectSkeleton' context be mkM
+            <*> projectSkeleton' context be mkM
+            <*> projectSkeleton' context be mkM
+            <*> projectSkeleton' context be mkM
+            <*> projectSkeleton' context be mkM
 
 instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPredicate contextPredicate be res b, ProjectibleWithPredicate contextPredicate be res c
          , ProjectibleWithPredicate contextPredicate be res d, ProjectibleWithPredicate contextPredicate be res e, ProjectibleWithPredicate contextPredicate be res f
@@ -493,6 +542,14 @@ instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPr
     (,,,,,,) <$> project' context be mkE a <*> project' context be mkE b <*> project' context be mkE c
              <*> project' context be mkE d <*> project' context be mkE e <*> project' context be mkE f
              <*> project' context be mkE g
+  projectSkeleton' context be mkM =
+    (,,,,,,) <$> projectSkeleton' context be mkM
+             <*> projectSkeleton' context be mkM
+             <*> projectSkeleton' context be mkM
+             <*> projectSkeleton' context be mkM
+             <*> projectSkeleton' context be mkM
+             <*> projectSkeleton' context be mkM
+             <*> projectSkeleton' context be mkM
 
 instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPredicate contextPredicate be res b, ProjectibleWithPredicate contextPredicate be res c
          , ProjectibleWithPredicate contextPredicate be res d, ProjectibleWithPredicate contextPredicate be res e, ProjectibleWithPredicate contextPredicate be res f
@@ -503,7 +560,17 @@ instance ( ProjectibleWithPredicate contextPredicate be res a, ProjectibleWithPr
     (,,,,,,,) <$> project' context be mkE a <*> project' context be mkE b <*> project' context be mkE c
               <*> project' context be mkE d <*> project' context be mkE e <*> project' context be mkE f
               <*> project' context be mkE g <*> project' context be mkE h
+  projectSkeleton' context be mkM =
+    (,,,,,,,) <$> projectSkeleton' context be mkM
+              <*> projectSkeleton' context be mkM
+              <*> projectSkeleton' context be mkM
+              <*> projectSkeleton' context be mkM
+              <*> projectSkeleton' context be mkM
+              <*> projectSkeleton' context be mkM
+              <*> projectSkeleton' context be mkM
+              <*> projectSkeleton' context be mkM
 
+-- TODO add projectSkeleton'
 instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (QField s)) where
   project' _ be mutateM a =
     zipBeamFieldsM (\(Columnar' f) _ ->
@@ -513,6 +580,19 @@ instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Nullable (
   project' _ be mutateM a =
     zipBeamFieldsM (\(Columnar' f) _ ->
                       Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
+
+instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Const T.Text)) where
+  project' _ be mutateM a =
+    zipBeamFieldsM (\(Columnar' f) _ ->
+                      Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
+
+instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Nullable (Const T.Text))) where
+  project' _ be mutateM a =
+    zipBeamFieldsM (\(Columnar' f) _ ->
+                      Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
+
+instance ProjectibleWithPredicate AnyType () T.Text (Const T.Text a) where
+  project' _ _ mutateM (Const a) = Const <$> mutateM (Proxy @()) (Proxy @()) a
 
 instance ProjectibleWithPredicate AnyType () T.Text (QField s a) where
   project' _ _ mutateM (QField q tbl f) =
@@ -529,3 +609,28 @@ reproject :: forall be a
           => Proxy be -> (Int -> BeamSqlBackendExpressionSyntax be) -> a -> a
 reproject _ mkField a =
   evalState (project' (Proxy @AnyType) (Proxy @(be, WithExprContext (BeamSqlBackendExpressionSyntax' be))) (\_ _ _ -> state (\i -> (i, i + 1)) >>= pure . pure . BeamSqlBackendExpressionSyntax' . mkField) a) 0
+
+-- | suitable as argument to 'QAll' in the case of a table result
+tableFieldsToExpressions :: ( BeamSqlBackend be, Beamable table )
+                         => TableSettings table -> T.Text -> table (QGenExpr ctxt be s)
+tableFieldsToExpressions tblSettings newTblNm =
+    changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField newTblNm (_fieldName f))))) tblSettings
+
+mkFieldsSkeleton :: forall be res m
+                  . (Projectible be res, MonadState Int m)
+                 => (Int -> m (WithExprContext (BeamSqlBackendExpressionSyntax' be))) -> m res
+mkFieldsSkeleton go =
+    projectSkeleton' (Proxy @AnyType) (Proxy @(be, WithExprContext (BeamSqlBackendExpressionSyntax' be))) $ \_ _ ->
+    do i <- get
+       put (i + 1)
+       go i
+
+mkFieldNames :: forall be res
+              . ( BeamSqlBackend be, Projectible be res )
+             => (T.Text -> BeamSqlBackendFieldNameSyntax be) -> (res, [ T.Text ])
+mkFieldNames mkField =
+    runWriter . flip evalStateT 0 $
+    mkFieldsSkeleton @be @res $ \i -> do
+      let fieldName' = fromString ("res" ++ show i)
+      tell [ fieldName' ]
+      pure (\_ -> BeamSqlBackendExpressionSyntax' (fieldE (mkField fieldName')))

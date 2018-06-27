@@ -163,10 +163,13 @@ instance IsSql92UpdateSyntax SqlSyntaxBuilder where
 instance IsSql92DeleteSyntax SqlSyntaxBuilder where
   type Sql92DeleteExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  deleteStmt tbl where_ =
+  deleteStmt tbl alias where_ =
     SqlSyntaxBuilder $
     byteString "DELETE FROM " <> quoteSql tbl <>
+    maybe mempty (\alias_ -> byteString " AS " <> quoteSql alias_) alias <>
     maybe mempty (\where_ -> byteString " WHERE " <> buildSql where_) where_
+
+  deleteSupportsAlias _ = True
 
 instance IsSql92FieldNameSyntax SqlSyntaxBuilder where
   qualifiedField a b =
@@ -261,16 +264,18 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   inE a es = SqlSyntaxBuilder (byteString "(" <> buildSql a <> byteString ") IN (" <>
                                buildSepBy (byteString ", ") (map buildSql es))
 
-instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
-  distinctE = sqlUnOp "DISTINCT"
-  similarToE = sqlBinOp "SIMILAR TO"
-
+instance IsSql99FunctionExpressionSyntax SqlSyntaxBuilder where
+  functionNameE fn = SqlSyntaxBuilder (byteString (TE.encodeUtf8 fn))
   functionCallE function args =
     SqlSyntaxBuilder $
     buildSql function <>
     byteString "(" <>
     buildSepBy (byteString ", ") (map buildSql args) <>
     byteString ")"
+
+instance IsSql99ExpressionSyntax SqlSyntaxBuilder where
+  distinctE = sqlUnOp "DISTINCT"
+  similarToE = sqlBinOp "SIMILAR TO"
 
   instanceFieldE e fieldNm =
     SqlSyntaxBuilder $
@@ -374,15 +379,26 @@ instance IsSql92OrderingSyntax SqlSyntaxBuilder where
 
 instance IsSql92TableSourceSyntax SqlSyntaxBuilder where
   type Sql92TableSourceSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92TableSourceExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
   tableNamed t = SqlSyntaxBuilder (quoteSql t)
   tableFromSubSelect query = SqlSyntaxBuilder (byteString "(" <> buildSql query <> byteString ")")
+  tableFromValues vss =
+      SqlSyntaxBuilder $
+      byteString "VALUES " <>
+      buildSepBy (byteString ", ")
+       (map (\vs -> byteString "(" <>
+                    buildSepBy (byteString ", ") (map buildSql vs) <>
+                    byteString ")") vss)
 
 instance IsSql92FromSyntax SqlSyntaxBuilder where
     type Sql92FromTableSourceSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
     type Sql92FromExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
     fromTable t Nothing = t
-    fromTable t (Just nm) = SqlSyntaxBuilder (buildSql t <> byteString " AS " <> quoteSql nm)
+    fromTable t (Just (nm, colNms)) =
+        SqlSyntaxBuilder (buildSql t <> byteString " AS " <> quoteSql nm <>
+                          maybe mempty (\colNms' -> byteString "(" <> buildSepBy (byteString ", ") (map quoteSql colNms') <> byteString ")") colNms)
 
     innerJoin = join "INNER JOIN"
     leftJoin = join "LEFT JOIN"
@@ -507,7 +523,3 @@ sqlFuncOp fun a =
 
 -- newtype SqlSyntaxM a = SqlSyntaxM (IO a)
 --   deriving (Applicative, Functor, Monad, MonadIO)
-
--- instance MonadBeam SqlSyntaxBackend SqlSyntaxBackend SqlSyntaxM where
---   withDatabaseDebug _ _ _ = fail "absurd"
---   runReturningMany _ _ = fail "absurd"

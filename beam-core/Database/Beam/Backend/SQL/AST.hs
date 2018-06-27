@@ -117,6 +117,7 @@ instance IsSql92UpdateSyntax Update where
 data Delete
   = Delete
   { deleteTable :: Text
+  , deleteAlias :: Maybe Text
   , deleteWhere :: Maybe Expression }
   deriving (Show, Eq)
 
@@ -124,6 +125,7 @@ instance IsSql92DeleteSyntax Delete where
   type Sql92DeleteExpressionSyntax Delete = Expression
 
   deleteStmt = Delete
+  deleteSupportsAlias _ = True
 
 data FieldName
   = QualifiedField Text Text
@@ -153,11 +155,6 @@ data ExtractField
   | ExtractFieldDateTimeHour
   | ExtractFieldDateTimeMinute
   | ExtractFieldDateTimeSecond
-  deriving (Show, Eq)
-
-data CastTarget
-  = CastTargetDataType DataType
-  | CastTargetDomainName Text
   deriving (Show, Eq)
 
 data DataType
@@ -254,7 +251,7 @@ data Expression
   | ExpressionUnOp Text Expression
 
   | ExpressionPosition Expression Expression
-  | ExpressionCast Expression CastTarget
+  | ExpressionCast Expression DataType
   | ExpressionExtract ExtractField Expression
   | ExpressionCharLength Expression
   | ExpressionOctetLength Expression
@@ -264,6 +261,7 @@ data Expression
   | ExpressionUpper Expression
   | ExpressionTrim Expression
 
+  | ExpressionNamedFunction Text
   | ExpressionFunctionCall Expression [ Expression ]
   | ExpressionInstanceField Expression Text
   | ExpressionRefField Expression Text
@@ -287,7 +285,7 @@ instance IsSql92ExpressionSyntax Expression where
   type Sql92ExpressionValueSyntax Expression = Value
   type Sql92ExpressionSelectSyntax Expression = Select
   type Sql92ExpressionFieldNameSyntax Expression = FieldName
-  type Sql92ExpressionCastTargetSyntax Expression = CastTarget
+  type Sql92ExpressionCastTargetSyntax Expression = DataType
   type Sql92ExpressionExtractFieldSyntax Expression = ExtractField
 
   valueE = ExpressionValue
@@ -349,10 +347,13 @@ instance IsSql92ExpressionSyntax Expression where
   defaultE = ExpressionDefault
   inE = ExpressionIn
 
+instance IsSql99FunctionExpressionSyntax Expression where
+  functionNameE = ExpressionNamedFunction
+  functionCallE = ExpressionFunctionCall
+
 instance IsSql99ExpressionSyntax Expression where
   distinctE = ExpressionDistinct
   similarToE = ExpressionBinOp "SIMILAR TO"
-  functionCallE = ExpressionFunctionCall
   instanceFieldE = ExpressionInstanceField
   refFieldE = ExpressionRefField
 
@@ -450,16 +451,19 @@ instance IsSql92GroupingSyntax Grouping where
 data TableSource
   = TableNamed Text
   | TableFromSubSelect Select
+  | TableFromValues [ [ Expression ] ]
   deriving (Show, Eq)
 
 instance IsSql92TableSourceSyntax TableSource where
   type Sql92TableSourceSelectSyntax TableSource = Select
+  type Sql92TableSourceExpressionSyntax TableSource = Expression
 
   tableNamed = TableNamed
   tableFromSubSelect = TableFromSubSelect
+  tableFromValues = TableFromValues
 
 data From
-  = FromTable TableSource (Maybe Text)
+  = FromTable TableSource (Maybe (Text, Maybe [Text]))
   | InnerJoin From From (Maybe Expression)
   | LeftJoin From From (Maybe Expression)
   | RightJoin From From (Maybe Expression)

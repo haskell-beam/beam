@@ -48,6 +48,8 @@ module Database.Beam.Postgres
 
   , module Database.Beam.Postgres.PgSpecific
 
+  , runBeamPostgres, runBeamPostgresDebug
+
     -- ** Postgres extension support
   , PgExtensionEntity, IsPgExtension(..)
   , pgCreateExtension, pgDropExtension

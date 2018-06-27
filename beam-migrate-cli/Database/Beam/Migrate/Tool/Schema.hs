@@ -8,6 +8,8 @@ import           Database.Beam.Migrate.Tool.Diff
 import           Database.Beam.Migrate.Tool.Registry
 import           Database.Beam.Migrate.Log
 
+import           Database.Beam.Backend.SQL
+
 import           Database.Beam.Migrate ( SomeDatabasePredicate(..)
                                        , DatabasePredicate(..)
                                        , PredicateSpecificity(..)
@@ -128,53 +130,50 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
                        Just branch ->
                          updateBranch branchName' (branch { migrationBranchCommit = hsHash }) registry)
 
-dumpSchema :: MigrateCmdLine
-           -> ModuleName
-           -> String
-           -> IO ()
-dumpSchema cmdLine backend connStr = do
-  backend' <- loadBackend' cmdLine backend
-  case backend' of
-    SomeBeamMigrationBackend (BeamMigrationBackend { backendGetDbConstraints = getConstraints
-                                                   , backendTransact = transact }) -> do
-      cs <- transact connStr getConstraints
-      case cs of
-        Left err -> fail ("Error getting constraints: " ++ show err)
-        Right cs' ->
-          let sch = Schema (map (\c -> (HS.singleton predSrc, c)) cs')
-              predSrc = PredicateSpecificityOnlyBackend (unModuleName backend)
-          in BS.putStrLn (Yaml.encode sch)
-
 showSimpleSchema :: MigrateCmdLine
                  -> ModuleName
                  -> String
+                 -> SchemaKind
                  -> IO ()
-showSimpleSchema cmdLine backend connStr = do
+showSimpleSchema cmdLine backend connStr schemaKind = do
   backend' <- loadBackend' cmdLine backend
   case backend' of
     SomeBeamMigrationBackend (BeamMigrationBackend { backendGetDbConstraints = getConstraints
                                                    , backendConvertToHaskell = HaskellPredicateConverter convDbPred
-                                                   , backendTransact = transact }) -> do
+                                                   , backendTransact = transact
+                                                   , backendActionProvider = actionProvs
+                                                   , backendRenderSyntax = renderSyntax }) -> do
       cs <- transact connStr getConstraints
       case cs of
         Left err -> fail ("Error getting constraints: " ++ show err)
-        Right cs' -> do
-          cs'' <- fmap catMaybes .
-                 forM cs' $ \c -> do
-                   let c' = convDbPred c
-                   case c' of
-                     Nothing -> putStrLn ("Tossing constraint " ++ show c)
-                     Just {} -> pure ()
-                   pure c'
-          case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs'' of
-            Candidates {} -> fail "Could not form haskell schema"
-            Solved actions ->
-              case renderHsSchema (hsActionsToModule "Schema" (fmap migrationCommand actions)) of
-                Left err -> fail ("Could not render schema: " ++ err)
-                Right sch -> putStrLn sch
+        Right cs' ->
+          case schemaKind of
+            YamlSchema ->
+              let sch = Schema (map (\c -> (HS.singleton predSrc, c)) cs')
+                  predSrc = PredicateSpecificityOnlyBackend (unModuleName backend)
+              in BS.putStrLn (Yaml.encode sch)
+            BackendSchema -> do
+              case finalSolution $ heuristicSolver actionProvs [] cs' of
+                Candidates {} -> fail "Could not form native schema"
+                Solved actions ->
+                    putStrLn (unlines (map renderSyntax (fmap migrationCommand actions)))
+            HsSchema -> do
+              cs'' <- fmap catMaybes .
+                     forM cs' $ \c -> do
+                       let c' = convDbPred c
+                       case c' of
+                         Nothing -> putStrLn ("Tossing constraint " ++ show c)
+                         Just {} -> pure ()
+                       pure c'
+              case finalSolution $ heuristicSolver (defaultActionProvider @HsMigrateBackend) [] cs'' of
+                Candidates {} -> fail "Could not form haskell schema"
+                Solved actions ->
+                  case renderHsSchema (hsActionsToModule "Schema" (fmap migrationCommand actions)) of
+                    Left err -> fail ("Could not render schema: " ++ err)
+                    Right sch -> putStrLn sch
 
 writeSchema :: MigrateCmdLine -> MigrationRegistry
-             -> UUID -> BeamMigrationBackend cmd be hdl m
+             -> UUID -> BeamMigrationBackend be m
              -> [SomeDatabasePredicate]
              -> IO FilePath
 writeSchema cmdLine registry commitId be cs = do
@@ -190,7 +189,7 @@ writeHsSchema :: MigrateCmdLine -> MigrationRegistry
               -> Schema
               -> [MigrationFormat] -> IO FilePath
 writeHsSchema cmdLine registry commitId cs dbSchema fmts =
-  case finalSolution $ heuristicSolver (defaultActionProvider @HsAction) [] cs of
+  case finalSolution $ heuristicSolver (defaultActionProvider @HsMigrateBackend) [] cs of
     Candidates [] -> fail "Could not form haskell schema"
     Candidates (x:_) ->
       let allSolved = dbStateCurrentState x
@@ -207,9 +206,9 @@ writeHsSchema cmdLine registry commitId cs dbSchema fmts =
                           metadataComment "--" metadata
 
 writeMigration :: MigrateCmdLine -> MigrationRegistry
-               -> BeamMigrationBackend cmd be hdl m
+               -> BeamMigrationBackend be m
                -> UUID -> UUID
-               -> [ cmd ]
+               -> [ BeamSqlBackendSyntax be ]
                -> IO FilePath
 writeMigration cmdLine reg be fromId toId cmds =
   case be of

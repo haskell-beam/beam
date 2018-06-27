@@ -27,6 +27,8 @@ library
                        Database.Beam.Query
                        Database.Beam.Query.Internal
                        Database.Beam.Query.CustomSQL
+                       Database.Beam.Query.CTE
+                       Database.Beam.Query.DataTypes
                        Database.Beam.Query.SQL92
                        Database.Beam.Query.Types
 
@@ -52,7 +54,7 @@ library
 
                        Database.Beam.Schema.Lenses
   build-depends:       base         >=4.7     && <5.0,
-                       aeson        >=0.11    && <1.3,
+                       aeson        >=0.11    && <1.4,
                        text         >=1.0     && <1.3,
                        bytestring   >=0.10    && <0.11,
                        mtl          >=2.1     && <2.3,
@@ -64,6 +66,8 @@ library
                        hashable     >=1.1     && <1.3,
                        network-uri  >=2.6     && <2.7,
                        containers   >=0.5     && <0.6,
+                       scientific   >=0.3     && <0.4,
+                       vector       >=0.11    && <0.13,
                        vector-sized >=0.5     && <1.1,
                        tagged       >=0.8     && <0.9
   Default-language:    Haskell2010

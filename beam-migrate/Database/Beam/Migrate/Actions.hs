@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Data types and functions to discover sequences of DDL commands to go from
 -- one database state to another. Used for migration generation.
@@ -89,9 +90,10 @@ module Database.Beam.Migrate.Actions
   , heuristicSolver
   ) where
 
-import           Database.Beam.Migrate.Types
+import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.SQL
+import           Database.Beam.Migrate.Types
 
 import           Control.Applicative
 import           Control.DeepSeq
@@ -123,25 +125,27 @@ data DatabaseStateSource
 instance NFData DatabaseStateSource
 
 -- | Represents the state of a database as a migration is being generated
-data DatabaseState cmd
+data DatabaseState be
   = DatabaseState
   { dbStateCurrentState       :: !(HM.HashMap SomeDatabasePredicate DatabaseStateSource)
     -- ^ The current set of predicates that apply to this database as well as
     -- their source (user or from previous actions)
   , dbStateKey                :: !(HS.HashSet SomeDatabasePredicate)
     -- ^ HS.fromMap of 'dbStateCurrentState', for maximal sharing
-  , dbStateCmdSequence        :: !(Seq.Seq (MigrationCommand cmd))
+  , dbStateCmdSequence        :: !(Seq.Seq (MigrationCommand be))
     -- ^ The current sequence of commands we've committed to in this state
-  } deriving Show
+  }
+deriving instance Show (BeamSqlBackendSyntax be) => Show (DatabaseState be)
 
 instance NFData (DatabaseState cmd) where
   rnf d@DatabaseState {..} = d `seq` ()
 
 -- | Wrapper for 'DatabaseState' that keeps track of the command sequence length
 -- and goal distance. Used for sorting states when conducting the search.
-data MeasuredDatabaseState cmd
-  = MeasuredDatabaseState {-# UNPACK #-} !Int {-# UNPACK #-} !Int (DatabaseState cmd)
-  deriving (Show, Generic)
+data MeasuredDatabaseState be
+  = MeasuredDatabaseState {-# UNPACK #-} !Int {-# UNPACK #-} !Int (DatabaseState be)
+  deriving Generic
+deriving instance Show (BeamSqlBackendSyntax be) => Show (MeasuredDatabaseState be)
 instance NFData (MeasuredDatabaseState cmd)
 instance Eq (MeasuredDatabaseState cmd) where
   a == b = measure a == measure b
@@ -171,13 +175,13 @@ measureDb' _ post cmdLength st@(DatabaseState _ repr _) =
 -- Given a particular starting point, the destination database is the database
 -- where each predicate in 'actionPreConditions' has been removed and each
 -- predicate in 'actionPostConditions' has been added.
-data PotentialAction cmd
+data PotentialAction be
   = PotentialAction
   { actionPreConditions  :: !(HS.HashSet SomeDatabasePredicate)
     -- ^ Preconditions that will no longer apply
   , actionPostConditions :: !(HS.HashSet SomeDatabasePredicate)
     -- ^ Conditions that will apply after we're done
-  , actionCommands :: !(Seq.Seq (MigrationCommand cmd))
+  , actionCommands :: !(Seq.Seq (MigrationCommand be))
     -- ^ The sequence of commands that accomplish this movement in the database
     -- graph. For an edge, 'actionCommands' contains one command; for a path, it
     -- will contain more.
@@ -188,14 +192,14 @@ data PotentialAction cmd
     -- path through the graph.
   }
 
-instance Semigroup (PotentialAction cmd) where
+instance Semigroup (PotentialAction be) where
   (<>) = mappend
 
 -- | 'PotentialAction's can represent edges or paths. Monadically combining two
 -- 'PotentialAction's results in the path between the source of the first and
 -- the destination of the second. 'mempty' here returns the action that does
 -- nothing (i.e., the edge going back to the same database state)
-instance Monoid (PotentialAction cmd) where
+instance Monoid (PotentialAction be) where
   mempty = PotentialAction mempty mempty mempty  "" 0
   mappend a b =
     PotentialAction (actionPreConditions a <> actionPreConditions b)
@@ -207,10 +211,10 @@ instance Monoid (PotentialAction cmd) where
                     (actionScore a + actionScore b)
 
 -- | See 'ActionProvider'
-type ActionProviderFn cmd =
+type ActionProviderFn be =
      (forall preCondition.  Typeable preCondition  => [ preCondition ])             {- The list of preconditions -}
   -> (forall postCondition. Typeable postCondition => [ postCondition ])            {- The list of postconditions (used for guiding action selection) -}
-  -> [ PotentialAction cmd ]  {- A list of actions that we could perform -}
+  -> [ PotentialAction be ]  {- A list of actions that we could perform -}
 
 -- | Edge discovery mechanism. A newtype wrapper over 'ActionProviderFn'.
 --
@@ -245,13 +249,13 @@ type ActionProviderFn cmd =
 -- results if there are any elements in the provided list. In this case, it's
 -- used to stop @DROP TABLE@ action generation for tables which must be present
 -- in the final database.
-newtype ActionProvider cmd
-  = ActionProvider { getPotentialActions :: ActionProviderFn cmd }
+newtype ActionProvider be
+  = ActionProvider { getPotentialActions :: ActionProviderFn be }
 
-instance Semigroup (ActionProvider cmd) where
+instance Semigroup (ActionProvider be) where
   (<>) = mappend
 
-instance Monoid (ActionProvider cmd) where
+instance Monoid (ActionProvider be) where
   mempty = ActionProvider (\_ _ -> [])
   mappend (ActionProvider a) (ActionProvider b) =
     ActionProvider $ \pre post ->
@@ -281,14 +285,13 @@ justOne_ [x] = [x]
 justOne_ _ = []
 
 -- | Action provider for SQL92 @CREATE TABLE@ actions.
-createTableActionProvider :: forall cmd
-                           . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
-                             , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-                          => ActionProvider cmd
+createTableActionProvider :: forall be
+                           . ( Typeable be, BeamMigrateOnlySqlBackend be )
+                          => ActionProvider be
 createTableActionProvider =
   ActionProvider provider
   where
-    provider :: ActionProviderFn cmd
+    provider :: ActionProviderFn be
     provider findPreConditions findPostConditions =
       do tblP@(TableExistsPredicate postTblNm) <- findPostConditions
          -- Make sure there's no corresponding predicate in the precondition
@@ -298,8 +301,7 @@ createTableActionProvider =
 
          (columnsP, columns) <- pure . unzip $
            do columnP@
-                (TableHasColumn tblNm colNm schema
-                 :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd)) <-
+                (TableHasColumn tblNm colNm schema :: TableHasColumn be) <-
                 findPostConditions
               guard (tblNm == postTblNm)
 
@@ -307,7 +309,7 @@ createTableActionProvider =
                 pure . unzip $ do
                 constraintP@
                   (TableColumnHasConstraint tblNm' colNm' c
-                   :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd)) <-
+                   :: TableColumnHasConstraint be) <-
                   findPostConditions
                 guard (postTblNm == tblNm')
                 guard (colNm == colNm')
@@ -330,15 +332,14 @@ createTableActionProvider =
                                ("Create the table " <> postTblNm) createTableWeight)
 
 -- | Action provider for SQL92 @DROP TABLE@ actions
-dropTableActionProvider :: forall cmd
-                        . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
-                          , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-                        => ActionProvider cmd
+dropTableActionProvider :: forall be
+                         . BeamMigrateOnlySqlBackend be
+                        => ActionProvider be
 dropTableActionProvider =
  ActionProvider provider
  where
    -- Look for tables that exist as a precondition but not a post condition
-   provider :: ActionProviderFn cmd
+   provider :: ActionProviderFn be
    provider findPreConditions findPostConditions =
      do tblP@(TableExistsPredicate preTblNm) <- findPreConditions
         ensuringNot_ $
@@ -358,21 +359,20 @@ dropTableActionProvider =
                               ("Drop table " <> preTblNm) dropTableWeight)
 
 -- | Action provider for SQL92 @ALTER TABLE ... ADD COLUMN ...@ actions
-addColumnProvider :: forall cmd
-                   . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
-                     , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-                   => ActionProvider cmd
+addColumnProvider :: forall be
+                   . ( Typeable be, BeamMigrateOnlySqlBackend be )
+                  => ActionProvider be
 addColumnProvider =
   ActionProvider provider
   where
-    provider :: ActionProviderFn cmd
+    provider :: ActionProviderFn be
     provider findPreConditions findPostConditions =
-      do colP@(TableHasColumn tblNm colNm colType :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableHasColumn tblNm colNm colType :: TableHasColumn be)
            <- findPostConditions
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm' == tblNm)
          ensuringNot_ $ do
-           TableHasColumn tblNm'' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <-
+           TableHasColumn tblNm'' colNm' _ :: TableHasColumn be <-
              findPreConditions
            guard (tblNm'' == tblNm && colNm == colNm') -- This column exists as a different type
 
@@ -384,15 +384,14 @@ addColumnProvider =
                 (addColumnWeight + fromIntegral (T.length tblNm + T.length colNm)))
 
 -- | Action provider for SQL92 @ALTER TABLE ... DROP COLUMN ...@ actions
-dropColumnProvider :: forall cmd
-                    . ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
-                      , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-                   => ActionProvider cmd
+dropColumnProvider :: forall be
+                    . ( Typeable be, BeamMigrateOnlySqlBackend be )
+                   => ActionProvider be
 dropColumnProvider = ActionProvider provider
   where
-    provider :: ActionProviderFn cmd
+    provider :: ActionProviderFn be
     provider findPreConditions _ =
-      do colP@(TableHasColumn tblNm colNm _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableHasColumn tblNm colNm _ :: TableHasColumn be)
            <- findPreConditions
 
 --         TableExistsPredicate tblNm' <- trace ("COnsider drop " <> show tblNm <> " " <> show colNm)  findPreConditions
@@ -414,21 +413,22 @@ dropColumnProvider = ActionProvider provider
                 (dropColumnWeight + fromIntegral (T.length tblNm + T.length colNm)))
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET NULL@
-addColumnNullProvider :: forall cmd
-                       . Sql92SaneDdlCommandSyntaxMigrateOnly cmd
-                      => ActionProvider cmd
+addColumnNullProvider :: forall be
+                       . ( Typeable be, BeamMigrateOnlySqlBackend be )
+                      => ActionProvider be
 addColumnNullProvider = ActionProvider provider
   where
-    provider :: ActionProviderFn cmd
+    provider :: ActionProviderFn be
     provider findPreConditions findPostConditions =
-      do colP@(TableColumnHasConstraint tblNm colNm _ :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableColumnHasConstraint tblNm colNm _ :: TableColumnHasConstraint be)
            <- findPostConditions
 -- TODO         guard (c == notNullConstraintSyntax)
 
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm == tblNm')
 
-         TableHasColumn tblNm'' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
+         TableHasColumn tblNm'' colNm' _ :: TableHasColumn be <-
+           findPreConditions
          guard (tblNm == tblNm'' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNotNullSyntax))
@@ -437,21 +437,22 @@ addColumnNullProvider = ActionProvider provider
                                ("Add not null constraint to " <> colNm <> " on " <> tblNm) 100)
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET  NOT NULL@
-dropColumnNullProvider :: forall cmd
-                        . Sql92SaneDdlCommandSyntaxMigrateOnly cmd
-                       => ActionProvider cmd
+dropColumnNullProvider :: forall be
+                        . ( Typeable be, BeamMigrateOnlySqlBackend be )
+                       => ActionProvider be
 dropColumnNullProvider = ActionProvider provider
   where
-    provider :: ActionProviderFn cmd
+    provider :: ActionProviderFn be
     provider findPreConditions _ =
-      do colP@(TableColumnHasConstraint tblNm colNm _ :: TableColumnHasConstraint (Sql92DdlCommandColumnSchemaSyntax cmd))
+      do colP@(TableColumnHasConstraint tblNm colNm _ :: TableColumnHasConstraint be)
            <- findPreConditions
 -- TODO         guard (c == notNullConstraintSyntax)
 
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm == tblNm')
 
-         TableHasColumn tblNm'' colNm' _ :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <- findPreConditions
+         TableHasColumn tblNm'' colNm' _ :: TableHasColumn be <-
+           findPreConditions
          guard (tblNm == tblNm'' && colNm == colNm')
 
          let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNullSyntax))
@@ -468,9 +469,9 @@ dropColumnNullProvider = ActionProvider provider
 --  * ALTER TABLE ... ADD COLUMN ...
 --  * ALTER TABLE ... DROP COLUMN ...
 --  * ALTER TABLE ... ALTER COLUMN ... SET [NOT] NULL
-defaultActionProvider :: ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
-                         , Sql92SerializableDataTypeSyntax (Sql92DdlCommandDataTypeSyntax cmd) )
-                      => ActionProvider cmd
+defaultActionProvider :: ( Typeable be
+                         , BeamMigrateOnlySqlBackend be )
+                      => ActionProvider be
 defaultActionProvider =
   mconcat
   [ createTableActionProvider
@@ -522,23 +523,23 @@ data Solver cmd where
                      } -> Solver cmd
 
 -- | Represents the final results of a search
-data FinalSolution cmd
-  = Solved [ MigrationCommand cmd ]
+data FinalSolution be
+  = Solved [ MigrationCommand be ]
     -- ^ The search found a path from the source to the destination database,
     -- and has provided a set of commands that would work
-  | Candidates [ DatabaseState cmd ]
+  | Candidates [ DatabaseState be ]
     -- ^ The search failed, but provided a set of 'DatbaseState's it encountered
     -- that were the closest to the destination database. By default, only 10
     -- candidates are provided.
-  deriving Show
+deriving instance Show (BeamSqlBackendSyntax be) => Show (FinalSolution be)
 
 -- | Returns 'True' if the state has been solved
-solvedState :: HS.HashSet SomeDatabasePredicate -> DatabaseState cmd -> Bool
+solvedState :: HS.HashSet SomeDatabasePredicate -> DatabaseState be -> Bool
 solvedState goal (DatabaseState _ cur _) = goal == cur
 
 -- | An exhaustive solving strategy that simply continues the search, while
 -- exploring every possible action. If there is a solution, this will find it.
-finalSolution :: Solver cmd -> FinalSolution cmd
+finalSolution :: Solver be -> FinalSolution be
 finalSolution (SearchFailed sts)     = Candidates sts
 finalSolution (ProvideSolution cmds) = Solved cmds
 finalSolution (ChooseActions _ _ actions next) =
@@ -552,10 +553,10 @@ finalSolution (ChooseActions _ _ actions next) =
 --
 -- See the documentation on 'Solver' for more information on how to consume the
 -- result.
-heuristicSolver :: ActionProvider cmd        -- ^ Edge discovery function
+heuristicSolver :: ActionProvider be         -- ^ Edge discovery function
                 -> [ SomeDatabasePredicate ] -- ^ Source database state
                 -> [ SomeDatabasePredicate ] -- ^ Destination database state
-                -> Solver cmd
+                -> Solver be
 heuristicSolver provider preConditionsL postConditionsL =
 
   heuristicSolver' initQueue mempty PQ.empty

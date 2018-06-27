@@ -5,7 +5,8 @@ module Database.Beam.Backend.SQL
 
   , MonadBeam(..)
 
-  , BeamSqlBackend(..)
+  , BeamSqlBackend
+  , BeamSqlBackendSyntax
   , MockSqlBackend
 
   , BeamSqlBackendIsString
@@ -13,9 +14,15 @@ module Database.Beam.Backend.SQL
   , BeamSql99ExpressionBackend
   , BeamSql99AggregationBackend
   , BeamSql99ConcatExpressionBackend
+  , BeamSql99CommonTableExpressionBackend
+  , BeamSql99RecursiveCTEBackend
   , BeamSql2003ExpressionBackend
 
   , BeamSqlT021Backend
+<<<<<<< HEAD
+=======
+  , BeamSqlT071Backend
+>>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
   , BeamSqlT611Backend
   , BeamSqlT612Backend
   , BeamSqlT614Backend
@@ -23,6 +30,7 @@ module Database.Beam.Backend.SQL
   , BeamSqlT616Backend
   , BeamSqlT618Backend
   , BeamSqlT621Backend
+  , BeamSql99DataTypeBackend
 
   , BeamSqlBackendSupportsOuterJoin
 
@@ -31,6 +39,7 @@ module Database.Beam.Backend.SQL
   , BeamSqlBackendInsertValuesSyntax
   , BeamSqlBackendUpdateSyntax
   , BeamSqlBackendDeleteSyntax
+  , BeamSqlBackendCastTargetSyntax
   , BeamSqlBackendSelectTableSyntax
   , BeamSqlBackendAggregationQuantifierSyntax
   , BeamSqlBackendSetQuantifierSyntax
@@ -47,6 +56,8 @@ module Database.Beam.Backend.SQL
   , BeamSqlBackendWindowFrameBoundsSyntax
   , BeamSqlBackendWindowFrameBoundSyntax
 
+  , BeamSql99BackendCTESyntax
+
   , BeamSqlBackendCanSerialize
   , BeamSqlBackendCanDeserialize
   , BeamSqlBackendSupportsDataType
@@ -56,7 +67,16 @@ import Database.Beam.Backend.SQL.SQL2003
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
-import Control.Monad.IO.Class
+import Control.Monad.Cont
+import Control.Monad.Except
+import Control.Monad.List
+import qualified Control.Monad.RWS.Lazy as Lazy
+import qualified Control.Monad.RWS.Strict as Strict
+import Control.Monad.Reader
+import qualified Control.Monad.State.Lazy as Lazy
+import qualified Control.Monad.Writer.Lazy as Lazy
+import qualified Control.Monad.State.Strict as Strict
+import qualified Control.Monad.Writer.Strict as Strict
 
 import Data.Tagged (Tagged)
 import Data.Text (Text)
@@ -65,35 +85,17 @@ import Data.Text (Text)
 
 -- | A class that ties together a monad with a particular backend
 --
---   Intuitively, this allows you to write code that performs database commands
---   without having to know the underlying API. As long as you have an
---   appropriate handle from a database library that Beam can use, you can use
---   the 'MonadBeam' methods to execute the query.
---
---   Provided here is a low-level interface. Most often, you'll only need the
---   'withDatabase' and 'withDatabaseDebug' function. The 'run*' functions are
---   wrapped by the appropriate functions in "Database.Beam.Query".
+--   Provided here is a low-level interface for executing commands. The 'run*'
+--   functions are wrapped by the appropriate functions in 'Database.Beam.Query'.
 --
 --   This interface is very high-level and isn't meant to expose the full power
 --   of the underlying database. Namely, it only supports simple data retrieval
 --   strategies. More complicated strategies (for example, Postgres's @COPY@)
 --   are supported in individual backends. See the documentation of those
 --   backends for more details.
-class (BeamBackend be, MonadIO m) =>
-  MonadBeam be handle m | m -> be handle where
-
-  {-# MINIMAL withDatabaseDebug, runReturningMany #-}
-
-  -- | Run a database action, and log debugging information about statements
-  --   executed using the specified 'IO' action.
-  withDatabaseDebug :: (String -> IO ()) -- ^ Database statement logging function
-                    -> handle            -- ^ The database connection handle against which to execute the action
-                    -> m a               -- ^ The database action
-                    -> IO a
-  withDatabase :: handle -> m a -> IO a
-
-  -- | Run a database action, but don't report any debug information
-  withDatabase = withDatabaseDebug (\_ -> pure ())
+class (BeamBackend be, Monad m) =>
+  MonadBeam be m | m -> be where
+  {-# MINIMAL runReturningMany #-}
 
   -- | Run a query determined by the given syntax, providing an action that will
   --   be called to consume the results from the database (if any). The action
@@ -142,6 +144,76 @@ class (BeamBackend be, MonadIO m) =>
                   Just x -> collectM (acc . (x:))
           in collectM id
 
+instance MonadBeam be m => MonadBeam be (ExceptT e m) where
+    runReturningMany s a = ExceptT $ runReturningMany s (\nextRow -> runExceptT (a (lift nextRow)))
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (ListT m) where
+    runReturningMany s a = ListT $ do
+                             x <- runReturningMany s (\nextRow -> runListT (a (lift nextRow)))
+                             pure x
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (ContT r m) where
+    runReturningMany s a = ContT $ \r ->
+                           runReturningMany s (\nextRow -> runContT (a (lift nextRow)) r)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (ReaderT r m) where
+    runReturningMany s a = ReaderT $ \r ->
+                           runReturningMany s (\nextRow -> runReaderT (a (lift nextRow)) r)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (Lazy.StateT s m) where
+    runReturningMany s a = Lazy.StateT $ \st ->
+                           runReturningMany s (\nextRow -> Lazy.runStateT (a (lift nextRow)) st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance MonadBeam be m => MonadBeam be (Strict.StateT s m) where
+    runReturningMany s a = Strict.StateT $ \st ->
+                           runReturningMany s (\nextRow -> Strict.runStateT (a (lift nextRow)) st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid s) => MonadBeam be (Lazy.WriterT s m) where
+    runReturningMany s a = Lazy.WriterT $
+                           runReturningMany s (\nextRow -> Lazy.runWriterT (a (lift nextRow)))
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid s) => MonadBeam be (Strict.WriterT s m) where
+    runReturningMany s a = Strict.WriterT $
+                           runReturningMany s (\nextRow -> Strict.runWriterT (a (lift nextRow)))
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid w) => MonadBeam be (Lazy.RWST r w s m) where
+    runReturningMany s a = Lazy.RWST $ \r st ->
+                           runReturningMany s (\nextRow -> Lazy.runRWST (a (lift nextRow)) r st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
+instance (MonadBeam be m, Monoid w) => MonadBeam be (Strict.RWST r w s m) where
+    runReturningMany s a = Strict.RWST $ \r st ->
+                           runReturningMany s (\nextRow -> Strict.runRWST (a (lift nextRow)) r st)
+    runNoReturn = lift . runNoReturn
+    runReturningOne = lift . runReturningOne
+    runReturningList = lift . runReturningList
+
 -- * BeamSqlBackend
 
 -- | Class for all Beam SQL backends
@@ -158,9 +230,9 @@ class ( -- Every SQL backend must be a beam backend
 
         -- Needed for the Eq instance on QGenExpr
       , Eq (BeamSqlBackendExpressionSyntax be)
-      ) => BeamSqlBackend be where
+      ) => BeamSqlBackend be
 
-  type BeamSqlBackendSyntax be :: *
+type family BeamSqlBackendSyntax be :: *
 
 -- | Fake backend that cannot deserialize anything, but is useful for testing
 data MockSqlBackend syntax
@@ -180,8 +252,8 @@ instance ( IsSql92Syntax syntax
 
            -- Needed for the Eq instance on QGenExpr
          , Eq (Sql92ExpressionSyntax syntax)
-         ) => BeamSqlBackend (MockSqlBackend syntax) where
-  type BeamSqlBackendSyntax (MockSqlBackend syntax) = syntax
+         ) => BeamSqlBackend (MockSqlBackend syntax)
+type instance BeamSqlBackendSyntax (MockSqlBackend syntax) = syntax
 
 -- | Type class for things which are text-like in this backend
 class BeamSqlBackendIsString be text
@@ -191,13 +263,22 @@ instance BeamSqlBackendIsString (MockSqlBackend cmd) [Char]
 
 type BeamSql99ExpressionBackend be = IsSql99ExpressionSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSql99ConcatExpressionBackend be = IsSql99ConcatExpressionSyntax (BeamSqlBackendExpressionSyntax be)
+type BeamSql99CommonTableExpressionBackend be =
+    ( BeamSqlBackend be
+    , IsSql99CommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be)
+    , IsSql99CommonTableExpressionSyntax (BeamSql99BackendCTESyntax be)
+    , Sql99CTESelectSyntax (BeamSql99BackendCTESyntax be) ~ BeamSqlBackendSelectSyntax be )
+type BeamSql99RecursiveCTEBackend be=
+    ( BeamSql99CommonTableExpressionBackend be
+    , IsSql99RecursiveCommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be) )
 type BeamSql99AggregationBackend be = IsSql99AggregationExpressionSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSql2003ExpressionBackend be = ( IsSql2003ExpressionSyntax (BeamSqlBackendExpressionSyntax be)
                                        , Sql2003SanityCheck (BeamSqlBackendSyntax be) )
 
 type BeamSqlBackendSupportsOuterJoin be = IsSql92FromOuterJoinSyntax (BeamSqlBackendFromSyntax be)
 
-type BeamSqlT021Backend be = IsSql2003BinaryAndVarBinaryDataTypeSyntax (BeamSqlBackendDataTypeSyntax be)
+type BeamSqlT021Backend be = IsSql2003BinaryAndVarBinaryDataTypeSyntax (BeamSqlBackendCastTargetSyntax be)
+type BeamSqlT071Backend be = IsSql2008BigIntDataTypeSyntax (BeamSqlBackendCastTargetSyntax be)
 type BeamSqlT611Backend be = IsSql2003ExpressionElementaryOLAPOperationsSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlT612Backend be = IsSql2003ExpressionAdvancedOLAPOperationsSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlT614Backend be = IsSql2003NtileExpressionSyntax (BeamSqlBackendExpressionSyntax be)
@@ -208,6 +289,10 @@ type BeamSqlT621Backend be =
   ( IsSql2003EnhancedNumericFunctionsExpressionSyntax (BeamSqlBackendExpressionSyntax be)
   , IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax (BeamSqlBackendExpressionSyntax be) )
 
+type BeamSql99DataTypeBackend be =
+    ( BeamSqlBackend be
+    , IsSql99DataTypeSyntax (BeamSqlBackendCastTargetSyntax be) )
+
 type BeamSqlBackendSelectSyntax be = Sql92SelectSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendInsertSyntax be = Sql92InsertSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendInsertValuesSyntax be = Sql92InsertValuesSyntax (BeamSqlBackendInsertSyntax be)
@@ -216,6 +301,8 @@ type BeamSqlBackendDataTypeSyntax be = Sql92ExpressionCastTargetSyntax (BeamSqlB
 type BeamSqlBackendFieldNameSyntax be = Sql92ExpressionFieldNameSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendUpdateSyntax be = Sql92UpdateSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendDeleteSyntax be = Sql92DeleteSyntax (BeamSqlBackendSyntax be)
+type BeamSqlBackendCastTargetSyntax be
+    = Sql92ExpressionCastTargetSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendExpressionQuantifierSyntax be = Sql92ExpressionQuantifierSyntax (Sql92ExpressionSyntax (BeamSqlBackendSyntax be))
 type BeamSqlBackendValueSyntax be = Sql92ValueSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendSetQuantifierSyntax be = Sql92SelectTableSetQuantifierSyntax (BeamSqlBackendSelectTableSyntax be)
@@ -228,6 +315,8 @@ type BeamSqlBackendGroupingSyntax be = Sql92SelectTableGroupingSyntax (BeamSqlBa
 type BeamSqlBackendWindowFrameSyntax be = Sql2003ExpressionWindowFrameSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendWindowFrameBoundsSyntax be = Sql2003WindowFrameBoundsSyntax (BeamSqlBackendWindowFrameSyntax be)
 type BeamSqlBackendWindowFrameBoundSyntax be = Sql2003WindowFrameBoundsBoundSyntax (BeamSqlBackendWindowFrameBoundsSyntax be)
+
+type BeamSql99BackendCTESyntax be = Sql99SelectCTESyntax (BeamSqlBackendSelectSyntax be)
 
 type BeamSqlBackendCanSerialize be = HasSqlValueSyntax (BeamSqlBackendValueSyntax be)
 type BeamSqlBackendCanDeserialize be = FromBackendRow be

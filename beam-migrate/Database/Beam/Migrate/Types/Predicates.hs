@@ -45,8 +45,8 @@ class (Typeable p, Hashable p, Eq p) => DatabasePredicate p where
 -- 'DatabasePredicate'. We often want to store these in lists and sets, so we
 -- need a monomorphic container that can store these polymorphic values.
 data SomeDatabasePredicate where
-  SomeDatabasePredicate :: DatabasePredicate p =>
-                           p -> SomeDatabasePredicate
+  SomeDatabasePredicate :: DatabasePredicate p
+                        => p -> SomeDatabasePredicate
 
 instance NFData SomeDatabasePredicate where
   rnf p' = p' `seq` ()

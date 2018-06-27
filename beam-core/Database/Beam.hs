@@ -11,7 +11,7 @@
 module Database.Beam
      ( module Database.Beam.Query
      , module Database.Beam.Schema
-     , MonadBeam(withDatabase, withDatabaseDebug)
+     , MonadBeam(..)
      , FromBackendRow(..)
 
        -- * Re-exports

@@ -15,7 +15,7 @@ here (found in the `beam-sqlite` package). Now, open up a GHCi prompt for us to
 use. Make sure to get the `beam-core` and `beam-sqlite` packages.
 
 ```console
-$ stack repl --package beam-core --package beam-sqlite --package sqlite-simple
+$ stack repl --package beam-core --package beam-sqlite --package sqlite-simple --package beam-migrate
 ```
 
 This will put you into a GHCi prompt with the `beam-core` and `beam-sqlite`
@@ -146,7 +146,7 @@ top-level functions to use the `User` type.
 
 ## Teaching Beam about our table
 
-We've defined a type that can represent our the data in our table. Now, let's
+We've defined a type that can represent the data in our table. Now, let's
 inform beam that we'd like to use `UserT` as a table.
 
 All beam tables need to implement the `Beamable` type class. Due to GHC's
@@ -323,13 +323,13 @@ We can use `limit_` and `offset_` in a similar manner to `take` and `drop` respe
 ```haskell
 !employee1sql sql
 !employee1out output
-let boundedQuery :: Q SqliteSelectSyntax _ _ _
+let boundedQuery :: Q Sqlite _ _ _
     boundedQuery = limit_ 1 $ offset_ 1 $
                    orderBy_ (asc_ . _userFirstName) $
                    all_ (_shoppingCartUsers shoppingCartDb)
 
 runBeamSqliteDebug putStrLn conn $ do
-  users <- runSelectReturningList (select boundedQuery :: SqlSelect SqliteSelectSyntax _)
+  users <- runSelectReturningList (select boundedQuery :: SqlSelect Sqlite _)
   mapM_ (liftIO . putStrLn . show) users
 ```
 
@@ -373,7 +373,7 @@ runBeamSqliteDebug putStrLn conn $ do
 Maybe we'd like something a little more interesting, such as the number of users
 for each unique first name. We can also express these aggregations using the
 `aggregate_` function. In order to get interesting results, we'll need to add
-more users to our database. We'll demonstrate using `withDatabase` to silence the debug messages.
+more users to our database.
 
 !beam-query
 ```haskell

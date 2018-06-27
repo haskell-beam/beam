@@ -20,19 +20,11 @@ module Database.Beam.Migrate.SQL.Tables
   , addColumn, dropColumn
 
     -- * Field specification
-  , DefaultValue, Constraint(..)
+  , DefaultValue, Constraint(..), NotNullConstraint
 
   , field
 
   , defaultTo_, notNull, unique
-  , int, smallint, bigint
-  , char, varchar, double
-  , characterLargeObject, binaryLargeObject, array
-  , boolean, numeric, date, time
-  , timestamp, timestamptz
-  , binary, varbinary
-
-  , maybeType
 
     -- ** Internal classes
     --    Provided without documentation for use in type signatures
@@ -54,11 +46,7 @@ import Control.Monad.Writer.Strict
 import Control.Monad.State
 
 import Data.Text (Text)
-import Data.Vector (Vector)
-import Data.ByteString (ByteString)
 import Data.Typeable
-import Data.Time (LocalTime, TimeOfDay)
-import Data.Scientific (Scientific)
 import qualified Data.Kind as Kind (Constraint)
 
 import GHC.TypeLits
@@ -72,8 +60,13 @@ import GHC.TypeLits
 --   The second argument is a table containing a 'FieldSchema' for each field.
 --   See documentation on the 'Field' command for more information.c
 createTable :: ( Beamable table, Table table
+<<<<<<< HEAD
                , BeamMigrateSqlBackend be ) =>
                Text -> TableSchema be  table
+=======
+               , BeamMigrateSqlBackend be )
+            => Text -> TableSchema be table
+>>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
             -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
 createTable newTblName tblSettings =
   do let createTableCommand =
@@ -121,7 +114,11 @@ data ColumnMigration a
 
 -- | Monad representing a series of @ALTER TABLE@ statements
 newtype TableMigration be a
+<<<<<<< HEAD
   = TableMigration (WriterT [Sql92DdlCommandAlterTableSyntax (BeamSqlBackendSyntax be)] (State (Text, [TableCheck])) a)
+=======
+  = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (Text, [TableCheck])) a)
+>>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
   deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
@@ -184,7 +181,11 @@ addColumn (TableFieldSchema nm (FieldSchema fieldSchemaSyntax) checks) =
 -- ALTER TABLE "NewTableName" ADD COLUMN "ANewColumn" SMALLINT NOT NULL DEFAULT 0;
 -- @
 --
+<<<<<<< HEAD
 alterTable :: forall be db db' table table' syntax
+=======
+alterTable :: forall be db db' table table'
+>>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
             . (Table table', BeamMigrateSqlBackend be)
            => CheckedDatabaseEntity be db (TableEntity table)
            -> (table ColumnMigration -> TableMigration be (table' ColumnMigration))
@@ -231,7 +232,7 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm tbl
 --
 -- instance Table Employee where
 --    data PrimaryKey Employee f = EmployeeKey (C f Text) (C f Text) deriving Generic
---    primaryKey = EmployeeKey <$> _firstName <*> _lastName
+--    primaryKey = EmployeeKey \<$\> _firstName \<*\> _lastName
 --
 -- instance Beamable PrimaryKey Employee f
 --
@@ -282,87 +283,6 @@ notNull = NotNullConstraint (Constraint notNullConstraintSyntax)
 -- | SQL @UNIQUE@ constraint
 unique :: BeamMigrateSqlBackend be => Constraint be
 unique = Constraint uniqueColumnConstraintSyntax
-
--- ** Data types
-
--- | SQL92 @INTEGER@ data type
-int :: (BeamMigrateSqlBackend be, Integral a) => DataType be a
-int = DataType intType
-
--- | SQL92 @SMALLINT@ data type
-smallint :: (BeamMigrateSqlBackend be, Integral a) => DataType be a
-smallint = DataType smallIntType
-
--- | SQL2008 Optional @BIGINT@ data type
-bigint :: (BeamMigrateSql2008Backend be, Integral a) => DataType be a
-bigint = DataType bigIntType
-
--- TODO is Integer the right type to use here?
--- | SQL2003 Optional @BINARY@ data type
-binary :: BeamSqlT021Backend be
-       => Maybe Word -> DataType be Integer
-binary prec = DataType (binaryType prec)
-
--- | SQL2003 Optional @VARBINARY@ data type
-varbinary :: BeamSqlT021Backend be
-          => Maybe Word -> DataType be Integer
-varbinary prec = DataType (varBinaryType prec)
-
--- TODO should this be Day or something?
--- | SQL92 @DATE@ data type
-date :: BeamMigrateSqlBackend be => DataType be LocalTime
-date = DataType dateType
-
--- | SQL92 @CHAR@ data type
-char :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
-char prec = DataType (charType prec Nothing)
-
--- | SQL92 @VARCHAR@ data type
-varchar :: BeamMigrateSqlBackend be => Maybe Word -> DataType be Text
-varchar prec = DataType (varCharType prec Nothing)
-
--- | SQL92 @DOUBLE@ data type
-double :: BeamMigrateSqlBackend be => DataType be Double
-double = DataType doubleType
-
--- | SQL92 @NUMERIC@ data type
-numeric ::  BeamMigrateSqlBackend be => Maybe (Word, Maybe Word) -> DataType be Scientific
-numeric x = DataType (numericType x)
-
--- | SQL92 @TIMESTAMP WITH TIME ZONE@ data type
-timestamptz :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
-timestamptz = DataType (timestampType Nothing True)
-
--- | SQL92 @TIMESTAMP WITHOUT TIME ZONE@ data type
-timestamp :: IsSql92DataTypeSyntax syntax => DataType syntax LocalTime
-timestamp = DataType (timestampType Nothing False)
-
--- | SQL92 @TIME@ data type
-time :: IsSql92DataTypeSyntax syntax => Maybe Word -> DataType syntax TimeOfDay
-time prec = DataType (timeType prec False)
-
--- | SQL99 @BOOLEAN@ data type
-boolean :: IsSql99DataTypeSyntax syntax => DataType syntax Bool
-boolean = DataType booleanType
-
--- | SQL99 @CLOB@ data type
-characterLargeObject :: IsSql99DataTypeSyntax syntax => DataType syntax Text
-characterLargeObject = DataType characterLargeObjectType
-
--- | SQL99 @BLOB@ data type
-binaryLargeObject :: IsSql99DataTypeSyntax syntax => DataType syntax ByteString
-binaryLargeObject = DataType binaryLargeObjectType
-
--- | SQL99 array data types
-array :: (Typeable a, IsSql99DataTypeSyntax syntax)
-      => DataType syntax a -> Int
-      -> DataType syntax (Vector a)
-array (DataType ty) sz = DataType (arrayType ty sz)
-
--- | Haskell requires 'DataType's to match exactly. Use this function to convert
--- a 'DataType' that expects a concrete value to one expecting a 'Maybe'
-maybeType :: DataType syntax a -> DataType syntax (Maybe a)
-maybeType (DataType sqlTy) = DataType sqlTy
 
 -- ** 'field' variable arity classes
 

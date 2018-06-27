@@ -24,6 +24,8 @@ module Database.Beam.Query
 
     , module Database.Beam.Query.Relationships
 
+    , module Database.Beam.Query.CTE
+
     -- * Operators
     , module Database.Beam.Query.Operator
 
@@ -33,6 +35,8 @@ module Database.Beam.Query
     , isFalse_, isNotFalse_
     , isUnknown_, isNotUnknown_
     , unknownAs_, sqlBool_
+    , possiblyNullBool_
+    , fromPossiblyNullBool_
 
     -- ** Unquantified comparison operators
     , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
@@ -49,10 +53,12 @@ module Database.Beam.Query
 
     , module Database.Beam.Query.CustomSQL
 
+    , module Database.Beam.Query.DataTypes
+
     -- * SQL Command construction and execution
     -- ** @SELECT@
     , SqlSelect(..)
-    , select, lookup_
+    , select, selectWith, lookup_
     , runSelectReturningList
     , runSelectReturningOne
     , dumpSqlSelect
@@ -82,7 +88,10 @@ import Prelude hiding (lookup)
 
 import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
+import Database.Beam.Query.CTE ( With, ReusableQ, selecting, reuse )
+import qualified Database.Beam.Query.CTE as CTE
 import Database.Beam.Query.CustomSQL
+import Database.Beam.Query.DataTypes
 import Database.Beam.Query.Extensions
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Operator hiding (SqlBool)
@@ -99,6 +108,7 @@ import Database.Beam.Schema.Tables
 
 import Control.Monad.Identity
 import Control.Monad.Writer
+import Control.Monad.State.Strict
 
 import Data.Text (Text)
 import Data.Proxy
@@ -120,11 +130,25 @@ newtype SqlSelect be a
     = SqlSelect (BeamSqlBackendSelectSyntax be)
 
 -- | Build a 'SqlSelect' for the given 'Q'.
-select :: forall be db res.
-          ( BeamSqlBackend be, HasQBuilder be, Projectible be res )
+select :: forall be db res
+        . ( BeamSqlBackend be, HasQBuilder be, Projectible be res )
        => Q be db QBaseScope res -> SqlSelect be (QExprToIdentity res)
 select q =
   SqlSelect (buildSqlQuery "t" q)
+
+-- | Create a 'SqlSelect' for a query which may have common table
+-- expressions. See the documentation of 'With' for more details.
+selectWith :: forall be db res
+            . ( BeamSqlBackend be, BeamSql99CommonTableExpressionBackend be
+              , HasQBuilder be, Projectible be res )
+           => With be db (Q be db QBaseScope res) -> SqlSelect be (QExprToIdentity res)
+selectWith (CTE.With mkQ) =
+    let (q, (recursiveness, ctes)) = evalState (runWriterT mkQ) 0
+    in case recursiveness of
+         CTE.Nonrecursive -> SqlSelect (withSyntax ctes
+                                                   (buildSqlQuery "t" q))
+         CTE.Recursive    -> SqlSelect (withRecursiveSyntax ctes
+                                                            (buildSqlQuery "t" q))
 
 -- | Convenience function to generate a 'SqlSelect' that looks up a table row
 --   given a primary key.
@@ -144,7 +168,7 @@ lookup_ tbl tblKey =
 
 -- | Run a 'SqlSelect' in a 'MonadBeam' and get the results as a list
 runSelectReturningList ::
-  (MonadBeam be hdl m, BeamSqlBackend be, FromBackendRow be a) =>
+  (MonadBeam be m, BeamSqlBackend be, FromBackendRow be a) =>
   SqlSelect be a -> m [ a ]
 runSelectReturningList (SqlSelect s) =
   runReturningList (selectCmd s)
@@ -153,7 +177,7 @@ runSelectReturningList (SqlSelect s) =
 --   one. Both no results as well as more than one result cause this to return
 --   'Nothing'.
 runSelectReturningOne ::
-  (MonadBeam be hdl m, BeamSqlBackend be, FromBackendRow be a) =>
+  (MonadBeam be m, BeamSqlBackend be, FromBackendRow be a) =>
   SqlSelect be a -> m (Maybe a)
 runSelectReturningOne (SqlSelect s) =
   runReturningOne (selectCmd s)
@@ -200,7 +224,7 @@ insert :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (table (
 insert tbl values = insertOnly tbl id values
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
-runInsert :: (BeamSqlBackend be, MonadBeam be hdl m)
+runInsert :: (BeamSqlBackend be, MonadBeam be m)
           => SqlInsert be -> m ()
 runInsert SqlInsertNoRows = pure ()
 runInsert (SqlInsert i) = runNoReturn (insertCmd i)
@@ -320,7 +344,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
       allBeamValues (\(Columnar' (TableField fieldNm)) -> fieldNm) (primaryKey tblSettings)
 
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
-runUpdate :: (BeamSqlBackend be, MonadBeam be hdl m)
+runUpdate :: (BeamSqlBackend be, MonadBeam be m)
           => SqlUpdate be tbl -> m ()
 runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
 runUpdate SqlIdentityUpdate = pure ()
@@ -331,18 +355,25 @@ runUpdate SqlIdentityUpdate = pure ()
 newtype SqlDelete be (table :: (* -> *) -> *) = SqlDelete (BeamSqlBackendDeleteSyntax be)
 
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause
-delete :: BeamSqlBackend be
+delete :: forall be db table
+        . BeamSqlBackend be
        => DatabaseEntity be db (TableEntity table)
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete be table
 delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
-  SqlDelete (deleteStmt tblNm (Just (where_ "t")))
+  SqlDelete (deleteStmt tblNm alias (Just (where_ "t")))
   where
-    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField name))))) tblSettings)
+    supportsAlias = deleteSupportsAlias (Proxy @(BeamSqlBackendDeleteSyntax be))
+
+    tgtName = "delete_target"
+    alias = if supportsAlias then Just tgtName else Nothing
+    mkField = if supportsAlias then qualifiedField tgtName else unqualifiedField
+
+    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (mkField name))))) tblSettings)
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
-runDelete :: (BeamSqlBackend be, MonadBeam be hdl m)
+runDelete :: (BeamSqlBackend be, MonadBeam be m)
           => SqlDelete be table -> m ()
 runDelete (SqlDelete d) = runNoReturn (deleteCmd d)
