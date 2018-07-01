@@ -254,6 +254,44 @@ void $ runSelectReturningList $ selectWith $ do
     pure ( artistName artist_, albumTitle album_, genreName genre_ )
 ```
 
+without CTEs,
+
+
+!beam-query
+```haskell
+!example chinook cte window
+do let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
+                                   , group_ (trackGenreId t)
+                                   , as_ @Int countAll_ )) $
+                        all_ (track chinookDb)
+
+       albumAndRepresentativeGenres =
+         withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
+                     (\(albumId, genreId, trackCnt) albumWindow ->
+                         (albumId, genreId, trackCnt, max_ trackCnt `over_` albumWindow)) $
+           albumGenreCnts
+
+
+   (albumId@(AlbumId albumIdColumn), genreId, _, _) <-
+      filter_' (\(_, _, trackCnt, maxTrackCntInAlbum) ->
+                    just_ trackCnt ==?. maxTrackCntInAlbum) $
+      albumAndRepresentativeGenres
+   genre_ <- join_' (genre chinookDb) (\g -> genreId ==?. just_ (primaryKey g))
+   album_ <- join_' (album chinookDb) (\a -> albumId ==?. just_ (primaryKey a))
+   artist_ <- join_ (artist chinookDb) (\a -> albumArtist album_ `references_` a)
+
+   -- Filter out all albums with tracks of only one genre
+   guard_' (albumIdColumn ==*.
+            anyOf_ (orderBy_ asc_ $ fmap (\(AlbumId albumIdRaw, _) -> albumIdRaw) $
+                    filter_ (\(_, genreCntByAlbum) -> genreCntByAlbum >. 1) $
+                    aggregate_ (\t -> let GenreId genreId = trackGenreId t
+                                      in ( group_ (trackAlbumId t)
+                                         , as_ @Int (countOver_ distinctInGroup_ genreId))) $
+                    all_ (track chinookDb)))
+
+   pure ( artistName artist_, albumTitle album_, genreName genre_ )
+```
+
 ## Reusing queries multiple times
 
 Suppose we wanted to ask the question, "which albums have tracks under the same

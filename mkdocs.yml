@@ -25,6 +25,7 @@ pages:
 #        - 'Common data types': 'user-guide/queries/data-types.md'
         - 'Window functions': 'user-guide/queries/window-functions.md'
         - 'Advanced features': 'user-guide/queries/advanced-features.md'
+        - 'Common table expressions': 'user-guide/queries/common-table-expressions.md'
       - 'Custom queries': 'user-guide/extensibility.md'
       - 'Data Manipulation':
         - 'INSERT': 'user-guide/manipulation/insert.md'
