@@ -359,7 +359,7 @@ instance FromField ShippingCarrier where
                    case x of
                      Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
                      Just x -> pure x
-instance FromBackendRow be ShippingCarrier
+instance FromBackendRow Sqlite ShippingCarrier
 ```
 
 Now, if we try to insert the shipping info again, it works.
