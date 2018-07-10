@@ -60,13 +60,8 @@ import GHC.TypeLits
 --   The second argument is a table containing a 'FieldSchema' for each field.
 --   See documentation on the 'Field' command for more information.c
 createTable :: ( Beamable table, Table table
-<<<<<<< HEAD
-               , BeamMigrateSqlBackend be ) =>
-               Text -> TableSchema be  table
-=======
                , BeamMigrateSqlBackend be )
             => Text -> TableSchema be table
->>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
             -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
 createTable newTblName tblSettings =
   do let createTableCommand =
@@ -114,11 +109,7 @@ data ColumnMigration a
 
 -- | Monad representing a series of @ALTER TABLE@ statements
 newtype TableMigration be a
-<<<<<<< HEAD
-  = TableMigration (WriterT [Sql92DdlCommandAlterTableSyntax (BeamSqlBackendSyntax be)] (State (Text, [TableCheck])) a)
-=======
   = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (Text, [TableCheck])) a)
->>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
   deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
@@ -181,11 +172,7 @@ addColumn (TableFieldSchema nm (FieldSchema fieldSchemaSyntax) checks) =
 -- ALTER TABLE "NewTableName" ADD COLUMN "ANewColumn" SMALLINT NOT NULL DEFAULT 0;
 -- @
 --
-<<<<<<< HEAD
-alterTable :: forall be db db' table table' syntax
-=======
 alterTable :: forall be db db' table table'
->>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
             . (Table table', BeamMigrateSqlBackend be)
            => CheckedDatabaseEntity be db (TableEntity table)
            -> (table ColumnMigration -> TableMigration be (table' ColumnMigration))
@@ -290,7 +277,7 @@ class FieldReturnType (defaultGiven :: Bool) (collationGiven :: Bool) be resTy a
   field' :: BeamMigrateSqlBackend be
          => Proxy defaultGiven -> Proxy collationGiven
          -> Text
-         -> BeamSqlBackendDataTypeSyntax be
+         -> BeamMigrateSqlBackendDataTypeSyntax be
          -> Maybe (BeamSqlBackendExpressionSyntax be)
          -> Maybe Text -> [ BeamSqlBackendColumnConstraintDefinitionSyntax be ]
          -> a

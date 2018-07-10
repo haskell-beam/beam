@@ -124,7 +124,7 @@ instance Monoid HaskellPredicateConverter where
 -- type to a haskell one).
 sql92HsPredicateConverters :: forall fromBe
                              . Typeable fromBe
-                            => (BeamSqlBackendDataTypeSyntax fromBe -> Maybe HsDataType)
+                            => (BeamMigrateSqlBackendDataTypeSyntax fromBe -> Maybe HsDataType)
                             -> HaskellPredicateConverter
 sql92HsPredicateConverters convType =
   trivialHsConverter @TableExistsPredicate <>
@@ -135,7 +135,7 @@ sql92HsPredicateConverters convType =
 -- data type to a haskell one.
 hasColumnConverter :: forall fromBe
                     . Typeable fromBe
-                   => (BeamSqlBackendDataTypeSyntax fromBe -> Maybe HsDataType)
+                   => (BeamMigrateSqlBackendDataTypeSyntax fromBe -> Maybe HsDataType)
                    -> HaskellPredicateConverter
 hasColumnConverter convType =
   hsPredicateConverter $

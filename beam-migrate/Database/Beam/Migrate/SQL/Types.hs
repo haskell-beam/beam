@@ -10,7 +10,7 @@ module Database.Beam.Migrate.SQL.Types
   , BeamMigrateSql99Backend
   , BeamSqlBackendConstraintSyntax
   , BeamSqlBackendColumnConstraintDefinitionSyntax
-  , BeamSqlBackendDataTypeSyntax
+  , BeamMigrateSqlBackendDataTypeSyntax
   , BeamSqlBackendColumnSchemaSyntax
   , BeamSqlBackendAlterTableSyntax
   , BeamSqlBackendMatchTypeSyntax
@@ -40,10 +40,10 @@ deriving instance BeamMigrateOnlySqlBackend be => Eq (FieldSchema be a)
 class ( IsSql92DdlCommandSyntax (BeamSqlBackendSyntax be)
       , Sql92SaneDdlCommandSyntaxMigrateOnly (BeamSqlBackendSyntax be)
 
-      , Sql92DisplaySyntax (BeamSqlBackendDataTypeSyntax be)
-      , Eq (BeamSqlBackendDataTypeSyntax be)
-      , Typeable (BeamSqlBackendDataTypeSyntax be)
-      , Sql92SerializableDataTypeSyntax (BeamSqlBackendDataTypeSyntax be)
+      , Sql92DisplaySyntax (BeamMigrateSqlBackendDataTypeSyntax be)
+      , Eq (BeamMigrateSqlBackendDataTypeSyntax be)
+      , Typeable (BeamMigrateSqlBackendDataTypeSyntax be)
+      , Sql92SerializableDataTypeSyntax (BeamMigrateSqlBackendDataTypeSyntax be)
 
       , Sql92SerializableConstraintDefinitionSyntax (BeamSqlBackendColumnConstraintDefinitionSyntax be)
       , Sql92DisplaySyntax (BeamSqlBackendColumnConstraintDefinitionSyntax be)
@@ -65,7 +65,7 @@ type BeamSqlBackendConstraintSyntax be
   = Sql92DdlCommandColumnConstraintSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendColumnConstraintDefinitionSyntax be
   = Sql92DdlCommandConstraintDefinitionSyntax (BeamSqlBackendSyntax be)
-type BeamSqlBackendDataTypeSyntax be
+type BeamMigrateSqlBackendDataTypeSyntax be
   = Sql92DdlCommandDataTypeSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendColumnSchemaSyntax be
   = Sql92DdlCommandColumnSchemaSyntax (BeamSqlBackendSyntax be)

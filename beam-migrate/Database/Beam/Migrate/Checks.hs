@@ -43,17 +43,17 @@ data TableHasColumn be where
   TableHasColumn
     :: { hasColumn_table  :: Text {-^ Table name -}
        , hasColumn_column :: Text {-^ Column name -}
-       , hasColumn_type   :: BeamSqlBackendDataTypeSyntax be {-^ Data type -}
+       , hasColumn_type   :: BeamMigrateSqlBackendDataTypeSyntax be {-^ Data type -}
        }
     -> TableHasColumn be
-instance Hashable (BeamSqlBackendDataTypeSyntax be) => Hashable (TableHasColumn be) where
+instance Hashable (BeamMigrateSqlBackendDataTypeSyntax be) => Hashable (TableHasColumn be) where
   hashWithSalt salt (TableHasColumn t c s) = hashWithSalt salt (t, c, s)
-instance Eq (BeamSqlBackendDataTypeSyntax be) => Eq (TableHasColumn be) where
+instance Eq (BeamMigrateSqlBackendDataTypeSyntax be) => Eq (TableHasColumn be) where
   TableHasColumn aTbl aCol aDt == TableHasColumn bTbl bCol bDt =
     aTbl == bTbl && aCol == bCol && aDt == bDt
 instance ( Typeable be
          , BeamMigrateOnlySqlBackend be
-         , Hashable (BeamSqlBackendDataTypeSyntax be) ) =>
+         , Hashable (BeamMigrateSqlBackendDataTypeSyntax be) ) =>
   DatabasePredicate (TableHasColumn be) where
   englishDescription (TableHasColumn tbl col type_) =
     "Table " <> show tbl <> " must have a column " <> show col <> " of " <> displaySyntax type_

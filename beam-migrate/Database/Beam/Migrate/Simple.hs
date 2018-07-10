@@ -274,7 +274,8 @@ runSimpleMigration runner hdl =
 -- | Given a function to convert a command to a 'String', produce a script that
 -- will execute the given migration. Usually, the function you provide
 -- eventually calls 'displaySyntax' to rendere the command.
-backendMigrationScript :: (BeamSqlBackendSyntax be -> String)
+backendMigrationScript :: BeamSqlBackend be
+                       => (BeamSqlBackendSyntax be -> String)
                        -> Migration be a
                        -> String
 backendMigrationScript render mig =

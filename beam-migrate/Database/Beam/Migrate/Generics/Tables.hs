@@ -16,8 +16,6 @@ module Database.Beam.Migrate.Generics.Tables
 
 import Database.Beam
 import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.SQL.SQL2003
 
 import Database.Beam.Migrate.Types.Predicates
 import Database.Beam.Migrate.SQL.Types

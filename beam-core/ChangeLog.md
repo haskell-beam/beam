@@ -1,3 +1,40 @@
+# 0.8.0.0
+
+## Common table expressions
+
+Beam now supports common table expressions on some backends, using the `With` monad.
+
+## Simplified types
+
+Every beam SQL backend is now an instance of `BeamSqlBackend` and has an
+associated syntax via an associated type family. This means types are much simpler.
+
+Another benefit is that `MonadBeam` now has a simpler type and can be used with
+monad transformers. For example, writing a computation that may call out to a
+postgres database is as simple as
+
+```haskell
+dbComputation :: MonadBeam Postgres m => m result
+```
+
+versus before
+
+```haskell
+dbComputation :: MonadBeam PgCommandSyntax Postgres Pg.Connection m => m result
+```
+
+Things become simpler if you want to write database agnostic computations. You can now do
+
+```haskell
+dbComputation :: (BeamSqlBackend be, MonadBeam be m) => m result
+```
+
+versus before
+
+```haskell
+dbComputation :: ( Sql92SanityCheck syntax, MonadBeam syntax be hdl m ) => m result
+```
+
 # 0.7.2.0
 
 Add compatibility with GHC 8.4 and stack nightly

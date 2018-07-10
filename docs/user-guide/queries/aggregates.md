@@ -37,8 +37,10 @@ group by the genre.
 !beam-query
 ```haskell
 !example chinook
-aggregate_ (\(genre, track) -> (group_ genre, as_ @Int $ count_ (trackId track)))
-           ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
+aggregate_ (\(genre, track) -> (group_ genre, as_ @Int $ count_ (trackId track))) $ do
+  g <- all_ (genre chinookDb)
+  t <- genreTracks g
+  pure (g, t)
 ```
 
 !!! tip "Tip"
@@ -70,8 +72,10 @@ to be explicit about it, you can use the `allInGroupExplicitly_` quantifier.
 aggregate_ (\(genre, track) ->
               ( group_ genre
               , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-              , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
-           ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
+              , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $ do
+  g <- all_ (genre chinookDb)
+  t <- genreTracks g
+  pure (g, t)
 ```
 
 !!! tip "Tip"
@@ -130,7 +134,7 @@ do (genre, priceCnt, trackLength) <-
                           , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
                           , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
-   track <- join_ (track chinookDb) (\track -> trackGenreId track ==. just_ (pk genre))
+   track <- genreTracks genre
    pure (genre, track, priceCnt, trackLength)
 ```
 
@@ -149,7 +153,7 @@ do (genre, priceCnt, trackLength) <-
                           , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
                           , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
-   track <- join_ (track chinookDb) (\track -> trackGenreId track ==. just_ (pk genre))
+   track <- genreTracks genre
    pure (genre, track, priceCnt, trackLength)
 ```
 

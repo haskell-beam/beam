@@ -19,10 +19,7 @@ module Database.Beam.Backend.SQL
   , BeamSql2003ExpressionBackend
 
   , BeamSqlT021Backend
-<<<<<<< HEAD
-=======
   , BeamSqlT071Backend
->>>>>>> 651b2dc3fd84649093759f02cacaa13467bc7a0a
   , BeamSqlT611Backend
   , BeamSqlT612Backend
   , BeamSqlT614Backend
@@ -46,6 +43,7 @@ module Database.Beam.Backend.SQL
   , BeamSqlBackendFromSyntax
 
   , BeamSqlBackendExpressionSyntax
+  , BeamSqlBackendDataTypeSyntax
   , BeamSqlBackendFieldNameSyntax
   , BeamSqlBackendExpressionQuantifierSyntax
   , BeamSqlBackendValueSyntax
