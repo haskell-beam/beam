@@ -81,6 +81,9 @@ instance ProjectibleWithPredicate c be res a => ProjectibleWithPredicate c be re
   project' p be mutateM (PgWithLocking tbls a) =
     PgWithLocking tbls <$> project' p be mutateM a
 
+  projectSkeleton' ctxt be mkM =
+    PgWithLocking mempty <$> projectSkeleton' ctxt be mkM
+
 -- | Use with 'lockingFor_' to lock all tables mentioned in the query
 lockAll_ :: a -> PgWithLocking s a
 lockAll_ = PgWithLocking mempty
