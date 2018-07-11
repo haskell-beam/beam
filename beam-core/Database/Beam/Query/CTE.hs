@@ -1,5 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
+
 module Database.Beam.Query.CTE where
 
 import Database.Beam.Backend.SQL
@@ -7,12 +9,16 @@ import Database.Beam.Query.Internal
 import Database.Beam.Query.Types
 
 import Control.Monad.Free.Church
-import Control.Monad.Writer
+import Control.Monad.Writer hiding ((<>))
 import Control.Monad.State.Strict
 
 import Data.Text (Text)
 import Data.String
 import Data.Proxy (Proxy(Proxy))
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
+
 
 import Unsafe.Coerce
 
@@ -26,6 +32,9 @@ instance Monoid (Recursiveness be) where
     mappend Recursive _ = Recursive
     mappend _ Recursive = Recursive
     mappend _ _ = Nonrecursive
+
+instance Semigroup (Recursiveness be) where
+  (<>) = mappend
 
 newtype With be (db :: (* -> *) -> *) a
     = With { runWith :: WriterT (Recursiveness be, [ BeamSql99BackendCTESyntax be ])

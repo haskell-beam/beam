@@ -27,9 +27,12 @@ andE' Nothing (Just y) = Just y
 andE' (Just x) (Just y) = Just (andE x y)
 
 newtype PreserveLeft a b = PreserveLeft { unPreserveLeft :: (a, b) }
-instance ProjectibleWithPredicate c syntax res b => ProjectibleWithPredicate c syntax res (PreserveLeft a b) where
+instance (Monoid a, ProjectibleWithPredicate c syntax res b) => ProjectibleWithPredicate c syntax res (PreserveLeft a b) where
   project' context be f (PreserveLeft (a, b)) =
     PreserveLeft . (a,) <$> project' context be f b
+
+  projectSkeleton' ctxt be mkM =
+    PreserveLeft . (mempty,) <$> projectSkeleton' ctxt be mkM
 
 type SelectStmtFn be
   =  BeamSqlBackendSelectTableSyntax be
@@ -513,6 +516,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
           -> SelectBuilder be db x
     onlyQ (Free (QAll entityNm mkTbl mkOn next)) f =
       f (Free (QAll entityNm mkTbl mkOn (Pure . PreserveLeft))) (next . unPreserveLeft)
+--      f (Free (QAll entityNm mkTbl mkOn (Pure . PreserveLeft))) (next . unPreserveLeft)
     onlyQ (Free (QArbitraryJoin entity mkJoin mkOn next)) f =
       f (Free (QArbitraryJoin entity mkJoin mkOn Pure)) next
     onlyQ (Free (QTwoWayJoin a b mkJoin mkOn next)) f =
