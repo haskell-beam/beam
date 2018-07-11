@@ -576,28 +576,50 @@ instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (QField s))
     zipBeamFieldsM (\(Columnar' f) _ ->
                       Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
 
+  projectSkeleton' _ _ mkM =
+    zipBeamFieldsM (\_ _ -> Columnar' . QField False "" <$> (mkM (Proxy @()) (Proxy @())))
+                   (tblSkeleton :: TableSkeleton t) (tblSkeleton :: TableSkeleton t)
+
 instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Nullable (QField s))) where
   project' _ be mutateM a =
     zipBeamFieldsM (\(Columnar' f) _ ->
                       Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
+
+  projectSkeleton' _ _ mkM =
+    zipBeamFieldsM (\_ _ -> Columnar' . QField False "" <$> mkM (Proxy @()) (Proxy @()))
+                   (tblSkeleton :: TableSkeleton t) (tblSkeleton :: TableSkeleton t)
 
 instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Const T.Text)) where
   project' _ be mutateM a =
     zipBeamFieldsM (\(Columnar' f) _ ->
                       Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
 
+  projectSkeleton' _ _ mkM =
+    zipBeamFieldsM (\_ _ -> Columnar' . Const <$> mkM (Proxy @()) (Proxy @()))
+                   (tblSkeleton :: TableSkeleton t) (tblSkeleton :: TableSkeleton t)
+
 instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Nullable (Const T.Text))) where
   project' _ be mutateM a =
     zipBeamFieldsM (\(Columnar' f) _ ->
                       Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
 
+  projectSkeleton' _ _ mkM =
+    zipBeamFieldsM (\_ _ -> Columnar' . Const <$> mkM (Proxy @()) (Proxy @()))
+                   (tblSkeleton :: TableSkeleton t) (tblSkeleton :: TableSkeleton t)
+
 instance ProjectibleWithPredicate AnyType () T.Text (Const T.Text a) where
   project' _ _ mutateM (Const a) = Const <$> mutateM (Proxy @()) (Proxy @()) a
+
+  projectSkeleton' _ _ mkM =
+    Const <$> mkM (Proxy @()) (Proxy @())
 
 instance ProjectibleWithPredicate AnyType () T.Text (QField s a) where
   project' _ _ mutateM (QField q tbl f) =
     fmap (QField q tbl)
          (mutateM (Proxy @(QField s a)) (Proxy @()) f)
+
+  projectSkeleton' _ _ mkM =
+    QField False "" <$> mkM (Proxy @()) (Proxy @())
 
 project :: forall be a
          . Projectible be a => Proxy be -> a -> WithExprContext [ BeamSqlBackendExpressionSyntax be ]
