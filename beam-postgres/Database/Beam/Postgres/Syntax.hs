@@ -1328,6 +1328,10 @@ instance HasDefaultSqlDataType PgDataTypeSyntax LocalTime where
   defaultSqlDataType _ _ = timestampType Nothing False
 instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax LocalTime
 
+instance HasDefaultSqlDataType PgDataTypeSyntax UTCTime where
+  defaultSqlDataType _ _ = timestampType Nothing False
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UTCTime
+
 instance HasDefaultSqlDataType PgDataTypeSyntax (SqlSerial Int) where
   defaultSqlDataType _ False = pgSerialType
   defaultSqlDataType _ _ = intType
