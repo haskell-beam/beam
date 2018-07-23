@@ -10,7 +10,6 @@ import           Database.Beam.Backend.SQL
 
 import           Control.Monad.Free.Church
 import           Control.Monad.Free
-import           Control.Monad.Writer
 
 import           Data.Maybe
 import           Data.Proxy (Proxy(Proxy))

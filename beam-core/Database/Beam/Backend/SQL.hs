@@ -67,7 +67,6 @@ import Database.Beam.Backend.Types
 
 import Control.Monad.Cont
 import Control.Monad.Except
-import Control.Monad.List
 import qualified Control.Monad.RWS.Lazy as Lazy
 import qualified Control.Monad.RWS.Strict as Strict
 import Control.Monad.Reader
@@ -144,14 +143,6 @@ class (BeamBackend be, Monad m) =>
 
 instance MonadBeam be m => MonadBeam be (ExceptT e m) where
     runReturningMany s a = ExceptT $ runReturningMany s (\nextRow -> runExceptT (a (lift nextRow)))
-    runNoReturn = lift . runNoReturn
-    runReturningOne = lift . runReturningOne
-    runReturningList = lift . runReturningList
-
-instance MonadBeam be m => MonadBeam be (ListT m) where
-    runReturningMany s a = ListT $ do
-                             x <- runReturningMany s (\nextRow -> runListT (a (lift nextRow)))
-                             pure x
     runNoReturn = lift . runNoReturn
     runReturningOne = lift . runReturningOne
     runReturningList = lift . runReturningList

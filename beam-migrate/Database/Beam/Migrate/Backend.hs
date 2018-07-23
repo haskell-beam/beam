@@ -49,14 +49,12 @@ import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.Serialization
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Types
-  ( SomeDatabasePredicate(..), CheckedDatabaseSettings, MigrationSteps )
+  ( SomeDatabasePredicate(..), CheckedDatabaseSettings )
 
 import           Database.Beam.Haskell.Syntax
 
 import           Control.Applicative
 
-
-import qualified Data.ByteString.Lazy as BL
 #if ! MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
 #endif

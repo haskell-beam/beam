@@ -21,7 +21,6 @@ import Database.Beam.Schema
 import Control.Monad.Identity
 import Control.Monad.Cont
 import Control.Monad.Except
-import Control.Monad.List
 import qualified Control.Monad.RWS.Lazy as Lazy
 import qualified Control.Monad.RWS.Strict as Strict
 import Control.Monad.Reader
@@ -45,8 +44,6 @@ class MonadBeam be m =>
     -> m [table Identity]
 
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ExceptT e m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
-instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ListT m) where
     runInsertReturningList e v = lift (runInsertReturningList e v)
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ContT r m) where
     runInsertReturningList e v = lift (runInsertReturningList e v)
@@ -84,8 +81,6 @@ class MonadBeam be m =>
 
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ExceptT e m) where
     runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
-instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ListT m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ContT r m) where
     runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ReaderT r m) where
@@ -121,8 +116,6 @@ class MonadBeam be m =>
     -> m [table Identity]
 
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ExceptT e m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
-instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ListT m) where
     runDeleteReturningList e v = lift (runDeleteReturningList e v)
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ContT r m) where
     runDeleteReturningList e v = lift (runDeleteReturningList e v)

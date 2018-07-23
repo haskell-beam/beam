@@ -72,7 +72,6 @@ import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
 
-import Control.Monad.Writer
 import Control.Monad.Identity
 import Control.Monad.Free
 import Control.Applicative
