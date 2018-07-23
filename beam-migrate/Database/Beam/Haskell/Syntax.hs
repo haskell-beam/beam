@@ -359,7 +359,10 @@ renderHsSchema (HsModule modNm entities migrations) =
                                           , Hs.Ident () "FlexibleInstances"
                                           , Hs.Ident () "DeriveGeneric"
                                           , Hs.Ident () "TypeSynonymInstances"
-                                          , Hs.Ident () "ExplicitNamespaces "] ]
+                                          , Hs.Ident () "ExplicitNamespaces"
+                                          , Hs.Ident () "TypeApplications"
+                                          , Hs.Ident () "TypeFamilies"
+                                          , Hs.Ident () "OverloadedStrings" ] ]
 
       HsImports importedModules = foldMap (\e -> foldMap hsDeclImports (hsEntityDecls e) <>
                                                  hsExprImports (hsEntityExp e)) entities <>
@@ -747,7 +750,7 @@ instance IsSql92DataTypeSyntax HsDataType where
   dateType = HsDataType (hsVarFrom "date" "Database.Beam.Migrate")
                         (HsType (tyConNamed "Day") (importSome "Data.Time" [ importTyNamed "Day" ])) dateType
 
-  timeType p False = HsDataType (hsVarFrom "time" "Database.Beam.Migrate")
+  timeType p False = HsDataType (hsApp (hsVarFrom "time" "Database.Beam.Migrate") [ hsMaybe Nothing ] )
                                 (HsType (tyConNamed "TimeOfDay") (importSome "Data.Time" [ importTyNamed "TimeOfDay" ]))
                                 (timeType p False)
   timeType _ _ = error "timeType"

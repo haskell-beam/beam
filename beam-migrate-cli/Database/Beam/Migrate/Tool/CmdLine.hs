@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Database.Beam.Migrate.Tool.CmdLine where
 
 import Data.Monoid
@@ -7,7 +8,13 @@ import Data.Hashable
 import Data.Text (Text)
 import Data.String (fromString)
 
+import GHC.Generics
+
 import Options.Applicative
+
+data MigrationFormat = MigrationFormatHaskell | MigrationFormatBackend String
+  deriving (Show, Eq, Ord, Generic)
+instance Hashable MigrationFormat
 
 newtype ModuleName = ModuleName { unModuleName :: String }
   deriving (Show, Eq, Ord, ToJSON, FromJSON)
@@ -57,7 +64,19 @@ data SchemaCommand
 
   | SchemaCommandNew Text {-^ The schema to iterate on -}
                      FilePath     {-^ The temporary file to use -}
+
+  | SchemaCommandCommit Bool {-^ Force creation of new schema -}
+                        Bool {-^ Overwrite old schema if nothing has changed -}
+                        (Maybe Text) {-^ Commit message -}
   deriving Show
+
+data MigrationCommand
+    = MigrationCommandNew Text {-^ The schema to come from (default DB) -}
+                          Text {-^ The schema to go to (default HEAD) -}
+                          Bool {-^ Attempt to automatically generate a migration -}
+                          Bool {-^ Leave migrations open for editing -}
+                          [ MigrationFormat ] {-^ Formats to generate in. If empty, defaults to every backend registered for schemas + Haskell -}
+    deriving Show
 
 data MigrateCommand
   = MigrateCommandInit InitCommand   -- ^ Initialize a new beam migrate registry
@@ -70,6 +89,7 @@ data MigrateCommand
   | MigrateCommandBranch    BranchCommand
 
   | MigrateCommandSchema SchemaCommand
+  | MigrateCommandMigration MigrationCommand
 
   | MigrateCommandAbort !Bool
 
@@ -105,6 +125,8 @@ migrationArgParser =
                                           , command "simple" simpleCommand
 
                                           , command "schema" schemaCommand
+                                          , command "migration" migrationCommand
+
                                           , command "abort" abortCommand
 
                                           , command "migrate" migrateCommand ])
@@ -118,6 +140,7 @@ migrationArgParser =
     databaseCommand = info (databasesParser <**> helper) (fullDesc <> progDesc "Create, update, list databases in the registry")
     branchCommand = info (branchParser <**> helper) (fullDesc <> progDesc "Create, update, list branches in the registry")
     schemaCommand = info (schemaParser <**> helper) (fullDesc <> progDesc "Create, update, import, and list schemas")
+    migrationCommand = info (migrationParser <**> helper) (fullDesc <> progDesc "Create, update, and list migrations")
     simpleCommand = info (simpleParser <**> helper) (fullDesc <> progDesc "Simple utilities that do not require a full beam-migrate setup")
     migrateCommand = info (migrateParser <**> helper) (fullDesc <> progDesc "Bring the given database up-to-date with the current branch")
     abortCommand = info (abortParser <**> helper) (fullDesc <> progDesc "Abort any edits taking place")
@@ -172,7 +195,8 @@ migrationArgParser =
                                                <*> (fromString <$> strArgument (metavar "BRANCH" <> help "Name of new branch"))
 
     schemaParser = MigrateCommandSchema <$> subparser (mconcat [ command "import" schemaImportCommand
-                                                               , command "new" schemaNewCommand ])
+                                                               , command "new" schemaNewCommand
+                                                               , command "commit" schemaCommitCommand ])
 
     schemaImportCommand = info (importParser <**> helper) (fullDesc <> progDesc "Import a database schema into haskell")
       where
@@ -187,7 +211,25 @@ migrationArgParser =
         newParser = SchemaCommandNew <$> (fromString <$> strArgument (metavar "FROM" <> help "Schema to iterate on" <> value "HEAD"))
                                      <*> strOption (long "tmp-file" <> metavar "TMPFILE" <> help "Temporary file to edit schema" <> value "BeamMigrateSchema.hs")
 
-    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand ])
+
+    schemaCommitCommand = info (commitParser <**> helper) (fullDesc <> progDesc "Commit the schema currently being edited")
+      where
+        commitParser = SchemaCommandCommit <$> flag False True (long "force" <> short 'f' <> help "Force the creation of a new schema, even if nothing has changed")
+                                           <*> flag False True (long "overwrite" <> help "Overwrite the existing schema, only if nothing meaningful has changed")
+                                           <*> optional (fromString <$> strOption (short 'm' <> metavar "MESSAGE" <> help "Commit message"))
+
+    migrationParser = MigrateCommandMigration <$> subparser (mconcat [ command "new" migrationNewCommand ])
+
+    migrationNewCommand = info (newParser <**> helper) (fullDesc <> progDesc "Create a new migration")
+        where
+          newParser = MigrationCommandNew <$> (fromString <$> strArgument (metavar "FROM" <> help "Schema to migrate from" <> value "DB"))
+                                          <*> (fromString <$> strArgument (metavar "TO" <> help "Schema to migrate to" <> value "HEAD"))
+                                          <*> flag False True (long "auto" <> help "Attempt to automatically generate appropriate migrations")
+                                          <*> flag True False (long "edit" <> short 'e' <> help "Leave the migration files available for editing before committing them to the registry")
+                                          <*> (many (option (eitherReader migrationFormatReader) (long "format" <> short 'f' <> help "Specify a list of formats desired for the given migration")))
+
+    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand
+                                                               , command "dump"   dumpSchemaCommand ])
 
     backendOption = ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use")
     connectionOption = strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend")
@@ -212,3 +254,7 @@ migrationCliOptions =
   info (migrationArgParser <**> helper)
        (fullDesc <> progDesc "Beam migrate command-line interface" <>
         header "beam-migrate -- migrate database schemas for various beam backends")
+
+migrationFormatReader :: String -> Either String MigrationFormat
+migrationFormatReader "hs" = pure MigrationFormatHaskell
+migrationFormatReader backend = pure (MigrationFormatBackend backend)

@@ -11,6 +11,8 @@ import Database.Beam.Migrate.Tool.Log
 import Database.Beam.Migrate.Tool.Migrate
 import Database.Beam.Migrate.Tool.Registry
 import Database.Beam.Migrate.Tool.Schema
+import Database.Beam.Migrate.Tool.SchemaCmd
+import Database.Beam.Migrate.Tool.MigrationCmd
 import Database.Beam.Migrate.Tool.Status
 
 import Data.Maybe
@@ -60,6 +62,11 @@ main = do
       importDb cmdLine dbName branchName doCommit doAutoMigrate
     MigrateCommandSchema (SchemaCommandNew tmplSrc tmpFile) ->
       beginNewSchema cmdLine tmplSrc tmpFile
+    MigrateCommandSchema (SchemaCommandCommit force overwrite commitMsg) ->
+      commitSchema cmdLine force overwrite commitMsg
+
+    MigrateCommandMigration (MigrationCommandNew fromCommit toCommit autoGen leaveOpen fmts) ->
+      newMigrationCmd cmdLine fromCommit toCommit autoGen leaveOpen fmts
 
     MigrateCommandAbort force ->
       abortEdits cmdLine force
@@ -68,4 +75,4 @@ main = do
       showSimpleSchema cmdLine backend connStr schemaKind
 
     MigrateCommandMigrate ->
-      doMigrateDatabase cmdLine
+      doMigrateDatabase cmdLine False

@@ -18,7 +18,7 @@ import           System.Console.ANSI
 import           Text.Read
 
 data MigrateStatus
-  = MigrateStatusNoCommits
+  = MigrateStatusNoCommits Bool {- whether the schema has been created or not -}
   | MigrateStatusAtBranch UUID LocalTime PredicateDiff
   deriving Show
 
@@ -27,8 +27,9 @@ displayMigrateStatus :: MigrateCmdLine -> MigrationRegistry
                      -> IO ()
 displayMigrateStatus _ reg dbName sts = do
   putStrLn ("Status for '" ++ unDatabaseName dbName ++ "':\n")
+  let curHead = registryHeadCommit reg
   case sts of
-    MigrateStatusNoCommits ->
+    MigrateStatusNoCommits _ ->
       putStr . unlines $
       [ "No commit history in this database."
       , ""
@@ -60,9 +61,18 @@ displayMigrateStatus _ reg dbName sts = do
           showCommit timestamp sch
 
           let green x = setSGRCode [ SetColor Foreground Dull Green ] ++ x ++ setSGRCode [ Reset ]
+              yellow x = setSGRCode [ SetColor Foreground Dull Yellow ] ++ x ++ setSGRCode [ Reset ]
+              red x = setSGRCode [ SetColor Foreground Dull Red ] ++ x ++ setSGRCode [ Reset ]
           if expected == actual
-            then putStrLn (green "Everything is up-to-date")
-            else putStrLn "Database is ahead of schema\nRun 'beam-migrate diff' for a full diff"
+            then putStrLn (green "Database matches its latest schema\n")
+            else putStrLn (red "Database differs from registered schema.\nRun 'beam-migrate diff' for a full diff\n")
+
+          if curHead /= branchId
+            then do
+              putStrLn (yellow "The database is at schema " ++ show branchId)
+              putStrLn (yellow "  but beam-migrate HEAD is at " ++ show curHead)
+              putStrLn "\nRun 'beam-migrate migrate' to move this database to the current HEAD"
+            else putStrLn "Everything is up-to-date"
 
 showCommit :: LocalTime -> RegisteredSchemaInfo -> IO ()
 showCommit atTime sch = do
@@ -83,12 +93,37 @@ hasBackendTables connStr be@BeamMigrationBackend { backendTransact = transact } 
        Left err -> fail ("hasBackendTables: " ++ show err)
        Right  x -> pure x
 
+getStatus :: MigrateCmdLine -> MigrationRegistry -> DatabaseName -> IO MigrateStatus
+getStatus cmdLine reg dbName = do
+  (db, _, SomeBeamMigrationBackend be) <- loadBackend cmdLine reg dbName
+  hasSchema <- hasBackendTables (migrationDbConnString db) be
+  if not hasSchema
+    then do
+      putStrLn "WARNING: Beam migrate not installed in this database. Run"
+      putStrLn "WARNING:"
+      putStrLn ("WARNING:  beam-migrate database upgrade " ++ unDatabaseName dbName)
+      putStrLn "WARNING:"
+      putStrLn "WARNING: to build the beam tables in the database"
+      pure (MigrateStatusNoCommits False)
+    else case be of
+           BeamMigrationBackend { backendTransact = transact } -> do
+             logEntry <- reportDdlErrors (transact (migrationDbConnString db) getLatestLogEntry)
+             case logEntry of
+               Nothing -> pure (MigrateStatusNoCommits True)
+               Just logEntry' ->
+                 case readMaybe (unpack (_logEntryCommitId logEntry')) of
+                   Nothing -> fail "Invalid commit id for last log entry"
+                   Just commitId -> do
+                     diff <- genDiffFromSources cmdLine reg
+                                                (PredicateFetchSourceDbHead db Nothing)
+                                                (PredicateFetchSourceCommit (Just (migrationDbBackend db)) commitId)
+                     pure (MigrateStatusAtBranch commitId (_logEntryDate logEntry') diff)
+
 displayStatus :: MigrateCmdLine -> IO ()
 displayStatus MigrateCmdLine { migrateDatabase = Nothing } =
   fail "No database specified"
 displayStatus cmdLine@(MigrateCmdLine { migrateDatabase = Just dbName }) = do
   reg <- lookupRegistry cmdLine
-  (db, _, SomeBeamMigrationBackend be) <- loadBackend cmdLine reg dbName
 
   case migrationRegistryMode reg of
     BeamMigrateReady ->
@@ -107,28 +142,6 @@ displayStatus cmdLine@(MigrateCmdLine { migrateDatabase = Just dbName }) = do
 
   putStrLn (setSGRCode [Reset])
 
-  hasSchema <- hasBackendTables (migrationDbConnString db) be
-  migrateStatus <-
-    if not hasSchema
-    then do
-      putStrLn "WARNING: Beam migrate not installed in this database. Run"
-      putStrLn "WARNING:"
-      putStrLn ("WARNING:  beam-migrate database upgrade " ++ unDatabaseName dbName)
-      putStrLn "WARNING:"
-      putStrLn "WARNING: to build the beam tables in the database"
-      pure MigrateStatusNoCommits
-    else case be of
-           BeamMigrationBackend { backendTransact = transact } -> do
-             logEntry <- reportDdlErrors (transact (migrationDbConnString db) getLatestLogEntry)
-             case logEntry of
-               Nothing -> pure MigrateStatusNoCommits
-               Just logEntry' ->
-                 case readMaybe (unpack (_logEntryCommitId logEntry')) of
-                   Nothing -> fail "Invalid commit id for last log entry"
-                   Just commitId -> do
-                     diff <- genDiffFromSources cmdLine reg
-                                                (PredicateFetchSourceDbHead db Nothing)
-                                                (PredicateFetchSourceCommit (Just (migrationDbBackend db)) commitId)
-                     pure (MigrateStatusAtBranch commitId (_logEntryDate logEntry') diff)
+  migrateStatus <- getStatus cmdLine reg dbName
 
   displayMigrateStatus cmdLine reg dbName migrateStatus

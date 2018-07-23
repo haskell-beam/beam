@@ -10,13 +10,14 @@
 -- | Migrations support for beam-postgres. See "Database.Beam.Migrate" for more
 -- information on beam migrations.
 module Database.Beam.Postgres.Migrate
-  ( migrationBackend
+  ( PgCommandSyntax, migrationBackend
   , postgresDataTypeDeserializers
   , pgPredConverter
   , getDbConstraints
   , pgTypeToHs
   , migrateScript
   , writeMigrationScript
+  , pgDataTypeFromAtt
 
     -- * Postgres data types
   , tsquery, tsvector, text, bytea
@@ -83,7 +84,6 @@ migrationBackend = Tool.BeamMigrationBackend
                                  , "  postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]"
                                  , ""
                                  , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
-                        (BL.concat . migrateScript)
                         (liftF (PgLiftWithHandle getDbConstraints id))
                         (Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
                          Db.sql2008BigIntDataTypeDeserializers <>

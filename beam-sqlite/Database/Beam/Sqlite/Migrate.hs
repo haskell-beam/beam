@@ -4,7 +4,7 @@
 -- | Migrations support for SQLite databases
 module Database.Beam.Sqlite.Migrate
   ( -- * @beam-migrate@ CLI support
-    migrationBackend
+    migrationBackend, SqliteCommandSyntax
 
     -- * @beam-migrate@ utility functions
   , migrateScript, writeMigrationScript
@@ -52,7 +52,6 @@ migrationBackend :: Tool.BeamMigrationBackend Sqlite SqliteM
 migrationBackend = Tool.BeamMigrationBackend
                        "sqlite"
                        "For beam-sqlite, this is the path to a sqlite3 file"
-                       (BL.concat . migrateScript)
                        getDbConstraints
                        (Db.sql92Deserializers <> sqliteDataTypeDeserializers <>
                         Db.beamCheckDeserializers)
