@@ -37,7 +37,8 @@ data TableFieldSchema be a
 newtype FieldSchema be a = FieldSchema (BeamSqlBackendColumnSchemaSyntax be)
 deriving instance BeamMigrateOnlySqlBackend be => Eq (FieldSchema be a)
 
-class ( IsSql92DdlCommandSyntax (BeamSqlBackendSyntax be)
+class ( Typeable (BeamSqlBackendSyntax be)
+      , IsSql92DdlCommandSyntax (BeamSqlBackendSyntax be)
       , Sql92SaneDdlCommandSyntaxMigrateOnly (BeamSqlBackendSyntax be)
 
       , Sql92DisplaySyntax (BeamMigrateSqlBackendDataTypeSyntax be)

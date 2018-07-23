@@ -84,7 +84,6 @@ data BeamMigrationBackend be m where
     , Sql92ReasonableMarshaller be ) =>
     { backendName :: String
     , backendConnStringExplanation :: String
-    , backendRenderSteps :: forall a. MigrationSteps be () a -> BL.ByteString
     , backendGetDbConstraints :: m [ SomeDatabasePredicate ]
     , backendPredicateParsers :: BeamDeserializers be
     , backendRenderSyntax :: BeamSqlBackendSyntax be -> String
