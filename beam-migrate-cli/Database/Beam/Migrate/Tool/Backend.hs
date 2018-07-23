@@ -7,7 +7,9 @@ import           Database.Beam.Migrate.Backend
 import           Control.Monad.Catch
 
 import qualified Data.HashMap.Strict as HM
+#if !MIN_VERSION_base(4, 11, 0)
 import           Data.Monoid
+#endif
 
 import           Language.Haskell.Interpreter hiding (ModuleName)
 import           Language.Haskell.Interpreter.Unsafe

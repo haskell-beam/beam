@@ -1,7 +1,9 @@
 module Database.Beam.Migrate.Tool.Diff where
 
-import           Database.Beam
-import           Database.Beam.Migrate hiding (timestamp)
+import           Prelude hiding (pred)
+
+import           Database.Beam hiding (timestamp)
+import           Database.Beam.Migrate
 import           Database.Beam.Migrate.Backend
 import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.Tool.Backend
@@ -76,12 +78,12 @@ genDiffFromSources cmdLine reg actualSource expSource =
      pure (PredicateDiff (HS.fromList expected) (HS.fromList actual))
 
 filterBeamMigratePreds :: SomeBeamMigrationBackend -> [SomeDatabasePredicate] -> [SomeDatabasePredicate]
-filterBeamMigratePreds (SomeBeamMigrationBackend (BeamMigrationBackend {} :: BeamMigrationBackend cmd be hdl m)) preds =
-  let beamMigrateDbSchema = collectChecks (beamMigratableDb @cmd @be @hdl)
-  in foldr (\pred@(SomeDatabasePredicate pred') preds ->
-              if pred `elem` preds
-              then filter (\p@(SomeDatabasePredicate p') -> p /= pred && not (predicateCascadesDropOn p' pred')) preds
-              else preds)
+filterBeamMigratePreds (SomeBeamMigrationBackend (BeamMigrationBackend {} :: BeamMigrationBackend be m)) preds =
+  let beamMigrateDbSchema = collectChecks (beamMigratableDb @be @m)
+  in foldr (\pred@(SomeDatabasePredicate pred') preds' ->
+              if pred `elem` preds'
+              then filter (\p@(SomeDatabasePredicate p') -> p /= pred && not (predicateCascadesDropOn p' pred')) preds'
+              else preds')
            preds beamMigrateDbSchema
 
 getPredicatesFromSpec :: MigrateCmdLine -> MigrationRegistry

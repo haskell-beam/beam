@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Database.Beam.Migrate.Tool.Registry where
 
 import           Database.Beam.Migrate
@@ -20,7 +21,9 @@ import qualified Data.HashSet as HS
 import           Data.LargeWord (Word256)
 import           Data.List (find, intercalate, sort)
 import           Data.Maybe
+#if !MIN_VERSION_base(4, 11, 0)
 import           Data.Monoid
+#endif
 import           Data.String
 import           Data.Text (Text, unpack)
 import qualified Data.Text as T
@@ -303,7 +306,7 @@ registeredSchemaInfoShortMessage sch =
 --     2. Otherwise, look for a @.beam-migrate@ file in this directory and each parent directory
 lookupRegistry' :: MigrateCmdLine -> IO (FilePath, MigrationRegistry)
 lookupRegistry' MigrateCmdLine { migrateRegistryPath = Just path } =
-  Yaml.decodeFile path >>= maybe (fail "Could not read migration registry") (pure . (path,))
+  Yaml.decodeFileEither path >>= either (\e -> fail ("Could not read migration registry: " ++ show e)) (pure . (path,))
 lookupRegistry' cmdLine = getCurrentDirectory >>= lookupRegistry''
   where
     lookupRegistry'' dir =
@@ -511,7 +514,7 @@ parseMetaData d =
                -- TODO parse dummy if we can't parse
                fmap (fmap (specificity,)) (mapM (beamDeserialize d) predicates))
 
-predsForBackend :: BeamMigrationBackend syntax be hdl m -> [ (HS.HashSet PredicateSpecificity, SomeDatabasePredicate) ]
+predsForBackend :: BeamMigrationBackend be m -> [ (HS.HashSet PredicateSpecificity, SomeDatabasePredicate) ]
                 -> [ SomeDatabasePredicate ]
 predsForBackend be = predsForBackendNamed (backendName be)
 
@@ -540,7 +543,7 @@ readSchemaMetaData reg BeamMigrationBackend { backendPredicateParsers = parsers 
   case d of
     [] -> fail "Invalid data in schema"
     _:d' | Just realData <- BS.unlines <$> traverse (BS.stripPrefix "-- + ") d'
-         , Just metadataV <- Yaml.decode realData
+         , Right metadataV <- Yaml.decodeEither' realData
          -> case Yaml.parseEither (parseMetaData parsers) metadataV of
              Left err -> fail ("Could not parse metadata: " ++ show err)
              Right metadata -> pure metadata

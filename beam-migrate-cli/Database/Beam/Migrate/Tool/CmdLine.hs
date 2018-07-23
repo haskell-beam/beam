@@ -2,7 +2,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Database.Beam.Migrate.Tool.CmdLine where
 
+#if !MIN_VERSION_base(4, 11, 0)
 import Data.Monoid
+#endif
 import Data.Aeson
 import Data.Hashable
 import Data.Text (Text)
@@ -228,8 +230,7 @@ migrationArgParser =
                                           <*> flag True False (long "edit" <> short 'e' <> help "Leave the migration files available for editing before committing them to the registry")
                                           <*> (many (option (eitherReader migrationFormatReader) (long "format" <> short 'f' <> help "Specify a list of formats desired for the given migration")))
 
-    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand
-                                                               , command "dump"   dumpSchemaCommand ])
+    simpleParser = MigrateCommandSimple <$> subparser (mconcat [ command "schema" simpleSchemaCommand ])
 
     backendOption = ModuleName <$> strOption (long "backend" <> metavar "BACKEND" <> help "Backend module to use")
     connectionOption = strOption (long "connection" <> metavar "CONNECTION" <> help "Connection string for backend")

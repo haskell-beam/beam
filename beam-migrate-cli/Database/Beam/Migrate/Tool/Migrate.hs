@@ -12,7 +12,7 @@ import           Control.Exception
 import           Control.Monad
 
 import qualified Data.ByteString.Char8 as BS
-import           Data.Char
+import           Data.Char as Char
 import           Data.Graph.Inductive.Graph
 import qualified Data.Graph.Inductive.Query as Gr
 import qualified Data.HashSet as HS
@@ -52,8 +52,7 @@ showCommands cmds = do
     yellow x = setSGRCode [ SetColor Foreground Dull Yellow ] ++ x ++ setSGRCode [ Reset ]
     green x = setSGRCode [ SetColor Foreground Dull Green ] ++ x ++ setSGRCode [ Reset ]
 
-getSchemaCommandsForBackend :: Typeable cmd
-                            => MigrationRegistry -> Maybe (BeamMigrationBackend cmd be hdl m)
+getSchemaCommandsForBackend :: MigrationRegistry -> Maybe (BeamMigrationBackend be m)
                             -> UUID -> IO [ MigrateDDLCommand cmd ]
 getSchemaCommandsForBackend reg Nothing id = fail "Asked to get haskell schema"
 getSchemaCommandsForBackend reg (Just be@(BeamMigrationBackend {})) commitId =
@@ -76,7 +75,7 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
   let destCommit = registryHeadCommit registry
 
   sts <- getStatus cmdLine registry dbName
-  (_, _, SomeBeamMigrationBackend be@(BeamMigrationBackend {} :: BeamMigrationBackend cmd be hdl m)) <-
+  (_, _, SomeBeamMigrationBackend be@(BeamMigrationBackend {} :: BeamMigrationBackend be m)) <-
     loadBackend cmdLine registry dbName
 
   cmds <-
@@ -142,7 +141,7 @@ doMigrateDatabase cmdLine@MigrateCmdLine { migrateDatabase = Just dbName } scrip
   putStrLn ("Should I run these commands?")
   ack <- getLine
 
-  if Char.toLower <$> ack /= "yes"
+  if fmap Char.toLower ack /= "yes"
     then fail "Exiting due to user request..."
     else do
-      
+      putStrLn "Would run commands"

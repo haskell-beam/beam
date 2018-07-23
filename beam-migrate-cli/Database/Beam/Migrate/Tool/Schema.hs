@@ -30,9 +30,11 @@ import           Control.Monad.State
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as HS
-import           Data.List
 import           Data.Maybe
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.List
 import           Data.Monoid
+#endif
 import           Data.Proxy
 import           Data.String (fromString)
 import           Data.Text (Text)
@@ -74,8 +76,7 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
   (db, backendMigFmt, backend) <- withRegistry $ \registry -> lift $ loadBackend cmdLine registry dbName
 
   case backend of
-    SomeBeamMigrationBackend be@(BeamMigrationBackend { backendGetDbConstraints = getConstraints
-                                                      , backendConvertToHaskell = HaskellPredicateConverter convDbPred
+    SomeBeamMigrationBackend be@(BeamMigrationBackend { backendConvertToHaskell = HaskellPredicateConverter convDbPred
                                                       , backendTransact = transact
                                                       , backendActionProvider = actionProvider }) -> do
       newCommit <- withRegistry $ \registry -> lift (registryNewCommitId registry)
@@ -95,7 +96,7 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
           Nothing -> liftIO $ putStrLn "Skipping migration generation, since this is an initial import"
           Just (Nothing, _) -> fail "No commit for DB^"
           Just (Just oldCommitId, oldPreds') ->
-            let solver = heuristicSolver actionProvider oldPreds' cs'
+            let solver = heuristicSolver actionProvider oldPreds' cs
             in case finalSolution solver of
                  Candidates {} -> fail "Could not find migration in backend"
                  Solved [] -> fail "Schemas are equivalent, not importing"
@@ -105,39 +106,39 @@ importDb cmdLine dbName@(DatabaseName dbNameStr) branchName doDbCommit autoCreat
                    modifyM (newMigration oldCommitId hsHash [MigrationFormatHaskell, backendMigFmt])
 
       -- TODO factor out
-     let schema = Schema (map (\pred@(SomeDatabasePredicate (_ :: pred)) -> ( HS.singleton (predicateSpecificity (Proxy @pred)), pred)) cs')
+      let schema = Schema (map (\pred@(SomeDatabasePredicate (_ :: pred)) -> ( HS.singleton (predicateSpecificity (Proxy @pred)), pred)) cs)
 
-     liftIO $ putStrLn "Exporting migration for backend..."
-     backendFileName <- withRegistry $ \registry -> liftIO (writeSchema cmdLine registry backendHash be cs')
-     liftIO (putStrLn ("Exported migration as " ++ backendFileName))
+      liftIO $ putStrLn "Exporting migration for backend..."
+      backendFileName <- withRegistry $ \registry -> liftIO (writeSchema cmdLine registry backendHash be cs)
+      liftIO (putStrLn ("Exported migration as " ++ backendFileName))
 
-     cs''' <- lift . fmap catMaybes .
-              forM cs' $ \c -> do
-                let c' = convDbPred c
-                case c' of
-                  Nothing -> putStrLn ("Tossing constraint " ++ show c)
-                  Just {} -> pure ()
-                pure c'
+      cs' <- lift . fmap catMaybes .
+             forM cs $ \c -> do
+               let c' = convDbPred c
+               case c' of
+                 Nothing -> putStrLn ("Tossing constraint " ++ show c)
+                 Just {} -> pure ()
+               pure c'
 
-     liftIO $ putStrLn "Exporting haskell schema..."
-     hsFileName <- withRegistry $ \registry -> liftIO $ writeHsSchema cmdLine registry hsHash cs''' schema [ backendMigFmt ]
-     liftIO $ putStrLn ("Exported haskell migration as " ++ hsFileName)
+      liftIO $ putStrLn "Exporting haskell schema..."
+      hsFileName <- withRegistry $ \registry -> liftIO $ writeHsSchema cmdLine registry hsHash cs' schema [ backendMigFmt ]
+      liftIO $ putStrLn ("Exported haskell migration as " ++ hsFileName)
 
-     liftIO $ putStrLn "Import complete"
+      liftIO $ putStrLn "Import complete"
 
-     let msg = "Initial import of " <> fromString dbNameStr
+      let msg = "Initial import of " <> fromString dbNameStr
 
-     when doDbCommit $
-       liftIO $ reportDdlErrors $ transact (migrationDbConnString db) $ recordCommit newCommit
+      when doDbCommit $
+        liftIO $ reportDdlErrors $ transact (migrationDbConnString db) $ recordCommit newCommit
 
-     modifyM (newSchema hsHash [MigrationFormatHaskell, backendMigFmt] msg)
+      modifyM (newSchema hsHash [MigrationFormatHaskell, backendMigFmt] msg)
 
-     modifyM (\registry ->
-                case lookupBranch registry branchName' of
-                  Nothing ->
-                    newBaseBranch branchName' hsHash registry
-                  Just branch ->
-                    updateBranch branchName' (branch { migrationBranchCommit = hsHash }) registry)
+      modifyM (\registry ->
+                 case lookupBranch registry branchName' of
+                   Nothing ->
+                     newBaseBranch branchName' hsHash registry
+                   Just branch ->
+                     updateBranch branchName' (branch { migrationBranchCommit = hsHash }) registry)
 
 dumpSchema :: MigrateCmdLine
            -> ModuleName
@@ -322,12 +323,12 @@ beginNewSchema cmdLine tmplSrc tmpFile = do
     pure ((), reg { migrationRegistryMode = BeamMigrateCreatingSchema tmpFile src hash })
 
 
-loadSchema :: forall be cmd hdl m a
-            . Typeable cmd => ModuleName -> BeamMigrationBackend cmd be hdl m
+loadSchema :: forall be m a
+            . ModuleName -> BeamMigrationBackend be m
            -> MigrateCmdLine -> MigrationRegistry -> FilePath
            -> (forall be' db. Database be' db => CheckedDatabaseSettings be' db -> IO a)
            -> IO a
-loadSchema backendModule _ cmdLine reg modPath withDb = do
+loadSchema backendModule (BeamMigrationBackend {}) cmdLine reg modPath withDb = do
   putStrLn ("Schema module path " ++ modPath)
   res <- runBeamInterpreter cmdLine $ do
            loadModules [ modPath ]
@@ -335,7 +336,7 @@ loadSchema backendModule _ cmdLine reg modPath withDb = do
                        , ("Database.Beam.Migrate.Backend", Nothing)
                        , (unModuleName backendModule, Just "BeamBackend") ]
 
-           let syntaxName = tyConName (typeRepTyCon (typeRep (Proxy @cmd)))
+           let syntaxName = tyConName (typeRepTyCon (typeRep (Proxy @(BeamSqlBackendSyntax be))))
 
            setTopLevelModules [ unModuleName (migrationRegistrySchemaModule reg) <> "." <> schemaModuleName UUID.nil ]
            GHCI.set [ languageExtensions := [ TypeApplications ] ]
@@ -439,7 +440,7 @@ commitSchema cmdLine force overwrite commitMsg =
                                newSchemaModStr <- renamedSchemaModule tmpFile newModFullName
                                                     (unlines (withoutMetadata (lines contents)))
 
-                               writeHsSchemaFile cmdLine reg newSchemaId schemaMetaData newSchemaModStr
+                               _ <- writeHsSchemaFile cmdLine reg newSchemaId schemaMetaData newSchemaModStr
 
                                reg' <- newSchema newSchemaId [MigrationFormatHaskell] commitMsg' reg
                                reg'' <- updateBranch branchNm (branch { migrationBranchCommit = newSchemaId }) reg'

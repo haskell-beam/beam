@@ -5,7 +5,9 @@ import           Database.Beam.Migrate.Tool.Registry
 
 import           Control.Monad
 
+#if !MIN_VERSION_base(4, 11, 0)
 import           Data.Monoid
+#endif
 import qualified Data.Text as T
 
 import           System.Console.ANSI

@@ -11,7 +11,6 @@ import Database.Beam.Migrate.Tool.Log
 import Database.Beam.Migrate.Tool.Migrate
 import Database.Beam.Migrate.Tool.Registry
 import Database.Beam.Migrate.Tool.Schema
-import Database.Beam.Migrate.Tool.SchemaCmd
 import Database.Beam.Migrate.Tool.MigrationCmd
 import Database.Beam.Migrate.Tool.Status
 
