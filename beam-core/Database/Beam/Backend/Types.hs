@@ -127,11 +127,7 @@ instance ( BeamBackend be, FromBackendRow be a, FromBackendRow be b, FromBackend
                                     <*> fromBackendRow <*> fromBackendRow <*> fromBackendRow <*> fromBackendRow
 
 instance FromBackendRow be a => FromBackendRow be (Maybe a) where
-  fromBackendRow = fmap f (fromBackendRow :: FromBackendRowA be (Maybe a))
-    where
-      f :: Maybe a -> Maybe (Maybe a)
-      f (Just a) = Just (Just a)
-      f Nothing = Just Nothing
+  fromBackendRow = fmap Just (fromBackendRow :: FromBackendRowA be (Maybe a))
 
 instance ( BeamBackend be, Generic (tbl Identity), Generic (tbl Exposed)
          , GFromBackendRow be (Rep (tbl Exposed)) (Rep (tbl Identity))) =>
