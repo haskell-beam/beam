@@ -6,7 +6,7 @@
 module Database.Beam.Backend.Types
   ( BeamBackend(..)
 
-  , FromBackendRowF(..), FromBackendRowM
+  , FromBackendRowF(..), FromBackendRowM(..)
   , parseOneField, peekField, checkNextNNull
 
   , FromBackendRow(..)
@@ -36,19 +36,32 @@ data FromBackendRowF be f where
   ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
   PeekField :: BackendFromField be a => (Maybe a -> f) -> FromBackendRowF be f
   CheckNextNNull :: Int -> (Bool -> f) -> FromBackendRowF be f
+  FailParseWith :: String -> FromBackendRowF be f
 deriving instance Functor (FromBackendRowF be)
-type FromBackendRowM be = F (FromBackendRowF be)
+newtype FromBackendRowM be a = FromBackendRowM (F (FromBackendRowF be) a)
+  deriving (Functor, Applicative)
+
+instance Monad (FromBackendRowM be) where
+  return = pure
+  FromBackendRowM a >>= b =
+    FromBackendRowM $
+    a >>= (\x -> let FromBackendRowM b' = b x in b')
+
+  fail = FromBackendRowM . liftF . FailParseWith
 
 parseOneField :: BackendFromField be a => FromBackendRowM be a
-parseOneField = liftF (ParseOneField id)
+parseOneField = FromBackendRowM (liftF (ParseOneField id))
 
 peekField :: BackendFromField be a => FromBackendRowM be (Maybe a)
-peekField = liftF (PeekField id)
+peekField = FromBackendRowM (liftF (PeekField id))
 
 checkNextNNull :: Int -> FromBackendRowM be Bool
-checkNextNNull n = liftF (CheckNextNNull n id)
+checkNextNNull n = FromBackendRowM (liftF (CheckNextNNull n id))
 
 class BeamBackend be => FromBackendRow be a where
+  -- | Parses a beam row. This should not fail, except in the case of
+  -- an internal bug in beam deserialization code. If it does fail,
+  -- this should throw a 'BeamRowParseError'.
   fromBackendRow :: FromBackendRowM be a
   default fromBackendRow :: BackendFromField be a => FromBackendRowM be a
   fromBackendRow = parseOneField

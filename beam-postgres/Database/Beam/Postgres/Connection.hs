@@ -127,7 +127,7 @@ data PgRowReadError
       -- ^ We attempted to read more columns than postgres returned. First
       -- argument is the zero-based index of the column we attempted to read,
       -- and the second is the total number of columns
-    | PgRowCouldNotParseField !CInt
+    | PgRowCouldNotParseField !CInt !String
       -- ^ There was an error while parsing the field. The first argument gives
       -- the zero-based index of the column that could not have been
       -- parsed. This is usually caused by your Haskell schema type being
@@ -147,7 +147,7 @@ getFields res = do
 
 runPgRowReader ::
   Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either PgRowReadError a)
-runPgRowReader conn rowIdx res fields readRow =
+runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
   Pg.nfields res >>= \(Pg.Col colCount) ->
   runF readRow finish step 0 colCount fields
   where
@@ -155,7 +155,7 @@ runPgRowReader conn rowIdx res fields readRow =
     step (ParseOneField _) curCol colCount _
       | curCol >= colCount = pure (Left (PgRowReadNoMoreColumns curCol colCount))
     step (ParseOneField next) curCol colCount remainingFields =
-      let next' Nothing _ _ _ = pure (Left (PgRowCouldNotParseField curCol))
+      let next' Nothing _ _ _ = pure (Left (PgRowCouldNotParseField curCol "fromField: could not parse field"))
           next' (Just {}) _ _ [] = fail "Internal error"
           next' (Just x) curCol' colCount' (_:remainingFields') = next x (curCol' + 1) colCount' remainingFields'
       in step (PeekField next') curCol colCount remainingFields
@@ -173,6 +173,9 @@ runPgRowReader conn rowIdx res fields readRow =
     step (CheckNextNNull n next) curCol colCount remainingFields =
       doCheckNextN (fromIntegral n) (curCol :: CInt) (colCount :: CInt) remainingFields >>= \yes ->
       next yes (curCol + if yes then fromIntegral n else 0) colCount (if yes then drop (fromIntegral n) remainingFields else remainingFields)
+
+    step (FailParseWith err) curCol _ _ =
+      pure (Left (PgRowCouldNotParseField (if curCol == 0 then curCol else curCol - 1) err))
 
     doCheckNextN 0 _ _ _ = pure False
     doCheckNextN n curCol colCount remainingFields

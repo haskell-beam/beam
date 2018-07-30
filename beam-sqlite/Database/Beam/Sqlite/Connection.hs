@@ -177,8 +177,10 @@ instance ToRow BeamSqliteParams where
 
 newtype BeamSqliteRow a = BeamSqliteRow a
 instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
-  fromRow = BeamSqliteRow <$> runF (fromBackendRow :: FromBackendRowM Sqlite a) finish step
+  fromRow = BeamSqliteRow <$> runF fromBackendRow' finish step
       where
+        FromBackendRowM fromBackendRow' = fromBackendRow :: FromBackendRowM Sqlite a
+
         finish = pure
 
         step :: FromBackendRowF Sqlite (RowParser a) -> RowParser a
@@ -200,6 +202,7 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
                   do put st'
                      unRP (next True)
                 _ -> unRP (next False)
+        step (FailParseWith err) = RP (fail err) -- TODO fail with a separate beam error here
 
 -- * Equality checks
 #define HAS_SQLITE_EQUALITY_CHECK(ty)                       \
