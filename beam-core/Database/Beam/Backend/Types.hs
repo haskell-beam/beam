@@ -7,7 +7,7 @@ module Database.Beam.Backend.Types
   ( BeamBackend(..)
 
   , FromBackendRowF(..), FromBackendRowA
-  , parseOneField, peekField
+  , parseOneField, parseAlternative
 
   , FromBackendRow(..)
   , valuesNeeded
@@ -34,15 +34,17 @@ class BeamBackend be where
 
 data FromBackendRowF be f where
   ParseOneField :: BackendFromField be a => (Maybe a -> f) -> FromBackendRowF be f
-  PeekField :: BackendFromField be a => (Maybe a -> f) -> FromBackendRowF be f
+  ParseAlternative :: (BackendFromField be a, BackendFromField be b)
+                   => (a -> Maybe r) -> (b -> Maybe r) -> (Maybe r -> f) -> FromBackendRowF be f
 deriving instance Functor (FromBackendRowF be)
 type FromBackendRowA be = Ap (FromBackendRowF be)
 
 parseOneField :: BackendFromField be a => FromBackendRowA be (Maybe a)
 parseOneField = liftAp (ParseOneField id)
 
-peekField :: BackendFromField be a => FromBackendRowA be (Maybe a)
-peekField = liftAp (PeekField id)
+parseAlternative :: (BackendFromField be a, BackendFromField be b)
+  => (a -> Maybe r) -> (b -> Maybe r) -> FromBackendRowA be (Maybe r)
+parseAlternative f g = liftAp (ParseAlternative f g id)
 
 class BeamBackend be => FromBackendRow be a where
   fromBackendRow :: FromBackendRowA be (Maybe a)

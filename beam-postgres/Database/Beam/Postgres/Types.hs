@@ -47,34 +47,18 @@ instance BeamBackend Postgres where
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 
-fromScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
-fromScientificOrIntegral = do
-  sciVal <- fmap (toBoundedInteger =<<) peekField
-  case sciVal of
-    Just sciVal' -> do
-      -- If the parse succeeded, consume the field
-      _ <- parseOneField @Postgres @Scientific
-      pure sciVal'
-    Nothing -> fromIntegral <$> fromBackendRow @Postgres @Integer
+fromScientificOrIntegral :: forall a. (Bounded a, Integral a) => FromBackendRowA Postgres (Maybe a)
+fromScientificOrIntegral = parseAlternative toBoundedInteger (Just . (fromIntegral :: Integer -> a))
 
--- | Deserialize integral fields, possibly downcasting from a larger integral
--- type, but only if we won't lose data
-fromPgIntegral :: forall a
-                . (Pg.FromField a, Integral a)
-               => FromBackendRowM Postgres a
-fromPgIntegral = do
-  val <- peekField
-  case val of
-    Just val' -> do
-      _ <- parseOneField @Postgres @a
-      pure val'
-    Nothing -> do
-      val' <- parseOneField @Postgres @Integer
-      let val'' = fromIntegral val'
-      if fromIntegral val'' == val'
-        then pure val''
-        else fail (concat [ "Data loss while downsizing Integral type. "
-                          , "Make sure your Haskell types are wide enough for your data" ])
+fromPgIntegral :: forall a. (Pg.FromField a, Integral a) => FromBackendRowA Postgres (Maybe a)
+fromPgIntegral = parseAlternative Just f
+  where
+    f :: Integer -> Maybe a
+    f x =
+      let x' = fromIntegral x
+      in if x == fromIntegral x'
+           then Just x'
+           else Nothing
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
 instance FromBackendRow Postgres SqlNull
@@ -109,19 +93,7 @@ instance FromBackendRow Postgres Value
 instance FromBackendRow Postgres TL.Text
 instance FromBackendRow Postgres Pg.Oid
 instance FromBackendRow Postgres LocalTime where
-  fromBackendRow =
-    peekField >>=
-    \case
-      Just (_ :: LocalTime) -> parseOneField
-
-      -- Also accept 'TIMESTAMP WITH TIME ZONE'. Considered as
-      -- 'LocalTime', because postgres always returns times in the
-      -- server timezone, regardless of type.
-      Nothing ->
-        peekField >>=
-        \case
-          Just (_ :: ZonedTime) -> zonedTimeToLocalTime <$> parseOneField
-          Nothing -> fail "'TIMESTAMP WITH TIME ZONE' or 'TIMESTAMP WITHOUT TIME ZONE' required for LocalTime"
+  fromBackendRow = parseAlternative Just (Just . zonedTimeToLocalTime)
 instance FromBackendRow Postgres TimeOfDay
 instance FromBackendRow Postgres Day
 instance FromBackendRow Postgres UUID
@@ -137,11 +109,7 @@ instance FromBackendRow Postgres (Ratio Integer)
 instance FromBackendRow Postgres (CI Text)
 instance FromBackendRow Postgres (CI TL.Text)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a) where
-    fromBackendRow = do
-      isNull <- peekField
-      case isNull of
-        Just SqlNull -> pure mempty
-        Nothing -> parseOneField @Postgres @(Vector a)
+  fromBackendRow = maybe (Just mempty) Just <$> parseOneField
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGArray a)
 instance FromBackendRow Postgres (Pg.Binary ByteString)
 instance FromBackendRow Postgres (Pg.Binary BL.ByteString)

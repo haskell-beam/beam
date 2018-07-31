@@ -42,6 +42,7 @@ library
                       time                 >=1.6  && <1.10,
                       monad-control        >=1.0  && <1.1,
                       mtl                  >=2.1  && <2.3,
+                      transformers         >=0.5  && <0.6,
                       conduit              >=1.2  && <1.4,
                       aeson                >=0.11 && <1.5,
                       uuid-types           >=1.0  && <1.1,

@@ -31,17 +31,17 @@ import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
                                         , query_, open, close )
 import           Database.SQLite.Simple.FromField ( FromField(..), ResultError(..)
                                                   , returnError, fieldData)
-import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
-import           Database.SQLite.Simple.Ok (Ok(..))
+import           Database.SQLite.Simple.Internal (RowParser (..))
 import           Database.SQLite.Simple.Types (Null)
+import           Database.SQLite.Simple.Ok (Ok (..))
 
+import           Control.Applicative.Free
 import           Control.Exception (bracket_, onException, mask)
-import           Control.Monad (forM_, replicateM_)
-import           Control.Monad.Free.Church
+import           Control.Monad (forM_)
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Identity (Identity)
 import           Control.Monad.Reader (ReaderT, MonadReader(..), runReaderT)
-import           Control.Monad.State.Strict (MonadState(..), runStateT)
+import           Control.Monad.State.Strict (MonadState (..), runStateT)
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.ByteString.Builder (toLazyByteString)
@@ -102,18 +102,15 @@ instance FromBackendRow Sqlite UTCTime
 instance FromBackendRow Sqlite Day
 instance FromBackendRow Sqlite Null
 instance FromBackendRow Sqlite Char where
-  fromBackendRow = do
-    t <- fromBackendRow
-    case T.uncons t of
-      Just (c, _) -> pure c
-      _ -> fail "Need string of size one to parse Char"
+  fromBackendRow =
+    (\mx -> mx >>= T.uncons >>= Just . fst) <$> fromBackendRow
 instance FromBackendRow Sqlite SqlNull where
   fromBackendRow =
-    SqlNull <$ (fromBackendRow :: FromBackendRowM Sqlite Null)
+    Just SqlNull <$ (fromBackendRow :: FromBackendRowA Sqlite (Maybe Null))
 instance FromBackendRow Sqlite LocalTime where
-  fromBackendRow = utcToLocalTime utc <$> fromBackendRow
+  fromBackendRow = fmap (utcToLocalTime utc) <$> fromBackendRow
 instance FromBackendRow Sqlite Scientific where
-  fromBackendRow = unSqliteScientific <$> fromBackendRow
+  fromBackendRow = fmap unSqliteScientific <$> fromBackendRow
 instance FromBackendRow Sqlite SqliteScientific
 
 newtype SqliteScientific = SqliteScientific { unSqliteScientific :: Scientific }
@@ -136,7 +133,7 @@ instance FromField SqliteScientific where
 instance BeamSqlBackend Sqlite
 instance BeamSql92Backend Sqlite
 
--- | 'MonadBeam' instance inside whiche SQLite queries are run. See the
+-- | 'MonadBeam' instance inside which SQLite queries are run. See the
 -- <https://tathougies.github.io/beam/ user guide> for more information
 newtype SqliteM a
   = SqliteM
@@ -150,30 +147,28 @@ instance ToRow BeamSqliteParams where
   toRow (BeamSqliteParams x) = x
 
 newtype BeamSqliteRow a = BeamSqliteRow a
-instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
-  fromRow = BeamSqliteRow <$> runF (fromBackendRow :: FromBackendRowM Sqlite a) finish step
-      where
-        finish = pure
-
-        step :: FromBackendRowF Sqlite (RowParser a) -> RowParser a
-        step (ParseOneField next) =
-            field >>= next
-        step (PeekField next) =
-            RP $ do
-              ro <- ask
-              st <- get
-              case runStateT (runReaderT (unRP field) ro) st of
-                Ok (a, _) -> unRP (next (Just a))
-                _ -> unRP (next Nothing)
-        step (CheckNextNNull n next) =
-            RP $ do
-              ro <- ask
-              st <- get
-              case runStateT (runReaderT (unRP (replicateM_ n (field :: RowParser Null))) ro) st of
-                Ok ((), st') ->
-                  do put st'
-                     unRP (next True)
-                _ -> unRP (next False)
+instance FromBackendRow Sqlite x => FromRow (BeamSqliteRow x) where
+  fromRow = BeamSqliteRow . maybe (error "unexpected Nothing") id
+        <$> runAp step (fromBackendRow :: FromBackendRowA Sqlite (Maybe x))
+    where
+      step :: FromBackendRowF Sqlite a -> RowParser a
+      step (ParseOneField next) = next . Just <$> field
+      step (ParseAlternative f g next) = do
+        r1 <- fieldOk
+        case r1 of
+          Ok x -> pure $ next $ f x
+          _ -> do
+            r2 <- fieldOk
+            case r2 of
+              Ok x -> pure $ next $ g x
+              _ -> pure $ next Nothing
+      fieldOk :: FromField a => RowParser (Ok a)
+      fieldOk = RP $ do
+        ro <- ask
+        st <- get
+        case runStateT (runReaderT (unRP field) ro) st of
+          Ok (a, _) -> pure $ Ok a
+          Errors es -> pure $ Errors es
 
 -- | URI syntax for use with 'withDbConnection'. See documentation for
 -- 'BeamURIOpeners' for more information.
@@ -215,6 +210,7 @@ instance MonadBeam SqliteCommandSyntax Sqlite Connection SqliteM where
           logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
           withStatement conn (fromString cmdString) $ \stmt ->
             do bind stmt (BeamSqliteParams (D.toList vals))
+               -- nextRow :: FromRow r => Statement -> IO (Maybe r)
                let nextRow' = liftIO (nextRow stmt) >>= \x ->
                               case x of
                                 Nothing -> pure Nothing
