@@ -31,6 +31,7 @@ import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
                                         , query_, open, close )
 import           Database.SQLite.Simple.FromField ( FromField(..), ResultError(..)
                                                   , returnError, fieldData)
+import           Database.SQLite.Simple.FromRow (fieldWith)
 import           Database.SQLite.Simple.Internal (RowParser (..))
 import           Database.SQLite.Simple.Types (Null)
 import           Database.SQLite.Simple.Ok (Ok (..))
@@ -152,7 +153,12 @@ instance FromBackendRow Sqlite x => FromRow (BeamSqliteRow x) where
         <$> runAp step (fromBackendRow :: FromBackendRowA Sqlite (Maybe x))
     where
       step :: FromBackendRowF Sqlite a -> RowParser a
-      step (ParseOneField next) = next . Just <$> field
+      step (ParseOneField next) = do
+        mr <- fieldWith $ \f -> do
+          case fieldData f of
+            SQLNull -> pure Nothing
+            _ -> Just <$> fromField f
+        pure $ next mr
       step (ParseAlternative f g next) = do
         r1 <- fieldOk
         case r1 of
