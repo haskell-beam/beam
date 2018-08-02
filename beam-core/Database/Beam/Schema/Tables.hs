@@ -1,4 +1,4 @@
-
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeApplications #-}
@@ -35,7 +35,7 @@ module Database.Beam.Schema.Tables
     , ComposeColumnar(..)
     , Nullable, TableField(..)
     , Exposed
-    , fieldName
+    , fieldName, fieldPath
 
     , TableSettings, HaskellTable
     , TableSkeleton, Ignored(..)
@@ -60,11 +60,15 @@ import           Database.Beam.Backend.Types
 
 import           Control.Arrow (first)
 import           Control.Monad.Identity
-import           Control.Monad.Writer
+import           Control.Monad.Writer hiding ((<>))
 
 import           Data.Char (isUpper, toLower)
-import           Data.Monoid ((<>))
+import qualified Data.List.NonEmpty as NE
+import           Data.Monoid (Endo(..))
 import           Data.Proxy
+#if !MIN_VERSION_base(4,11,0)
+import           Data.Semigroup
+#endif
 import           Data.String (IsString(..))
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -139,7 +143,8 @@ type DatabaseModification f be db = db (EntityModification f be)
 -- | A newtype wrapper around 'f e -> f e' (i.e., an endomorphism between entity
 --   types in 'f'). You usually want to use 'modifyTable' or another function to
 --   contstruct these for you.
-newtype EntityModification f be e = EntityModification (f e -> f e)
+newtype EntityModification f be e = EntityModification (Endo (f e))
+  deriving (Monoid, Semigroup)
 -- | A newtype wrapper around 'Columnar f a -> Columnar f ' (i.e., an
 --   endomorphism between 'Columnar's over 'f'). You usually want to use
 --   'fieldNamed' or the 'IsString' instance to rename the field, when 'f ~
@@ -153,7 +158,7 @@ newtype FieldModification f a
 -- > dbModification { tbl1 = modifyTable (\oldNm -> "NewTableName") tableModification }
 dbModification :: forall f be db. Database be db => DatabaseModification f be db
 dbModification = runIdentity $
-                 zipTables (Proxy @be) (\_ _ -> pure (EntityModification id)) (undefined :: DatabaseModification f be db) (undefined :: DatabaseModification f be db)
+                 zipTables (Proxy @be) (\_ _ -> pure mempty) (undefined :: DatabaseModification f be db) (undefined :: DatabaseModification f be db)
 
 -- | Return a table modification (for use with 'modifyTable') that does nothing.
 --   Useful if you only want to change the table name, or if you only want to
@@ -186,7 +191,7 @@ withDbModification :: forall db be entity
                    -> DatabaseModification (entity be db) be db
                    -> db (entity be db)
 withDbModification db mods =
-  runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (entityFn tbl)) db mods
+  runIdentity $ zipTables (Proxy @be) (\tbl (EntityModification entityFn) -> pure (appEndo entityFn tbl)) db mods
 
 -- | Modify a table according to the given field modifications. Invoked by
 --   'modifyTable' to apply the modification in the database. Not used as often in
@@ -196,30 +201,39 @@ withTableModification mods tbl =
   runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification fieldFn :: FieldModification f a)) ->
                                   pure (Columnar' (fieldFn field))) tbl mods
 
+
 -- | Provide an 'EntityModification' for 'TableEntity's. Allows you to modify
 --   the name of the table and provide a modification for each field in the
 --   table. See the examples for 'withDbModification' for more.
-modifyTable :: (Text -> Text)
+modifyTable :: (Beamable tbl, Table tbl)
+            => (Text -> Text)
             -> tbl (FieldModification (TableField tbl))
             -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)
-modifyTable modTblNm modFields =
-  EntityModification (\(DatabaseEntity (DatabaseTable nm fields)) ->
-                         (DatabaseEntity (DatabaseTable (modTblNm nm) (withTableModification modFields fields))))
+modifyTable modTblNm modFields = modifyEntityName modTblNm <> modifyTableFields modFields
+{-# DEPRECATED modifyTable "Instead of 'modifyTable fTblNm fFields', use 'modifyEntityName _ <> modifyTableFields _'" #-}
+
+-- | Construct an 'EntityModification' to rename any database entity
+modifyEntityName :: IsDatabaseEntity be entity => (Text -> Text) -> EntityModification (DatabaseEntity be db) be entity
+modifyEntityName modTblNm = EntityModification (Endo (\(DatabaseEntity tbl) -> DatabaseEntity (tbl & dbEntityName %~ modTblNm)))
+
+-- | Construct an 'EntityModification' to rename the fields of a 'TableEntity'
+modifyTableFields :: tbl (FieldModification (TableField tbl)) -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)
+modifyTableFields modFields = EntityModification (Endo (\(DatabaseEntity tbl@(DatabaseTable {})) -> DatabaseEntity tbl { dbTableSettings = withTableModification modFields (dbTableSettings tbl) }))
 
 -- | A field modification to rename the field. Also offered under the 'IsString'
 --   instance for 'FieldModification (TableField tbl) a' for convenience.
 fieldNamed :: Text -> FieldModification (TableField tbl) a
-fieldNamed newName = FieldModification (\_ -> TableField newName)
+fieldNamed newName = FieldModification (fieldName .~ newName)
 
 newtype FieldRenamer entity = FieldRenamer { withFieldRenamer :: entity -> entity }
 
 class RenamableField f where
-  renameField :: Proxy f -> Proxy a -> (Text -> Text) -> Columnar f a -> Columnar f a
+  renameField :: Proxy f -> Proxy a -> (NE.NonEmpty Text -> Text) -> Columnar f a -> Columnar f a
 instance RenamableField (TableField tbl) where
-  renameField _ _ f (TableField nm) = TableField (f nm)
+  renameField _ _ f (TableField path _) = TableField path (f path)
 
 class RenamableWithRule mod where
-  renamingFields :: (Text -> Text) -> mod
+  renamingFields :: (NE.NonEmpty Text -> Text) -> mod
 instance Database be db => RenamableWithRule (db (EntityModification (DatabaseEntity be db) be)) where
   renamingFields renamer =
     runIdentity $
@@ -228,7 +242,7 @@ instance Database be db => RenamableWithRule (db (EntityModification (DatabaseEn
               (undefined :: DatabaseModification f be db)
 instance IsDatabaseEntity be entity => RenamableWithRule (EntityModification (DatabaseEntity be db) be entity) where
   renamingFields renamer =
-    EntityModification (\(DatabaseEntity tbl) -> DatabaseEntity (withFieldRenamer (renamingFields renamer) tbl))
+    EntityModification (Endo (\(DatabaseEntity tbl) -> DatabaseEntity (withFieldRenamer (renamingFields renamer) tbl)))
 instance (Beamable tbl, RenamableField f) => RenamableWithRule (tbl (FieldModification f)) where
   renamingFields renamer =
     runIdentity $
@@ -265,45 +279,62 @@ class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) 
 
 instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (TableEntity tbl))) where
   renamingFields renamer =
-    FieldRenamer $ \(DatabaseTable tblName fields) ->
-    DatabaseTable tblName $
-    changeBeamRep (\(Columnar' tblField :: Columnar' (TableField tbl) a) ->
-                     Columnar' (renameField (Proxy @(TableField tbl)) (Proxy @a) renamer tblField) :: Columnar' (TableField tbl) a) $
-    fields
+    FieldRenamer $ \tbl ->
+      tbl { dbTableSettings =
+              changeBeamRep (\(Columnar' tblField :: Columnar' (TableField tbl) a) ->
+                               Columnar' (renameField (Proxy @(TableField tbl))
+                                                      (Proxy @a)
+                                                      renamer tblField)
+                                 :: Columnar' (TableField tbl) a) $
+              dbTableSettings tbl }
 
 instance Beamable tbl => IsDatabaseEntity be (TableEntity tbl) where
   data DatabaseEntityDescriptor be (TableEntity tbl) where
-    DatabaseTable :: Table tbl => Text -> TableSettings tbl -> DatabaseEntityDescriptor be (TableEntity tbl)
+    DatabaseTable
+      :: Table tbl =>
+       { dbTableSchema      :: Maybe Text
+       , dbTableOrigName    :: Text
+       , dbTableCurrentName :: Text
+       , dbTableSettings    :: TableSettings tbl }
+      -> DatabaseEntityDescriptor be (TableEntity tbl)
   type DatabaseEntityDefaultRequirements be (TableEntity tbl) =
     ( GDefaultTableFieldSettings (Rep (TableSettings tbl) ())
     , Generic (TableSettings tbl), Table tbl, Beamable tbl )
   type DatabaseEntityRegularRequirements be (TableEntity tbl) =
     ( Table tbl, Beamable tbl )
 
-  dbEntityName f (DatabaseTable t s) = fmap (\t' -> DatabaseTable t' s) (f t)
+  dbEntityName f tbl = fmap (\t' -> tbl { dbTableCurrentName = t' }) (f (dbTableCurrentName tbl))
   dbEntityAuto nm =
-    DatabaseTable (unCamelCaseSel nm) defTblFieldSettings
+    DatabaseTable Nothing nm (unCamelCaseSel nm) defTblFieldSettings
 
 instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (ViewEntity tbl))) where
   renamingFields renamer =
-    FieldRenamer $ \(DatabaseView tblName fields) ->
-    DatabaseView tblName $
-    changeBeamRep (\(Columnar' tblField :: Columnar' (TableField tbl) a) ->
-                     Columnar' (renameField (Proxy @(TableField tbl)) (Proxy @a) renamer tblField) :: Columnar' (TableField tbl) a) $
-    fields
+    FieldRenamer $ \vw ->
+      vw { dbViewSettings =
+             changeBeamRep (\(Columnar' tblField :: Columnar' (TableField tbl) a) ->
+                              Columnar' (renameField (Proxy @(TableField tbl))
+                                                     (Proxy @a)
+                                                     renamer tblField)
+                                :: Columnar' (TableField tbl) a) $
+             dbViewSettings vw }
 
 instance Beamable tbl => IsDatabaseEntity be (ViewEntity tbl) where
   data DatabaseEntityDescriptor be (ViewEntity tbl) where
-    DatabaseView :: Text -> TableSettings tbl -> DatabaseEntityDescriptor be (ViewEntity tbl)
+    DatabaseView
+      :: { dbViewSchema :: Maybe Text
+         , dbViewOrigName :: Text
+         , dbViewCurrentName :: Text
+         , dbViewSettings :: TableSettings tbl }
+      -> DatabaseEntityDescriptor be (ViewEntity tbl)
   type DatabaseEntityDefaultRequirements be (ViewEntity tbl) =
     ( GDefaultTableFieldSettings (Rep (TableSettings tbl) ())
     , Generic (TableSettings tbl), Beamable tbl )
   type DatabaseEntityRegularRequirements be (ViewEntity tbl) =
     (  Beamable tbl )
 
-  dbEntityName f (DatabaseView t s) = fmap (\t' -> DatabaseView t' s) (f t)
+  dbEntityName f vw = fmap (\t' -> vw { dbViewCurrentName = t' }) (f (dbViewCurrentName vw))
   dbEntityAuto nm =
-    DatabaseView (unCamelCaseSel nm) defTblFieldSettings
+    DatabaseView Nothing nm (unCamelCaseSel nm) defTblFieldSettings
 
 instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (DomainTypeEntity ty))) where
   renamingFields _ = FieldRenamer id
@@ -451,12 +482,18 @@ newtype ComposeColumnar f g a = ComposeColumnar (f (Columnar g a))
 --   instance for 'TableField', or the 'fieldNamed' function.
 data TableField (table :: (* -> *) -> *) ty
   = TableField
-  { _fieldName :: Text  -- ^ The field name
+  { _fieldPath :: NE.NonEmpty T.Text
+    -- ^ The path that led to this field. Each element is the haskell
+    -- name of the record field in which this table is stored.
+  , _fieldName :: Text  -- ^ The field name
   } deriving (Show, Eq)
 
 -- | Van Laarhoven lens to retrieve or set the field name from a 'TableField'.
 fieldName :: Lens' (TableField table ty) Text
-fieldName f (TableField name) = TableField <$> f name
+fieldName f (TableField path name) = TableField path <$> f name
+
+fieldPath :: Traversal' (TableField table ty) Text
+fieldPath f (TableField orig name) = TableField <$> traverse f orig <*> pure name
 
 -- | Represents a table that contains metadata on its fields. In particular,
 --   each field of type 'Columnar f a' is transformed into 'TableField table a'.
@@ -785,8 +822,9 @@ instance (GDefaultTableFieldSettings (a p), GDefaultTableFieldSettings (b p)) =>
 instance Selector f  =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField table field)) p) where
     gDefTblFieldSettings (_ :: Proxy (S1 f (K1 Generic.R (TableField table field)) p)) = M1 (K1 s)
-        where s = TableField name
-              name = unCamelCaseSel (T.pack (selName (undefined :: S1 f (K1 Generic.R (TableField table field)) ())))
+        where s = TableField (pure rawSelName) name
+              name = unCamelCaseSel rawSelName
+              rawSelName = T.pack (selName (undefined :: S1 f (K1 Generic.R (TableField table field)) ()))
 
 instance ( TypeError ('Text "All Beamable types must be record types, so appropriate names can be given to columns")) => GDefaultTableFieldSettings (K1 r f p) where
   gDefTblFieldSettings _ = error "impossible"
@@ -822,8 +860,8 @@ instance ( Table rel, Generic (rel (TableField rel))
          , GDefaultTableFieldSettings (Rep (rel (TableField rel)) ()) ) =>
   SubTableStrategyImpl 'PrimaryKeyStrategy f (PrimaryKey rel) where
   namedSubTable _ = primaryKey tbl
-    where tbl = changeBeamRep (\(Columnar' (TableField nm) :: Columnar' (TableField rel) a) ->
-                                  let c = Columnar' (TableField nm) :: Columnar' (TableField tbl) a
+    where tbl = changeBeamRep (\(Columnar' (TableField path nm) :: Columnar' (TableField rel) a) ->
+                                  let c = Columnar' (TableField path nm) :: Columnar' (TableField tbl) a
                                   in runIdentity (reduceTag (\_ -> pure c) undefined)) $
                 to' $ gDefTblFieldSettings (Proxy @(Rep (rel (TableField rel)) ()))
 instance ( Generic (sub f)
@@ -845,10 +883,11 @@ instance {-# OVERLAPPING #-}
     where tbl :: sub f
           tbl = namedSubTable (Proxy @strategy)
 
-          relName = unCamelCaseSel (T.pack (selName (undefined :: S1 f' (K1 Generic.R (sub f)) p)))
+          origSelName = T.pack (selName (undefined :: S1 f' (K1 Generic.R (sub f)) p))
+          relName = unCamelCaseSel origSelName
 
           settings' :: sub f
-          settings' = changeBeamRep (reduceTag %~ \(Columnar' (TableField nm)) -> Columnar' (TableField (relName <> "__" <> nm))) tbl
+          settings' = changeBeamRep (reduceTag %~ \(Columnar' (TableField path nm)) -> Columnar' (TableField (pure origSelName <> path) (relName <> "__" <> nm))) tbl
 
 type family ReplaceBaseTag tag f where
   ReplaceBaseTag tag (Nullable f) = Nullable (ReplaceBaseTag tag f)
@@ -860,9 +899,9 @@ class TagReducesTo f f' | f -> f' where
                (Columnar' f' a' -> m (Columnar' f' a'))
             -> Columnar' f a -> m (Columnar' f a)
 instance TagReducesTo (TableField tbl) (TableField tbl) where
-  reduceTag f ~(Columnar' (TableField nm)) =
-    (\(Columnar' (TableField nm')) -> Columnar' (TableField nm')) <$>
-    f (Columnar' (TableField nm))
+  reduceTag f ~(Columnar' (TableField path nm)) =
+    (\(Columnar' (TableField path' nm')) -> Columnar' (TableField path' nm')) <$>
+    f (Columnar' (TableField path nm))
 instance TagReducesTo f f' => TagReducesTo (Nullable f) f' where
   reduceTag fn ~(Columnar' x :: Columnar' (Nullable f) a) =
     (\(Columnar' x' :: Columnar' f (Maybe a')) -> Columnar' x') <$>

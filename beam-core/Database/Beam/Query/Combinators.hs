@@ -87,13 +87,12 @@ import Data.Time (LocalTime)
 import GHC.Generics
 
 -- | Introduce all entries of a table into the 'Q' monad
-all_ :: ( Database be db, Table table
-        , BeamSqlBackend be )
+all_ :: ( Database be db, BeamSqlBackend be )
        => DatabaseEntity be db (TableEntity table)
        -> Q be db s (table (QExpr be s))
-all_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (,Nothing))
-                    (tableFieldsToExpressions tblSettings)
+all_ (DatabaseEntity dt@(DatabaseTable {})) =
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed (dbTableCurrentName dt)) . Just . (,Nothing))
+                    (tableFieldsToExpressions (dbTableSettings dt))
                     (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a view into the 'Q' monad
@@ -101,9 +100,9 @@ allFromView_ :: ( Database be db, Beamable table
                 , BeamSqlBackend be )
                => DatabaseEntity be db (ViewEntity table)
                -> Q be db s (table (QExpr be s))
-allFromView_ (DatabaseEntity (DatabaseView tblNm tblSettings)) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (,Nothing))
-                    (tableFieldsToExpressions tblSettings)
+allFromView_ (DatabaseEntity vw) =
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed (dbViewCurrentName vw)) . Just . (,Nothing))
+                    (tableFieldsToExpressions (dbViewSettings vw))
                     (\_ -> Nothing) snd)
 
 values_ :: forall be db s a
@@ -134,9 +133,9 @@ join_' :: ( Database be db, Table table, BeamSqlBackend be )
        => DatabaseEntity be db (TableEntity table)
        -> (table (QExpr be s) -> QExpr be s SqlBool)
        -> Q be db s (table (QExpr be s))
-join_' (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkOn =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (, Nothing))
-                    (tableFieldsToExpressions tblSettings)
+join_' (DatabaseEntity tbl@(DatabaseTable {})) mkOn =
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed (dbTableCurrentName tbl)) . Just . (, Nothing))
+                    (tableFieldsToExpressions (dbTableSettings tbl))
                     (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
 
 -- | Introduce a table using a left join with no ON clause. Because this is not

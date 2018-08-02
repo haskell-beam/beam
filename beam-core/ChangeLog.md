@@ -4,6 +4,33 @@
 
 Beam now supports common table expressions on some backends, using the `With` monad.
 
+## Changes to field name modification
+
+`EntityModification` is now a `Monoid`. 
+
+Instead of taking the beam-determined name, the `renamingFields`
+function instead takes a `Data.List.NonEmpty` value containing the
+names of each Haskell record selector that led to this field.
+
+For example, in the following
+
+```haskell
+data Embedded f =
+  Embedded { _field1 :: Columnar f Text
+           , _field2 :: Columnar f Int }
+
+data Table1 f =
+  Table1 { _tbl1FieldA :: Columnar f Text
+         , _tbl1Embedded :: Embedded f }
+
+db = defaultDbSettings `withDbModification`
+     dbModification { table1 = renamingFields f }
+```
+
+`f` would be called with `["_tbl1FieldA"]`, `["_tbl1Embedded", "_field1"]`
+and `["_tbl1Embedded", "_field2"]`.
+
+
 ## Simplified types
 
 Every beam SQL backend is now an instance of `BeamSqlBackend` and has an
@@ -34,6 +61,12 @@ versus before
 ```haskell
 dbComputation :: ( Sql92SanityCheck syntax, MonadBeam syntax be hdl m ) => m result
 ```
+
+## Removal of `HasDefaultSqlDataTypeConstraints`
+
+The changes above make a separate `HasDefaultSqlDataTypeConstraints`
+class unnecessary. The `defaultSqlDataTypeConstraints` method is now
+included within the `HasDefaultSqlDataType` class.
 
 # 0.7.2.0
 

@@ -5,7 +5,6 @@
 module Database.Beam.Migrate.Generics.Tables
   ( -- * Field data type defaulting
     HasDefaultSqlDataType(..)
-  , HasDefaultSqlDataTypeConstraints(..)
   , Sql92HasDefaultDataType
 
   -- * Internal
@@ -99,13 +98,22 @@ instance BeamMigrateSqlBackend be =>
 
 -- * Default data types
 
--- | Certain data types also come along with constraints. For example, @SERIAL@
--- types in Postgres generate an automatic @DEFAULT@ constraint.
+-- | Used to define a default SQL data type for a haskell type in a particular
+-- backend, as well as any constraints that are needed
 --
--- You need an instance of this class for any type for which you want beam to be
--- able to infer the SQL data type. If your data type does not have any
--- constraint requirements, you can just declare an empty instance
-class BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be ty where
+-- Beam defines instances for several standard SQL types, which are
+-- polymorphic over any standard data type syntax. Backends or
+-- extensions which provide custom types should instantiate instances
+-- of this class for any types they provide for which they would like
+-- checked schema migrations
+class BeamMigrateSqlBackend be => HasDefaultSqlDataType be ty where
+
+  -- | Provide a data type for the given type
+  defaultSqlDataType :: Proxy ty       -- ^ Concrete representation of the type
+                     -> Proxy be       -- ^ Concrete representation of the backend
+                     -> Bool           -- ^ 'True' if this field is in an embedded
+                                       --   key or table, 'False' otherwise
+                     -> BeamSqlBackendDataTypeSyntax be
 
   -- | Provide arbitrary constraints on a field of the requested type. See
   -- 'FieldCheck' for more information on the formatting of constraints.
@@ -120,28 +128,9 @@ class BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be ty where
     -> [ FieldCheck ]
   defaultSqlDataTypeConstraints _ _ _ = []
 
--- | Used to define a default SQL data type for a haskell type in a particular
--- data type syntax.
---
--- Beam defines instances for several standard SQL types, which are polymorphic
--- over any standard data type syntax. Backends or extensions which provide
--- custom types should instantiate instances of this class and
--- 'HasDefaultSqlDataTypeConstraints' for any types they provide for which they
--- would like checked schema migrations
-class BeamMigrateSqlBackend be => HasDefaultSqlDataType be ty where
-
-  -- | Provide a data type for the given type
-  defaultSqlDataType :: Proxy ty       -- ^ Concrete representation of the type
-                     -> Proxy be       -- ^ Concrete representation of the backend
-                     -> Bool           -- ^ 'True' if this field is in an embedded
-                                       --   key or table, 'False' otherwise
-                     -> BeamSqlBackendDataTypeSyntax be
-
 instance (BeamMigrateSqlBackend be, HasDefaultSqlDataType be ty) =>
   HasDefaultSqlDataType be (Maybe ty) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy @ty)
-instance (BeamMigrateSqlBackend be, HasDefaultSqlDataTypeConstraints be ty) =>
-  HasDefaultSqlDataTypeConstraints be (Maybe ty) where
   defaultSqlDataTypeConstraints _ = defaultSqlDataTypeConstraints (Proxy @ty)
 
 -- TODO Not sure if individual databases will want to customize these types
