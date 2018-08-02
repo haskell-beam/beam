@@ -161,24 +161,32 @@ runPgRowReader conn rowIdx res fields readRow = do
     step (ParseOneField next) = do
       (curCol, field):fs <- get
       put fs
-      fieldValue <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
-      r <- liftIO $ Pg.runConversion (Pg.fromField field fieldValue) conn
-      case r of
-        Pg.Ok x -> pure $ next $ Just x
-        Pg.Errors _ -> lift $ throwE $ PgRowCouldNotParseField curCol
+      isNull <- liftIO $ Pg.getisnull res rowIdx (Pg.Col curCol)
+      case isNull of
+        True -> pure $ next $ Nothing
+        False -> do
+          fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+          r <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
+          case r of
+            Pg.Ok x -> pure $ next $ Just x
+            Pg.Errors _ -> lift $ throwE $ PgRowCouldNotParseField curCol
     step (ParseAlternative f g next) = do
       (curCol, field):fs <- get
       put fs
-      fv1 <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
-      r1 <- liftIO $ Pg.runConversion (Pg.fromField field fv1) conn
-      case r1 of
-        Pg.Ok x -> pure $ next $ f x
-        _ -> do
-          fv2 <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
-          r2 <- liftIO $ Pg.runConversion (Pg.fromField field fv2) conn
-          case r2 of
-            Pg.Ok x -> pure $ next $ g x
-            Pg.Errors _ -> lift $ throwE $ PgRowCouldNotParseField curCol
+      isNull <- liftIO $ Pg.getisnull res rowIdx (Pg.Col curCol)
+      case isNull of
+        True -> pure $ next $ Nothing
+        False -> do
+          fv1 <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+          r1 <- liftIO $ Pg.runConversion (Pg.fromField field fv1) conn
+          case r1 of
+            Pg.Ok x -> pure $ next $ f x
+            _ -> do
+              fv2 <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+              r2 <- liftIO $ Pg.runConversion (Pg.fromField field fv2) conn
+              case r2 of
+                Pg.Ok x -> pure $ next $ g x
+                Pg.Errors _ -> lift $ throwE $ PgRowCouldNotParseField curCol
 
 withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either PgError a)
 withPgDebug dbg conn (Pg action) =
