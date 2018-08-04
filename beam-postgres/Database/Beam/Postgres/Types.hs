@@ -12,6 +12,7 @@ module Database.Beam.Postgres.Types
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.Types
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreMap, HStoreList)
@@ -47,18 +48,20 @@ instance BeamBackend Postgres where
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 
-fromScientificOrIntegral :: forall a. (Bounded a, Integral a) => FromBackendRowA Postgres (Maybe a)
-fromScientificOrIntegral = parseAlternative toBoundedInteger (Just . (fromIntegral :: Integer -> a))
+fromScientificOrIntegral :: forall a. (Bounded a, Integral a) => FromBackendRowA Postgres (Result a)
+fromScientificOrIntegral =
+  parseAlternative (maybe (Error $ BeamRowError "fromScientificOrIntegral: downcasting would result in loss of data") Result <$> toBoundedInteger)
+                   (Result . (fromIntegral :: Integer -> a))
 
-fromPgIntegral :: forall a. (Pg.FromField a, Integral a) => FromBackendRowA Postgres (Maybe a)
-fromPgIntegral = parseAlternative Just f
+fromPgIntegral :: forall a. (Pg.FromField a, Integral a) => FromBackendRowA Postgres (Result a)
+fromPgIntegral = parseAlternative Result f
   where
-    f :: Integer -> Maybe a
+    f :: Integer -> Result a
     f x =
       let x' = fromIntegral x
       in if x == fromIntegral x'
-           then Just x'
-           else Nothing
+           then Result x'
+           else Error $ BeamRowError "fromPgIntegral: downcasting would result in loss of data"
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
 instance FromBackendRow Postgres SqlNull
@@ -93,7 +96,7 @@ instance FromBackendRow Postgres Value
 instance FromBackendRow Postgres TL.Text
 instance FromBackendRow Postgres Pg.Oid
 instance FromBackendRow Postgres LocalTime where
-  fromBackendRow = parseAlternative Just (Just . zonedTimeToLocalTime)
+  fromBackendRow = parseAlternative Result (Result . zonedTimeToLocalTime)
 instance FromBackendRow Postgres TimeOfDay
 instance FromBackendRow Postgres Day
 instance FromBackendRow Postgres UUID
@@ -109,7 +112,10 @@ instance FromBackendRow Postgres (Ratio Integer)
 instance FromBackendRow Postgres (CI Text)
 instance FromBackendRow Postgres (CI TL.Text)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a) where
-  fromBackendRow = maybe (Just mempty) Just <$> parseOneField
+  fromBackendRow = f <$> parseOneField
+    where
+      f Null = Result mempty
+      f x = x
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGArray a)
 instance FromBackendRow Postgres (Pg.Binary ByteString)
 instance FromBackendRow Postgres (Pg.Binary BL.ByteString)

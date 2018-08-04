@@ -157,25 +157,25 @@ runPgRowReader conn rowIdx res fields readRow = do
     else
       pure $ Left $ PgRowReadNotEnoughColumns needCols colCount
   where
-    step :: FromBackendRowF Postgres a -> StateT [(CInt, Pg.Field)] (ExceptT PgRowReadError IO) a
+    step :: forall a. FromBackendRowF Postgres a -> StateT [(CInt, Pg.Field)] (ExceptT PgRowReadError IO) a
     step (ParseOneField next) = do
       (curCol, field):fs <- get
       put fs
       isNull <- liftIO $ Pg.getisnull res rowIdx (Pg.Col curCol)
       case isNull of
-        True -> pure $ next $ Nothing
+        True -> pure $ next Null
         False -> do
           fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
           r <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
           case r of
-            Pg.Ok x -> pure $ next $ Just x
+            Pg.Ok x -> pure $ next $ Result x
             Pg.Errors _ -> lift $ throwE $ PgRowCouldNotParseField curCol
     step (ParseAlternative f g next) = do
       (curCol, field):fs <- get
       put fs
       isNull <- liftIO $ Pg.getisnull res rowIdx (Pg.Col curCol)
       case isNull of
-        True -> pure $ next $ Nothing
+        True -> pure $ next Null
         False -> do
           fv1 <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
           r1 <- liftIO $ Pg.runConversion (Pg.fromField field fv1) conn
@@ -209,7 +209,7 @@ withPgDebug dbg conn (Pg action) =
                    finishUp (PgStreamDone (Left err)) = pure (Left err)
                    finishUp (PgStreamContinue next') = next' Nothing >>= finishUp
 
-                   columnCount = fromIntegral $ valuesNeeded (fromBackendRow :: FromBackendRowA Postgres (Maybe x))
+                   columnCount = fromIntegral $ valuesNeeded (fromBackendRow :: FromBackendRowA Postgres (Result x))
                in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query) (PgStreamContinue nextStream) runConsumer >>= finishUp
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
@@ -246,7 +246,9 @@ withPgDebug dbg conn (Pg action) =
              then next Nothing rowIdx
              else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
                     Left err -> pure (Left (PgRowParseError err))
-                    Right r -> next r (rowIdx + 1)
+                    Right (Result r) -> next (Just r) (rowIdx + 1) -- TODO
+                    Right Null -> pure $ Left $ PgInternalError "failed to parse row"
+                    Right (Error x) -> pure (Left (PgInternalError (show x)))
       stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (PgInternalError "Nested queries not allowed"))
       stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (PgInternalError "Nested queries not allowed"))
 
@@ -263,12 +265,16 @@ withPgDebug dbg conn (Pg action) =
             getFields res' >>= \fields ->
             runPgRowReader conn rowIdx res' fields fromBackendRow >>= \case
               Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
-              Right r -> next r Nothing
+              Right (Result r) -> next (Just r) Nothing
+              Right Null -> pure $ PgStreamDone $ Left $ PgInternalError "Failed to parse row"
+              Right (Error x) -> pure (PgStreamDone (Left (PgInternalError $ show x)))
       stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
         getFields res >>= \fields ->
         runPgRowReader conn rowIdx res fields fromBackendRow >>= \case
           Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
-          Right r -> pure (PgStreamContinue (next r))
+          Right (Result r) -> pure (PgStreamContinue (next $ Just r))
+          Right Null -> pure $ PgStreamDone $ Left $ PgInternalError "Failed to parse row"
+          Right (Error _) -> pure (PgStreamDone (Left (PgInternalError "TODO: this should not be internal error")))
       stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
       stepProcess (PgLiftWithHandle _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
 

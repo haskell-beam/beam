@@ -2,9 +2,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Database.Beam.Backend.Types
   ( BeamBackend(..)
+  , Result (..), BeamRowError (..)
 
   , FromBackendRowF(..), FromBackendRowA
   , parseOneField, parseAlternative
@@ -16,6 +18,7 @@ module Database.Beam.Backend.Types
 
 import           Control.Applicative
 import           Control.Applicative.Free
+import           Control.Exception
 import           Control.Monad.Identity
 import           Data.Tagged
 import           Data.Vector.Sized (Vector)
@@ -27,28 +30,49 @@ import GHC.Generics
 import GHC.TypeLits
 import GHC.Types
 
+data BeamRowError
+  = BeamRowError String
+  deriving (Eq, Show)
+
+instance Exception BeamRowError
+
+data Result a
+  = Result a
+  | Null
+  | Error BeamRowError
+  deriving (Eq, Show, Functor)
+
+instance Applicative Result where
+  pure = Result
+  Result f <*> Result x = Result (f x)
+  Result _ <*> Null = Null
+  Null <*> Result _ = Null
+  Null <*> Null = Null
+  Error e <*> _ = Error e
+  _ <*> Error e = Error e
+
 -- | Class for all beam backends
 class BeamBackend be where
   -- | Requirements to marshal a certain type from a database of a particular backend
   type BackendFromField be :: * -> Constraint
 
 data FromBackendRowF be f where
-  ParseOneField :: BackendFromField be a => (Maybe a -> f) -> FromBackendRowF be f
+  ParseOneField :: BackendFromField be a => (Result a -> f) -> FromBackendRowF be f
   ParseAlternative :: (BackendFromField be a, BackendFromField be b)
-                   => (a -> Maybe r) -> (b -> Maybe r) -> (Maybe r -> f) -> FromBackendRowF be f
+                   => (a -> Result r) -> (b -> Result r) -> (Result r -> f) -> FromBackendRowF be f
 deriving instance Functor (FromBackendRowF be)
 type FromBackendRowA be = Ap (FromBackendRowF be)
 
-parseOneField :: BackendFromField be a => FromBackendRowA be (Maybe a)
+parseOneField :: BackendFromField be a => FromBackendRowA be (Result a)
 parseOneField = liftAp (ParseOneField id)
 
 parseAlternative :: (BackendFromField be a, BackendFromField be b)
-  => (a -> Maybe r) -> (b -> Maybe r) -> FromBackendRowA be (Maybe r)
+  => (a -> Result r) -> (b -> Result r) -> FromBackendRowA be (Result r)
 parseAlternative f g = liftAp (ParseAlternative f g id)
 
 class BeamBackend be => FromBackendRow be a where
-  fromBackendRow :: FromBackendRowA be (Maybe a)
-  default fromBackendRow :: (BackendFromField be a) => FromBackendRowA be (Maybe a)
+  fromBackendRow :: FromBackendRowA be (Result a)
+  default fromBackendRow :: (BackendFromField be a) => FromBackendRowA be (Result a)
   fromBackendRow = parseOneField
 
 valuesNeeded :: FromBackendRowA be a -> Int
@@ -71,9 +95,9 @@ data Exposed x
 data Nullable (c :: * -> *) x
 
 class GFromBackendRow be (exposed :: * -> *) rep where
-  gFromBackendRow :: Proxy exposed -> FromBackendRowA be (Maybe (rep ()))
+  gFromBackendRow :: Proxy exposed -> FromBackendRowA be (Result (rep ()))
 instance GFromBackendRow be e U1 where
-  gFromBackendRow _ = pure (Just U1)
+  gFromBackendRow _ = pure (Result U1)
 instance GFromBackendRow be e p => GFromBackendRow be (M1 t f e) (M1 t f p) where
   gFromBackendRow _ = fmap M1 <$> gFromBackendRow (Proxy @e)
 instance (GFromBackendRow be ea a, GFromBackendRow be eb b) => GFromBackendRow be (ea :*: eb) (a :*: b) where
@@ -87,7 +111,7 @@ instance FromBackendRow be (t (Nullable Identity)) => GFromBackendRow be (K1 R (
 
 
 instance BeamBackend be => FromBackendRow be () where
-  fromBackendRow = pure (Just ())
+  fromBackendRow = pure (Result ())
 
 instance ( BeamBackend be, KnownNat n, FromBackendRow be a ) => FromBackendRow be (Vector n a) where
   fromBackendRow = fmap sequenceA $ sequenceA $ Vector.replicate fromBackendRow
@@ -128,8 +152,12 @@ instance ( BeamBackend be, FromBackendRow be a, FromBackendRow be b, FromBackend
   fromBackendRow = liftA8 (,,,,,,,) <$> fromBackendRow <*> fromBackendRow <*> fromBackendRow <*> fromBackendRow
                                     <*> fromBackendRow <*> fromBackendRow <*> fromBackendRow <*> fromBackendRow
 
-instance FromBackendRow be a => FromBackendRow be (Maybe a) where
-  fromBackendRow = fmap Just (fromBackendRow :: FromBackendRowA be (Maybe a))
+instance (BeamBackend be, FromBackendRow be a) => FromBackendRow be (Maybe a) where
+  fromBackendRow = f <$> (fromBackendRow :: FromBackendRowA be (Result a))
+    where
+      f (Result x) = Result $ Just x
+      f Null = Result Nothing
+      f (Error e) = Error e
 
 instance ( BeamBackend be, Generic (tbl Identity), Generic (tbl Exposed)
          , GFromBackendRow be (Rep (tbl Exposed)) (Rep (tbl Identity))) =>
