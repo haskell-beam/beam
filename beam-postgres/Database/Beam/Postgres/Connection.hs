@@ -133,6 +133,7 @@ data PgRowReadError
       -- the zero-based index of the column that could not have been
       -- parsed. This is usually caused by your Haskell schema type being
       -- incompatible with the one in the database.
+    | PgRowUnexpectedNull
     deriving Show
 
 instance Exception PgRowReadError
@@ -146,14 +147,24 @@ getFields res = do
 
   mapM getField [0..colCount - 1]
 
-runPgRowReader ::
-  Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowA Postgres a -> IO (Either PgRowReadError a)
+runPgRowReader
+  :: Pg.Connection
+  -> Pg.Row
+  -> Pg.Result
+  -> [Pg.Field]
+  -> FromBackendRowA Postgres (Result a)
+  -> IO (Either PgRowReadError a)
 runPgRowReader conn rowIdx res fields readRow = do
   (Pg.Col colCount) <- Pg.nfields res
   let needCols = fromIntegral $ valuesNeeded readRow
   if needCols <= colCount
     then do
-      runExceptT $ evalStateT (runAp step readRow) $ zip [0..(colCount - 1)] fields
+      er <- runExceptT $ evalStateT (runAp step readRow) $ zip [0..(colCount - 1)] fields
+      pure $ case er of
+               Right (Result x) -> Right x
+               Right Null -> Left PgRowUnexpectedNull
+               Right _ -> error "Internal error"
+               Left x -> Left x
     else
       pure $ Left $ PgRowReadNotEnoughColumns needCols colCount
   where
@@ -177,13 +188,12 @@ runPgRowReader conn rowIdx res fields readRow = do
       case isNull of
         True -> pure $ next Null
         False -> do
-          fv1 <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
-          r1 <- liftIO $ Pg.runConversion (Pg.fromField field fv1) conn
+          fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+          r1 <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
           case r1 of
             Pg.Ok x -> pure $ next $ f x
             _ -> do
-              fv2 <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
-              r2 <- liftIO $ Pg.runConversion (Pg.fromField field fv2) conn
+              r2 <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
               case r2 of
                 Pg.Ok x -> pure $ next $ g x
                 Pg.Errors _ -> lift $ throwE $ PgRowCouldNotParseField curCol
@@ -246,9 +256,7 @@ withPgDebug dbg conn (Pg action) =
              then next Nothing rowIdx
              else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
                     Left err -> pure (Left (PgRowParseError err))
-                    Right (Result r) -> next (Just r) (rowIdx + 1) -- TODO
-                    Right Null -> pure $ Left $ PgInternalError "failed to parse row"
-                    Right (Error x) -> pure (Left (PgInternalError (show x)))
+                    Right r -> next (Just r) (rowIdx + 1)
       stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (PgInternalError "Nested queries not allowed"))
       stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (PgInternalError "Nested queries not allowed"))
 
@@ -265,16 +273,12 @@ withPgDebug dbg conn (Pg action) =
             getFields res' >>= \fields ->
             runPgRowReader conn rowIdx res' fields fromBackendRow >>= \case
               Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
-              Right (Result r) -> next (Just r) Nothing
-              Right Null -> pure $ PgStreamDone $ Left $ PgInternalError "Failed to parse row"
-              Right (Error x) -> pure (PgStreamDone (Left (PgInternalError $ show x)))
+              Right r -> next (Just r) Nothing
       stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
         getFields res >>= \fields ->
         runPgRowReader conn rowIdx res fields fromBackendRow >>= \case
           Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
-          Right (Result r) -> pure (PgStreamContinue (next $ Just r))
-          Right Null -> pure $ PgStreamDone $ Left $ PgInternalError "Failed to parse row"
-          Right (Error _) -> pure (PgStreamDone (Left (PgInternalError "TODO: this should not be internal error")))
+          Right r -> pure (PgStreamContinue (next $ Just r))
       stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
       stepProcess (PgLiftWithHandle _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
 

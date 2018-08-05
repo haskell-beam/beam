@@ -129,14 +129,13 @@ runQueryReturning conn x withSrc = do
     then do
       singleRowModeSet <- liftIO (Pg.withConnection conn Pg.setSingleRowMode)
       if singleRowModeSet
-         then error "TODO" -- withSrc (streamResults Nothing) `finally` gracefulShutdown
+         then withSrc (streamResults Nothing) `finally` gracefulShutdown
          else fail "Could not enable single row mode"
     else do
       errMsg <- fromMaybe "No libpq error provided" <$> liftIO (Pg.withConnection conn Pg.errorMessage)
       fail (show errMsg)
 
   where
-    {-
     streamResults fields = do
       nextRow <- liftIO (Pg.withConnection conn Pg.getResult)
       case nextRow of
@@ -148,16 +147,15 @@ runQueryReturning conn x withSrc = do
               do fields' <- liftIO (maybe (getFields row) pure fields)
                  parsedRow <- liftIO (runPgRowReader conn 0 row fields' fromBackendRow)
                  case parsedRow of
-                   Left err -> liftIO (bailEarly row ("Could not read row: " <> show err))
-                   Right parsedRow' ->
-                     do C.yield parsedRow'
-                        streamResults (Just fields')
+                    Left err -> liftIO (bailEarly row ("Could not read row: " <> show err))
+                    Right parsedRow' ->
+                      do C.yield parsedRow'
+                         streamResults (Just fields')
             Pg.TuplesOk -> liftIO (Pg.withConnection conn finishQuery)
             Pg.EmptyQuery -> fail "No query"
             Pg.CommandOk -> pure ()
             _ -> do errMsg <- liftIO (Pg.resultErrorMessage row)
                     fail ("Postgres error: " <> show errMsg)
-     -}
 
     bailEarly row errorString = do
       Pg.unsafeFreeResult row
@@ -180,7 +178,6 @@ runQueryReturning conn x withSrc = do
         Nothing -> pure ()
         Just _ -> finishQuery conn'
 
-    {-
     gracefulShutdown =
       liftIO . Pg.withConnection conn $ \conn' ->
       do sts <- Pg.transactionStatus conn'
@@ -190,4 +187,3 @@ runQueryReturning conn x withSrc = do
            Pg.TransInError -> pure ()
            Pg.TransUnknown -> pure ()
            Pg.TransActive -> cancelQuery conn'
-    -}
