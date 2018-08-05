@@ -12,7 +12,6 @@ module Database.Beam.Postgres.Types
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.Types
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreMap, HStoreList)

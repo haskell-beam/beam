@@ -134,6 +134,7 @@ data PgRowReadError
       -- parsed. This is usually caused by your Haskell schema type being
       -- incompatible with the one in the database.
     | PgRowUnexpectedNull
+      -- ^ Row parsing produced a Result of Null.
     deriving Show
 
 instance Exception PgRowReadError
@@ -190,13 +191,13 @@ runPgRowReader conn rowIdx res fields readRow = do
         False -> do
           fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
           r1 <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
-          case r1 of
-            Pg.Ok x -> pure $ next $ f x
+          case fmap f r1 of
+            Pg.Ok (Result x) -> pure $ next $ Result x
             _ -> do
               r2 <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
-              case r2 of
-                Pg.Ok x -> pure $ next $ g x
-                Pg.Errors _ -> lift $ throwE $ PgRowCouldNotParseField curCol
+              case fmap g r2 of
+                Pg.Ok (Result x) -> pure $ next $ Result x
+                _ -> lift $ throwE $ PgRowCouldNotParseField curCol
 
 withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either PgError a)
 withPgDebug dbg conn (Pg action) =

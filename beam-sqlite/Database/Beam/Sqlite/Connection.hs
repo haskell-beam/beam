@@ -25,7 +25,7 @@ import           Database.Beam.Schema.Tables ( DatabaseEntity(..)
 import           Database.Beam.Sqlite.Syntax
 
 import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
-                                        , Query(..), SQLData(..), field
+                                        , Query(..), SQLData(..)
                                         , execute, execute_
                                         , withStatement, bind, nextRow
                                         , query_, open, close )
@@ -37,13 +37,12 @@ import           Database.SQLite.Simple.Types (Null)
 import           Database.SQLite.Simple.Ok (Ok (..))
 
 import           Control.Applicative.Free
-import           Control.Exception (SomeException(..), bracket_, onException, mask, throw)
+import           Control.Exception (SomeException(..), bracket_, onException, mask)
 import           Control.Monad (forM_)
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Identity (Identity)
 import           Control.Monad.Reader (ReaderT, MonadReader(..), runReaderT)
-import           Control.Monad.State.Strict (MonadState (..), runStateT)
-import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans (lift)
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.ByteString.Builder (toLazyByteString)
@@ -170,7 +169,8 @@ instance FromBackendRow Sqlite x => FromRow (BeamSqliteRow x) where
             SQLNull -> pure $ next Null
             _ -> case fromField f of
                    Ok x -> pure $ next $ Result x
-                   Errors (x:_) -> pure $ next $ Error $ BeamRowError $ show x
+                   Errors xs@(_:_) -> pure $ next $ Error $ BeamRowError $ show xs
+                   Errors _ -> pure $ next $ Error $ BeamRowError "Unknown error"
       step (ParseAlternative funcLeft funcRight next) = do
         fieldWith $ \f -> do
           case fieldData f of
