@@ -266,7 +266,7 @@ withPgDebug dbg conn (Pg action) =
             getFields res' >>= \fields ->
             runPgRowReader conn rowIdx res' fields fromBackendRow >>= \case
               Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
-              Right r -> next r Nothing
+              Right r -> next (Just r) Nothing
       stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
         getFields res >>= \fields ->
         runPgRowReader conn rowIdx res fields fromBackendRow >>= \case
