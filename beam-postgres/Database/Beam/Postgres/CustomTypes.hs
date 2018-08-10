@@ -42,7 +42,9 @@ import           Data.Functor.Const
 import qualified Data.HashSet as HS
 import           Data.Hashable (Hashable)
 import           Data.Proxy (Proxy(..))
+#if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
+#endif
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as TE
 

@@ -67,9 +67,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import           Data.UUID.Types (UUID)
 import           Data.Typeable
-#if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
-#endif
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
 migrationBackend :: Tool.BeamMigrationBackend Postgres Pg

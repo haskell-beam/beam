@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE CPP #-}
@@ -70,9 +71,7 @@ import           Data.Semigroup
 -- function. You can combine these values monoidally to combine multiple locks for use with the
 -- 'withLocks_' function.
 newtype PgLockedTables s = PgLockedTables [ T.Text ]
-instance Monoid (PgLockedTables s) where
-  mempty = PgLockedTables []
-  mappend (PgLockedTables a) (PgLockedTables b) = PgLockedTables (a <> b)
+  deriving ( Semigroup, Monoid )
 
 -- | Combines the result of a query along with a set of locked tables. Used as a
 -- return value for the 'lockingFor_' function.
