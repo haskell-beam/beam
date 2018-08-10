@@ -169,15 +169,14 @@ runPgRowReader conn rowIdx res fields readRow = do
     else
       pure $ Left $ PgRowReadNotEnoughColumns needCols colCount
   where
-    step :: forall a. FromBackendRowF Postgres a -> StateT [(CInt, Pg.Field)] (ExceptT PgRowReadError IO) a
+    step :: FromBackendRowF Postgres a -> StateT [(CInt, Pg.Field)] (ExceptT PgRowReadError IO) a
     step (ParseOneField next) = do
       (curCol, field):fs <- get
       put fs
-      isNull <- liftIO $ Pg.getisnull res rowIdx (Pg.Col curCol)
-      case isNull of
-        True -> pure $ next Null
-        False -> do
-          fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+      fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+      case fv of
+        Nothing -> pure $ next Null
+        Just _ -> do
           r <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
           case r of
             Pg.Ok x -> pure $ next $ Result x
@@ -185,11 +184,10 @@ runPgRowReader conn rowIdx res fields readRow = do
     step (ParseAlternative f g next) = do
       (curCol, field):fs <- get
       put fs
-      isNull <- liftIO $ Pg.getisnull res rowIdx (Pg.Col curCol)
-      case isNull of
-        True -> pure $ next Null
-        False -> do
-          fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+      fv <- liftIO $ Pg.getvalue res rowIdx (Pg.Col curCol)
+      case fv of
+        Nothing -> pure $ next Null
+        Just _ -> do
           r1 <- liftIO $ Pg.runConversion (Pg.fromField field fv) conn
           case fmap f r1 of
             Pg.Ok (Result x) -> pure $ next $ Result x

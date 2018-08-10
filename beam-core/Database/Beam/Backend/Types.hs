@@ -20,6 +20,7 @@ import           Control.Applicative
 import           Control.Applicative.Free
 import           Control.Exception
 import           Control.Monad.Identity
+import           Data.Monoid (Sum(..))
 import           Data.Tagged
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
@@ -76,8 +77,7 @@ class BeamBackend be => FromBackendRow be a where
   fromBackendRow = parseOneField
 
 valuesNeeded :: FromBackendRowA be a -> Int
-valuesNeeded (Pure _) = 0
-valuesNeeded (Ap _ a) = 1 + valuesNeeded a
+valuesNeeded = getSum . runAp_ (\_ -> Sum 1)
 
 -- | newtype mainly used to inspect tho tag structure of a particular
 --   'Beamable'. Prevents overlapping instances in some case. Usually not used
@@ -188,4 +188,3 @@ liftA7 f a1 a2 a3 a4 a5 a6 a7 = f <$> a1 <*> a2 <*> a3 <*> a4 <*> a5 <*> a6 <*> 
 
 liftA8 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> b) -> f a1 -> f a2 -> f a3 -> f a4 -> f a5 -> f a6 -> f a7 -> f a8 -> f b
 liftA8 f a1 a2 a3 a4 a5 a6 a7 a8 = f <$> a1 <*> a2 <*> a3 <*> a4 <*> a5 <*> a6 <*> a7 <*> a8
-
