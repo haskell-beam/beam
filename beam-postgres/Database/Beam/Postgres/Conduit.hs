@@ -147,10 +147,10 @@ runQueryReturning conn x withSrc = do
               do fields' <- liftIO (maybe (getFields row) pure fields)
                  parsedRow <- liftIO (runPgRowReader conn 0 row fields' fromBackendRow)
                  case parsedRow of
-                    Left err -> liftIO (bailEarly row ("Could not read row: " <> show err))
-                    Right parsedRow' ->
-                      do C.yield parsedRow'
-                         streamResults (Just fields')
+                   Left err -> liftIO (bailEarly row ("Could not read row: " <> show err))
+                   Right parsedRow' ->
+                     do C.yield parsedRow'
+                        streamResults (Just fields')
             Pg.TuplesOk -> liftIO (Pg.withConnection conn finishQuery)
             Pg.EmptyQuery -> fail "No query"
             Pg.CommandOk -> pure ()

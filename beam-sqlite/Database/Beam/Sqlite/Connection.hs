@@ -37,7 +37,7 @@ import           Database.SQLite.Simple.Types (Null)
 import           Database.SQLite.Simple.Ok (Ok (..))
 
 import           Control.Applicative.Free
-import           Control.Exception (SomeException(..), bracket_, onException, mask)
+import           Control.Exception (Exception, SomeException(..), bracket_, onException, mask)
 import           Control.Monad (forM_)
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Identity (Identity)
@@ -109,7 +109,7 @@ instance FromBackendRow Sqlite Char where
       f (Result x) =
         case TL.uncons x of
           Just (c, _) -> Result c
-          Nothing -> Error $ BeamRowError "Failed to parse Char"
+          Nothing -> Error "Failed to parse Char"
       f Null = Null
       f (Error e) = Error e
 instance FromBackendRow Sqlite SqlNull where
@@ -153,14 +153,18 @@ newtype BeamSqliteParams = BeamSqliteParams [SQLData]
 instance ToRow BeamSqliteParams where
   toRow (BeamSqliteParams x) = x
 
+
+newtype BeamSqliteRowError = BeamSqliteRowError T.Text deriving (Eq, Show)
+instance Exception BeamSqliteRowError
+
 newtype BeamSqliteRow a = BeamSqliteRow a
 instance FromBackendRow Sqlite x => FromRow (BeamSqliteRow x) where
   fromRow = do
     r <- runAp step (fromBackendRow :: FromBackendRowA Sqlite (Result x))
     case r of
       Result x -> pure $ BeamSqliteRow x
-      Null -> RP $ lift $ lift $ Errors [SomeException $ BeamRowError "Unexpected null parsing BeamSqliteRow"]
-      Error x -> RP $ lift $ lift $ Errors [SomeException x]
+      Null -> RP $ lift $ lift $ Errors [SomeException $ BeamSqliteRowError "Unexpected null parsing BeamSqliteRow"]
+      Error x -> RP $ lift $ lift $ Errors [SomeException $ BeamSqliteRowError x]
     where
       step :: FromBackendRowF Sqlite a -> RowParser a
       step (ParseOneField next) = do
@@ -169,8 +173,10 @@ instance FromBackendRow Sqlite x => FromRow (BeamSqliteRow x) where
             SQLNull -> pure $ next Null
             _ -> case fromField f of
                    Ok x -> pure $ next $ Result x
-                   Errors xs@(_:_) -> pure $ next $ Error $ BeamRowError $ show xs
-                   Errors _ -> pure $ next $ Error $ BeamRowError "Unknown error"
+                   Errors xs -> pure $ next $ Error $
+                     case xs of
+                       [] -> "Unknown error"
+                       _ -> T.pack $ show xs
       step (ParseAlternative funcLeft funcRight next) = do
         fieldWith $ \f -> do
           case fieldData f of
@@ -179,7 +185,10 @@ instance FromBackendRow Sqlite x => FromRow (BeamSqliteRow x) where
                    Ok x -> pure $ next $ funcLeft x
                    _ -> case fromField f of
                           Ok x -> pure $ next $ funcRight x
-                          _ -> pure $ next $ Error $ BeamRowError "Failed to evaluate ParseAlternative"
+                          Errors xs -> pure $ next $ Error $
+                            case xs of
+                              [] -> "Unknown error"
+                              _ -> T.pack $ show xs
 
 -- | URI syntax for use with 'withDbConnection'. See documentation for
 -- 'BeamURIOpeners' for more information.

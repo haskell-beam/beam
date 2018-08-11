@@ -49,7 +49,7 @@ instance Pg.FromField SqlNull where
 
 fromScientificOrIntegral :: forall a. (Bounded a, Integral a) => FromBackendRowA Postgres (Result a)
 fromScientificOrIntegral =
-  parseAlternative (maybe (Error $ BeamRowError "fromScientificOrIntegral: downcasting would result in loss of data") Result <$> toBoundedInteger)
+  parseAlternative (maybe (Error "fromScientificOrIntegral: downcasting would result in loss of data") Result <$> toBoundedInteger)
                    (Result . (fromIntegral :: Integer -> a))
 
 fromPgIntegral :: forall a. (Pg.FromField a, Integral a) => FromBackendRowA Postgres (Result a)
@@ -60,7 +60,7 @@ fromPgIntegral = parseAlternative Result f
       let x' = fromIntegral x
       in if x == fromIntegral x'
            then Result x'
-           else Error $ BeamRowError "fromPgIntegral: downcasting would result in loss of data"
+           else Error "fromPgIntegral: downcasting would result in loss of data"
 
 -- Default FromBackendRow instances for all postgresql-simple FromField instances
 instance FromBackendRow Postgres SqlNull

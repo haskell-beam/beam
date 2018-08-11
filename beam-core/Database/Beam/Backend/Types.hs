@@ -6,7 +6,7 @@
 
 module Database.Beam.Backend.Types
   ( BeamBackend(..)
-  , Result (..), BeamRowError (..)
+  , Result (..)
 
   , FromBackendRowF(..), FromBackendRowA
   , parseOneField, parseAlternative
@@ -18,10 +18,10 @@ module Database.Beam.Backend.Types
 
 import           Control.Applicative
 import           Control.Applicative.Free
-import           Control.Exception
 import           Control.Monad.Identity
 import           Data.Monoid (Sum(..))
 import           Data.Tagged
+import           Data.Text (Text)
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
@@ -31,16 +31,10 @@ import GHC.Generics
 import GHC.TypeLits
 import GHC.Types
 
-data BeamRowError
-  = BeamRowError String
-  deriving (Eq, Show)
-
-instance Exception BeamRowError
-
 data Result a
   = Result a
   | Null
-  | Error BeamRowError
+  | Error Text
   deriving (Eq, Show, Functor)
 
 instance Applicative Result where
