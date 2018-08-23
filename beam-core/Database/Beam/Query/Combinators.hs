@@ -902,7 +902,9 @@ instance ( IsSql92ExpressionSyntax syntax
       in QExpr (\tblPfx -> caseE [(cond tblPfx, onJust' tblPfx)] (onNothing tblPfx))
 
 infixl 3 <|>.
-(<|>.) :: (SqlJustable a (QExpr syntax s y), SqlDeconstructMaybe syntax (QExpr syntax s y) a s)
+(<|>.) :: ( y ~ Maybe a
+          , SqlJustable a (QExpr syntax s y)
+          )
        => QExpr syntax s y
        -> QExpr syntax s y
        -> QExpr syntax s y
