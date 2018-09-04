@@ -136,7 +136,7 @@ join_' :: ( Database be db, Table table, BeamSqlBackend be )
 join_' (DatabaseEntity tbl@(DatabaseTable {})) mkOn =
     Q $ liftF (QAll (\_ -> fromTable (tableNamed (dbTableCurrentName tbl)) . Just . (, Nothing))
                     (tableFieldsToExpressions (dbTableSettings tbl))
-                    (\tbl -> let QExpr on = mkOn tbl in Just on) snd)
+                    (\tbl' -> let QExpr on = mkOn tbl' in Just on) snd)
 
 -- | Introduce a table using a left join with no ON clause. Because this is not
 --   an inner join, the resulting table is made nullable. This means that each
