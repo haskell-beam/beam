@@ -1,6 +1,6 @@
 # Beam: a type-safe, non-TH Haskell relational database library and ORM
 
-![Build status](https://api.travis-ci.org/tathougies/beam.svg?branch=master)
+[![Build status](https://api.travis-ci.org/tathougies/beam.svg?branch=master)](https://travis-ci.org/tathougies/beam)
 
 Beam is a Haskell interface to relational databases. Beam uses the Haskell type
 system to verify that queries are type-safe before sending them to the database

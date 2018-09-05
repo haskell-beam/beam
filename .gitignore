@@ -4,6 +4,7 @@ cabal.sandbox.config
 .stack-work
 *~
 dist
+dist-newstyle
 *.db
 *.db-journal
 .#*
@@ -20,4 +21,3 @@ site
 TAGS
 .DS_Store
 docs/ChinookData
-

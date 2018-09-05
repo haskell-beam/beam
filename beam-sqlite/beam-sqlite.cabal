@@ -34,10 +34,10 @@ library
                       time          >=1.6  && <1.10,
                       dlist         >=0.8  && <0.9,
                       mtl           >=2.1  && <2.3,
-                      free          >=4.12 && <5.1,
+                      free          >=4.12 && <5.2,
                       scientific    >=0.3  && <0.4,
                       network-uri   >=2.6  && <2.7,
-                      aeson         >=0.11 && <1.4,
+                      aeson         >=0.11 && <1.5,
                       attoparsec    >=0.13 && <0.14
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,

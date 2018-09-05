@@ -14,7 +14,7 @@ tables defined above has the form.
 data ExampleDb f
     = ExampleDb
     { persons :: f (TableEntity PersonT)
-    , posts   :: f (TableEntity PersonT)
+    , posts   :: f (TableEntity PostT)
     } deriving Generic
 instance Database be ExampleDb
 
@@ -45,7 +45,7 @@ We can include this in our database:
 data ExampleDb f
     = ExampleDb
     { persons        :: f (TableEntity PersonT)
-    , posts          :: f (TableEntity PersonT)
+    , posts          :: f (TableEntity PostT)
     , postAndPosters :: f (ViewEntity PostAndPosterView)
     } deriving Generic
 ```
@@ -98,7 +98,7 @@ combinator instead.
 <!-- data ExampleDb f -->
 <!--     = ExampleDb -->
 <!--     { persons        :: f (TableEntityWithUnique PersonT '[PersonByEmail, PersonByPhone]) -->
-<!--     , posts          :: f (TableEntity PersonT) -->
+<!--     , posts          :: f (TableEntity PostT) -->
 <!--     , postAndPosters :: f (ViewEntity PostAndPosterView) -->
 <!--     } deriving Generic -->
 <!-- ``` -->

@@ -7,7 +7,7 @@
 --
 -- @beam-postgres@ supports most beam features as well as many postgres-specific
 -- features. For example, @beam-postgres@ provides support for full-text search,
--- @DISTINCT ON@, JSON handling, postgres @ARRAY@s, and the @MONEY@ type.
+-- @DISTINCT ON@, JSON handling, postgres @ARRAY@s, @RANGE@s, and the @MONEY@ type.
 --
 -- The documentation for @beam-postgres@ functionality below indicates which
 -- postgres function each function or type wraps. Postgres maintains its own
