@@ -25,7 +25,7 @@ import GHC.Generics (Generic)
 -- * Table checks
 
 -- | Asserts that a table with the given name exists in a database
-data TableExistsPredicate = TableExistsPredicate Text {-^ Table name -}
+data TableExistsPredicate = TableExistsPredicate QualifiedName {-^ Table name -}
   deriving (Show, Eq, Ord, Typeable, Generic)
 instance Hashable TableExistsPredicate
 instance DatabasePredicate TableExistsPredicate where
@@ -41,7 +41,7 @@ instance DatabasePredicate TableExistsPredicate where
 -- type paramater @syntax@ should be an instance of 'IsSql92ColumnSchemaSyntax'.
 data TableHasColumn be where
   TableHasColumn
-    :: { hasColumn_table  :: Text {-^ Table name -}
+    :: { hasColumn_table  :: QualifiedName {-^ Table name -}
        , hasColumn_column :: Text {-^ Column name -}
        , hasColumn_type   :: BeamMigrateSqlBackendDataTypeSyntax be {-^ Data type -}
        }
@@ -72,7 +72,7 @@ instance ( Typeable be
 -- @syntax@ type parameter should be an instance of 'IsSql92ColumnSchemaSyntax'
 data TableColumnHasConstraint be
   = TableColumnHasConstraint
-  { hasConstraint_table  :: Text {-^ Table name -}
+  { hasConstraint_table  :: QualifiedName {-^ Table name -}
   , hasConstraint_column :: Text {-^ Column name -}
   , hasConstraint_defn   :: BeamSqlBackendColumnConstraintDefinitionSyntax be {-^ Constraint definition -}
   } deriving Generic
@@ -98,7 +98,7 @@ instance ( Typeable be, BeamMigrateOnlySqlBackend be
 -- The order of the columns is significant.
 data TableHasPrimaryKey
   = TableHasPrimaryKey
-  { hasPrimaryKey_table :: Text   {-^ Table name -}
+  { hasPrimaryKey_table :: QualifiedName   {-^ Table name -}
   , hasPrimaryKey_cols  :: [Text] {-^ Column names -}
   } deriving (Show, Eq, Generic)
 instance Hashable TableHasPrimaryKey

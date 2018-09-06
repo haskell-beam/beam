@@ -10,7 +10,7 @@ module Database.Beam.Migrate.Generics
    defaultMigratableDbSettings
 
  -- * Extending the defaulting sytem
- , HasDefaultSqlDataType(..), HasDefaultSqlDataTypeConstraints(..)
+ , HasDefaultSqlDataType(..)
  , HasNullableConstraint, NullableStatus
  , Sql92HasDefaultDataType
  ) where

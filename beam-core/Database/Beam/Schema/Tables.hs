@@ -274,6 +274,8 @@ class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) 
   type DatabaseEntityRegularRequirements be entityType :: Constraint
 
   dbEntityName :: Lens' (DatabaseEntityDescriptor be entityType) Text
+  dbEntitySchema :: Traversal' (DatabaseEntityDescriptor be entityType) (Maybe Text)
+
   dbEntityAuto :: DatabaseEntityDefaultRequirements be entityType =>
                   Text -> DatabaseEntityDescriptor be entityType
 
@@ -304,6 +306,7 @@ instance Beamable tbl => IsDatabaseEntity be (TableEntity tbl) where
     ( Table tbl, Beamable tbl )
 
   dbEntityName f tbl = fmap (\t' -> tbl { dbTableCurrentName = t' }) (f (dbTableCurrentName tbl))
+  dbEntitySchema f tbl = fmap (\s' -> tbl { dbTableSchema = s'}) (f (dbTableSchema tbl))
   dbEntityAuto nm =
     DatabaseTable Nothing nm (unCamelCaseSel nm) defTblFieldSettings
 
@@ -333,6 +336,7 @@ instance Beamable tbl => IsDatabaseEntity be (ViewEntity tbl) where
     (  Beamable tbl )
 
   dbEntityName f vw = fmap (\t' -> vw { dbViewCurrentName = t' }) (f (dbViewCurrentName vw))
+  dbEntitySchema f vw = fmap (\s' -> vw { dbViewSchema = s' }) (f (dbViewSchema vw))
   dbEntityAuto nm =
     DatabaseView Nothing nm (unCamelCaseSel nm) defTblFieldSettings
 
@@ -341,12 +345,13 @@ instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (DomainTyp
 
 instance IsDatabaseEntity be (DomainTypeEntity ty) where
   data DatabaseEntityDescriptor be (DomainTypeEntity ty)
-    = DatabaseDomainType !Text
+    = DatabaseDomainType !(Maybe Text) !Text
   type DatabaseEntityDefaultRequirements be (DomainTypeEntity ty) = ()
   type DatabaseEntityRegularRequirements be (DomainTypeEntity ty) = ()
 
-  dbEntityName f (DatabaseDomainType t) = DatabaseDomainType <$> f t
-  dbEntityAuto = DatabaseDomainType
+  dbEntityName f (DatabaseDomainType s t) = DatabaseDomainType s <$> f t
+  dbEntitySchema f (DatabaseDomainType s t) = DatabaseDomainType <$> f s <*> pure t
+  dbEntityAuto = DatabaseDomainType Nothing
 
 -- | Represents a meta-description of a particular entityType. Mostly, a wrapper
 --   around 'DatabaseEntityDescriptor be entityType', but carries around the

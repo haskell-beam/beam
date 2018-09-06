@@ -58,7 +58,7 @@ reusableForCTE :: forall be res db
 reusableForCTE tblNm =
     ReusableQ (Proxy @res)
               (\proxyS ->
-                 Q $ liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (, Nothing))
+                 Q $ liftF (QAll (\_ -> fromTable (tableNamed Nothing tblNm) . Just . (, Nothing))
                                  (\tblNm' -> fst $ mkFieldNames @be @res (qualifiedField tblNm'))
                                  (\_ -> Nothing)
                                  (rewriteThread @QAnyScope @res proxyS . snd)))

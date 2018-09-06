@@ -144,8 +144,12 @@ class IsSql92InsertValuesSyntax (Sql92InsertValuesSyntax insert) =>
   IsSql92InsertSyntax insert where
 
   type Sql92InsertValuesSyntax insert :: *
-  insertStmt :: Text
+  insertStmt :: Maybe Text
+             -- ^ Schema name
+             -> Text
+             -- ^ Table name
              -> [ Text ]
+             -- ^ Fields
              -> Sql92InsertValuesSyntax insert
              -> insert
 
@@ -165,7 +169,10 @@ class ( IsSql92ExpressionSyntax (Sql92UpdateExpressionSyntax update)
   type Sql92UpdateFieldNameSyntax update :: *
   type Sql92UpdateExpressionSyntax update :: *
 
-  updateStmt :: Text
+  updateStmt :: Maybe Text
+             -- ^ Schema name
+             -> Text
+             -- ^ Table name
              -> [(Sql92UpdateFieldNameSyntax update, Sql92UpdateExpressionSyntax update)]
              -> Maybe (Sql92UpdateExpressionSyntax update) {-^ WHERE -}
              -> update
@@ -174,7 +181,8 @@ class IsSql92ExpressionSyntax (Sql92DeleteExpressionSyntax delete) =>
   IsSql92DeleteSyntax delete where
   type Sql92DeleteExpressionSyntax delete :: *
 
-  deleteStmt :: Text -> Maybe Text
+  deleteStmt :: Maybe Text {-^ Table schema -}
+             -> Text -> Maybe Text
              -> Maybe (Sql92DeleteExpressionSyntax delete)
              -> delete
 
@@ -323,7 +331,9 @@ class IsSql92TableSourceSyntax tblSource where
   type Sql92TableSourceSelectSyntax tblSource :: *
   type Sql92TableSourceExpressionSyntax tblSource :: *
 
-  tableNamed :: Text -> tblSource
+  tableNamed :: Maybe Text {- ^ Schema -}
+             -> Text {-^ Table name -}
+             -> tblSource
   tableFromSubSelect :: Sql92TableSourceSelectSyntax tblSource -> tblSource
   tableFromValues :: [ [ Sql92TableSourceExpressionSyntax tblSource ] ] -> tblSource
 

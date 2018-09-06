@@ -127,9 +127,9 @@ tableOp op all a b =
 instance IsSql92InsertSyntax SqlSyntaxBuilder where
   type Sql92InsertValuesSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  insertStmt table fields values =
+  insertStmt schema table fields values =
     SqlSyntaxBuilder $
-    byteString "INSERT INTO " <> quoteSql table <>
+    byteString "INSERT INTO " <> tableName schema table <>
     byteString "(" <> buildSepBy (byteString ", ") (map quoteSql fields) <> byteString ") " <>
     buildSql values
 
@@ -152,9 +152,9 @@ instance IsSql92UpdateSyntax SqlSyntaxBuilder where
   type Sql92UpdateFieldNameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92UpdateExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  updateStmt table set where_ =
+  updateStmt schema table set where_ =
     SqlSyntaxBuilder $
-    byteString "UPDATE " <> quoteSql table <>
+    byteString "UPDATE " <> tableName schema table <>
     (case set of
        [] -> mempty
        es -> byteString " SET " <> buildSepBy (byteString ", ") (map (\(field, expr) -> buildSql field <> byteString "=" <> buildSql expr) es)) <>
@@ -163,9 +163,9 @@ instance IsSql92UpdateSyntax SqlSyntaxBuilder where
 instance IsSql92DeleteSyntax SqlSyntaxBuilder where
   type Sql92DeleteExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  deleteStmt tbl alias where_ =
+  deleteStmt sch tbl alias where_ =
     SqlSyntaxBuilder $
-    byteString "DELETE FROM " <> quoteSql tbl <>
+    byteString "DELETE FROM " <> tableName sch tbl <>
     maybe mempty (\alias_ -> byteString " AS " <> quoteSql alias_) alias <>
     maybe mempty (\where_ -> byteString " WHERE " <> buildSql where_) where_
 
@@ -381,7 +381,7 @@ instance IsSql92TableSourceSyntax SqlSyntaxBuilder where
   type Sql92TableSourceSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92TableSourceExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  tableNamed t = SqlSyntaxBuilder (quoteSql t)
+  tableNamed s t = SqlSyntaxBuilder (tableName s t)
   tableFromSubSelect query = SqlSyntaxBuilder (byteString "(" <> buildSql query <> byteString ")")
   tableFromValues vss =
       SqlSyntaxBuilder $
@@ -507,6 +507,10 @@ sqlFuncOp :: ByteString -> SqlSyntaxBuilder -> SqlSyntaxBuilder
 sqlFuncOp fun a =
   SqlSyntaxBuilder $
   byteString fun <> byteString "(" <> buildSql a <> byteString")"
+
+tableName :: Maybe Text -> Text -> Builder
+tableName Nothing t = quoteSql t
+tableName (Just s) t = quoteSql s <> byteString "." <> quoteSql t
 
 -- * Fake 'MonadBeam' instance (for using 'SqlSyntaxBuilder' with migrations mainly)
 

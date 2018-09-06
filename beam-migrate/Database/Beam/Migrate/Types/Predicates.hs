@@ -2,6 +2,7 @@
 module Database.Beam.Migrate.Types.Predicates where
 
 import Database.Beam
+import Database.Beam.Schema.Tables
 
 import Control.DeepSeq
 
@@ -9,6 +10,8 @@ import Data.Aeson
 import Data.Text (Text)
 import Data.Hashable
 import Data.Typeable
+
+import Lens.Micro ((^.))
 
 -- * Predicates
 
@@ -90,11 +93,31 @@ p = SomeDatabasePredicate
 --   changes. The following types represent predicates whose names have not yet
 --   been determined.
 
+-- | A name in a schema
+data QualifiedName = QualifiedName (Maybe Text) Text
+  deriving (Show, Eq, Ord)
+
+instance ToJSON QualifiedName where
+  toJSON (QualifiedName Nothing t) = toJSON t
+  toJSON (QualifiedName (Just s) t) = object [ "schema" .= s, "name" .= t ]
+
+instance FromJSON QualifiedName where
+  parseJSON s@(String {}) = QualifiedName Nothing <$> parseJSON s
+  parseJSON (Object o) = QualifiedName <$> o .: "schema" <*> o .: "name"
+  parseJSON _ = fail "QualifiedName: expects either string or {schema: ..., name: ...}"
+
+instance Hashable QualifiedName where
+  hashWithSalt s (QualifiedName sch t) =
+    hashWithSalt s (sch, t)
+
+qname :: IsDatabaseEntity be entity => DatabaseEntityDescriptor be entity -> QualifiedName
+qname e = QualifiedName (e ^. dbEntitySchema) (e ^. dbEntityName)
+
 -- | A predicate that depends on the name of a table as well as its fields
-newtype TableCheck = TableCheck (forall tbl. Table tbl => Text -> tbl (TableField tbl) -> SomeDatabasePredicate)
+newtype TableCheck = TableCheck (forall tbl. Table tbl => QualifiedName -> tbl (TableField tbl) -> SomeDatabasePredicate)
 
 -- | A predicate that depends on the name of a domain type
-newtype DomainCheck = DomainCheck (Text -> SomeDatabasePredicate)
+newtype DomainCheck = DomainCheck (QualifiedName -> SomeDatabasePredicate)
 
--- | A predicate that depedns on the name of a table and one of its fields
-newtype FieldCheck = FieldCheck (Text -> Text -> SomeDatabasePredicate)
+-- | A predicate that depends on the name of a table and one of its fields
+newtype FieldCheck = FieldCheck (QualifiedName -> Text -> SomeDatabasePredicate)

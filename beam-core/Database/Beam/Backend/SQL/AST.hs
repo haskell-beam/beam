@@ -77,7 +77,8 @@ instance IsSql92SelectTableSyntax SelectTable where
 
 data Insert
   = Insert
-  { insertTable :: Text
+  { insertSchema :: Maybe Text
+  , insertTable :: Text
   , insertFields :: [ Text ]
   , insertValues :: InsertValues }
   deriving (Show, Eq)
@@ -103,7 +104,8 @@ instance IsSql92InsertValuesSyntax InsertValues where
 
 data Update
   = Update
-  { updateTable :: Text
+  { updateSchema :: Maybe Text
+  , updateTable :: Text
   , updateFields :: [ (FieldName, Expression) ]
   , updateWhere :: Maybe Expression }
   deriving (Show, Eq)
@@ -116,7 +118,8 @@ instance IsSql92UpdateSyntax Update where
 
 data Delete
   = Delete
-  { deleteTable :: Text
+  { deleteSchema :: Maybe Text
+  , deleteTable :: Text
   , deleteAlias :: Maybe Text
   , deleteWhere :: Maybe Expression }
   deriving (Show, Eq)
@@ -449,7 +452,7 @@ instance IsSql92GroupingSyntax Grouping where
   groupByExpressions = Grouping
 
 data TableSource
-  = TableNamed Text
+  = TableNamed (Maybe Text) Text
   | TableFromSubSelect Select
   | TableFromValues [ [ Expression ] ]
   deriving (Show, Eq)

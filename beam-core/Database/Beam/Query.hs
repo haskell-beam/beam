@@ -113,6 +113,8 @@ import Control.Monad.State.Strict
 import Data.Text (Text)
 import Data.Proxy
 
+import Lens.Micro ((^.))
+
 -- * Query
 
 data QBaseScope
@@ -206,10 +208,11 @@ insertOnly :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (QEx
               -- ^ Values to insert. See 'insertValues', 'insertExpressions', 'insertData', and 'insertFrom' for possibilities.
            -> SqlInsert be
 insertOnly _ _ SqlInsertValuesEmpty = SqlInsertNoRows
-insertOnly (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkProj (SqlInsertValues vs) =
-    SqlInsert (insertStmt tblNm proj vs)
+insertOnly (DatabaseEntity dt@(DatabaseTable {})) mkProj (SqlInsertValues vs) =
+    SqlInsert (insertStmt (dbTableSchema dt) (dbTableCurrentName dt) proj vs)
   where
-    tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
+    tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
+                              (dbTableSettings dt)
     proj = execWriter (project' (Proxy @AnyType) (Proxy @((), Text))
                                 (\_ _ f -> tell [f] >> pure f)
                                 (mkProj tblFields))
@@ -297,15 +300,17 @@ update :: ( BeamSqlBackend be, Beamable table )
        -> (forall s. table (QExpr be s) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlUpdate be table
-update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere =
+update (DatabaseEntity dt@(DatabaseTable {})) mkAssignments mkWhere =
   case assignments of
     [] -> SqlIdentityUpdate
-    _  -> SqlUpdate (updateStmt tblNm assignments (Just (where_ "t")))
+    _  -> SqlUpdate (updateStmt (dbTableSchema dt) (dbTableCurrentName dt)
+                                assignments (Just (where_ "t")))
   where
     assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
     QExpr where_ = mkWhere tblFieldExprs
 
-    tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
+    tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
+                              (dbTableSettings dt)
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
 
 -- | Generate a 'SqlUpdate' that will update the given table with the given value.
@@ -328,7 +333,7 @@ save :: forall table be db.
      -> table Identity
         -- ^ Value to set to
      -> SqlUpdate be table
-save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
+save tbl@(DatabaseEntity dt@(DatabaseTable {})) v =
   update tbl (\(tblField :: table (QField s)) ->
                 execWriter $
                 zipBeamFieldsM
@@ -341,7 +346,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
 
   where
     primaryKeyFieldNames =
-      allBeamValues (\(Columnar' (TableField fieldNm)) -> fieldNm) (primaryKey tblSettings)
+      allBeamValues (\(Columnar' fd) -> fd ^. fieldName) (primaryKey (dbTableSettings dt))
 
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
 runUpdate :: (BeamSqlBackend be, MonadBeam be m)
@@ -362,8 +367,8 @@ delete :: forall be db table
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete be table
-delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
-  SqlDelete (deleteStmt tblNm alias (Just (where_ "t")))
+delete (DatabaseEntity dt@(DatabaseTable {})) mkWhere =
+  SqlDelete (deleteStmt (dbTableSchema dt) (dbTableCurrentName dt) alias (Just (where_ "t")))
   where
     supportsAlias = deleteSupportsAlias (Proxy @(BeamSqlBackendDeleteSyntax be))
 
@@ -371,7 +376,8 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
     alias = if supportsAlias then Just tgtName else Nothing
     mkField = if supportsAlias then qualifiedField tgtName else unqualifiedField
 
-    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QExpr (pure (fieldE (mkField name))))) tblSettings)
+    QExpr where_ = mkWhere (changeBeamRep (\(Columnar' fd) -> Columnar' (QExpr (pure (fieldE (mkField (fd ^. fieldName))))))
+                            (dbTableSettings dt))
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
 runDelete :: (BeamSqlBackend be, MonadBeam be m)

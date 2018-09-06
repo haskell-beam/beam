@@ -51,6 +51,8 @@ import qualified Data.Kind as Kind (Constraint)
 
 import GHC.TypeLits
 
+import Lens.Micro ((^.))
+
 -- * Table manipulation
 
 -- | Add a @CREATE TABLE@ statement to this migration
@@ -71,7 +73,7 @@ createTable newTblName tblSettings =
 
          command = createTableCmd createTableCommand
 
-         tbl' = changeBeamRep (\(Columnar' (TableFieldSchema name _ _)) -> Columnar' (TableField name)) tblSettings
+         tbl' = changeBeamRep (\(Columnar' (TableFieldSchema name _ _)) -> Columnar' (TableField (pure name) name)) tblSettings
 
          fieldChecks = changeBeamRep (\(Columnar' (TableFieldSchema _ _ cs)) -> Columnar' (Const cs)) tblSettings
 
@@ -84,14 +86,14 @@ createTable newTblName tblSettings =
              cols -> [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableHasPrimaryKey tblName cols)) ]
 
      upDown command Nothing
-     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable newTblName tbl') tblChecks fieldChecks) [])
+     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable Nothing newTblName newTblName tbl') tblChecks fieldChecks) [])
 
 -- | Add a @DROP TABLE@ statement to this migration.
 dropTable :: BeamMigrateSqlBackend be
           => CheckedDatabaseEntity be db (TableEntity table)
           -> Migration be ()
-dropTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm _) _ _) _) =
-  let command = dropTableCmd (dropTableSyntax tblNm)
+dropTable (CheckedDatabaseEntity (CheckedDatabaseTable dt _ _) _) =
+  let command = dropTableCmd (dropTableSyntax (dbTableCurrentName dt))
   in upDown command Nothing
 
 -- | Copy a table schema from one database to another
@@ -177,26 +179,28 @@ alterTable :: forall be db db' table table'
            => CheckedDatabaseEntity be db (TableEntity table)
            -> (table ColumnMigration -> TableMigration be (table' ColumnMigration))
            -> Migration be (CheckedDatabaseEntity be db' (TableEntity table'))
-alterTable (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm tbl) tblChecks tblFieldChecks) entityChecks) alterColumns =
+alterTable (CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks tblFieldChecks) entityChecks) alterColumns =
  let initialTbl = runIdentity $
                   zipBeamFieldsM
-                      (\(Columnar' (TableField nm) :: Columnar' (TableField table) x)
+                      (\(Columnar' fd :: Columnar' (TableField table) x)
                         (Columnar' (Const checks) :: Columnar' (Const [FieldCheck]) x) ->
-                         pure (Columnar' (ColumnMigration nm checks)
+                         pure (Columnar' (ColumnMigration (fd ^. fieldName) checks)
                                :: Columnar' ColumnMigration x))
-                      tbl tblFieldChecks
+                      (dbTableSettings dt) tblFieldChecks
 
      TableMigration alterColumns' = alterColumns initialTbl
-     ((newTbl, cmds), (tblNm', tblChecks')) = runState (runWriterT alterColumns') (tblNm, tblChecks)
+     ((newTbl, cmds), (tblNm', tblChecks')) = runState (runWriterT alterColumns') (dbTableCurrentName dt, tblChecks)
 
      fieldChecks' = changeBeamRep (\(Columnar' (ColumnMigration _ checks) :: Columnar' ColumnMigration a) ->
                                      Columnar' (Const checks) :: Columnar' (Const [FieldCheck]) a)
                                   newTbl
      tbl' = changeBeamRep (\(Columnar' (ColumnMigration nm _) :: Columnar' ColumnMigration a) ->
-                              Columnar' (TableField nm) :: Columnar' (TableField table') a)
+                              Columnar' (TableField (pure nm) nm) :: Columnar' (TableField table') a)
                           newTbl
  in forM_ cmds (\cmd -> upDown (alterTableCmd cmd) Nothing) >>
-    pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable tblNm' tbl') tblChecks' fieldChecks') entityChecks)
+    pure (CheckedDatabaseEntity (CheckedDatabaseTable (dt { dbTableCurrentName = tblNm'
+                                                          , dbTableSettings = tbl' })
+                                   tblChecks' fieldChecks') entityChecks)
 
 -- * Fields
 

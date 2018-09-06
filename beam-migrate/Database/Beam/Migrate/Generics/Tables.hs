@@ -5,7 +5,6 @@
 module Database.Beam.Migrate.Generics.Tables
   ( -- * Field data type defaulting
     HasDefaultSqlDataType(..)
-  , Sql92HasDefaultDataType
 
   -- * Internal
   , GMigratableTableSettings(..)
@@ -50,7 +49,6 @@ instance ( BeamMigrateSqlBackend be
     gDefaultTblSettingsChecks be (Proxy @bId) embedded
 
 instance ( HasDefaultSqlDataType be haskTy
-         , HasDefaultSqlDataTypeConstraints be haskTy
          , HasNullableConstraint (NullableStatus haskTy) be
 
          , Typeable be, BeamMigrateSqlBackend be ) =>
@@ -137,59 +135,38 @@ instance (BeamMigrateSqlBackend be, HasDefaultSqlDataType be ty) =>
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int where
   defaultSqlDataType _ _ _ = intType
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Int
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int32 where
   defaultSqlDataType _ _ _ = intType
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Int32
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int16 where
   defaultSqlDataType _ _ _ = intType
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Int16
 instance ( BeamMigrateSqlBackend be, BeamSqlT071Backend be ) => HasDefaultSqlDataType be Int64 where
     defaultSqlDataType _ _ _ = bigIntType
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Int64
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Word where
   defaultSqlDataType _ _ _ = numericType (Just (10, Nothing))
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Word
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Word16 where
   defaultSqlDataType _ _ _ = numericType (Just (5, Nothing))
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Word16
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Word32 where
   defaultSqlDataType _ _ _ = numericType (Just (10, Nothing))
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Word32
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Word64 where
   defaultSqlDataType _ _ _ = numericType (Just (20, Nothing))
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Word64
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Text where
   defaultSqlDataType _ _ _ = varCharType Nothing Nothing
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Text
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be SqlBitString where
   defaultSqlDataType _ _ _ = varBitType Nothing
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be SqlBitString
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Double where
   defaultSqlDataType _ _ _ = realType
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Double
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Scientific where
   defaultSqlDataType _ _ _ = numericType (Just (20, Just 10))
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Scientific
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Day where
   defaultSqlDataType _ _ _ = dateType
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Day
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be TimeOfDay where
   defaultSqlDataType _ _ _ = timeType Nothing False
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be TimeOfDay
 
 instance BeamMigrateSql99Backend be => HasDefaultSqlDataType be Bool where
   defaultSqlDataType _ _ _ = booleanType
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataTypeConstraints be Bool
-
--- | Constraint synonym to use if you want to assert that a particular
--- 'IsSql92Syntax' syntax supports defaulting for a particular data type
-type Sql92HasDefaultDataType syntax ty =
-  ( HasDefaultSqlDataType (Sql92DdlCommandDataTypeSyntax syntax) ty
-  , HasDefaultSqlDataTypeConstraints (Sql92DdlCommandColumnSchemaSyntax syntax) ty )
