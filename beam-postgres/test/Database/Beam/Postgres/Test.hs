@@ -46,6 +46,7 @@ startTempPostgres = do
 
   tmpDir <- getCanonicalTemporaryDirectory
   pgDataDir <- createTempDirectory tmpDir "postgres-data"
+  pgHostDir <- createTempDirectory tmpDir "postgres-host"
 
   callProcess "pg_ctl" [ "init", "-D", pgDataDir ]
 
@@ -53,7 +54,8 @@ startTempPostgres = do
   pgHdl <- spawnProcess "postgres"
                         [ "-i", "-D", pgDataDir
                         , "-p", show portNumber
-                        , "-h", "localhost" ]
+                        , "-h", "localhost"
+                        , "-k", pgHostDir ]
 
   let waitForPort 10 = fail "Could not connect to postgres"
       waitForPort n = do
