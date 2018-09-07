@@ -148,14 +148,6 @@ instance MonadBeam be m => MonadBeam be (ExceptT e m) where
     runReturningOne = lift . runReturningOne
     runReturningList = lift . runReturningList
 
-instance MonadBeam be m => MonadBeam be (ListT m) where
-    runReturningMany s a = ListT $ do
-                             x <- runReturningMany s (\nextRow -> runListT (a (lift nextRow)))
-                             pure x
-    runNoReturn = lift . runNoReturn
-    runReturningOne = lift . runReturningOne
-    runReturningList = lift . runReturningList
-
 instance MonadBeam be m => MonadBeam be (ContT r m) where
     runReturningMany s a = ContT $ \r ->
                            runReturningMany s (\nextRow -> runContT (a (lift nextRow)) r)
