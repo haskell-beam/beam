@@ -61,10 +61,6 @@ jobs:
         postgresql: "9.6"
       env: BEAM_RESOLVER=lts-12.0
 
-    - stage: test
-      script: ./ci/test
-      env: BEAM_RESOLVER=lts-12.0
-
     - stage: build-doc-examples
       addons:
         postgresql: "9.6"
