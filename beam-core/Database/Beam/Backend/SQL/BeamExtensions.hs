@@ -21,7 +21,6 @@ import Database.Beam.Schema
 import Control.Monad.Identity
 import Control.Monad.Cont
 import Control.Monad.Except
-import Control.Monad.List
 import qualified Control.Monad.RWS.Lazy as Lazy
 import qualified Control.Monad.RWS.Strict as Strict
 import Control.Monad.Reader

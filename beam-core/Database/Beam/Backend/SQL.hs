@@ -67,7 +67,6 @@ import Database.Beam.Backend.Types
 
 import Control.Monad.Cont
 import Control.Monad.Except
-import Control.Monad.List
 import qualified Control.Monad.RWS.Lazy as Lazy
 import qualified Control.Monad.RWS.Strict as Strict
 import Control.Monad.Reader
