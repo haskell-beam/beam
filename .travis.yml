@@ -10,6 +10,7 @@
 
 # Use new container infrastructure to enable caching
 sudo: required
+filter_secrets: false
 
 # Do not choose a language; we provide our own build tools.
 language: generic
