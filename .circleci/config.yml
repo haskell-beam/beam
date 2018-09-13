@@ -4,16 +4,28 @@ jobs:
     docker:
       - image: nixos/nix:latest
     steps:
+      - restore_cache:
+          keys:
+            - deps-{{ .Branch }}-{{ .Revision }}
+            - deps-{{ .Branch }}
+            - deps-
       - run:
           name: Update nix
           command: nix-channel --update
-      - run:
-          name: Install git
-          command: nix-env -i git
       - checkout
       - run:
           name: Build stack
           command: "nix-build -A stack '<nixpkgs>' -o stack-bin"
       - run:
+          name: Build deps
+          command: ./stack-bin/bin/stack --no-terminal --nix build --dependencies-only --resolver lts-12.0
+      - save_cache:
+          keys: deps-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - ".stack-work"
+      - run:
           name: Build
-          command: ./stack-bin/bin/stack --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver lts-12.0
+          command: ./stack-bin/bin/stack --no-terminal --nix build --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver lts-12.0
+      - run:
+          name: Test
+          command: ./stack-bin/bin/stack --no-terminal --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver lts-12.0
