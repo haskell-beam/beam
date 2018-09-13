@@ -4,6 +4,9 @@ jobs:
     docker:
       - image: nixos/nix:latest
     steps:
+      - run:
+          name: Install git
+          command: nix-env -i git
       - checkout
       - run:
           name: Update nix
@@ -13,4 +16,4 @@ jobs:
           command: "nix-build -A stack '<nixpkgs>' -o stack-bin"
       - run:
           name: Build
-          command: ./stack-bin/stack --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver 12.0
+          command: ./stack-bin/bin/stack --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver 12.0
