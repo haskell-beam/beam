@@ -14,7 +14,7 @@ let
     meta = {
       homepage = https://github.com/lepture/python-livereload;
       description = "Python LiveReload is an awesome tool for web developers";
-      license = nixpkgs.stdenv.lib.bsd;
+      license = stdenv.lib.licenses.bsd3;
     };
   };
 
@@ -30,7 +30,7 @@ let
     meta = {
       homepage = http://www.mkdocs.org/;
       description = "MkDocs is a fast, simple and downright gorgeous static site generator that’s geared towards building project documentation. Documentation source files are written in Markdown, and configured with a single YAML configuration file.";
-      license = stdenv.lib.licenses.bsd;
+      license = stdenv.lib.licenses.bsd3;
     };
   };
 
