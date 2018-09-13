@@ -3,6 +3,8 @@ jobs:
   build:
     docker:
       - image: nixos/nix:latest
+        environment:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
     steps:
       - restore_cache:
           keys:
