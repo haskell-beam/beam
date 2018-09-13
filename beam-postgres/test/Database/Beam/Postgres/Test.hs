@@ -39,6 +39,7 @@ withTestPostgres dbName getConnStr action = do
 
 startTempPostgres :: IO (ByteString, IO ())
 startTempPostgres = do
+  putStrLn "Starting postgres"
   s <- socket AF_INET Stream defaultProtocol
   bind s (SockAddrInet 0 0)
   SockAddrInet port _ <- getSocketName s
