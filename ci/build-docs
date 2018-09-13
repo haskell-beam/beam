@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+# set -e
 
 if [ ! -d "$HOME/venv/bin" ]; then
     echo "Creating virtual environment"

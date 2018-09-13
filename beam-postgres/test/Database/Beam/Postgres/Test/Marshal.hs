@@ -22,6 +22,8 @@ import           Data.Typeable
 import           Data.UUID (UUID, fromWords)
 import           Data.Word
 
+import           GHC.Stack
+
 import qualified Hedgehog
 import           Hedgehog ((===))
 import qualified Hedgehog.Gen as Gen

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+# set -e
 
 BEAM_DOC_CACHE_ARCHIVE="${BEAM_DOC_BACKEND}-docs-cache.tar.gz"
 BEAM_DOC_CACHE="docs/${BEAM_DOC_CACHE_ARCHIVE}"

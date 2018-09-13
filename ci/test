@@ -2,4 +2,11 @@
 
 set -e
 
-stack --no-terminal test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver $BEAM_RESOLVER
+if [ ! -z "$POSTGRES_PATH" ]; then
+    export PATH="${POSTGRES_PATH}:${PATH}"
+fi
+postgres --help
+pg_ctl --help
+
+stack --no-terminal build --dump-logs --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver $BEAM_RESOLVER --fast
+

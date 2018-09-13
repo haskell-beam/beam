@@ -20,6 +20,10 @@ cache:
   - $HOME/.stack
   - $HOME/venv
 
+env:
+  global:
+    - POSTGRES_PATH=/usr/lib/postgresql/9.6/bin/
+
 # Ensure necessary system libraries are present
 # addons:
 #  apt:
@@ -45,18 +49,20 @@ jobs:
   include:
     - stage: test
       script: ./ci/test
-      env: BEAM_RESOLVER=lts-9.0
-
-    - stage: test
-      script: ./ci/test
+      addons:
+        postgresql: "9.6"
       env: BEAM_RESOLVER=lts-10.3
 
     - stage: test
       script: ./ci/test
+      addons:
+        postgresql: "9.6"
       env: BEAM_RESOLVER=lts-11.2
 
     - stage: test
       script: ./ci/test
+      addons:
+        postgresql: "9.6"
       env: BEAM_RESOLVER=lts-12.0
 
     - stage: build-doc-examples
