@@ -86,7 +86,7 @@ in
   haskell.lib.buildStackProject {
     inherit ghc;
     name = "beam-env";
-    buildInputs = [ postgresql python27Packages.ghp-import bash
+    buildInputs = [ postgresql python27Packages.ghp-import bash postgresql sqlite
                     (python27.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ]))
                     ncurses libcxx icu gcc mysql zlib openssl stack gnupg dos2unix vim pcre ];
     LANG = "en_us.UTF-8";
