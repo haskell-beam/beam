@@ -11,6 +11,7 @@ import Data.String
 
 import Network.Socket
 
+import System.IO
 import System.IO.Temp
 import System.Process
 
@@ -44,21 +45,31 @@ startTempPostgres = do
 
   let portNumber = fromIntegral port :: Int
 
+  hPutStrLn stderr "startTempPostgres: creating directories"
+
   tmpDir <- getCanonicalTemporaryDirectory
   pgDataDir <- createTempDirectory tmpDir "postgres-data"
   pgHostDir <- createTempDirectory tmpDir "postgres-host"
 
+  hPutStrLn stderr ("startTempPostgres: created dirs " ++ show (pgDataDir, pgHostDir))
   callProcess "pg_ctl" [ "init", "-D", pgDataDir ]
 
   close s
+  hPutStrLn stderr ("startTempPostgres: spawning postgres")
   pgHdl <- spawnProcess "postgres"
                         [ "-i", "-D", pgDataDir
                         , "-p", show portNumber
                         , "-h", "localhost"
                         , "-k", pgHostDir ]
 
-  let waitForPort 10 = fail "Could not connect to postgres"
+  hPutStrLn stderr ("startTempPostgres: waiting for postgres")
+  let waitForPort 10 = do
+        hPutStrLn stderr ("startTempPostgres: could not connect to postgres")
+        fail "Could not connect to postgres"
       waitForPort n = do
+        if n == 0 then
+          hPutStrLn stderr ("startTempPostgres: trying to connect")
+          else hPutStrLn stderr "startTempPostgres: connecting again"
         s <- socket AF_INET Stream defaultProtocol
         ( connect s (SockAddrInet port (tupleToHostAddress (127, 0, 0, 1))) >>
           close s )
