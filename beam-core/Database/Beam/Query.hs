@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
+{-# LANGUAGE CPP #-}
 module Database.Beam.Query
     ( -- * Query type
       module Database.Beam.Query.Types

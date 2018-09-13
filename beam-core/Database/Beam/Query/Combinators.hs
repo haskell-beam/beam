@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Query.Combinators
@@ -72,7 +73,6 @@ import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
 
-import Control.Monad.Writer
 import Control.Monad.Identity
 import Control.Monad.Free
 import Control.Applicative
@@ -80,6 +80,9 @@ import Control.Applicative
 import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import GHC.Generics
 
