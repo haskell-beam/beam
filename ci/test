@@ -7,4 +7,4 @@ if [ ! -z "$POSTGRES_PATH" ]; then
 fi
 postgres --help
 pg_ctl --help
-exec stack --no-terminal test --dump-logs --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver $BEAM_RESOLVER
+exec stack --no-terminal test --dump-logs --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver $BEAM_RESOLVER --fast
