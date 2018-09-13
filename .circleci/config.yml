@@ -9,5 +9,8 @@ jobs:
           name: Update nix
           command: nix-channel --update
       - run:
+          name: Build stack
+          command: "nix-build -A stack '<nixpkgs>' -o stack-bin"
+      - run:
           name: Build
-          command: stack --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver 12.0
+          command: ./stack-bin/stack --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver 12.0
