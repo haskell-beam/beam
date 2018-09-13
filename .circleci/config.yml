@@ -5,15 +5,15 @@ jobs:
       - image: nixos/nix:latest
     steps:
       - run:
+          name: Update nix
+          command: nix-channel --update
+      - run:
           name: Install git
           command: nix-env -i git
       - checkout
-      - run:
-          name: Update nix
-          command: nix-channel --update
       - run:
           name: Build stack
           command: "nix-build -A stack '<nixpkgs>' -o stack-bin"
       - run:
           name: Build
-          command: ./stack-bin/bin/stack --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver 12.0
+          command: ./stack-bin/bin/stack --nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver lts-12.0
