@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: nixos/nix:latest
+      - image: nixorg/nix:circleci
         environment:
           SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.crt
     steps:
@@ -13,7 +13,7 @@ jobs:
             - deps-
       - run:
           name: Update nix
-          command: nix-channel --update
+          command: "nix-channel --update && nix-channel --list"
       - checkout
       - run:
           name: Build stack
