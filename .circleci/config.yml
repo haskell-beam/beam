@@ -20,7 +20,7 @@ jobs:
           name: Build deps
           command: ./stack-bin/bin/stack --no-terminal --nix build --dependencies-only --resolver lts-12.0
       - save_cache:
-          keys: deps-{{ .Branch }}-{{ .Revision }}
+          key: deps-{{ .Branch }}-{{ .Revision }}
           paths:
             - ".stack-work"
       - run:
