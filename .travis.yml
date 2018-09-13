@@ -21,7 +21,8 @@ cache:
   - $HOME/venv
 
 env:
-  - POSTGRES_PATH=/usr/lib/postgresql/9.6/bin/
+  global:
+    - POSTGRES_PATH=/usr/lib/postgresql/9.6/bin/
 
 # Ensure necessary system libraries are present
 # addons:
