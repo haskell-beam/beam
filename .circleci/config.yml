@@ -12,8 +12,11 @@ jobs:
             - deps-{{ .Branch }}
             - deps-
       - run:
+          name: Update nixpkgs
+          command: "nix-channel --add https://nixos.org/channels/nixos-18.09 nixpkgs && nix-channel --update && nix-channel --list"
+      - run:
           name: Update nix
-          command: "nix-channel --update && nix-channel --list"
+          command: "nix-env -u nix"
       - checkout
       - run:
           name: Build stack
