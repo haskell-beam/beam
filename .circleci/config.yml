@@ -24,7 +24,7 @@ jobs:
       - run:
           name: Build deps
           command: ./stack-bin/bin/stack --no-terminal --nix --nix-shell-file=./shell.nix build --dependencies-only --resolver lts-12.0
-          no_output_timout: 30mx
+          no_output_timout: 30m
       - save_cache:
           key: deps-{{ .Branch }}-{{ .Revision }}
           paths:
