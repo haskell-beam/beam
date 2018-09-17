@@ -23,7 +23,7 @@ jobs:
           command: "nix-build -A stack '<nixpkgs>' -o stack-bin"
       - run:
           name: Build deps
-          command: ./stack-bin/bin/stack --no-terminal --nix --nix-shell-file=./shell.nix build --dependencies-only --resolver lts-12.0
+          command: ./stack-bin/bin/stack --no-terminal --nix --nix-shell-file=./shell.nix build --dependencies-only --resolver lts-12.0 --fast
           no_output_timout: 30m
       - save_cache:
           key: deps-{{ .Branch }}-{{ .Revision }}
@@ -31,7 +31,7 @@ jobs:
             - ".stack-work"
       - run:
           name: Build
-          command: ./stack-bin/bin/stack --no-terminal --nix --nix-shell-file=./shell.nix build --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver lts-12.0
+          command: ./stack-bin/bin/stack --no-terminal --nix --nix-shell-file=./shell.nix build --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver lts-12.0 --fast
       - run:
           name: Test
           command: ./stack-bin/bin/stack --no-terminal --nix --nix-shell-file=./shell.nix test --flag beam-core:werror --flag beam-sqlite:werror --flag beam-postgres:werror --flag beam-migrate:werror --resolver lts-12.0
