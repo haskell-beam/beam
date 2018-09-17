@@ -174,11 +174,11 @@ newtype PgSyntax
   = PgSyntax { buildPgSyntax :: PgSyntaxM () }
 
 instance Semigroup PgSyntax where
-  (<>) = mappend
+  a <> b = PgSyntax (buildPgSyntax a >> buildPgSyntax b)
 
 instance Monoid PgSyntax where
   mempty = PgSyntax (pure ())
-  mappend a b = PgSyntax (buildPgSyntax a >> buildPgSyntax b)
+  mappend = (<>)
 
 instance Eq PgSyntax where
   PgSyntax x == PgSyntax y = (fromF x :: Free PgSyntaxF ()) == fromF y

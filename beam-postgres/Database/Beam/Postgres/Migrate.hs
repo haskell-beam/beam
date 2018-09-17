@@ -69,6 +69,8 @@ import           Data.UUID.Types (UUID)
 import           Data.Typeable
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
+#else
+import           Data.Monoid (Endo(..))
 #endif
 
 -- | Top-level migration backend for use by @beam-migrate@ tools

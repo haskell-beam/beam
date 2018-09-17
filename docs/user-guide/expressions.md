@@ -24,7 +24,7 @@ general for the compiler to meaningfully infer types.
   Regular Haskell rational literals will be automatically converted to
   `QGenExprs`.
 * **Text literals** can be constructed via `fromString` in `IsString`. Again,
-  Haskell string constants will automaticall be converted to `QGenExprs`,
+  Haskell string constants will automatically be converted to `QGenExprs`,
   although you may have to provide an explicit type, as different backends
   support different text types natively.
 * **All other literals** can be constructed using the `val_` function in
