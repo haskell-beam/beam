@@ -273,7 +273,7 @@ pgDataTypeFromAtt _ oid pgMod
 
 getDbConstraints :: Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
 getDbConstraints conn =
-  do tbls <- Pg.query_ conn "SELECT oid, relname FROM pg_catalog.pg_class where relnamespace=(select oid from pg_catalog.pg_namespace where nspname='public') and relkind='r'"
+  do tbls <- Pg.query_ conn "SELECT cl.oid, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname = any (current_schemas(false)) and relkind='r'"
      let tblsExist = map (\(_, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate tbl)) tbls
 
      columnChecks <-
