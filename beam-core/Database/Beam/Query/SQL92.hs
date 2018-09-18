@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-unused-binds #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.SQL92
     ( buildSql92Query' ) where
@@ -11,7 +12,9 @@ import           Database.Beam.Schema.Tables
 
 import           Control.Monad.Free.Church
 import           Control.Monad.Free
+#if !MIN_VERSION_base(4, 11, 0)
 import           Control.Monad.Writer
+#endif
 
 import           Data.Maybe
 import           Data.String
