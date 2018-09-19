@@ -158,7 +158,8 @@ instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be SqlBitString where
   defaultSqlDataType _ _ _ = varBitType Nothing
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Double where
-  defaultSqlDataType _ _ _ = realType
+  defaultSqlDataType _ _ _ = doubleType
+
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Scientific where
   defaultSqlDataType _ _ _ = numericType (Just (20, Just 10))
 

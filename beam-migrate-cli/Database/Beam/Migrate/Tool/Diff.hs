@@ -4,6 +4,7 @@ import           Prelude hiding (pred)
 
 import           Database.Beam hiding (timestamp)
 import           Database.Beam.Migrate hiding (p)
+
 import           Database.Beam.Migrate.Backend
 import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.Tool.Backend

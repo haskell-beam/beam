@@ -24,6 +24,7 @@ module Database.Beam.Postgres.Full
   -- * @INSERT@ and @INSERT RETURNING@
   , insert, insertReturning
   , insertDefaults
+  , runPgInsertReturningList
 
   , PgInsertReturning(..)
 
@@ -41,10 +42,12 @@ module Database.Beam.Postgres.Full
   -- * @UPDATE RETURNING@
   , PgUpdateReturning(..)
   , updateReturning
+  , runPgUpdateReturningList
 
   -- * @DELETE RETURNING@
   , PgDeleteReturning(..)
   , deleteReturning
+  , runPgDeleteReturningList
   ) where
 
 import           Database.Beam hiding (insert, insertValues)
@@ -204,6 +207,17 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
    where
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
      tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField True tblNm (_fieldName f))) tblSettings
+
+runPgInsertReturningList
+  :: ( MonadBeam be m
+     , BeamSqlBackendSyntax be ~ PgCommandSyntax
+     , FromBackendRow be a
+     )
+  => PgInsertReturning a
+  -> m [a]
+runPgInsertReturningList = \case
+  PgInsertReturningEmpty -> pure []
+  PgInsertReturning syntax -> runReturningList $ PgCommandSyntax PgCommandTypeDataUpdateReturning syntax
 
 -- ** @ON CONFLICT@ clause
 
@@ -416,6 +430,17 @@ updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
   where
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
+runPgUpdateReturningList
+  :: ( MonadBeam be m
+     , BeamSqlBackendSyntax be ~ PgCommandSyntax
+     , FromBackendRow be a
+     )
+  => PgUpdateReturning a
+  -> m [a]
+runPgUpdateReturningList = \case
+  PgUpdateReturningEmpty -> pure []
+  PgUpdateReturning syntax -> runReturningList $ PgCommandSyntax PgCommandTypeDataUpdateReturning syntax
+
 -- * @DELETE@
 
 -- | The most general kind of @DELETE@ that postgres can perform
@@ -439,3 +464,12 @@ deleteReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
   where
     SqlDelete pgDelete = delete table mkWhere
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
+
+runPgDeleteReturningList
+  :: ( MonadBeam be m
+     , BeamSqlBackendSyntax be ~ PgCommandSyntax
+     , FromBackendRow be a
+     )
+  => PgDeleteReturning a
+  -> m [a]
+runPgDeleteReturningList (PgDeleteReturning syntax) = runReturningList $ PgCommandSyntax PgCommandTypeDataUpdateReturning syntax
