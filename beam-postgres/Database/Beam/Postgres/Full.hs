@@ -338,17 +338,16 @@ onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO 
 onConflictUpdateSet :: Beamable tbl
                     => (tbl (QField PostgresInaccessible) ->
                         tbl (QExpr Postgres PostgresInaccessible)  ->
-                        [ QAssignment Postgres PostgresInaccessible ])
+                        QAssignment Postgres PostgresInaccessible)
                     -> PgConflictAction tbl
 onConflictUpdateSet mkAssignments =
   PgConflictAction $ \tbl ->
-  let assignments = mkAssignments tbl tblExcluded
+  let QAssignment assignments = mkAssignments tbl tblExcluded
       tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
 
-      assignmentSyntaxes = do
-        QAssignment assignments' <- assignments
-        (fieldNm, expr) <- assignments'
-        pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
+      assignmentSyntaxes =
+        [ fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr)
+        | (fieldNm, expr) <- assignments ]
   in PgConflictActionSyntax $
      emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
 
@@ -360,19 +359,18 @@ onConflictUpdateSet mkAssignments =
 onConflictUpdateSetWhere :: Beamable tbl
                          => (tbl (QField PostgresInaccessible) ->
                              tbl (QExpr Postgres PostgresInaccessible)  ->
-                             [ QAssignment Postgres PostgresInaccessible ])
+                             QAssignment Postgres PostgresInaccessible)
                          -> (tbl (QExpr Postgres PostgresInaccessible) -> QExpr Postgres PostgresInaccessible Bool)
                          -> PgConflictAction tbl
 onConflictUpdateSetWhere mkAssignments where_ =
   PgConflictAction $ \tbl ->
-  let assignments = mkAssignments tbl tblExcluded
+  let QAssignment assignments = mkAssignments tbl tblExcluded
       QExpr where_' = where_ (changeBeamRep (\(Columnar' f) -> Columnar' (current_ f)) tbl)
       tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
 
-      assignmentSyntaxes = do
-        QAssignment assignments' <- assignments
-        (fieldNm, expr) <- assignments'
-        pure (fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr))
+      assignmentSyntaxes =
+        [ fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr)
+        | (fieldNm, expr) <- assignments ]
   in PgConflictActionSyntax $
      emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes <> emit " WHERE " <> fromPgExpression (where_' "t")
 
@@ -389,7 +387,7 @@ onConflictUpdateInstead mkProj =
                                   (\_ _ e -> tell [e] >> pure e)
                                   (mkProj tblFields))
 
-  in map (\fieldNm -> QAssignment [ (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm)) ]) proj
+  in QAssignment (map (\fieldNm -> (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm))) proj)
 
 -- | Sometimes you want to update every value in the row. Beam can auto-generate
 -- an assignment that assigns the conflicting row to every field in the database
@@ -411,7 +409,7 @@ data PgUpdateReturning a
 -- returned. Use 'runUpdateReturning' to get the results.
 updateReturning :: Projectible Postgres a
                 => DatabaseEntity Postgres be (TableEntity table)
-                -> (forall s. table (QField s) -> [ QAssignment Postgres s ])
+                -> (forall s. table (QField s) -> QAssignment Postgres s)
                 -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
                 -> (table (QExpr Postgres PostgresInaccessible) -> a)
                 -> PgUpdateReturning (QExprToIdentity a)

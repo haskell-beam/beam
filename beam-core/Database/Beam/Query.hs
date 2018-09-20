@@ -292,7 +292,7 @@ data SqlUpdate be (table :: (* -> *) -> *)
 update :: ( BeamSqlBackend be, Beamable table )
        => DatabaseEntity be db (TableEntity table)
           -- ^ The table to insert into
-       -> (forall s. table (QField s) -> [ QAssignment be s ])
+       -> (forall s. table (QField s) -> QAssignment be s)
           -- ^ A sequence of assignments to make.
        -> (forall s. table (QExpr be s) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
@@ -302,11 +302,35 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
     [] -> SqlIdentityUpdate
     _  -> SqlUpdate (updateStmt tblNm assignments (Just (where_ "t")))
   where
-    assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
+    QAssignment assignments = mkAssignments tblFields
     QExpr where_ = mkWhere tblFieldExprs
 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
+
+updateOnly :: forall table db be
+            . ( BeamSqlBackend be , Beamable table )
+           => DatabaseEntity be db (TableEntity table)
+              -- ^ The table to update
+           -> table (QFieldAssignment be table)
+              -- ^ Updates to be made (use 'set' to construct an empty field)
+           -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+           -> SqlUpdate be table
+updateOnly tblEntity assignments mkWhere =
+  let realAssignments :: forall s. table (QField s) -> QAssignment be s
+      realAssignments tblFields =
+        let tblExprs = changeBeamRep (\(Columnar' fd) -> Columnar' (current_ fd)) tblFields
+        in execWriter $
+           zipBeamFieldsM
+             (\(Columnar' field :: Columnar' (QField s) a)
+               c@(Columnar' (QFieldAssignment mkAssignment)) ->
+                case mkAssignment tblExprs of
+                  Nothing -> pure c
+                  Just newValue -> do
+                    tell (field <-. newValue)
+                    pure c)
+             tblFields assignments
+  in update tblEntity realAssignments mkWhere
 
 -- | Generate a 'SqlUpdate' that will update the given table with the given value.
 --
@@ -334,7 +358,7 @@ save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
                 zipBeamFieldsM
                   (\(Columnar' field) c@(Columnar' value) ->
                      do when (qFieldName field `notElem` primaryKeyFieldNames) $
-                          tell [ field <-. value ]
+                          tell (field <-. value )
                         pure c)
                   tblField (val_ v :: table (QExpr be s)))
              (\tblE -> primaryKey tblE ==. val_ (primaryKey v))
