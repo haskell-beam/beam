@@ -92,7 +92,7 @@ all_ :: ( Database be db, BeamSqlBackend be )
        => DatabaseEntity be db (TableEntity table)
        -> Q be db s (table (QExpr be s))
 all_ (DatabaseEntity dt@(DatabaseTable {})) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed (dbTableSchema dt) (dbTableCurrentName dt)) . Just . (,Nothing))
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed (tableName (dbTableSchema dt) (dbTableCurrentName dt))) . Just . (,Nothing))
                     (tableFieldsToExpressions (dbTableSettings dt))
                     (\_ -> Nothing) snd)
 
@@ -102,7 +102,7 @@ allFromView_ :: ( Database be db, Beamable table
                => DatabaseEntity be db (ViewEntity table)
                -> Q be db s (table (QExpr be s))
 allFromView_ (DatabaseEntity vw) =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed (dbViewSchema vw) (dbViewCurrentName vw)) . Just . (,Nothing))
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed (tableName (dbViewSchema vw) (dbViewCurrentName vw))) . Just . (,Nothing))
                     (tableFieldsToExpressions (dbViewSettings vw))
                     (\_ -> Nothing) snd)
 
@@ -135,7 +135,7 @@ join_' :: ( Database be db, Table table, BeamSqlBackend be )
        -> (table (QExpr be s) -> QExpr be s SqlBool)
        -> Q be db s (table (QExpr be s))
 join_' (DatabaseEntity tbl@(DatabaseTable {})) mkOn =
-    Q $ liftF (QAll (\_ -> fromTable (tableNamed (dbTableSchema tbl) (dbTableCurrentName tbl)) . Just . (, Nothing))
+    Q $ liftF (QAll (\_ -> fromTable (tableNamed (tableName (dbTableSchema tbl) (dbTableCurrentName tbl))) . Just . (, Nothing))
                     (tableFieldsToExpressions (dbTableSettings tbl))
                     (\tbl' -> let QExpr on = mkOn tbl' in Just on) snd)
 

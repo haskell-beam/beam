@@ -656,3 +656,8 @@ mkFieldNames mkField =
       let fieldName' = fromString ("res" ++ show i)
       tell [ fieldName' ]
       pure (\_ -> BeamSqlBackendExpressionSyntax' (fieldE (mkField fieldName')))
+
+tableNameFromEntity :: IsSql92TableNameSyntax name
+                    => DatabaseEntityDescriptor be (TableEntity tbl)
+                    -> name
+tableNameFromEntity = tableName <$> dbTableSchema <*> dbTableCurrentName

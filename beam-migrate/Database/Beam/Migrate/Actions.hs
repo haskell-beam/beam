@@ -329,7 +329,7 @@ createTableActionProvider =
              colsSyntax = map (\(colNm, type_, cs) -> (colNm, columnSchemaSyntax type_ Nothing cs Nothing)) columns
          pure (PotentialAction mempty (HS.fromList postConditions)
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
-                               ("Create the table " <> postTblNm) createTableWeight)
+                               ("Create the table " <> qnameAsText postTblNm) createTableWeight)
 
 -- | Action provider for SQL92 @DROP TABLE@ actions
 dropTableActionProvider :: forall be

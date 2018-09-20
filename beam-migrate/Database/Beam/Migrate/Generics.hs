@@ -12,7 +12,6 @@ module Database.Beam.Migrate.Generics
  -- * Extending the defaulting sytem
  , HasDefaultSqlDataType(..)
  , HasNullableConstraint, NullableStatus
- , Sql92HasDefaultDataType
  ) where
 
 import Database.Beam.Migrate.Types

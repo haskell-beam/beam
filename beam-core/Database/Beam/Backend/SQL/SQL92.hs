@@ -140,14 +140,14 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
   unionTables, intersectTables, exceptTable ::
     Bool -> select -> select -> select
 
-class IsSql92InsertValuesSyntax (Sql92InsertValuesSyntax insert) =>
+class ( IsSql92InsertValuesSyntax (Sql92InsertValuesSyntax insert)
+      , IsSql92TableNameSyntax (Sql92InsertTableNameSyntax insert) ) =>
   IsSql92InsertSyntax insert where
 
   type Sql92InsertValuesSyntax insert :: *
-  insertStmt :: Maybe Text
-             -- ^ Schema name
-             -> Text
-             -- ^ Table name
+  type Sql92InsertTableNameSyntax insert :: *
+
+  insertStmt :: Sql92InsertTableNameSyntax insert
              -> [ Text ]
              -- ^ Fields
              -> Sql92InsertValuesSyntax insert
@@ -164,25 +164,26 @@ class IsSql92ExpressionSyntax (Sql92InsertValuesExpressionSyntax insertValues) =
                 -> insertValues
 
 class ( IsSql92ExpressionSyntax (Sql92UpdateExpressionSyntax update)
-      , IsSql92FieldNameSyntax (Sql92UpdateFieldNameSyntax update)) =>
+      , IsSql92FieldNameSyntax (Sql92UpdateFieldNameSyntax update)
+      , IsSql92TableNameSyntax (Sql92UpdateTableNameSyntax update) ) =>
       IsSql92UpdateSyntax update where
+
+  type Sql92UpdateTableNameSyntax update :: *
   type Sql92UpdateFieldNameSyntax update :: *
   type Sql92UpdateExpressionSyntax update :: *
 
-  updateStmt :: Maybe Text
-             -- ^ Schema name
-             -> Text
-             -- ^ Table name
+  updateStmt :: Sql92UpdateTableNameSyntax update
              -> [(Sql92UpdateFieldNameSyntax update, Sql92UpdateExpressionSyntax update)]
              -> Maybe (Sql92UpdateExpressionSyntax update) {-^ WHERE -}
              -> update
 
-class IsSql92ExpressionSyntax (Sql92DeleteExpressionSyntax delete) =>
+class ( IsSql92TableNameSyntax (Sql92DeleteTableNameSyntax delete)
+      , IsSql92ExpressionSyntax (Sql92DeleteExpressionSyntax delete) ) =>
   IsSql92DeleteSyntax delete where
+  type Sql92DeleteTableNameSyntax delete :: *
   type Sql92DeleteExpressionSyntax delete :: *
 
-  deleteStmt :: Maybe Text {-^ Table schema -}
-             -> Text -> Maybe Text
+  deleteStmt :: Sql92DeleteTableNameSyntax delete -> Maybe Text
              -> Maybe (Sql92DeleteExpressionSyntax delete)
              -> delete
 
@@ -327,12 +328,19 @@ class IsSql92OrderingSyntax ord where
   ascOrdering, descOrdering
     :: Sql92OrderingExpressionSyntax ord -> ord
 
-class IsSql92TableSourceSyntax tblSource where
+class IsSql92TableNameSyntax tblName where
+  tableName :: Maybe Text {-^ Schema -}
+            -> Text {-^ Table name -}
+            -> tblName
+
+class IsSql92TableNameSyntax (Sql92TableSourceTableNameSyntax tblSource) =>
+  IsSql92TableSourceSyntax tblSource where
+
   type Sql92TableSourceSelectSyntax tblSource :: *
   type Sql92TableSourceExpressionSyntax tblSource :: *
+  type Sql92TableSourceTableNameSyntax tblSource :: *
 
-  tableNamed :: Maybe Text {- ^ Schema -}
-             -> Text {-^ Table name -}
+  tableNamed :: Sql92TableSourceTableNameSyntax tblSource
              -> tblSource
   tableFromSubSelect :: Sql92TableSourceSelectSyntax tblSource -> tblSource
   tableFromValues :: [ [ Sql92TableSourceExpressionSyntax tblSource ] ] -> tblSource

@@ -209,7 +209,7 @@ insertOnly :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (QEx
            -> SqlInsert be
 insertOnly _ _ SqlInsertValuesEmpty = SqlInsertNoRows
 insertOnly (DatabaseEntity dt@(DatabaseTable {})) mkProj (SqlInsertValues vs) =
-    SqlInsert (insertStmt (dbTableSchema dt) (dbTableCurrentName dt) proj vs)
+    SqlInsert (insertStmt (tableNameFromEntity dt) proj vs)
   where
     tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
                               (dbTableSettings dt)
@@ -303,7 +303,7 @@ update :: ( BeamSqlBackend be, Beamable table )
 update (DatabaseEntity dt@(DatabaseTable {})) mkAssignments mkWhere =
   case assignments of
     [] -> SqlIdentityUpdate
-    _  -> SqlUpdate (updateStmt (dbTableSchema dt) (dbTableCurrentName dt)
+    _  -> SqlUpdate (updateStmt (tableNameFromEntity dt)
                                 assignments (Just (where_ "t")))
   where
     assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
@@ -368,7 +368,7 @@ delete :: forall be db table
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete be table
 delete (DatabaseEntity dt@(DatabaseTable {})) mkWhere =
-  SqlDelete (deleteStmt (dbTableSchema dt) (dbTableCurrentName dt) alias (Just (where_ "t")))
+  SqlDelete (deleteStmt (tableNameFromEntity dt) alias (Just (where_ "t")))
   where
     supportsAlias = deleteSupportsAlias (Proxy @(BeamSqlBackendDeleteSyntax be))
 

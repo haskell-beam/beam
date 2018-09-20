@@ -77,14 +77,14 @@ instance IsSql92SelectTableSyntax SelectTable where
 
 data Insert
   = Insert
-  { insertSchema :: Maybe Text
-  , insertTable :: Text
+  { insertTable :: TableName
   , insertFields :: [ Text ]
   , insertValues :: InsertValues }
   deriving (Show, Eq)
 
 instance IsSql92InsertSyntax Insert where
   type Sql92InsertValuesSyntax Insert = InsertValues
+  type Sql92InsertTableNameSyntax Insert = TableName
 
   insertStmt = Insert
 
@@ -104,13 +104,13 @@ instance IsSql92InsertValuesSyntax InsertValues where
 
 data Update
   = Update
-  { updateSchema :: Maybe Text
-  , updateTable :: Text
+  { updateTable :: TableName
   , updateFields :: [ (FieldName, Expression) ]
   , updateWhere :: Maybe Expression }
   deriving (Show, Eq)
 
 instance IsSql92UpdateSyntax Update where
+  type Sql92UpdateTableNameSyntax Update = TableName
   type Sql92UpdateFieldNameSyntax Update = FieldName
   type Sql92UpdateExpressionSyntax Update = Expression
 
@@ -118,13 +118,13 @@ instance IsSql92UpdateSyntax Update where
 
 data Delete
   = Delete
-  { deleteSchema :: Maybe Text
-  , deleteTable :: Text
+  { deleteTable :: TableName
   , deleteAlias :: Maybe Text
   , deleteWhere :: Maybe Expression }
   deriving (Show, Eq)
 
 instance IsSql92DeleteSyntax Delete where
+  type Sql92DeleteTableNameSyntax Delete = TableName
   type Sql92DeleteExpressionSyntax Delete = Expression
 
   deleteStmt = Delete
@@ -451,8 +451,14 @@ instance IsSql92GroupingSyntax Grouping where
 
   groupByExpressions = Grouping
 
+data TableName = TableName (Maybe Text) Text
+  deriving (Show, Eq)
+
+instance IsSql92TableNameSyntax TableName where
+  tableName = TableName
+
 data TableSource
-  = TableNamed (Maybe Text) Text
+  = TableNamed TableName
   | TableFromSubSelect Select
   | TableFromValues [ [ Expression ] ]
   deriving (Show, Eq)
@@ -460,6 +466,7 @@ data TableSource
 instance IsSql92TableSourceSyntax TableSource where
   type Sql92TableSourceSelectSyntax TableSource = Select
   type Sql92TableSourceExpressionSyntax TableSource = Expression
+  type Sql92TableSourceTableNameSyntax TableSource = TableName
 
   tableNamed = TableNamed
   tableFromSubSelect = TableFromSubSelect

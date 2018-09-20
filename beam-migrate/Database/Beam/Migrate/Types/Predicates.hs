@@ -113,6 +113,10 @@ instance Hashable QualifiedName where
 qname :: IsDatabaseEntity be entity => DatabaseEntityDescriptor be entity -> QualifiedName
 qname e = QualifiedName (e ^. dbEntitySchema) (e ^. dbEntityName)
 
+qnameAsText :: QualifiedName -> Text
+qnameAsText (QualifiedName Nothing tbl) = tbl
+qnameAsText (QualifiedName (Just sch) tbl) = sch <> "." <> tbl
+
 -- | A predicate that depends on the name of a table as well as its fields
 newtype TableCheck = TableCheck (forall tbl. Table tbl => QualifiedName -> tbl (TableField tbl) -> SomeDatabasePredicate)
 

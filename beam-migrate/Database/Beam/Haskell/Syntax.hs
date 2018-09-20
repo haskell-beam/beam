@@ -15,6 +15,7 @@ module Database.Beam.Haskell.Syntax where
 import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.Builder
+import           Database.Beam.Backend.SQL.AST
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.SQL.Types
 import           Database.Beam.Migrate.Serialization
@@ -420,6 +421,21 @@ data HsMigrateBackend = HsMigrateBackend
 instance BeamMigrateOnlySqlBackend HsMigrateBackend
 type instance BeamSqlBackendSyntax HsMigrateBackend = HsAction
 
+hsMkTableName :: (Char -> Char) -> TableName -> String
+hsMkTableName toNameCase (TableName sch nm) =
+  case sch of
+    Nothing ->
+      case T.unpack nm of
+        [] -> error "No name for table"
+        x:xs -> toNameCase x:xs
+    Just schNm ->
+      case T.unpack schNm of
+        [] -> error "Empty schema name"
+        x:xs -> toNameCase x:xs ++ "_" ++ T.unpack nm
+
+hsTableVarName = hsMkTableName toLower
+hsTableTypeName = hsMkTableName toUpper
+
 instance IsSql92DdlCommandSyntax HsAction where
   type Sql92DdlCommandCreateTableSyntax HsAction = HsAction
   type Sql92DdlCommandAlterTableSyntax HsAction = HsAction
@@ -430,6 +446,7 @@ instance IsSql92DdlCommandSyntax HsAction where
   alterTableCmd = id
 
 instance IsSql92AlterTableSyntax HsAction where
+  type Sql92AlterTableTableNameSyntax HsAction = TableName
   type Sql92AlterTableAlterTableActionSyntax HsAction = HsNone
 
   alterTableSyntax _ _ = error "alterTableSyntax"
@@ -449,11 +466,14 @@ instance IsSql92AlterColumnActionSyntax HsNone where
   setNotNullSyntax = HsNone
 
 instance IsSql92DropTableSyntax HsAction where
+  type Sql92DropTableTableNameSyntax HsAction = TableName
+
   dropTableSyntax nm = HsAction [ (Nothing, dropTable) ] []
     where
-      dropTable = hsApp (hsVar "dropTable") [ hsVar ("_" <> nm) ]
+      dropTable = hsApp (hsVar "dropTable") [ hsVar (fromString (hsTableVarName nm)) ]
 
 instance IsSql92CreateTableSyntax HsAction where
+  type Sql92CreateTableTableNameSyntax HsAction = TableName
   type Sql92CreateTableOptionsSyntax HsAction = HsNone
   type Sql92CreateTableTableConstraintSyntax HsAction = HsTableConstraint
   type Sql92CreateTableColumnSchemaSyntax HsAction = HsColumnSchema
@@ -464,10 +484,7 @@ instance IsSql92CreateTableSyntax HsAction where
              [ entity ]
     where
       (varName, tyName, tyConName) =
-        case T.unpack nm of
-          [] -> error "No name for table"
-          x:xs -> let tyName' = toUpper x:xs
-                  in ( toLower x:xs, tyName' ++ "T", tyName')
+        ( hsTableVarName nm, hsTableTypeName nm ++ "T", hsTableTypeName nm )
 
       mkHsFieldName fieldNm = "_" ++ varName ++
                               case T.unpack fieldNm of
@@ -481,7 +498,7 @@ instance IsSql92CreateTableSyntax HsAction where
 
       migration =
         hsApp (hsVarFrom "createTable" "Database.Beam.Migrate")
-              [ hsStr nm
+              [ hsStr (fromString (hsTableVarName nm))
               , hsApp (hsTyCon (fromString tyConName))
                       (map (\(fieldNm, ty) -> mkHsColumnSchema ty fieldNm) fields) ]
       entity = HsEntity

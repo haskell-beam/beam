@@ -67,7 +67,7 @@ createTable :: ( Beamable table, Table table
             -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
 createTable newTblName tblSettings =
   do let createTableCommand =
-           createTableSyntax Nothing newTblName
+           createTableSyntax Nothing (tableName Nothing newTblName)
                              (allBeamValues (\(Columnar' (TableFieldSchema name (FieldSchema schema) _)) -> (name, schema)) tblSettings)
                              [ primaryKeyConstraintSyntax (allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings)) ]
 
@@ -93,7 +93,7 @@ dropTable :: BeamMigrateSqlBackend be
           => CheckedDatabaseEntity be db (TableEntity table)
           -> Migration be ()
 dropTable (CheckedDatabaseEntity (CheckedDatabaseTable dt _ _) _) =
-  let command = dropTableCmd (dropTableSyntax (dbTableCurrentName dt))
+  let command = dropTableCmd (dropTableSyntax (tableNameFromTableEntity dt))
   in upDown command Nothing
 
 -- | Copy a table schema from one database to another
@@ -189,17 +189,21 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks tblFieldChe
                       (dbTableSettings dt) tblFieldChecks
 
      TableMigration alterColumns' = alterColumns initialTbl
-     ((newTbl, cmds), (tblNm', tblChecks')) = runState (runWriterT alterColumns') (dbTableCurrentName dt, tblChecks)
+     ((newTbl, cmds), (tblNm', tblChecks')) =
+       runState (runWriterT alterColumns') (dbTableCurrentName dt, tblChecks)
 
      fieldChecks' = changeBeamRep (\(Columnar' (ColumnMigration _ checks) :: Columnar' ColumnMigration a) ->
                                      Columnar' (Const checks) :: Columnar' (Const [FieldCheck]) a)
                                   newTbl
+
+     tbl' :: TableSettings table'
      tbl' = changeBeamRep (\(Columnar' (ColumnMigration nm _) :: Columnar' ColumnMigration a) ->
                               Columnar' (TableField (pure nm) nm) :: Columnar' (TableField table') a)
                           newTbl
  in forM_ cmds (\cmd -> upDown (alterTableCmd cmd) Nothing) >>
-    pure (CheckedDatabaseEntity (CheckedDatabaseTable (dt { dbTableCurrentName = tblNm'
-                                                          , dbTableSettings = tbl' })
+    pure (CheckedDatabaseEntity (CheckedDatabaseTable
+                                  (DatabaseTable (dbTableSchema dt) (dbTableOrigName dt)
+                                     tblNm' tbl')
                                    tblChecks' fieldChecks') entityChecks)
 
 -- * Fields
