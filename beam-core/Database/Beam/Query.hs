@@ -157,7 +157,7 @@ selectWith (CTE.With mkQ) =
 lookup_ :: ( Database be db, Table table
 
            , BeamSqlBackend be, HasQBuilder be
-           , SqlValableTable (PrimaryKey table) be
+           , SqlValableTable be (PrimaryKey table)
            , HasTableEquality be (PrimaryKey table)
            )
         => DatabaseEntity be db (TableEntity table)
@@ -310,9 +310,23 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
 
+-- | A specialization of 'update' that matches the given (already existing) row
+updateRow :: ( BeamSqlBackend be, Table table
+             , HasTableEquality be (PrimaryKey table)
+             , SqlValableTable be (PrimaryKey table) )
+          => DatabaseEntity be db (TableEntity table)
+             -- ^ The table to insert into
+          -> table Identity
+             -- ^ The row to update
+          -> (forall s. table (QField s) -> QAssignment be s)
+             -- ^ A sequence of assignments to make.
+          -> SqlUpdate be table
+updateRow tbl row update' =
+  update tbl update' (references_ (val_ (pk row)))
+
 -- | A specialization of 'update' that is more convenient for normal tables.
 updateTable :: forall table db be
-             . ( BeamSqlBackend be , Beamable table )
+             . ( BeamSqlBackend be, Beamable table )
             => DatabaseEntity be db (TableEntity table)
                -- ^ The table to update
             -> table (QFieldAssignment be table)
@@ -335,6 +349,21 @@ updateTable tblEntity assignments mkWhere =
              tblFields assignments
 
   in update tblEntity mkAssignments mkWhere
+
+-- | Convenience form of 'updateTable' that generates a @WHERE@ clause
+-- that matches only the already existing entity
+updateTableRow :: ( BeamSqlBackend be, Table table
+                  , HasTableEquality be (PrimaryKey table)
+                  , SqlValableTable be (PrimaryKey table) )
+               => DatabaseEntity be db (TableEntity table)
+                  -- ^ The table to update
+               -> table Identity
+                  -- ^ The row to update
+               -> table (QFieldAssignment be table)
+                  -- ^ Updates to be made (use 'set' to construct an empty field)
+               -> SqlUpdate be table
+updateTableRow tbl row update' =
+  updateTable tbl update' (references_ (val_ (pk row)))
 
 set :: forall table be table'. Beamable table => table (QFieldAssignment be table')
 set = changeBeamRep (\_ -> Columnar' (QFieldAssignment (\_ -> Nothing))) (tblSkeleton :: TableSkeleton table)
@@ -364,8 +393,8 @@ save :: forall table be db.
         ( Table table
         , BeamSqlBackend be
 
-        , SqlValableTable (PrimaryKey table) be
-        , SqlValableTable table be
+        , SqlValableTable be (PrimaryKey table)
+        , SqlValableTable be table
 
         , HasTableEquality be (PrimaryKey table)
         )

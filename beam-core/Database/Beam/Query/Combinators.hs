@@ -522,7 +522,7 @@ type instance HaskellLiteralForQExpr (table (Nullable f)) = HaskellLiteralForQEx
 type family HaskellLiteralForQExpr_AddNullable x = a
 type instance HaskellLiteralForQExpr_AddNullable (tbl f) = tbl (Nullable f)
 
-type SqlValableTable table be =
+type SqlValableTable be table =
    ( Beamable table
    , FieldsFulfillConstraint (HasSqlValueSyntax (BeamSqlBackendValueSyntax be)) table )
 
