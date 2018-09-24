@@ -876,12 +876,6 @@ commas [] = mempty
 commas [x] = x
 commas (x:xs) = x <> foldMap (emit ", " <>) xs
 
-sqliteSerialType :: SqliteDataTypeSyntax
-sqliteSerialType = SqliteDataTypeSyntax (emit "INTEGER PRIMARY KEY AUTOINCREMENT")
-                                        intType
-                                        (BeamSerializedDataType (beamSerializeJSON "sqlite" "serial"))
-                                        True
-
 instance HasSqlValueSyntax SqliteValueSyntax ByteString where
   sqlValueSyntax bs = SqliteValueSyntax (emitValue (SQLBlob bs))
 

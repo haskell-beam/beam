@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Query.Combinators
@@ -73,7 +74,9 @@ import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
 
+#if !MIN_VERSION_base(4, 11, 0)
 import Control.Monad.Writer
+#endif
 import Control.Monad.Identity
 import Control.Monad.Free
 import Control.Applicative

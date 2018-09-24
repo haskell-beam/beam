@@ -675,7 +675,7 @@ range_ :: forall n a context s. PgIsRange n
        => PgBoundType -- ^ Lower bound type
        -> PgBoundType -- ^ Upper bound type
        -> QGenExpr context Postgres s (Maybe a) -- ^. Lower bound value
-       -> QGenExpr context Postgres s (Maybe a) -- ^. Lower bound value
+       -> QGenExpr context Postgres s (Maybe a) -- ^. Upper bound value
        -> QGenExpr context Postgres s (PgRange n a)
 range_ lbt ubt (QExpr e1) (QExpr e2) = QExpr (pgExprFrom <$> e1 <*> e2)
   where
