@@ -333,7 +333,7 @@ insertReturning :: DatabaseEntity Sqlite db (TableEntity table)
                 -> SqliteInsertReturning table
 insertReturning tbl@(DatabaseEntity (DatabaseTable tblNm _)) vs =
   case insert tbl vs of
-    SqlInsert s ->
+    SqlInsert _ s ->
       SqliteInsertReturning tblNm s
     SqlInsertNoRows ->
       SqliteInsertReturningNoRows

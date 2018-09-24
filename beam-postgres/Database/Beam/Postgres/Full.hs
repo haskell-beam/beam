@@ -41,13 +41,14 @@ module Database.Beam.Postgres.Full
 
   -- * @UPDATE RETURNING@
   , PgUpdateReturning(..)
-  , updateReturning
   , runPgUpdateReturningList
 
   -- * @DELETE RETURNING@
   , PgDeleteReturning(..)
-  , deleteReturning
   , runPgDeleteReturningList
+
+  -- * Generalized @RETURNING@
+  , PgReturning(..)
   ) where
 
 import           Database.Beam hiding (insert, insertValues)
@@ -162,12 +163,12 @@ insertDefaults = SqlInsertValues (PgInsertValuesSyntax (emit "DEFAULT VALUES"))
 insert :: DatabaseEntity Postgres db (TableEntity table)
        -> SqlInsertValues Postgres (table (QExpr Postgres s)) -- TODO arbitrary projectibles
        -> PgInsertOnConflict table
-       -> SqlInsert Postgres
-insert tbl values onConflict_ =
+       -> SqlInsert Postgres table
+insert tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) values onConflict_ =
   case insertReturning tbl values onConflict_
          (Nothing :: Maybe (table (QExpr Postgres PostgresInaccessible) -> QExpr Postgres PostgresInaccessible Int)) of
     PgInsertReturning a ->
-      SqlInsert (PgInsertSyntax a)
+      SqlInsert tblSettings (PgInsertSyntax a)
     PgInsertReturningEmpty ->
       SqlInsertNoRows
 
@@ -194,15 +195,15 @@ insertReturning _ SqlInsertValuesEmpty _ _ = PgInsertReturningEmpty
 insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
                 (SqlInsertValues (PgInsertValuesSyntax insertValues_))
                 (PgInsertOnConflict mkOnConflict)
-                returning =
+                mMkProjection =
   PgInsertReturning $
   emit "INSERT INTO " <> pgQuotedIdentifier tblNm <>
   emit "(" <> pgSepBy (emit ", ") (allBeamValues (\(Columnar' f) -> pgQuotedIdentifier (_fieldName f)) tblSettings) <> emit ") " <>
   insertValues_ <> emit " " <> fromPgInsertOnConflict (mkOnConflict tblFields) <>
-  (case returning of
+  (case mMkProjection of
      Nothing -> mempty
      Just mkProjection ->
-         emit " RETURNING "<>
+         emit " RETURNING " <>
          pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t")))
    where
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
@@ -400,33 +401,15 @@ onConflictSetAll = onConflictUpdateInstead id
 -- * @UPDATE@
 
 -- | The most general kind of @UPDATE@ that postgres can perform
+--
+-- You can build this from a 'SqlUpdate' by using 'returning'
+--
+-- > update tbl where `returning` projection
+--
+-- Run the result with 'runPgUpdateReturningList'
 data PgUpdateReturning a
   = PgUpdateReturning PgSyntax
   | PgUpdateReturningEmpty
-
--- | Postgres @UPDATE ... RETURNING@ statement support. The last
--- argument takes the newly inserted row and returns the values to be
--- returned. Use 'runUpdateReturning' to get the results.
-updateReturning :: Projectible Postgres a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> (forall s. table (QField s) -> QAssignment Postgres s)
-                -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
-                -> (table (QExpr Postgres PostgresInaccessible) -> a)
-                -> PgUpdateReturning (QExprToIdentity a)
-updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
-                mkAssignments
-                mkWhere
-                mkProjection =
-  case update table mkAssignments mkWhere of
-    SqlUpdate pgUpdate ->
-      PgUpdateReturning $
-      fromPgUpdate pgUpdate <>
-      emit " RETURNING " <>
-      pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t"))
-
-    SqlIdentityUpdate -> PgUpdateReturningEmpty
-  where
-    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 runPgUpdateReturningList
   :: ( MonadBeam be m
@@ -442,26 +425,13 @@ runPgUpdateReturningList = \case
 -- * @DELETE@
 
 -- | The most general kind of @DELETE@ that postgres can perform
+--
+-- You can build this from a 'SqlDelete' by using 'returning'
+--
+-- > delete tbl where `returning` projection
+--
+-- Run the result with 'runPgDeleteReturningList'
 newtype PgDeleteReturning a = PgDeleteReturning PgSyntax
-
--- | Postgres @DELETE ... RETURNING@ statement support. The last
--- argument takes the newly inserted row and returns the values to be
--- returned. Use 'runDeleteReturning' to get the results.
-deleteReturning :: Projectible Postgres a
-                => DatabaseEntity Postgres be (TableEntity table)
-                -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
-                -> (table (QExpr Postgres PostgresInaccessible) -> a)
-                -> PgDeleteReturning (QExprToIdentity a)
-deleteReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
-                mkWhere
-                mkProjection =
-  PgDeleteReturning $
-  fromPgDelete pgDelete <>
-  emit " RETURNING " <>
-  pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t"))
-  where
-    SqlDelete pgDelete = delete table mkWhere
-    tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 runPgDeleteReturningList
   :: ( MonadBeam be m
@@ -471,3 +441,47 @@ runPgDeleteReturningList
   => PgDeleteReturning a
   -> m [a]
 runPgDeleteReturningList (PgDeleteReturning syntax) = runReturningList $ PgCommandSyntax PgCommandTypeDataUpdateReturning syntax
+
+-- * General @RETURNING@ support
+
+class PgReturning cmd where
+  type PgReturningType cmd :: * -> *
+
+  returning :: (Beamable tbl, Projectible Postgres a)
+            => cmd Postgres tbl -> (tbl (QExpr Postgres PostgresInaccessible) -> a)
+            -> PgReturningType cmd a
+
+instance PgReturning SqlInsert where
+  type PgReturningType SqlInsert = PgInsertReturning
+
+  returning SqlInsertNoRows _ = PgInsertReturningEmpty
+  returning (SqlInsert tblSettings (PgInsertSyntax syntax)) mkProjection =
+    PgInsertReturning $
+    syntax <> emit " RETURNING " <>
+    pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t"))
+
+    where
+      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr . pure . fieldE . unqualifiedField . _fieldName $ f)) tblSettings
+
+instance PgReturning SqlUpdate where
+  type PgReturningType SqlUpdate = PgUpdateReturning
+
+  returning SqlIdentityUpdate _ = PgUpdateReturningEmpty
+  returning (SqlUpdate tblSettings (PgUpdateSyntax syntax)) mkProjection =
+    PgUpdateReturning $
+    syntax <> emit " RETURNING " <>
+    pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t"))
+
+    where
+      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr . pure . fieldE . unqualifiedField . _fieldName $ f)) tblSettings
+
+instance PgReturning SqlDelete where
+  type PgReturningType SqlDelete = PgDeleteReturning
+
+  returning (SqlDelete tblSettings (PgDeleteSyntax syntax)) mkProjection =
+    PgDeleteReturning $
+    syntax <> emit " RETURNING " <>
+    pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t"))
+
+    where
+      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr . pure . fieldE . unqualifiedField . _fieldName $ f)) tblSettings

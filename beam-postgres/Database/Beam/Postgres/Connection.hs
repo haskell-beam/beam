@@ -333,9 +333,10 @@ instance MonadBeamInsertReturning Postgres Pg where
 instance MonadBeamUpdateReturning Postgres Pg where
     runUpdateReturningList tbl mkAssignments mkWhere = do
         let updateReturningCmd' =
-                updateReturning tbl mkAssignments mkWhere
-                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                                                        Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty))
+                update tbl mkAssignments mkWhere
+                   `returning`
+                     changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                                       Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
 
         case updateReturningCmd' of
           PgUpdateReturningEmpty ->
@@ -346,8 +347,9 @@ instance MonadBeamUpdateReturning Postgres Pg where
 instance MonadBeamDeleteReturning Postgres Pg where
     runDeleteReturningList tbl mkWhere = do
         let PgDeleteReturning deleteReturningCmd =
-                deleteReturning tbl mkWhere
-                                (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                                                        Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty))
+                delete tbl mkWhere
+                  `returning`
+                    changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                                      Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
 
         runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning deleteReturningCmd)

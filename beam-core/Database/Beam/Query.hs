@@ -198,8 +198,8 @@ dumpSqlSelect q =
 -- * INSERT
 
 -- | Represents a SQL @INSERT@ command that has not yet been run
-data SqlInsert be
-  = SqlInsert (BeamSqlBackendInsertSyntax be)
+data SqlInsert be (table :: (* -> *) -> *)
+  = SqlInsert !(TableSettings table) !(BeamSqlBackendInsertSyntax be)
   | SqlInsertNoRows
 
 -- | Generate a 'SqlInsert' over only certain fields of a table
@@ -209,10 +209,10 @@ insertOnly :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (QEx
            -> (table (QField s) -> QExprToField r)
            -> SqlInsertValues be r
               -- ^ Values to insert. See 'insertValues', 'insertExpressions', 'insertData', and 'insertFrom' for possibilities.
-           -> SqlInsert be
+           -> SqlInsert be table
 insertOnly _ _ SqlInsertValuesEmpty = SqlInsertNoRows
 insertOnly (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkProj (SqlInsertValues vs) =
-    SqlInsert (insertStmt tblNm proj vs)
+    SqlInsert tblSettings (insertStmt tblNm proj vs)
   where
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
     proj = execWriter (project' (Proxy @AnyType) (Proxy @((), Text))
@@ -225,14 +225,14 @@ insert :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (table (
           -- ^ Table to insert into
        -> SqlInsertValues be (table (QExpr be s))
           -- ^ Values to insert. See 'insertValues', 'insertExpressions', and 'insertFrom' for possibilities.
-       -> SqlInsert be
+       -> SqlInsert be table
 insert tbl values = insertOnly tbl id values
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
 runInsert :: (BeamSqlBackend be, MonadBeam be m)
-          => SqlInsert be -> m ()
+          => SqlInsert be table -> m ()
 runInsert SqlInsertNoRows = pure ()
-runInsert (SqlInsert i) = runNoReturn (insertCmd i)
+runInsert (SqlInsert _ i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
 --   'tbl'.
@@ -283,7 +283,7 @@ insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 
 -- | Represents a SQL @UPDATE@ statement for the given @table@.
 data SqlUpdate be (table :: (* -> *) -> *)
-  = SqlUpdate (BeamSqlBackendUpdateSyntax be)
+  = SqlUpdate !(TableSettings table) !(BeamSqlBackendUpdateSyntax be)
   | SqlIdentityUpdate -- An update with no assignments
 
 -- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
@@ -305,7 +305,7 @@ update :: ( BeamSqlBackend be, Beamable table )
 update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere =
   case assignments of
     [] -> SqlIdentityUpdate
-    _  -> SqlUpdate (updateStmt tblNm assignments (Just (where_ "t")))
+    _  -> SqlUpdate tblSettings (updateStmt tblNm assignments (Just (where_ "t")))
   where
     QAssignment assignments = mkAssignments tblFields
     QExpr where_ = mkWhere tblFieldExprs
@@ -442,13 +442,14 @@ save tbl v =
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
 runUpdate :: (BeamSqlBackend be, MonadBeam be m)
           => SqlUpdate be tbl -> m ()
-runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
+runUpdate (SqlUpdate _ u) = runNoReturn (updateCmd u)
 runUpdate SqlIdentityUpdate = pure ()
 
 -- * DELETE
 
 -- | Represents a SQL @DELETE@ statement for the given @table@
-newtype SqlDelete be (table :: (* -> *) -> *) = SqlDelete (BeamSqlBackendDeleteSyntax be)
+data SqlDelete be (table :: (* -> *) -> *)
+  = SqlDelete !(TableSettings table) !(BeamSqlBackendDeleteSyntax be)
 
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause
 delete :: forall be db table
@@ -459,7 +460,7 @@ delete :: forall be db table
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete be table
 delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
-  SqlDelete (deleteStmt tblNm alias (Just (where_ "t")))
+  SqlDelete tblSettings (deleteStmt tblNm alias (Just (where_ "t")))
   where
     supportsAlias = deleteSupportsAlias (Proxy @(BeamSqlBackendDeleteSyntax be))
 
@@ -472,4 +473,4 @@ delete (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkWhere =
 -- | Run a 'SqlDelete' in a 'MonadBeam'
 runDelete :: (BeamSqlBackend be, MonadBeam be m)
           => SqlDelete be table -> m ()
-runDelete (SqlDelete d) = runNoReturn (deleteCmd d)
+runDelete (SqlDelete _ d) = runNoReturn (deleteCmd d)
