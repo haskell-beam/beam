@@ -449,7 +449,7 @@ class PgReturning cmd where
 
   returning :: (Beamable tbl, Projectible Postgres a)
             => cmd Postgres tbl -> (tbl (QExpr Postgres PostgresInaccessible) -> a)
-            -> PgReturningType cmd a
+            -> PgReturningType cmd (QExprToIdentity a)
 
 instance PgReturning SqlInsert where
   type PgReturningType SqlInsert = PgInsertReturning
