@@ -15,7 +15,7 @@ module Database.Beam.Query
 
     , QGenExprTable, QExprTable
 
-    , QAssignment, QField
+    , QAssignment, QField, QFieldAssignment
 
     , QBaseScope
 
@@ -77,8 +77,9 @@ module Database.Beam.Query
     -- ** @UPDATE@
     , SqlUpdate(..)
     , update, save
-    , updateTable, set
-    , toNewValue, toUpdatedValue, toUpdatedValueMaybe
+    , updateTable, set, setFieldsTo
+    , toNewValue, toOldValue, toUpdatedValue
+    , toUpdatedValueMaybe
     , updateRow, updateTableRow
     , runUpdate
 
@@ -113,6 +114,7 @@ import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.State.Strict
 
+import Data.Functor.Const (Const(..))
 import Data.Text (Text)
 import Data.Proxy
 
@@ -369,10 +371,39 @@ updateTableRow tbl row update' =
 set :: forall table be table'. Beamable table => table (QFieldAssignment be table')
 set = changeBeamRep (\_ -> Columnar' (QFieldAssignment (\_ -> Nothing))) (tblSkeleton :: TableSkeleton table)
 
+setFieldsTo :: forall table be table'
+             . Table table => (forall s. table (QExpr be s)) -> table (QFieldAssignment be table')
+setFieldsTo tbl =
+
+  runIdentity $
+  zipBeamFieldsM (\(Columnar' (Const columnIx))
+                   (Columnar' (QExpr newValue)) ->
+                    if columnIx `elem` primaryKeyIndices
+                    then pure $ Columnar' toOldValue
+                    else pure $ Columnar' (toNewValue (QExpr newValue)))
+                 indexedTable tbl
+
+  where
+    indexedTable :: table (Const Int)
+    indexedTable =
+      flip evalState 0 $
+      zipBeamFieldsM (\_ _ -> do
+                         n <- get
+                         put (n + 1)
+                         return (Columnar' (Const n)))
+        (tblSkeleton :: TableSkeleton table) (tblSkeleton :: TableSkeleton table)
+
+    primaryKeyIndices :: [ Int ]
+    primaryKeyIndices = allBeamValues (\(Columnar' (Const ix)) -> ix) (primaryKey indexedTable)
+
 -- | Use with 'set' to set a field to an explicit new value that does
 -- not depend on any other value
 toNewValue :: (forall s. QExpr be s a) -> QFieldAssignment be table a
 toNewValue newVal = toUpdatedValue (\_ -> newVal)
+
+-- | Use with 'set' to not modify the field
+toOldValue :: QFieldAssignment be table a
+toOldValue = toUpdatedValueMaybe (\_ -> Nothing)
 
 -- | Use with 'set' to set a field to a new value that is calculated
 -- based on one or more fields from the existing row
