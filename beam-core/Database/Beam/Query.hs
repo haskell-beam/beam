@@ -77,6 +77,8 @@ module Database.Beam.Query
     -- ** @UPDATE@
     , SqlUpdate(..)
     , update, save
+    , updateTable, set
+    , toNewValue, toUpdatedValue, toUpdatedValueMaybe
     , runUpdate
 
     -- ** @DELETE@
@@ -308,17 +310,18 @@ update (DatabaseEntity (DatabaseTable tblNm tblSettings)) mkAssignments mkWhere 
     tblFields = changeBeamRep (\(Columnar' (TableField name)) -> Columnar' (QField False tblNm name)) tblSettings
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
 
-updateOnly :: forall table db be
-            . ( BeamSqlBackend be , Beamable table )
-           => DatabaseEntity be db (TableEntity table)
-              -- ^ The table to update
-           -> table (QFieldAssignment be table)
-              -- ^ Updates to be made (use 'set' to construct an empty field)
-           -> (forall s. table (QExpr be s) -> QExpr be s Bool)
-           -> SqlUpdate be table
-updateOnly tblEntity assignments mkWhere =
-  let realAssignments :: forall s. table (QField s) -> QAssignment be s
-      realAssignments tblFields =
+-- | A specialization of 'update' that is more convenient for normal tables.
+updateTable :: forall table db be
+             . ( BeamSqlBackend be , Beamable table )
+            => DatabaseEntity be db (TableEntity table)
+               -- ^ The table to update
+            -> table (QFieldAssignment be table)
+               -- ^ Updates to be made (use 'set' to construct an empty field)
+            -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+            -> SqlUpdate be table
+updateTable tblEntity assignments mkWhere =
+  let mkAssignments :: forall s. table (QField s) -> QAssignment be s
+      mkAssignments tblFields =
         let tblExprs = changeBeamRep (\(Columnar' fd) -> Columnar' (current_ fd)) tblFields
         in execWriter $
            zipBeamFieldsM
@@ -330,7 +333,26 @@ updateOnly tblEntity assignments mkWhere =
                     tell (field <-. newValue)
                     pure c)
              tblFields assignments
-  in update tblEntity realAssignments mkWhere
+
+  in update tblEntity mkAssignments mkWhere
+
+set :: forall table be table'. Beamable table => table (QFieldAssignment be table')
+set = changeBeamRep (\_ -> Columnar' (QFieldAssignment (\_ -> Nothing))) (tblSkeleton :: TableSkeleton table)
+
+-- | Use with 'set' to set a field to an explicit new value that does
+-- not depend on any other value
+toNewValue :: (forall s. QExpr be s a) -> QFieldAssignment be table a
+toNewValue newVal = toUpdatedValue (\_ -> newVal)
+
+-- | Use with 'set' to set a field to a new value that is calculated
+-- based on one or more fields from the existing row
+toUpdatedValue :: (forall s. table (QExpr be s) -> QExpr be s a) -> QFieldAssignment be table a
+toUpdatedValue mkNewVal = toUpdatedValueMaybe (Just <$> mkNewVal)
+
+-- | Use with 'set' to optionally set a fiield to a new value,
+-- calculated based on one or more fields from the existing row
+toUpdatedValueMaybe :: (forall s. table (QExpr be s) -> Maybe (QExpr be s a)) -> QFieldAssignment be table a
+toUpdatedValueMaybe = QFieldAssignment
 
 -- | Generate a 'SqlUpdate' that will update the given table with the given value.
 --
