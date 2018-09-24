@@ -79,6 +79,7 @@ module Database.Beam.Query
     , update, save
     , updateTable, set
     , toNewValue, toUpdatedValue, toUpdatedValueMaybe
+    , updateRow, updateTableRow
     , runUpdate
 
     -- ** @DELETE@
