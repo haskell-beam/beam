@@ -415,7 +415,7 @@ toUpdatedValue mkNewVal = toUpdatedValueMaybe (Just <$> mkNewVal)
 toUpdatedValueMaybe :: (forall s. table (QExpr be s) -> Maybe (QExpr be s a)) -> QFieldAssignment be table a
 toUpdatedValueMaybe = QFieldAssignment
 
--- | Generate a 'SqlUpdate' that will update the given table with the given value.
+-- | Generate a 'SqlUpdate' that will update the given table row with the given value.
 --
 --   The SQL @UPDATE@ that is generated will set every non-primary key field for
 --   the row where each primary key field is exactly what is given.
@@ -435,20 +435,9 @@ save :: forall table be db.
      -> table Identity
         -- ^ Value to set to
      -> SqlUpdate be table
-save tbl@(DatabaseEntity (DatabaseTable _ tblSettings)) v =
-  update tbl (\(tblField :: table (QField s)) ->
-                execWriter $
-                zipBeamFieldsM
-                  (\(Columnar' field) c@(Columnar' value) ->
-                     do when (qFieldName field `notElem` primaryKeyFieldNames) $
-                          tell (field <-. value )
-                        pure c)
-                  tblField (val_ v :: table (QExpr be s)))
-             (\tblE -> primaryKey tblE ==. val_ (primaryKey v))
-
-  where
-    primaryKeyFieldNames =
-      allBeamValues (\(Columnar' (TableField fieldNm)) -> fieldNm) (primaryKey tblSettings)
+save tbl v =
+  updateTableRow tbl v
+    (setFieldsTo (val_ v))
 
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
 runUpdate :: (BeamSqlBackend be, MonadBeam be m)
