@@ -52,6 +52,7 @@ module Database.Beam.Postgres.Syntax
     , PgSelectLockingOptions(..)
     , fromPgSelectLockingClause
     , pgSelectStmt
+    , defaultPgValueSyntax
 
     , PgDataTypeDescr(..)
 
