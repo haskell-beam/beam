@@ -433,6 +433,7 @@ hsMkTableName toNameCase (TableName sch nm) =
         [] -> error "Empty schema name"
         x:xs -> toNameCase x:xs ++ "_" ++ T.unpack nm
 
+hsTableVarName, hsTableTypeName :: TableName -> String
 hsTableVarName = hsMkTableName toLower
 hsTableTypeName = hsMkTableName toUpper
 

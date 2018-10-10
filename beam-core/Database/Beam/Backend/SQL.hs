@@ -41,6 +41,7 @@ module Database.Beam.Backend.SQL
   , BeamSqlBackendAggregationQuantifierSyntax
   , BeamSqlBackendSetQuantifierSyntax
   , BeamSqlBackendFromSyntax
+  , BeamSqlBackendTableNameSyntax
 
   , BeamSqlBackendExpressionSyntax
   , BeamSqlBackendDataTypeSyntax
@@ -298,6 +299,7 @@ type BeamSqlBackendSetQuantifierSyntax be = Sql92SelectTableSetQuantifierSyntax 
 type BeamSqlBackendAggregationQuantifierSyntax be = Sql92AggregationSetQuantifierSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendSelectTableSyntax be = Sql92SelectSelectTableSyntax (BeamSqlBackendSelectSyntax be)
 type BeamSqlBackendFromSyntax be = Sql92SelectFromSyntax (BeamSqlBackendSelectSyntax be)
+type BeamSqlBackendTableNameSyntax be =  Sql92TableSourceTableNameSyntax (Sql92FromTableSourceSyntax (BeamSqlBackendFromSyntax be))
 type BeamSqlBackendOrderingSyntax be = Sql92SelectOrderingSyntax (BeamSqlBackendSelectSyntax be)
 type BeamSqlBackendGroupingSyntax be = Sql92SelectTableGroupingSyntax (BeamSqlBackendSelectTableSyntax be)
 

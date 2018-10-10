@@ -25,6 +25,7 @@ type Sql92SelectProjectionSyntax select = Sql92SelectTableProjectionSyntax (Sql9
 type Sql92SelectGroupingSyntax select = Sql92SelectTableGroupingSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92SelectFromSyntax select = Sql92SelectTableFromSyntax (Sql92SelectSelectTableSyntax select)
 type Sql92InsertExpressionSyntax select = Sql92InsertValuesExpressionSyntax (Sql92InsertValuesSyntax select)
+type Sql92TableNameSyntax select = Sql92TableSourceTableNameSyntax (Sql92FromTableSourceSyntax (Sql92SelectFromSyntax select))
 
 type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92ExpressionSyntax cmdSyntax)
 type Sql92ExpressionSyntax cmdSyntax = Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax)

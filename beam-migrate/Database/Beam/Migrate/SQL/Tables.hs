@@ -34,6 +34,7 @@ module Database.Beam.Migrate.SQL.Tables
 import Database.Beam
 import Database.Beam.Schema.Tables
 import Database.Beam.Backend.SQL
+import Database.Beam.Query.Internal (tableNameFromEntity)
 
 import Database.Beam.Migrate.Types
 import Database.Beam.Migrate.Checks
@@ -93,7 +94,7 @@ dropTable :: BeamMigrateSqlBackend be
           => CheckedDatabaseEntity be db (TableEntity table)
           -> Migration be ()
 dropTable (CheckedDatabaseEntity (CheckedDatabaseTable dt _ _) _) =
-  let command = dropTableCmd (dropTableSyntax (tableNameFromTableEntity dt))
+  let command = dropTableCmd (dropTableSyntax (tableNameFromEntity dt))
   in upDown command Nothing
 
 -- | Copy a table schema from one database to another
@@ -111,7 +112,7 @@ data ColumnMigration a
 
 -- | Monad representing a series of @ALTER TABLE@ statements
 newtype TableMigration be a
-  = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (Text, [TableCheck])) a)
+  = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (Sql92TableNameSyntax be, [TableCheck])) a)
   deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
