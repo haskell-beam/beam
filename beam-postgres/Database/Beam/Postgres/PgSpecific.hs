@@ -403,7 +403,7 @@ instance PgIsArrayContext QWindowingContext
 -- containing expressions.
 array_ :: forall context f s a.
           (PgIsArrayContext context, Foldable f)
-       => f (QGenExpr PgArrayValueContext PgExpressionSyntax s a)
+       => f (QGenExpr context PgExpressionSyntax s a)
        -> QGenExpr context PgExpressionSyntax s (V.Vector a)
 array_ vs =
   QExpr $ fmap (PgExpressionSyntax . mkArraySyntax (Proxy @context) . mconcat) $

@@ -52,6 +52,7 @@ module Database.Beam.Postgres.Syntax
     , PgSelectLockingOptions(..)
     , fromPgSelectLockingClause
     , pgSelectStmt
+    , defaultPgValueSyntax
 
     , PgDataTypeDescr(..)
 
@@ -1145,6 +1146,9 @@ instance HasSqlValueSyntax PgValueSyntax B.ByteString where
 
 instance HasSqlValueSyntax PgValueSyntax BL.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
+
+instance Pg.ToField a => HasSqlValueSyntax PgValueSyntax (V.Vector a) where
+  sqlValueSyntax = defaultPgValueSyntax
 
 pgQuotedIdentifier :: T.Text -> PgSyntax
 pgQuotedIdentifier t =
