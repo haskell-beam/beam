@@ -23,6 +23,7 @@ library
                       Database.Beam.Sqlite.Syntax
                       Database.Beam.Sqlite.Connection
                       Database.Beam.Sqlite.Migrate
+  other-modules:      Database.Beam.Sqlite.SqliteSpecific
   build-depends:      base          >=4.7  && <5,
 
                       beam-core     >=0.7  && <0.8,
