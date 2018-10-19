@@ -1390,3 +1390,7 @@ instance HasSqlEqualityCheck PgExpressionSyntax a =>
   HasSqlEqualityCheck PgExpressionSyntax (Tagged t a)
 instance HasSqlQuantifiedEqualityCheck PgExpressionSyntax a =>
   HasSqlQuantifiedEqualityCheck PgExpressionSyntax (Tagged t a)
+
+instance HasDefaultSqlDataTypeConstraints PgColumnSchemaSyntax UTCTime
+instance HasDefaultSqlDataType PgDataTypeSyntax UTCTime where
+    defaultSqlDataType _ _ = timestampType Nothing True
