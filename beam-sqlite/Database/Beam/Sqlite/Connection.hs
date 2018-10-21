@@ -163,8 +163,8 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
               ro <- ask
               st <- get
               case runStateT (runReaderT (unRP field) ro) st of
-                Ok (a, _) -> unRP (next (Just a))
-                _ -> unRP (next Nothing)
+                Ok (a, _) -> unRP (next (Right a))
+                Errors exL -> unRP (next (Left exL))
         step (CheckNextNNull n next) =
             RP $ do
               ro <- ask

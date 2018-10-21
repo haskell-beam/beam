@@ -23,7 +23,7 @@ module Database.Beam.Postgres.Connection
 
   , postgresUriSyntax ) where
 
-import           Control.Exception (Exception, throwIO)
+import           Control.Exception (Exception, SomeException, throwIO)
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
 
@@ -127,10 +127,11 @@ data PgRowReadError
       -- ^ We attempted to read more columns than postgres returned. First
       -- argument is the zero-based index of the column we attempted to read,
       -- and the second is the total number of columns
-    | PgRowCouldNotParseField !CInt
+    | PgRowCouldNotParseField !CInt [SomeException]
       -- ^ There was an error while parsing the field. The first argument gives
       -- the zero-based index of the column that could not have been
-      -- parsed. This is usually caused by your Haskell schema type being
+      -- parsed. The second argument contains the exception(s) behind the error.
+      -- This is usually caused by your Haskell schema type being
       -- incompatible with the one in the database.
     deriving Show
 
@@ -155,20 +156,20 @@ runPgRowReader conn rowIdx res fields readRow =
     step (ParseOneField _) curCol colCount _
       | curCol >= colCount = pure (Left (PgRowReadNoMoreColumns curCol colCount))
     step (ParseOneField next) curCol colCount remainingFields =
-      let next' Nothing _ _ _ = pure (Left (PgRowCouldNotParseField curCol))
-          next' (Just {}) _ _ [] = fail "Internal error"
-          next' (Just x) curCol' colCount' (_:remainingFields') = next x (curCol' + 1) colCount' remainingFields'
+      let next' (Left exL) _ _ _ = pure (Left (PgRowCouldNotParseField curCol exL))
+          next' (Right {}) _ _ [] = fail "Internal error"
+          next' (Right x) curCol' colCount' (_:remainingFields') = next x (curCol' + 1) colCount' remainingFields'
       in step (PeekField next') curCol colCount remainingFields
 
-    step (PeekField next) curCol colCount [] = next Nothing curCol colCount []
+    step (PeekField next) curCol colCount [] = next (Left []) curCol colCount []
     step (PeekField next) curCol colCount remainingFields
-      | curCol >= colCount = next Nothing curCol colCount remainingFields
+      | curCol >= colCount = next (Left []) curCol colCount remainingFields
     step (PeekField next) curCol colCount remainingFields@(field:_) =
       do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
          res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res' of
-           Pg.Errors {} -> next Nothing curCol colCount remainingFields
-           Pg.Ok x -> next (Just x) curCol colCount remainingFields
+           Pg.Errors exL -> next (Left exL) curCol colCount remainingFields
+           Pg.Ok x -> next (Right x) curCol colCount remainingFields
 
     step (CheckNextNNull n next) curCol colCount remainingFields =
       doCheckNextN (fromIntegral n) (curCol :: CInt) (colCount :: CInt) remainingFields >>= \yes ->

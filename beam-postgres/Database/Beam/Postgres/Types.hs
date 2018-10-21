@@ -49,7 +49,8 @@ instance Pg.FromField SqlNull where
 
 fromScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
 fromScientificOrIntegral = do
-  sciVal <- fmap (toBoundedInteger =<<) peekField
+  let eitherToMaybe = either (const Nothing) Just
+  sciVal <- fmap (toBoundedInteger =<<) (eitherToMaybe <$> peekField)
   case sciVal of
     Just sciVal' -> do
       -- If the parse succeeded, consume the field
@@ -65,10 +66,10 @@ fromPgIntegral :: forall a
 fromPgIntegral = do
   val <- peekField
   case val of
-    Just val' -> do
+    Right val' -> do
       _ <- parseOneField @Postgres @a
       pure val'
-    Nothing -> do
+    Left _ -> do
       val' <- parseOneField @Postgres @Integer
       let val'' = fromIntegral val'
       if fromIntegral val'' == val'
@@ -112,16 +113,16 @@ instance FromBackendRow Postgres LocalTime where
   fromBackendRow =
     peekField >>=
     \case
-      Just (_ :: LocalTime) -> parseOneField
+      Right (_ :: LocalTime) -> parseOneField
 
       -- Also accept 'TIMESTAMP WITH TIME ZONE'. Considered as
       -- 'LocalTime', because postgres always returns times in the
       -- server timezone, regardless of type.
-      Nothing ->
+      Left _ ->
         peekField >>=
         \case
-          Just (_ :: ZonedTime) -> zonedTimeToLocalTime <$> parseOneField
-          Nothing -> fail "'TIMESTAMP WITH TIME ZONE' or 'TIMESTAMP WITHOUT TIME ZONE' required for LocalTime"
+          Right (_ :: ZonedTime) -> zonedTimeToLocalTime <$> parseOneField
+          Left _ -> fail "'TIMESTAMP WITH TIME ZONE' or 'TIMESTAMP WITHOUT TIME ZONE' required for LocalTime"
 instance FromBackendRow Postgres TimeOfDay
 instance FromBackendRow Postgres Day
 instance FromBackendRow Postgres UUID
@@ -140,8 +141,8 @@ instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a) wher
     fromBackendRow = do
       isNull <- peekField
       case isNull of
-        Just SqlNull -> pure mempty
-        Nothing -> parseOneField @Postgres @(Vector a)
+        Right SqlNull -> pure mempty
+        Left _ -> parseOneField @Postgres @(Vector a)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGArray a)
 instance FromBackendRow Postgres (Pg.Binary ByteString)
 instance FromBackendRow Postgres (Pg.Binary BL.ByteString)

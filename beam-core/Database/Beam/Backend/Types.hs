@@ -15,6 +15,7 @@ module Database.Beam.Backend.Types
 
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
+import           Control.Exception (SomeException)
 import           Data.Tagged
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
@@ -32,7 +33,7 @@ class BeamBackend be where
 
 data FromBackendRowF be f where
   ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
-  PeekField :: BackendFromField be a => (Maybe a -> f) -> FromBackendRowF be f
+  PeekField :: BackendFromField be a => (Either [SomeException] a -> f) -> FromBackendRowF be f
   CheckNextNNull :: Int -> (Bool -> f) -> FromBackendRowF be f
 deriving instance Functor (FromBackendRowF be)
 type FromBackendRowM be = F (FromBackendRowF be)
@@ -40,7 +41,7 @@ type FromBackendRowM be = F (FromBackendRowF be)
 parseOneField :: BackendFromField be a => FromBackendRowM be a
 parseOneField = liftF (ParseOneField id)
 
-peekField :: BackendFromField be a => FromBackendRowM be (Maybe a)
+peekField :: BackendFromField be a => FromBackendRowM be (Either [SomeException] a)
 peekField = liftF (PeekField id)
 
 checkNextNNull :: Int -> FromBackendRowM be Bool
