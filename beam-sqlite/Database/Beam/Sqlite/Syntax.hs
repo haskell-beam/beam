@@ -21,6 +21,9 @@ module Database.Beam.Sqlite.Syntax
   , SqliteInsertValuesSyntax(..)
   , SqliteColumnSchemaSyntax(..)
   , SqliteExpressionSyntax(..), SqliteValueSyntax(..)
+  , SqliteAggregationSetQuantifierSyntax(..)
+
+  , fromSqliteExpression
 
     -- * SQLite data type syntax
   , SqliteDataTypeSyntax(..)
@@ -30,7 +33,7 @@ module Database.Beam.Sqlite.Syntax
     -- * Building and consuming 'SqliteSyntax'
   , fromSqliteCommand, formatSqliteInsert
 
-  , emit, emitValue
+  , emit, emitValue, parens
 
   , sqliteEscape, withPlaceholders
   , sqliteRenderSyntaxScript
