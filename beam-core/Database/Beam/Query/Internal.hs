@@ -120,8 +120,8 @@ data QNested s
 data QField s ty
   = QField
   { qFieldShouldQualify :: Bool
-  , qFieldTblName :: T.Text
-  , qFieldName    :: T.Text }
+  , qFieldTblName       :: T.Text
+  , qFieldName          :: T.Text }
   deriving (Show, Eq, Ord)
 
 newtype QAssignment be s
@@ -660,4 +660,5 @@ mkFieldNames mkField =
 tableNameFromEntity :: IsSql92TableNameSyntax name
                     => DatabaseEntityDescriptor be (TableEntity tbl)
                     -> name
+
 tableNameFromEntity = tableName <$> dbTableSchema <*> dbTableCurrentName

@@ -7,6 +7,7 @@ import Database.Beam
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate
 import Database.Beam.Migrate.Backend
+import Database.Beam.Migrate.Types.Predicates (QualifiedName(..))
 
 import Control.Monad (when)
 
@@ -165,7 +166,7 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
 
     cleanAndCreateSchema = do
       cs <- getCs
-      let migrationLogExists = any (== p (TableExistsPredicate "beam_migration")) cs
+      let migrationLogExists = any (== p (TableExistsPredicate (QualifiedName Nothing "beam_migration"))) cs
 
       when migrationLogExists $ do
         Just totalCnt <-
@@ -173,9 +174,9 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
           aggregate_ (\_ -> as_ @Int countAll_) $
           all_ (_beamMigrateLogEntries (beamMigrateDb @be @m))
         when (totalCnt > 0) (fail "beam-migrate: No versioning information, but log entries present")
-        runNoReturn (dropTableCmd (dropTableSyntax "beam_migration"))
+        runNoReturn (dropTableCmd (dropTableSyntax (tableName Nothing "beam_migration")))
 
-      runNoReturn (dropTableCmd (dropTableSyntax "beam_version"))
+      runNoReturn (dropTableCmd (dropTableSyntax (tableName Nothing "beam_version")))
 
       createSchema
 
@@ -186,4 +187,4 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
 checkForBackendTables :: BeamMigrationBackend be m -> m Bool
 checkForBackendTables BeamMigrationBackend { backendGetDbConstraints = getCs } =
   do cs <- getCs
-     pure (any (== p (TableExistsPredicate "beam_version")) cs)
+     pure (any (== p (TableExistsPredicate (QualifiedName Nothing "beam_version"))) cs)

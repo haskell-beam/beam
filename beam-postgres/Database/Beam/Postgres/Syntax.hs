@@ -30,7 +30,7 @@ module Database.Beam.Postgres.Syntax
     , PgDeleteSyntax(..)
     , PgUpdateSyntax(..)
 
-    , PgExpressionSyntax(..), PgFromSyntax(..)
+    , PgExpressionSyntax(..), PgFromSyntax(..), PgTableNameSyntax(..)
     , PgComparisonQuantifierSyntax(..)
     , PgExtractFieldSyntax(..)
     , PgProjectionSyntax(..), PgGroupingSyntax(..)
@@ -244,6 +244,7 @@ newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax }
 newtype PgAggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fromPgAggregationSetQuantifier :: PgSyntax }
 newtype PgSelectSetQuantifierSyntax = PgSelectSetQuantifierSyntax { fromPgSelectSetQuantifier :: PgSyntax }
 newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
+newtype PgTableNameSyntax = PgTableNameSyntax { fromPgTableName :: PgSyntax }
 newtype PgComparisonQuantifierSyntax = PgComparisonQuantifierSyntax { fromPgComparisonQuantifier :: PgSyntax }
 newtype PgExtractFieldSyntax = PgExtractFieldSyntax { fromPgExtractField :: PgSyntax }
 newtype PgProjectionSyntax = PgProjectionSyntax { fromPgProjection :: PgSyntax }
@@ -404,13 +405,18 @@ instance IsSql92DdlCommandSyntax PgCommandSyntax where
   dropTableCmd   = PgCommandSyntax PgCommandTypeDdl . coerce
   alterTableCmd  = PgCommandSyntax PgCommandTypeDdl . coerce
 
+instance IsSql92TableNameSyntax PgTableNameSyntax where
+  tableName Nothing t = PgTableNameSyntax (pgQuotedIdentifier t)
+  tableName (Just s) t = PgTableNameSyntax (pgQuotedIdentifier s <> emit "." <> pgQuotedIdentifier t)
+
 instance IsSql92UpdateSyntax PgUpdateSyntax where
   type Sql92UpdateFieldNameSyntax PgUpdateSyntax = PgFieldNameSyntax
   type Sql92UpdateExpressionSyntax PgUpdateSyntax = PgExpressionSyntax
+  type Sql92UpdateTableNameSyntax PgUpdateSyntax = PgTableNameSyntax
 
   updateStmt tbl fields where_ =
     PgUpdateSyntax $
-    emit "UPDATE " <> pgQuotedIdentifier tbl <>
+    emit "UPDATE " <> fromPgTableName tbl <>
     (case fields of
        [] -> mempty
        fields ->
@@ -420,10 +426,11 @@ instance IsSql92UpdateSyntax PgUpdateSyntax where
 
 instance IsSql92DeleteSyntax PgDeleteSyntax where
   type Sql92DeleteExpressionSyntax PgDeleteSyntax = PgExpressionSyntax
+  type Sql92DeleteTableNameSyntax PgDeleteSyntax = PgTableNameSyntax
 
   deleteStmt tbl alias where_ =
     PgDeleteSyntax $
-    emit "DELETE FROM " <> pgQuotedIdentifier tbl <>
+    emit "DELETE FROM " <> fromPgTableName tbl <>
     maybe mempty (\alias_ -> emit " AS " <> pgQuotedIdentifier alias_) alias <>
     maybe mempty (\where_ -> emit " WHERE " <> fromPgExpression where_) where_
 
@@ -925,8 +932,9 @@ instance IsSql92FieldNameSyntax PgFieldNameSyntax where
 instance IsSql92TableSourceSyntax PgTableSourceSyntax where
   type Sql92TableSourceSelectSyntax PgTableSourceSyntax = PgSelectSyntax
   type Sql92TableSourceExpressionSyntax PgTableSourceSyntax = PgExpressionSyntax
+  type Sql92TableSourceTableNameSyntax PgTableSourceSyntax = PgTableNameSyntax
 
-  tableNamed = PgTableSourceSyntax . pgQuotedIdentifier
+  tableNamed = PgTableSourceSyntax . fromPgTableName
   tableFromSubSelect s = PgTableSourceSyntax $ emit "(" <> fromPgSelect s <> emit ")"
   tableFromValues vss = PgTableSourceSyntax . pgParens $
                         emit "VALUES " <>
@@ -944,11 +952,12 @@ instance IsSql92ProjectionSyntax PgProjectionSyntax where
                                  maybe mempty (\nm -> emit " AS " <> pgQuotedIdentifier nm) nm) exprs)
 
 instance IsSql92InsertSyntax PgInsertSyntax where
+  type Sql92InsertTableNameSyntax PgInsertSyntax = PgTableNameSyntax
   type Sql92InsertValuesSyntax PgInsertSyntax = PgInsertValuesSyntax
 
   insertStmt tblName fields values =
       PgInsertSyntax $
-      emit "INSERT INTO " <> pgQuotedIdentifier tblName <> emit "(" <>
+      emit "INSERT INTO " <> fromPgTableName tblName <> emit "(" <>
       pgSepBy (emit ", ") (map pgQuotedIdentifier fields) <>
       emit ") " <> fromPgInsertValues values
 
@@ -965,16 +974,19 @@ instance IsSql92InsertValuesSyntax PgInsertValuesSyntax where
   insertFromSql (PgSelectSyntax a) = PgInsertValuesSyntax a
 
 instance IsSql92DropTableSyntax PgDropTableSyntax where
+  type Sql92DropTableTableNameSyntax PgDropTableSyntax = PgTableNameSyntax
+
   dropTableSyntax tblNm =
     PgDropTableSyntax $
-    emit "DROP TABLE " <> pgQuotedIdentifier tblNm
+    emit "DROP TABLE " <> fromPgTableName tblNm
 
 instance IsSql92AlterTableSyntax PgAlterTableSyntax where
   type Sql92AlterTableAlterTableActionSyntax PgAlterTableSyntax = PgAlterTableActionSyntax
+  type Sql92AlterTableTableNameSyntax PgAlterTableSyntax = PgTableNameSyntax
 
   alterTableSyntax tblNm action =
     PgAlterTableSyntax $
-    emit "ALTER TABLE " <> pgQuotedIdentifier tblNm <> emit " " <> fromPgAlterTableAction action
+    emit "ALTER TABLE " <> fromPgTableName tblNm <> emit " " <> fromPgAlterTableAction action
 
 instance IsSql92AlterTableActionSyntax PgAlterTableActionSyntax where
   type Sql92AlterTableAlterColumnActionSyntax PgAlterTableActionSyntax = PgAlterColumnActionSyntax
@@ -1005,6 +1017,7 @@ instance IsSql92AlterColumnActionSyntax PgAlterColumnActionSyntax where
   setNotNullSyntax = PgAlterColumnActionSyntax (emit "SET NOT NULL")
 
 instance IsSql92CreateTableSyntax PgCreateTableSyntax where
+  type Sql92CreateTableTableNameSyntax PgCreateTableSyntax = PgTableNameSyntax
   type Sql92CreateTableColumnSchemaSyntax PgCreateTableSyntax = PgColumnSchemaSyntax
   type Sql92CreateTableTableConstraintSyntax PgCreateTableSyntax = PgTableConstraintSyntax
   type Sql92CreateTableOptionsSyntax PgCreateTableSyntax = PgTableOptionsSyntax
@@ -1017,7 +1030,7 @@ instance IsSql92CreateTableSyntax PgCreateTableSyntax where
               ( emit " " <> before <> emit " "
               , emit " " <> after <> emit " " )
     in PgCreateTableSyntax $
-       emit "CREATE" <> beforeOptions <> emit "TABLE " <> pgQuotedIdentifier tblNm <>
+       emit "CREATE" <> beforeOptions <> emit "TABLE " <> fromPgTableName tblNm <>
        emit " (" <>
        pgSepBy (emit ", ")
                (map (\(nm, type_) -> pgQuotedIdentifier nm <> emit " " <> fromPgColumnSchema type_)  fieldTypes <>

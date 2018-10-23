@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing#-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -21,6 +22,7 @@ module Database.Beam.Sqlite.Syntax
   , SqliteInsertValuesSyntax(..)
   , SqliteColumnSchemaSyntax(..)
   , SqliteExpressionSyntax(..), SqliteValueSyntax(..)
+  , SqliteTableNameSyntax(..)
 
     -- * SQLite data type syntax
   , SqliteDataTypeSyntax(..)
@@ -181,9 +183,9 @@ newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSynt
 -- into 'SqliteSyntax'.
 data SqliteInsertSyntax
   = SqliteInsertSyntax
-  { sqliteInsertTable :: T.Text
+  { sqliteInsertTable  :: !SqliteTableNameSyntax
   , sqliteInsertFields :: [ T.Text ]
-  , sqliteInsertValues :: SqliteInsertValuesSyntax
+  , sqliteInsertValues :: !SqliteInsertValuesSyntax
   }
 
 -- | SQLite @UPDATE@ syntax
@@ -276,6 +278,7 @@ newtype SqliteAlterTableSyntax = SqliteAlterTableSyntax { fromSqliteAlterTable :
 newtype SqliteAlterTableActionSyntax = SqliteAlterTableActionSyntax { fromSqliteAlterTableAction :: Maybe SqliteSyntax }
 newtype SqliteAlterColumnActionSyntax = SqliteAlterColumnActionSyntax { fromSqliteAlterColumnAction :: Maybe SqliteSyntax }
 newtype SqliteDropTableSyntax = SqliteDropTableSyntax { fromSqliteDropTable :: SqliteSyntax }
+newtype SqliteTableNameSyntax = SqliteTableNameSyntax { fromSqliteTableName :: SqliteSyntax }
 
 fromSqliteExpression :: SqliteExpressionSyntax -> SqliteSyntax
 fromSqliteExpression (SqliteExpressionSyntax s) = s
@@ -286,9 +289,9 @@ sqliteExpressionSerialized = BeamSerializedExpression . TE.decodeUtf8 . BL.toStr
                              sqliteRenderSyntaxScript . fromSqliteExpression
 
 -- | Format a SQLite @INSERT@ expression for the given table name, fields, and values.
-formatSqliteInsert :: T.Text -> [ T.Text ] -> SqliteInsertValuesSyntax -> SqliteSyntax
+formatSqliteInsert :: SqliteTableNameSyntax -> [ T.Text ] -> SqliteInsertValuesSyntax -> SqliteSyntax
 formatSqliteInsert tblNm fields values =
-  emit "INSERT INTO " <> quotedIdentifier tblNm <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
+  emit "INSERT INTO " <> fromSqliteTableName tblNm <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
   case values of
     SqliteInsertFromSql (SqliteSelectSyntax select) -> select
     SqliteInsertExpressions es ->
@@ -314,17 +317,25 @@ instance IsSql92DdlCommandSyntax SqliteCommandSyntax where
   alterTableCmd = SqliteCommandSyntax . fromSqliteAlterTable
   dropTableCmd = SqliteCommandSyntax . fromSqliteDropTable
 
+instance IsSql92TableNameSyntax SqliteTableNameSyntax where
+  -- SQLite doesn't have schemas proper, but it does have attached databases, which is what we use here
+  tableName Nothing tbl = SqliteTableNameSyntax (quotedIdentifier tbl)
+  tableName (Just sch) tbl = SqliteTableNameSyntax (quotedIdentifier sch <> emit "." <> quotedIdentifier tbl)
+
 instance IsSql92DropTableSyntax SqliteDropTableSyntax where
-  dropTableSyntax nm = SqliteDropTableSyntax (emit "DROP TABLE " <> quotedIdentifier nm)
+  type Sql92DropTableTableNameSyntax SqliteDropTableSyntax = SqliteTableNameSyntax
+
+  dropTableSyntax nm = SqliteDropTableSyntax (emit "DROP TABLE " <> fromSqliteTableName nm)
 
 instance IsSql92AlterTableSyntax SqliteAlterTableSyntax where
   type Sql92AlterTableAlterTableActionSyntax SqliteAlterTableSyntax = SqliteAlterTableActionSyntax
+  type Sql92AlterTableTableNameSyntax SqliteAlterTableSyntax = SqliteTableNameSyntax
 
   alterTableSyntax nm action =
     SqliteAlterTableSyntax $
     case fromSqliteAlterTableAction action of
       Just alterTable ->
-        emit "ALTER TABLE " <> quotedIdentifier nm <> emit " " <> alterTable
+        emit "ALTER TABLE " <> fromSqliteTableName nm <> emit " " <> alterTable
       Nothing ->
         emit "SELECT 1"
 
@@ -436,6 +447,7 @@ instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
   type Sql92CreateTableColumnSchemaSyntax SqliteCreateTableSyntax = SqliteColumnSchemaSyntax
   type Sql92CreateTableTableConstraintSyntax SqliteCreateTableSyntax = SqliteTableConstraintSyntax
   type Sql92CreateTableOptionsSyntax SqliteCreateTableSyntax = SqliteTableOptionsSyntax
+  type Sql92CreateTableTableNameSyntax SqliteCreateTableSyntax = SqliteTableNameSyntax
 
   createTableSyntax _ nm fields constraints =
     let fieldDefs = map mkFieldDef fields
@@ -451,7 +463,7 @@ instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
 
         createWithConstraints constraintDefs' =
           SqliteCreateTableSyntax $
-          emit "CREATE TABLE " <> quotedIdentifier nm <> parens (commas (fieldDefs <> constraintDefs'))
+          emit "CREATE TABLE " <> fromSqliteTableName nm <> parens (commas (fieldDefs <> constraintDefs'))
         normalCreateTable = createWithConstraints constraintDefs
         createTableNoPkConstraint = createWithConstraints noPkConstraintDefs
 
@@ -631,10 +643,11 @@ instance IsSql92FieldNameSyntax SqliteFieldNameSyntax where
     quotedIdentifier a
 
 instance IsSql92TableSourceSyntax SqliteTableSourceSyntax where
+  type Sql92TableSourceTableNameSyntax SqliteTableSourceSyntax = SqliteTableNameSyntax
   type Sql92TableSourceSelectSyntax SqliteTableSourceSyntax = SqliteSelectSyntax
   type Sql92TableSourceExpressionSyntax SqliteTableSourceSyntax = SqliteExpressionSyntax
 
-  tableNamed = SqliteTableSourceSyntax . quotedIdentifier
+  tableNamed = SqliteTableSourceSyntax . fromSqliteTableName
   tableFromSubSelect s =
     SqliteTableSourceSyntax (parens (fromSqliteSelect s))
   tableFromValues vss = SqliteTableSourceSyntax . parens $
@@ -833,6 +846,7 @@ instance IsSql92AggregationSetQuantifierSyntax SqliteAggregationSetQuantifierSyn
   setQuantifierAll = SqliteAggregationSetQuantifierSyntax (emit "ALL")
 
 instance IsSql92InsertSyntax SqliteInsertSyntax where
+  type Sql92InsertTableNameSyntax SqliteInsertSyntax = SqliteTableNameSyntax
   type Sql92InsertValuesSyntax SqliteInsertSyntax = SqliteInsertValuesSyntax
 
   insertStmt = SqliteInsertSyntax
@@ -845,12 +859,13 @@ instance IsSql92InsertValuesSyntax SqliteInsertValuesSyntax where
   insertFromSql = SqliteInsertFromSql
 
 instance IsSql92UpdateSyntax SqliteUpdateSyntax where
+  type Sql92UpdateTableNameSyntax SqliteUpdateSyntax = SqliteTableNameSyntax
   type Sql92UpdateFieldNameSyntax SqliteUpdateSyntax = SqliteFieldNameSyntax
   type Sql92UpdateExpressionSyntax SqliteUpdateSyntax = SqliteExpressionSyntax
 
   updateStmt tbl fields where_ =
     SqliteUpdateSyntax $
-    emit "UPDATE " <> quotedIdentifier tbl <>
+    emit "UPDATE " <> fromSqliteTableName tbl <>
     (case fields of
        [] -> mempty
        _ -> emit " SET " <>
@@ -858,11 +873,12 @@ instance IsSql92UpdateSyntax SqliteUpdateSyntax where
     maybe mempty (\where_ -> emit " WHERE " <> fromSqliteExpression where_) where_
 
 instance IsSql92DeleteSyntax SqliteDeleteSyntax where
+  type Sql92DeleteTableNameSyntax SqliteDeleteSyntax = SqliteTableNameSyntax
   type Sql92DeleteExpressionSyntax SqliteDeleteSyntax = SqliteExpressionSyntax
 
   deleteStmt tbl Nothing where_ =
     SqliteDeleteSyntax $
-    emit "DELETE FROM " <> quotedIdentifier tbl <>
+    emit "DELETE FROM " <> fromSqliteTableName tbl <>
     maybe mempty (\where_ -> emit " WHERE " <> fromSqliteExpression where_) where_
   deleteStmt _ (Just _) _ =
       error "beam-sqlite: invariant failed: DELETE must not have a table alias"

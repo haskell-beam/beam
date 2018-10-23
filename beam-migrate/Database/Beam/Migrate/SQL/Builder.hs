@@ -83,13 +83,13 @@ instance IsSql92CreateTableSyntax SqlSyntaxBuilder where
   type Sql92CreateTableTableConstraintSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92CreateTableOptionsSyntax SqlSyntaxBuilder = SqlSyntaxBuilderCreateTableOptions
 
-  createTableSyntax tableOptions tableName fieldSchemas constraints =
+  createTableSyntax tableOptions tblName fieldSchemas constraints =
       SqlSyntaxBuilder $
       byteString "CREATE " <>
       maybe mempty (\b -> buildSql b <> byteString " ") beforeOptions <>
       byteString " TABLE " <>
 
-      buildSql tableName <>
+      buildSql tblName <>
 
       byteString "(" <>
       buildSepBy (byteString ", ")

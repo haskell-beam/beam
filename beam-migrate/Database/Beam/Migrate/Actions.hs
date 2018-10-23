@@ -94,6 +94,7 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Types
+import           Database.Beam.Migrate.Types.Predicates (qnameAsText, qnameAsTableName)
 
 import           Control.Applicative
 import           Control.DeepSeq
@@ -324,7 +325,7 @@ createTableActionProvider =
            pure (primaryKeyP, primaryKey)
 
          let postConditions = [ p tblP, p primaryKeyP ] ++ concat columnsP
-             cmd = createTableCmd (createTableSyntax Nothing postTblNm colsSyntax tblConstraints)
+             cmd = createTableCmd (createTableSyntax Nothing (qnameAsTableName postTblNm) colsSyntax tblConstraints)
              tblConstraints = if null primaryKey then [] else [ primaryKeyConstraintSyntax primaryKey ]
              colsSyntax = map (\(colNm, type_, cs) -> (colNm, columnSchemaSyntax type_ Nothing cs Nothing)) columns
          pure (PotentialAction mempty (HS.fromList postConditions)
@@ -352,11 +353,11 @@ dropTableActionProvider =
                     pure p'
 
         -- Now, collect all preconditions that may be related to the dropped table
-        let cmd = dropTableCmd (dropTableSyntax preTblNm)
+        let cmd = dropTableCmd (dropTableSyntax (qnameAsTableName preTblNm))
         pure ({-trace ("Dropping table " <> show preTblNm <> " would drop " <> show relatedPreds) $ -}
               PotentialAction (HS.fromList (SomeDatabasePredicate tblP:relatedPreds)) mempty
                               (Seq.singleton (MigrationCommand cmd MigrationLosesData))
-                              ("Drop table " <> preTblNm) dropTableWeight)
+                              ("Drop table " <> qnameAsText preTblNm) dropTableWeight)
 
 -- | Action provider for SQL92 @ALTER TABLE ... ADD COLUMN ...@ actions
 addColumnProvider :: forall be
@@ -376,12 +377,12 @@ addColumnProvider =
              findPreConditions
            guard (tblNm'' == tblNm && colNm == colNm') -- This column exists as a different type
 
-         let cmd = alterTableCmd (alterTableSyntax tblNm (addColumnSyntax colNm schema))
+         let cmd = alterTableCmd (alterTableSyntax (qnameAsTableName tblNm) (addColumnSyntax colNm schema))
              schema = columnSchemaSyntax colType Nothing [] Nothing
          pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate colP])
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
-                               ("Add column " <> colNm <> " to " <> tblNm)
-                (addColumnWeight + fromIntegral (T.length tblNm + T.length colNm)))
+                               ("Add column " <> colNm <> " to " <> qnameAsText tblNm)
+                (addColumnWeight + fromIntegral (T.length (qnameAsText tblNm) + T.length colNm)))
 
 -- | Action provider for SQL92 @ALTER TABLE ... DROP COLUMN ...@ actions
 dropColumnProvider :: forall be
@@ -406,11 +407,11 @@ dropColumnProvider = ActionProvider provider
                      guard (pred' `predicateCascadesDropOn` colP)
                      pure p'
 
-         let cmd = alterTableCmd (alterTableSyntax tblNm (dropColumnSyntax colNm))
+         let cmd = alterTableCmd (alterTableSyntax (qnameAsTableName tblNm) (dropColumnSyntax colNm))
          pure (PotentialAction (HS.fromList (SomeDatabasePredicate colP:relatedPreds)) mempty
                                (Seq.singleton (MigrationCommand cmd MigrationLosesData))
-                               ("Drop column " <> colNm <> " from " <> tblNm)
-                (dropColumnWeight + fromIntegral (T.length tblNm + T.length colNm)))
+                               ("Drop column " <> colNm <> " from " <> qnameAsText tblNm)
+                (dropColumnWeight + fromIntegral (T.length (qnameAsText tblNm) + T.length colNm)))
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET NULL@
 addColumnNullProvider :: forall be
@@ -431,10 +432,10 @@ addColumnNullProvider = ActionProvider provider
            findPreConditions
          guard (tblNm == tblNm'' && colNm == colNm')
 
-         let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNotNullSyntax))
+         let cmd = alterTableCmd (alterTableSyntax (qnameAsTableName tblNm) (alterColumnSyntax colNm setNotNullSyntax))
          pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate colP])
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
-                               ("Add not null constraint to " <> colNm <> " on " <> tblNm) 100)
+                               ("Add not null constraint to " <> colNm <> " on " <> qnameAsText tblNm) 100)
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET  NOT NULL@
 dropColumnNullProvider :: forall be
@@ -455,10 +456,10 @@ dropColumnNullProvider = ActionProvider provider
            findPreConditions
          guard (tblNm == tblNm'' && colNm == colNm')
 
-         let cmd = alterTableCmd (alterTableSyntax tblNm (alterColumnSyntax colNm setNullSyntax))
+         let cmd = alterTableCmd (alterTableSyntax (qnameAsTableName tblNm) (alterColumnSyntax colNm setNullSyntax))
          pure (PotentialAction (HS.fromList [SomeDatabasePredicate colP]) mempty
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
-                               ("Drop not null constraint for " <> colNm <> " on " <> tblNm) 100)
+                               ("Drop not null constraint for " <> colNm <> " on " <> qnameAsText tblNm) 100)
 
 -- | Default action providers for any SQL92 compliant syntax.
 --

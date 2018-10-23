@@ -358,7 +358,7 @@ runInsertReturningList (SqliteInsertReturning nm insertStmt_) =
 #error Need either POSIX or Win32 API for MonadBeamInsertReturning
 #endif
 
-       let tableNameTxt = T.decodeUtf8 (BL.toStrict (sqliteRenderSyntaxScript (fromSqliteTableName nm)))
+  let tableNameTxt = T.decodeUtf8 (BL.toStrict (sqliteRenderSyntaxScript (fromSqliteTableName nm)))fi
 
            startSavepoint =
              execute_ conn (Query ("SAVEPOINT insert_savepoint_" <> processId))

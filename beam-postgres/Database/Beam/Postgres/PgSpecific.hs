@@ -110,8 +110,7 @@ where
 
 import           Database.Beam hiding (char, double)
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate ( HasDefaultSqlDataType(..)
-                                       , HasDefaultSqlDataTypeConstraints(..) )
+import           Database.Beam.Migrate ( HasDefaultSqlDataType(..) )
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Query.Internal
@@ -1275,7 +1274,7 @@ pgUnnest' q =
                     PgFromSyntax . mconcat $
                     [ q pfx, emit " "
                     , pgQuotedIdentifier alias
-                    , pgParens (pgSepBy (emit ", ") (allBeamValues (\(Columnar' (TableField nm)) -> pgQuotedIdentifier nm) tblFields))
+                    , pgParens (pgSepBy (emit ", ") (allBeamValues (\(Columnar' (TableField _ nm)) -> pgQuotedIdentifier nm) tblFields))
                     ])
                  (tableFieldsToExpressions tblFields)
                  (\_ -> Nothing) snd))
@@ -1285,7 +1284,8 @@ pgUnnest' q =
       evalState (zipBeamFieldsM (\_ _ ->
                                    do i <- get
                                       put (i + 1)
-                                      pure (Columnar' (TableField (fromString ("r" ++ show i)))))
+                                      let fieldNm = fromString ("r" ++ show i)
+                                      pure (Columnar' (TableField (pure fieldNm) fieldNm)))
                                 tblSkeleton tblSkeleton) (0 :: Int)
 
 pgUnnest :: forall tbl db s
@@ -1317,45 +1317,35 @@ pgUnnestArrayWithOrdinality (QExpr q) =
 
 instance HasDefaultSqlDataType Postgres PgPoint where
   defaultSqlDataType _ _ _ = pgPointType
-instance HasDefaultSqlDataTypeConstraints Postgres PgPoint
 
 instance HasDefaultSqlDataType Postgres PgLine where
   defaultSqlDataType _ _ _ = pgLineType
-instance HasDefaultSqlDataTypeConstraints Postgres PgLine
 
 instance HasDefaultSqlDataType Postgres PgLineSegment where
   defaultSqlDataType _ _ _ = pgLineSegmentType
-instance HasDefaultSqlDataTypeConstraints Postgres PgLineSegment
 
 instance HasDefaultSqlDataType Postgres PgBox where
   defaultSqlDataType _ _ _ = pgBoxType
-instance HasDefaultSqlDataTypeConstraints Postgres PgBox
 
 instance HasDefaultSqlDataType Postgres TsQuery where
   defaultSqlDataType _ _ _ = pgTsQueryType
-instance HasDefaultSqlDataTypeConstraints Postgres TsQuery
 
 instance HasDefaultSqlDataType Postgres TsVector where
   defaultSqlDataType _ _ _ = pgTsVectorType
-instance HasDefaultSqlDataTypeConstraints Postgres TsVector
 
 instance HasDefaultSqlDataType Postgres (PgJSON a) where
   defaultSqlDataType _ _ _ = pgJsonType
-instance HasDefaultSqlDataTypeConstraints Postgres (PgJSON a)
 
 instance HasDefaultSqlDataType Postgres (PgJSONB a) where
   defaultSqlDataType _ _ _ = pgJsonbType
-instance HasDefaultSqlDataTypeConstraints Postgres (PgJSONB a)
 
 instance HasDefaultSqlDataType Postgres PgMoney where
   defaultSqlDataType _ _ _ = pgMoneyType
-instance HasDefaultSqlDataTypeConstraints Postgres PgMoney
 
 instance HasDefaultSqlDataType Postgres a
     => HasDefaultSqlDataType Postgres (V.Vector a) where
   defaultSqlDataType _ be embedded =
       pgUnboundedArrayType (defaultSqlDataType (Proxy :: Proxy a) be embedded)
-instance HasDefaultSqlDataTypeConstraints Postgres (V.Vector a)
 
 -- $full-text-search
 --

@@ -34,6 +34,7 @@ module Database.Beam.Migrate.SQL.Tables
 import Database.Beam
 import Database.Beam.Schema.Tables
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.SQL.AST (TableName(..))
 import Database.Beam.Query.Internal (tableNameFromEntity)
 
 import Database.Beam.Migrate.Types
@@ -112,7 +113,7 @@ data ColumnMigration a
 
 -- | Monad representing a series of @ALTER TABLE@ statements
 newtype TableMigration be a
-  = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (Sql92TableNameSyntax be, [TableCheck])) a)
+  = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (TableName, [TableCheck])) a)
   deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
@@ -120,9 +121,9 @@ renameTableTo :: BeamMigrateSqlBackend be
               => Text -> table ColumnMigration
               -> TableMigration be (table ColumnMigration)
 renameTableTo newName oldTbl = TableMigration $ do
-  (curNm, chks) <- get
-  tell [ alterTableSyntax curNm (renameTableToSyntax newName) ]
-  put (newName, chks)
+  (TableName curSchema curNm, chks) <- get
+  tell [ alterTableSyntax (tableName curSchema curNm) (renameTableToSyntax newName) ]
+  put (TableName curSchema curNm, chks)
   return oldTbl
 
 -- | @ALTER TABLE ... RENAME COLUMN ... TO ...@ command
@@ -130,8 +131,8 @@ renameColumnTo :: BeamMigrateSqlBackend be
                => Text -> ColumnMigration a
                -> TableMigration be (ColumnMigration a)
 renameColumnTo newName column = TableMigration $ do
-  (curTblNm, _) <- get
-  tell [ alterTableSyntax curTblNm
+  (TableName curSchema curNm, _) <- get
+  tell [ alterTableSyntax (tableName curSchema curNm)
            (renameColumnToSyntax (columnMigrationFieldName column) newName) ]
   pure column { columnMigrationFieldName = newName }
 
@@ -139,8 +140,9 @@ renameColumnTo newName column = TableMigration $ do
 dropColumn :: BeamMigrateSqlBackend be
            => ColumnMigration a -> TableMigration be ()
 dropColumn column = TableMigration $ do
-  (curTblNm, _)<- get
-  tell [ alterTableSyntax curTblNm (dropColumnSyntax (columnMigrationFieldName column)) ]
+  (TableName curSchema curNm, _)<- get
+  tell [ alterTableSyntax (tableName curSchema curNm)
+           (dropColumnSyntax (columnMigrationFieldName column)) ]
 
 -- | @ALTER TABLE ... ADD COLUMN ...@ command
 addColumn :: BeamMigrateSqlBackend be
@@ -148,8 +150,8 @@ addColumn :: BeamMigrateSqlBackend be
           -> TableMigration be (ColumnMigration a)
 addColumn (TableFieldSchema nm (FieldSchema fieldSchemaSyntax) checks) =
   TableMigration $
-  do (curTblNm, _) <- get
-     tell [ alterTableSyntax curTblNm (addColumnSyntax nm fieldSchemaSyntax) ]
+  do (TableName curSchema curNm, _) <- get
+     tell [ alterTableSyntax (tableName curSchema curNm) (addColumnSyntax nm fieldSchemaSyntax) ]
      pure (ColumnMigration nm checks)
 
 -- | Compose a series of @ALTER TABLE@ commands
@@ -190,8 +192,10 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks tblFieldChe
                       (dbTableSettings dt) tblFieldChecks
 
      TableMigration alterColumns' = alterColumns initialTbl
-     ((newTbl, cmds), (tblNm', tblChecks')) =
-       runState (runWriterT alterColumns') (dbTableCurrentName dt, tblChecks)
+     ((newTbl, cmds), (TableName tblSchema' tblNm', tblChecks')) =
+       runState (runWriterT alterColumns')
+                ( TableName (dbTableSchema dt) (dbTableCurrentName dt)
+                , tblChecks )
 
      fieldChecks' = changeBeamRep (\(Columnar' (ColumnMigration _ checks) :: Columnar' ColumnMigration a) ->
                                      Columnar' (Const checks) :: Columnar' (Const [FieldCheck]) a)
@@ -203,7 +207,7 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks tblFieldChe
                           newTbl
  in forM_ cmds (\cmd -> upDown (alterTableCmd cmd) Nothing) >>
     pure (CheckedDatabaseEntity (CheckedDatabaseTable
-                                  (DatabaseTable (dbTableSchema dt) (dbTableOrigName dt)
+                                  (DatabaseTable tblSchema' (dbTableOrigName dt)
                                      tblNm' tbl')
                                    tblChecks' fieldChecks') entityChecks)
 

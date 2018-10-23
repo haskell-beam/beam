@@ -167,20 +167,16 @@ instance HasQBuilder Postgres where
 
 instance HasDefaultSqlDataType Postgres ByteString where
   defaultSqlDataType _ _ _ = pgByteaType
-instance HasDefaultSqlDataTypeConstraints Postgres ByteString
 
 instance HasDefaultSqlDataType Postgres LocalTime where
   defaultSqlDataType _ _ _ = timestampType Nothing False
-instance HasDefaultSqlDataTypeConstraints Postgres LocalTime
 
 instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
   defaultSqlDataType _ _ False = pgSerialType
   defaultSqlDataType _ _ _ = intType
-instance HasDefaultSqlDataTypeConstraints Postgres (SqlSerial Int)
 
 instance HasDefaultSqlDataType Postgres UUID where
   defaultSqlDataType _ _ _ = pgUuidType
-instance HasDefaultSqlDataTypeConstraints Postgres UUID
 
 -- * Instances for 'HasSqlEqualityCheck'
 

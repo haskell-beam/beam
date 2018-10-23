@@ -16,9 +16,10 @@ module Database.Beam.Sqlite.Migrate
   ) where
 
 import qualified Database.Beam.Migrate as Db
-import qualified Database.Beam.Query.DataTypes as Db
 import qualified Database.Beam.Migrate.Backend as Tool
 import qualified Database.Beam.Migrate.Serialization as Db
+import           Database.Beam.Migrate.Types (QualifiedName(..))
+import qualified Database.Beam.Query.DataTypes as Db
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Haskell.Syntax
@@ -237,9 +238,10 @@ getDbConstraints =
   SqliteM . ReaderT $ \(_, conn) -> do
     tblNames <- query_ conn "SELECT name, sql from sqlite_master where type='table'"
     tblPreds <-
-      fmap mconcat . forM tblNames $ \(tblName, sql) -> do
+      fmap mconcat . forM tblNames $ \(tblNameStr, sql) -> do
+        let tblName = QualifiedName Nothing tblNameStr
         columns <- fmap (sortBy (comparing (\(cid, _, _, _, _, _) -> cid :: Int))) $
-                   query_ conn (fromString ("PRAGMA table_info('" <> T.unpack tblName <> "')"))
+                   query_ conn (fromString ("PRAGMA table_info('" <> T.unpack tblNameStr <> "')"))
 
         let columnPreds =
               foldMap

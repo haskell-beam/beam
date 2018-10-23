@@ -98,12 +98,13 @@ withLocks_ = flip PgWithLocking
 
 -- | Join with a table while locking it explicitly. Provides a 'PgLockedTables' value that can be
 -- used with 'withLocks_' to explicitly lock a table during a @SELECT@ statement
-locked_ :: Database Postgres db
+locked_ :: (Beamable tbl, Database Postgres db)
         => DatabaseEntity Postgres db (TableEntity tbl)
         -> Q Postgres db s (PgLockedTables s, tbl (QExpr Postgres s))
-locked_ (DatabaseEntity (DatabaseTable tblNm tblSettings)) = do
-  (nm, joined) <- Q (liftF (QAll (\_ -> fromTable (tableNamed tblNm) . Just . (,Nothing))
-                                 (tableFieldsToExpressions tblSettings)
+locked_ (DatabaseEntity dt) = do
+  (nm, joined) <- Q (liftF (QAll (\_ -> fromTable (tableNamed (tableName (dbTableSchema dt) (dbTableCurrentName dt))) .
+                                        Just . (,Nothing))
+                                 (tableFieldsToExpressions (dbTableSettings dt))
                                  (\_ -> Nothing) id))
   pure (PgLockedTables [nm], joined)
 
@@ -191,12 +192,12 @@ insertReturning :: Projectible Postgres a
                 -> PgInsertReturning (QExprToIdentity a)
 
 insertReturning _ SqlInsertValuesEmpty _ _ = PgInsertReturningEmpty
-insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
+insertReturning (DatabaseEntity tbl)
                 (SqlInsertValues (PgInsertValuesSyntax insertValues_))
                 (PgInsertOnConflict mkOnConflict)
                 returning =
   PgInsertReturning $
-  emit "INSERT INTO " <> pgQuotedIdentifier tblNm <>
+  emit "INSERT INTO " <> fromPgTableName (tableName (dbTableSchema tbl) (dbTableCurrentName tbl)) <>
   emit "(" <> pgSepBy (emit ", ") (allBeamValues (\(Columnar' f) -> pgQuotedIdentifier (_fieldName f)) tblSettings) <> emit ") " <>
   insertValues_ <> emit " " <> fromPgInsertOnConflict (mkOnConflict tblFields) <>
   (case returning of
@@ -207,6 +208,8 @@ insertReturning (DatabaseEntity (DatabaseTable tblNm tblSettings))
    where
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
      tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField True tblNm (_fieldName f))) tblSettings
+
+     tblSettings = dbTableSettings tbl
 
 runPgInsertReturningList
   :: ( MonadBeam be m

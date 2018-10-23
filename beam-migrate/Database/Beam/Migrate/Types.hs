@@ -27,6 +27,7 @@ module Database.Beam.Migrate.Types
   , DatabasePredicate(..)
   , SomeDatabasePredicate(..)
   , PredicateSpecificity(..)
+  , QualifiedName(..)
 
   , p
 
