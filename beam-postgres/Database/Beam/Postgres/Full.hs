@@ -192,7 +192,7 @@ insertReturning :: Projectible Postgres a
                 -> PgInsertReturning (QExprToIdentity a)
 
 insertReturning _ SqlInsertValuesEmpty _ _ = PgInsertReturningEmpty
-insertReturning (DatabaseEntity tbl)
+insertReturning (DatabaseEntity tbl@(DatabaseTable {}))
                 (SqlInsertValues (PgInsertValuesSyntax insertValues_))
                 (PgInsertOnConflict mkOnConflict)
                 returning =
@@ -207,7 +207,7 @@ insertReturning (DatabaseEntity tbl)
          pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t")))
    where
      tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
-     tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField True tblNm (_fieldName f))) tblSettings
+     tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField True (dbTableCurrentName tbl) (_fieldName f))) tblSettings
 
      tblSettings = dbTableSettings tbl
 
@@ -418,7 +418,7 @@ updateReturning :: Projectible Postgres a
                 -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
                 -> (table (QExpr Postgres PostgresInaccessible) -> a)
                 -> PgUpdateReturning (QExprToIdentity a)
-updateReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
+updateReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSettings }))
                 mkAssignments
                 mkWhere
                 mkProjection =
@@ -457,7 +457,7 @@ deleteReturning :: Projectible Postgres a
                 -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
                 -> (table (QExpr Postgres PostgresInaccessible) -> a)
                 -> PgDeleteReturning (QExprToIdentity a)
-deleteReturning table@(DatabaseEntity (DatabaseTable _ tblSettings))
+deleteReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSettings }))
                 mkWhere
                 mkProjection =
   PgDeleteReturning $

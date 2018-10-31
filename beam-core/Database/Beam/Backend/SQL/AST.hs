@@ -452,7 +452,7 @@ instance IsSql92GroupingSyntax Grouping where
   groupByExpressions = Grouping
 
 data TableName = TableName (Maybe Text) Text
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 instance IsSql92TableNameSyntax TableName where
   tableName = TableName

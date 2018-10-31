@@ -105,6 +105,7 @@ instance IsDatabaseEntity Postgres (PgExtensionEntity extension) where
     ( IsPgExtension extension )
 
   dbEntityName f (PgDatabaseExtension nm ext) = fmap (\nm' -> PgDatabaseExtension nm' ext) (f nm)
+  dbEntitySchema _ n = pure n
   dbEntityAuto _ = PgDatabaseExtension (pgExtensionName (Proxy @extension)) pgExtensionBuild
 
 instance IsCheckedDatabaseEntity Postgres (PgExtensionEntity extension) where

@@ -123,7 +123,7 @@ pgChecksForTypeSchema (PgDataTypeEnum vals) =
 instance IsDatabaseEntity Postgres (PgType a) where
 
   data DatabaseEntityDescriptor Postgres (PgType a) where
-      PgTypeDescriptor :: Text -> PgDataTypeSyntax
+      PgTypeDescriptor :: Maybe Text -> Text -> PgDataTypeSyntax
                        -> DatabaseEntityDescriptor Postgres (PgType a)
 
   type DatabaseEntityDefaultRequirements Postgres (PgType a) =
@@ -135,8 +135,9 @@ instance IsDatabaseEntity Postgres (PgType a) where
       ( HasSqlValueSyntax PgValueSyntax a
       , FromBackendRow Postgres a )
 
-  dbEntityName f (PgTypeDescriptor nm ty) = (\nm' -> PgTypeDescriptor nm' ty) <$> f nm
-  dbEntityAuto _ = PgTypeDescriptor typeName
+  dbEntityName f (PgTypeDescriptor sch nm ty) = (\nm' -> PgTypeDescriptor sch nm' ty) <$> f nm
+  dbEntitySchema f (PgTypeDescriptor sch nm ty) = PgTypeDescriptor <$> f sch <*> pure nm <*> pure ty
+  dbEntityAuto _ = PgTypeDescriptor Nothing typeName
                                     (PgDataTypeSyntax (PgDataTypeDescrDomain typeName)
                                                       (pgQuotedIdentifier typeName)
                                                       (pgDataTypeJSON (object [ "customType" .= typeName])))
@@ -168,7 +169,7 @@ createEnum nm = do
   upDown (pgCreateEnumSyntax nm (fmap sqlValueSyntax [minBound..(maxBound::a)]))
          (Just (pgDropTypeSyntax nm))
 
-  let tyDesc = PgTypeDescriptor nm $
+  let tyDesc = PgTypeDescriptor Nothing nm $
                PgDataTypeSyntax (PgDataTypeDescrDomain nm)
                                 (pgQuotedIdentifier nm)
                                 (pgDataTypeJSON (object [ "customType" .= nm ]))
@@ -199,5 +200,5 @@ pgParseEnum namer =
       Just  v -> pure v
 
 beamTypeForCustomPg :: CheckedDatabaseEntity Postgres db (PgType a) -> DataType Postgres a
-beamTypeForCustomPg (CheckedDatabaseEntity (CheckedPgTypeDescriptor (PgTypeDescriptor _ dt) _) _)
+beamTypeForCustomPg (CheckedDatabaseEntity (CheckedPgTypeDescriptor (PgTypeDescriptor _ _ dt) _) _)
     = DataType dt

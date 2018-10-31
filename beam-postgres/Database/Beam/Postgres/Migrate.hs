@@ -311,7 +311,7 @@ pgDataTypeFromAtt _ oid pgMod
 getDbConstraints :: Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
 getDbConstraints conn =
   do tbls <- Pg.query_ conn "SELECT oid, relname FROM pg_catalog.pg_class where relnamespace=(select oid from pg_catalog.pg_namespace where nspname='public') and relkind='r'"
-     let tblsExist = map (\(_, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate tbl)) tbls
+     let tblsExist = map (\(_, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate (Db.QualifiedName Nothing tbl))) tbls
 
      columnChecks <-
        fmap mconcat . forM tbls $ \(oid, tbl) ->
@@ -321,17 +321,17 @@ getDbConstraints conn =
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
                                         pgDataType = pgDataTypeFromAtt typ typId typmod'
 
-                                    in Db.SomeDatabasePredicate (Db.TableHasColumn tbl nm pgDataType :: Db.TableHasColumn Postgres)) columns
+                                    in Db.SomeDatabasePredicate (Db.TableHasColumn (Db.QualifiedName Nothing tbl) nm pgDataType :: Db.TableHasColumn Postgres)) columns
               notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
                                            if isNotNull then
-                                            [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint tbl nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
+                                            [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint (Db.QualifiedName Nothing tbl) nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
                                               :: Db.TableColumnHasConstraint Postgres)]
                                            else [] ) columns
 
           pure (columnChecks ++ notNullChecks)
 
      primaryKeys <-
-       map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey relnm (V.toList cols))) <$>
+       map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey (Db.QualifiedName Nothing relnm) (V.toList cols))) <$>
        Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname ORDER BY k.n ASC)"
                                            , "FROM pg_index i"
                                            , "CROSS JOIN unnest(i.indkey) WITH ORDINALITY k(attid, n)"
