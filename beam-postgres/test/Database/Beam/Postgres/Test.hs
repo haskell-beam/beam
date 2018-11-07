@@ -5,14 +5,17 @@ import qualified Database.PostgreSQL.Simple as Pg
 import Control.Exception (SomeException(..), bracket, catch)
 import Control.Concurrent (threadDelay)
 
+import Control.Monad (void)
+
 import Data.ByteString (ByteString)
 import Data.Semigroup
 import Data.String
 
-import Network.Socket
-
 import System.IO.Temp
 import System.Process
+import System.Exit
+import System.FilePath
+import System.Directory
 
 withTestPostgres :: String -> IO ByteString -> (Pg.Connection -> IO a) -> IO a
 withTestPostgres dbName getConnStr action = do
@@ -38,31 +41,32 @@ withTestPostgres dbName getConnStr action = do
 
 startTempPostgres :: IO (ByteString, IO ())
 startTempPostgres = do
-  s <- socket AF_INET Stream defaultProtocol
-  bind s (SockAddrInet 0 0)
-  SockAddrInet port _ <- getSocketName s
-
-  let portNumber = fromIntegral port :: Int
-
   tmpDir <- getCanonicalTemporaryDirectory
   pgDataDir <- createTempDirectory tmpDir "postgres-data"
 
   callProcess "pg_ctl" [ "init", "-D", pgDataDir ]
 
-  close s
+  -- Use 'D' because otherwise, the path is too long on OS X
   pgHdl <- spawnProcess "postgres"
-                        [ "-i", "-D", pgDataDir
-                        , "-p", show portNumber
-                        , "-h", "localhost" ]
+                        [ "-D", pgDataDir
+                        , "-k", pgDataDir, "-h", "" ]
+
+  putStrLn ("Using " ++ pgDataDir ++ " as postgres host")
 
   let waitForPort 10 = fail "Could not connect to postgres"
       waitForPort n = do
-        s <- socket AF_INET Stream defaultProtocol
-        ( connect s (SockAddrInet port (tupleToHostAddress (127, 0, 0, 1))) >>
-          close s )
-          `catch` (\(SomeException {}) -> threadDelay 1000000 >> waitForPort (n + 1))
+        (code, stdout, stderr) <- readProcessWithExitCode "pg_ctl" [ "status", "-D", pgDataDir ] ""
+        case code of
+          ExitSuccess -> waitForSocket 0
+          ExitFailure _ -> threadDelay 1000000 >> waitForPort (n + 1)
+
+      waitForSocket 10 = fail "Could not connect to postgres (waitForSocket)"
+      waitForSocket n = do
+        skExists <- doesFileExist (pgDataDir </> ".s.PGSQL.5432")
+        if skExists then pure () else threadDelay 1000000 >> waitForSocket (n + 1)
 
   waitForPort 0
+  putStrLn "Completed waiting for postgres"
 
-  pure ( fromString ("port=" <> show portNumber <> " host=localhost")
-       , interruptProcessGroupOf pgHdl )
+  pure ( fromString ("host=" ++ pgDataDir)
+       , void (callProcess "pg_ctl" [ "stop", "-D", pgDataDir ]))

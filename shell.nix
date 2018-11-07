@@ -1,4 +1,4 @@
-{ nixpkgs ? import <nixpkgs> {}, ghc ? nixpkgs.haskell.packages.ghc822.ghc }:
+{ nixpkgs ? import <nixpkgs> {}, ghc ? nixpkgs.haskell.packages.ghc844.ghc }:
 with (import <nixpkgs> {});
 
 let
@@ -14,7 +14,7 @@ let
     meta = {
       homepage = https://github.com/lepture/python-livereload;
       description = "Python LiveReload is an awesome tool for web developers";
-      license = nixpkgs.stdenv.lib.bsd;
+      license = stdenv.lib.licenses.bsd3;
     };
   };
 
@@ -31,7 +31,7 @@ let
     meta = {
       homepage = http://www.mkdocs.org/;
       description = "MkDocs is a fast, simple and downright gorgeous static site generator that’s geared towards building project documentation. Documentation source files are written in Markdown, and configured with a single YAML configuration file.";
-      license = stdenv.lib.licenses.bsd;
+      license = stdenv.lib.licenses.bsd3;
     };
   };
 
@@ -87,7 +87,8 @@ in
   haskell.lib.buildStackProject {
     inherit ghc;
     name = "beam-env";
-    buildInputs = [ postgresql python27Packages.ghp-import bash
+    buildInputs = [ postgresql # python27Packages.ghp-import 
+                    bash
                     mkdocs
                     (python27.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ]))
                     ncurses libcxx icu gcc mysql zlib openssl stack gnupg dos2unix vim pcre ];
