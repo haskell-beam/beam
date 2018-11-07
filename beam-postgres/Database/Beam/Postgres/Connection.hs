@@ -154,12 +154,12 @@ runPgRowReader conn rowIdx res fields readRow =
   Pg.nfields res >>= \(Pg.Col colCount) ->
   runF readRow finish step 0 colCount fields
   where
+    step :: FromBackendRowF Postgres (CInt -> CInt -> [Pg.Field] -> IO (Either PgRowReadError a)) -> CInt -> CInt -> [Pg.Field] -> IO (Either PgRowReadError a)
     step (ParseOneField _) curCol colCount [] = pure (Left (PgRowReadNoMoreColumns curCol colCount))
     step (ParseOneField _) curCol colCount _
       | curCol >= colCount = pure (Left (PgRowReadNoMoreColumns curCol colCount))
     step (ParseOneField next) curCol colCount (field:remainingFields) =
-      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
-         parseResult <- Pg.runConversion (Pg.fromField field fieldValue) conn
+      do parseResult <- readField curCol field
          case parseResult of
            Pg.Errors errs -> pure (Left (PgRowCouldNotParseField curCol errs))
            Pg.Ok x -> next x (curCol + 1) colCount remainingFields
@@ -168,8 +168,7 @@ runPgRowReader conn rowIdx res fields readRow =
     step (PeekField next) curCol colCount remainingFields
       | curCol >= colCount = next Nothing curCol colCount remainingFields
     step (PeekField next) curCol colCount remainingFields@(field:_) =
-      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
-         res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
+      do res' <- readField curCol field
          case res' of
            Pg.Errors {} -> next Nothing curCol colCount remainingFields
            Pg.Ok x -> next (Just x) curCol colCount remainingFields
@@ -187,11 +186,15 @@ runPgRowReader conn rowIdx res fields readRow =
 
     readAndCheck [] = pure True
     readAndCheck ((i, field):xs) =
-      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col i)
-         res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
+      do res' <- readField i field
          case res' of
            Pg.Errors _ -> pure False
            Pg.Ok Pg.Null -> readAndCheck xs
+
+    readField :: Pg.FromField a => CInt -> Pg.Field -> IO (Pg.Ok a)
+    readField colIdx field' =
+      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col colIdx)
+         Pg.runConversion (Pg.fromField field' fieldValue) conn
 
     finish x _ _ _ = pure (Right x)
 
