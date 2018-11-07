@@ -1,0 +1,26 @@
+image: nixos/nix:latest
+
+stages:
+  - build-base
+  - build-backends
+  - test
+
+build beam core:
+  stage: build-base
+  script: stack build --nix beam-core beam-migrate -fbeam-core:werror -fbeam-migrate:werror
+
+build beam sqlite:
+  stage: build-backends
+  script: stack build --fast beam-sqlite -fbeam-sqlite:werror
+
+build beam postgres:
+  stage: build-backends
+  script: stack build --fast beam-postgres -fbeam-postgres:werror
+
+test beam-core:
+  stage: test
+  script: stack test --nix beam-core -fbeam-core:werror
+
+test beam-postgres:
+  stage: test
+  script: stack test --nix beam-postgres -fbeam-postgres:werror
