@@ -50,6 +50,8 @@ import qualified Database.PostgreSQL.Simple.Internal as PgI
 import qualified Database.PostgreSQL.Simple.Ok as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..), Query(..))
 
+import           Control.Exception (SomeException)
+
 import           Control.Monad.Reader
 import           Control.Monad.State
 
@@ -127,10 +129,11 @@ data PgRowReadError
       -- ^ We attempted to read more columns than postgres returned. First
       -- argument is the zero-based index of the column we attempted to read,
       -- and the second is the total number of columns
-    | PgRowCouldNotParseField !CInt
+    | PgRowCouldNotParseField !CInt [SomeException]
       -- ^ There was an error while parsing the field. The first argument gives
       -- the zero-based index of the column that could not have been
-      -- parsed. This is usually caused by your Haskell schema type being
+      -- parsed. Second argument is list of errors that occurred during parsing.
+      -- This is usually caused by your Haskell schema type being
       -- incompatible with the one in the database.
     deriving Show
 
@@ -154,11 +157,12 @@ runPgRowReader conn rowIdx res fields readRow =
     step (ParseOneField _) curCol colCount [] = pure (Left (PgRowReadNoMoreColumns curCol colCount))
     step (ParseOneField _) curCol colCount _
       | curCol >= colCount = pure (Left (PgRowReadNoMoreColumns curCol colCount))
-    step (ParseOneField next) curCol colCount remainingFields =
-      let next' Nothing _ _ _ = pure (Left (PgRowCouldNotParseField curCol))
-          next' (Just {}) _ _ [] = fail "Internal error"
-          next' (Just x) curCol' colCount' (_:remainingFields') = next x (curCol' + 1) colCount' remainingFields'
-      in step (PeekField next') curCol colCount remainingFields
+    step (ParseOneField next) curCol colCount (field:remainingFields) =
+      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
+         parseResult <- Pg.runConversion (Pg.fromField field fieldValue) conn
+         case parseResult of
+           Pg.Errors errs -> pure (Left (PgRowCouldNotParseField curCol errs))
+           Pg.Ok x -> next x (curCol + 1) colCount remainingFields
 
     step (PeekField next) curCol colCount [] = next Nothing curCol colCount []
     step (PeekField next) curCol colCount remainingFields
