@@ -67,9 +67,9 @@ data CheckedDatabaseEntity be (db :: (* -> *) -> *) entityType where
 -- predicates.
 type CheckedDatabaseSettings be db = db (CheckedDatabaseEntity be db)
 
-renameCheckedEntity :: (Text -> Text) -> CheckedDatabaseEntity be db ty -> CheckedDatabaseEntity be db ty
-renameCheckedEntity renamer (CheckedDatabaseEntity desc checks) =
-  CheckedDatabaseEntity (desc & unChecked . dbEntityName %~ renamer) checks
+renameCheckedEntity :: (Text -> Text) -> EntityModification (CheckedDatabaseEntity be db) be ent
+renameCheckedEntity renamer =
+  EntityModification (Endo (\(CheckedDatabaseEntity desc checks) -> (CheckedDatabaseEntity (desc & unChecked . dbEntityName %~ renamer) checks)))
 
 -- | Convert a 'CheckedDatabaseSettings' to a regular 'DatabaseSettings'. The
 -- return value is suitable for use in any regular beam query or DML statement.
