@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- | Common 'DatabasePredicate's used for defining schemas
 module Database.Beam.Migrate.Types.Predicates where
 
@@ -11,6 +13,10 @@ import Data.Aeson
 import Data.Text (Text)
 import Data.Hashable
 import Data.Typeable
+
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 
 import Lens.Micro ((^.))
 
