@@ -22,7 +22,7 @@ import Data.String
 import GHC.Types
 import GHC.Generics
 
-import Lens.Micro ((^.), (.~))
+import Lens.Micro (Lens', (&), (^.), (.~), (%~))
 
 -- * Checked Database Entities
 
@@ -39,8 +39,12 @@ class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
   -- | Like 'DatabaseEntityDefaultRequirements' but for checked entities
   type CheckedDatabaseEntityDefaultRequirements be entity :: Constraint
 
-  -- | Produce the corresponding 'DatabaseEntityDescriptior'
+  -- | Produce the corresponding 'DatabaseEntityDescriptor'
   unCheck :: CheckedDatabaseEntityDescriptor be entity -> DatabaseEntityDescriptor be entity
+  unCheck d = d ^. unChecked
+
+  -- | A lens to access the internal unchecked descriptor
+  unChecked :: Lens' (CheckedDatabaseEntityDescriptor be entity) (DatabaseEntityDescriptor be entity)
 
   -- | Produce the set of 'DatabasePredicate's that apply to this entity
   collectEntityChecks :: CheckedDatabaseEntityDescriptor be entity -> [ SomeDatabasePredicate ]
@@ -62,6 +66,10 @@ data CheckedDatabaseEntity be (db :: (* -> *) -> *) entityType where
 -- regular 'DatabaseSettings' object and 'collectChecks' to access the
 -- predicates.
 type CheckedDatabaseSettings be db = db (CheckedDatabaseEntity be db)
+
+renameCheckedEntity :: (Text -> Text) -> CheckedDatabaseEntity be db ty -> CheckedDatabaseEntity be db ty
+renameCheckedEntity renamer (CheckedDatabaseEntity desc checks) =
+  CheckedDatabaseEntity (desc & unChecked . dbEntityName %~ renamer) checks
 
 -- | Convert a 'CheckedDatabaseSettings' to a regular 'DatabaseSettings'. The
 -- return value is suitable for use in any regular beam query or DML statement.
