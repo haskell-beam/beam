@@ -13,6 +13,7 @@ module Database.Beam.Migrate.Types
   , CheckedDatabaseEntity(..)
 
   , unCheckDatabase, collectChecks
+  , renameCheckedEntity
 
     -- ** Modifyinging checked entities
     --
