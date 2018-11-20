@@ -128,6 +128,9 @@ newtype QAssignment be s
   = QAssignment [(BeamSqlBackendFieldNameSyntax be, BeamSqlBackendExpressionSyntax be)]
   deriving (Monoid, Semigroup)
 
+newtype QFieldAssignment be tbl a
+  = QFieldAssignment (forall s. tbl (QExpr be s) -> Maybe (QExpr be s a))
+
 -- * QGenExpr type
 
 data QAggregateContext

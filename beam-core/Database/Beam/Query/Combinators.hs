@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE CPP #-}
 
@@ -74,6 +75,9 @@ import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
 
+#if !MIN_VERSION_base(4, 11, 0)
+import Control.Monad.Writer
+#endif
 import Control.Monad.Identity
 import Control.Monad.Free
 import Control.Applicative
@@ -524,7 +528,7 @@ type instance HaskellLiteralForQExpr (table (Nullable f)) = HaskellLiteralForQEx
 type family HaskellLiteralForQExpr_AddNullable x = a
 type instance HaskellLiteralForQExpr_AddNullable (tbl f) = tbl (Nullable f)
 
-type SqlValableTable table be =
+type SqlValableTable be table =
    ( Beamable table
    , FieldsFulfillConstraint (HasSqlValueSyntax (BeamSqlBackendValueSyntax be)) table )
 

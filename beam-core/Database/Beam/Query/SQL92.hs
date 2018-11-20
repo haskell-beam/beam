@@ -12,6 +12,10 @@ import           Database.Beam.Backend.SQL
 import           Control.Monad.Free.Church
 import           Control.Monad.Free
 
+#if !MIN_VERSION_base(4, 11, 0)
+import           Control.Monad.Writer
+#endif
+
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
 #endif

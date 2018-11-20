@@ -75,7 +75,7 @@ class MonadBeam be m =>
        , Projectible be (table (QExpr be ()))
        , FromBackendRow be (table Identity) )
     => DatabaseEntity be db (TableEntity table)
-    -> (forall s. table (QField s) -> [ QAssignment be s ])
+    -> (forall s. table (QField s) -> QAssignment be s)
     -> (forall s. table (QExpr be s) -> QExpr be s Bool)
     -> m [table Identity]
 

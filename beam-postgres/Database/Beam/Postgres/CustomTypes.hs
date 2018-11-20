@@ -152,7 +152,7 @@ instance IsCheckedDatabaseEntity Postgres (PgType a) where
     type CheckedDatabaseEntityDefaultRequirements Postgres (PgType a) =
         DatabaseEntityDefaultRequirements Postgres (PgType a)
 
-    unCheck (CheckedPgTypeDescriptor ty _) = ty
+    unChecked f (CheckedPgTypeDescriptor ty d) = fmap (\ty' -> CheckedPgTypeDescriptor ty' d) (f ty)
     collectEntityChecks (CheckedPgTypeDescriptor e chks) =
         fmap (\(PgTypeCheck mkCheck) -> mkCheck (getConst (dbEntityName Const e))) chks
     checkedDbEntityAuto nm = CheckedPgTypeDescriptor (dbEntityAuto nm)

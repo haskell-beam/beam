@@ -335,7 +335,7 @@ insertReturning :: Beamable table
                 -> SqliteInsertReturning table
 insertReturning tbl@(DatabaseEntity dt) vs =
   case insert tbl vs of
-    SqlInsert s ->
+    SqlInsert _ s ->
       SqliteInsertReturning (tableName (dbTableSchema dt) (dbTableCurrentName dt)) s
     SqlInsertNoRows ->
       SqliteInsertReturningNoRows

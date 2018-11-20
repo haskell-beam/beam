@@ -15,7 +15,7 @@ module Database.Beam.Query
 
     , QGenExprTable, QExprTable
 
-    , QAssignment, QField
+    , QAssignment, QField, QFieldAssignment
 
     , QBaseScope
 
@@ -77,6 +77,10 @@ module Database.Beam.Query
     -- ** @UPDATE@
     , SqlUpdate(..)
     , update, save
+    , updateTable, set, setFieldsTo
+    , toNewValue, toOldValue, toUpdatedValue
+    , toUpdatedValueMaybe
+    , updateRow, updateTableRow
     , runUpdate
 
     -- ** @DELETE@
@@ -110,6 +114,7 @@ import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.State.Strict
 
+import Data.Functor.Const (Const(..))
 import Data.Text (Text)
 import Data.Proxy
 
@@ -157,7 +162,7 @@ selectWith (CTE.With mkQ) =
 lookup_ :: ( Database be db, Table table
 
            , BeamSqlBackend be, HasQBuilder be
-           , SqlValableTable (PrimaryKey table) be
+           , SqlValableTable be (PrimaryKey table)
            , HasTableEquality be (PrimaryKey table)
            )
         => DatabaseEntity be db (TableEntity table)
@@ -195,8 +200,8 @@ dumpSqlSelect q =
 -- * INSERT
 
 -- | Represents a SQL @INSERT@ command that has not yet been run
-data SqlInsert be
-  = SqlInsert (BeamSqlBackendInsertSyntax be)
+data SqlInsert be (table :: (* -> *) -> *)
+  = SqlInsert !(TableSettings table) !(BeamSqlBackendInsertSyntax be)
   | SqlInsertNoRows
 
 -- | Generate a 'SqlInsert' over only certain fields of a table
@@ -206,10 +211,10 @@ insertOnly :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (QEx
            -> (table (QField s) -> QExprToField r)
            -> SqlInsertValues be r
               -- ^ Values to insert. See 'insertValues', 'insertExpressions', 'insertData', and 'insertFrom' for possibilities.
-           -> SqlInsert be
+           -> SqlInsert be table
 insertOnly _ _ SqlInsertValuesEmpty = SqlInsertNoRows
 insertOnly (DatabaseEntity dt@(DatabaseTable {})) mkProj (SqlInsertValues vs) =
-    SqlInsert (insertStmt (tableNameFromEntity dt) proj vs)
+    SqlInsert (dbTableSettings dt) (insertStmt (tableNameFromEntity dt) proj vs)
   where
     tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
                               (dbTableSettings dt)
@@ -223,14 +228,14 @@ insert :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (table (
           -- ^ Table to insert into
        -> SqlInsertValues be (table (QExpr be s))
           -- ^ Values to insert. See 'insertValues', 'insertExpressions', and 'insertFrom' for possibilities.
-       -> SqlInsert be
+       -> SqlInsert be table
 insert tbl values = insertOnly tbl id values
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
 runInsert :: (BeamSqlBackend be, MonadBeam be m)
-          => SqlInsert be -> m ()
+          => SqlInsert be table -> m ()
 runInsert SqlInsertNoRows = pure ()
-runInsert (SqlInsert i) = runNoReturn (insertCmd i)
+runInsert (SqlInsert _ i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
 --   'tbl'.
@@ -281,7 +286,7 @@ insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 
 -- | Represents a SQL @UPDATE@ statement for the given @table@.
 data SqlUpdate be (table :: (* -> *) -> *)
-  = SqlUpdate (BeamSqlBackendUpdateSyntax be)
+  = SqlUpdate !(TableSettings table) !(BeamSqlBackendUpdateSyntax be)
   | SqlIdentityUpdate -- An update with no assignments
 
 -- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
@@ -295,7 +300,7 @@ data SqlUpdate be (table :: (* -> *) -> *)
 update :: ( BeamSqlBackend be, Beamable table )
        => DatabaseEntity be db (TableEntity table)
           -- ^ The table to insert into
-       -> (forall s. table (QField s) -> [ QAssignment be s ])
+       -> (forall s. table (QField s) -> QAssignment be s)
           -- ^ A sequence of assignments to make.
        -> (forall s. table (QExpr be s) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
@@ -303,17 +308,120 @@ update :: ( BeamSqlBackend be, Beamable table )
 update (DatabaseEntity dt@(DatabaseTable {})) mkAssignments mkWhere =
   case assignments of
     [] -> SqlIdentityUpdate
-    _  -> SqlUpdate (updateStmt (tableNameFromEntity dt)
-                                assignments (Just (where_ "t")))
+    _  -> SqlUpdate (dbTableSettings dt)
+                    (updateStmt (tableNameFromEntity dt)
+                       assignments (Just (where_ "t")))
   where
-    assignments = concatMap (\(QAssignment as) -> as) (mkAssignments tblFields)
+    QAssignment assignments = mkAssignments tblFields
     QExpr where_ = mkWhere tblFieldExprs
 
     tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
                               (dbTableSettings dt)
     tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
 
--- | Generate a 'SqlUpdate' that will update the given table with the given value.
+-- | A specialization of 'update' that matches the given (already existing) row
+updateRow :: ( BeamSqlBackend be, Table table
+             , HasTableEquality be (PrimaryKey table)
+             , SqlValableTable be (PrimaryKey table) )
+          => DatabaseEntity be db (TableEntity table)
+             -- ^ The table to insert into
+          -> table Identity
+             -- ^ The row to update
+          -> (forall s. table (QField s) -> QAssignment be s)
+             -- ^ A sequence of assignments to make.
+          -> SqlUpdate be table
+updateRow tbl row update' =
+  update tbl update' (references_ (val_ (pk row)))
+
+-- | A specialization of 'update' that is more convenient for normal tables.
+updateTable :: forall table db be
+             . ( BeamSqlBackend be, Beamable table )
+            => DatabaseEntity be db (TableEntity table)
+               -- ^ The table to update
+            -> table (QFieldAssignment be table)
+               -- ^ Updates to be made (use 'set' to construct an empty field)
+            -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+            -> SqlUpdate be table
+updateTable tblEntity assignments mkWhere =
+  let mkAssignments :: forall s. table (QField s) -> QAssignment be s
+      mkAssignments tblFields =
+        let tblExprs = changeBeamRep (\(Columnar' fd) -> Columnar' (current_ fd)) tblFields
+        in execWriter $
+           zipBeamFieldsM
+             (\(Columnar' field :: Columnar' (QField s) a)
+               c@(Columnar' (QFieldAssignment mkAssignment)) ->
+                case mkAssignment tblExprs of
+                  Nothing -> pure c
+                  Just newValue -> do
+                    tell (field <-. newValue)
+                    pure c)
+             tblFields assignments
+
+  in update tblEntity mkAssignments mkWhere
+
+-- | Convenience form of 'updateTable' that generates a @WHERE@ clause
+-- that matches only the already existing entity
+updateTableRow :: ( BeamSqlBackend be, Table table
+                  , HasTableEquality be (PrimaryKey table)
+                  , SqlValableTable be (PrimaryKey table) )
+               => DatabaseEntity be db (TableEntity table)
+                  -- ^ The table to update
+               -> table Identity
+                  -- ^ The row to update
+               -> table (QFieldAssignment be table)
+                  -- ^ Updates to be made (use 'set' to construct an empty field)
+               -> SqlUpdate be table
+updateTableRow tbl row update' =
+  updateTable tbl update' (references_ (val_ (pk row)))
+
+set :: forall table be table'. Beamable table => table (QFieldAssignment be table')
+set = changeBeamRep (\_ -> Columnar' (QFieldAssignment (\_ -> Nothing))) (tblSkeleton :: TableSkeleton table)
+
+setFieldsTo :: forall table be table'
+             . Table table => (forall s. table (QExpr be s)) -> table (QFieldAssignment be table')
+setFieldsTo tbl =
+
+  runIdentity $
+  zipBeamFieldsM (\(Columnar' (Const columnIx))
+                   (Columnar' (QExpr newValue)) ->
+                    if columnIx `elem` primaryKeyIndices
+                    then pure $ Columnar' toOldValue
+                    else pure $ Columnar' (toNewValue (QExpr newValue)))
+                 indexedTable tbl
+
+  where
+    indexedTable :: table (Const Int)
+    indexedTable =
+      flip evalState 0 $
+      zipBeamFieldsM (\_ _ -> do
+                         n <- get
+                         put (n + 1)
+                         return (Columnar' (Const n)))
+        (tblSkeleton :: TableSkeleton table) (tblSkeleton :: TableSkeleton table)
+
+    primaryKeyIndices :: [ Int ]
+    primaryKeyIndices = allBeamValues (\(Columnar' (Const ix)) -> ix) (primaryKey indexedTable)
+
+-- | Use with 'set' to set a field to an explicit new value that does
+-- not depend on any other value
+toNewValue :: (forall s. QExpr be s a) -> QFieldAssignment be table a
+toNewValue newVal = toUpdatedValue (\_ -> newVal)
+
+-- | Use with 'set' to not modify the field
+toOldValue :: QFieldAssignment be table a
+toOldValue = toUpdatedValueMaybe (\_ -> Nothing)
+
+-- | Use with 'set' to set a field to a new value that is calculated
+-- based on one or more fields from the existing row
+toUpdatedValue :: (forall s. table (QExpr be s) -> QExpr be s a) -> QFieldAssignment be table a
+toUpdatedValue mkNewVal = toUpdatedValueMaybe (Just <$> mkNewVal)
+
+-- | Use with 'set' to optionally set a fiield to a new value,
+-- calculated based on one or more fields from the existing row
+toUpdatedValueMaybe :: (forall s. table (QExpr be s) -> Maybe (QExpr be s a)) -> QFieldAssignment be table a
+toUpdatedValueMaybe = QFieldAssignment
+
+-- | Generate a 'SqlUpdate' that will update the given table row with the given value.
 --
 --   The SQL @UPDATE@ that is generated will set every non-primary key field for
 --   the row where each primary key field is exactly what is given.
@@ -323,8 +431,8 @@ save :: forall table be db.
         ( Table table
         , BeamSqlBackend be
 
-        , SqlValableTable (PrimaryKey table) be
-        , SqlValableTable table be
+        , SqlValableTable be (PrimaryKey table)
+        , SqlValableTable be table
 
         , HasTableEquality be (PrimaryKey table)
         )
@@ -333,31 +441,21 @@ save :: forall table be db.
      -> table Identity
         -- ^ Value to set to
      -> SqlUpdate be table
-save tbl@(DatabaseEntity dt@(DatabaseTable {})) v =
-  update tbl (\(tblField :: table (QField s)) ->
-                execWriter $
-                zipBeamFieldsM
-                  (\(Columnar' field) c@(Columnar' value) ->
-                     do when (qFieldName field `notElem` primaryKeyFieldNames) $
-                          tell [ field <-. value ]
-                        pure c)
-                  tblField (val_ v :: table (QExpr be s)))
-             (\tblE -> primaryKey tblE ==. val_ (primaryKey v))
-
-  where
-    primaryKeyFieldNames =
-      allBeamValues (\(Columnar' fd) -> fd ^. fieldName) (primaryKey (dbTableSettings dt))
+save tbl v =
+  updateTableRow tbl v
+    (setFieldsTo (val_ v))
 
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
 runUpdate :: (BeamSqlBackend be, MonadBeam be m)
           => SqlUpdate be tbl -> m ()
-runUpdate (SqlUpdate u) = runNoReturn (updateCmd u)
+runUpdate (SqlUpdate _ u) = runNoReturn (updateCmd u)
 runUpdate SqlIdentityUpdate = pure ()
 
 -- * DELETE
 
 -- | Represents a SQL @DELETE@ statement for the given @table@
-newtype SqlDelete be (table :: (* -> *) -> *) = SqlDelete (BeamSqlBackendDeleteSyntax be)
+data SqlDelete be (table :: (* -> *) -> *)
+  = SqlDelete !(TableSettings table) !(BeamSqlBackendDeleteSyntax be)
 
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause
 delete :: forall be db table
@@ -368,7 +466,8 @@ delete :: forall be db table
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete be table
 delete (DatabaseEntity dt@(DatabaseTable {})) mkWhere =
-  SqlDelete (deleteStmt (tableNameFromEntity dt) alias (Just (where_ "t")))
+  SqlDelete (dbTableSettings dt)
+            (deleteStmt (tableNameFromEntity dt) alias (Just (where_ "t")))
   where
     supportsAlias = deleteSupportsAlias (Proxy @(BeamSqlBackendDeleteSyntax be))
 
@@ -377,9 +476,9 @@ delete (DatabaseEntity dt@(DatabaseTable {})) mkWhere =
     mkField = if supportsAlias then qualifiedField tgtName else unqualifiedField
 
     QExpr where_ = mkWhere (changeBeamRep (\(Columnar' fd) -> Columnar' (QExpr (pure (fieldE (mkField (fd ^. fieldName))))))
-                            (dbTableSettings dt))
+                             (dbTableSettings dt))
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
 runDelete :: (BeamSqlBackend be, MonadBeam be m)
           => SqlDelete be table -> m ()
-runDelete (SqlDelete d) = runNoReturn (deleteCmd d)
+runDelete (SqlDelete _ d) = runNoReturn (deleteCmd d)

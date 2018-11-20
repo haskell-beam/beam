@@ -114,7 +114,7 @@ instance IsCheckedDatabaseEntity Postgres (PgExtensionEntity extension) where
   type CheckedDatabaseEntityDefaultRequirements Postgres (PgExtensionEntity extension) =
     DatabaseEntityRegularRequirements Postgres (PgExtensionEntity extension)
 
-  unCheck (CheckedPgExtension ext) = ext
+  unChecked f (CheckedPgExtension ext) = CheckedPgExtension <$> f ext
   collectEntityChecks (CheckedPgExtension (PgDatabaseExtension {})) =
     [ SomeDatabasePredicate (PgHasExtension (pgExtensionName (Proxy @extension))) ]
   checkedDbEntityAuto = CheckedPgExtension . dbEntityAuto
