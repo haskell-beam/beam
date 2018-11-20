@@ -13,12 +13,10 @@ import           Control.Monad.Free.Church
 import           Control.Monad.Free
 
 #if !MIN_VERSION_base(4, 11, 0)
-import           Control.Monad.Writer
-#endif
-
-#if !MIN_VERSION_base(4,11,0)
+import           Control.Monad.Writer hiding ((<>))
 import           Data.Semigroup
 #endif
+
 import           Data.Maybe
 import           Data.Proxy (Proxy(Proxy))
 import           Data.String
