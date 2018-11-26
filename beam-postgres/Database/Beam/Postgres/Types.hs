@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -10,6 +11,8 @@
 
 module Database.Beam.Postgres.Types
   ( Postgres(..) ) where
+
+#include "MachDeps.h"
 
 import           Database.Beam
 import           Database.Beam.Backend
@@ -173,9 +176,15 @@ instance HasDefaultSqlDataType Postgres ByteString where
 instance HasDefaultSqlDataType Postgres LocalTime where
   defaultSqlDataType _ _ _ = timestampType Nothing False
 
+#if WORD_SIZE_IN_BITS == 32
 instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
   defaultSqlDataType _ = defaultSqlDataType (Proxy @(SqlSerial Int32))
+#elif WORD_SIZE_IN_BITS == 64
 instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy @(SqlSerial Int64))
+#else
+#error "Unsupported word size; check the value of WORD_SIZE_IN_BITS"
+#endif
 
 instance HasDefaultSqlDataType Postgres (SqlSerial Int16) where
   defaultSqlDataType _ _ False = pgSmallSerialType

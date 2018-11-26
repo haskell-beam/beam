@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -11,6 +12,8 @@ module Database.Beam.Migrate.Generics.Tables
 
   , HasNullableConstraint, NullableStatus
   ) where
+
+#include "MachDeps.h"
 
 import Database.Beam
 import Database.Beam.Backend.SQL
@@ -133,8 +136,17 @@ instance (BeamMigrateSqlBackend be, HasDefaultSqlDataType be ty) =>
 
 -- TODO Not sure if individual databases will want to customize these types
 
+
+#if WORD_SIZE_IN_BITS == 32
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int where
   defaultSqlDataType _ = defaultSqlDataType (Proxy @Int32)
+#elif WORD_SIZE_IN_BITS == 64
+instance ( BeamMigrateSqlBackend be, BeamSqlT071Backend be ) => HasDefaultSqlDataType be Int where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy @Int64)
+#else
+#error "Unsupported word size; check the value of WORD_SIZE_IN_BITS"
+#endif
+
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int32 where
   defaultSqlDataType _ _ _ = intType
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int16 where
