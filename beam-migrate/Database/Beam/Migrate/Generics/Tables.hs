@@ -138,7 +138,7 @@ instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int where
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int32 where
   defaultSqlDataType _ _ _ = intType
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int16 where
-  defaultSqlDataType _ _ _ = intType
+  defaultSqlDataType _ _ _ = smallIntType
 instance ( BeamMigrateSqlBackend be, BeamSqlT071Backend be ) => HasDefaultSqlDataType be Int64 where
     defaultSqlDataType _ _ _ = bigIntType
 
