@@ -14,8 +14,9 @@ module Database.Beam.Haskell.Syntax where
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Backend.SQL.AST
+import           Database.Beam.Backend.SQL.Builder
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.SQL.Types
 import           Database.Beam.Migrate.Serialization
@@ -91,6 +92,8 @@ instance Hashable HsDataType where
   hashWithSalt salt (HsDataType mig ty _) = hashWithSalt salt (mig, ty)
 instance Sql92DisplaySyntax HsDataType where
   displaySyntax = show
+instance HasDataTypeCreatedCheck HsDataType where
+  dataTypeHasBeenCreated _ _ = True -- TODO make this more robust
 
 data HsType
   = HsType
@@ -944,6 +947,8 @@ beamMigrateSqlBackend :: HsBackendConstraint
 beamMigrateSqlBackend =
   HsBackendConstraint $ \beTy ->
   Hs.ClassA () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend")) [ beTy ]
+
+
 
 -- * Orphans
 

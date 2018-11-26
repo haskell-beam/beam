@@ -40,7 +40,6 @@ import           Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BC
 import           Data.Functor.Const
 import qualified Data.HashSet as HS
-import           Data.Hashable (Hashable)
 import           Data.Proxy (Proxy(..))
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
@@ -59,17 +58,6 @@ data PgDataTypeSchema a where
 class IsPgCustomDataType a where
     pgDataTypeName :: Proxy a -> Text
     pgDataTypeDescription :: PgDataTypeSchema a
-
-data PgHasEnum = PgHasEnum Text {- Enumeration name -} [Text] {- enum values -}
-    deriving (Show, Eq, Generic, Hashable)
-instance DatabasePredicate PgHasEnum where
-    englishDescription (PgHasEnum enumName values) =
-        "Has postgres enumeration " ++ show enumName ++ " with values " ++ show values
-
-    predicateSpecificity _ = PredicateSpecificityOnlyBackend "postgres"
-    serializePredicate (PgHasEnum name values) =
-        object [ "has-postgres-enum" .= object [ "name" .= name
-                                               , "values" .= values ] ]
 
 pgCustomEnumSchema :: HasSqlValueSyntax PgValueSyntax a => [a] -> PgDataTypeSchema a
 pgCustomEnumSchema = PgDataTypeEnum

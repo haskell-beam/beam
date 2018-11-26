@@ -322,7 +322,7 @@ instance ( FieldReturnType defaultGiven collationGiven be resTy a
   FieldReturnType defaultGiven collationGiven be resTy (DataType be' x -> a) where
   field' = error "Unreachable because of GHC Custom Type Errors"
 
-instance BeamMigrateSqlBackend be =>
+instance ( BeamMigrateSqlBackend be, HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) ) =>
   FieldReturnType defaultGiven collationGiven be resTy (TableFieldSchema be resTy) where
   field' _ _ nm ty default_' collation constraints =
     TableFieldSchema nm (FieldSchema (columnSchemaSyntax ty default_' constraints collation)) checks

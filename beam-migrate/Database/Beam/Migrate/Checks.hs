@@ -37,11 +37,17 @@ instance DatabasePredicate TableExistsPredicate where
 
   predicateSpecificity _ = PredicateSpecificityAllBackends
 
+-- | A class that can check whether a particular data type is present
+-- in a set of preconditions.
+class HasDataTypeCreatedCheck dataType where
+  dataTypeHasBeenCreated :: dataType -> (forall preCondition. Typeable preCondition => [ preCondition ]) -> Bool
+
 -- | Asserts that the table specified has a column with the given data type. The
 -- type paramater @syntax@ should be an instance of 'IsSql92ColumnSchemaSyntax'.
 data TableHasColumn be where
   TableHasColumn
-    :: { hasColumn_table  :: QualifiedName {-^ Table name -}
+    :: ( HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) )
+    => { hasColumn_table  :: QualifiedName {-^ Table name -}
        , hasColumn_column :: Text {-^ Column name -}
        , hasColumn_type   :: BeamMigrateSqlBackendDataTypeSyntax be {-^ Data type -}
        }
@@ -121,7 +127,8 @@ instance DatabasePredicate TableHasPrimaryKey where
 -- | 'BeamDeserializers' for all the predicates defined in this module
 beamCheckDeserializers
   :: forall be
-   . (Typeable be, BeamMigrateOnlySqlBackend be)
+   . ( Typeable be, BeamMigrateOnlySqlBackend be
+     , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) )
   => BeamDeserializers be
 beamCheckDeserializers = mconcat
   [ beamDeserializer (const deserializeTableExistsPredicate)

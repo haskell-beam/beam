@@ -25,11 +25,13 @@ import           Prelude hiding (log)
 
 import           Database.Beam
 import           Database.Beam.Backend
-import           Database.Beam.Migrate.Backend
-import           Database.Beam.Migrate.Types
-import           Database.Beam.Migrate.Actions
-import           Database.Beam.Migrate.Log
 import           Database.Beam.Haskell.Syntax
+import           Database.Beam.Migrate.Actions
+import           Database.Beam.Migrate.Backend
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck)
+import           Database.Beam.Migrate.Log
+import           Database.Beam.Migrate.SQL (BeamMigrateSqlBackendDataTypeSyntax)
+import           Database.Beam.Migrate.Types
 
 import           Control.Monad.Cont
 import           Control.Monad.Writer
@@ -91,7 +93,8 @@ defaultUpToDateHooks =
 --
 -- Tries to bring the database up to date, using the database log and the given
 -- 'MigrationSteps'. Fails if the migration is irreversible, or an error occurs.
-bringUpToDate :: Database be db
+bringUpToDate :: ( Database be db
+                 , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) )
               => BeamMigrationBackend be m
               -> MigrationSteps be () (CheckedDatabaseSettings be db)
               -> m (Maybe (CheckedDatabaseSettings be db))
@@ -106,7 +109,8 @@ bringUpToDate be@BeamMigrationBackend {} =
 -- documentation for 'BringUpToDateHooks' for more information. Calling this
 -- with 'defaultUpToDateHooks' is the same as using 'bringUpToDate'.
 bringUpToDateWithHooks :: forall db be m
-                        . Database be db
+                        . ( Database be db
+                          , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) )
                        => BringUpToDateHooks m
                        -> BeamMigrationBackend be m
                        -> MigrationSteps be () (CheckedDatabaseSettings be db)

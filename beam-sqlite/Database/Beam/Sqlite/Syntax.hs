@@ -40,6 +40,7 @@ module Database.Beam.Sqlite.Syntax
 
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Haskell.Syntax
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.Serialization
@@ -913,3 +914,5 @@ instance HasSqlValueSyntax SqliteValueSyntax Day where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
     where tmStr = formatTime defaultTimeLocale (iso8601DateFormat Nothing) tm
 
+instance HasDataTypeCreatedCheck SqliteDataTypeSyntax where
+  dataTypeHasBeenCreated _ _ = True

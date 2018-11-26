@@ -67,18 +67,21 @@ instance Database be BeamMigrateDb
 
 beamMigratableDb :: forall be m
                   . ( BeamMigrateSqlBackend be
+                    , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
                     , MonadBeam be m )
                  => CheckedDatabaseSettings be BeamMigrateDb
 beamMigratableDb = runMigrationSilenced $ beamMigrateDbMigration @be @m
 
 beamMigrateDb :: forall be m
                . ( BeamMigrateSqlBackend be
+                 , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
                  , MonadBeam be m )
                => DatabaseSettings be BeamMigrateDb
 beamMigrateDb = unCheckDatabase $ beamMigratableDb @be @m
 
 beamMigrateDbMigration ::  forall be m
                         . ( BeamMigrateSqlBackend be
+                          , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
                           , MonadBeam be m )
                        => Migration be (CheckedDatabaseSettings be BeamMigrateDb)
 beamMigrateDbMigration =
@@ -93,6 +96,7 @@ beamMigrateSchemaVersion = 1
 
 getLatestLogEntry :: forall be m
                    . ( BeamMigrateSqlBackend be
+                     , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
                      , BeamSqlBackendCanDeserialize be Int
                      , BeamSqlBackendCanDeserialize be LocalTime
                      , BeamSqlBackendSupportsDataType be Text
@@ -108,6 +112,7 @@ getLatestLogEntry =
 
 updateSchemaToCurrent :: forall be m
                        . ( BeamMigrateSqlBackend be
+                         , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
                          , BeamSqlBackendCanSerialize be Text
                          , MonadBeam be m )
                       => m ()
@@ -116,6 +121,7 @@ updateSchemaToCurrent =
 
 recordCommit :: forall be m
              . ( BeamMigrateSqlBackend be
+               , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
                , BeamSqlBackendSupportsDataType be Text
                , BeamSqlBackendCanDeserialize be Int
                , BeamSqlBackendCanDeserialize be LocalTime

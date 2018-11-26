@@ -75,6 +75,7 @@ data BeamMigrationBackend be m where
     ( MonadBeam be m
     , HasQBuilder be
     , BeamMigrateSqlBackend be
+    , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
     , BeamSqlBackendCanSerialize be LocalTime
     , BeamSqlBackendCanSerialize be (Maybe LocalTime)
     , BeamSqlBackendCanSerialize be Text

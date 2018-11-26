@@ -51,6 +51,7 @@ instance ( BeamMigrateSqlBackend be
 instance ( HasDefaultSqlDataType be haskTy
          , HasNullableConstraint (NullableStatus haskTy) be
 
+         , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
          , Typeable be, BeamMigrateSqlBackend be ) =>
   GMigratableTableSettings be (Rec0 haskTy) (Rec0 (Const [FieldCheck] haskTy)) where
 

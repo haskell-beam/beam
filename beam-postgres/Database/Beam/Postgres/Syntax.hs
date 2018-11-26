@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -54,6 +55,7 @@ module Database.Beam.Postgres.Syntax
     , pgSelectStmt
 
     , PgDataTypeDescr(..)
+    , PgHasEnum(..)
 
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
     , pgCreateEnumSyntax, pgDropTypeSyntax
@@ -85,10 +87,13 @@ module Database.Beam.Postgres.Syntax
 
 import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Migrate
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.Serialization
 
+import           Control.Monad (guard)
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
@@ -379,6 +384,13 @@ instance Hashable PgDataTypeSyntax where
   hashWithSalt salt (PgDataTypeSyntax a _ _) = hashWithSalt salt a
 instance Eq PgDataTypeSyntax where
   PgDataTypeSyntax a _ _ == PgDataTypeSyntax b _ _ = a == b
+
+instance HasDataTypeCreatedCheck PgDataTypeSyntax where
+  dataTypeHasBeenCreated (PgDataTypeSyntax (PgDataTypeDescrOid {}) _ _) _ = True
+  dataTypeHasBeenCreated (PgDataTypeSyntax (PgDataTypeDescrDomain d) _ _) pre =
+    not . null $
+    do PgHasEnum nm _ <- pre
+       guard (nm == d)
 
 instance Eq PgColumnConstraintDefinitionSyntax where
   PgColumnConstraintDefinitionSyntax a _ ==
@@ -1131,6 +1143,19 @@ instance IsSql92ColumnConstraintSyntax PgColumnConstraintSyntax where
 defaultPgValueSyntax :: Pg.ToField a => a -> PgValueSyntax
 defaultPgValueSyntax =
     PgValueSyntax . pgBuildAction . pure . Pg.toField
+
+-- Database Predicates
+
+data PgHasEnum = PgHasEnum T.Text {- Enumeration name -} [T.Text] {- enum values -}
+    deriving (Show, Eq, Generic, Hashable)
+instance DatabasePredicate PgHasEnum where
+    englishDescription (PgHasEnum enumName values) =
+        "Has postgres enumeration " ++ show enumName ++ " with values " ++ show values
+
+    predicateSpecificity _ = PredicateSpecificityOnlyBackend "postgres"
+    serializePredicate (PgHasEnum name values) =
+        object [ "has-postgres-enum" .= object [ "name" .= name
+                                               , "values" .= values ] ]
 
 #define DEFAULT_SQL_SYNTAX(ty)                                  \
            instance HasSqlValueSyntax PgValueSyntax ty where    \
