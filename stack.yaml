@@ -1,6 +1,6 @@
 #resolver: lts-9.0
 #resolver: lts-10.3
-resolver: lts-11.10
+resolver: lts-12.20
 packages:
   - beam-sqlite
   - beam-postgres
