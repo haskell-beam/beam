@@ -116,7 +116,8 @@ pgChecksForTypeSchema (PgDataTypeEnum vals) =
         let PgValueSyntax (PgSyntax syntax) = sqlValueSyntax val
         in runF syntax (\_ -> error "Expecting a simple text encoding for enumeration type")
                        (\case
-                           EscapeString s _ -> TE.decodeUtf8 s
+                           EmitByteString "'" next -> next
+                           EscapeString s _ -> TE.decodeUtf8 s -- TODO Make this more robust
                            _ -> error "Expecting a simple text encoding for enumeration type")
   in [ PgTypeCheck (\nm -> p (PgHasEnum nm valTxts)) ]
 
