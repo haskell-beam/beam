@@ -310,8 +310,8 @@ pgDataTypeFromAtt _ oid pgMod
 pgEnumerationTypeFromAtt :: [ (T.Text, Pg.Oid, V.Vector T.Text) ] -> ByteString -> Pg.Oid -> Maybe Int32 -> Maybe PgDataTypeSyntax
 pgEnumerationTypeFromAtt enumData =
   let enumDataMap = HM.fromList [ (fromIntegral oid' :: Word64, -- Get around lack of Hashable for CUInt
-                                   PgDataTypeSyntax (PgDataTypeDescrOid oid Nothing) (emit (TE.encodeUtf8 nm))
-                                          (pgDataTypeJSON (object [ "enum" .= nm ]))) | (nm, oid@(Pg.Oid oid'), _) <- enumData ]
+                                   PgDataTypeSyntax (PgDataTypeDescrDomain nm) (emit (TE.encodeUtf8 nm))
+                                          (pgDataTypeJSON (object [ "customType" .= nm ]))) | (nm, oid@(Pg.Oid oid'), _) <- enumData ]
   in \_ (Pg.Oid oid) _ -> HM.lookup (fromIntegral oid) enumDataMap
 
 pgUnknownDataType :: Pg.Oid -> Maybe Int32 -> PgDataTypeSyntax
