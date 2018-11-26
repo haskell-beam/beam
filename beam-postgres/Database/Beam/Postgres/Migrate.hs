@@ -50,6 +50,7 @@ import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 
+import           Control.Applicative ((<|>))
 import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad
@@ -57,22 +58,24 @@ import           Control.Monad.Free.Church (liftF)
 
 import           Data.Aeson hiding (json)
 import           Data.Bits
-import           Data.Maybe
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
-import           Data.String
+import qualified Data.HashMap.Strict as HM
 import           Data.Int
+import           Data.Maybe
+import           Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Data.Vector as V
-import           Data.UUID.Types (UUID)
 import           Data.Typeable
+import           Data.UUID.Types (UUID)
+import qualified Data.Vector as V
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #else
 import           Data.Monoid (Endo(..))
 #endif
+import           Data.Word (Word64)
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
 migrationBackend :: Tool.BeamMigrationBackend Postgres Pg
@@ -272,25 +275,27 @@ writeMigrationScript fp steps =
 pgExpandDataType :: Db.DataType Postgres a -> PgDataTypeSyntax
 pgExpandDataType (Db.DataType pg) = pg
 
-pgDataTypeFromAtt :: ByteString -> Pg.Oid -> Maybe Int32 -> PgDataTypeSyntax
+pgDataTypeFromAtt :: ByteString -> Pg.Oid -> Maybe Int32 -> Maybe PgDataTypeSyntax
 pgDataTypeFromAtt _ oid pgMod
-  | Pg.typoid Pg.bool == oid = pgExpandDataType Db.boolean
-  | Pg.typoid Pg.bytea == oid = pgExpandDataType Db.binaryLargeObject
-  | Pg.typoid Pg.char == oid = pgExpandDataType (Db.char Nothing) -- TODO length
+  | Pg.typoid Pg.bool == oid        = Just $ pgExpandDataType Db.boolean
+  | Pg.typoid Pg.bytea == oid       = Just $ pgExpandDataType Db.binaryLargeObject
+  | Pg.typoid Pg.char == oid        = Just $ pgExpandDataType (Db.char Nothing) -- TODO length
   -- TODO Pg.name
-  | Pg.typoid Pg.int8 == oid = pgExpandDataType (Db.bigint :: Db.DataType Postgres Int64)
-  | Pg.typoid Pg.int4 == oid = pgExpandDataType (Db.int :: Db.DataType Postgres Int32)
-  | Pg.typoid Pg.int2 == oid = pgExpandDataType (Db.smallint :: Db.DataType Postgres Int16)
-  | Pg.typoid Pg.varchar == oid = pgExpandDataType (Db.varchar Nothing)
-  | Pg.typoid Pg.timestamp == oid = pgExpandDataType Db.timestamp
-  | Pg.typoid Pg.text  == oid = pgTextType
-  | Pg.typoid Pg.json  == oid = pgJsonType
-  | Pg.typoid Pg.jsonb == oid = pgJsonbType
-  | Pg.typoid Pg.uuid  == oid = pgUuidType
-  | Pg.typoid Pg.point == oid = pgPointType
-  | Pg.typoid Pg.line  == oid = pgLineType
-  | Pg.typoid Pg.lseg  == oid = pgLineSegmentType
-  | Pg.typoid Pg.box   == oid = pgBoxType
+  | Pg.typoid Pg.int8 == oid        = Just $ pgExpandDataType (Db.bigint :: Db.DataType Postgres Int64)
+  | Pg.typoid Pg.int4 == oid        = Just $ pgExpandDataType (Db.int :: Db.DataType Postgres Int32)
+  | Pg.typoid Pg.int2 == oid        = Just $ pgExpandDataType (Db.smallint :: Db.DataType Postgres Int16)
+  | Pg.typoid Pg.varchar == oid     = Just $ pgExpandDataType (Db.varchar Nothing)
+  | Pg.typoid Pg.timestamp == oid   = Just $ pgExpandDataType Db.timestamp
+  | Pg.typoid Pg.timestamptz == oid = Just $ pgExpandDataType Db.timestamptz
+  | Pg.typoid Pg.float8 == oid      = Just $ pgExpandDataType Db.double
+  | Pg.typoid Pg.text  == oid       = Just $ pgTextType
+  | Pg.typoid Pg.json  == oid       = Just $ pgJsonType
+  | Pg.typoid Pg.jsonb == oid       = Just $ pgJsonbType
+  | Pg.typoid Pg.uuid  == oid       = Just $ pgUuidType
+  | Pg.typoid Pg.point == oid       = Just $ pgPointType
+  | Pg.typoid Pg.line  == oid       = Just $ pgLineType
+  | Pg.typoid Pg.lseg  == oid       = Just $ pgLineSegmentType
+  | Pg.typoid Pg.box   == oid       = Just $ pgBoxType
   | Pg.typoid Pg.numeric == oid =
       let precAndDecimal =
             case pgMod of
@@ -299,12 +304,20 @@ pgDataTypeFromAtt _ oid pgMod
                 let prec = fromIntegral (pgMod' `shiftR` 16)
                     dec = fromIntegral (pgMod' .&. 0xFFFF)
                 in Just (prec, if dec == 0 then Nothing else Just dec)
-      in pgExpandDataType (Db.numeric precAndDecimal)
-  | otherwise = PgDataTypeSyntax (PgDataTypeDescrOid oid pgMod) (emit "{- UNKNOWN -}")
-                                 (pgDataTypeJSON (object [ "oid" .= (fromIntegral oid' :: Word), "mod" .= pgMod ]))
-  where
-    Pg.Oid oid' = oid
-  -- , \_ _ -> errorTypeHs (show fallback))
+      in Just $ pgExpandDataType (Db.numeric precAndDecimal)
+  | otherwise = Nothing
+
+pgEnumerationTypeFromAtt :: [ (T.Text, Pg.Oid, V.Vector T.Text) ] -> ByteString -> Pg.Oid -> Maybe Int32 -> Maybe PgDataTypeSyntax
+pgEnumerationTypeFromAtt enumData =
+  let enumDataMap = HM.fromList [ (fromIntegral oid' :: Word64, -- Get around lack of Hashable for CUInt
+                                   PgDataTypeSyntax (PgDataTypeDescrOid oid Nothing) (emit (TE.encodeUtf8 nm))
+                                          (pgDataTypeJSON (object [ "enum" .= nm ]))) | (nm, oid@(Pg.Oid oid'), _) <- enumData ]
+  in \_ (Pg.Oid oid) _ -> HM.lookup (fromIntegral oid) enumDataMap
+
+pgUnknownDataType :: Pg.Oid -> Maybe Int32 -> PgDataTypeSyntax
+pgUnknownDataType oid@(Pg.Oid oid') pgMod =
+  PgDataTypeSyntax (PgDataTypeDescrOid oid pgMod) (emit "{- UNKNOWN -}")
+                   (pgDataTypeJSON (object [ "oid" .= (fromIntegral oid' :: Word), "mod" .= pgMod ]))
 
 -- * Create constraints from a connection
 
@@ -313,13 +326,23 @@ getDbConstraints conn =
   do tbls <- Pg.query_ conn "SELECT cl.oid, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname = any (current_schemas(false)) and relkind='r'"
      let tblsExist = map (\(_, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate (Db.QualifiedName Nothing tbl))) tbls
 
+     enumerationData <-
+       Pg.query_ conn
+         (fromString (unlines
+                      [ "SELECT t.typname, t.oid, array_agg(e.enumlabel ORDER BY e.enumsortorder)"
+                      , "FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid"
+                      , "GROUP BY t.typname, t.oid" ]))
+
      columnChecks <-
        fmap mconcat . forM tbls $ \(oid, tbl) ->
        do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, pg_catalog.format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute att WHERE att.attrelid=? AND att.attnum>0 AND att.attisdropped='f'"
                        (Pg.Only (oid :: Pg.Oid))
           let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: ByteString) ->
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
-                                        pgDataType = pgDataTypeFromAtt typ typId typmod'
+
+                                        pgDataType = fromMaybe (pgUnknownDataType typId typmod') $
+                                                     pgDataTypeFromAtt typ typId typmod' <|>
+                                                     pgEnumerationTypeFromAtt enumerationData typ typId typmod'
 
                                     in Db.SomeDatabasePredicate (Db.TableHasColumn (Db.QualifiedName Nothing tbl) nm pgDataType :: Db.TableHasColumn Postgres)) columns
               notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
@@ -339,13 +362,8 @@ getDbConstraints conn =
                                            , "JOIN pg_class c ON c.oid=i.indrelid"
                                            , "WHERE c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
 
-     enumerations <-
-       map (\(enumNm, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) <$>
-       Pg.query_ conn
-         (fromString (unlines
-                      [ "SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortorder)"
-                      , "FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid"
-                      , "GROUP BY t.typname" ]))
+     let enumerations =
+           map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData
 
      pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations)
 
