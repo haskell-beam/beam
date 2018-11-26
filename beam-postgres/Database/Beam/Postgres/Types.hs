@@ -4,6 +4,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -28,6 +29,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import           Data.CaseInsensitive (CI)
 import           Data.Int
+import           Data.Proxy
 import           Data.Ratio (Ratio)
 import           Data.Scientific (Scientific, toBoundedInteger)
 import           Data.Tagged
@@ -172,8 +174,20 @@ instance HasDefaultSqlDataType Postgres LocalTime where
   defaultSqlDataType _ _ _ = timestampType Nothing False
 
 instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy @(SqlSerial Int32))
+instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
+
+instance HasDefaultSqlDataType Postgres (SqlSerial Int16) where
+  defaultSqlDataType _ _ False = pgSmallSerialType
+  defaultSqlDataType _ _ _ = smallIntType
+
+instance HasDefaultSqlDataType Postgres (SqlSerial Int32) where
   defaultSqlDataType _ _ False = pgSerialType
   defaultSqlDataType _ _ _ = intType
+
+instance HasDefaultSqlDataType Postgres (SqlSerial Int64) where
+  defaultSqlDataType _ _ False = pgBigSerialType
+  defaultSqlDataType _ _ _ = bigIntType
 
 instance HasDefaultSqlDataType Postgres UUID where
   defaultSqlDataType _ _ _ = pgUuidType

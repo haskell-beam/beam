@@ -134,7 +134,7 @@ instance (BeamMigrateSqlBackend be, HasDefaultSqlDataType be ty) =>
 -- TODO Not sure if individual databases will want to customize these types
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int where
-  defaultSqlDataType _ _ _ = intType
+  defaultSqlDataType _ = defaultSqlDataType (Proxy @Int32)
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int32 where
   defaultSqlDataType _ _ _ = intType
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int16 where
