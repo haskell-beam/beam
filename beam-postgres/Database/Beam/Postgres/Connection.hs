@@ -141,9 +141,9 @@ getFields res = do
   Pg.Col colCount <- Pg.nfields res
 
   let getField col =
-        Pg.Field res (Pg.Col col) <$> Pg.ftype res (Pg.Col col)
+        PgI.resultToField res (Pg.Col col)
 
-  mapM getField [0..colCount - 1]
+  return $ map getField [0..colCount - 1]
 
 runPgRowReader ::
   Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either PgRowReadError a)
