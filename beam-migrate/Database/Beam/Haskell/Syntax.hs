@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Instances that allow us to use Haskell as a backend syntax. This allows us
 -- to use migrations defined a la 'Database.Beam.Migrate.SQL' to generate a beam
@@ -16,10 +16,10 @@ import           Database.Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.AST
 import           Database.Beam.Backend.SQL.Builder
-import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck (..))
+import           Database.Beam.Migrate.Serialization
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.SQL.Types
-import           Database.Beam.Migrate.Serialization
 
 import           Data.Char (toLower, toUpper)
 import           Data.Hashable
@@ -464,6 +464,11 @@ instance IsSql92AlterTableActionSyntax HsNone where
   dropColumnSyntax _ = HsNone
   renameTableToSyntax _ = HsNone
   renameColumnToSyntax _ _ = HsNone
+
+instance IsSql92IndexSyntax HsNone where
+  type Sql92IndexTableNameSyntax HsNone = TableName
+  addIndexSyntax _ _ _ _ = HsNone
+  dropIndexSyntax _ = HsNone
 
 instance IsSql92AlterColumnActionSyntax HsNone where
   setNullSyntax = HsNone

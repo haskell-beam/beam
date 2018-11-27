@@ -38,10 +38,11 @@ module Database.Beam.Schema
     -- * Types for lens generation
     , Lenses, LensFor(..)
 
+    -- TODO: does it worth reexporting index stuff here?
     , module Database.Beam.Schema.Lenses ) where
 
-import Database.Beam.Schema.Tables
 import Database.Beam.Schema.Lenses
+import Database.Beam.Schema.Tables
 
 -- $db-construction
 -- Types and functions to express database types and auto-generate name mappings

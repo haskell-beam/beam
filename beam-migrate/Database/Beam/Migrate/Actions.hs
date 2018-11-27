@@ -1,10 +1,8 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Data types and functions to discover sequences of DDL commands to go from
@@ -82,7 +80,10 @@ module Database.Beam.Migrate.Actions
   , addColumnProvider
   , addColumnNullProvider
   , dropColumnNullProvider
+  , addIndexProvider
+  , dropIndexProvider
   , defaultActionProvider
+  , indexActionProvider
 
   -- * Solver
   , Solver(..), FinalSolution(..)
@@ -94,7 +95,9 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Checks
 import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.Types
-import           Database.Beam.Migrate.Types.Predicates (qnameAsText, qnameAsTableName)
+import           Database.Beam.Migrate.Types.Predicates (qnameAsTableName,
+                                                         qnameAsText)
+import           Database.Beam.Schema.Indices
 
 import           Control.Applicative
 import           Control.DeepSeq
@@ -267,11 +270,14 @@ instance Monoid (ActionProvider be) where
        withStrategy (rparWith (parList rseq)) bRes `seq`
        aRes ++ bRes
 
-createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
+createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight,
+  addIndexWeight, dropIndexWeight :: Int
 createTableWeight = 500
 dropTableWeight = 100
 addColumnWeight = 1
 dropColumnWeight = 1
+addIndexWeight = 1
+dropIndexWeight = 1
 
 -- | Proceeds only if no predicate matches the given pattern. See the
 -- implementation of 'dropTableActionProvider' for an example of usage.
@@ -472,6 +478,50 @@ dropColumnNullProvider = ActionProvider provider
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Drop not null constraint for " <> colNm <> " on " <> qnameAsText tblNm) 100)
 
+-- | Action provider for SQL92 @ADD INDEX ...@ actions.
+-- Note that this is not included into 'defaultActionProvider', consider adding
+-- 'indexActionProvider' to your migration backend if your engine supports that.
+addIndexProvider :: forall be
+                   . ( BeamMigrateOnlySqlBackend be, BeamMigrateOnlyIndexBackend be )
+                   => ActionProvider be
+addIndexProvider =
+  ActionProvider provider
+  where
+    provider :: ActionProviderFn be
+    provider findPreConditions findPostConditions =
+      do idxP@(TableHasIndex tblNm colNms opts) <- findPostConditions
+         TableExistsPredicate tblNm' <- findPreConditions
+         guard (tblNm' == tblNm)
+         ensuringNot_ $ do
+           TableHasIndex tblNm'' colNms' _ :: TableHasIndex <- findPreConditions
+           guard (tblNm'' == tblNm && colNms == colNms') -- An index on these columns already exists
+
+         let cmd = addIndexSyntax (qnameAsTableName tblNm) idxNm colNms opts
+             QualifiedName _ bareTblNm = tblNm
+             idxNm = mkIndexName bareTblNm colNms
+         pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate idxP])
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
+                               ("Add index " <> T.intercalate "," colNms <> " to " <> qnameAsText tblNm)
+                (addIndexWeight + fromIntegral (sum $ map T.length (qnameAsText tblNm : colNms))))
+
+-- | Action provider for SQL92 @DROP INDEX ...@ actions.
+dropIndexProvider :: forall be
+                   . ( BeamMigrateOnlySqlBackend be, BeamMigrateOnlyIndexBackend be )
+                   => ActionProvider be
+dropIndexProvider = ActionProvider provider
+  where
+    provider :: ActionProviderFn be
+    provider findPreConditions _ =
+      do idxP@(TableHasIndex tblNm colNms _) <- findPreConditions
+
+         let cmd = alterTableCmd (dropIndexSyntax idxNm)
+             QualifiedName _ bareTblNm = tblNm
+             idxNm = mkIndexName bareTblNm colNms
+         pure (PotentialAction (HS.fromList [SomeDatabasePredicate idxP]) mempty
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
+                               ("Drop index " <> T.intercalate "," colNms <> " from " <> qnameAsText tblNm)
+                (dropIndexWeight + fromIntegral (sum $ map T.length (qnameAsText tblNm : colNms))))
+
 -- | Default action providers for any SQL92 compliant syntax.
 --
 -- In particular, this provides edges consisting of the following statements:
@@ -494,6 +544,20 @@ defaultActionProvider =
 
   , addColumnNullProvider
   , dropColumnNullProvider ]
+
+-- | Action providers for indices management syntax.
+--
+-- In particular, this provides edges consisting of the following statements:
+--
+--  * ADD INDEX ...
+--  * DROP INDEX ...
+indexActionProvider :: ( BeamMigrateOnlySqlBackend be, BeamMigrateOnlyIndexBackend be )
+                    => ActionProvider be
+indexActionProvider =
+  mconcat
+  [ addIndexProvider
+  , dropIndexProvider
+   ]
 
 -- | Represents current state of a database graph search.
 --

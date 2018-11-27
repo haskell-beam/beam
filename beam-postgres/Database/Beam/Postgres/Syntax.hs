@@ -1,16 +1,16 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Data types for Postgres syntax. Access is given mainly for extension
 -- modules. The types and definitions here are likely to change.
@@ -87,9 +87,11 @@ module Database.Beam.Postgres.Syntax
 import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate
-import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
-import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck (..))
 import           Database.Beam.Migrate.Serialization
+import           Database.Beam.Migrate.SQL.Builder hiding
+                                                    (fromSqlConstraintAttributes)
+import           Database.Beam.Schema.Indices
 
 import           Control.Monad (guard)
 import           Control.Monad.Free
@@ -98,7 +100,8 @@ import           Control.Monad.Free.Church
 import           Data.Aeson (Value, object, (.=))
 import           Data.Bits
 import           Data.ByteString (ByteString)
-import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByteString)
+import           Data.ByteString.Builder (Builder, byteString, char8,
+                                          toLazyByteString)
 import qualified Data.ByteString.Char8 as B
 import           Data.ByteString.Lazy.Char8 (toStrict)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -108,24 +111,30 @@ import           Data.Coerce
 import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Int
+import qualified Data.List as L
 import           Data.Maybe
 import           Data.Scientific (Scientific)
-import           Data.String (IsString(..), fromString)
+import           Data.String (IsString (..), fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
-import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
+import           Data.Time (Day, LocalTime, NominalDiffTime, TimeOfDay, UTCTime,
+                            ZonedTime)
 import           Data.UUID.Types (UUID)
 import           Data.Word
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
 
+import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreBuilder,
+                                                          HStoreList, HStoreMap)
+import qualified Database.PostgreSQL.Simple.Time as Pg (Date, LocalTimestamp,
+                                                        UTCTimestamp,
+                                                        ZonedTimestamp)
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
-import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..), Binary(..), Null(..))
-import qualified Database.PostgreSQL.Simple.Time as Pg (Date, ZonedTimestamp, LocalTimestamp, UTCTimestamp)
-import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreList, HStoreMap, HStoreBuilder)
+import qualified Database.PostgreSQL.Simple.Types as Pg (Binary (..), Null (..),
+                                                         Oid (..))
 
 data PostgresInaccessible
 
@@ -374,6 +383,7 @@ newtype PgDropTableSyntax = PgDropTableSyntax { fromPgDropTable :: PgSyntax }
 newtype PgAlterTableSyntax = PgAlterTableSyntax { fromPgAlterTable :: PgSyntax }
 newtype PgAlterTableActionSyntax = PgAlterTableActionSyntax { fromPgAlterTableAction :: PgSyntax }
 newtype PgAlterColumnActionSyntax = PgAlterColumnActionSyntax { fromPgAlterColumnAction :: PgSyntax }
+newtype PgIndexSyntax = PgIndexSyntax { fromPgIndex :: PgSyntax }
 newtype PgWindowFrameSyntax = PgWindowFrameSyntax { fromPgWindowFrame :: PgSyntax }
 newtype PgWindowFrameBoundsSyntax = PgWindowFrameBoundsSyntax { fromPgWindowFrameBounds :: PgSyntax }
 newtype PgWindowFrameBoundSyntax = PgWindowFrameBoundSyntax { fromPgWindowFrameBound :: ByteString -> PgSyntax }
@@ -492,7 +502,7 @@ instance IsSql92FromSyntax PgFromSyntax where
       coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm <>
       maybe mempty (\colNms' -> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier colNms'))) colNms
 
-  innerJoin a b Nothing = PgFromSyntax (fromPgFrom a <> emit " CROSS JOIN " <> fromPgFrom b)
+  innerJoin a b Nothing  = PgFromSyntax (fromPgFrom a <> emit " CROSS JOIN " <> fromPgFrom b)
   innerJoin a b (Just e) = pgJoin "INNER JOIN" a b (Just e)
 
   leftJoin = pgJoin "LEFT JOIN"
@@ -1025,6 +1035,20 @@ instance IsSql92AlterTableActionSyntax PgAlterTableActionSyntax where
     PgAlterTableActionSyntax $
     emit "RENAME COLUMN " <> pgQuotedIdentifier oldNm <> emit " TO " <> pgQuotedIdentifier newNm
 
+instance IsSql92IndexSyntax PgIndexSyntax where
+  type Sql92IndexTableNameSyntax PgIndexSyntax = PgTableNameSyntax
+  addIndexSyntax tblNm idxNm colNms (IndexOptions uniq) =
+    PgIndexSyntax $
+    emit "CREATE " <> emit (if uniq then "UNIQUE " else " ") <>
+    emit "INDEX " <> pgQuotedIdentifier idxNm <>
+    emit " ON " <> fromPgTableName tblNm <>
+        emit "(" <>
+        mconcat (L.intersperse (emit ", ") (map pgQuotedIdentifier colNms)) <>
+        emit ")"
+  dropIndexSyntax idxNm =
+    PgIndexSyntax $
+    emit "DROP INDEX " <> pgQuotedIdentifier idxNm
+
 instance IsSql92AlterColumnActionSyntax PgAlterColumnActionSyntax where
   setNullSyntax = PgAlterColumnActionSyntax (emit "DROP NOT NULL")
   setNotNullSyntax = PgAlterColumnActionSyntax (emit "SET NOT NULL")
@@ -1397,4 +1421,3 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
       where
         quoteIdentifierChar '"' = char8 '"' <> char8 '"'
         quoteIdentifierChar c = char8 c
-

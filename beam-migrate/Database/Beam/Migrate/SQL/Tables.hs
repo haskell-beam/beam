@@ -1,8 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.Beam.Migrate.SQL.Tables
   ( -- * Table manipulation
@@ -18,6 +18,7 @@ module Database.Beam.Migrate.SQL.Tables
 
   , renameTableTo, renameColumnTo
   , addColumn, dropColumn
+  , addIndex, dropIndex
 
     -- * Field specification
   , DefaultValue, Constraint(..), NotNullConstraint
@@ -31,29 +32,30 @@ module Database.Beam.Migrate.SQL.Tables
   , FieldReturnType(..)
   ) where
 
-import Database.Beam
-import Database.Beam.Schema.Tables
-import Database.Beam.Backend.SQL
-import Database.Beam.Backend.SQL.AST (TableName(..))
-import Database.Beam.Query.Internal (tableNameFromEntity)
+import           Database.Beam
+import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.SQL.AST (TableName (..))
+import           Database.Beam.Query.Internal (tableNameFromEntity)
+import           Database.Beam.Schema.Indices
+import           Database.Beam.Schema.Tables
 
-import Database.Beam.Migrate.Types
-import Database.Beam.Migrate.Checks
-import Database.Beam.Migrate.SQL.Types
-import Database.Beam.Migrate.SQL.SQL92
+import           Database.Beam.Migrate.Checks
+import           Database.Beam.Migrate.SQL.SQL92
+import           Database.Beam.Migrate.SQL.Types
+import           Database.Beam.Migrate.Types
 
-import Control.Applicative
-import Control.Monad.Identity
-import Control.Monad.Writer.Strict
-import Control.Monad.State
+import           Control.Applicative
+import           Control.Monad.Identity
+import           Control.Monad.State
+import           Control.Monad.Writer.Strict
 
-import Data.Text (Text)
-import Data.Typeable
 import qualified Data.Kind as Kind (Constraint)
+import           Data.Text (Text)
+import           Data.Typeable
 
-import GHC.TypeLits
+import           GHC.TypeLits
 
-import Lens.Micro ((^.))
+import           Lens.Micro ((^.))
 
 -- * Table manipulation
 
@@ -113,7 +115,7 @@ data ColumnMigration a
 
 -- | Monad representing a series of @ALTER TABLE@ statements
 newtype TableMigration be a
-  = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (TableName, [TableCheck])) a)
+  = TableMigration (WriterT [BeamSqlBackendAlterTableSyntax be] (State (TableName, [SomeTableCheck])) a)
   deriving (Monad, Applicative, Functor)
 
 -- | @ALTER TABLE ... RENAME TO@ command
@@ -195,7 +197,7 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks tblFieldChe
      ((newTbl, cmds), (TableName tblSchema' tblNm', tblChecks')) =
        runState (runWriterT alterColumns')
                 ( TableName (dbTableSchema dt) (dbTableCurrentName dt)
-                , tblChecks )
+                , SomeTableCheck <$> tblChecks )
 
      fieldChecks' = changeBeamRep (\(Columnar' (ColumnMigration _ checks) :: Columnar' ColumnMigration a) ->
                                      Columnar' (Const checks) :: Columnar' (Const [FieldCheck]) a)
@@ -209,7 +211,27 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks tblFieldChe
     pure (CheckedDatabaseEntity (CheckedDatabaseTable
                                   (DatabaseTable tblSchema' (dbTableOrigName dt)
                                      tblNm' tbl')
-                                   tblChecks' fieldChecks') entityChecks)
+                                   (givenTableChecks tblChecks') fieldChecks') entityChecks)
+
+-- | @ALTER TABLE ... ADD INDEX ...@ command
+addIndex :: (BeamMigrateSqlBackend be, BeamMigrateOnlyIndexBackend be)
+         => [ColumnMigration a] -> IndexOptions -> TableMigration be ()
+addIndex columns opts = TableMigration $ do
+  (TableName curSchema curNm, _) <- get
+  let columnNms = map columnMigrationFieldName columns
+      idxName = mkIndexName curNm columnNms
+  tell [ addIndexSyntax (tableName curSchema curNm) idxName columnNms opts ]
+  -- TODO: should I add index checks here?
+
+-- | @ALTER TABLE ... DROP INDEX ...@ command
+dropIndex :: (BeamMigrateSqlBackend be, BeamMigrateOnlyIndexBackend be)
+          => [ColumnMigration a] -> TableMigration be ()
+dropIndex columns = TableMigration $ do
+  (TableName _ curTblNm, _) <- get
+  let columnNms = map columnMigrationFieldName columns
+      idxName = mkIndexName curTblNm columnNms
+  tell [ dropIndexSyntax idxName ]
+  -- TODO: should I remove index checks here?
 
 -- * Fields
 

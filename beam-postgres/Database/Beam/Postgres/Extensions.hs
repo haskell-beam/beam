@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
 
 -- | Postgres extensions are run-time loadable plugins that can extend Postgres
 -- functionality. Extensions are part of the database schema.
@@ -15,16 +14,16 @@ module Database.Beam.Postgres.Extensions where
 import           Database.Beam
 import           Database.Beam.Schema.Tables
 
-import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Postgres.Types
 
 import           Database.Beam.Migrate
 
 import           Control.Monad
 
 import           Data.Aeson
-import qualified Data.HashSet as HS
 import           Data.Hashable (Hashable)
+import qualified Data.HashSet as HS
 import           Data.Proxy
 import           Data.Text (Text)
 #if !MIN_VERSION_base(4, 11, 0)

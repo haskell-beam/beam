@@ -1,8 +1,8 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Migrate.Types
   ( -- * Checked database entities
@@ -33,8 +33,9 @@ module Database.Beam.Migrate.Types
   , p
 
     -- * Entity checks
-  , TableCheck(..), DomainCheck(..)
-  , FieldCheck(..)
+  , TableCheck(..), SomeTableCheck(..)
+  , DomainCheck(..), FieldCheck(..)
+  , givenTableChecks
 
     -- * Migrations
   , MigrationStep(..), MigrationSteps(..)
@@ -48,12 +49,12 @@ module Database.Beam.Migrate.Types
 
   , migrateScript, evaluateDatabase, stepNames ) where
 
+import Control.Arrow
+import Control.Category (Category)
+import Control.Monad.Free.Church
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate.Types.CheckedEntities
 import Database.Beam.Migrate.Types.Predicates
-import Control.Monad.Free.Church
-import Control.Arrow
-import Control.Category (Category)
 
 #if !MIN_VERSION_base(4, 11, 0)
 import Data.Semigroup
@@ -205,4 +206,3 @@ stepNames (MigrationSteps f) = runF (runKleisli f ()) (\_ x -> x) (\(MigrationSt
   where
     runMigration :: forall a'. Migration be a' -> a'
     runMigration migration = runF migration id (\(MigrationRunCommand _ _ next) -> next)
-

@@ -7,6 +7,7 @@ module Database.Beam.Migrate.SQL.Types
 
   , BeamMigrateOnlySqlBackend
   , BeamMigrateSqlBackend
+  , BeamMigrateOnlyIndexBackend
   , BeamMigrateSql99Backend
   , BeamSqlBackendConstraintSyntax
   , BeamSqlBackendColumnConstraintDefinitionSyntax
@@ -18,9 +19,9 @@ module Database.Beam.Migrate.SQL.Types
   , BeamSqlBackendConstraintAttributesSyntax
   ) where
 
-import Database.Beam.Migrate.Types.Predicates
-import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Backend.SQL
+import Database.Beam.Migrate.SQL.SQL92
+import Database.Beam.Migrate.Types.Predicates
 
 import Data.Text (Text)
 import Data.Typeable (Typeable)
@@ -57,6 +58,11 @@ type BeamMigrateSqlBackend be =
     ( BeamMigrateOnlySqlBackend be
     , Sql92SaneDdlCommandSyntax (BeamSqlBackendSyntax be)
     , BeamSqlBackend be )
+
+type BeamMigrateOnlyIndexBackend be =
+    ( Sql92IndexCommandSyntax (BeamSqlBackendSyntax be)
+    , IsSql92IndexSyntax (BeamSqlBackendSyntax be)
+    )
 
 type BeamMigrateSql99Backend be =
   ( BeamMigrateSqlBackend be

@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Postgres.CustomTypes
     ( PgType, PgTypeCheck(..)
     , PgDataTypeSchema
@@ -27,12 +27,12 @@ module Database.Beam.Postgres.CustomTypes
     ) where
 
 import           Database.Beam
-import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate
-import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax
+import           Database.Beam.Postgres.Types
+import           Database.Beam.Schema.Tables
 
 import           Control.Monad
 import           Control.Monad.Free.Church
@@ -40,7 +40,7 @@ import           Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BC
 import           Data.Functor.Const
 import qualified Data.HashSet as HS
-import           Data.Proxy (Proxy(..))
+import           Data.Proxy (Proxy (..))
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
 #endif

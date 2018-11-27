@@ -1,10 +1,10 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
 
 -- | Migrations support for beam-postgres. See "Database.Beam.Migrate" for more
@@ -31,9 +31,9 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate.Actions (defaultActionProvider)
 import qualified Database.Beam.Migrate.Backend as Tool
 import qualified Database.Beam.Migrate.Checks as Db
+import qualified Database.Beam.Migrate.Serialization as Db
 import qualified Database.Beam.Migrate.SQL as Db
 import           Database.Beam.Migrate.SQL.BeamExtensions
-import qualified Database.Beam.Migrate.Serialization as Db
 import qualified Database.Beam.Migrate.Types as Db
 import qualified Database.Beam.Query.DataTypes as Db
 
@@ -47,8 +47,8 @@ import           Database.Beam.Postgres.Types
 import           Database.Beam.Haskell.Syntax
 
 import qualified Database.PostgreSQL.Simple as Pg
-import qualified Database.PostgreSQL.Simple.Types as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
+import qualified Database.PostgreSQL.Simple.Types as Pg
 
 import           Control.Applicative ((<|>))
 import           Control.Arrow
@@ -73,7 +73,7 @@ import qualified Data.Vector as V
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #else
-import           Data.Monoid (Endo(..))
+import           Data.Monoid (Endo (..))
 #endif
 import           Data.Word (Word64)
 
@@ -366,6 +366,7 @@ getDbConstraints conn =
            map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData
 
      pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations)
+     -- TODO: do not forget to update this
 
 -- * Postgres-specific data types
 
