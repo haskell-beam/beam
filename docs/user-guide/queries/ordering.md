@@ -13,7 +13,7 @@ Use the `asc_` and `desc_` functions to specify the sort ordering over an
 arbitrary expression.
 
 !!! note "Note"
-    Use `nullsFirst_` and `nullsLast_` to control the odering of nulls.
+    Use `nullsFirst_` and `nullsLast_` to control the ordering of nulls.
     See [advanced features](./advanced-features.md) for more information.
 
 For example, to get the first ten albums when sorted lexicographically, use
