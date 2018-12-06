@@ -54,7 +54,7 @@ class BeamBackend be => FromBackendRow be a where
   valuesNeeded :: Proxy be -> Proxy a -> Int
   valuesNeeded _ _ = 1
 
--- | newtype mainly used to inspect tho tag structure of a particular
+-- | newtype mainly used to inspect the tag structure of a particular
 --   'Beamable'. Prevents overlapping instances in some case. Usually not used
 --   in end-user code.
 data Exposed x
