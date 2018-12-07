@@ -18,6 +18,7 @@ import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL.AST
 
+import           Data.List.NonEmpty ( NonEmpty((:|)) )
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Text (Text)
@@ -77,14 +78,14 @@ employeeTableSchema = defTblFieldSettings
 
 expectedEmployeeTableSchema :: TableSettings EmployeeT
 expectedEmployeeTableSchema =
-  EmployeeT { _employeeFirstName = TableField "first_name"
-            , _employeeLastName = TableField "last_name"
-            , _employeePhoneNumber = TableField "phone_number"
-            , _employeeAge = TableField "age"
-            , _employeeSalary = TableField "salary"
-            , _employeeHireDate = TableField "hire_date"
-            , _employeeLeaveDate = TableField "leave_date"
-            , _employeeCreated = TableField "created"
+  EmployeeT { _employeeFirstName = TableField (pure "_employeeFirstName") "first_name"
+            , _employeeLastName = TableField (pure "_employeeLastName") "last_name"
+            , _employeePhoneNumber = TableField (pure "_employeePhoneNumber") "phone_number"
+            , _employeeAge = TableField (pure "_employeeAge") "age"
+            , _employeeSalary = TableField (pure "_employeeSalary") "salary"
+            , _employeeHireDate = TableField (pure "_employeeHireDate") "hire_date"
+            , _employeeLeaveDate = TableField (pure "_employeeLeaveDate") "leave_date"
+            , _employeeCreated = TableField (pure "_employeeCreated") "created"
             }
 
 basicSchemaGeneration :: TestTree
@@ -168,55 +169,58 @@ funnyTableSchema = defTblFieldSettings
 underscoresAreHandledGracefully :: TestTree
 underscoresAreHandledGracefully =
   testCase "Underscores in field names are handled gracefully" $
-  do let fieldNames = allBeamValues (\(Columnar' f) -> _fieldName f) funnyTableSchema
-     fieldNames @?= [ "funny_field1"
-                    , "funny_field_2"
-                    , "funny_first_name"
-                    , "funny_lastName"
-                    , "funny_middle_Name"
-                    , "___" ]
+  do let fieldNames = allBeamValues (\(Columnar' f) -> (_fieldPath f, _fieldName f)) funnyTableSchema
+     fieldNames @?= [ ( pure "funny_field1", "funny_field1")
+                    , ( pure "funny_field_2", "funny_field_2")
+                    , ( pure "funny_first_name", "funny_first_name")
+                    , ( pure "_funny_lastName", "funny_lastName")
+                    , ( pure "_funny_middle_Name", "funny_middle_Name")
+                    , ( pure "___", "___") ]
 
 ruleBasedRenaming :: TestTree
 ruleBasedRenaming =
   testCase "Rule based renaming works correctly" $
-  do let (DatabaseEntity (DatabaseTable _ funny)) = _funny employeeDbSettingsRuleMods
-         (DatabaseEntity (DatabaseTable _ departments)) = _departments employeeDbSettingsRuleMods
+  do let (DatabaseEntity (DatabaseTable { dbTableSettings = funny })) = _funny employeeDbSettingsRuleMods
+         (DatabaseEntity (DatabaseTable { dbTableSettings = departments })) = _departments employeeDbSettingsRuleMods
 
-         funnyFieldNames = allBeamValues (\(Columnar' f) -> _fieldName f) funny
-         deptFieldNames = allBeamValues (\(Columnar' f) -> _fieldName f) departments
+         funnyFieldNames = allBeamValues (\(Columnar' f) -> (_fieldPath f, _fieldName f)) funny
+         deptFieldNames = allBeamValues (\(Columnar' f) -> (_fieldPath f, _fieldName f)) departments
 
-     funnyFieldNames @?= [ "pfx_funny_field1"
-                         , "pfx_funny_field_2"
-                         , "pfx_funny_first_name"
-                         , "pfx_funny_lastName"
-                         , "pfx_funny_middle_Name"
-                         , "___" ]
+     funnyFieldNames @?= [ ( pure "funny_field1", "pfx_funny_field1")
+                         , ( pure "funny_field_2", "pfx_funny_field_2")
+                         , ( pure "funny_first_name", "pfx_funny_first_name")
+                         , ( pure "_funny_lastName", "pfx_funny_lastName")
+                         , ( pure "_funny_middle_Name", "pfx_funny_middle_Name")
+                         , ( pure "___", "___") ]
 
-     deptFieldNames @?= [ "name", "head__first_name", "head__last_name", "head__created" ]
+     deptFieldNames @?= [ (pure "_departmentName", "name")
+                        , ( "_departmentHead" :| [ "_employeeFirstName" ], "head__first_name")
+                        , ( "_departmentHead" :| [ "_employeeLastName" ], "head__last_name")
+                        , ( "_departmentHead" :| [ "_employeeCreated" ], "head__created") ]
 
 -- * Ensure it is possible to use nested paremetric beams
 parametricBeamSchemaGeneration :: TestTree
 parametricBeamSchemaGeneration =
   testCase "Parametric schema generation" $
-  do let (DatabaseEntity (DatabaseTable _ deptVehiculesA)) = _departmentVehiculesA employeeDbSettings
-         deptVehiculesFieldNamesA = allBeamValues (\(Columnar' f) -> _fieldName f) deptVehiculesA
+  do let (DatabaseEntity (DatabaseTable { dbTableSettings = deptVehiculesA })) = _departmentVehiculesA employeeDbSettings
+         deptVehiculesFieldNamesA = allBeamValues (\(Columnar' f) -> (_fieldPath f, _fieldName f)) deptVehiculesA
 
-     deptVehiculesFieldNamesA @?= [ "departament__name"
-                                  , "relates_to__id"
-                                  , "relates_to__type"
-                                  , "relates_to__of_wheels"
-                                  , "meta_info__price"
+     deptVehiculesFieldNamesA @?= [ ( "_aDepartament" :| [ "_departmentName" ] , "departament__name")
+                                  , ( "_aRelatesTo"   :| [ "_vehiculeId" ], "relates_to__id")
+                                  , ( "_aRelatesTo"   :| [ "_vehiculeType" ], "relates_to__type")
+                                  , ( "_aRelatesTo"   :| [ "_numberOfWheels" ], "relates_to__of_wheels")
+                                  , ( "_aMetaInfo"    :| [ "_price" ], "meta_info__price")
                                   ]
 
 -- * Ensure it doesn't matter whether we abstract over a beam's parameters, or if we them fixed.
 parametricAndFixedNestedBeamsAreEquivalent :: TestTree
 parametricAndFixedNestedBeamsAreEquivalent =
   testCase "Parametric and fixed nested beams are equivalent" $
-  do let (DatabaseEntity (DatabaseTable _ deptVehiculesA)) = _departmentVehiculesA employeeDbSettings
-         (DatabaseEntity (DatabaseTable _ deptVehiculesB)) = _departmentVehiculesB employeeDbSettings
+  do let (DatabaseEntity (DatabaseTable { dbTableSettings = deptVehiculesA })) = _departmentVehiculesA employeeDbSettings
+         (DatabaseEntity (DatabaseTable { dbTableSettings = deptVehiculesB })) = _departmentVehiculesB employeeDbSettings
          deptVehiculesFieldNamesA = allBeamValues (\(Columnar' f) -> _fieldName f) deptVehiculesA
          deptVehiculesFieldNamesB = allBeamValues (\(Columnar' f) -> _fieldName f) deptVehiculesB
-         
+
      deptVehiculesFieldNamesB @?= deptVehiculesFieldNamesA
 
 
@@ -234,7 +238,7 @@ data DepartamentRelatedT metaInfo prop f = DepartamentProperty
 type BDepartmentVehicule    = BDepartmentVehiculeT Identity
 data BDepartmentVehiculeT f = BDepartmentVehicule
       { _bDepartament  :: PrimaryKey DepartmentT f
-      , _bRelatesTo    :: VehiculeT f                
+      , _bRelatesTo    :: VehiculeT f
       , _bMetaInfo     :: VehiculeInformationT (Nullable f)
       } deriving Generic
 -- 
@@ -280,15 +284,11 @@ instance Table VehiculeInformationT where
      data PrimaryKey VehiculeInformationT f = VehiculeInformationKey  deriving(Generic)
      primaryKey _ = VehiculeInformationKey
 
-
-
-
-
-instance Beamable BDepartmentVehiculeT 
+instance Beamable BDepartmentVehiculeT
 instance Beamable (PrimaryKey BDepartmentVehiculeT)
 instance Table BDepartmentVehiculeT where
-  data PrimaryKey BDepartmentVehiculeT f = DepReKeyB (PrimaryKey DepartmentT f) 
-                                                     (PrimaryKey VehiculeT   f) 
+  data PrimaryKey BDepartmentVehiculeT f = DepReKeyB (PrimaryKey DepartmentT f)
+                                                     (PrimaryKey VehiculeT   f)
                                                      deriving(Generic)
   primaryKey = DepReKeyB <$> _bDepartament <*> (primaryKey._bRelatesTo)
 
@@ -301,7 +301,7 @@ data EmployeeDb f
     { _employees            :: f (TableEntity EmployeeT)
     , _departments          :: f (TableEntity DepartmentT)
     , _roles                :: f (TableEntity RoleT)
-    , _funny                :: f (TableEntity FunnyT) 
+    , _funny                :: f (TableEntity FunnyT)
     , _departmentVehiculesA :: f (TableEntity ADepartmentVehiculeT)
     , _departmentVehiculesB :: f (TableEntity BDepartmentVehiculeT)
     } deriving Generic
@@ -313,9 +313,10 @@ employeeDbSettings = defaultDbSettings
 employeeDbSettingsRuleMods :: DatabaseSettings be EmployeeDb
 employeeDbSettingsRuleMods = defaultDbSettings `withDbModification`
                              renamingFields (\field ->
-                                                case T.stripPrefix "funny" field of
-                                                  Nothing -> field
-                                                  Just fieldNm -> "pfx_" <> field)
+                                                let defName = defaultFieldName field
+                                                in case T.stripPrefix "funny" defName of
+                                                  Nothing -> defName
+                                                  Just fieldNm -> "pfx_" <> defName)
 
 -- employeeDbSettingsModified :: DatabaseSettings EmployeeDb
 -- employeeDbSettingsModified =

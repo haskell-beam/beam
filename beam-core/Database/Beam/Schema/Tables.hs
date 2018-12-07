@@ -53,7 +53,8 @@ module Database.Beam.Schema.Tables
     , tableValuesNeeded
     , pk
     , allBeamValues, changeBeamRep
-    , alongsideTable )
+    , alongsideTable
+    , defaultFieldName )
     where
 
 import           Database.Beam.Backend.Types
@@ -63,6 +64,7 @@ import           Control.Monad.Identity
 import           Control.Monad.Writer hiding ((<>))
 
 import           Data.Char (isUpper, toLower)
+import           Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
 import           Data.Monoid (Endo(..))
 import           Data.Proxy
@@ -978,3 +980,7 @@ unCamelCaseSel original =
                  [] -> symbolLeft
                  [xs] -> xs
                  _:xs -> T.intercalate "_" xs
+
+-- | Produce the beam default field name for the given path
+defaultFieldName :: NE.NonEmpty Text -> Text
+defaultFieldName comps = fold (NE.intersperse (T.pack "__") (unCamelCaseSel <$> comps))

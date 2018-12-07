@@ -124,7 +124,6 @@ marshalTest :: forall a
              . ( Typeable a, Eq a, Show a
                , BeamSqlBackendSupportsDataType Postgres a
                , HasDefaultSqlDataType Postgres a
-               , HasDefaultSqlDataTypeConstraints Postgres a
                , HasNullableConstraint (NullableStatus a) Postgres )
             => Hedgehog.Gen a -> IO ByteString -> TestTree
 marshalTest = marshalTest' (===)
@@ -133,7 +132,6 @@ marshalTest' :: forall a
               . ( Typeable a, Show a
                 , BeamSqlBackendSupportsDataType Postgres a
                 , HasDefaultSqlDataType Postgres a
-                , HasDefaultSqlDataTypeConstraints Postgres a
                 , HasNullableConstraint (NullableStatus a) Postgres )
              => (forall m. (Hedgehog.MonadTest m, HasCallStack) => a -> a -> m ()) -> Hedgehog.Gen a -> IO ByteString -> TestTree
 marshalTest' cmp gen postgresConn =
