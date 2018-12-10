@@ -5,7 +5,9 @@
 -- | Defines common 'DatabasePredicate's that are shared among backends
 module Database.Beam.Migrate.Checks where
 
+import Control.Monad (guard)
 import Database.Beam.Backend.SQL.SQL92
+
 import Database.Beam.Migrate.Serialization
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.SQL.Types
@@ -16,14 +18,17 @@ import Database.Beam.Schema.Tables
 import Data.Aeson (object, withObject, (.:), (.=))
 import Data.Aeson.Types (Parser, Value)
 import Data.Hashable (Hashable (..))
+import Data.Proxy (Proxy (..))
 import Data.Text (Text)
-import Data.Typeable (Typeable, cast)
+import Data.Typeable (Typeable, cast, splitTyConApp, typeOf, typeRep)
 #if !MIN_VERSION_base(4, 11, 0)
 import Data.Semigroup
 #endif
 
 import GHC.Exts (fromList, toList)
 import GHC.Generics (Generic)
+
+import Unsafe.Coerce (unsafeCoerce)
 
 -- * Table checks
 
@@ -153,12 +158,25 @@ instance DatabasePredicate TableHasIndex where
     | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
     | otherwise = False
 
-  -- TODO: how to say that we cannot delete a column while an index on it exists?
-  -- The following does not work since 'TableHasColumn' is polymorphic other used syntax, and
-  -- we don't know which index to get here
-  --
-  -- predicateRestrictDropOf (TableHasIndex tblNm _) p'
-  --   | Just (TableHasColumn tblNm' _ _) <- cast p' = tblNm' == tblNm
+  predicateRestrictsDropOf (TableHasIndex tblNm colNms _) p'
+    | Just (tblNm', colNm') <-
+        withTyCon (\(TableHasColumn tblNm' colNm' _) -> (tblNm', colNm')) p' =
+          tblNm == tblNm' && (colNm' `elem` colNms)
+    | otherwise = False
+
+-- | Match a given item's type against a type-level application with the given
+-- type constructor. Applies the given function and returns 'Just' its result on match,
+-- 'Nothing' otherwise.
+-- Unlike 'cast', this function does not require @a@ type to be instance of 'Typeable'.
+withTyCon
+    :: forall (con :: * -> *) (item :: *) r.
+       (Typeable con, Typeable item)
+    => (forall a. con a -> r) -> item -> Maybe r
+withTyCon f x = do
+    (itemTyCon, itemTyArgs@(_ : _)) <- pure $ splitTyConApp (typeOf x)
+    (conTyCon, conTyArgs) <- pure $ splitTyConApp (typeRep (Proxy @con))
+    guard (itemTyCon == conTyCon && init itemTyArgs == conTyArgs)
+    return (f $ unsafeCoerce x)
 
 -- | Convert gathered indices into checks.
 entityIndicesToChecks

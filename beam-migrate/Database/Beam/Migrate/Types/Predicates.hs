@@ -57,8 +57,8 @@ class (Typeable p, Hashable p, Eq p) => DatabasePredicate p where
   -- needs another one to be true in order to exist. The difference is, the other
   -- predicate cannot be removed until this one exists, this predicate has to be
   -- explicitely removed with a corresponding action first.
-  predicateRestrictDropOf :: DatabasePredicate p' => p -> p' -> Bool
-  predicateRestrictDropOf _ _ = False
+  predicateRestrictsDropOf :: DatabasePredicate p' => p -> p' -> Bool
+  predicateRestrictsDropOf _ _ = False
 
 -- | A Database predicate is a value of any type which satisfies
 -- 'DatabasePredicate'. We often want to store these in lists and sets, so we

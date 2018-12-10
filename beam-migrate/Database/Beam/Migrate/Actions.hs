@@ -418,6 +418,9 @@ dropColumnProvider = ActionProvider provider
 --           TableHasColumn tblNm' colNm' colType' :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <-
 --             findPostConditions
 --           guard (tblNm' == tblNm && colNm == colNm' && colType == colType') -- This column exists as a different type
+         ensuringNot_ $ do
+            SomeDatabasePredicate pred' <- findPreConditions
+            guard (pred' `predicateRestrictsDropOf` colP)
 
          relatedPreds <- --pure []
            pure $ do p'@(SomeDatabasePredicate pred') <- findPreConditions
