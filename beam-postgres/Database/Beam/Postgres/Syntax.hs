@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -89,7 +88,6 @@ import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate
 import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
-import           Database.Beam.Migrate.SQL
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.Serialization
 
@@ -675,9 +673,12 @@ mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. 
 instance IsCustomSqlSyntax PgExpressionSyntax where
   newtype CustomSqlSyntax PgExpressionSyntax =
     PgCustomExpressionSyntax { fromPgCustomExpression :: PgSyntax }
-    deriving (Monoid, Semigroup)
+    deriving Monoid
   customExprSyntax = PgExpressionSyntax . fromPgCustomExpression
   renderSyntax = PgCustomExpressionSyntax . pgParens . fromPgExpression
+
+instance Semigroup (CustomSqlSyntax PgExpressionSyntax) where
+  (<>) = mappend
 
 instance IsString (CustomSqlSyntax PgExpressionSyntax) where
   fromString = PgCustomExpressionSyntax . emit . fromString
@@ -1147,7 +1148,8 @@ defaultPgValueSyntax =
 -- Database Predicates
 
 data PgHasEnum = PgHasEnum T.Text {- Enumeration name -} [T.Text] {- enum values -}
-    deriving (Show, Eq, Generic, Hashable)
+    deriving (Show, Eq, Generic)
+instance Hashable PgHasEnum
 instance DatabasePredicate PgHasEnum where
     englishDescription (PgHasEnum enumName values) =
         "Has postgres enumeration " ++ show enumName ++ " with values " ++ show values

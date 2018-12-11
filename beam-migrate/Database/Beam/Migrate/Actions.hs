@@ -371,7 +371,7 @@ addColumnProvider =
       do colP@(TableHasColumn tblNm colNm colType :: TableHasColumn be)
            <- findPostConditions
          TableExistsPredicate tblNm' <- findPreConditions
-         guard (tblNm' == tblNm && dataTypeHasBeenCreated colType findPreConditions)
+         guard (tblNm'  == tblNm && dataTypeHasBeenCreated colType findPreConditions)
          ensuringNot_ $ do
            TableHasColumn tblNm'' colNm' _ :: TableHasColumn be <-
              findPreConditions
@@ -380,10 +380,10 @@ addColumnProvider =
          (constraintsP, constraints) <-
            pure . unzip $ do
            constraintP@
-             (TableColumnHasConstraint tblNm' colNm' c
+             (TableColumnHasConstraint tblNm'' colNm' c
               :: TableColumnHasConstraint be) <-
              findPostConditions
-           guard (tblNm == tblNm')
+           guard (tblNm == tblNm'')
            guard (colNm == colNm')
 
            pure (p constraintP, c)
