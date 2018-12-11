@@ -59,7 +59,7 @@ selectMock = select
 
 updateMock :: Beamable table
            => DatabaseEntity (MockSqlBackend Command) db (TableEntity table)
-           -> (forall s. table (QField s) -> [ QAssignment (MockSqlBackend Command) s ])
+           -> (forall s. table (QField s) -> QAssignment (MockSqlBackend Command) s)
            -> (forall s. table (QExpr (MockSqlBackend Command) s) -> QExpr (MockSqlBackend Command) s Bool)
            -> SqlUpdate (MockSqlBackend Command) table
 updateMock = update
@@ -1137,9 +1137,9 @@ existsTest =
 updateCurrent :: TestTree
 updateCurrent =
   testCase "UPDATE can use current value" $
-  do SqlUpdate Update { .. } <-
+  do SqlUpdate _ (Update { .. }) <-
        pure $ updateMock (_employees employeeDbSettings)
-                         (\employee -> [ _employeeAge employee <-. current_ (_employeeAge employee) + 1])
+                         (\employee -> _employeeAge employee <-. current_ (_employeeAge employee) + 1)
                          (\employee -> _employeeFirstName employee ==. "Joe")
 
      updateTable @?= (TableName Nothing "employees")
@@ -1154,9 +1154,9 @@ updateNullable =
      let employeeKey :: PrimaryKey EmployeeT (Nullable Identity)
          employeeKey = EmployeeId (Just "John") (Just "Smith") (Just curTime)
 
-     SqlUpdate Update { .. } <-
+     SqlUpdate _ (Update { .. }) <-
        pure $ updateMock (_departments employeeDbSettings)
-                         (\department -> [ _departmentHead department <-. val_ employeeKey ])
+                         (\department -> _departmentHead department <-. val_ employeeKey)
                          (\department -> _departmentName department ==. "Sales")
 
      updateTable @?= (TableName Nothing "departments")
