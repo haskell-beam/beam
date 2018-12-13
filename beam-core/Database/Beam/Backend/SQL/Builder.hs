@@ -33,6 +33,7 @@ import           Data.Coerce
 import           Data.Hashable
 import           Data.Int
 import           Data.String
+import qualified Control.Monad.Fail as Fail
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
@@ -507,8 +508,10 @@ instance BeamBackend SqlSyntaxBackend where
   type BackendFromField SqlSyntaxBackend = Trivial
 
 newtype SqlSyntaxM a = SqlSyntaxM (IO a)
-  deriving (Applicative, Functor, Monad, MonadIO)
+  deriving (Applicative, Functor, Monad, MonadIO, Fail.MonadFail)
 
 instance MonadBeam SqlSyntaxBuilder SqlSyntaxBackend SqlSyntaxBackend SqlSyntaxM where
-  withDatabaseDebug _ _ _ = fail "absurd"
-  runReturningMany _ _ = fail "absurd"
+  withDatabaseDebug _ _ _ = Fail.fail "absurd"
+  runReturningMany _ _ = Fail.fail "absurd"
+
+
