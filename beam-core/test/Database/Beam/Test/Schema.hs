@@ -1,5 +1,6 @@
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Test.Schema
   ( EmployeeT(..), DepartmentT(..)
@@ -14,16 +15,22 @@ module Database.Beam.Test.Schema
   , tests ) where
 
 import           Database.Beam
-import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend
 import           Database.Beam.Backend.SQL.AST
+import           Database.Beam.Schema.Indices
+import           Database.Beam.Schema.Tables
 
-import           Data.List.NonEmpty ( NonEmpty((:|)) )
+import           Data.List (sort)
+import           Data.List.NonEmpty (NonEmpty ((:|)))
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time.Clock (UTCTime)
+
+import           GHC.Exts (fromList)
+
+import           Lens.Micro
 
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -36,9 +43,11 @@ tests = testGroup "Schema Tests"
                   , parametricAndFixedNestedBeamsAreEquivalent
 --                  , automaticNestedFieldsAreUnset
 --                  , nullableForeignKeysGivenMaybeType
-                  , underscoresAreHandledGracefully ]
+                  , underscoresAreHandledGracefully
 --                  , dbSchemaGeneration ]
---                  , dbSchemaModification ]
+--                  , dbSchemaModification
+                  , indicesAreBuiltCorrectly
+                  ]
 
 data DummyBackend
 
@@ -241,7 +250,7 @@ data BDepartmentVehiculeT f = BDepartmentVehicule
       , _bRelatesTo    :: VehiculeT f
       , _bMetaInfo     :: VehiculeInformationT (Nullable f)
       } deriving Generic
--- 
+--
 -- ["departament__name","relates_to__id","relates_to__type","relates_to__of_wheels","meta_info__price"]
 
 
@@ -250,8 +259,8 @@ instance (Beamable metaInfo, Beamable  prop) => Beamable (DepartamentRelatedT me
 
 
 instance (Table metaInfo, Table  prop) => Table    (DepartamentRelatedT metaInfo prop) where
-  data PrimaryKey (DepartamentRelatedT metaInfo prop) f = DepReKeyA (PrimaryKey DepartmentT f) 
-                                                                    (PrimaryKey prop f) 
+  data PrimaryKey (DepartamentRelatedT metaInfo prop) f = DepReKeyA (PrimaryKey DepartmentT f)
+                                                                    (PrimaryKey prop f)
                                                                     deriving(Generic)
   primaryKey = DepReKeyA <$> _aDepartament <*> (primaryKey._aRelatesTo)
 
@@ -349,3 +358,108 @@ employeeDbSettingsRuleMods = defaultDbSettings `withDbModification`
 --                                  (EmployeeId (TableField "head__first_name" (DummyField True False (DummyFieldMaybe DummyFieldText)))
 --                                              (TableField "head__last_name" (DummyField True False (DummyFieldMaybe DummyFieldText)))
 --                                              (TableField "head__created" (DummyField True False (DummyFieldMaybe DummyFieldUTCTime))))
+
+-- * Indices are built correctly
+
+data ColonistT f = Colonist
+    { _cSpaceId  :: C f Int
+    , _cFullName :: C f Text
+    , _cFather   :: PrimaryKey ColonistT (Nullable f)
+    , _cOrigin   :: PrimaryKey PlanetT f
+    } deriving (Generic)
+
+data PlanetT f = Planet
+    { _pSpaceId           :: C f Int
+    , _pIntergalacticName :: C f Text
+    , _pDiameter          :: C f Int
+    , _pFounder           :: PrimaryKey ColonistT (Nullable f)
+    } deriving (Generic)
+
+-- just to check automatic derivation supports various kinds of entity.
+data DummyViewT f = DummyView
+    { _dvSomething :: C f Int
+    } deriving (Generic)
+
+data ColonistDb f = ColonistDb
+    { _colonists :: f (TableEntity ColonistT)
+    , _planets   :: f (TableEntity PlanetT)
+    , _dummy     :: f (ViewEntity DummyViewT)
+    } deriving (Generic)
+
+instance Table ColonistT where
+    newtype PrimaryKey ColonistT f = ColonistId (C f Int)
+        deriving (Generic)
+    primaryKey = ColonistId . _cSpaceId
+
+instance Table PlanetT where
+    data PrimaryKey PlanetT f = PlanetId (C f Int) (C f Text)
+        deriving (Generic)
+    primaryKey = PlanetId <$> _pSpaceId <*> _pIntergalacticName
+
+instance Beamable ColonistT
+instance Beamable (PrimaryKey ColonistT)
+instance Beamable PlanetT
+instance Beamable (PrimaryKey PlanetT)
+instance Beamable DummyViewT
+
+instance Database be ColonistDb
+
+instance IndexFromReference (ColonistT :-> ColonistT)
+instance IndexFromReference (ColonistT :-> PlanetT)
+instance IndexFromReference (PlanetT :-> ColonistT) where
+    referenceIndexOptions _ = indexOptions{ indexUnique = True }
+
+colonistsDbSettings :: DatabaseSettings be ColonistDb
+colonistsDbSettings = defaultDbSettings
+
+colonistsTableSchema :: TableSettings ColonistT
+colonistsTableName :: Text
+(colonistsTableSchema, colonistsTableName) =
+    let DatabaseEntity (DatabaseTable _ _ tblName tableSettings) = _colonists colonistsDbSettings
+    in (tableSettings, tblName)
+
+planetsTableSchema :: TableSettings PlanetT
+planetsTableName :: Text
+(planetsTableSchema, planetsTableName) =
+    let DatabaseEntity (DatabaseTable _ _ tblName tableSettings) = _planets colonistsDbSettings
+    in (tableSettings, tblName)
+
+indicesAreBuiltCorrectly :: TestTree
+indicesAreBuiltCorrectly =
+  testCase "Indices are built correctly" $
+  do let colonistsFieldNames = allBeamValues (\(Columnar' f) -> _fieldName f) colonistsTableSchema
+         planetsFieldNames = allBeamValues (\(Columnar' f) -> _fieldName f) planetsTableSchema
+
+         extraIndices = buildDbIndices colonistsDbSettings dbIndices
+            { _colonists = mconcat
+                [ tableIndex _cOrigin indexOptions
+                , tableIndex (_cFullName, _cFather) indexOptions
+                ]
+            , _planets =
+                tableIndex _pSpaceId indexOptions{ indexUnique = True }
+            }
+
+         autoIndices = buildDbIndices colonistsDbSettings defaultDbIndices
+
+     extraIndices @?= [ Index colonistsTableName $
+                            TableIndex (fromList $ colonistsFieldNames ^.. (ix 3 <> ix 4))
+                                       indexOptions
+                      , Index colonistsTableName $
+                            TableIndex (fromList $ colonistsFieldNames ^.. (ix 1 <> ix 2))
+                                       indexOptions
+                      , Index planetsTableName $
+                            TableIndex (fromList $ planetsFieldNames ^.. ix 0)
+                                       indexOptions{ indexUnique = True }
+                       ]
+
+     sort autoIndices @?= sort
+          [ Index colonistsTableName $
+                TableIndex (fromList $ colonistsFieldNames ^.. ix 2)
+                           indexOptions
+          , Index colonistsTableName $
+                TableIndex (fromList $ colonistsFieldNames ^.. (ix 3 <> ix 4))
+                           indexOptions
+          , Index planetsTableName $
+                TableIndex (fromList $ planetsFieldNames ^.. ix 3)
+                           indexOptions{ indexUnique = True }
+            ]

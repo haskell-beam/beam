@@ -1,24 +1,23 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-unused-binds #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.Query.SQL92
     ( buildSql92Query' ) where
 
-import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Query.Internal
 
-import           Control.Monad.Free.Church
 import           Control.Monad.Free
+import           Control.Monad.Free.Church
 
 #if !MIN_VERSION_base(4, 11, 0)
-import           Control.Monad.Writer hiding ((<>))
 import           Data.Semigroup
 #endif
 
 import           Data.Maybe
-import           Data.Proxy (Proxy(Proxy))
+import           Data.Proxy (Proxy (Proxy))
 import           Data.String
 import qualified Data.Text as T
 

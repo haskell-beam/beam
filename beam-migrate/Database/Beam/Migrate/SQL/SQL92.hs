@@ -1,5 +1,5 @@
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 -- | Finally-tagless encoding of SQL92 DDL commands.
 --
@@ -9,6 +9,7 @@
 module Database.Beam.Migrate.SQL.SQL92 where
 
 import Database.Beam.Backend.SQL.SQL92
+import Database.Beam.Schema.Indices
 
 import Data.Aeson (Value)
 import Data.Hashable
@@ -28,6 +29,10 @@ type Sql92SaneDdlCommandSyntax cmd =
       Sql92DdlCommandDataTypeSyntax cmd
   , Sql92ColumnSchemaExpressionSyntax (Sql92DdlCommandColumnSchemaSyntax cmd) ~
       Sql92ExpressionSyntax cmd )
+
+-- | Syntax constraints required for indices manipulation.
+type Sql92IndexCommandSyntax cmd =
+  IsSql92IndexSyntax (Sql92DdlCommandAlterTableSyntax cmd)
 
 -- | Syntax equalities for any reasonable DDL syntax, only including
 -- types defined here.
@@ -117,6 +122,14 @@ class ( IsSql92ColumnSchemaSyntax (Sql92AlterTableColumnSchemaSyntax syntax)
 
 class IsSql92AlterColumnActionSyntax syntax where
   setNotNullSyntax, setNullSyntax :: syntax
+
+class IsSql92TableNameSyntax (Sql92IndexTableNameSyntax syntax) =>
+  IsSql92IndexSyntax syntax where
+
+  type Sql92IndexTableNameSyntax syntax :: *
+
+  addIndexSyntax :: Sql92IndexTableNameSyntax syntax -> Text -> [Text] -> IndexOptions -> syntax
+  dropIndexSyntax :: Text -> syntax
 
 class ( IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstraintDefinitionSyntax columnSchema)
       , IsSql92DataTypeSyntax (Sql92ColumnSchemaColumnTypeSyntax columnSchema)

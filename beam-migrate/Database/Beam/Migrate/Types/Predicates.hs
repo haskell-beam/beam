@@ -9,9 +9,10 @@ import Database.Beam.Schema.Tables
 
 import Control.DeepSeq
 
+import Data.Maybe
 import Data.Aeson
-import Data.Text (Text)
 import Data.Hashable
+import Data.Text (Text)
 import Data.Typeable
 
 #if !MIN_VERSION_base(4, 11, 0)
@@ -44,12 +45,20 @@ class (Typeable p, Hashable p, Eq p) => DatabasePredicate p where
   -- order for a table to have a column, that table must exist. This function
   -- takes in the current predicate and another arbitrary database predicate. It
   -- should return 'True' if this predicate needs the other predicate to be true
-  -- in order to exist.
+  -- in order to exist. Once the predicate on which the given one depends does
+  -- not hold, the given predicate is removed without any additional actions.
   --
   -- By default, this simply returns 'False', which makes sense for many
   -- predicates.
   predicateCascadesDropOn :: DatabasePredicate p' => p -> p' -> Bool
   predicateCascadesDropOn _ _ = False
+
+  -- | Similarly to 'predicateCascadesDropOn', should return 'True' if this predicate
+  -- needs another one to be true in order to exist. The difference is, the other
+  -- predicate cannot be removed until this one exists, this predicate has to be
+  -- explicitely removed with a corresponding action first.
+  predicateRestrictsDropOf :: DatabasePredicate p' => p -> p' -> Bool
+  predicateRestrictsDropOf _ _ = False
 
 -- | A Database predicate is a value of any type which satisfies
 -- 'DatabasePredicate'. We often want to store these in lists and sets, so we
@@ -82,7 +91,7 @@ instance Hashable PredicateSpecificity
 
 instance ToJSON PredicateSpecificity where
   toJSON PredicateSpecificityAllBackends = "all"
-  toJSON (PredicateSpecificityOnlyBackend s)  = object [ "backend" .= toJSON s ]
+  toJSON (PredicateSpecificityOnlyBackend s) = object [ "backend" .= toJSON s ]
 instance FromJSON PredicateSpecificity where
   parseJSON "all" = pure PredicateSpecificityAllBackends
   parseJSON (Object o) = PredicateSpecificityOnlyBackend <$> o .: "backend"
@@ -128,7 +137,14 @@ qnameAsTableName :: IsSql92TableNameSyntax syntax => QualifiedName -> syntax
 qnameAsTableName (QualifiedName sch t) = tableName sch t
 
 -- | A predicate that depends on the name of a table as well as its fields
-newtype TableCheck = TableCheck (forall tbl. Table tbl => QualifiedName -> tbl (TableField tbl) -> SomeDatabasePredicate)
+newtype TableCheck tbl = TableCheck (QualifiedName -> tbl (TableField tbl) -> SomeDatabasePredicate)
+
+-- | Allows to drop all checks into one pack, used in migration state
+data SomeTableCheck = forall tbl. (Typeable tbl, Table tbl) => SomeTableCheck (TableCheck tbl)
+
+-- | Leave only checks for the given table.
+givenTableChecks :: Typeable tbl => [SomeTableCheck] -> [TableCheck tbl]
+givenTableChecks = catMaybes . map (\(SomeTableCheck check) -> cast check)
 
 -- | A predicate that depends on the name of a domain type
 newtype DomainCheck = DomainCheck (QualifiedName -> SomeDatabasePredicate)

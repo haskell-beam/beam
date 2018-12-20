@@ -1,26 +1,34 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
 
 -- | Defines common 'DatabasePredicate's that are shared among backends
 module Database.Beam.Migrate.Checks where
 
+import Control.Monad (guard)
 import Database.Beam.Backend.SQL.SQL92
+
+import Database.Beam.Migrate.Serialization
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.SQL.Types
-import Database.Beam.Migrate.Serialization
 import Database.Beam.Migrate.Types.Predicates
+import Database.Beam.Schema.Indices
+import Database.Beam.Schema.Tables
 
-import Data.Aeson ((.:), (.=), withObject, object)
+import Data.Aeson (object, withObject, (.:), (.=))
 import Data.Aeson.Types (Parser, Value)
-import Data.Hashable (Hashable(..))
+import Data.Hashable (Hashable (..))
+import Data.Proxy (Proxy (..))
 import Data.Text (Text)
-import Data.Typeable (Typeable, cast)
+import Data.Typeable (Typeable, cast, splitTyConApp, typeOf, typeRep)
 #if !MIN_VERSION_base(4, 11, 0)
 import Data.Semigroup
 #endif
 
+import GHC.Exts (fromList, toList)
 import GHC.Generics (Generic)
+
+import Unsafe.Coerce (unsafeCoerce)
 
 -- * Table checks
 
@@ -122,6 +130,67 @@ instance DatabasePredicate TableHasPrimaryKey where
     | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
     | otherwise = False
 
+-- | Asserts that the given table has a primary key made of the given columns.
+-- The order of the columns is significant.
+data TableHasIndex
+  = TableHasIndex
+  { hasIndex_table :: QualifiedName {-^ Table name -}
+  , hasIndex_cols  :: [Text] {-^ Column names -}
+  , hasIndex_opts  :: IndexOptions
+  } deriving (Show, Eq, Generic)
+instance Hashable TableHasIndex where
+    hashWithSalt salt (TableHasIndex tbl cols opts) = hashWithSalt salt (tbl, toList cols, opts)
+instance DatabasePredicate TableHasIndex where
+  englishDescription (TableHasIndex tblName colNames opts) =
+    "Table " <> show tblName <> " has " <> indexOptionsEnglishDescription opts <>
+    "index " <> show colNames
+
+  predicateSpecificity _ = PredicateSpecificityOnlyBackend ""
+
+  serializePredicate (TableHasIndex tbl cols opts) =
+    object [ "has-index" .= object [ "table" .= tbl
+                                   , "columns" .= cols
+                                   , "options" .= opts ] ]
+
+  -- we do not provide cascading delete of 'TableHasColumn' check,
+  -- index should be removed explicitely first
+  predicateCascadesDropOn (TableHasIndex tblNm _ _) p'
+    | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
+    | otherwise = False
+
+  predicateRestrictsDropOf (TableHasIndex tblNm colNms _) p'
+    | Just (tblNm', colNm') <-
+        withTyCon (\(TableHasColumn tblNm' colNm' _) -> (tblNm', colNm')) p' =
+          tblNm == tblNm' && (colNm' `elem` colNms)
+    | otherwise = False
+
+-- | Match a given item's type against a type-level application with the given
+-- type constructor. Applies the given function and returns 'Just' its result on match,
+-- 'Nothing' otherwise.
+-- Unlike 'cast', this function does not require @a@ type to be instance of 'Typeable'.
+withTyCon
+    :: forall (con :: * -> *) (item :: *) r.
+       (Typeable con, Typeable item)
+    => (forall a. con a -> r) -> item -> Maybe r
+withTyCon f x = do
+    (itemTyCon, itemTyArgs@(_ : _)) <- pure $ splitTyConApp (typeOf x)
+    (conTyCon, conTyArgs) <- pure $ splitTyConApp (typeRep (Proxy @con))
+    guard (itemTyCon == conTyCon && init itemTyArgs == conTyArgs)
+    return (f $ unsafeCoerce x)
+
+-- | Convert gathered indices into checks.
+entityIndicesToChecks
+    :: Table table
+    => DatabaseEntityDescriptor be (TableEntity table)
+    -> EntityIndices be db (TableEntity table)
+    -> [TableCheck table]
+entityIndicesToChecks (DatabaseTable _ origNm _ _) (EntityIndices mkTableIndices) =
+    flip map (toList mkTableIndices) $ \mkTableIndex ->
+        TableCheck $ \qTblNm@(QualifiedName tblSchema tblNm) tblSettings ->
+          let dbEntity = DatabaseEntity (DatabaseTable tblSchema origNm tblNm tblSettings)
+              Index _ (TableIndex index opts) = mkTableIndex dbEntity
+          in SomeDatabasePredicate $ TableHasIndex qTblNm (fromList $ toList index) opts
+
 -- * Deserialization
 
 -- | 'BeamDeserializers' for all the predicates defined in this module
@@ -135,6 +204,7 @@ beamCheckDeserializers = mconcat
   , beamDeserializer (const deserializeTableHasPrimaryKeyPredicate)
   , beamDeserializer deserializeTableHasColumnPredicate
   , beamDeserializer deserializeTableColumnHasConstraintPredicate
+  , beamDeserializer (const deserializeTableHasIndexPredicate)
   ]
   where
     deserializeTableExistsPredicate :: Value -> Parser SomeDatabasePredicate
@@ -170,3 +240,11 @@ beamCheckDeserializers = mconcat
        fmap (id @(TableColumnHasConstraint be))
          (TableColumnHasConstraint <$> v' .: "table" <*> v' .: "column"
                                    <*> (beamDeserialize d =<< v' .: "constraint")))
+
+    deserializeTableHasIndexPredicate :: Value -> Parser SomeDatabasePredicate
+    deserializeTableHasIndexPredicate =
+      withObject "TableHasIndex" $ \v ->
+      v .: "has-index" >>=
+      (withObject "TableHasIndex" $ \v' ->
+       SomeDatabasePredicate <$>
+         (TableHasIndex <$> v' .: "table" <*> v' .: "columns" <*> v' .: "options"))

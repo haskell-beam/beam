@@ -5,6 +5,7 @@ module Database.Beam.Migrate.Types.CheckedEntities where
 
 import Database.Beam
 import Database.Beam.Backend.SQL
+import Database.Beam.Schema.Indices
 import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Checks
@@ -12,17 +13,17 @@ import Database.Beam.Migrate.Generics.Tables
 import Database.Beam.Migrate.Types.Predicates
 
 import Control.Applicative
-import Control.Monad.Writer
 import Control.Monad.Identity
+import Control.Monad.Writer
 
 import Data.Proxy
-import Data.Text (Text)
 import Data.String
+import Data.Text (Text)
 
-import GHC.Types
 import GHC.Generics
+import GHC.Types
 
-import Lens.Micro (Lens', (&), (^.), (.~), (%~))
+import Lens.Micro (Lens', (%~), (&), (.~), (^.))
 
 -- * Checked Database Entities
 
@@ -53,6 +54,11 @@ class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
   -- 'dbEntityAuto' and provides some means to generate 'DatabasePredicate's
   checkedDbEntityAuto :: CheckedDatabaseEntityDefaultRequirements be entity
                       => Text -> CheckedDatabaseEntityDescriptor be entity
+
+  addIndexChecks :: CheckedDatabaseEntityDescriptor be entity
+                 -> EntityIndices be db entity
+                 -> CheckedDatabaseEntityDescriptor be entity
+  addIndexChecks = const
 
 -- | Like 'DatabaseEntity' but for checked databases
 data CheckedDatabaseEntity be (db :: (* -> *) -> *) entityType where
@@ -105,7 +111,7 @@ instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
   data CheckedDatabaseEntityDescriptor be (TableEntity tbl) where
     CheckedDatabaseTable :: Table tbl
                          => DatabaseEntityDescriptor be (TableEntity tbl)
-                         -> [ TableCheck ]
+                         -> [ TableCheck tbl ]
                          -> tbl (Const [FieldCheck])
                          -> CheckedDatabaseEntityDescriptor be (TableEntity tbl)
 
@@ -132,6 +138,10 @@ instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
 
         fieldChecks = to (gDefaultTblSettingsChecks (Proxy @be) (Proxy @(Rep (tbl Identity))) False)
     in CheckedDatabaseTable (dbEntityAuto tblTypeName) tblChecks fieldChecks
+
+  addIndexChecks (CheckedDatabaseTable dbTable@(DatabaseTable _ _ _ _) tblChecks tblFieldChecks)
+                 entityIndices =
+    CheckedDatabaseTable dbTable (entityIndicesToChecks dbTable entityIndices ++ tblChecks) tblFieldChecks
 
 -- | Purposefully opaque type describing how to modify a table field. Used to
 -- parameterize the second argument to 'modifyCheckedTable'. For now, the only
