@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.Combinators
     ( -- * Various SQL functions and constructs
@@ -65,22 +64,21 @@ module Database.Beam.Query.Combinators
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
     ) where
 
-import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.Types
 
 import Database.Beam.Query.Internal
-import Database.Beam.Query.Ord
 import Database.Beam.Query.Operator
+import Database.Beam.Query.Ord
 import Database.Beam.Query.Types
 
 import Database.Beam.Schema.Tables
 
-import Control.Monad.Identity
-import Control.Monad.Free
 import Control.Applicative
+import Control.Monad.Free
+import Control.Monad.Identity
 
 #if !MIN_VERSION_base(4, 11, 0)
-import Control.Monad.Writer hiding ((<>))
 import Data.Semigroup
 #endif
 
