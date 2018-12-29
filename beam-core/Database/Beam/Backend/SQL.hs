@@ -10,6 +10,7 @@ import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 
 import Control.Monad.IO.Class
+import Control.Monad.Fail (MonadFail)
 
 -- * MonadBeam class
 
@@ -29,7 +30,7 @@ import Control.Monad.IO.Class
 --   strategies. More complicated strategies (for example, Postgres's @COPY@)
 --   are supported in individual backends. See the documentation of those
 --   backends for more details.
-class (BeamBackend be, Monad m, MonadIO m, Sql92SanityCheck syntax) =>
+class (BeamBackend be, Monad m, MonadIO m, MonadFail m, Sql92SanityCheck syntax) =>
   MonadBeam syntax be handle m | m -> syntax be handle where
 
   {-# MINIMAL withDatabaseDebug, runReturningMany #-}

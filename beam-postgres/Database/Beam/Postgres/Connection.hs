@@ -52,6 +52,8 @@ import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..), Query(..))
 
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Control.Monad.Fail (MonadFail)
+import qualified Control.Monad.Fail as Fail
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (toLazyByteString, byteString)
@@ -301,6 +303,9 @@ deriving instance Functor PgF
 -- API. See "Database.Beam.Postgres.Conduit" for more information.
 newtype Pg a = Pg { runPg :: F PgF a }
     deriving (Monad, Applicative, Functor, MonadFree PgF)
+
+instance MonadFail Pg where
+    fail e = fail $ "Internal Error with: " <> show e
 
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)
