@@ -329,18 +329,18 @@ loadSchema :: forall be m a
            -> (forall be' db. Database be' db => CheckedDatabaseSettings be' db -> IO a)
            -> IO a
 loadSchema backendModule (BeamMigrationBackend {}) cmdLine reg modPath withDb = do
-  putStrLn ("Schema module path " ++ modPath)
+  putStrLn ("Loading module " ++ unModuleName backendModule)
   res <- runBeamInterpreter cmdLine $ do
            loadModules [ modPath ]
            setImportsQ [ ("Database.Beam.Migrate", Just "BeamMigrate")
                        , ("Database.Beam.Migrate.Backend", Nothing)
                        , (unModuleName backendModule, Just "BeamBackend") ]
 
-           let syntaxName = tyConName (typeRepTyCon (typeRep (Proxy @(BeamSqlBackendSyntax be))))
+           let beName = tyConName (typeRepTyCon (typeRep (Proxy @be)))
 
            setTopLevelModules [ unModuleName (migrationRegistrySchemaModule reg) <> "." <> schemaModuleName UUID.nil ]
            GHCI.set [ languageExtensions := [ TypeApplications ] ]
-           interpret ("SomeCheckedDatabaseSettings (BeamMigrate.runMigrationSilenced (migration @BeamBackend." <> syntaxName <> "))") (undefined :: SomeCheckedDatabaseSettings)
+           interpret ("SomeCheckedDatabaseSettings (BeamMigrate.runMigrationSilenced (migration @BeamBackend." <> beName <> "))") (undefined :: SomeCheckedDatabaseSettings)
 
   case res of
     Left e -> reportHintError e
