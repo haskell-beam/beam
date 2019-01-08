@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+
 module Database.Beam.Migrate.Generics.Types where
 
 import           Database.Beam.Migrate.Types

@@ -234,20 +234,16 @@ data DepartamentRelatedT metaInfo prop f = DepartamentProperty
 type BDepartmentVehicule    = BDepartmentVehiculeT Identity
 data BDepartmentVehiculeT f = BDepartmentVehicule
       { _bDepartament  :: PrimaryKey DepartmentT f
-      , _bRelatesTo    :: VehiculeT f                
+      , _bRelatesTo    :: VehiculeT f
       , _bMetaInfo     :: VehiculeInformationT (Nullable f)
       } deriving Generic
--- 
--- ["departament__name","relates_to__id","relates_to__type","relates_to__of_wheels","meta_info__price"]
-
-
 
 instance (Beamable metaInfo, Beamable  prop) => Beamable (DepartamentRelatedT metaInfo prop)
 
 
 instance (Table metaInfo, Table  prop) => Table    (DepartamentRelatedT metaInfo prop) where
-  data PrimaryKey (DepartamentRelatedT metaInfo prop) f = DepReKeyA (PrimaryKey DepartmentT f) 
-                                                                    (PrimaryKey prop f) 
+  data PrimaryKey (DepartamentRelatedT metaInfo prop) f = DepReKeyA (PrimaryKey DepartmentT f)
+                                                                    (PrimaryKey prop f)
                                                                     deriving(Generic)
   primaryKey = DepReKeyA <$> _aDepartament <*> (primaryKey._aRelatesTo)
 
@@ -280,19 +276,25 @@ instance Table VehiculeInformationT where
      data PrimaryKey VehiculeInformationT f = VehiculeInformationKey  deriving(Generic)
      primaryKey _ = VehiculeInformationKey
 
-
-
-
-
-instance Beamable BDepartmentVehiculeT 
+instance Beamable BDepartmentVehiculeT
 instance Beamable (PrimaryKey BDepartmentVehiculeT)
 instance Table BDepartmentVehiculeT where
-  data PrimaryKey BDepartmentVehiculeT f = DepReKeyB (PrimaryKey DepartmentT f) 
-                                                     (PrimaryKey VehiculeT   f) 
+  data PrimaryKey BDepartmentVehiculeT f = DepReKeyB (PrimaryKey DepartmentT f)
+                                                     (PrimaryKey VehiculeT   f)
                                                      deriving(Generic)
   primaryKey = DepReKeyB <$> _bDepartament <*> (primaryKey._bRelatesTo)
 
-
+data NoPrimaryKeyT f
+    = NoPrimaryKeyT
+    { _npkField1 :: C f Text
+    , _npkField2 :: C f Double
+    } deriving Generic
+instance Beamable NoPrimaryKeyT
+instance Table NoPrimaryKeyT where
+    data PrimaryKey NoPrimaryKeyT f = NoPrimaryKey
+        deriving Generic
+    primaryKey _ = NoPrimaryKey
+instance Beamable (PrimaryKey NoPrimaryKeyT)
 
 -- * Database schema is derived correctly
 
@@ -301,9 +303,10 @@ data EmployeeDb f
     { _employees            :: f (TableEntity EmployeeT)
     , _departments          :: f (TableEntity DepartmentT)
     , _roles                :: f (TableEntity RoleT)
-    , _funny                :: f (TableEntity FunnyT) 
+    , _funny                :: f (TableEntity FunnyT)
     , _departmentVehiculesA :: f (TableEntity ADepartmentVehiculeT)
     , _departmentVehiculesB :: f (TableEntity BDepartmentVehiculeT)
+    , _noPrimaryKey         :: f (TableEntity NoPrimaryKeyT)
     } deriving Generic
 instance Database be EmployeeDb
 
