@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, StandaloneDeriving #-}
 
 module Database.Beam.Postgres.Test.DataTypes where
 
@@ -7,8 +7,12 @@ import Database.Beam.Postgres
 import Database.Beam.Postgres.Migrate
 import Database.Beam.Postgres.Test
 import Database.Beam.Migrate
+import Database.Beam.Backend.SQL.BeamExtensions
+
+import Control.Exception (SomeException(..), handle)
 
 import Data.ByteString (ByteString)
+import Data.Text (Text)
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -16,7 +20,8 @@ import Test.Tasty.HUnit
 tests :: IO ByteString -> TestTree
 tests postgresConn =
     testGroup "Data-type unit tests"
-    [ jsonNulTest postgresConn ]
+    [ jsonNulTest postgresConn
+    , errorOnSchemaMismatch postgresConn ]
 
 data JsonT f
     = JsonT
@@ -74,3 +79,60 @@ jsonNulTest pgConn =
                    , "\0he\0\0llo\0" ]
 
       return ()
+
+data TblT f
+    = Tbl { _tblKey :: C f Int, _tblValue :: C f Text }
+      deriving (Generic, Beamable)
+
+deriving instance Show (TblT Identity)
+deriving instance Eq (TblT Identity)
+
+instance Table TblT where
+    data PrimaryKey TblT f = TblKey (C f Int)
+      deriving (Generic, Beamable)
+    primaryKey = TblKey <$> _tblKey
+
+data WrongTblT f
+    = WrongTbl { _wrongTblKey :: C f Int, _wrongTblValue :: C f Int }
+      deriving (Generic, Beamable)
+
+instance Table WrongTblT where
+    data PrimaryKey WrongTblT f = WrongTblKey (C f Int)
+      deriving (Generic, Beamable)
+    primaryKey = WrongTblKey <$> _wrongTblKey
+
+data RealDb entity
+    = RealDb { _realTbl :: entity (TableEntity TblT) }
+      deriving (Generic, Database Postgres)
+
+data WrongDb entity
+    = WrongDb { _wrongTbl :: entity (TableEntity WrongTblT) }
+      deriving (Generic, Database Postgres)
+
+-- | Regression test for <https://github.com/tathougies/beam/issues/112>
+errorOnSchemaMismatch :: IO ByteString -> TestTree
+errorOnSchemaMismatch pgConn =
+    testCase "runInsertReturningList should error on schema mismatch (#112)" $
+    withTestPostgres "db_failures" pgConn $ \conn -> do
+      vs <-
+        runBeamPostgres conn $ do
+          realDb <- fmap unCheckDatabase $ executeMigration runNoReturn
+            (RealDb <$> createTable "tbl1" (Tbl (field "key" int notNull)
+                                                (field "value" (varchar Nothing) notNull)))
+
+          runInsertReturningList (_realTbl realDb) $ insertValues [ Tbl 1 "hello", Tbl 2 "world", Tbl 3 "foo" ]
+
+      vs @?= [ Tbl 1 "hello", Tbl 2 "world", Tbl 3 "foo" ]
+
+      let wrongDb = unCheckDatabase $
+                    runMigrationSilenced (WrongDb <$> createTable "tbl1"
+                                                        (WrongTbl (field "key" int notNull)
+                                                                  (field "value" int notNull)))
+
+      didFail <- handle (\(e :: SomeException) -> pure True) $
+        runBeamPostgres conn $ do
+          _ <- runInsertReturningList (_wrongTbl wrongDb) $ insertValues [ WrongTbl 4 23, WrongTbl 5 24, WrongTbl 6 24 ]
+          pure False
+
+      assertBool "runInsertReturningList succeeded" didFail
+      didFail @?= True
