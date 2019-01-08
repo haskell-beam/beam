@@ -687,6 +687,14 @@ instance IsSql92QuantifierSyntax PgComparisonQuantifierSyntax where
   quantifyOverAll = PgComparisonQuantifierSyntax (emit "ALL")
   quantifyOverAny = PgComparisonQuantifierSyntax (emit "ANY")
 
+instance IsSql92ExtractFieldSyntax PgExtractFieldSyntax where
+  secondsField = PgExtractFieldSyntax (emit "SECOND")
+  minutesField = PgExtractFieldSyntax (emit "MINUTE")
+  hourField    = PgExtractFieldSyntax (emit "HOUR")
+  dayField     = PgExtractFieldSyntax (emit "DAY")
+  monthField   = PgExtractFieldSyntax (emit "MONTH")
+  yearField    = PgExtractFieldSyntax (emit "YEAR")
+
 instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
   type Sql92ExpressionSelectSyntax PgExpressionSyntax = PgSelectSyntax

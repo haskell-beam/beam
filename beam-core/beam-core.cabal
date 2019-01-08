@@ -48,6 +48,7 @@ library
   other-modules:       Database.Beam.Query.Aggregate
                        Database.Beam.Query.Combinators
                        Database.Beam.Query.Extensions
+                       Database.Beam.Query.Extract
                        Database.Beam.Query.Operator
                        Database.Beam.Query.Ord
                        Database.Beam.Query.Relationships

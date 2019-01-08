@@ -39,12 +39,13 @@ module Database.Beam.Sqlite.Syntax
   ) where
 
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.SQL.AST (ExtractField(..))
 import           Database.Beam.Haskell.Syntax
 import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.Serialization
-import           Database.Beam.Query
+import           Database.Beam.Query hiding (ExtractField(..))
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -204,7 +205,6 @@ data SqliteExpressionSyntax
 instance Hashable SqliteExpressionSyntax
 newtype SqliteFromSyntax = SqliteFromSyntax { fromSqliteFromSyntax :: SqliteSyntax }
 newtype SqliteComparisonQuantifierSyntax = SqliteComparisonQuantifierSyntax { fromSqliteComparisonQuantifier :: SqliteSyntax }
-newtype SqliteExtractFieldSyntax = SqliteExtractFieldSyntax { fromSqliteExtractField :: SqliteSyntax }
 newtype SqliteAggregationSetQuantifierSyntax = SqliteAggregationSetQuantifierSyntax { fromSqliteAggregationSetQuantifier :: SqliteSyntax }
 newtype SqliteProjectionSyntax = SqliteProjectionSyntax { fromSqliteProjection :: SqliteSyntax }
 newtype SqliteGroupingSyntax = SqliteGroupingSyntax { fromSqliteGrouping :: SqliteSyntax }
@@ -729,7 +729,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   type Sql92ExpressionFieldNameSyntax SqliteExpressionSyntax = SqliteFieldNameSyntax
   type Sql92ExpressionQuantifierSyntax SqliteExpressionSyntax = SqliteComparisonQuantifierSyntax
   type Sql92ExpressionCastTargetSyntax SqliteExpressionSyntax = SqliteDataTypeSyntax
-  type Sql92ExpressionExtractFieldSyntax SqliteExpressionSyntax = SqliteExtractFieldSyntax
+  type Sql92ExpressionExtractFieldSyntax SqliteExpressionSyntax = ExtractField
 
   addE = binOp "+"; subE = binOp "-"; mulE = binOp "*"; divE = binOp "/"
   modE = binOp "%"; orE = binOp "OR"; andE = binOp "AND"; likeE = binOp "LIKE"
@@ -777,9 +777,7 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   upperE x = SqliteExpressionSyntax (emit "UPPER" <> parens (fromSqliteExpression x))
   trimE x = SqliteExpressionSyntax (emit "TRIM" <> parens (fromSqliteExpression x))
   coalesceE es = SqliteExpressionSyntax (emit "COALESCE" <> parens (commas (map fromSqliteExpression es)))
-  extractE field from =
-    SqliteExpressionSyntax $
-    emit "EXTRACT" <> parens (fromSqliteExtractField field <> emit " FROM " <> parens (fromSqliteExpression from))
+  extractE = sqliteExtract
   castE e t = SqliteExpressionSyntax (emit "CAST" <> parens (parens (fromSqliteExpression e) <> emit " AS " <> fromSqliteDataType t))
   caseE cases else_ =
     SqliteExpressionSyntax $
@@ -892,6 +890,30 @@ commas :: [SqliteSyntax] -> SqliteSyntax
 commas [] = mempty
 commas [x] = x
 commas (x:xs) = x <> foldMap (emit ", " <>) xs
+
+strftimeSyntax :: SqliteExpressionSyntax -> SqliteExpressionSyntax -> [ SqliteExpressionSyntax ] -> SqliteExpressionSyntax
+strftimeSyntax fmt ts mods =
+    functionCallE (SqliteExpressionSyntax (emit "strftime"))
+                  (fmt:ts:mods)
+
+-- | SQLite does not support @EXTRACT@ directly, but we can emulate
+-- the behavior if we know which field we want.
+sqliteExtract :: ExtractField -> SqliteExpressionSyntax -> SqliteExpressionSyntax
+sqliteExtract field from =
+    case field of
+      ExtractFieldTimeZoneHour   -> error "sqliteExtract: TODO ExtractFieldTimeZoneHour"
+      ExtractFieldTimeZoneMinute -> error "sqliteExtract: TODO ExtractFieldTimeZoneMinute"
+
+      ExtractFieldDateTimeYear   -> extractStrftime "%Y"
+      ExtractFieldDateTimeMonth  -> extractStrftime "%m"
+      ExtractFieldDateTimeDay    -> extractStrftime "%d"
+      ExtractFieldDateTimeHour   -> extractStrftime "%H"
+      ExtractFieldDateTimeMinute -> extractStrftime "%M"
+      ExtractFieldDateTimeSecond -> extractStrftime "%S"
+
+    where
+      extractStrftime :: String -> SqliteExpressionSyntax
+      extractStrftime fmt = strftimeSyntax (valueE (sqlValueSyntax fmt)) from []
 
 sqliteSerialType :: SqliteDataTypeSyntax
 sqliteSerialType = SqliteDataTypeSyntax (emit "INTEGER PRIMARY KEY AUTOINCREMENT")

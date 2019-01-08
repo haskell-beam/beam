@@ -283,6 +283,14 @@ data Expression
   | ExpressionCurrentTimestamp
   deriving (Show, Eq)
 
+instance IsSql92ExtractFieldSyntax ExtractField where
+  secondsField = ExtractFieldDateTimeSecond
+  minutesField = ExtractFieldDateTimeMinute
+  hourField = ExtractFieldDateTimeHour
+  dayField = ExtractFieldDateTimeDay
+  monthField = ExtractFieldDateTimeMonth
+  yearField = ExtractFieldDateTimeYear
+
 instance IsSql92ExpressionSyntax Expression where
   type Sql92ExpressionQuantifierSyntax Expression = ComparatorQuantifier
   type Sql92ExpressionValueSyntax Expression = Value
