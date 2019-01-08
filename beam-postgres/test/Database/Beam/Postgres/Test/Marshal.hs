@@ -160,3 +160,4 @@ marshalTest' cmp gen postgresConn =
       v' `cmp` a
 
     assertBool "Hedgehog test failed" passes
+
