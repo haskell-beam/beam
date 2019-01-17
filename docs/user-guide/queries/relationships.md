@@ -115,7 +115,7 @@ associated `InvoiceLine`s, you can use `val_` to convert `oneInvoice` to the SQL
 expression level.
 
 ```haskell
-oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice (val_ i)
+oneToMany_ (invoiceLine chinookDb) invoiceLineInvoice (val_ oneInvoice)
 ```
 
 If you find yourself repeating yourself constantly, you can define a helper.
