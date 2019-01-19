@@ -39,32 +39,31 @@ class MonadBeam be m =>
     :: ( Beamable table
        , Projectible be (table (QExpr be ()))
        , FromBackendRow be (table Identity) )
-    => DatabaseEntity be db (TableEntity table)
-    -> SqlInsertValues be (table (QExpr be s))
+    => SqlInsert be table
     -> m [table Identity]
 
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ExceptT e m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ContT r m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ReaderT r m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (Lazy.StateT r m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (Strict.StateT r m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance (MonadBeamInsertReturning be m, Monoid r)
     => MonadBeamInsertReturning be (Lazy.WriterT r m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance (MonadBeamInsertReturning be m, Monoid r)
     => MonadBeamInsertReturning be (Strict.WriterT r m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance (MonadBeamInsertReturning be m, Monoid w)
     => MonadBeamInsertReturning be (Lazy.RWST r w s m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 instance (MonadBeamInsertReturning be m, Monoid w)
     => MonadBeamInsertReturning be (Strict.RWST r w s m) where
-    runInsertReturningList e v = lift (runInsertReturningList e v)
+    runInsertReturningList = lift . runInsertReturningList
 
 -- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.
 --   Useful for discovering the new values of the updated rows.
@@ -74,33 +73,31 @@ class MonadBeam be m =>
     :: ( Beamable table
        , Projectible be (table (QExpr be ()))
        , FromBackendRow be (table Identity) )
-    => DatabaseEntity be db (TableEntity table)
-    -> (forall s. table (QField s) -> QAssignment be s)
-    -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+    => SqlUpdate be table
     -> m [table Identity]
 
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ExceptT e m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ContT r m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ReaderT r m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (Lazy.StateT r m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (Strict.StateT r m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance (MonadBeamUpdateReturning be m, Monoid r)
     => MonadBeamUpdateReturning be (Lazy.WriterT r m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance (MonadBeamUpdateReturning be m, Monoid r)
     => MonadBeamUpdateReturning be (Strict.WriterT r m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance (MonadBeamUpdateReturning be m, Monoid w)
     => MonadBeamUpdateReturning be (Lazy.RWST r w s m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 instance (MonadBeamUpdateReturning be m, Monoid w)
     => MonadBeamUpdateReturning be (Strict.RWST r w s m) where
-    runUpdateReturningList e a w = lift (runUpdateReturningList e a w)
+    runUpdateReturningList = lift . runUpdateReturningList
 
 -- | 'MonadBeam's that suppert returning rows that will be deleted by the given
 -- @DELETE@ statement. Useful for deallocating resources based on the value of
@@ -111,29 +108,28 @@ class MonadBeam be m =>
     :: ( Beamable table
        , Projectible be (table (QExpr be ()))
        , FromBackendRow be (table Identity) )
-    => DatabaseEntity be db (TableEntity table)
-    -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+    => SqlDelete be table
     -> m [table Identity]
 
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ExceptT e m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ContT r m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ReaderT r m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (Lazy.StateT r m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (Strict.StateT r m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance (MonadBeamDeleteReturning be m, Monoid r)
     => MonadBeamDeleteReturning be (Lazy.WriterT r m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance (MonadBeamDeleteReturning be m, Monoid r)
     => MonadBeamDeleteReturning be (Strict.WriterT r m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance (MonadBeamDeleteReturning be m, Monoid w)
     => MonadBeamDeleteReturning be (Lazy.RWST r w s m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
 instance (MonadBeamDeleteReturning be m, Monoid w)
     => MonadBeamDeleteReturning be (Strict.RWST r w s m) where
-    runDeleteReturningList e v = lift (runDeleteReturningList e v)
+    runDeleteReturningList = lift . runDeleteReturningList
