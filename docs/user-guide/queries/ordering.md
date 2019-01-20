@@ -1,7 +1,7 @@
 Usually, queries are ordered before `LIMIT` and `OFFSET` are applied. Beam
 supports the standard SQL `ORDER BY` construct through the `orderBy_` function.
 
-`orderBy_` works like the Haskell function `sortBy`, with some restructions. Its
+`orderBy_` works like the Haskell function `sortBy`, with some restrictions. Its
 first argument is a function which takes as input the output of the given query.
 The function should return a sorting key, which is either a single sort ordering
 or a tuple of them. A sort ordering specifies an expression and a direction by
