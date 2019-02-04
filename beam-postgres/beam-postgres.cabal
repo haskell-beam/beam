@@ -23,10 +23,12 @@ library
                       Database.Beam.Postgres.Conduit
                       Database.Beam.Postgres.Full
 
-  other-modules:      Database.Beam.Postgres.Types
-                      Database.Beam.Postgres.Connection
-                      Database.Beam.Postgres.PgSpecific
+  other-modules:      Database.Beam.Postgres.Connection
+                      Database.Beam.Postgres.Debug
                       Database.Beam.Postgres.Extensions
+                      Database.Beam.Postgres.PgSpecific
+                      Database.Beam.Postgres.Types
+
   build-depends:      base                 >=4.7  && <5.0,
                       beam-core            >=0.8  && <0.9,
                       beam-migrate         >=0.4  && <0.5,
