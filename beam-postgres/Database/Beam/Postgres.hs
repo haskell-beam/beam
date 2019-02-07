@@ -77,5 +77,6 @@ import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unbounde
 import Database.Beam.Postgres.Extensions ( PgExtensionEntity, IsPgExtension(..)
                                          , pgCreateExtension, pgDropExtension
                                          , getPgExtension )
+import Database.Beam.Postgres.Debug
 
 import qualified Database.PostgreSQL.Simple as Pg
