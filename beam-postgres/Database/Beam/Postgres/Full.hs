@@ -292,7 +292,7 @@ conflictingConstraint nm =
   PgInsertOnConflictTargetSyntax $
   emit "ON CONSTRAINT " <> pgQuotedIdentifier nm <> emit " "
 
-instance HasInsertOnConflict Postgres where
+instance BeamHasInsertOnConflict Postgres where
   type SqlConflictTarget Postgres table = PgInsertOnConflictTarget table
   type SqlConflictAction Postgres table = PgConflictAction table
 

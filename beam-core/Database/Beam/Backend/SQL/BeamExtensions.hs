@@ -11,7 +11,7 @@ module Database.Beam.Backend.SQL.BeamExtensions
   ( MonadBeamInsertReturning(..)
   , MonadBeamUpdateReturning(..)
   , MonadBeamDeleteReturning(..)
-  , HasInsertOnConflict(..)
+  , BeamHasInsertOnConflict(..)
 
   , SqlSerial(..)
   , onConflictUpdateInstead
@@ -142,7 +142,7 @@ instance (MonadBeamDeleteReturning be m, Monoid w)
     => MonadBeamDeleteReturning be (Strict.RWST r w s m) where
     runDeleteReturningList = lift . runDeleteReturningList
 
-class BeamSqlBackend be => HasInsertOnConflict be where
+class BeamSqlBackend be => BeamHasInsertOnConflict be where
   type SqlConflictTarget be (table :: (* -> *) -> *) :: *
   type SqlConflictAction be (table :: (* -> *) -> *) :: *
 
@@ -182,7 +182,7 @@ newtype InaccessibleQAssignment be = InaccessibleQAssignment
 
 onConflictUpdateInstead
   :: forall be table proj
-  .  ( HasInsertOnConflict be
+  .  ( BeamHasInsertOnConflict be
      , Beamable table
      , ProjectibleWithPredicate AnyType () (InaccessibleQAssignment be) proj
      )
@@ -212,7 +212,7 @@ onConflictUpdateInstead mkProj = onConflictUpdateSet mkAssignments
 
 onConflictUpdateAll
   :: forall be table
-  .  ( HasInsertOnConflict be
+  .  ( BeamHasInsertOnConflict be
      , Beamable table
      )
   => SqlConflictAction be table
