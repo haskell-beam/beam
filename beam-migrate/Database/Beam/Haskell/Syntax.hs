@@ -620,6 +620,14 @@ instance IsSql92ReferentialActionSyntax HsNone where
   referentialActionSetDefaultSyntax = HsNone
   referentialActionSetNullSyntax = HsNone
 
+instance IsSql92ExtractFieldSyntax HsExpr where
+  secondsField = hsVar "secondsField"
+  minutesField = hsVar "minutesField"
+  hourField    = hsVar "hourField"
+  yearField    = hsVar "yearField"
+  monthField   = hsVar "monthField"
+  dayField     = hsVar "dayField"
+
 instance IsSql92ExpressionSyntax HsExpr where
   type Sql92ExpressionFieldNameSyntax HsExpr = HsExpr
   type Sql92ExpressionSelectSyntax HsExpr = SqlSyntaxBuilder

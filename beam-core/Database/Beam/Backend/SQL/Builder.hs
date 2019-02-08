@@ -187,6 +187,14 @@ instance IsSql92QuantifierSyntax SqlSyntaxBuilder where
   quantifyOverAll = SqlSyntaxBuilder "ALL"
   quantifyOverAny = SqlSyntaxBuilder "ANY"
 
+instance IsSql92ExtractFieldSyntax SqlSyntaxBuilder where
+  secondsField = SqlSyntaxBuilder (byteString "SECOND")
+  minutesField = SqlSyntaxBuilder (byteString "MINUTE")
+  hourField    = SqlSyntaxBuilder (byteString "HOUR")
+  dayField     = SqlSyntaxBuilder (byteString "DAY")
+  monthField   = SqlSyntaxBuilder (byteString "MONTH")
+  yearField    = SqlSyntaxBuilder (byteString "YEAR")
+
 instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   type Sql92ExpressionValueSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92ExpressionSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
@@ -222,7 +230,7 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   positionE needle haystack =
     SqlSyntaxBuilder $ byteString "POSITION(" <> buildSql needle <> byteString ") IN (" <> buildSql haystack <> byteString ")"
   extractE what from =
-    SqlSyntaxBuilder $ buildSql what <> byteString " FROM (" <> buildSql from <> byteString ")"
+    SqlSyntaxBuilder $ byteString "EXTRACT(" <> buildSql what <> byteString " FROM (" <> buildSql from <> byteString "))"
   absE = sqlFuncOp "ABS"
   charLengthE = sqlFuncOp "CHAR_LENGTH"
   bitLengthE = sqlFuncOp "BIT_LENGTH"

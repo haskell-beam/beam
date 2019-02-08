@@ -15,6 +15,7 @@ import Data.String (fromString)
 import Data.Text (Text)
 import Data.Time (LocalTime)
 import Data.UUID.Types (UUID)
+import Data.Maybe (fromMaybe)
 
 data LogEntryT f
   = LogEntry
@@ -175,7 +176,8 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
       let migrationLogExists = any (== p (TableExistsPredicate (QualifiedName Nothing "beam_migration"))) cs
 
       when migrationLogExists $ do
-        Just totalCnt <-
+        totalCnt <-
+          fmap (fromMaybe 0) $ -- Should never return 'Nothing', but this prevents an irrefutable pattern match
           runSelectReturningOne $ select $
           aggregate_ (\_ -> as_ @Int countAll_) $
           all_ (_beamMigrateLogEntries (beamMigrateDb @be @m))

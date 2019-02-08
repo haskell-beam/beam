@@ -297,8 +297,7 @@ instance MonadBeam Sqlite SqliteM where
       , "for emulation" ]
 
 instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
-  runInsertReturningList tbl values =
-    runInsertReturningList (insertReturning tbl values)
+  runInsertReturningList = runInsertReturningList
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
 runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
@@ -343,10 +342,10 @@ insertReturning tbl@(DatabaseEntity dt) vs =
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
 -- inserted row.
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
-                       => SqliteInsertReturning table
+                       => SqlInsert Sqlite table
                        -> SqliteM [ table Identity ]
-runInsertReturningList SqliteInsertReturningNoRows = pure []
-runInsertReturningList (SqliteInsertReturning nm insertStmt_) =
+runInsertReturningList SqlInsertNoRows = pure []
+runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _)) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $ do
 

@@ -56,7 +56,7 @@ runInsert conn (SqlInsert _ (PgInsertSyntax i)) =
 
 -- | Run a PostgreSQL @INSERT ... RETURNING ...@ statement in any 'MonadIO' and
 -- get a 'C.Source' of the newly inserted rows.
-runInsertReturning :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a)
+runInsertReturning :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a )
                    => Pg.Connection
                    -> PgInsertReturning a
                    -> (CONDUIT_TRANSFORMER () a m () -> m b)

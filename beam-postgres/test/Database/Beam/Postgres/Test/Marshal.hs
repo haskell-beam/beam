@@ -151,7 +151,7 @@ marshalTest' cmp gen postgresConn =
 
       [MarshalTable rowId v] <-
         liftIO . runBeamPostgres conn $
-        runInsertReturningList (_marshalTbl marshalDb) $ insertExpressions [ MarshalTable default_ (val_ a) ]
+        runInsertReturningList $ insert (_marshalTbl marshalDb) $ insertExpressions [ MarshalTable default_ (val_ a) ]
       v `cmp` a
 
       Just (MarshalTable _ v') <-
@@ -160,3 +160,4 @@ marshalTest' cmp gen postgresConn =
       v' `cmp` a
 
     assertBool "Hedgehog test failed" passes
+

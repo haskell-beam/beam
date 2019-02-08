@@ -69,7 +69,11 @@ test-suite beam-postgres-tests
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
-  other-modules: Database.Beam.Postgres.Test, Database.Beam.Postgres.Test.Marshal, Database.Beam.Postgres.Test.Select
+  other-modules: Database.Beam.Postgres.Test,
+                 Database.Beam.Postgres.Test.Marshal,
+                 Database.Beam.Postgres.Test.Select,
+                 Database.Beam.Postgres.Test.DataTypes,
+                 Database.Beam.Postgres.Test.Migrate
   build-depends: base, beam-core, beam-migrate, beam-postgres, text, bytestring, tasty, tasty-hunit,
                  postgresql-simple, process, temporary, hedgehog, uuid, filepath, directory
   default-language: Haskell2010

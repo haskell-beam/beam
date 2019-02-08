@@ -114,7 +114,7 @@ import           Data.String (IsString(..), fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
-import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
+import           Data.Time (LocalTime, UTCTime, TimeOfDay, NominalDiffTime, Day)
 import           Data.UUID.Types (UUID)
 import           Data.Word
 #if !MIN_VERSION_base(4, 11, 0)
@@ -124,7 +124,7 @@ import           Data.Semigroup
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..), Binary(..), Null(..))
-import qualified Database.PostgreSQL.Simple.Time as Pg (Date, ZonedTimestamp, LocalTimestamp, UTCTimestamp)
+import qualified Database.PostgreSQL.Simple.Time as Pg (Date, LocalTimestamp, UTCTimestamp)
 import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreList, HStoreMap, HStoreBuilder)
 
 data PostgresInaccessible
@@ -515,7 +515,7 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   domainType nm = PgDataTypeSyntax (PgDataTypeDescrDomain nm) (pgQuotedIdentifier nm)
                                    (domainType nm)
 
-  charType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (fmap fromIntegral prec))
+  charType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (Just (fromIntegral (fromMaybe 1 prec))))
                                            (emit "CHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
                                            (charType prec charSet)
   varCharType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varchar) (fmap fromIntegral prec))
@@ -686,6 +686,14 @@ instance IsString (CustomSqlSyntax PgExpressionSyntax) where
 instance IsSql92QuantifierSyntax PgComparisonQuantifierSyntax where
   quantifyOverAll = PgComparisonQuantifierSyntax (emit "ALL")
   quantifyOverAny = PgComparisonQuantifierSyntax (emit "ANY")
+
+instance IsSql92ExtractFieldSyntax PgExtractFieldSyntax where
+  secondsField = PgExtractFieldSyntax (emit "SECOND")
+  minutesField = PgExtractFieldSyntax (emit "MINUTE")
+  hourField    = PgExtractFieldSyntax (emit "HOUR")
+  dayField     = PgExtractFieldSyntax (emit "DAY")
+  monthField   = PgExtractFieldSyntax (emit "MONTH")
+  yearField    = PgExtractFieldSyntax (emit "YEAR")
 
 instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
@@ -1180,11 +1188,10 @@ DEFAULT_SQL_SYNTAX(Word32)
 DEFAULT_SQL_SYNTAX(Word64)
 DEFAULT_SQL_SYNTAX(T.Text)
 DEFAULT_SQL_SYNTAX(TL.Text)
-DEFAULT_SQL_SYNTAX(UTCTime)
 DEFAULT_SQL_SYNTAX(Value)
 DEFAULT_SQL_SYNTAX(Pg.Oid)
 DEFAULT_SQL_SYNTAX(LocalTime)
-DEFAULT_SQL_SYNTAX(ZonedTime)
+DEFAULT_SQL_SYNTAX(UTCTime)
 DEFAULT_SQL_SYNTAX(TimeOfDay)
 DEFAULT_SQL_SYNTAX(NominalDiffTime)
 DEFAULT_SQL_SYNTAX(Day)
@@ -1194,7 +1201,6 @@ DEFAULT_SQL_SYNTAX(Pg.HStoreMap)
 DEFAULT_SQL_SYNTAX(Pg.HStoreList)
 DEFAULT_SQL_SYNTAX(Pg.HStoreBuilder)
 DEFAULT_SQL_SYNTAX(Pg.Date)
-DEFAULT_SQL_SYNTAX(Pg.ZonedTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.LocalTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.UTCTimestamp)
 DEFAULT_SQL_SYNTAX(Scientific)

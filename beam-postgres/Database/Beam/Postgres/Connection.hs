@@ -320,11 +320,10 @@ instance MonadBeam Postgres Pg where
         liftF (PgRunReturning cmd consume id)
 
 instance MonadBeamInsertReturning Postgres Pg where
-    runInsertReturningList tbl values = do
-        let insertReturningCmd' =
-                insertReturning tbl values onConflictDefault
-                                (Just (changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                                                              Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)))
+    runInsertReturningList i = do
+        let insertReturningCmd' = i `returning`
+              changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
 
         -- Make savepoint
         case insertReturningCmd' of
@@ -334,12 +333,10 @@ instance MonadBeamInsertReturning Postgres Pg where
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
 
 instance MonadBeamUpdateReturning Postgres Pg where
-    runUpdateReturningList tbl mkAssignments mkWhere = do
-        let updateReturningCmd' =
-                update tbl mkAssignments mkWhere
-                   `returning`
-                     changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                                       Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
+    runUpdateReturningList u = do
+        let updateReturningCmd' = u `returning`
+              changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
 
         case updateReturningCmd' of
           PgUpdateReturningEmpty ->
@@ -348,11 +345,9 @@ instance MonadBeamUpdateReturning Postgres Pg where
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
 
 instance MonadBeamDeleteReturning Postgres Pg where
-    runDeleteReturningList tbl mkWhere = do
-        let PgDeleteReturning deleteReturningCmd =
-                delete tbl mkWhere
-                  `returning`
-                    changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                                      Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
+    runDeleteReturningList d = do
+        let PgDeleteReturning deleteReturningCmd = d `returning`
+              changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
 
         runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning deleteReturningCmd)

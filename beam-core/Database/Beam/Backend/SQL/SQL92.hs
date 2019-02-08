@@ -29,6 +29,7 @@ type Sql92TableNameSyntax select = Sql92TableSourceTableNameSyntax (Sql92FromTab
 
 type Sql92ValueSyntax cmdSyntax = Sql92ExpressionValueSyntax (Sql92ExpressionSyntax cmdSyntax)
 type Sql92ExpressionSyntax cmdSyntax = Sql92SelectExpressionSyntax (Sql92SelectSyntax cmdSyntax)
+type Sql92ExtractFieldSyntax cmdSyntax = Sql92ExpressionExtractFieldSyntax (Sql92ExpressionSyntax cmdSyntax)
 type Sql92HasValueSyntax cmdSyntax = HasSqlValueSyntax (Sql92ValueSyntax cmdSyntax)
 
 -- Putting these in the head constraint can cause infinite recursion that would
@@ -199,6 +200,14 @@ class IsSql92FieldNameSyntax fn where
 class IsSql92QuantifierSyntax quantifier where
   quantifyOverAll, quantifyOverAny :: quantifier
 
+class IsSql92ExtractFieldSyntax extractField where
+  secondsField :: extractField
+  minutesField :: extractField
+  hourField :: extractField
+  dayField :: extractField
+  monthField :: extractField
+  yearField :: extractField
+
 class IsSql92DataTypeSyntax dataType where
   domainType :: Text -> dataType
   charType :: Maybe Word -> Maybe Text -> dataType
@@ -225,6 +234,7 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
       , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr)
       , IsSql92DataTypeSyntax (Sql92ExpressionCastTargetSyntax expr)
+      , IsSql92ExtractFieldSyntax (Sql92ExpressionExtractFieldSyntax expr)
       , Typeable expr ) =>
     IsSql92ExpressionSyntax expr where
   type Sql92ExpressionQuantifierSyntax expr :: *

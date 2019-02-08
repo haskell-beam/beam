@@ -275,16 +275,21 @@ writeMigrationScript fp steps =
 pgExpandDataType :: Db.DataType Postgres a -> PgDataTypeSyntax
 pgExpandDataType (Db.DataType pg) = pg
 
+pgCharLength :: Maybe Int32 -> Maybe Word
+pgCharLength Nothing = Nothing
+pgCharLength (Just (-1)) = Nothing
+pgCharLength (Just x) = Just (fromIntegral x)
+
 pgDataTypeFromAtt :: ByteString -> Pg.Oid -> Maybe Int32 -> Maybe PgDataTypeSyntax
 pgDataTypeFromAtt _ oid pgMod
   | Pg.typoid Pg.bool == oid        = Just $ pgExpandDataType Db.boolean
   | Pg.typoid Pg.bytea == oid       = Just $ pgExpandDataType Db.binaryLargeObject
-  | Pg.typoid Pg.char == oid        = Just $ pgExpandDataType (Db.char Nothing) -- TODO length
+  | Pg.typoid Pg.char == oid        = Just $ pgExpandDataType (Db.char (pgCharLength pgMod))
   -- TODO Pg.name
   | Pg.typoid Pg.int8 == oid        = Just $ pgExpandDataType (Db.bigint :: Db.DataType Postgres Int64)
   | Pg.typoid Pg.int4 == oid        = Just $ pgExpandDataType (Db.int :: Db.DataType Postgres Int32)
   | Pg.typoid Pg.int2 == oid        = Just $ pgExpandDataType (Db.smallint :: Db.DataType Postgres Int16)
-  | Pg.typoid Pg.varchar == oid     = Just $ pgExpandDataType (Db.varchar Nothing)
+  | Pg.typoid Pg.varchar == oid     = Just $ pgExpandDataType (Db.varchar (pgCharLength pgMod))
   | Pg.typoid Pg.timestamp == oid   = Just $ pgExpandDataType Db.timestamp
   | Pg.typoid Pg.timestamptz == oid = Just $ pgExpandDataType Db.timestamptz
   | Pg.typoid Pg.float8 == oid      = Just $ pgExpandDataType Db.double
