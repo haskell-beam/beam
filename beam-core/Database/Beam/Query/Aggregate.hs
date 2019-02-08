@@ -12,6 +12,7 @@ module Database.Beam.Query.Aggregate
     -- ** General-purpose aggregate functions #gp-agg-funcs#
   , sum_, avg_, min_, max_, count_, countAll_
   , rank_, cumeDist_, percentRank_, denseRank_
+  , rowNumber_
 
   , every_, any_, some_
 
@@ -191,9 +192,15 @@ percentRank_ :: BeamSqlT612Backend be
              => QAgg be s Double
 percentRank_ = QExpr (pure percentRankAggE)
 
+-- | SQL2003 @DENSE_RANK@ function (Requires T612 Advanced OLAP operations support)
 denseRank_ :: BeamSqlT612Backend be
            => QAgg be s Int
 denseRank_ = QExpr (pure denseRankAggE)
+
+-- | SQL2003 @ROW_NUMBER@ function
+rowNumber_ :: BeamSql2003ExpressionBackend be
+           =>  QAgg be s Int
+rowNumber_ = QExpr (pure rowNumberE)
 
 -- | SQL2003 @RANK@ function (Requires T611 Elementary OLAP operations support)
 rank_ :: BeamSqlT611Backend be

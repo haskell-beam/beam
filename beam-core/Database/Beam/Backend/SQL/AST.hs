@@ -423,6 +423,7 @@ instance IsSql2003ExpressionSyntax Expression where
   type Sql2003ExpressionWindowFrameSyntax Expression = WindowFrame
 
   overE = ExpressionOver
+  rowNumberE = ExpressionAgg "ROW_NUMBER" Nothing []
 
 newtype Projection
   = ProjExprs [ (Expression, Maybe Text ) ]

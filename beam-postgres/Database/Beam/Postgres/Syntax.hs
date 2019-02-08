@@ -796,6 +796,7 @@ instance IsSql2003ExpressionSyntax PgExpressionSyntax where
   overE expr frame =
     PgExpressionSyntax $
     fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
+  rowNumberE = PgExpressionSyntax $ emit "ROW_NUMBER()"
 
 instance IsSql2003EnhancedNumericFunctionsExpressionSyntax PgExpressionSyntax where
   lnE    x = PgExpressionSyntax (emit "LN("    <> fromPgExpression x <> emit ")")

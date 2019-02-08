@@ -293,6 +293,7 @@ instance IsSql2003ExpressionSyntax SqlSyntaxBuilder where
   overE expr frame =
       SqlSyntaxBuilder $
       buildSql expr <> buildSql frame
+  rowNumberE = SqlSyntaxBuilder (byteString "ROW_NUMBER()")
 
 instance IsSql2003WindowFrameSyntax SqlSyntaxBuilder where
   type Sql2003WindowFrameExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
