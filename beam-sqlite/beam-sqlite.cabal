@@ -1,6 +1,6 @@
 
 name:                beam-sqlite
-version:             0.3.2.3
+version:             0.3.2.4
 synopsis:            Beam driver for SQLite
 description:         Beam driver for the <https://sqlite.org/ SQLite> embedded database.
                      See <http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/ here>
