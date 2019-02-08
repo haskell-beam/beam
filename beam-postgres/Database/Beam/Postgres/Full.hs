@@ -132,24 +132,25 @@ locked_ (DatabaseEntity dt) = do
 --
 -- If you want to use the most common behavior (lock all rows in every table mentioned), the
 -- 'lockingAllTablesFor_' function may be what you're after.
-lockingFor_ :: ( Database Postgres db, Projectible Postgres a )
+lockingFor_ :: forall a db s
+             . ( Database Postgres db, Projectible Postgres a, ThreadRewritable (QNested s) a )
             => PgSelectLockingStrength
             -> Maybe PgSelectLockingOptions
             -> Q Postgres db (QNested s) (PgWithLocking (QNested s) a)
-            -> Q Postgres db s a
+            -> Q Postgres db s (WithRewrittenThread (QNested s) s a)
 lockingFor_ lockStrength mLockOptions (Q q) =
   Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) _) tbl ords limit offset ->
                             let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
                             in pgSelectStmt tbl ords limit offset (Just locking))
-                         q (\(PgWithLocking _ a) -> a)))
+                         q (\(PgWithLocking _ a) -> rewriteThread (Proxy @s) a)))
 
 -- | Like 'lockingFor_', but does not require an explicit set of locked tables. This produces an
 -- empty @FOR .. OF@ clause.
-lockingAllTablesFor_ :: ( Database Postgres db, Projectible Postgres a )
+lockingAllTablesFor_ :: ( Database Postgres db, Projectible Postgres a, ThreadRewritable (QNested s) a )
                      => PgSelectLockingStrength
                      -> Maybe PgSelectLockingOptions
                      -> Q Postgres db (QNested s) a
-                     -> Q Postgres db s a
+                     -> Q Postgres db s (WithRewrittenThread (QNested s) s a)
 lockingAllTablesFor_ lockStrength mLockOptions q =
   lockingFor_ lockStrength mLockOptions (lockAll_ <$> q)
 
