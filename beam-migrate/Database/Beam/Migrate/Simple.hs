@@ -2,6 +2,10 @@
 -- | Utility functions for common use cases
 module Database.Beam.Migrate.Simple
   ( autoMigrate
+  , planMigration
+  , describeMigrationPlan
+  , executeMigrationPlan
+  , autoMigrateVerbose
   , simpleSchema
   , simpleMigration
   , runSimpleMigration
@@ -205,18 +209,51 @@ autoMigrate :: Database be db
             => BeamMigrationBackend be m
             -> CheckedDatabaseSettings be db
             -> m ()
-autoMigrate BeamMigrationBackend { backendActionProvider = actions
-                                 , backendGetDbConstraints = getCs }
+autoMigrate b@(BeamMigrationBackend {})
             db =
+  do cmds <- planMigration b db
+     executeMigrationPlan b cmds
+
+planMigration :: Database be db
+              => BeamMigrationBackend be m
+              -> CheckedDatabaseSettings be db
+              -> m [MigrationCommand be]
+planMigration BeamMigrationBackend { backendActionProvider = actions
+                                   , backendGetDbConstraints = getCs }
+              db =
   do actual <- getCs
      let expected = collectChecks db
      case finalSolution (heuristicSolver actions actual expected) of
-       Candidates {} -> fail "autoMigrate: Could not determine migration"
-       Solved cmds ->
-         -- Check if any of the commands are irreversible
-         case foldMap migrationCommandDataLossPossible cmds of
-           MigrationKeepsData -> mapM_ (runNoReturn . migrationCommand) cmds
-           _ -> fail "autoMigrate: Not performing automatic migration due to data loss"
+       Candidates {} -> fail "planMigration: Could not determine migration"
+       Solved cmds -> return cmds
+
+describeMigrationPlan :: Sql92DisplaySyntax (BeamSqlBackendSyntax be)
+                      => [MigrationCommand be]
+                      -> [String]
+describeMigrationPlan = map $ \cmd -> safety cmd <> displaySyntax (migrationCommand cmd)
+  where
+    safety cmd = case migrationCommandDataLossPossible cmd of
+      MigrationLosesData -> "<UNSAFE> "
+      MigrationKeepsData -> "         "
+
+executeMigrationPlan :: BeamMigrationBackend be m
+                     -> [MigrationCommand be]
+                     -> m ()
+executeMigrationPlan (BeamMigrationBackend {}) cmds =
+     -- Check if any of the commands are irreversible
+     case foldMap migrationCommandDataLossPossible cmds of
+       MigrationKeepsData -> mapM_ (runNoReturn . migrationCommand) cmds
+       _ -> fail "executeMigrationPlan: Not performing automatic migration due to data loss"
+
+autoMigrateVerbose :: (Database be db, Sql92DisplaySyntax (BeamSqlBackendSyntax be), MonadIO m)
+                   => BeamMigrationBackend be m
+                   -> CheckedDatabaseSettings be db
+                   -> m ()
+autoMigrateVerbose b@(BeamMigrationBackend {})
+                   db =
+  do cmds <- planMigration b db
+     liftIO $ putStr $ unlines $ describeMigrationPlan cmds
+     executeMigrationPlan b cmds
 
 -- | Given a migration backend, a handle to a database, and a checked database,
 -- attempt to find a schema. This should always return 'Just', unless the
