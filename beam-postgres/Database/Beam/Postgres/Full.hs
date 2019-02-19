@@ -241,6 +241,27 @@ newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
 newtype PgConflictAction (tbl :: (* -> *) -> *) =
     PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
 
+-- | Postgres @LATERAL JOIN@ support
+--
+-- Allows the use of variables introduced on the left side of a @JOIN@ to be used on the right hand
+-- side.
+--
+-- Because of the default scoping rules, we can't use the typical monadic bind (@>>=@) operator to
+-- create this join.
+--
+-- Instead, 'lateral_'  takes two  arguments. The first  is the  left hand side  of the  @JOIN@. The
+-- second is a function that  takes the result of the first join and  uses those variables to create
+-- the right hand side.
+--
+-- For example, to join table A with a subquery that returns the first three rows in B which matches
+-- a column in A, ordered by another column in B:
+--
+-- > lateral_ (_tableA database) $ \tblA ->
+-- >   limit_ 3 $
+-- >   ordering_ (\(_, b) -> asc_ (_bField2 b)) $ do
+-- >     b <- _tableB database
+-- >     guard_ (_bField1 b ==. _aField1 a)
+-- >     pure (a, b0
 lateral_ :: forall s a b db
           . ( ThreadRewritable s a, ThreadRewritable (QNested s) b, Projectible Postgres b )
          => a -> (WithRewrittenThread s (QNested s) a -> Q Postgres db (QNested s) b)
