@@ -55,6 +55,12 @@ module Database.Beam.Postgres
   , pgCreateExtension, pgDropExtension
   , getPgExtension
 
+    -- ** Debug support
+
+  , PgDebugStmt
+  , pgTraceStmtIO, pgTraceStmtIO
+  , pgTraceStmt
+
   -- * @postgresql-simple@ re-exports
 
   , Pg.ResultError(..), Pg.SqlError(..)
