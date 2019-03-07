@@ -485,7 +485,7 @@ newtype ComposeColumnar f g a = ComposeColumnar (f (Columnar g a))
 --
 --   Usually you use the 'defaultDbSettings' function to generate an appropriate
 --   naming convention for you, and then modify it with 'withDbModification' if
---   necessary. Under this scheme, the field can be renamed using the 'IsString'
+--   necessary. Under this scheme, the field n be renamed using the 'IsString'
 --   instance for 'TableField', or the 'fieldNamed' function.
 data TableField (table :: (* -> *) -> *) ty
   = TableField
