@@ -410,7 +410,7 @@ instance PgIsArrayContext QWindowingContext
 -- containing expressions.
 array_ :: forall context f s a.
           (PgIsArrayContext context, Foldable f)
-       => f (QGenExpr PgArrayValueContext Postgres s a)
+       => f (QGenExpr context Postgres s a)
        -> QGenExpr context Postgres s (V.Vector a)
 array_ vs =
   QExpr $ fmap (PgExpressionSyntax . mkArraySyntax (Proxy @context) . mconcat) $

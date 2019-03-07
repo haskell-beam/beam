@@ -1,7 +1,7 @@
 Usually, queries are ordered before `LIMIT` and `OFFSET` are applied. Beam
 supports the standard SQL `ORDER BY` construct through the `orderBy_` function.
 
-`orderBy_` works like the Haskell function `sortBy`, with some restructions. Its
+`orderBy_` works like the Haskell function `sortBy`, with some restrictions. Its
 first argument is a function which takes as input the output of the given query.
 The function should return a sorting key, which is either a single sort ordering
 or a tuple of them. A sort ordering specifies an expression and a direction by
@@ -13,7 +13,7 @@ Use the `asc_` and `desc_` functions to specify the sort ordering over an
 arbitrary expression.
 
 !!! note "Note"
-    Use `nullsFirst_` and `nullsLast_` to control the odering of nulls.
+    Use `nullsFirst_` and `nullsLast_` to control the ordering of nulls.
     See [advanced features](./advanced-features.md) for more information.
 
 For example, to get the first ten albums when sorted lexicographically, use

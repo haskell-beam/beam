@@ -10,5 +10,6 @@ packages:
   - beam-core
   - beam-migrate
   - beam-migrate-cli
+
 nix:
   shell-file: shell.nix

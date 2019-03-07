@@ -1,4 +1,5 @@
-{-# LANGUAGE PolyKinds, UndecidableInstances #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Schema.Lenses
     ( tableLenses
     , TableLens(..)

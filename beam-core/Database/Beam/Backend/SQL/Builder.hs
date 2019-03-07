@@ -34,6 +34,7 @@ import           Data.Coerce
 import           Data.Hashable
 import           Data.Int
 import           Data.String
+import qualified Control.Monad.Fail as Fail
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
@@ -533,11 +534,5 @@ sqlFuncOp fun a =
 -- class Trivial a
 -- instance Trivial a
 
--- instance BeamBackend SqlSyntaxBackend where
---   type BackendFromField SqlSyntaxBackend = Trivial
--- instance BeamSqlBackend SqlSyntaxBackend where
---   type BeamSqlBackendSyntax SqlSyntaxBackend = SqlSyntaxBuilder
--- instance BeamSqlBackendIsString SqlSyntaxBackend Text
-
--- newtype SqlSyntaxM a = SqlSyntaxM (IO a)
---   deriving (Applicative, Functor, Monad, MonadIO)
+newtype SqlSyntaxM a = SqlSyntaxM (IO a)
+  deriving (Applicative, Functor, Monad, MonadIO, Fail.MonadFail)

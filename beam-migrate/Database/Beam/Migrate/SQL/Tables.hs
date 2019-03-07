@@ -68,11 +68,12 @@ createTable :: ( Beamable table, Table table
             => Text -> TableSchema be table
             -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
 createTable newTblName tblSettings =
-  do let createTableCommand =
+  do let pkFields = allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings)
+         tblConstraints = if null pkFields then [] else [ primaryKeyConstraintSyntax pkFields ]
+         createTableCommand =
            createTableSyntax Nothing (tableName Nothing newTblName)
                              (allBeamValues (\(Columnar' (TableFieldSchema name (FieldSchema schema) _)) -> (name, schema)) tblSettings)
-                             [ primaryKeyConstraintSyntax (allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings)) ]
-
+                             tblConstraints
          command = createTableCmd createTableCommand
 
          tbl' = changeBeamRep (\(Columnar' (TableFieldSchema name _ _)) -> Columnar' (TableField (pure name) name)) tblSettings
