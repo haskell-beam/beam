@@ -21,7 +21,7 @@ module Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Backend.SQL
 --import           Database.Beam.Backend.Types
 
---import           Control.Monad.IO.Class
+import           Control.Monad.IO.Class
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder

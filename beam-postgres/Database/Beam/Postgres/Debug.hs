@@ -69,6 +69,5 @@ pgTraceStmtIO' conn stmt =
 
 pgTraceStmt :: PgDebugStmt statement => statement -> Pg ()
 pgTraceStmt stmt =
-  let syntax = pgStmtSyntax stmt
-  in liftF (PgLiftWithHandle (flip pgTraceStmtIO stmt) id)
+  liftF (PgLiftWithHandle (flip pgTraceStmtIO stmt) id)
 

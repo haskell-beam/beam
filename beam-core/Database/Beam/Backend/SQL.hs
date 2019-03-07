@@ -68,8 +68,6 @@ import Database.Beam.Backend.Types
 
 import Control.Monad.Cont
 import Control.Monad.Except
-import Control.Monad.IO.Class
-import Control.Monad.Fail (MonadFail)
 import qualified Control.Monad.RWS.Lazy as Lazy
 import qualified Control.Monad.RWS.Strict as Strict
 import Control.Monad.Reader

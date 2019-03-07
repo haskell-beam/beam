@@ -58,7 +58,7 @@ module Database.Beam.Postgres
     -- ** Debug support
 
   , PgDebugStmt
-  , pgTraceStmtIO, pgTraceStmtIO
+  , pgTraceStmtIO, pgTraceStmtIO'
   , pgTraceStmt
 
   -- * @postgresql-simple@ re-exports
