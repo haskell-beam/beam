@@ -22,7 +22,7 @@ module Database.Beam.Schema.Tables
     , DatabaseModification, EntityModification(..)
     , FieldModification(..)
     , dbModification, tableModification, withDbModification
-    , withTableModification, modifyTable, modifyEntityName, fieldNamed
+    , withTableModification, modifyTable, modifyEntityName, modifyTableFields, fieldNamed
     , defaultDbSettings
 
     , RenamableWithRule(..), RenamableField(..)
