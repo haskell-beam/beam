@@ -34,7 +34,8 @@ pages:
   - Schema management:
       - 'The Migrations Framework': 'schema-guide/migrations.md'
       - 'The beam-migrate tool': 'schema-guide/tool.md'
-      - 'Supported migrations': 'schema-guide/supported.md'
+      - 'The beam-migrate library': 'schema-guide/library.md'
+#      - 'Supported migrations': 'schema-guide/supported.md'
   - Backends:
       - 'beam-postgres': 'user-guide/backends/beam-postgres.md'
       - 'beam-sqlite': 'user-guide/backends/beam-sqlite.md'

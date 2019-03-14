@@ -26,6 +26,9 @@ def check_ci():
 def fetch_backend_src(backend_name, cache_dir, base_dir, src):
     if 'file' in src:
         return (os.path.join(base_dir, src['file']), {})
+    elif 'local' in src:
+        path = os.path.join(base_dir, src['local'])
+        return (path, { 'STACK_YAML': os.path.join(path, 'stack.yaml') })
     elif 'github' in src:
         repo_name = '/'.join(src['github'].split('/')[1:])
         github_archive_name = repo_name + '-' + src['revision']

@@ -72,7 +72,7 @@ to be explicit about it, you can use the `allInGroupExplicitly_` quantifier.
 aggregate_ (\(genre, track) ->
               ( group_ genre
               , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
-              , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $ do
+              , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (fromMaybe_ 0 (trackMilliseconds track))) `div_` 1000)) $ do
   g <- all_ (genre chinookDb)
   t <- genreTracks g
   pure (g, t)

@@ -13,7 +13,7 @@ backends:
   beam-postgres:
     backend-name: Postgres
     backend-module: Database.Beam.Postgres
-    backend-options: '"host=localhost port=5432 user=tathougies" beam_docs_chinook'
+    backend-options: '"host=localhost port=5432 user=travis" beam_docs_chinook'
     src:
       file: ./beam-postgres
     haskell-names:
@@ -69,14 +69,15 @@ backends:
     backend-options: "127.0.0.1 3306 root '' beam_docs_chinook"
     src:
       github: tathougies/beam-mysql
-      revision: 9ed52d636b5ba5a2395e0f7a0262eab8507b5cd1
-      sha256: 050de4dc3e77705dc69e697e9b8e384fbdd5dbd035c16ec82557e3b480aea440
+      revision: 9e0d9bb9feb58d5bd01e8d93b89217be37dc1dd2
+      sha256: 4bd405d79faf8b4f8b29f91cfd166eccd55ab726dbb9d4b25ddc96b7670ee43a
     haskell-names:
       package: beam-mysql
       backend: MySQL
       monad: MySQLM
       select-syntax: MysqlSelectSyntax
       mnemonic: My
+      with-database-debug: runBeamMySQLDebug
     extra-packages:
       - mysql-simple
     extra-imports:
@@ -86,3 +87,5 @@ backends:
       docsWithTransaction = withTransaction
     supports:
       - utf8
+
+

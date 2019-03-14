@@ -12,7 +12,6 @@ module Database.Beam.Sqlite.Connection
   , runBeamSqlite, runBeamSqliteDebug
 
     -- * Emulated @INSERT RETURNING@ support
-  , SqliteInsertReturning
   , insertReturning, runInsertReturningList
   ) where
 
@@ -319,26 +318,13 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
 
 -- * emulated INSERT returning support
 
--- | Represents an @INSERT@ statement, from which we can retrieve inserted rows.
--- Beam also offers a backend-agnostic way of using this functionality in the
--- 'MonadBeamInsertReturning' extension. This functionality is emulated in
--- SQLite using a temporary table and a trigger.
-data SqliteInsertReturning (table :: (* -> *) -> *)
-  = SqliteInsertReturning !SqliteTableNameSyntax !SqliteInsertSyntax
-  | SqliteInsertReturningNoRows
-
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
 -- into the given table. Use 'runInsertReturningList'
 insertReturning :: Beamable table
                 => DatabaseEntity Sqlite db (TableEntity table)
                 -> SqlInsertValues Sqlite (table (QExpr Sqlite s))
-                -> SqliteInsertReturning table
-insertReturning tbl@(DatabaseEntity dt) vs =
-  case insert tbl vs of
-    SqlInsert _ s ->
-      SqliteInsertReturning (tableName (dbTableSchema dt) (dbTableCurrentName dt)) s
-    SqlInsertNoRows ->
-      SqliteInsertReturningNoRows
+                -> SqlInsert Sqlite table
+insertReturning = insert
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
 -- inserted row.
