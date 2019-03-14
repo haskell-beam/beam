@@ -254,6 +254,8 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
   fieldE :: Sql92ExpressionFieldNameSyntax expr -> expr
 
   betweenE :: expr -> expr -> expr -> expr
+  betweenE a lower upper =
+    (a `gtE` lower) `andE` (a `gtE` upper)
 
   andE, orE, addE, subE, mulE, divE, likeE,
     modE, overlapsE, nullIfE, positionE
