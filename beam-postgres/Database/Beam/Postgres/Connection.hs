@@ -12,8 +12,7 @@
 {-# LANGUAGE CPP #-}
 
 module Database.Beam.Postgres.Connection
-  ( PgRowReadError(..), PgError(..)
-  , Pg(..), PgF(..)
+  ( Pg(..), PgF(..)
 
   , runBeamPostgres, runBeamPostgresDebug
 
@@ -23,13 +22,14 @@ module Database.Beam.Postgres.Connection
 
   , postgresUriSyntax ) where
 
-import           Control.Exception (Exception, throwIO)
+import           Control.Exception (SomeException(..), throwIO)
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
 
 import           Database.Beam hiding (runDelete, runUpdate, runInsert, insert)
 import           Database.Beam.Backend.SQL.BeamExtensions
-import           Database.Beam.Backend.Types
+import           Database.Beam.Backend.SQL.Row ( FromBackendRowF(..), FromBackendRowM(..)
+                                               , BeamRowReadError(..), ColumnParseError(..) )
 import           Database.Beam.Backend.URI
 import           Database.Beam.Query.Types (QGenExpr(..))
 import           Database.Beam.Schema.Tables
@@ -48,7 +48,7 @@ import qualified Database.PostgreSQL.Simple.Internal as Pg
   , exec, throwResultError )
 import qualified Database.PostgreSQL.Simple.Internal as PgI
 import qualified Database.PostgreSQL.Simple.Ok as Pg
-import qualified Database.PostgreSQL.Simple.Types as Pg (Null(..), Query(..))
+import qualified Database.PostgreSQL.Simple.Types as Pg (Query(..))
 
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -58,10 +58,12 @@ import qualified Control.Monad.Fail as Fail
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (toLazyByteString, byteString)
 import qualified Data.ByteString.Lazy as BL
+import           Data.Maybe (listToMaybe, fromMaybe)
 import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
+import           Data.Typeable (cast)
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
@@ -70,14 +72,7 @@ import           Foreign.C.Types
 
 import           Network.URI (uriToString)
 
--- | Errors that may arise while using the 'Pg' monad.
-data PgError
-  = PgRowParseError PgRowReadError
-  | PgInternalError String
-  deriving Show
-instance Exception PgError
-
-data PgStream a = PgStreamDone     (Either PgError a)
+data PgStream a = PgStreamDone     (Either BeamRowReadError a)
                 | PgStreamContinue (Maybe PgI.Row -> IO (PgStream a))
 
 -- | 'BeamURIOpeners' for the standard @postgresql:@ URI scheme. See the
@@ -123,21 +118,6 @@ pgRenderSyntax conn (PgSyntax mkQuery) =
 
 -- * Run row readers
 
--- | An error that may occur while parsing a row
-data PgRowReadError
-    = PgRowReadNoMoreColumns !CInt !CInt
-      -- ^ We attempted to read more columns than postgres returned. First
-      -- argument is the zero-based index of the column we attempted to read,
-      -- and the second is the total number of columns
-    | PgRowCouldNotParseField !CInt !String
-      -- ^ There was an error while parsing the field. The first argument gives
-      -- the zero-based index of the column that could not have been
-      -- parsed. This is usually caused by your Haskell schema type being
-      -- incompatible with the one in the database.
-    deriving Show
-
-instance Exception PgRowReadError
-
 getFields :: Pg.Result -> IO [Pg.Field]
 getFields res = do
   Pg.Col colCount <- Pg.nfields res
@@ -148,55 +128,63 @@ getFields res = do
   mapM getField [0..colCount - 1]
 
 runPgRowReader ::
-  Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either PgRowReadError a)
+  Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either BeamRowReadError a)
 runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
   Pg.nfields res >>= \(Pg.Col colCount) ->
   runF readRow finish step 0 colCount fields
   where
-    step (ParseOneField _) curCol colCount [] = pure (Left (PgRowReadNoMoreColumns curCol colCount))
-    step (ParseOneField _) curCol colCount _
-      | curCol >= colCount = pure (Left (PgRowReadNoMoreColumns curCol colCount))
-    step (ParseOneField next) curCol colCount remainingFields =
-      let next' Nothing _ _ _ = pure (Left (PgRowCouldNotParseField curCol "fromField: could not parse field"))
-          next' (Just {}) _ _ [] = fail "Internal error"
-          next' (Just x) curCol' colCount' (_:remainingFields') = next x (curCol' + 1) colCount' remainingFields'
-      in step (PeekField next') curCol colCount remainingFields
 
-    step (PeekField next) curCol colCount [] = next Nothing curCol colCount []
-    step (PeekField next) curCol colCount remainingFields
-      | curCol >= colCount = next Nothing curCol colCount remainingFields
-    step (PeekField next) curCol colCount remainingFields@(field:_) =
+    step :: forall x. FromBackendRowF Postgres (CInt -> CInt -> [PgI.Field] -> IO (Either BeamRowReadError x))
+         -> CInt -> CInt -> [PgI.Field] -> IO (Either BeamRowReadError x)
+    step (ParseOneField _) curCol colCount [] = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
+    step (ParseOneField _) curCol colCount _
+      | curCol >= colCount = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
+    step (ParseOneField next) curCol colCount (field:remainingFields) =
       do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
          res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res' of
-           Pg.Errors {} -> next Nothing curCol colCount remainingFields
-           Pg.Ok x -> next (Just x) curCol colCount remainingFields
+           Pg.Errors errs ->
+             let err = fromMaybe (ColumnErrorInternal "Column parse failed with unknown exception") $
+                       listToMaybe $
+                       do SomeException e <- errs
+                          Just pgErr <- pure (cast e)
+                          case pgErr of
+                            Pg.ConversionFailed { Pg.errSQLType = sql
+                                                , Pg.errHaskellType = hs
+                                                , Pg.errMessage = msg } ->
+                              pure (ColumnTypeMismatch hs sql msg)
+                            Pg.Incompatible { Pg.errSQLType = sql
+                                            , Pg.errHaskellType = hs
+                                            , Pg.errMessage = msg } ->
+                              pure (ColumnTypeMismatch hs sql msg)
+                            Pg.UnexpectedNull {} ->
+                              pure ColumnUnexpectedNull
+             in pure (Left (BeamRowReadError (Just (fromIntegral curCol)) err))
+           Pg.Ok x -> next x (curCol + 1) colCount remainingFields
 
-    step (CheckNextNNull n next) curCol colCount remainingFields =
-      doCheckNextN (fromIntegral n) (curCol :: CInt) (colCount :: CInt) remainingFields >>= \yes ->
-      next yes (curCol + if yes then fromIntegral n else 0) colCount (if yes then drop (fromIntegral n) remainingFields else remainingFields)
+    step (SkipField {}) curCol colCount [] = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
+    step (SkipField {}) curCol colCount _
+      | curCol >= colCount = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
+    step (SkipField next) curCol colCount (_:cols) =
+      next (curCol + 1) colCount cols
 
-    step (FailParseWith err) curCol _ _ =
-      pure (Left (PgRowCouldNotParseField (if curCol == 0 then curCol else curCol - 1) err))
+    step (Alt (FromBackendRowM a) (FromBackendRowM b) next) curCol colCount cols =
+      do aRes <- runF a finishWithSt step curCol colCount cols
+         case aRes of
+           Right (x, curCol', colCount', cols') -> next x curCol' colCount' cols'
+           Left aErr -> do
+             bRes <- runF b finishWithSt step curCol colCount cols
+             case bRes of
+               Right (x, curCol', colCount', cols') -> next x curCol' colCount' cols'
+               Left {} -> pure (Left aErr)
 
-    doCheckNextN 0 _ _ _ = pure False
-    doCheckNextN n curCol colCount remainingFields
-      | curCol + n > colCount = pure False
-      | otherwise =
-        let fieldsInQuestion = zip [curCol..] (take (fromIntegral n) remainingFields)
-        in readAndCheck fieldsInQuestion
-
-    readAndCheck [] = pure True
-    readAndCheck ((i, field):xs) =
-      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col i)
-         res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
-         case res' of
-           Pg.Errors _ -> pure False
-           Pg.Ok Pg.Null -> readAndCheck xs
+    step (FailParseWith err) _ _ _ =
+      pure (Left err)
 
     finish x _ _ _ = pure (Right x)
+    finishWithSt x curCol colCount cols = pure (Right (x, curCol, colCount, cols))
 
-withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either PgError a)
+withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either BeamRowReadError a)
 withPgDebug dbg conn (Pg action) =
   let finish x = pure (Right x)
       step (PgLiftIO io next) = io >>= next
@@ -239,13 +227,13 @@ withPgDebug dbg conn (Pg action) =
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
            runF process next stepReturningNone
 
-      stepReturningNone :: forall a. PgF (IO (Either PgError a)) -> IO (Either PgError a)
+      stepReturningNone :: forall a. PgF (IO (Either BeamRowReadError a)) -> IO (Either BeamRowReadError a)
       stepReturningNone (PgLiftIO action' next) = action' >>= next
       stepReturningNone (PgLiftWithHandle withConn next) = withConn conn >>= next
       stepReturningNone (PgFetchNext next) = next Nothing
-      stepReturningNone (PgRunReturning _ _ _) = pure (Left (PgInternalError "Nested queries not allowed"))
+      stepReturningNone (PgRunReturning _ _ _) = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal  "Nested queries not allowed")))
 
-      stepReturningList :: forall a. Pg.Result -> PgF (CInt -> IO (Either PgError a)) -> CInt -> IO (Either PgError a)
+      stepReturningList :: forall a. Pg.Result -> PgF (CInt -> IO (Either BeamRowReadError a)) -> CInt -> IO (Either BeamRowReadError a)
       stepReturningList _   (PgLiftIO action' next) rowIdx = action' >>= \x -> next x rowIdx
       stepReturningList res (PgFetchNext next) rowIdx =
         do fields <- getFields res
@@ -253,10 +241,10 @@ withPgDebug dbg conn (Pg action) =
            if rowIdx >= rowCount
              then next Nothing rowIdx
              else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
-                    Left err -> pure (Left (PgRowParseError err))
+                    Left err -> pure (Left err)
                     Right r -> next (Just r) (rowIdx + 1)
-      stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (PgInternalError "Nested queries not allowed"))
-      stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (PgInternalError "Nested queries not allowed"))
+      stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
+      stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
 
       finishProcess :: forall a. a -> Maybe PgI.Row -> IO (PgStream a)
       finishProcess x _ = pure (PgStreamDone (Right x))
@@ -270,15 +258,15 @@ withPgDebug dbg conn (Pg action) =
           Just (PgI.Row rowIdx res') ->
             getFields res' >>= \fields ->
             runPgRowReader conn rowIdx res' fields fromBackendRow >>= \case
-              Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
+              Left err -> pure (PgStreamDone (Left err))
               Right r -> next (Just r) Nothing
       stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
         getFields res >>= \fields ->
         runPgRowReader conn rowIdx res fields fromBackendRow >>= \case
-          Left err -> pure (PgStreamDone (Left (PgRowParseError err)))
+          Left err -> pure (PgStreamDone (Left err))
           Right r -> pure (PgStreamContinue (next (Just r)))
-      stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
-      stepProcess (PgLiftWithHandle _ _) _ = pure (PgStreamDone (Left (PgInternalError "Nested queries not allowed")))
+      stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed"))))
+      stepProcess (PgLiftWithHandle _ _) _ = pure (PgStreamDone (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed"))))
 
       runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
       runConsumer s@(PgStreamDone {}) _ = pure s

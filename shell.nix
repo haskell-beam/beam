@@ -83,12 +83,14 @@ let
       license = stdenv.lib.licenses.mit;
     };
   };
+
+  beamPython = python27.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ]);
 in
   haskell.lib.buildStackProject {
     inherit ghc;
     name = "beam-env";
-    buildInputs = [ postgresql bash
-                    (python27.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ]))
+    buildInputs = [ postgresql bash beamPython
                     ncurses libcxx icu gcc mysql zlib openssl stack gnupg dos2unix vim pcre ];
     LANG = "en_us.UTF-8";
+    python = beamPython;
   }

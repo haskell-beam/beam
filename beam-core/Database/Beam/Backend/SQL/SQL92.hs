@@ -4,7 +4,7 @@
 module Database.Beam.Backend.SQL.SQL92 where
 
 import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.Types
+import Database.Beam.Backend.SQL.Row
 
 import Data.Int
 import Data.Tagged
@@ -255,7 +255,8 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
 
   betweenE :: expr -> expr -> expr -> expr
   betweenE a lower upper =
-    (a `gtE` lower) `andE` (a `gtE` upper)
+    (a `gt` lower) `andE` (a `gt` upper)
+    where gt = gtE Nothing
 
   andE, orE, addE, subE, mulE, divE, likeE,
     modE, overlapsE, nullIfE, positionE

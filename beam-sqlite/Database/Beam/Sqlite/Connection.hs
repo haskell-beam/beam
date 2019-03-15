@@ -30,7 +30,6 @@ import           Database.Beam.Query ( QExpr, SqlInsert(..), SqlInsertValues(..)
 import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( Beamable
                                              , DatabaseEntity(..)
-                                             , DatabaseEntityDescriptor(..)
                                              , TableEntity)
 import           Database.Beam.Sqlite.Syntax
 
@@ -45,20 +44,22 @@ import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
 
-import           Control.Exception (bracket_, onException, mask)
-import           Control.Monad (forM_, replicateM_)
+import           Control.Exception (SomeException(..), bracket_, onException, mask)
+import           Control.Monad (forM_)
 import           Control.Monad.Fail (MonadFail)
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Identity (Identity)
-import           Control.Monad.Reader (ReaderT, MonadReader(..), runReaderT)
-import           Control.Monad.State.Strict (MonadState(..), runStateT)
+import           Control.Monad.Reader (ReaderT(..), MonadReader(..), runReaderT)
+import           Control.Monad.State.Strict (MonadState(..), StateT(..), runStateT)
+import           Control.Monad.Trans (lift)
 
 import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
 import           Data.Int
+import           Data.Maybe (mapMaybe)
 import           Data.Proxy (Proxy(..))
 import           Data.Scientific (Scientific)
 import           Data.String (fromString)
@@ -67,6 +68,7 @@ import qualified Data.Text.Encoding as T (decodeUtf8)
 import qualified Data.Text.Lazy as TL
 import           Data.Time ( LocalTime, UTCTime, Day
                            , ZonedTime, utc, utcToLocalTime )
+import           Data.Typeable (cast)
 import           Data.Word
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
@@ -184,28 +186,56 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
       where
         FromBackendRowM fromBackendRow' = fromBackendRow :: FromBackendRowM Sqlite a
 
+        translateErrors :: Maybe Int -> SomeException -> Maybe SomeException
+        translateErrors col (SomeException e) =
+          case cast e of
+            Just (ConversionFailed { errSQLType     = typeString
+                                   , errHaskellType = hsString
+                                   , errMessage     = msg }) ->
+              Just (SomeException (BeamRowReadError col (ColumnTypeMismatch hsString typeString ("conversion failed: " ++ msg))))
+            Just (UnexpectedNull {}) ->
+              Just (SomeException (BeamRowReadError col ColumnUnexpectedNull))
+            Just (Incompatible { errSQLType     = typeString
+                               , errHaskellType = hsString
+                               , errMessage     = msg }) ->
+              Just (SomeException (BeamRowReadError col (ColumnTypeMismatch hsString typeString ("incompatible: " ++ msg))))
+            Nothing -> Nothing
+
         finish = pure
 
-        step :: FromBackendRowF Sqlite (RowParser a) -> RowParser a
+        step :: forall a'. FromBackendRowF Sqlite (RowParser a') -> RowParser a'
         step (ParseOneField next) =
-            field >>= next
-        step (PeekField next) =
-            RP $ do
-              ro <- ask
-              st <- get
-              case runStateT (runReaderT (unRP field) ro) st of
-                Ok (a, _) -> unRP (next (Just a))
-                _ -> unRP (next Nothing)
-        step (CheckNextNNull n next) =
-            RP $ do
-              ro <- ask
-              st <- get
-              case runStateT (runReaderT (unRP (replicateM_ n (field :: RowParser Null))) ro) st of
-                Ok ((), st') ->
-                  do put st'
-                     unRP (next True)
-                _ -> unRP (next False)
-        step (FailParseWith err) = RP (fail err) -- TODO fail with a separate beam error here
+            RP $ ReaderT $ \ro -> StateT $ \st@(col, _) ->
+            case runStateT (runReaderT (unRP field) ro) st of
+              Ok (x, st') -> runStateT (runReaderT (unRP (next x)) ro) st'
+              Errors errs -> Errors (mapMaybe (translateErrors (Just col)) errs)
+        step (SkipField (RP next)) =
+          RP $ do
+            (col, d) <- get
+            case d of
+              [] -> lift (lift (Errors [SomeException (BeamRowReadError Nothing (ColumnNotEnoughColumns (col + length d))) ]))
+              _:ds -> do
+                put (col + 1, ds)
+                next
+        step (Alt (FromBackendRowM a) (FromBackendRowM b) next) = do
+          RP $ do
+            let RP a' = runF a finish step
+                RP b' = runF b finish step
+
+            st <- get
+            ro <- ask
+            case runStateT (runReaderT a' ro) st of
+              Ok (ra, st') -> do
+                put st'
+                unRP (next ra)
+              Errors aErrs ->
+                case runStateT (runReaderT b' ro) st of
+                  Ok (rb, st') -> do
+                    put st'
+                    unRP (next rb)
+                  Errors bErrs ->
+                    lift (lift (Errors (aErrs ++ bErrs)))
+        step (FailParseWith err) = RP (lift (lift (Errors [SomeException err])))
 
 -- * Equality checks
 #define HAS_SQLITE_EQUALITY_CHECK(ty)                       \

@@ -108,7 +108,6 @@ import Database.Beam.Query.Relationships
 import Database.Beam.Query.Types (QGenExpr) -- hide QGenExpr constructor
 import Database.Beam.Query.Types hiding (QGenExpr)
 
-import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
 import Database.Beam.Backend.SQL.Builder
 import Database.Beam.Schema.Tables
