@@ -5,7 +5,7 @@
 
 module Database.Beam.Backend.SQL.Row
   ( FromBackendRowF(..), FromBackendRowM(..)
-  , parseOneField, peekField, skipField
+  , parseOneField, peekField
 
   , ColumnParseError(..), BeamRowReadError(..)
 
@@ -20,6 +20,7 @@ import           Control.Exception (Exception)
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
 import           Data.Tagged
+import           Data.Typeable
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
@@ -50,8 +51,7 @@ data BeamRowReadError
 instance Exception BeamRowReadError
 
 data FromBackendRowF be f where
-  ParseOneField :: BackendFromField be a => (a -> f) -> FromBackendRowF be f
-  SkipField :: f -> FromBackendRowF be f
+  ParseOneField :: (BackendFromField be a, Typeable a) => (a -> f) -> FromBackendRowF be f
   Alt :: FromBackendRowM be a -> FromBackendRowM be a -> (a -> f) -> FromBackendRowF be f
   FailParseWith :: BeamRowReadError -> FromBackendRowF be f
 deriving instance Functor (FromBackendRowF be)
@@ -72,14 +72,13 @@ instance Alternative (FromBackendRowM be) where
   a <|> b =
     FromBackendRowM (liftF (Alt a b id))
 
-parseOneField :: BackendFromField be a => FromBackendRowM be a
-parseOneField = FromBackendRowM (liftF (ParseOneField id))
+parseOneField :: (BackendFromField be a, Typeable a) => FromBackendRowM be a
+parseOneField = do
+  x <- FromBackendRowM (liftF (ParseOneField id))
+  pure x
 
-skipField :: FromBackendRowM be ()
-skipField = FromBackendRowM (liftF (SkipField ()))
-
-peekField :: BackendFromField be a => FromBackendRowM be (Maybe a)
-peekField = fmap Just parseOneField <|> (Nothing <$ skipField)
+peekField :: (Typeable a, BackendFromField be a) => FromBackendRowM be (Maybe a)
+peekField = fmap Just (FromBackendRowM (liftF (ParseOneField id))) <|> pure Nothing
 
 -- checkNextNNull :: Int -> FromBackendRowM be Bool
 -- checkNextNNull n = FromBackendRowM (liftF (CheckNextNNull n id))
@@ -90,7 +89,7 @@ class BeamBackend be => FromBackendRow be a where
   -- an internal bug in beam deserialization code. If it does fail,
   -- this should throw a 'BeamRowParseError'.
   fromBackendRow :: FromBackendRowM be a
-  default fromBackendRow :: BackendFromField be a => FromBackendRowM be a
+  default fromBackendRow :: (Typeable a, BackendFromField be a) => FromBackendRowM be a
   fromBackendRow = parseOneField
 
   valuesNeeded :: Proxy be -> Proxy a -> Int

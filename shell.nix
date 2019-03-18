@@ -89,7 +89,7 @@ in
   haskell.lib.buildStackProject {
     inherit ghc;
     name = "beam-env";
-    buildInputs = [ postgresql bash beamPython
+    buildInputs = [ postgresql bash beamPython mkdocs pv sqlite
                     ncurses libcxx icu gcc mysql zlib openssl stack gnupg dos2unix vim pcre ];
     LANG = "en_us.UTF-8";
     python = beamPython;

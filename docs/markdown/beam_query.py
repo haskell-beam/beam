@@ -218,6 +218,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
     with open(source_file, 'wt') as source_hdl:
         source_hdl.write(u"\n".join(template_data).encode('utf-8'))
 
+    print "Running backend example", lines_hash
     build_command = 'stack runhaskell ' + build_options + ' ' + source_file
     is_ci = check_ci()
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(cache_dir), close_fds=True,
@@ -246,7 +247,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
         else:
             print "Error in source file", source_file
             print err
-            return err.split()
+            return unicode(err, 'utf-8').encode('ascii', 'ignore').split()
 
 def run_example(template_path, cache_dir, example_lines):
     template_data, options = read_template(template_path, { 'PLACEHOLDER': example_lines })
@@ -266,6 +267,7 @@ def run_example(template_path, cache_dir, example_lines):
     if build_command is None:
         return ["No BUILD_COMMAND specified"] + example_lines
 
+    print "Running example", lines_hash
     is_ci = check_ci()
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(build_dir), close_fds=True,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -289,7 +291,7 @@ def run_example(template_path, cache_dir, example_lines):
             sys.exit(1)
         else:
             print err
-            return err.split()
+            return unicode(err, 'utf-8').encode('ascii', 'ignore').split()
 
 class BeamQueryBlockProcessor(Preprocessor):
     def __init__(self, *args, **kwargs):

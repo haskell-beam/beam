@@ -196,7 +196,7 @@ You can also use `in_` to use the common `IN` predicate.
 ```haskell
 !example chinook
 limit_ 10 $
-  filter_ (\customer -> customerFirstName customer `in_` [val_ "Joe", val_ "Sam", val_ "Elizabeth"]) $
+  filter_ (\customer -> customerFirstName customer `in_` [val_ "Johannes", val_ "Aaron", val_ "Ellie"]) $
   all_ (customer chinookDb)
 ```
 

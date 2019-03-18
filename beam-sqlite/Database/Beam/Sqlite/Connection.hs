@@ -209,14 +209,6 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
             case runStateT (runReaderT (unRP field) ro) st of
               Ok (x, st') -> runStateT (runReaderT (unRP (next x)) ro) st'
               Errors errs -> Errors (mapMaybe (translateErrors (Just col)) errs)
-        step (SkipField (RP next)) =
-          RP $ do
-            (col, d) <- get
-            case d of
-              [] -> lift (lift (Errors [SomeException (BeamRowReadError Nothing (ColumnNotEnoughColumns (col + length d))) ]))
-              _:ds -> do
-                put (col + 1, ds)
-                next
         step (Alt (FromBackendRowM a) (FromBackendRowM b) next) = do
           RP $ do
             let RP a' = runF a finish step
