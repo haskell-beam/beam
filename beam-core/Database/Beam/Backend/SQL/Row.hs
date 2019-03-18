@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -24,7 +25,9 @@ import           Data.Typeable
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
+#if !MIN_VERSION_base(4, 12, 0)
 import           Data.Proxy
+#endif
 
 import           GHC.Generics
 import           GHC.TypeLits
@@ -79,9 +82,6 @@ parseOneField = do
 
 peekField :: (Typeable a, BackendFromField be a) => FromBackendRowM be (Maybe a)
 peekField = fmap Just (FromBackendRowM (liftF (ParseOneField id))) <|> pure Nothing
-
--- checkNextNNull :: Int -> FromBackendRowM be Bool
--- checkNextNNull n = FromBackendRowM (liftF (CheckNextNNull n id))
 
 -- BeamBackend instead of BeamSqlBackend to prevent circular super class
 class BeamBackend be => FromBackendRow be a where

@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-partial-type-signatures #-}
 
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE LambdaCase #-}
@@ -64,7 +64,11 @@ import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
+#if MIN_VERSION_base(4,12,0)
+import           Data.Typeable (cast)
+#else
 import           Data.Typeable (cast, typeOf)
+#endif
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
@@ -177,7 +181,6 @@ runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
       pure (Left err)
 
     finish x _ _ _ = pure (Right x)
-    finishWithSt x curCol colCount cols = pure (Right (x, curCol, colCount, cols))
 
 withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either BeamRowReadError a)
 withPgDebug dbg conn (Pg action) =
