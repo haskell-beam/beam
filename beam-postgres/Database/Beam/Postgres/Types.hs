@@ -114,7 +114,7 @@ instance FromBackendRow Postgres LocalTime where
   fromBackendRow =
     peekField >>=
     \case
-      Just (_ :: LocalTime) -> parseOneField
+      Just (x :: LocalTime) -> pure x
 
       -- Also accept 'TIMESTAMP WITH TIME ZONE'. Considered as
       -- 'LocalTime', because postgres always returns times in the
@@ -122,7 +122,7 @@ instance FromBackendRow Postgres LocalTime where
       Nothing ->
         peekField >>=
         \case
-          Just (_ :: ZonedTime) -> zonedTimeToLocalTime <$> parseOneField
+          Just (x :: ZonedTime) -> pure (zonedTimeToLocalTime x)
           Nothing -> fail "'TIMESTAMP WITH TIME ZONE' or 'TIMESTAMP WITHOUT TIME ZONE' required for LocalTime"
 instance FromBackendRow Postgres TimeOfDay
 instance FromBackendRow Postgres Day
@@ -139,7 +139,7 @@ instance FromBackendRow Postgres (Ratio Integer)
 instance FromBackendRow Postgres (CI Text)
 instance FromBackendRow Postgres (CI TL.Text)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a) where
-    fromBackendRow = do
+  fromBackendRow = do
       isNull <- peekField
       case isNull of
         Just SqlNull -> pure mempty
