@@ -29,6 +29,7 @@ from time import time
 
 import re
 import random
+import string
 
 # Ordered so that 'data-' attrs of html are in deterministic order.
 PARAM_REGEXES = odict((

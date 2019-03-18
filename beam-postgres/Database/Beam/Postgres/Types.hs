@@ -57,21 +57,18 @@ fromScientificOrIntegral = do
   sciVal <- fmap (toBoundedInteger =<<) peekField
   case sciVal of
     Just sciVal' -> do
-      -- If the parse succeeded, consume the field
-      _ <- parseOneField @Postgres @Scientific
       pure sciVal'
     Nothing -> fromIntegral <$> fromBackendRow @Postgres @Integer
 
 -- | Deserialize integral fields, possibly downcasting from a larger integral
 -- type, but only if we won't lose data
 fromPgIntegral :: forall a
-                . (Pg.FromField a, Integral a)
+                . (Pg.FromField a, Integral a, Typeable a)
                => FromBackendRowM Postgres a
 fromPgIntegral = do
   val <- peekField
   case val of
     Just val' -> do
-      _ <- parseOneField @Postgres @a
       pure val'
     Nothing -> do
       val' <- parseOneField @Postgres @Integer
@@ -151,7 +148,7 @@ instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGArray a)
 instance FromBackendRow Postgres (Pg.Binary ByteString)
 instance FromBackendRow Postgres (Pg.Binary BL.ByteString)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGRange a)
-instance (Pg.FromField a, Pg.FromField b) => FromBackendRow Postgres (Either a b)
+instance (Pg.FromField a, Pg.FromField b, Typeable a, Typeable b) => FromBackendRow Postgres (Either a b)
 
 instance BeamSqlBackend Postgres
 instance BeamMigrateOnlySqlBackend Postgres

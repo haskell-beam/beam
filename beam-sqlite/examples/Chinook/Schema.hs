@@ -297,29 +297,40 @@ chinookDb :: DatabaseSettings be ChinookDb
 chinookDb =
   defaultDbSettings `withDbModification`
   (dbModification
-   { album = modifyTable (\_ -> "Album")
-                         (Album "AlbumId" "Title" (ArtistId "ArtistId"))
-   , artist = modifyTable (\_ -> "Artist") (Artist "ArtistId" "Name")
-   , customer = modifyTable (\_ -> "Customer")
-                     (Customer "CustomerId" "FirstName" "LastName" "Company"
-                               (addressFields "") "Phone" "Fax" "Email"
-                               (EmployeeId "SupportRepId"))
-   , employee = modifyTable (\_ -> "Employee")
+   { album = setEntityName "Album" <>
+             modifyTableFields (Album "AlbumId" "Title" (ArtistId "ArtistId"))
+   , artist = setEntityName "Artist" <>
+              modifyTableFields (Artist "ArtistId" "Name")
+   , customer = setEntityName "Customer" <>
+                modifyTableFields
+                    (Customer "CustomerId" "FirstName" "LastName" "Company"
+                              (addressFields "") "Phone" "Fax" "Email"
+                              (EmployeeId "SupportRepId"))
+   , employee = setEntityName "Employee" <>
+                modifyTableFields
                     (Employee "EmployeeId" "LastName" "FirstName" "Title"
                               (EmployeeId "ReportsTo") "BirthDate" "HireDate"
                               (addressFields "") "Phone" "Fax" "Email")
-   , genre = modifyTable (\_ -> "Genre")
-                  (Genre "GenreId" "Name")
-   , invoice = modifyTable (\_ -> "Invoice")
+   , genre = setEntityName "Genre" <>
+             modifyTableFields
+                 (Genre "GenreId" "Name")
+   , invoice = setEntityName "Invoice" <>
+               modifyTableFields
                    (Invoice "InvoiceId" (CustomerId "CustomerId") "InvoiceDate"
                             (addressFields "Billing") "Total")
-   , invoiceLine = modifyTable (\_ -> "InvoiceLine")
+   , invoiceLine = setEntityName "InvoiceLine" <>
+                   modifyTableFields
                         (InvoiceLine "InvoiceLineId" (InvoiceId "InvoiceId") (TrackId "TrackId")
                                      "UnitPrice" "Quantity")
-   , mediaType = modifyTable (\_ -> "MediaType") (MediaType "MediaTypeId" "Name")
-   , playlist = modifyTable (\_ -> "Playlist") (Playlist "PlaylistId" "Name")
-   , playlistTrack = modifyTable (\_ -> "PlaylistTrack") (PlaylistTrack (PlaylistId "PlaylistId")
-                                                                        (TrackId "TrackId"))
-   , track = modifyTable (\_ -> "Track") (Track "TrackId" "Name" (AlbumId "AlbumId") (MediaTypeId "MediaTypeId")
-                                                (GenreId "GenreId") "Composer" "Milliseconds" "Bytes" "UnitPrice")
+   , mediaType = setEntityName "MediaType" <>
+                 modifyTableFields (MediaType "MediaTypeId" "Name")
+   , playlist = setEntityName "Playlist" <>
+                modifyTableFields (Playlist "PlaylistId" "Name")
+   , playlistTrack = setEntityName "PlaylistTrack" <>
+                     modifyTableFields (PlaylistTrack (PlaylistId "PlaylistId")
+                                                      (TrackId "TrackId"))
+   , track = setEntityName "Track" <>
+             modifyTableFields
+                 (Track "TrackId" "Name" (AlbumId "AlbumId") (MediaTypeId "MediaTypeId")
+                        (GenreId "GenreId") "Composer" "Milliseconds" "Bytes" "UnitPrice")
    })

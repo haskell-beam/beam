@@ -2,11 +2,12 @@
 
 ## Common table expressions
 
-Beam now supports common table expressions on some backends, using the `With` monad.
+Beam now supports common table expressions on some backends, using the
+`With` monad. Currently, only `SELECT` statements are supported.
 
 ## Changes to field name modification
 
-`EntityModification` is now a `Monoid`. 
+`EntityModification` is now a `Monoid`.
 
 Instead of taking the beam-determined name, the `renamingFields`
 function instead takes a `Data.List.NonEmpty` value containing the
@@ -67,6 +68,18 @@ dbComputation :: ( Sql92SanityCheck syntax, MonadBeam syntax be hdl m ) => m res
 The changes above make a separate `HasDefaultSqlDataTypeConstraints`
 class unnecessary. The `defaultSqlDataTypeConstraints` method is now
 included within the `HasDefaultSqlDataType` class.
+
+## Changes to parseOneField and peekField
+
+Formerly, the `peekField` function would attemt to parse a field
+without advancing the column pointer, regardless of whether a field
+was successfully parsed. In order to support more efficient parsing,
+this has been changed. When `peekField` returns a `Just` value, then
+the column pointer is advanced to the next pointer. This means you do
+not need to call `parseOneField` again to advance the pointer.
+
+You can still chain `peekField` calls together by using the new
+`Alternative` instance for `FromBackendRowM`.
 
 # 0.7.2.0
 

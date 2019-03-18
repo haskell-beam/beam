@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -63,7 +64,7 @@ import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
-import           Data.Typeable (cast)
+import           Data.Typeable (cast, typeOf)
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
@@ -139,7 +140,7 @@ runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
     step (ParseOneField _) curCol colCount [] = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
     step (ParseOneField _) curCol colCount _
       | curCol >= colCount = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
-    step (ParseOneField next) curCol colCount (field:remainingFields) =
+    step (ParseOneField (next' :: next -> _)) curCol colCount (field:remainingFields) =
       do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
          res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res' of
@@ -160,22 +161,16 @@ runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
                             Pg.UnexpectedNull {} ->
                               pure ColumnUnexpectedNull
              in pure (Left (BeamRowReadError (Just (fromIntegral curCol)) err))
-           Pg.Ok x -> next x (curCol + 1) colCount remainingFields
-
-    step (SkipField {}) curCol colCount [] = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
-    step (SkipField {}) curCol colCount _
-      | curCol >= colCount = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
-    step (SkipField next) curCol colCount (_:cols) =
-      next (curCol + 1) colCount cols
+           Pg.Ok x -> next' x (curCol + 1) colCount remainingFields
 
     step (Alt (FromBackendRowM a) (FromBackendRowM b) next) curCol colCount cols =
-      do aRes <- runF a finishWithSt step curCol colCount cols
+      do aRes <- runF a (\x curCol' colCount' cols' -> pure (Right (next x curCol' colCount' cols'))) step curCol colCount cols
          case aRes of
-           Right (x, curCol', colCount', cols') -> next x curCol' colCount' cols'
+           Right next' -> next'
            Left aErr -> do
-             bRes <- runF b finishWithSt step curCol colCount cols
+             bRes <- runF b (\x curCol' colCount' cols' -> pure (Right (next x curCol' colCount' cols'))) step curCol colCount cols
              case bRes of
-               Right (x, curCol', colCount', cols') -> next x curCol' colCount' cols'
+               Right next' -> next'
                Left {} -> pure (Left aErr)
 
     step (FailParseWith err) _ _ _ =
