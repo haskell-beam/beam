@@ -38,6 +38,7 @@ library
                        Database.Beam.Backend.Types
                        Database.Beam.Backend.URI
                        Database.Beam.Backend.SQL
+                       Database.Beam.Backend.SQL.Row
                        Database.Beam.Backend.SQL.Types
                        Database.Beam.Backend.SQL.BeamExtensions
                        Database.Beam.Backend.SQL.SQL92
@@ -76,7 +77,7 @@ library
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
-  ghc-options:         -Wall
+  ghc-options:         -Wall -O3
   if flag(werror)
     ghc-options:       -Werror
 

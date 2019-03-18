@@ -29,7 +29,6 @@ module Database.Beam.Postgres.CustomTypes
 import           Database.Beam
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax

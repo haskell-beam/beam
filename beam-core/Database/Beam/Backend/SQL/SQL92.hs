@@ -4,7 +4,7 @@
 module Database.Beam.Backend.SQL.SQL92 where
 
 import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.Types
+import Database.Beam.Backend.SQL.Row
 
 import Data.Int
 import Data.Tagged

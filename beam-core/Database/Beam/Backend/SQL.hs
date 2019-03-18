@@ -1,6 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Backend.SQL
-  ( module Database.Beam.Backend.SQL.SQL2003
+  ( module Database.Beam.Backend.SQL.Row
+  , module Database.Beam.Backend.SQL.SQL2003
   , module Database.Beam.Backend.SQL.Types
 
   , MonadBeam(..)
@@ -63,6 +64,7 @@ module Database.Beam.Backend.SQL
   ) where
 
 import Database.Beam.Backend.SQL.SQL2003
+import Database.Beam.Backend.SQL.Row
 import Database.Beam.Backend.SQL.Types
 import Database.Beam.Backend.Types
 

@@ -99,10 +99,7 @@ migrationBackend = Tool.BeamMigrationBackend
                                          pgCustomEnumActionProvider)
                         (\options action ->
                             bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
-                              left pgToToolError <$> withPgDebug (\_ -> pure ()) conn action)
-  where
-    pgToToolError (PgRowParseError err) = show err
-    pgToToolError (PgInternalError err) = err
+                              left show <$> withPgDebug (\_ -> pure ()) conn action)
 
 -- | 'BeamDeserializers' for postgres-specific types:
 --

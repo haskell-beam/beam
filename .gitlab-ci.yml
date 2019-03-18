@@ -2,6 +2,7 @@ image: nixos/nix:latest
 
 stages:
   - build
+  - docs
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
@@ -26,3 +27,7 @@ build beam-sqlite:
 build beam-migrate:
   stage: build
   script:  chown -R root /builds/tathougies1 && nix-shell --command "stack build --system-ghc --nix beam-migrate-cli --flag beam-migrate:werror"
+
+build docs:
+  stage: docs
+  script: chown -R root /builds/tathougies1 && ./builddocs.sh builddocs

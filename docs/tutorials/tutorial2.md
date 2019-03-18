@@ -553,7 +553,8 @@ addresses <-
   runBeamSqliteDebug putStrLn conn $
     do runUpdate $
          update (shoppingCartDb ^. shoppingCartUserAddresses)
-                (\address -> [ address ^. addressCity <-. val_ "Sugarville"
+                (\address -> mconcat
+                             [ address ^. addressCity <-. val_ "Sugarville"
                              , address ^. addressZip <-. val_ "12345" ])
                 (\address -> address ^. addressCity ==. val_ "Sugarland" &&.
                              address ^. addressState ==. val_ "TX")
