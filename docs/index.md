@@ -38,16 +38,12 @@ packages:
 - .
 - location:
     git: https://github.com/tathougies/beam.git
-    commit: a3b5e0763843fed48c7eef53fa7d08cfe710342d
+    commit: <latest master commit>
   extra-dep: true
   subdirs:
     - beam-core
     - <backend>
 ```
-
-!!! note "Note"
-    the commit will need to be changed to whatever the latest commit of master is,
-    or whichever commit you want to build from even.
 
 and add the following to your `.cabal` file, in the `build-depends` section:
 
