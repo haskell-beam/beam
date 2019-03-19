@@ -496,6 +496,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../user-guide/queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -632,26 +644,6 @@
     Basic concepts
   </a>
   
-    <nav class="md-nav">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#automatic-migration-generation" title="Automatic migration generation" class="md-nav__link">
-    Automatic migration generation
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#advantages-of-checked-migrations" title="Advantages of checked migrations" class="md-nav__link">
-    Advantages of checked migrations
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -672,6 +664,20 @@
           <li class="md-nav__item">
   <a href="#the-beam-migrate-tool" title="The beam-migrate tool" class="md-nav__link">
     The beam-migrate tool
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automatic-migration-generation" title="Automatic migration generation" class="md-nav__link">
+    Automatic migration generation
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advantages-of-checked-migrations" title="Advantages of checked migrations" class="md-nav__link">
+    Advantages of checked migrations
   </a>
   
 </li>
@@ -708,8 +714,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -862,26 +868,6 @@
     Basic concepts
   </a>
   
-    <nav class="md-nav">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#automatic-migration-generation" title="Automatic migration generation" class="md-nav__link">
-    Automatic migration generation
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#advantages-of-checked-migrations" title="Advantages of checked migrations" class="md-nav__link">
-    Advantages of checked migrations
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -902,6 +888,20 @@
           <li class="md-nav__item">
   <a href="#the-beam-migrate-tool" title="The beam-migrate tool" class="md-nav__link">
     The beam-migrate tool
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automatic-migration-generation" title="Automatic migration generation" class="md-nav__link">
+    Automatic migration generation
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advantages-of-checked-migrations" title="Advantages of checked migrations" class="md-nav__link">
+    Advantages of checked migrations
   </a>
   
 </li>
@@ -930,38 +930,25 @@
                 
                   <h1>The Migrations Framework</h1>
                 
-                <div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>The <code>beam-migrations</code> package is still a WIP. The following manual
-represents both planned and implemented features. If you'd like to help
-guide development, please join
-the
-<a href="https://groups.google.com/forum/#!forum/beam-discussion"><code>beam-discussion</code> mailing list</a>.</p>
-</div>
-<p>In the User Guide we saw how to declare a schema for an already created database
+                <p>In the User Guide we saw how to declare a schema for an already created database
 and use it to perform queries. Beam can also manage a database schema based on
 Haskell datatypes you feed it.</p>
-<p>The Beam Migrations Framework is meant to be a robust, modular, and opinionated
-way of managing schema changes. It is an optional part of beam provided in the
-<code>beam-migrate</code> package.</p>
-<p>Install the migrations framework and tool by running</p>
+<p>The migrations framework is meant to be a robust and modular way of
+managing schema changes. It is an optional part of beam provided in
+the <code>beam-migrate</code> package.</p>
+<p>Install the migrations framework by running.</p>
 <div class="codehilite"><pre><span></span>$ cabal install beam-migrate
 <span class="c1"># or</span>
 $ stack install beam-migrate
 </pre></div>
 
 
-<p>This installs the <code>beam-migrate</code> library as well as a CLI tool (named
-<code>beam-migrate</code> as well) which automates common tasks.</p>
-<p>If you use <code>stack</code> make sure you always use <code>stack exec -- beam-migrate</code> instead
-of the typical <code>beam-migrate</code> command in order to have the package path
-automatically and correctly set for you.</p>
 <h2 id="basic-concepts">Basic concepts</h2>
 <p>In the user guide, we saw how we can use <code>defaultDbSettings</code> to generate default
 metadata that can be used to access the database. This default metadata is
-enough to query, but not enough for <code>beam-migrate</code>. Thus, <code>beam-migrate</code> offers
-the <code>defaultMigratableDbSettings</code> function, which annotates the database schema
-with additional information. Whereas <code>defaultDbSettings</code> yields a value of type
+enough to query, but not enough for <code>beam-migrate</code>. <code>beam-migrate</code> offers the
+<code>defaultMigratableDbSettings</code> function, which annotates the database schema with
+additional information. Whereas <code>defaultDbSettings</code> yields a value of type
 <code>DatabaseSettings be db</code>, <code>defaultMigratableDbSettings</code> yields a value of type
 <code>CheckedDatabaseSettings be db</code>. You can recover a <code>DatabaseSettings be db</code> from
 a <code>CheckedDatabaseSettings be db</code> value by applying the <code>unCheckDatabase</code>
@@ -983,6 +970,25 @@ predicate can be of any type that satisfies the <code>DatabasePredicate</code> t
 class. The predicates can be stored in a list because they are wrapped in
 the <code>SomeDatabasePredicate</code> GADT that holds the type class instance as well.</p>
 </div>
+<h2 id="usage-modes">Usage modes</h2>
+<p><code>beam-migrate</code> can be used as a library or a command-line tool in <em>managed</em> or
+<em>unmanaged</em> mode.</p>
+<h3 id="the-beam-migrate-library">The <code>beam-migrate</code> library</h3>
+<p>The <code>beam-migrate</code> library provides syntax definitions for common SQL DDL tasks.
+It also provides types for expressing migrations as transformations of one or
+more schemas to another. <code>beam-migrate</code> offers a built-in way to apply these
+migrations to a production database, running only those migrations that are
+necessary. You can also directly interpret the <code>beam-migrate</code> DSL to hook your
+Haskell migrations into your own system.</p>
+<p><code>beam-migrate</code> is described in more detail in the <a href="../library/"><code>beam-migrate</code> migrations
+guide</a></p>
+<h3 id="the-beam-migrate-tool">The <code>beam-migrate</code> tool</h3>
+<p>There is an optional <code>beam-migrate</code> command line tool, available in the
+<code>beam-migrate-cli</code> package.</p>
+<p>The <code>beam-migrate</code> tool can generate a beam schema from a pre-existing database,
+manage migrations for several production databases, automatically generate
+migrations between two schemas, and much more. It is rather opinionated, and is
+described in more detail in the <a href="../tool/"><code>beam-migrate</code> CLI guide</a></p>
 <h3 id="automatic-migration-generation">Automatic migration generation</h3>
 <p>Given two <code>CheckedDatabaseSettings</code> values, <code>beam-migrate</code> can generate a set of
 SQL steps that will transform one schema to another. The generation of such
@@ -1008,44 +1014,11 @@ period of time. <code>beam-migrate</code>'s algorithm is designed to terminate, 
 may take a while. Additionally, the prover will not automatically generate steps
 for some migrations. For example, <code>beam-migrate</code> will never rename a table
 without explicit instructions.</p>
-<p>For these cases, the <code>beam-migrate</code> command line interface offers an
-<em>interactive</em> mode. Here, it presents both database types for the user's
-inspection, as well as a list of steps <code>beam-migrate</code> thinks it can take based
-on these types. The user can choose to let <code>beam-migrate</code> guess the next step,
-or the user can select a step that <code>beam-migrate</code> offers as the next step, or
-the user can enter his/her own step and select which predicates are consumed and
-generated.</p>
 <h3 id="advantages-of-checked-migrations">Advantages of checked migrations</h3>
 <p>Unlike other database migration frameworks, the checking process allows
 <code>beam-migrate</code> to be sure that the migration you specify will result in the
 database type you want. Also, checked migrations allow the programmer to verify
 that the database they are accessing indeed matches what their schema expects.</p>
-<h2 id="usage-modes">Usage modes</h2>
-<p><code>beam-migrate</code> can be used as a library or a command-line tool in <em>managed</em> or
-<em>unmanaged</em> mode.</p>
-<h3 id="the-beam-migrate-library">The <code>beam-migrate</code> library</h3>
-<p>The <code>beam-migrate</code> library provides syntax definitions for common SQL DDL tasks.
-It also provides types for expressing migrations as transformations of one or
-more schemas to another. The library exports types for database backends to hook
-into automated migration tools (including the <code>beam-migrate</code> tool). Finally, it
-also implements the migration solver. Its use is described in the next section.</p>
-<h3 id="the-beam-migrate-tool">The <code>beam-migrate</code> tool</h3>
-<p>In <em>unmanaged</em> mode, the <code>beam-migrate</code> tool offers a set of convenience
-functionality for generating migrations, checking databases, etc based off of a
-schema. It is useful for performing one-off tasks (such as generating a
-migration script) that you don't want to recompile your project for.</p>
-<p><em>Managed</em> mode extends the functionality of <em>unmanaged</em> mode with tools for
-managing sets of schemas and migrations between them. In this mode,
-<code>beam-migrate</code> can be used to update a production or development database
-schema. This mode supports schema branching and version-control integration but
-forces you to adopt <code>beam-migrate</code>'s conventions.</p>
-<div class="admonition tip">
-<p class="admonition-title">Tip</p>
-<p>If you're worried about a <code>beam-migrate</code> dependency in a production
-application, <code>beam-migrate</code> can be used to freeze a particular checked
-database settings object. This means you get a <code>DatabaseSettings</code> value
-which can be used in an application with only a <code>beam-core</code> dependency.</p>
-</div>
 <div class="footnote">
 <hr />
 <ol>

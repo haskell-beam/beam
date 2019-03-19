@@ -507,6 +507,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../user-guide/queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -638,8 +650,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -815,17 +827,14 @@ the schema should be pretty familiar, so I'm going to skip the explanation.</p>
                 <span class="p">,</span> <span class="n">_productTitle</span>       <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
                 <span class="p">,</span> <span class="n">_productDescription</span> <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
                 <span class="p">,</span> <span class="n">_productPrice</span>       <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Int</span> <span class="cm">{- Price in cents -}</span> <span class="p">}</span>
-                  <span class="kr">deriving</span> <span class="kt">Generic</span>
+                  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="kr">type</span> <span class="kt">Product</span> <span class="ow">=</span> <span class="kt">ProductT</span> <span class="kt">Identity</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Product</span>
 
 <span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">ProductT</span> <span class="kr">where</span>
   <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">ProductT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">ProductId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span><span class="p">)</span>
-                               <span class="kr">deriving</span> <span class="kt">Generic</span>
+                               <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
   <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">ProductId</span> <span class="o">.</span> <span class="n">_productId</span>
-
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">ProductT</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">ProductT</span><span class="p">)</span>
 </pre></div>
 
 
@@ -849,17 +858,14 @@ exists in many existing databases.</p>
               <span class="p">,</span> <span class="n">_orderForUser</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">UserT</span> <span class="n">f</span>
               <span class="p">,</span> <span class="n">_orderShipToAddress</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">AddressT</span> <span class="n">f</span>
               <span class="p">,</span> <span class="n">_orderShippingInfo</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">ShippingInfoT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span> <span class="p">}</span>
-                <span class="kr">deriving</span> <span class="kt">Generic</span>
+                <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="kr">type</span> <span class="kt">Order</span> <span class="ow">=</span> <span class="kt">OrderT</span> <span class="kt">Identity</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Order</span>
 
 <span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">OrderT</span> <span class="kr">where</span>
     <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">OrderT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">OrderId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span><span class="p">)</span>
-                               <span class="kr">deriving</span> <span class="kt">Generic</span>
+                               <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
     <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">OrderId</span> <span class="o">.</span> <span class="n">_orderId</span>
-
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">OrderT</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">OrderT</span><span class="p">)</span>
 
 <span class="kr">data</span> <span class="kt">ShippingCarrier</span> <span class="ow">=</span> <span class="kt">USPS</span> <span class="o">|</span> <span class="kt">FedEx</span> <span class="o">|</span> <span class="kt">UPS</span> <span class="o">|</span> <span class="kt">DHL</span>
                        <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Show</span><span class="p">,</span> <span class="kt">Read</span><span class="p">,</span> <span class="kt">Eq</span><span class="p">,</span> <span class="kt">Ord</span><span class="p">,</span> <span class="kt">Enum</span><span class="p">)</span>
@@ -868,17 +874,15 @@ exists in many existing databases.</p>
                      <span class="p">{</span> <span class="n">_shippingInfoId</span>             <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span>
                      <span class="p">,</span> <span class="n">_shippingInfoCarrier</span>        <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">ShippingCarrier</span>
                      <span class="p">,</span> <span class="n">_shippingInfoTrackingNumber</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span> <span class="p">}</span>
-                       <span class="kr">deriving</span> <span class="kt">Generic</span>
+                       <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="kr">type</span> <span class="kt">ShippingInfo</span> <span class="ow">=</span> <span class="kt">ShippingInfoT</span> <span class="kt">Identity</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">ShippingInfo</span>
 
 <span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">ShippingInfoT</span> <span class="kr">where</span>
     <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">ShippingInfoT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">ShippingInfoId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span><span class="p">)</span>
-                                      <span class="kr">deriving</span> <span class="kt">Generic</span>
+                                      <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
     <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">ShippingInfoId</span> <span class="o">.</span> <span class="n">_shippingInfoId</span>
 
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">ShippingInfoT</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">ShippingInfoT</span><span class="p">)</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">ShippingInfoT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="kt">Identity</span><span class="p">))</span>
 </pre></div>
 
@@ -897,17 +901,14 @@ will establish a many-to-many relationship between orders and products.</p>
                  <span class="p">{</span> <span class="n">_lineItemInOrder</span>    <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">OrderT</span> <span class="n">f</span>
                  <span class="p">,</span> <span class="n">_lineItemForProduct</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">ProductT</span> <span class="n">f</span>
                  <span class="p">,</span> <span class="n">_lineItemQuantity</span>   <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span> <span class="p">}</span>
-                   <span class="kr">deriving</span> <span class="kt">Generic</span>
+                   <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="kr">type</span> <span class="kt">LineItem</span> <span class="ow">=</span> <span class="kt">LineItemT</span> <span class="kt">Identity</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">LineItem</span>
 
 <span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">LineItemT</span> <span class="kr">where</span>
     <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">LineItemT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">LineItemId</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">OrderT</span> <span class="n">f</span><span class="p">)</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">ProductT</span> <span class="n">f</span><span class="p">)</span>
-                                  <span class="kr">deriving</span> <span class="kt">Generic</span>
+                                  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
     <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">LineItemId</span> <span class="o">&lt;$&gt;</span> <span class="n">_lineItemInOrder</span> <span class="o">&lt;*&gt;</span> <span class="n">_lineItemForProduct</span>
-
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">LineItemT</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">LineItemT</span><span class="p">)</span>
 </pre></div>
 
 
@@ -931,9 +932,7 @@ unwrapper <code>Reader</code> of <code>a</code>. The applicative actions are the
                       <span class="p">,</span> <span class="n">_shoppingCartOrders</span>        <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">OrderT</span><span class="p">)</span>
                       <span class="p">,</span> <span class="n">_shoppingCartShippingInfos</span> <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">ShippingInfoT</span><span class="p">)</span>
                       <span class="p">,</span> <span class="n">_shoppingCartLineItems</span>     <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">LineItemT</span><span class="p">)</span> <span class="p">}</span>
-                        <span class="kr">deriving</span> <span class="kt">Generic</span>
-
-<span class="kr">instance</span> <span class="kt">Database</span> <span class="n">be</span> <span class="kt">ShoppingCartDb</span>
+                        <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Database</span> <span class="n">be</span><span class="p">)</span>
 
 <span class="kt">ShoppingCartDb</span> <span class="p">(</span><span class="kt">TableLens</span> <span class="n">shoppingCartUsers</span><span class="p">)</span> <span class="p">(</span><span class="kt">TableLens</span> <span class="n">shoppingCartUserAddresses</span><span class="p">)</span>
                <span class="p">(</span><span class="kt">TableLens</span> <span class="n">shoppingCartProducts</span><span class="p">)</span> <span class="p">(</span><span class="kt">TableLens</span> <span class="n">shoppingCartOrders</span><span class="p">)</span>
@@ -943,23 +942,23 @@ unwrapper <code>Reader</code> of <code>a</code>. The applicative actions are the
 <span class="nf">shoppingCartDb</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span> <span class="p">`</span><span class="n">withDbModification</span><span class="p">`</span>
                  <span class="n">dbModification</span> <span class="p">{</span>
                    <span class="n">_shoppingCartUserAddresses</span> <span class="ow">=</span>
-                     <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;addresses&quot;</span><span class="p">)</span> <span class="o">$</span>
-                     <span class="n">tableModification</span> <span class="p">{</span>
-                       <span class="n">_addressLine1</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;address1&quot;</span><span class="p">,</span>
-                       <span class="n">_addressLine2</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;address2&quot;</span>
+                     <span class="n">setEntityName</span> <span class="s">&quot;addresses&quot;</span> <span class="o">&lt;&gt;</span>
+                     <span class="n">modifyTableFields</span> <span class="n">tableModification</span> <span class="p">{</span>
+                       <span class="n">_addressLine1</span> <span class="ow">=</span> <span class="s">&quot;address1&quot;</span><span class="p">,</span>
+                       <span class="n">_addressLine2</span> <span class="ow">=</span> <span class="s">&quot;address2&quot;</span>
                      <span class="p">},</span>
-                   <span class="n">_shoppingCartProducts</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;products&quot;</span><span class="p">)</span> <span class="n">tableModification</span><span class="p">,</span>
-                   <span class="n">_shoppingCartOrders</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;orders&quot;</span><span class="p">)</span> <span class="o">$</span>
-                                         <span class="n">tableModification</span> <span class="p">{</span>
+                   <span class="n">_shoppingCartProducts</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;products&quot;</span><span class="p">,</span>
+                   <span class="n">_shoppingCartOrders</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;orders&quot;</span> <span class="o">&lt;&gt;</span>
+                                         <span class="n">modifyTableFields</span> <span class="n">tableModification</span> <span class="p">{</span>
                                            <span class="n">_orderShippingInfo</span> <span class="ow">=</span> <span class="kt">ShippingInfoId</span> <span class="s">&quot;shipping_info__id&quot;</span>
                                          <span class="p">},</span>
-                   <span class="n">_shoppingCartShippingInfos</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;shipping_info&quot;</span><span class="p">)</span> <span class="o">$</span>
-                                                <span class="n">tableModification</span> <span class="p">{</span>
+                   <span class="n">_shoppingCartShippingInfos</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;shipping_info&quot;</span> <span class="o">&lt;&gt;</span>
+                                                <span class="n">modifyTableFields</span> <span class="n">tableModification</span> <span class="p">{</span>
                                                   <span class="n">_shippingInfoId</span> <span class="ow">=</span> <span class="s">&quot;id&quot;</span><span class="p">,</span>
                                                   <span class="n">_shippingInfoCarrier</span> <span class="ow">=</span> <span class="s">&quot;carrier&quot;</span><span class="p">,</span>
                                                   <span class="n">_shippingInfoTrackingNumber</span> <span class="ow">=</span> <span class="s">&quot;tracking_number&quot;</span>
                                                 <span class="p">},</span>
-                   <span class="n">_shoppingCartLineItems</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;line_items&quot;</span><span class="p">)</span> <span class="n">tableModification</span>
+                   <span class="n">_shoppingCartLineItems</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;line_items&quot;</span>
                  <span class="p">}</span>
 </pre></div>
 
@@ -1020,16 +1019,6 @@ correctly.</p>
 </pre></div>
 
 
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p><code>insertReturning</code> and <code>runInsertReturningList</code> are from the <code>beam-sqlite</code>
-package. They emulate the <code>INSERT .. RETURNING ..</code> functionatily you may
-expect in other databases. Because this emulation is backend-specific it is
-part of the backend package, rather than <code>beam-core</code>.</p>
-<p>Other backends may have similar functionality. Please refer to the backend
-package you're interested in for more information, as well as notes on the
-implementation.</p>
-</div>
 <h2 id="marshalling-a-custom-type">Marshalling a custom type</h2>
 <p>Now we can insert shipping information. Of course, the shipping information
 contains the <code>ShippingCarrier</code> enumeration.</p>
@@ -1044,103 +1033,48 @@ contains the <code>ShippingCarrier</code> enumeration.</p>
 
 
 <p>If you run this, you'll get an error from GHCi.</p>
-<div class="codehilite"><pre><span></span><span class="o">&lt;</span><span class="kp">interactive</span><span class="o">&gt;:</span><span class="m">263</span><span class="o">:</span><span class="m">7</span><span class="o">:</span> error<span class="o">:</span>
-    <span class="o">*</span> No instance <span class="kr">for</span> <span class="p">(</span>Database.Beam.Backend.Types.FromBackendRow
-                         Sqlite ShippingCarrier<span class="p">)</span>
-        arising from a use of <span class="s">&#39;runInsertReturningList&#39;</span>
-    <span class="o">*</span> In a stmt of a <span class="s">&#39;do&#39;</span> block<span class="o">:</span>
-        <span class="p">[</span>bettyShippingInfo<span class="p">]</span> <span class="o">&lt;-</span> runInsertReturningList
-                               <span class="o">$</span> insertReturning <span class="p">(</span>shoppingCartDb <span class="o">^</span><span class="m">.</span> shoppingCartShippingInfos<span class="p">)</span>
-                                 <span class="o">$</span> insertExpressions
-                                     <span class="p">[</span>ShippingInfo default_ <span class="p">(</span>val_ USPS<span class="p">)</span> <span class="p">(</span>val_ <span class="s">&quot;12345790ABCDEFGHI&quot;</span><span class="p">)]</span>
-      In the second argument of <span class="s">&#39;($)&#39;</span><span class="p">,</span> namely
-        <span class="s">&#39;do { [bettyShippingInfo] &lt;- runInsertReturningList</span>
-<span class="s">                                     $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)</span>
-<span class="s">                                       $ insertExpressions</span>
-<span class="s">                                           [ShippingInfo default_ (val_ USPS) (val_ &quot;12345790ABCDEFGHI&quot;)];</span>
-<span class="s">              pure bettyShippingInfo }&#39;&#39;</span>
-<span class="s">      In the first argument of &#39;</span>GHC.GHCi.ghciStepIO <span class="o">::</span>
-                                  forall a. IO a <span class="o">-&gt;</span> IO a<span class="s">&#39;, namely</span>
-<span class="s">        &#39;</span>runBeamSqliteDebug putStrLn conn
-         <span class="o">$</span> do <span class="p">{</span> <span class="p">[</span>bettyShippingInfo<span class="p">]</span> <span class="o">&lt;-</span> runInsertReturningList
-                                       <span class="o">$</span> insertReturning
-                                           <span class="p">(</span>shoppingCartDb <span class="o">^</span><span class="m">.</span> shoppingCartShippingInfos<span class="p">)</span>
-                                         <span class="o">$</span> insertExpressions
-                                             <span class="p">[</span>ShippingInfo default_ <span class="p">(</span>val_ USPS<span class="p">)</span> <span class="p">(</span>val_ <span class="s">&quot;12345790ABCDEFGHI&quot;</span><span class="p">)];</span>
-                pure bettyShippingInfo <span class="p">}</span><span class="s">&#39;</span>
+<p>```<interactive>:845:7: error:
+    • No instance for (FromBackendRow Sqlite ShippingCarrier)
+        arising from a use of ‘runInsertReturningList’
+    • In a stmt of a 'do' block:
+        [bettyShippingInfo] &lt;- runInsertReturningList
+                                 $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+                                     $ insertExpressions
+                                         [ShippingInfo
+                                            default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]
+...</p>
+<p><interactive>:847:50: error:
+    • No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax
+                         Database.Beam.Sqlite.Syntax.SqliteValueSyntax ShippingCarrier)</p>
+<div class="codehilite"><pre><span></span><span class="n">These</span> <span class="n">errors</span> <span class="n">are</span> <span class="n">because</span> <span class="n">there</span><span class="s1">&#39;s no way to express a `ShippingCarrier` in the</span>
+<span class="n">backend</span> <span class="n">syntax</span><span class="o">.</span> <span class="n">We</span> <span class="n">can</span> <span class="n">fix</span> <span class="n">this</span> <span class="n">by</span> <span class="n">writing</span> <span class="n">instances</span> <span class="k">for</span> <span class="n">beam</span><span class="o">.</span> <span class="n">We</span> <span class="n">can</span> <span class="n">re</span><span class="o">-</span><span class="n">use</span> <span class="n">the</span>
+<span class="n">functionality</span> <span class="n">we</span> <span class="n">already</span> <span class="n">have</span> <span class="k">for</span> <span class="sb">`String`</span><span class="o">.</span>
 
-<span class="s">&lt;interactive&gt;:265:7: error:</span>
-<span class="s">    * No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax</span>
-<span class="s">                         SqliteValueSyntax ShippingCarrier)</span>
-<span class="s">        arising from a use of &#39;</span>insertExpressions<span class="s">&#39;</span>
-<span class="s">    * In the second argument of &#39;</span><span class="p">(</span><span class="o">$</span><span class="p">)</span><span class="s">&#39;, namely</span>
-<span class="s">        &#39;</span>insertExpressions
-           <span class="p">[</span>ShippingInfo default_ <span class="p">(</span>val_ USPS<span class="p">)</span> <span class="p">(</span>val_ <span class="s">&quot;12345790ABCDEFGHI&quot;</span><span class="p">)]</span><span class="s">&#39;&#39;</span>
-      In the second argument of <span class="s">&#39;($)&#39;</span><span class="p">,</span> namely
-        <span class="s">&#39;insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)</span>
-<span class="s">         $ insertExpressions</span>
-<span class="s">             [ShippingInfo default_ (val_ USPS) (val_ &quot;12345790ABCDEFGHI&quot;)]&#39;</span>
-      In a stmt of a <span class="s">&#39;do&#39;</span> block<span class="o">:</span>
-        <span class="p">[</span>bettyShippingInfo<span class="p">]</span> <span class="o">&lt;-</span> runInsertReturningList
-                               <span class="o">$</span> insertReturning <span class="p">(</span>shoppingCartDb <span class="o">^</span><span class="m">.</span> shoppingCartShippingInfos<span class="p">)</span>
-                                 <span class="o">$</span> insertExpressions
-                                     <span class="p">[</span>ShippingInfo default_ <span class="p">(</span>val_ USPS<span class="p">)</span> <span class="p">(</span>val_ <span class="s">&quot;12345790ABCDEFGHI&quot;</span><span class="p">)]</span>
+<span class="n">The</span> <span class="sb">`HasSqlValueSyntax`</span> <span class="k">class</span> <span class="nc">tells</span> <span class="n">us</span> <span class="n">how</span> <span class="n">to</span> <span class="n">convert</span> <span class="n">a</span> <span class="n">Haskell</span> <span class="n">value</span> <span class="n">into</span> <span class="n">a</span>
+<span class="n">corresponding</span> <span class="n">backend</span> <span class="n">value</span><span class="o">.</span>
+
+<span class="sb">``</span><span class="err">`</span><span class="n">haskell</span>
+<span class="kn">import</span> <span class="nn">Database.Beam.Backend.SQL</span>
+
+<span class="p">:</span><span class="nb">set</span> <span class="o">-</span><span class="n">XUndecidableInstances</span>
+
+<span class="n">instance</span> <span class="n">HasSqlValueSyntax</span> <span class="n">be</span> <span class="n">String</span> <span class="o">=&gt;</span> <span class="n">HasSqlValueSyntax</span> <span class="n">be</span> <span class="n">ShippingCarrier</span> <span class="n">where</span>
+  <span class="n">sqlValueSyntax</span> <span class="o">=</span> <span class="n">autoSqlValueSyntax</span>
 </pre></div>
 
 
-<p>These errors are because there's no way to express a <code>ShippingCarrier</code> in the
-backend syntax. We can fix this by writing instances for beam. We can re-use the
-functionality we already have for <code>String</code>.</p>
-<p>The <code>HasSqlValueSyntax</code> class tells us how to convert a Haskell value into a
-corresponding backend value.</p>
-<div class="codehilite"><pre><span></span><span class="kr">import</span> <span class="nn">Database.Beam.Backend.SQL</span>
-
-<span class="kt">:</span><span class="n">set</span> <span class="o">-</span><span class="kt">XUndecidableInstances</span>
-
-<span class="kr">instance</span> <span class="kt">HasSqlValueSyntax</span> <span class="n">be</span> <span class="kt">String</span> <span class="ow">=&gt;</span> <span class="kt">HasSqlValueSyntax</span> <span class="n">be</span> <span class="kt">ShippingCarrier</span> <span class="kr">where</span>
-  <span class="n">sqlValueSyntax</span> <span class="ow">=</span> <span class="n">autoSqlValueSyntax</span>
-</pre></div>
-
-
+<p><code>autoSqlValueSyntax</code> uses the underlying <code>Show</code> instance to serialize
+a type to a string representation.</p>
 <p>The <code>FromBackendRow</code> class tells us how to convert a value from the database
-into a corresponding Haskell value. Most often, it is enough to declare an empty
-instance, so long as there is a backend-specific instance for unmarshaling your
-data type.</p>
-<p>For example,</p>
-<div class="codehilite"><pre><span></span><span class="kt">Prelude</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Sqlite</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Time</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">SQLite</span><span class="o">.</span><span class="kt">Simple</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Text</span> <span class="kt">Lens</span><span class="o">.</span><span class="kt">Micro</span><span class="o">&gt;</span> <span class="kr">import</span> <span class="nn">Database.Beam.Backend</span>
-<span class="kt">Prelude</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Sqlite</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Time</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">SQLite</span><span class="o">.</span><span class="kt">Simple</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Text</span> <span class="kt">Lens</span><span class="o">.</span><span class="kt">Micro</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Backend</span><span class="o">&gt;</span> <span class="kt">:</span><span class="n">set</span> <span class="o">-</span><span class="kt">XMultiParamTypeClasses</span>
-<span class="kt">Prelude</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Sqlite</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Time</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">SQLite</span><span class="o">.</span><span class="kt">Simple</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Text</span> <span class="kt">Lens</span><span class="o">.</span><span class="kt">Micro</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Backend</span><span class="o">&gt;</span> <span class="kr">instance</span> <span class="kt">FromBackendRow</span> <span class="kt">Sqlite</span> <span class="kt">ShippingCarrier</span>
+into a corresponding Haskell value.</p>
+<div class="codehilite"><pre><span></span><span class="kr">import</span> <span class="k">qualified</span> <span class="nn">Data.Text</span> <span class="k">as</span> <span class="n">T</span> <span class="c1">-- for unpack</span>
 
-<span class="o">&lt;</span><span class="n">interactive</span><span class="o">&gt;:</span><span class="mi">271</span><span class="kt">:</span><span class="mi">10</span><span class="kt">:</span> <span class="ne">error</span><span class="kt">:</span>
-    <span class="o">*</span> <span class="kt">No</span> <span class="kr">instance</span> <span class="n">for</span> <span class="p">(</span><span class="kt">Database</span><span class="o">.</span><span class="kt">SQLite</span><span class="o">.</span><span class="kt">Simple</span><span class="o">.</span><span class="kt">FromField</span><span class="o">.</span><span class="kt">FromField</span>
-                         <span class="kt">ShippingCarrier</span><span class="p">)</span>
-        <span class="n">arising</span> <span class="n">from</span> <span class="n">a</span> <span class="n">use</span> <span class="kr">of</span> <span class="kt">&#39;Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Backend</span><span class="o">.</span><span class="kt">Types</span><span class="o">.$</span><span class="n">dmfromBackendRow&#39;</span>
-    <span class="o">*</span> <span class="kt">In</span> <span class="n">the</span> <span class="n">expression</span><span class="kt">:</span>
-        <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Backend</span><span class="o">.</span><span class="kt">Types</span><span class="o">.$</span><span class="n">dmfromBackendRow</span>
-          <span class="o">@</span><span class="kt">Sqlite</span> <span class="o">@</span><span class="kt">ShippingCarrier</span>
-      <span class="kt">In</span> <span class="n">an</span> <span class="n">equation</span> <span class="n">for</span> <span class="n">&#39;fromBackendRow&#39;</span><span class="kt">:</span>
-          <span class="n">fromBackendRow</span>
-            <span class="ow">=</span> <span class="kt">Database</span><span class="o">.</span><span class="kt">Beam</span><span class="o">.</span><span class="kt">Backend</span><span class="o">.</span><span class="kt">Types</span><span class="o">.$</span><span class="n">dmfromBackendRow</span>
-                <span class="o">@</span><span class="kt">Sqlite</span> <span class="o">@</span><span class="kt">ShippingCarrier</span>
-      <span class="kt">In</span> <span class="n">the</span> <span class="kr">instance</span> <span class="n">declaration</span> <span class="n">for</span>
-        <span class="kt">&#39;FromBackendRow</span> <span class="kt">Sqlite</span> <span class="kt">ShippingCarrier&#39;</span>
+<span class="kr">instance</span> <span class="kt">FromBackendRow</span> <span class="kt">Sqlite</span> <span class="kt">ShippingCarrier</span> <span class="kr">where</span>
+  <span class="n">fromBackendRow</span> <span class="ow">=</span> <span class="n">read</span> <span class="o">.</span> <span class="kt">T</span><span class="o">.</span><span class="n">unpack</span> <span class="o">&lt;$&gt;</span> <span class="n">fromBackendRow</span>
 </pre></div>
 
 
-<p>Let's see if we can write <code>Database.SQLite.Simple.FromField.FromField</code> instance
-for <code>ShippingCarrier</code> and then let's try re-instantiating <code>FromBackendRow</code>.</p>
-<div class="codehilite"><pre><span></span><span class="kr">import</span> <span class="nn">Database.SQLite.Simple.FromField</span>
-<span class="kr">import</span> <span class="nn">Text.Read</span>
-
-<span class="kr">instance</span> <span class="kt">FromField</span> <span class="kt">ShippingCarrier</span> <span class="kr">where</span>
-  <span class="n">fromField</span> <span class="n">f</span> <span class="ow">=</span> <span class="kr">do</span> <span class="n">x</span> <span class="ow">&lt;-</span> <span class="n">readMaybe</span> <span class="o">&lt;$&gt;</span> <span class="n">fromField</span> <span class="n">f</span>
-                   <span class="kr">case</span> <span class="n">x</span> <span class="kr">of</span>
-                     <span class="kt">Nothing</span> <span class="ow">-&gt;</span> <span class="n">returnError</span> <span class="kt">ConversionFailed</span> <span class="n">f</span> <span class="s">&quot;Could not &#39;read&#39; value for &#39;ShippingCarrier&#39;&quot;</span>
-                     <span class="kt">Just</span> <span class="n">x</span> <span class="ow">-&gt;</span> <span class="n">pure</span> <span class="n">x</span>
-<span class="kr">instance</span> <span class="kt">FromBackendRow</span> <span class="n">be</span> <span class="kt">ShippingCarrier</span>
-</pre></div>
-
-
+<p>Since, <code>autoSqlValueSyntax</code> uses the <code>Show</code> instance, we can simply use the <code>Read</code> instance.</p>
 <p>Now, if we try to insert the shipping info again, it works.</p>
 <div class="codehilite"><pre><span></span><span class="nf">bettyShippingInfo</span> <span class="ow">&lt;-</span>
   <span class="n">runBeamSqliteDebug</span> <span class="n">putStrLn</span> <span class="n">conn</span> <span class="o">$</span> <span class="kr">do</span>
@@ -1240,9 +1174,9 @@ resulting rows have a timestamp set by the database.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-0-Console">
-            <div class="codehilite"><pre><span></span><span class="go">Order {_orderId = 1, _orderDate = 2018-05-02 18:12:10, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
-<span class="go">Order {_orderId = 2, _orderDate = 2018-05-02 18:12:10, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
-<span class="go">Order {_orderId = 3, _orderDate = 2018-05-02 18:12:10, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+            <div class="codehilite"><pre><span></span><span class="go">Order {_orderId = 1, _orderDate = 2019-03-19 17:09:19, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+<span class="go">Order {_orderId = 2, _orderDate = 2019-03-19 17:09:19, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
+<span class="go">Order {_orderId = 3, _orderDate = 2019-03-19 17:09:19, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
 </pre></div>
 
         </div>
@@ -1373,9 +1307,9 @@ orders.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-2-Output">
-            <div class="codehilite"><pre><span></span>(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2018-05-02 18:12:20, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))
-(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2018-05-02 18:12:20, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))
-(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2018-05-02 18:12:20, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))
+            <div class="codehilite"><pre><span></span>(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2019-03-19 17:09:29, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))
+(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2019-03-19 17:09:29, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))
+(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2019-03-19 17:09:29, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))
 (User {_userEmail = &quot;sam@example.com&quot;, _userFirstName = &quot;Sam&quot;, _userLastName = &quot;Taylor&quot;, _userPassword = &quot;332532dcfaa1cbf61e2a266bd723612c&quot;},Nothing)
 </pre></div>
 
@@ -1585,9 +1519,9 @@ order.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-5-Output">
-            <div class="codehilite"><pre><span></span>(Order {_orderId = 1, _orderDate = 2018-05-02 18:12:40, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)
-(Order {_orderId = 2, _orderDate = 2018-05-02 18:12:40, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)
-(Order {_orderId = 3, _orderDate = 2018-05-02 18:12:40, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)
+            <div class="codehilite"><pre><span></span>(Order {_orderId = 1, _orderDate = 2019-03-19 17:09:49, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)
+(Order {_orderId = 2, _orderDate = 2019-03-19 17:09:49, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)
+(Order {_orderId = 3, _orderDate = 2019-03-19 17:09:49, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)
 </pre></div>
 
         </div>
@@ -1601,7 +1535,7 @@ that we have to use <code>maybe_</code> below in order to handle the fact that s
 into our query with a left join. <code>maybe_</code> is to <code>QExpr</code> what <code>maybe</code> is to normal Haskell
 values. <code>maybe_</code> is polymorphic to either <code>QExpr</code>s or full on tables of <code>QExpr</code>s. For our purposes,
 the type of <code>maybe_</code> is</p>
-<div class="codehilite"><pre><span></span><span class="nf">maybe_</span> <span class="ow">::</span> <span class="kt">QExpr</span> <span class="n">s</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="kt">QExpr</span> <span class="n">s</span> <span class="n">b</span> <span class="ow">-&gt;</span> <span class="kt">QExpr</span> <span class="n">s</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="kt">QExpr</span> <span class="n">s</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="n">b</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="kt">QExpr</span> <span class="n">s</span> <span class="n">a</span>
+<div class="codehilite"><pre><span></span><span class="nf">maybe_</span> <span class="ow">::</span> <span class="kt">QExpr</span> <span class="n">be</span> <span class="n">s</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="kt">QExpr</span> <span class="n">be</span> <span class="n">s</span> <span class="n">b</span> <span class="ow">-&gt;</span> <span class="kt">QExpr</span> <span class="n">be</span> <span class="n">s</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="kt">QExpr</span> <span class="n">be</span> <span class="n">s</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="n">b</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="kt">QExpr</span> <span class="n">be</span> <span class="n">s</span> <span class="n">a</span>
 </pre></div>
 
 
@@ -1859,8 +1793,8 @@ nullable primary keys to optionally include information.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-8-Output">
-            <div class="codehilite"><pre><span></span>Order {_orderId = 1, _orderDate = 2018-05-02 18:12:53, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}
-Order {_orderId = 3, _orderDate = 2018-05-02 18:12:53, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}
+            <div class="codehilite"><pre><span></span>Order {_orderId = 1, _orderDate = 2019-03-19 17:10:10, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}
+Order {_orderId = 3, _orderDate = 2019-03-19 17:10:10, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}
 </pre></div>
 
         </div>

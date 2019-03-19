@@ -494,6 +494,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -634,8 +646,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -832,8 +844,8 @@ object that can be run in <code>MonadBeam</code> with <code>runDelete</code>.</p
     
         <div role="tabpanel" class="tab-pane " id="tab-0-Postgres">
             <div class="codehilite"><pre><span></span><span class="k">DELETE</span>
-<span class="k">FROM</span> <span class="ss">&quot;Customer&quot;</span>
-<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;Emilio&#39;</span><span class="p">);</span>
+<span class="k">FROM</span> <span class="ss">&quot;Customer&quot;</span> <span class="k">AS</span> <span class="ss">&quot;delete_target&quot;</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;delete_target&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;Emilio&#39;</span><span class="p">);</span>
 </pre></div>
 
         </div>

@@ -482,6 +482,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#manipulating-types-with-cast" title="Manipulating types with CAST" class="md-nav__link">
+    Manipulating types with CAST
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sql-functions-and-operators" title="SQL Functions and operators" class="md-nav__link">
     SQL Functions and operators
   </a>
@@ -625,6 +632,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -756,8 +775,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -988,6 +1007,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#manipulating-types-with-cast" title="Manipulating types with CAST" class="md-nav__link">
+    Manipulating types with CAST
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sql-functions-and-operators" title="SQL Functions and operators" class="md-nav__link">
     SQL Functions and operators
   </a>
@@ -1047,7 +1073,7 @@ general for the compiler to meaningfully infer types.</p>
   Regular Haskell rational literals will be automatically converted to
   <code>QGenExprs</code>.</li>
 <li><strong>Text literals</strong> can be constructed via <code>fromString</code> in <code>IsString</code>. Again,
-  Haskell string constants will automaticall be converted to <code>QGenExprs</code>,
+  Haskell string constants will automatically be converted to <code>QGenExprs</code>,
   although you may have to provide an explicit type, as different backends
   support different text types natively.</li>
 <li><strong>All other literals</strong> can be constructed using the <code>val_</code> function in
@@ -1780,7 +1806,7 @@ in either Los Angeles or Manila:</p>
             
         <div role="tabpanel" class="tab-pane active" id="tab-6-Haskell">
             <div class="codehilite"><pre><span></span><span class="nf">limit_</span> <span class="mi">10</span> <span class="o">$</span>
-  <span class="n">filter_</span> <span class="p">(</span><span class="nf">\</span><span class="n">customer</span> <span class="ow">-&gt;</span> <span class="n">customerFirstName</span> <span class="n">customer</span> <span class="p">`</span><span class="n">in_</span><span class="p">`</span> <span class="p">[</span><span class="n">val_</span> <span class="s">&quot;Joe&quot;</span><span class="p">,</span> <span class="n">val_</span> <span class="s">&quot;Sam&quot;</span><span class="p">,</span> <span class="n">val_</span> <span class="s">&quot;Elizabeth&quot;</span><span class="p">])</span> <span class="o">$</span>
+  <span class="n">filter_</span> <span class="p">(</span><span class="nf">\</span><span class="n">customer</span> <span class="ow">-&gt;</span> <span class="n">customerFirstName</span> <span class="n">customer</span> <span class="p">`</span><span class="n">in_</span><span class="p">`</span> <span class="p">[</span><span class="n">val_</span> <span class="s">&quot;Johannes&quot;</span><span class="p">,</span> <span class="n">val_</span> <span class="s">&quot;Aaron&quot;</span><span class="p">,</span> <span class="n">val_</span> <span class="s">&quot;Ellie&quot;</span><span class="p">])</span> <span class="o">$</span>
   <span class="n">all_</span> <span class="p">(</span><span class="n">customer</span> <span class="n">chinookDb</span><span class="p">)</span>
 </pre></div>
 
@@ -1806,7 +1832,7 @@ in either Los Angeles or Manila:</p>
                              <span class="o">?</span><span class="p">)</span>
 <span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
 
-<span class="c1">-- With values: [SQLText &quot;Joe&quot;,SQLText &quot;Sam&quot;,SQLText &quot;Elizabeth&quot;]</span>
+<span class="c1">-- With values: [SQLText &quot;Johannes&quot;,SQLText &quot;Aaron&quot;,SQLText &quot;Ellie&quot;]</span>
 </pre></div>
 
         </div>
@@ -1826,9 +1852,9 @@ in either Los Angeles or Manila:</p>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Email&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res11&quot;</span><span class="p">,</span>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;SupportRepId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res12&quot;</span>
 <span class="k">FROM</span> <span class="ss">&quot;Customer&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
-<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">&#39;Joe&#39;</span><span class="p">,</span>
-                             <span class="s1">&#39;Sam&#39;</span><span class="p">,</span>
-                             <span class="s1">&#39;Elizabeth&#39;</span><span class="p">)</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">&#39;Johannes&#39;</span><span class="p">,</span>
+                             <span class="s1">&#39;Aaron&#39;</span><span class="p">,</span>
+                             <span class="s1">&#39;Ellie&#39;</span><span class="p">)</span>
 <span class="k">LIMIT</span> <span class="mi">10</span>
 </pre></div>
 
@@ -1849,9 +1875,9 @@ in either Los Angeles or Manila:</p>
        <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">Email</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res11</span><span class="o">`</span><span class="p">,</span>
        <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">SupportRepId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res12</span><span class="o">`</span>
 <span class="k">FROM</span> <span class="o">`</span><span class="n">Customer</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span>
-<span class="k">WHERE</span> <span class="p">(</span><span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">FirstName</span><span class="o">`</span><span class="p">)</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">&#39;Joe&#39;</span><span class="p">,</span>
-                             <span class="s1">&#39;Sam&#39;</span><span class="p">,</span>
-                             <span class="s1">&#39;Elizabeth&#39;</span><span class="p">)</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">FirstName</span><span class="o">`</span><span class="p">)</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">&#39;Johannes&#39;</span><span class="p">,</span>
+                             <span class="s1">&#39;Aaron&#39;</span><span class="p">,</span>
+                             <span class="s1">&#39;Ellie&#39;</span><span class="p">)</span>
 <span class="k">LIMIT</span> <span class="mi">10</span>
 </pre></div>
 
@@ -1870,6 +1896,86 @@ if. The corresponding beam syntax is</p>
 
 <p>where <code>cond&lt;n&gt;</code> are <code>QGenExpr</code> of type <code>Bool</code>, and <code>result1</code>, <code>result2</code>, and
 <code>elseResult</code> are <code>QGenExprs</code> of the same type.</p>
+<h2 id="manipulating-types-with-cast">Manipulating types with <code>CAST</code></h2>
+<p>Oftentimes, you want to cast data between two different types. SQL
+provides the <code>CAST</code> function for this purpose. Beam exposes this
+functionality through the <code>cast_</code> function which takes an expression
+and a datatype. For example, to select all line items where the first
+digit of the quantity is 2:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-7-Haskell" aria-controls="tab-7-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-7-Sqlite" aria-controls="tab-7-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-7-Postgres" aria-controls="tab-7-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-7-Mysql" aria-controls="tab-7-Mysql" role="tab" data-toggle="tab" data-lang="sql">Mysql</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-7-Haskell">
+            <div class="codehilite"><pre><span></span><span class="nf">filter_</span> <span class="p">(</span><span class="nf">\</span><span class="n">ln</span> <span class="ow">-&gt;</span> <span class="n">cast_</span> <span class="p">(</span><span class="n">invoiceLineQuantity</span> <span class="n">ln</span><span class="p">)</span> <span class="p">(</span><span class="n">varchar</span> <span class="kt">Nothing</span><span class="p">)</span> <span class="p">`</span><span class="n">like_</span><span class="p">`</span> <span class="s">&quot;2%&quot;</span><span class="p">)</span> <span class="o">$</span>
+  <span class="n">all_</span> <span class="p">(</span><span class="n">invoiceLine</span> <span class="n">chinookDb</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-7-Sqlite">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceLineId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;TrackId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;UnitPrice&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Quantity&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res4&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;InvoiceLine&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="k">CAST</span><span class="p">((</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Quantity&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="nb">VARCHAR</span><span class="p">))</span> <span class="k">LIKE</span> <span class="p">(</span><span class="o">?</span><span class="p">);</span>
+
+<span class="c1">-- With values: [SQLText &quot;2%&quot;]</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-7-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceLineId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;TrackId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;UnitPrice&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Quantity&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res4&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;InvoiceLine&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="k">CAST</span><span class="p">((</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Quantity&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="nb">VARCHAR</span><span class="p">))</span> <span class="k">LIKE</span> <span class="p">(</span><span class="s1">&#39;2%&#39;</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-7-Mysql">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">InvoiceLineId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res0</span><span class="o">`</span><span class="p">,</span>
+       <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">InvoiceId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res1</span><span class="o">`</span><span class="p">,</span>
+       <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">TrackId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res2</span><span class="o">`</span><span class="p">,</span>
+       <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">UnitPrice</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res3</span><span class="o">`</span><span class="p">,</span>
+       <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">Quantity</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res4</span><span class="o">`</span>
+<span class="k">FROM</span> <span class="o">`</span><span class="n">InvoiceLine</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="k">CAST</span><span class="p">((</span><span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">Quantity</span><span class="o">`</span><span class="p">)</span> <span class="k">AS</span> <span class="nb">CHAR</span><span class="p">))</span> <span class="k">LIKE</span> <span class="p">(</span><span class="s1">&#39;2%&#39;</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
 <h2 id="sql-functions-and-operators">SQL Functions and operators</h2>
 <table>
 <thead>

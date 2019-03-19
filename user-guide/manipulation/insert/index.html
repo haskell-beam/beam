@@ -498,6 +498,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -704,8 +716,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -1136,7 +1148,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
 
 <span class="c1">-- With values: [SQLInteger 800];</span>
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2018-04-09 22:44:24, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2019-03-19 17:22:39, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </pre></div>
 
         </div>
@@ -1174,7 +1186,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">FROM</span> <span class="ss">&quot;Invoice&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
 <span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">800</span><span class="p">);</span>
 
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2018-05-02 18:17:27.060309, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2019-03-19 10:22:42.74249, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </pre></div>
 
         </div>
@@ -1204,7 +1216,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">FROM</span> <span class="o">`</span><span class="n">Invoice</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span>
 <span class="k">WHERE</span> <span class="p">(</span><span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">InvoiceId</span><span class="o">`</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">800</span><span class="p">);</span>
 
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2018-04-10 00:32:22, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2019-03-19 10:22:47, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </pre></div>
 
         </div>
@@ -1450,7 +1462,7 @@ qualified.</p>
             
         <div role="tabpanel" class="tab-pane active" id="tab-4-Haskell">
             <div class="codehilite"><pre><span></span><span class="p">[</span><span class="n">newInvoice</span><span class="p">]</span> <span class="ow">&lt;-</span>
-  <span class="kt">BeamExtensions</span><span class="o">.</span><span class="n">runInsertReturningList</span> <span class="p">(</span><span class="n">invoice</span> <span class="n">chinookDb</span><span class="p">)</span> <span class="o">$</span>
+  <span class="kt">BeamExtensions</span><span class="o">.</span><span class="n">runInsertReturningList</span> <span class="o">$</span> <span class="n">insert</span> <span class="p">(</span><span class="n">invoice</span> <span class="n">chinookDb</span><span class="p">)</span> <span class="o">$</span>
   <span class="n">insertExpressions</span> <span class="p">[</span> <span class="kt">Invoice</span> <span class="n">default_</span> <span class="c1">-- Ask the database to give us a default id</span>
                               <span class="p">(</span><span class="n">val_</span> <span class="p">(</span><span class="kt">CustomerId</span> <span class="mi">1</span><span class="p">))</span> <span class="n">currentTimestamp_</span>
                               <span class="p">(</span><span class="n">val_</span> <span class="p">(</span><span class="kt">Address</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;123 My Street&quot;</span><span class="p">)</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;Buenos Noches&quot;</span><span class="p">)</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;Rio&quot;</span><span class="p">)</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;Mozambique&quot;</span><span class="p">)</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;ABCDEF&quot;</span><span class="p">)))</span>
@@ -1480,7 +1492,7 @@ qualified.</p>
         <span class="o">?</span><span class="p">);</span>
 
 <span class="c1">-- With values: [SQLInteger 1,SQLText &quot;123 My Street&quot;,SQLText &quot;Buenos Noches&quot;,SQLText &quot;Rio&quot;,SQLText &quot;Mozambique&quot;,SQLText &quot;ABCDEF&quot;,SQLText &quot;1000.0&quot;];</span>
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2018-04-09 22:44:31, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2019-03-19 17:23:11, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </pre></div>
 
         </div>
@@ -1513,7 +1525,7 @@ qualified.</p>
                             <span class="ss">&quot;BillingPostalCode&quot;</span><span class="p">,</span>
                             <span class="ss">&quot;Total&quot;</span><span class="p">;</span>
 
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 501}, invoiceCustomer = CustomerId 1, invoiceDate = 2018-05-02 18:17:37.475852, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 814}, invoiceCustomer = CustomerId 1, invoiceDate = 2019-03-19 10:23:14.615668, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </pre></div>
 
         </div>
@@ -1528,16 +1540,6 @@ specified in your <code>SqlInsertValues</code>. If you know what this is statica
 you can feel free to pattern match directly. Otherwise (if you used
 <code>insertFrom</code>, for example), you'll need to handle the possibility that nothing
 was inserted.</p>
-<div class="admonition tip">
-<p class="admonition-title">Tip</p>
-<p>Note that unlike the standard beam <code>INSERT</code> functionality, which can run any
-<code>SqlInsert</code>, <code>runInsertReturningList</code> requires that we supply a table and a
-<code>SqlInsertValues</code>.</p>
-<p>This is because this functionality is emulated on some backends. Some
-backends (such as postgres) provide a more advanced <code>INSERT .. RETURNING</code>
-statement that can be used more like <code>SqlInsert</code>. See the backend
-documentation for more details.</p>
-</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Although SQLite has no support for the <code>DEFAULT</code> clause,

@@ -590,6 +590,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../user-guide/queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -721,8 +733,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -1154,7 +1166,7 @@ typically map more features than selda ones.</p>
 <h2 id="help-the-type-checker-keeps-complaining-about-syntax-types">Help! The type checker keeps complaining about <code>Syntax</code> types</h2>
 <p>Suppose you had the following code to run a query over an arbitrary backend that
 supported the SQL92 syntax.</p>
-<div class="codehilite"><pre><span></span><span class="nf">listEmployees</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">IsSql92Syntax</span> <span class="n">cmd</span><span class="p">,</span> <span class="kt">MonadBeam</span> <span class="n">cmd</span> <span class="n">be</span> <span class="n">hdl</span> <span class="n">m</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="p">[</span><span class="kt">Employee</span><span class="p">]</span>
+<div class="codehilite"><pre><span></span><span class="nf">listEmployees</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">IsSql92Syntax</span> <span class="n">cmd</span><span class="p">,</span> <span class="kt">MonadBeam</span> <span class="n">cmd</span> <span class="n">be</span> <span class="n">m</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="p">[</span><span class="kt">Employee</span><span class="p">]</span>
 <span class="nf">listEmployees</span> <span class="ow">=</span> <span class="n">runSelectReturningList</span> <span class="o">$</span> <span class="n">select</span> <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">employees</span> <span class="n">employeeDb</span><span class="p">))</span>
 </pre></div>
 
@@ -1186,7 +1198,7 @@ cycles in superclasses, which requires the scary-looking
 constraint synonym. This takes a command syntax and asserts all the type
 equalities that a sane SQL92 syntax would support. Thus the code above becomes.</p>
 <div class="codehilite"><pre><span></span><span class="nf">listEmployees</span> <span class="ow">::</span> <span class="p">(</span> <span class="kt">IsSql92Syntax</span> <span class="n">cmd</span><span class="p">,</span> <span class="kt">Sql92SanityCheck</span> <span class="n">cmd</span>
-                 <span class="p">,</span> <span class="kt">MonadBeam</span> <span class="n">cmd</span> <span class="n">be</span> <span class="n">hdl</span> <span class="n">m</span><span class="p">)</span>
+                 <span class="p">,</span> <span class="kt">MonadBeam</span> <span class="n">cmd</span> <span class="n">be</span> <span class="n">m</span><span class="p">)</span>
               <span class="ow">=&gt;</span> <span class="n">m</span> <span class="p">[</span><span class="kt">Employee</span><span class="p">]</span>
 <span class="nf">listEmployees</span> <span class="ow">=</span> <span class="n">runSelectReturningList</span> <span class="o">$</span> <span class="n">select</span> <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">employees</span> <span class="n">employeeDb</span><span class="p">))</span>
 </pre></div>

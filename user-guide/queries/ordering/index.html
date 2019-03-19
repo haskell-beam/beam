@@ -532,6 +532,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -663,8 +675,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -840,7 +852,7 @@
                 
                 <p>Usually, queries are ordered before <code>LIMIT</code> and <code>OFFSET</code> are applied. Beam
 supports the standard SQL <code>ORDER BY</code> construct through the <code>orderBy_</code> function.</p>
-<p><code>orderBy_</code> works like the Haskell function <code>sortBy</code>, with some restructions. Its
+<p><code>orderBy_</code> works like the Haskell function <code>sortBy</code>, with some restrictions. Its
 first argument is a function which takes as input the output of the given query.
 The function should return a sorting key, which is either a single sort ordering
 or a tuple of them. A sort ordering specifies an expression and a direction by
@@ -851,7 +863,7 @@ sort.</p>
 arbitrary expression.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Use <code>nullsFirst_</code> and <code>nullsLast_</code> to control the odering of nulls.
+<p>Use <code>nullsFirst_</code> and <code>nullsLast_</code> to control the ordering of nulls.
 See <a href="../advanced-features/">advanced features</a> for more information.</p>
 </div>
 <p>For example, to get the first ten albums when sorted lexicographically, use</p>

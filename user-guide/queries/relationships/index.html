@@ -634,6 +634,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -765,8 +777,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -1059,7 +1071,7 @@ provided sample Chinook database.</p>
 
 
 <p>One more thing, before we explore how beam handles relationships. Before we do, let's define a quick utility function.</p>
-<div class="codehilite"><pre><span></span><span class="kt">Prelude</span> <span class="kt">Chinook</span><span class="o">.</span><span class="kt">Schema</span><span class="o">&gt;</span> <span class="kr">let</span> <span class="n">withConnectionTutorial</span> <span class="ow">=</span> <span class="n">withDatabaseDebug</span> <span class="n">putStrLn</span> <span class="n">chinook</span>
+<div class="codehilite"><pre><span></span><span class="kt">Prelude</span> <span class="kt">Chinook</span><span class="o">.</span><span class="kt">Schema</span><span class="o">&gt;</span> <span class="kr">let</span> <span class="n">withConnectionTutorial</span> <span class="ow">=</span> <span class="n">runBeamSqliteDebug</span> <span class="n">putStrLn</span> <span class="n">chinook</span>
 </pre></div>
 
 
@@ -1424,7 +1436,7 @@ moand.</p>
 <p>Or, if you have an actual <code>Invoice</code> (called <code>oneInvoice</code>) and you want all the
 associated <code>InvoiceLine</code>s, you can use <code>val_</code> to convert <code>oneInvoice</code> to the SQL
 expression level.</p>
-<div class="codehilite"><pre><span></span><span class="nf">oneToMany_</span> <span class="p">(</span><span class="n">invoiceLine</span> <span class="n">chinookDb</span><span class="p">)</span> <span class="n">invoiceLineInvoice</span> <span class="p">(</span><span class="n">val_</span> <span class="n">i</span><span class="p">)</span>
+<div class="codehilite"><pre><span></span><span class="nf">oneToMany_</span> <span class="p">(</span><span class="n">invoiceLine</span> <span class="n">chinookDb</span><span class="p">)</span> <span class="n">invoiceLineInvoice</span> <span class="p">(</span><span class="n">val_</span> <span class="n">oneInvoice</span><span class="p">)</span>
 </pre></div>
 
 

@@ -639,6 +639,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -770,8 +782,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -1103,8 +1115,7 @@ underlying Haskell type.</p>
 Identity</code>. Notice that deriving <code>Show</code>, <code>Eq</code>, and other standard Haskell type
 classes won't generally work for <code>ModelT</code>. However, you can use the standalone
 deriving mechanism to derive these instances for <code>Model</code>.</p>
-<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">ModelT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">Model</span> <span class="p">{</span> <span class="o">..</span> <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">ModelT</span>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">ModelT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">Model</span> <span class="p">{</span> <span class="o">..</span> <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 
 <span class="c1">-- deriving instance Show (ModelT f) -- Won&#39;t work because GHC won&#39;t get the constraints right</span>
 
@@ -1196,17 +1207,15 @@ takes a table over an arbitrary column tag and produces that table's
     <span class="p">,</span> <span class="n">personFirstName</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
     <span class="p">,</span> <span class="n">personLastName</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
     <span class="p">,</span> <span class="n">personAge</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">PersonT</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 </pre></div>
 
 
 <p>and you want the <code>personEmail</code> field to form the primary key, you would define a <code>Table</code> instance as such</p>
 <div class="codehilite"><pre><span></span><span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">PersonT</span> <span class="kr">where</span>
   <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="n">f</span>
-      <span class="ow">=</span> <span class="kt">PersonKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span><span class="p">)</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+      <span class="ow">=</span> <span class="kt">PersonKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span><span class="p">)</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
   <span class="n">primaryKey</span> <span class="n">person</span> <span class="ow">=</span> <span class="kt">PersonKey</span> <span class="o">&lt;$&gt;</span> <span class="n">personEmail</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">PersonT</span><span class="p">)</span> <span class="c1">-- PrimaryKey&#39;s must be &#39;Beamable&#39;</span>
 </pre></div>
 
 
@@ -1245,10 +1254,11 @@ tbl</code> to a type with no fields. Then just produce this type in <code>primar
   <span class="ow">=</span> <span class="kt">BadT</span>
   <span class="p">{</span> <span class="n">badFirstName</span> <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
   <span class="p">,</span> <span class="n">badLastName</span>  <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">BadT</span>
 <span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">BadT</span> <span class="kr">where</span>
   <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">BadT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">BadNoId</span>
+    <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
   <span class="n">primaryKey</span> <span class="kr">_</span> <span class="ow">=</span> <span class="kt">BadNoId</span>
 </pre></div>
 
@@ -1260,16 +1270,15 @@ parent. For example, suppose we want to create a new model
 representing a post by a user.</p>
 <div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">PostT</span> <span class="n">f</span>
     <span class="ow">=</span> <span class="kt">Post</span>
-    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Auto</span> <span class="kt">Int</span><span class="p">)</span>
+    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int</span><span class="p">)</span>
     <span class="p">,</span> <span class="n">postPostedAt</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">LocalTime</span>
     <span class="p">,</span> <span class="n">postContent</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
     <span class="p">,</span> <span class="n">postPoster</span>   <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="n">f</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">PostT</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 
 <span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">PostT</span> <span class="kr">where</span>
   <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">PostT</span> <span class="n">f</span>
-      <span class="ow">=</span> <span class="kt">PostId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Auto</span> <span class="kt">Int</span><span class="p">))</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+      <span class="ow">=</span> <span class="kt">PostId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int</span><span class="p">))</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
   <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">PostId</span> <span class="o">.</span> <span class="n">postId</span>
 
 <span class="kr">type</span> <span class="kt">Post</span> <span class="ow">=</span> <span class="kt">PostT</span> <span class="kt">Identity</span>
@@ -1287,12 +1296,11 @@ and adding the <code>Nullable</code> column tag modifier.</p>
 <p>For example, to make the poster optional above.</p>
 <div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">PostT</span> <span class="n">f</span>
     <span class="ow">=</span> <span class="kt">Post</span>
-    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Auto</span> <span class="kt">Int</span><span class="p">)</span>
+    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int</span><span class="p">)</span>
     <span class="p">,</span> <span class="n">postPostedAt</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">LocalTime</span>
     <span class="p">,</span> <span class="n">postContent</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
     <span class="p">,</span> <span class="n">postPoster</span>   <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">PostT</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 </pre></div>
 
 
@@ -1324,8 +1332,7 @@ we define the following structure for addresses.</p>
   <span class="p">,</span> <span class="n">addressState</span>      <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
   <span class="p">,</span> <span class="n">addressCountry</span>    <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
   <span class="p">,</span> <span class="n">addressPostalCode</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">AddressMixin</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="kr">type</span> <span class="kt">Address</span> <span class="ow">=</span> <span class="kt">AddressMixin</span> <span class="kt">Identity</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="p">(</span><span class="kt">AddressMixin</span> <span class="kt">Identity</span><span class="p">)</span>
 </pre></div>
@@ -1345,7 +1352,7 @@ we define the following structure for addresses.</p>
   <span class="p">,</span> <span class="n">employeePhone</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
   <span class="p">,</span> <span class="n">employeeFax</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
   <span class="p">,</span> <span class="n">employeeEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="c1">-- ...</span>
 <span class="kr">data</span> <span class="kt">CustomerT</span> <span class="n">f</span>
   <span class="ow">=</span> <span class="kt">Customer</span>
@@ -1358,7 +1365,7 @@ we define the following structure for addresses.</p>
   <span class="p">,</span> <span class="n">customerFax</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
   <span class="p">,</span> <span class="n">customerEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
   <span class="p">,</span> <span class="n">customerSupportRep</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">EmployeeT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 </pre></div>
 
 

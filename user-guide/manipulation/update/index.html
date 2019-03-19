@@ -498,6 +498,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -670,8 +682,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -944,7 +956,7 @@ save the entire row.</p>
     <span class="ss">&quot;Fax&quot;</span><span class="o">=?</span><span class="p">,</span>
     <span class="ss">&quot;Email&quot;</span><span class="o">=?</span><span class="p">,</span>
     <span class="ss">&quot;SupportRepId&quot;</span><span class="o">=?</span>
-<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="o">?</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">);</span>
 
 <span class="c1">-- With values: [SQLText &quot;Mark&quot;,SQLText &quot;Philips&quot;,SQLText &quot;Telus&quot;,SQLText &quot;8210 111 ST NW&quot;,SQLText &quot;Edmonton&quot;,SQLText &quot;AB&quot;,SQLText &quot;Canada&quot;,SQLText &quot;T6G 2C7&quot;,SQLText &quot;+1 (123) 456-7890&quot;,SQLText &quot;+1 (780) 434-5565&quot;,SQLText &quot;mphilips12@shaw.ca&quot;,SQLInteger 5,SQLInteger 14];</span>
 
@@ -1002,7 +1014,7 @@ save the entire row.</p>
     <span class="ss">&quot;Fax&quot;</span><span class="o">=</span><span class="s1">&#39;+1 (780) 434-5565&#39;</span><span class="p">,</span>
     <span class="ss">&quot;Email&quot;</span><span class="o">=</span><span class="s1">&#39;mphilips12@shaw.ca&#39;</span><span class="p">,</span>
     <span class="ss">&quot;SupportRepId&quot;</span><span class="o">=</span><span class="mi">5</span>
-<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">14</span><span class="p">);</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="mi">14</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">);</span>
 
 
 <span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
@@ -1058,7 +1070,7 @@ save the entire row.</p>
     <span class="o">`</span><span class="n">Fax</span><span class="o">`=</span><span class="s1">&#39;+1 (780) 434-5565&#39;</span><span class="p">,</span>
     <span class="o">`</span><span class="n">Email</span><span class="o">`=</span><span class="s1">&#39;mphilips12@shaw.ca&#39;</span><span class="p">,</span>
     <span class="o">`</span><span class="n">SupportRepId</span><span class="o">`=</span><span class="mi">5</span>
-<span class="k">WHERE</span> <span class="p">(</span><span class="o">`</span><span class="n">CustomerId</span><span class="o">`</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">14</span><span class="p">);</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="mi">14</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="o">`</span><span class="n">CustomerId</span><span class="o">`</span><span class="p">);</span>
 
 
 <span class="k">SELECT</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">CustomerId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res0</span><span class="o">`</span><span class="p">,</span>
@@ -1097,8 +1109,9 @@ want to update a few columns. Moreover, if you have several large columns, using
 <code>save</code> may end up sending huge pieces of data to the database. The SQL <code>UPDATE</code>
 syntax allows you to set or modify each column individually and to even
 calculate a new value based off the result of an expression.</p>
-<p>The beam <code>update</code> function exposes this functionality. <code>update</code> takes a table, a
-set of assignments, and a boolean expression, and returns a <code>SqlUpdate</code>.</p>
+<p>The beam <code>update</code> function exposes this functionality. <code>update</code> takes
+a table, a set of assignments (which can be combined monoidally), and
+a boolean expression, and returns a <code>SqlUpdate</code>.</p>
 <p>For example, suppose Canada and the USA became one country and we needed to
 update all customer addresses to reflect that.</p>
 <p>
@@ -1141,7 +1154,7 @@ update all customer addresses to reflect that.</p>
 
 <span class="c1">-- This is the important part!</span>
 <span class="nf">runUpdate</span> <span class="o">$</span> <span class="n">update</span> <span class="p">(</span><span class="n">customer</span> <span class="n">chinookDb</span><span class="p">)</span>
-                   <span class="p">(</span><span class="nf">\</span><span class="n">c</span> <span class="ow">-&gt;</span> <span class="p">[</span> <span class="n">addressCountry</span> <span class="p">(</span><span class="n">customerAddress</span> <span class="n">c</span><span class="p">)</span> <span class="o">&lt;-.</span> <span class="n">val_</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;USA&quot;</span><span class="p">)</span> <span class="p">])</span>
+                   <span class="p">(</span><span class="nf">\</span><span class="n">c</span> <span class="ow">-&gt;</span> <span class="n">addressCountry</span> <span class="p">(</span><span class="n">customerAddress</span> <span class="n">c</span><span class="p">)</span> <span class="o">&lt;-.</span> <span class="n">val_</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;USA&quot;</span><span class="p">))</span>
                    <span class="p">(</span><span class="nf">\</span><span class="n">c</span> <span class="ow">-&gt;</span> <span class="n">addressCountry</span> <span class="p">(</span><span class="n">customerAddress</span> <span class="n">c</span><span class="p">)</span> <span class="o">==.</span> <span class="n">val_</span> <span class="p">(</span><span class="kt">Just</span> <span class="s">&quot;Canada&quot;</span><span class="p">))</span>
 
 <span class="kt">Just</span> <span class="n">canadianCount&#39;</span> <span class="ow">&lt;-</span>
@@ -1362,7 +1375,7 @@ quantity of every line item.</p>
 <span class="nf">putStrLn</span> <span class="p">(</span><span class="s">&quot;Before, we had &quot;</span> <span class="o">++</span> <span class="n">show</span> <span class="n">totalLineItems</span> <span class="o">++</span> <span class="s">&quot; total products sold</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
 
 <span class="nf">runUpdate</span> <span class="o">$</span> <span class="n">update</span> <span class="p">(</span><span class="n">invoiceLine</span> <span class="n">chinookDb</span><span class="p">)</span>
-                   <span class="p">(</span><span class="nf">\</span><span class="n">ln</span> <span class="ow">-&gt;</span> <span class="p">[</span> <span class="n">invoiceLineQuantity</span> <span class="n">ln</span> <span class="o">&lt;-.</span> <span class="n">current_</span> <span class="p">(</span><span class="n">invoiceLineQuantity</span> <span class="n">ln</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="p">])</span>
+                   <span class="p">(</span><span class="nf">\</span><span class="n">ln</span> <span class="ow">-&gt;</span> <span class="n">invoiceLineQuantity</span> <span class="n">ln</span> <span class="o">&lt;-.</span> <span class="n">current_</span> <span class="p">(</span><span class="n">invoiceLineQuantity</span> <span class="n">ln</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
                    <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">val_</span> <span class="kt">True</span><span class="p">)</span>
 
 <span class="kt">Just</span> <span class="n">totalLineItems&#39;</span> <span class="ow">&lt;-</span>

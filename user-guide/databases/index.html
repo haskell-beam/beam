@@ -605,6 +605,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -736,8 +748,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -998,9 +1010,8 @@ tables defined above has the form.</p>
 <div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">ExampleDb</span> <span class="n">f</span>
     <span class="ow">=</span> <span class="kt">ExampleDb</span>
     <span class="p">{</span> <span class="n">persons</span> <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">PersonT</span><span class="p">)</span>
-    <span class="p">,</span> <span class="n">posts</span>   <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">PersonT</span><span class="p">)</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
-<span class="kr">instance</span> <span class="kt">Database</span> <span class="n">be</span> <span class="kt">ExampleDb</span>
+    <span class="p">,</span> <span class="n">posts</span>   <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">PostT</span><span class="p">)</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Database</span> <span class="n">be</span><span class="p">)</span>
 
 <span class="nf">exampleDb</span> <span class="ow">::</span> <span class="kt">DatabaseSettings</span> <span class="n">be</span> <span class="kt">ExampleDb</span>
 <span class="nf">exampleDb</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span>
@@ -1016,8 +1027,7 @@ that returned the latest comments and their respective posters.</p>
     <span class="ow">=</span> <span class="kt">PostAndPosterView</span>
     <span class="p">{</span> <span class="n">post</span>   <span class="ow">::</span> <span class="kt">PostT</span> <span class="n">f</span>
     <span class="p">,</span> <span class="n">poster</span> <span class="ow">::</span> <span class="kt">PersonT</span> <span class="n">f</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">PostAndPosterView</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 </pre></div>
 
 
@@ -1025,9 +1035,9 @@ that returned the latest comments and their respective posters.</p>
 <div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">ExampleDb</span> <span class="n">f</span>
     <span class="ow">=</span> <span class="kt">ExampleDb</span>
     <span class="p">{</span> <span class="n">persons</span>        <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">PersonT</span><span class="p">)</span>
-    <span class="p">,</span> <span class="n">posts</span>          <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">PersonT</span><span class="p">)</span>
+    <span class="p">,</span> <span class="n">posts</span>          <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">PostT</span><span class="p">)</span>
     <span class="p">,</span> <span class="n">postAndPosters</span> <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">ViewEntity</span> <span class="kt">PostAndPosterView</span><span class="p">)</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Database</span> <span class="n">be</span><span class="p">)</span>
 </pre></div>
 
 
@@ -1096,7 +1106,7 @@ equivalence if a view is declared as a table or vice versa.</p>
 
 <!--     { persons        :: f (TableEntityWithUnique PersonT '[PersonByEmail, PersonByPhone]) -->
 
-<!--     , posts          :: f (TableEntity PersonT) -->
+<!--     , posts          :: f (TableEntity PostT) -->
 
 <!--     , postAndPosters :: f (ViewEntity PostAndPosterView) -->
 
@@ -1165,30 +1175,46 @@ modifications value</em>. The easiest way to construct a database modification v
 is with the <code>dbModification</code> function, which produces a modification that makes
 no changes.</p>
 <p>You can then use Haskell record syntax to specify table or other entity
-modifications. For example, the <code>modifyTable</code> function can be used to produce a
-table modification given a modifier function for the table name and a table
-modification. Like database modifications, an identity table modification can be
-constructed with the <code>tableModification</code> function. Modifications to field names
-con be accomplished using Haskell record syntax on the result of
-<code>tableModification</code>. The <code>fieldNamed</code> field modification will give a field an
-explicit new name.</p>
+modifications. Modifications can be combined with the <code>(&lt;&gt;)</code> semigroup operator.</p>
+<p>One common operation is renaming an entity. The <code>setEntityName</code>
+function can be used to set the name of any entity (table, view,
+etc). The <code>modifyEntityName</code> function can be used to derive a new name
+based on the default-assigned beam one.</p>
+<p>Another common operation is renaming table fields. You can use the
+<code>modifyTableFields</code> modification for this. Simply pass a
+<code>tableModification</code> where each record contains the new name of the
+field.</p>
 <p>For example, to rename the <code>persons</code> table as <code>people</code> in the database above,</p>
 <div class="codehilite"><pre><span></span><span class="nf">exampleDb</span> <span class="ow">::</span> <span class="kt">DatabaseSettings</span> <span class="n">be</span> <span class="kt">ExampleDb</span>
 <span class="nf">exampleDb</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span> <span class="p">`</span><span class="n">withDbModification</span><span class="p">`</span>
             <span class="n">dbModification</span> <span class="p">{</span>
-              <span class="n">persons</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;people&quot;</span><span class="p">)</span> <span class="n">tableModification</span>
+              <span class="n">persons</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;people&quot;</span>
             <span class="p">}</span>
 </pre></div>
 
 
-<p>Or, to keep the <code>persons</code> table named as it is, but change the name of the <code>personEmail</code> field from <code>"email"</code> to <code>"email_address"</code></p>
+<p>Or, to keep the <code>persons</code> table named as it is, but change the name of
+the <code>personEmail</code> field from <code>"email"</code> to <code>"email_address"</code></p>
 <div class="codehilite"><pre><span></span><span class="nf">exampleDb</span> <span class="ow">::</span> <span class="kt">DatabaseSettings</span> <span class="n">be</span> <span class="kt">ExampleDb</span>
 <span class="nf">exampleDb</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span> <span class="p">`</span><span class="n">withDbModification</span><span class="p">`</span>
             <span class="n">dbModification</span> <span class="p">{</span>
-              <span class="n">persons</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="n">id</span> <span class="o">$</span>
-                        <span class="n">tableModification</span> <span class="p">{</span>
-                          <span class="n">personEmail</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;email_address&quot;</span>
-                        <span class="p">}</span>
+              <span class="n">persons</span> <span class="ow">=</span> <span class="n">modifyTableFields</span>
+                          <span class="n">tableModification</span> <span class="p">{</span>
+                            <span class="n">personEmail</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;email_address&quot;</span>
+                          <span class="p">}</span>
+            <span class="p">}</span>
+</pre></div>
+
+
+<p>To do both,</p>
+<div class="codehilite"><pre><span></span><span class="nf">exampleDb</span> <span class="ow">::</span> <span class="kt">DatabaseSettings</span> <span class="n">be</span> <span class="kt">ExampleDb</span>
+<span class="nf">exampleDb</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span> <span class="p">`</span><span class="n">withDbModification</span><span class="p">`</span>
+            <span class="n">dbModification</span> <span class="p">{</span>
+              <span class="n">persons</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;people&quot;</span> <span class="o">&lt;&gt;</span>
+                        <span class="n">modifyTableFields</span>
+                          <span class="n">tableModification</span> <span class="p">{</span>
+                            <span class="n">personEmail</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;email_address&quot;</span>
+                          <span class="p">}</span>
             <span class="p">}</span>
 </pre></div>
 
@@ -1198,10 +1224,11 @@ explicit new name.</p>
 <div class="codehilite"><pre><span></span><span class="nf">exampleDb</span> <span class="ow">::</span> <span class="kt">DatabaseSettings</span> <span class="n">be</span> <span class="kt">ExampleDb</span>
 <span class="nf">exampleDb</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span> <span class="p">`</span><span class="n">withDbModification</span><span class="p">`</span>
             <span class="n">dbModification</span> <span class="p">{</span>
-              <span class="n">persons</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="n">id</span> <span class="o">$</span>
-                        <span class="n">tableModification</span> <span class="p">{</span>
-                          <span class="n">personEmail</span> <span class="ow">=</span> <span class="s">&quot;email_address&quot;</span>
-                        <span class="p">}</span>
+              <span class="n">persons</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;people&quot;</span> <span class="o">&lt;&gt;</span>
+                        <span class="n">modifyTableFields</span>
+                          <span class="n">tableModification</span> <span class="p">{</span>
+                            <span class="n">personEmail</span> <span class="ow">=</span> <span class="s">&quot;email_address&quot;</span>
+                          <span class="p">}</span>
             <span class="p">}</span>
 </pre></div>
                 

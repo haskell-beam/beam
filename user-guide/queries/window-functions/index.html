@@ -512,6 +512,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#more-examples" title="More examples" class="md-nav__link">
+    More examples
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#frame-syntax" title="Frame syntax" class="md-nav__link">
     Frame syntax
   </a>
@@ -535,6 +542,18 @@
   <li class="md-nav__item">
     <a href="../advanced-features/" title="Advanced features" class="md-nav__link">
       Advanced features
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
     </a>
   </li>
 
@@ -670,8 +689,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -822,6 +841,13 @@
         <li class="md-nav__item">
   <a href="#the-withwindow_-function" title="The withWindow_ function" class="md-nav__link">
     The withWindow_ function
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-examples" title="More examples" class="md-nav__link">
+    More examples
   </a>
   
 </li>
@@ -1026,6 +1052,198 @@ For example, to get the sum of the totals of the invoices, by rank.</p>
     
                 </div>
                     </p>
+<h2 id="more-examples">More examples</h2>
+<p>Windows and aggregates can be combined freely. For example, suppose
+you wanted to find, for each album, the single genre that represented
+most of the tracks on that album.</p>
+<p>We can begin by finding the number of tracks in a given genre on a
+given album using <code>countAll_</code> and <code>aggregate_</code>, like so</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-3-Haskell" aria-controls="tab-3-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-3-Sqlite" aria-controls="tab-3-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-3-Postgres" aria-controls="tab-3-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-3-Mysql" aria-controls="tab-3-Mysql" role="tab" data-toggle="tab" data-lang="sql">Mysql</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-3-Haskell">
+            <div class="codehilite"><pre><span></span><span class="nf">aggregate_</span> <span class="p">(</span><span class="nf">\</span><span class="n">t</span> <span class="ow">-&gt;</span> <span class="p">(</span> <span class="n">group_</span> <span class="p">(</span><span class="n">trackAlbumId</span> <span class="n">t</span><span class="p">)</span>
+                  <span class="p">,</span> <span class="n">group_</span> <span class="p">(</span><span class="n">trackGenreId</span> <span class="n">t</span><span class="p">)</span>
+                  <span class="p">,</span> <span class="n">as_</span> <span class="o">@</span><span class="kt">Int</span> <span class="n">countAll_</span> <span class="p">))</span> <span class="o">$</span>
+<span class="nf">all_</span> <span class="p">(</span><span class="n">track</span> <span class="n">chinookDb</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-3-Sqlite">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Track&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">,</span>
+         <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span><span class="p">;</span>
+
+<span class="c1">-- With values: []</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-3-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Track&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">,</span>
+         <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-3-Mysql">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">AlbumId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res0</span><span class="o">`</span><span class="p">,</span>
+       <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">GenreId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res1</span><span class="o">`</span><span class="p">,</span>
+       <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res2</span><span class="o">`</span>
+<span class="k">FROM</span> <span class="o">`</span><span class="n">Track</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">AlbumId</span><span class="o">`</span><span class="p">,</span>
+         <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">GenreId</span><span class="o">`</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>Now, we want to find, for each album, which genre has the most
+tracks. We can do this by windowing over the album ID.</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-4-Haskell" aria-controls="tab-4-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-4-Postgres" aria-controls="tab-4-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-4-Haskell">
+            <div class="codehilite"><pre><span></span><span class="kr">let</span> <span class="n">albumGenreCnts</span> <span class="ow">=</span> <span class="n">aggregate_</span> <span class="p">(</span><span class="nf">\</span><span class="n">t</span> <span class="ow">-&gt;</span> <span class="p">(</span> <span class="n">group_</span> <span class="p">(</span><span class="n">trackAlbumId</span> <span class="n">t</span><span class="p">)</span>
+                                <span class="p">,</span> <span class="n">group_</span> <span class="p">(</span><span class="n">trackGenreId</span> <span class="n">t</span><span class="p">)</span>
+                                <span class="p">,</span> <span class="n">as_</span> <span class="o">@</span><span class="kt">Int</span> <span class="n">countAll_</span> <span class="p">))</span> <span class="o">$</span>
+                     <span class="n">all_</span> <span class="p">(</span><span class="n">track</span> <span class="n">chinookDb</span><span class="p">)</span>
+<span class="kr">in</span> <span class="n">withWindow_</span> <span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">albumId</span><span class="p">,</span> <span class="kr">_</span><span class="p">,</span> <span class="kr">_</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">frame_</span> <span class="p">(</span><span class="n">partitionBy_</span> <span class="n">albumId</span><span class="p">)</span> <span class="n">noOrder_</span> <span class="n">noBounds_</span><span class="p">)</span>
+               <span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">albumId</span><span class="p">,</span> <span class="n">genreId</span><span class="p">,</span> <span class="n">trackCnt</span><span class="p">)</span> <span class="n">albumWindow</span> <span class="ow">-&gt;</span>
+                   <span class="p">(</span><span class="n">albumId</span><span class="p">,</span> <span class="n">genreId</span><span class="p">,</span> <span class="n">trackCnt</span><span class="p">,</span> <span class="n">max_</span> <span class="n">trackCnt</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">albumWindow</span><span class="p">))</span> <span class="o">$</span>
+   <span class="n">albumGenreCnts</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-4-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+       <span class="k">MAX</span><span class="p">(</span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">))</span> <span class="n">OVER</span> <span class="p">(</span><span class="n">PARTITION</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Track&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">,</span>
+         <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>We're almost there. Now, our query returns tuples of</p>
+<ol>
+<li>an album ID,</li>
+<li>a genre ID,</li>
+<li>the number of tracks in that genre for that album, and</li>
+<li>the number of tracks for the genre with the most tracks in that album</li>
+</ol>
+<p>To get just the genre with the most tracks, we have to find the genres
+wher the number of tracks (#3) matches #4. We can do this using
+<code>filter_</code>. Because <code>max_</code> can return <code>NULL</code> if there are no items in
+the window, we use <code>filter_'</code> and the nullable ordering operators.</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-5-Haskell" aria-controls="tab-5-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-5-Postgres" aria-controls="tab-5-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-5-Haskell">
+            <div class="codehilite"><pre><span></span><span class="kr">let</span> <span class="n">albumGenreCnts</span> <span class="ow">=</span> <span class="n">aggregate_</span> <span class="p">(</span><span class="nf">\</span><span class="n">t</span> <span class="ow">-&gt;</span> <span class="p">(</span> <span class="n">group_</span> <span class="p">(</span><span class="n">trackAlbumId</span> <span class="n">t</span><span class="p">)</span>
+                                <span class="p">,</span> <span class="n">group_</span> <span class="p">(</span><span class="n">trackGenreId</span> <span class="n">t</span><span class="p">)</span>
+                                <span class="p">,</span> <span class="n">as_</span> <span class="o">@</span><span class="kt">Int</span> <span class="n">countAll_</span> <span class="p">))</span> <span class="o">$</span>
+                     <span class="n">all_</span> <span class="p">(</span><span class="n">track</span> <span class="n">chinookDb</span><span class="p">)</span>
+
+    <span class="n">withMaxCounts</span> <span class="ow">=</span> <span class="n">withWindow_</span> <span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">albumId</span><span class="p">,</span> <span class="kr">_</span><span class="p">,</span> <span class="kr">_</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">frame_</span> <span class="p">(</span><span class="n">partitionBy_</span> <span class="n">albumId</span><span class="p">)</span> <span class="n">noOrder_</span> <span class="n">noBounds_</span><span class="p">)</span>
+                                <span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">albumId</span><span class="p">,</span> <span class="n">genreId</span><span class="p">,</span> <span class="n">trackCnt</span><span class="p">)</span> <span class="n">albumWindow</span> <span class="ow">-&gt;</span>
+                                    <span class="p">(</span><span class="n">albumId</span><span class="p">,</span> <span class="n">genreId</span><span class="p">,</span> <span class="n">trackCnt</span><span class="p">,</span> <span class="n">max_</span> <span class="n">trackCnt</span> <span class="p">`</span><span class="n">over_</span><span class="p">`</span> <span class="n">albumWindow</span><span class="p">))</span> <span class="o">$</span>
+                    <span class="n">albumGenreCnts</span>
+<span class="kr">in</span> <span class="n">filter_&#39;</span> <span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="kr">_</span><span class="p">,</span> <span class="kr">_</span><span class="p">,</span> <span class="n">trackCnt</span><span class="p">,</span> <span class="n">maxTrackCntPerAlbum</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">just_</span> <span class="n">trackCnt</span> <span class="o">==?.</span> <span class="n">maxTrackCntPerAlbum</span><span class="p">)</span> <span class="n">withMaxCounts</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-5-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res3&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span>
+<span class="k">FROM</span>
+  <span class="p">(</span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+          <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+          <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+          <span class="k">MAX</span><span class="p">(</span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">))</span> <span class="n">OVER</span> <span class="p">(</span><span class="n">PARTITION</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;res3&quot;</span>
+   <span class="k">FROM</span> <span class="ss">&quot;Track&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+   <span class="k">GROUP</span> <span class="k">BY</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">,</span>
+            <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span><span class="p">)</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res3&quot;</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
 <h2 id="frame-syntax">Frame syntax</h2>
 <p>The <code>frame_</code> function takes a partition, ordering, and bounds parameter, all of
 which are optional. To specify no partition, use <code>noPartition_</code>. For no
@@ -1056,18 +1274,18 @@ calculation.</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-8-Haskell" aria-controls="tab-8-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-16-Haskell" aria-controls="tab-16-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-8-Postgres" aria-controls="tab-8-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-16-Postgres" aria-controls="tab-16-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-8-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-16-Haskell">
             <div class="codehilite"><pre><span></span><span class="nf">withWindow_</span> <span class="p">(</span><span class="nf">\</span><span class="n">i</span> <span class="ow">-&gt;</span> <span class="p">(</span> <span class="n">frame_</span> <span class="n">noPartition_</span> <span class="n">noOrder_</span> <span class="n">noBounds_</span>
                    <span class="p">,</span> <span class="n">frame_</span> <span class="p">(</span><span class="n">partitionBy_</span> <span class="p">(</span><span class="n">invoiceCustomer</span> <span class="n">i</span><span class="p">))</span> <span class="n">noOrder_</span> <span class="n">noBounds_</span>
                    <span class="p">,</span> <span class="n">frame_</span> <span class="n">noPartition_</span> <span class="p">(</span><span class="n">orderPartitionBy_</span> <span class="p">(</span><span class="n">asc_</span> <span class="p">(</span><span class="n">invoiceTotal</span> <span class="n">i</span><span class="p">)))</span> <span class="n">noBounds_</span>
@@ -1083,7 +1301,7 @@ calculation.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-8-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-16-Postgres">
             <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>

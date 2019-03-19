@@ -556,6 +556,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="user-guide/queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -687,8 +699,8 @@
 
 
   <li class="md-nav__item">
-    <a href="schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -920,13 +932,13 @@ project by adding <code>beam-core</code> and an appropriate beam backend to your
 <code>stack.yaml</code> as an <code>extra-dep</code>. Some projects may want to follow the latest
 master, for the newest features. If so, put the following in your <code>stack.yaml</code>
 to build and use beam in your project!</p>
-<div class="codehilite"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">packages</span><span class="p p-Indicator">:</span>
+<div class="codehilite"><pre><span></span><span class="nt">packages</span><span class="p">:</span>
 <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">.</span>
-<span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">location</span><span class="p p-Indicator">:</span>
-    <span class="l l-Scalar l-Scalar-Plain">git</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">https://github.com/tathougies/beam.git</span>
-    <span class="l l-Scalar l-Scalar-Plain">commit</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">a3b5e0763843fed48c7eef53fa7d08cfe710342d</span>
-  <span class="l l-Scalar l-Scalar-Plain">extra-dep</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">true</span>
-  <span class="l l-Scalar l-Scalar-Plain">subdirs</span><span class="p p-Indicator">:</span>
+<span class="p p-Indicator">-</span> <span class="nt">location</span><span class="p">:</span>
+    <span class="nt">git</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">https://github.com/tathougies/beam.git</span>
+    <span class="nt">commit</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">a3b5e0763843fed48c7eef53fa7d08cfe710342d</span>
+  <span class="nt">extra-dep</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">true</span>
+  <span class="nt">subdirs</span><span class="p">:</span>
     <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">beam-core</span>
     <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">&lt;backend&gt;</span>
 </pre></div>

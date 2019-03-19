@@ -492,6 +492,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../user-guide/queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -623,8 +635,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -1583,8 +1595,8 @@ planned.</p>
 </tr>
 <tr>
 <td align="left"><strong>F201 CAST function</strong></td>
-<td align="center">TODO</td>
-<td align="left"></td>
+<td align="center">FULL</td>
+<td align="left">See <code>cast_</code></td>
 </tr>
 <tr>
 <td align="left"><strong>F202 TRUNCATE TABLE: identity column restart option</strong></td>
@@ -2367,14 +2379,14 @@ planned.</p>
 <td align="left"></td>
 </tr>
 <tr>
-<td align="left"><strong>T111 Updatable joins, unions,  and columns</strong></td>
+<td align="left"><strong>T111 Updatable joins, unions, and columns</strong></td>
 <td align="center">TODO</td>
 <td align="left"></td>
 </tr>
 <tr>
 <td align="left"><strong>T121 WITH (excluding recursive) in query expression</strong></td>
-<td align="center">TODO</td>
-<td align="left"></td>
+<td align="center">FULL</td>
+<td align="left">Use <code>selectWith</code>, <code>selecting</code>, and <code>reuse</code>. See the <a href="../../user-guide/queries/common-table-expressions/">section</a> in the users guide</td>
 </tr>
 <tr>
 <td align="left"><strong>T122 WITH (excluding recursive) in subquery</strong></td>
@@ -2383,8 +2395,8 @@ planned.</p>
 </tr>
 <tr>
 <td align="left"><strong>T131 Recursive query</strong></td>
-<td align="center">TODO</td>
-<td align="left"></td>
+<td align="center">FULL</td>
+<td align="left">Use <code>selectWith</code> and the <code>MonadFix With</code> instance. See the <a href="../../user-guide/queries/common-table-expressions/">section</a> for more details</td>
 </tr>
 <tr>
 <td align="left"><strong>T132 Recursive query in subquery</strong></td>

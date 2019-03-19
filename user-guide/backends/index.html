@@ -537,6 +537,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -668,8 +680,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -903,9 +915,9 @@ $ stack install beam-sqlite
 
 
 <p>Now, back in GHCi, we can create a connection to this database.</p>
-<div class="codehilite"><pre><span></span>Prelude Database.Beam.Sqlite<span class="o">&gt;</span> basics <span class="o">&lt;-</span> open <span class="s">&quot;basics.db&quot;</span>
-Prelude Database.Beam.Sqlite<span class="o">&gt;</span> withDatabase basics <span class="o">$</span> runSelectReturningList <span class="p">(</span>select <span class="p">(</span>all_ <span class="p">(</span>persons exampleDb<span class="p">)))</span>
-<span class="p">[</span> <span class="m">..</span> <span class="p">]</span>
+<div class="codehilite"><pre><span></span><span class="n">Prelude</span> <span class="n">Database.Beam.Sqlite</span><span class="o">&gt;</span> <span class="n">basics</span> <span class="o">&lt;-</span> <span class="n">open</span> <span class="s">&quot;basics.db&quot;</span>
+<span class="n">Prelude</span> <span class="n">Database.Beam.Sqlite</span><span class="o">&gt;</span> <span class="n">runBeamSqlite</span> <span class="n">basics</span> <span class="o">$</span> <span class="nf">runSelectReturningList </span><span class="p">(</span><span class="nf">select </span><span class="p">(</span><span class="nf">all_ </span><span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">)))</span>
+<span class="n">[</span> <span class="n">..</span> <span class="n">]</span>
 </pre></div>
 
 
@@ -927,23 +939,24 @@ directly against the database using <code>sqlite-simple</code> functionality:</p
 </pre></div>
 
 
-<p>Now we can insert some data into our database. Beam ships with a
-function <code>withDatabase</code>, with the following signature:</p>
-<div class="codehilite"><pre><span></span><span class="nf">withDatabase</span> <span class="ow">::</span> <span class="kt">MonadBeam</span> <span class="n">syntax</span> <span class="n">be</span> <span class="n">hdl</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="n">hdl</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="n">a</span>
+<p>Now we can insert some data into our database. <code>beam-sqlite</code> ships with a
+function <code>runBeamSqlite</code>, with the following signature:</p>
+<div class="codehilite"><pre><span></span><span class="nf">runBeamSqlite</span> <span class="ow">::</span> <span class="kt">Connection</span> <span class="ow">-&gt;</span> <span class="kt">SqliteM</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="n">a</span>
 </pre></div>
 
 
-<p><code>MonadBeam</code> is a type class that relates a particular SQL syntax (<code>syntax</code>) to a
-backend (<code>be</code>), command monad (<code>m</code>), and database handle (<code>hdl</code>) type. Inside
-the <code>m</code> monad, we can execute data query and manipulation commands. The <code>hdl</code>
-type is usually the type of the connection in the underlying backend library.</p>
-<p>For example, <code>beam-sqlite</code> uses the <code>sqlite-simple</code> library, so its handle type
-is <code>Connection</code> from <code>Database.SQLite.Simple</code>.</p>
+<p><code>beam-sqlite</code> uses the <code>sqlite-simple</code> library, so its handle type is
+<code>Connection</code> from <code>Database.SQLite.Simple</code>.</p>
+<p><code>SqliteM</code> is a monad implementing <code>MonadBeam</code> which we can use to construct
+database actions from individual SQL commands (select, insert, update, delete).
+<code>MonadBeam</code> is a type class that relates a particular SQL syntax (<code>syntax</code>) to a
+backend (<code>be</code>), and a command monad (<code>m</code>). Inside the <code>m</code> monad, we can execute
+data query and manipulation commands.</p>
 <p>Let's insert some data into our database. We are going to use the <code>runInsert</code>
 function from <code>MonadBeam</code>. INSERTs are discussed in more detail in
 the <a href="../manipulation/insert/">data manipulation guide</a>.</p>
 <div class="codehilite"><pre><span></span>Prelude Schema&gt; :{
-Prelude Schema| withDatabase conn $ do
+Prelude Schema| runBeamSqlite conn $ do
 Prelude Schema|   runInsert $ insert (persons exampleDb) $
 Prelude Schema|               insertValues [ Person &quot;Bob&quot; &quot;Smith&quot; 50
 Prelude Schema|                            , Person &quot;Alice&quot; &quot;Wong&quot; 55
@@ -953,7 +966,7 @@ Prelude Schema| :}
 
 
 <p>The <code>runInsert</code> function has the type signature</p>
-<div class="codehilite"><pre><span></span><span class="nf">runInsert</span> <span class="ow">::</span> <span class="kt">MonadBeam</span> <span class="n">syntax</span> <span class="n">be</span> <span class="n">hdl</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">SqlInsert</span> <span class="n">syntax</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+<div class="codehilite"><pre><span></span><span class="nf">runInsert</span> <span class="ow">::</span> <span class="kt">MonadBeam</span> <span class="n">syntax</span> <span class="n">be</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">SqlInsert</span> <span class="n">syntax</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
 </pre></div>
 
 
@@ -978,10 +991,10 @@ of specifying the source of values.</p>
 <p>Now, we can query the database, using the <code>runSelect</code> function. Like <code>runInsert</code>
 and <code>insert</code>, we use the <code>select</code> function to construct a value of type
 <code>SqlSelect syntax</code>, which can be run inside <code>MonadBeam</code>.</p>
-<p>We can use the <code>withDatabaseDebug</code> function to install a hook that beam will
+<p>We can use the <code>runBeamSqliteDebug</code> function to install a hook that beam will
 call with every SQL command it is about to run. In the following example, beam
 will print its query to stdout via <code>putStrLn</code>. You can use this functionality to hook beam in to a logging framework.</p>
-<div class="codehilite"><pre><span></span>Prelude Schema&gt; withDatabaseDebug putStrLn conn $ runSelect (select (all_ (persons exampleDb)))
+<div class="codehilite"><pre><span></span>Prelude Schema&gt; runBeamSqliteDebug putStrLn conn $ runSelect (select (all_ (persons exampleDb)))
 [ Person { personFirstName = &quot;Bob&quot;, personLastName=&quot;Smith&quot;, personAge=50 }, ... ]
 </pre></div>
                 

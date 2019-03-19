@@ -38,7 +38,7 @@ main =
      let onStmt s = modifyIORef stmts (. (s:))
 
          record :: BEAM_BACKEND_MONAD a -> IO a
-         record a = withDatabaseDebug (onStmt . (++ ";")) chinook a
+         record a = BEAM_WITH_DATABASE_DEBUG (onStmt . (++ ";")) chinook a
 
      handle (\BeamDone -> pure ()) $
        docsWithTransaction chinook $ do

@@ -573,6 +573,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -704,8 +716,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -926,19 +938,39 @@ look at some of the important query types.</p>
 <h2 id="data-types">Data types</h2>
 <h3 id="the-q-data-type">The <code>Q</code> data type</h3>
 <p>Beam queries are built using the <code>Q</code> data type. <code>Q</code>'s signature is as follows</p>
-<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">Q</span> <span class="n">syntax</span> <span class="n">db</span> <span class="n">s</span> <span class="n">a</span>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">Q</span> <span class="n">be</span> <span class="n">db</span> <span class="n">s</span> <span class="n">a</span>
 </pre></div>
 
 
 <p>In this definition</p>
 <ul>
-<li>
-<p><code>syntax</code> is the particular dialect of SQL this <code>Q</code> monad will evaluate to.
-  Often times, this is any instance of <code>IsSql92SelectSyntax</code>, but sometimes you
-  use syntax-specific features. For example, if you want to use named windows in
-  postgres, you'll likely have to specialize this to <code>PgSelectSyntax</code> from
-  <code>Database.Beam.Postgres.Syntax</code>.</p>
-</li>
+<li><code>be</code> is the particular Beam backend this <code>Q</code> monad is written
+  for. Each beam backend defines a custom tag type. For example,
+  <code>beam-sqlite</code> provides the <code>Sqlite</code> tag, and <code>beam-postgres</code>
+  provides the <code>Postgres</code> tag. You can see what SQL backends are available
+  in GHCi by asking for info on the <code>BeamSqlBackend</code> class.</li>
+</ul>
+<div class="codehilite"><pre><span></span>Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple Lens.Micro Data.Time Database.Beam.Backend.SQL T&gt; :info BeamSqlBackend
+ass (Database.Beam.Backend.Types.BeamBackend be,
+     IsSql92Syntax (BeamSqlBackendSyntax be),
+     Sql92SanityCheck (BeamSqlBackendSyntax be),
+     HasSqlValueSyntax (BeamSqlBackendValueSyntax be) Bool,
+     HasSqlValueSyntax (BeamSqlBackendValueSyntax be) SqlNull,
+     Eq (BeamSqlBackendExpressionSyntax be)) =&gt;
+    BeamSqlBackend be
+    -- Defined at /Users/travis/Projects/beam/beam-core/Database/Beam/Backend/SQL.hs:212:1
+stance BeamSqlBackend Sqlite
+-- Defined at /Users/travis/Projects/beam/beam-sqlite/Database/Beam/Sqlite/Connection.hs:157:10
+stance (IsSql92Syntax syntax, Sql92SanityCheck syntax,
+        HasSqlValueSyntax (Sql92ValueSyntax syntax) Bool,
+        HasSqlValueSyntax (Sql92ValueSyntax syntax) SqlNull,
+        Eq (Sql92ExpressionSyntax syntax)) =&gt;
+       BeamSqlBackend (MockSqlBackend syntax)
+-- Defined at /Users/travis/Projects/beam/beam-core/Database/Beam/Backend/SQL.hs:238:10
+</pre></div>
+
+
+<ul>
 <li>
 <p><code>db</code> is the type of the database (as we defined above). This is used to ensure
   you only query database entities that are in scope in this database.</p>
@@ -962,7 +994,7 @@ to <a href="../relationships/#full-inner-joins">create JOINs</a>.</p>
 <p>While <code>Q</code> represents the result of whole queries (entire <code>SELECT</code>s for example),
 <code>QGenExpr</code> represents the type of SQL expressions. <code>QGenExpr</code> also takes some
 type parameters:</p>
-<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">QGenExpr</span> <span class="n">context</span> <span class="n">syntax</span> <span class="n">s</span> <span class="n">a</span>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">QGenExpr</span> <span class="n">context</span> <span class="n">be</span> <span class="n">s</span> <span class="n">a</span>
 </pre></div>
 
 
@@ -973,17 +1005,20 @@ type parameters:</p>
   Expressions returning scalar values have <code>context ~ QValueContext</code>.</p>
 </li>
 <li>
-<p><code>syntax</code> is the particular SQL dialect this expression is written in. Note
-  that this is usually different than the <code>syntax</code> for <code>Q</code>, because <code>Q</code>'s syntax
-  refers to a particular syntax for <code>SELECT</code> expressions (a type implementing
-  <code>IsSql92SelectSyntax</code>), while <code>QGenExpr</code>'s syntax usually refers to an
-  expression syntax (a type implementing <code>IsSql92ExpressionSyntax</code>). Of course,
-  since syntaxes are related, you can get from a <code>Q</code> <code>SELECT</code> syntax to a
-  <code>QGenExpr</code> <code>syntax</code> with the <code>Sql92SelectExpressionSyntax</code> type family.</p>
+<p><code>be</code> is the backend for which this expression is written. For
+  example, expressions destined for execution in PostgreSQL, will
+  substitute this for <code>Postgres</code> (from <code>Database.Beam.Postgres</code> in the
+  <code>beam-postgres</code> package). You can also leave this polymorphic if you
+  want your expression to be useable across multiple backends.</p>
 </li>
 </ul>
-<p>Thus, a <code>QGenExpr</code> with syntax <code>Sql92SelectExpressionSyntax select</code> can be
-  used in the <code>FILTER</code> clause of a query with type <code>Q select db s a</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>In previous versions of beam <code>be</code> indicated the 'syntax' rather
+than the backend. This was confusing because the syntax and backend
+types were not obviously related. Beam &gt;=0.8.0.0 uses the backend
+type consistently to indicate where an expression is being used.</p>
+</div>
 <ul>
 <li>
 <p><code>s</code> is a scoping parameter, which will match the <code>s</code> in <code>Q</code>.</p>
@@ -1004,8 +1039,8 @@ type parameters:</p>
 </pre></div>
 
 
-<p>Thus, value expressions can be given the simpler type of <code>QExpr syntax s a</code>.
-Expressions containing aggregates are typed as <code>QAgg syntax s a</code>.</p>
+<p>Thus, value expressions can be given the simpler type of <code>QExpr be s a</code>.
+Expressions containing aggregates are typed as <code>QAgg be s a</code>.</p>
 <h3 id="a-note-on-type-inference">A note on type inference</h3>
 <p>These types may seem incredibly complicated. Indeed, the safety that beam tries
 to provide requires these scary-looking types.</p>
@@ -1019,8 +1054,8 @@ utility function <code>as_</code> for this. With <code>-XTypeApplications</code>
 </pre></div>
 
 
-<p>ensures that <code>ambiguous expression</code> has the type <code>QGenExpr ctxt syntax s Int</code>
-with the <code>ctxt</code>, <code>syntax</code>, and <code>s</code> types appropriately inferred.</p>
+<p>ensures that <code>ambiguous expression</code> has the type <code>QGenExpr ctxt be s Int</code>
+with the <code>ctxt</code>, <code>be</code>, and <code>s</code> types appropriately inferred.</p>
 <h2 id="simple-queries">Simple queries</h2>
 <p>The easiest query is simply getting all the rows in a specific table. If you
 have a database object (something with type <code>DatabaseSettings be db</code>) with some
@@ -1028,7 +1063,7 @@ table or view entities, you can use the <code>all_</code> function to retrieve a
 a specific table or view.</p>
 <p>For example, to retrieve all <code>PersonT</code> entries in the <code>exampleDb</code> we defined in
 the last section, we can say</p>
-<div class="codehilite"><pre><span></span><span class="nf">all_</span> <span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">)</span> <span class="ow">::</span> <span class="kt">Q</span> <span class="n">syntax</span> <span class="kt">ExampleDb</span> <span class="n">s</span> <span class="p">(</span><span class="kt">PersonT</span> <span class="p">(</span><span class="kt">QExpr</span> <span class="n">s</span><span class="p">))</span>
+<div class="codehilite"><pre><span></span><span class="nf">all_</span> <span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">)</span> <span class="ow">::</span> <span class="kt">Q</span> <span class="n">be</span> <span class="kt">ExampleDb</span> <span class="n">s</span> <span class="p">(</span><span class="kt">PersonT</span> <span class="p">(</span><span class="kt">QExpr</span> <span class="n">s</span><span class="p">))</span>
 </pre></div>
 
 
@@ -1042,7 +1077,7 @@ higher-kinded type. This means that each field in <code>PersonT</code> now conta
 expression instead of a Haskell value. This is the magic that our parameterized
 types allow.</p>
 <p>Thus,</p>
-<div class="codehilite"><pre><span></span><span class="nf">personFirstName</span> <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">))</span> <span class="ow">::</span> <span class="kt">QExpr</span> <span class="n">s</span> <span class="kt">Text</span>
+<div class="codehilite"><pre><span></span><span class="nf">personFirstName</span> <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">))</span> <span class="ow">::</span> <span class="kt">QExpr</span> <span class="n">be</span> <span class="n">s</span> <span class="kt">Text</span>
 </pre></div>
 
 
@@ -1074,17 +1109,15 @@ database. The return type of <code>all_</code> is just the table we ask for. In 
 we're interested in the <code>persons</code> table. The <code>persons</code> table has the <code>Beamable</code>
 type <code>PersonT</code>. As expected, the <code>SqlSelect</code> will return us concrete <code>Person</code>
 values (recall that <code>Person</code> is equivalent to <code>PersonT Identity</code>).</p>
-<div class="codehilite"><pre><span></span><span class="nf">select</span> <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">))</span> <span class="ow">::</span> <span class="p">(</span><span class="o">...</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">SqlSelect</span> <span class="n">syntax</span> <span class="kt">Person</span>
+<div class="codehilite"><pre><span></span><span class="nf">select</span> <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">))</span> <span class="ow">::</span> <span class="kt">HasQBuilder</span> <span class="n">be</span> <span class="ow">=&gt;</span> <span class="kt">SqlSelect</span> <span class="n">be</span> <span class="kt">Person</span>
 </pre></div>
 
 
-<p>The <code>...</code> in the context represents a bunch of requirements for <code>syntax</code> that
-GHC will generate.</p>
 <p>Normally, you'd ship this select statement off to a backend to run, but for the
 purposes of this tutorial, we can also ask beam to dump what the standard SQL
 expression this query encodes.</p>
 <div class="codehilite"><pre><span></span><span class="nf">dumpSqlSelect</span> <span class="p">(</span><span class="n">all_</span> <span class="p">(</span><span class="n">persons</span> <span class="n">exampleDb</span><span class="p">))</span>
-<span class="kt">SELECT</span> <span class="s">&quot;t0&quot;</span><span class="o">.</span><span class="s">&quot;first_name&quot;</span> <span class="kt">AS</span> <span class="s">&quot;res0&quot;</span><span class="p">,</span> <span class="s">&quot;t0&quot;</span><span class="o">.</span><span class="s">&quot;last_name&quot;</span> <span class="kt">AS</span> <span class="s">&quot;res1&quot;</span><span class="p">,</span> <span class="s">&quot;t0&quot;</span><span class="o">.</span><span class="s">&quot;age&quot;</span> <span class="kt">AS</span> <span class="s">&quot;res2&quot;</span><span class="p">,</span> <span class="s">&quot;t0&quot;</span><span class="o">.</span><span class="s">&quot;email&quot;</span> <span class="kt">AS</span> <span class="s">&quot;res3&quot;</span><span class="p">,</span> <span class="s">&quot;t0&quot;</span><span class="o">.</span><span class="s">&quot;phone&quot;</span> <span class="kt">AS</span> <span class="s">&quot;res4&quot;</span> <span class="kt">FROM</span> <span class="s">&quot;person&quot;</span> <span class="kt">AS</span> <span class="s">&quot;t0&quot;</span>
+<span class="kt">SELECT</span> <span class="p">`</span><span class="n">t0</span><span class="p">`</span><span class="o">.</span><span class="p">`</span><span class="n">email</span><span class="p">`</span> <span class="kt">AS</span> <span class="s">&quot;res0&quot;</span><span class="p">,</span> <span class="p">`</span><span class="n">t0</span><span class="p">`</span><span class="o">.</span><span class="p">`</span><span class="n">first_name</span><span class="p">`</span> <span class="kt">AS</span> <span class="s">&quot;res1&quot;</span><span class="p">,</span> <span class="p">`</span><span class="n">t0</span><span class="p">`</span><span class="o">.</span><span class="p">`</span><span class="n">last_name</span><span class="p">`</span> <span class="kt">AS</span> <span class="s">&quot;res2&quot;</span><span class="p">,</span> <span class="p">`</span><span class="n">t0</span><span class="p">`</span><span class="o">.</span><span class="p">`</span><span class="n">password</span><span class="p">`</span> <span class="kt">AS</span> <span class="s">&quot;res3&quot;</span> <span class="kt">FROM</span> <span class="s">&quot;cart_users&quot;</span> <span class="kt">AS</span> <span class="s">&quot;t0&quot;</span>
 </pre></div>
 
 
@@ -1333,26 +1366,26 @@ possible, rather than shipping data to your application pre-processing.</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-17-Haskell" aria-controls="tab-17-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-18-Haskell" aria-controls="tab-18-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-17-Sqlite" aria-controls="tab-17-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+            <a href="#tab-18-Sqlite" aria-controls="tab-18-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-17-Postgres" aria-controls="tab-17-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-18-Postgres" aria-controls="tab-18-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-17-Mysql" aria-controls="tab-17-Mysql" role="tab" data-toggle="tab" data-lang="sql">Mysql</a>
+            <a href="#tab-18-Mysql" aria-controls="tab-18-Mysql" role="tab" data-toggle="tab" data-lang="sql">Mysql</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-17-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-18-Haskell">
             <div class="codehilite"><pre><span></span><span class="c1">-- &#39;complicatedQuery&#39; could be declared and imported from an external module here. The generated query is the same regardless</span>
 <span class="kr">let</span> <span class="n">complicatedQuery</span> <span class="ow">=</span>
        <span class="n">filter_</span> <span class="p">(</span><span class="nf">\</span><span class="n">customer</span> <span class="ow">-&gt;</span> <span class="p">((</span><span class="n">customerFirstName</span> <span class="n">customer</span> <span class="p">`</span><span class="n">like_</span><span class="p">`</span> <span class="s">&quot;Jo%&quot;</span><span class="p">)</span> <span class="o">&amp;&amp;.</span> <span class="p">(</span><span class="n">customerLastName</span> <span class="n">customer</span> <span class="p">`</span><span class="n">like_</span><span class="p">`</span> <span class="s">&quot;S%&quot;</span><span class="p">))</span> <span class="o">&amp;&amp;.</span>
@@ -1365,7 +1398,7 @@ possible, rather than shipping data to your application pre-processing.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-17-Sqlite">
+        <div role="tabpanel" class="tab-pane " id="tab-18-Sqlite">
             <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
@@ -1427,7 +1460,7 @@ possible, rather than shipping data to your application pre-processing.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-17-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-18-Postgres">
             <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
        <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span><span class="p">,</span>
@@ -1477,7 +1510,7 @@ possible, rather than shipping data to your application pre-processing.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-17-Mysql">
+        <div role="tabpanel" class="tab-pane " id="tab-18-Mysql">
             <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">res0</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res0</span><span class="o">`</span><span class="p">,</span>
        <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">res1</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res1</span><span class="o">`</span><span class="p">,</span>
        <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">res2</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res2</span><span class="o">`</span><span class="p">,</span>

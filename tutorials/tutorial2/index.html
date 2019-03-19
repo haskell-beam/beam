@@ -507,6 +507,18 @@
   </li>
 
         
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../user-guide/queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
       </ul>
     </nav>
   </li>
@@ -638,8 +650,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../../schema-guide/supported/" title="Supported migrations" class="md-nav__link">
-      Supported migrations
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
     </a>
   </li>
 
@@ -830,18 +842,15 @@ address in the United States consists of</p>
                 <span class="p">,</span> <span class="n">_addressZip</span>   <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
 
                 <span class="p">,</span> <span class="n">_addressForUser</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">UserT</span> <span class="n">f</span> <span class="p">}</span>
-                  <span class="kr">deriving</span> <span class="kt">Generic</span>
+                  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
 <span class="kr">type</span> <span class="kt">Address</span> <span class="ow">=</span> <span class="kt">AddressT</span> <span class="kt">Identity</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">UserT</span> <span class="kt">Identity</span><span class="p">)</span>
 <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Address</span>
 
 <span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">AddressT</span> <span class="kr">where</span>
-    <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">AddressT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">AddressId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span><span class="p">)</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+    <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">AddressT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">AddressId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int</span><span class="p">)</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
     <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">AddressId</span> <span class="o">.</span> <span class="n">_addressId</span>
 <span class="kr">type</span> <span class="kt">AddressId</span> <span class="ow">=</span> <span class="kt">PrimaryKey</span> <span class="kt">AddressT</span> <span class="kt">Identity</span> <span class="c1">-- For convenience</span>
-
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">AddressT</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">AddressT</span><span class="p">)</span>
 </pre></div>
 
 
@@ -862,9 +871,7 @@ database type.</p>
 <div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">ShoppingCartDb</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">ShoppingCartDb</span>
                       <span class="p">{</span> <span class="n">_shoppingCartUsers</span>         <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">UserT</span><span class="p">)</span>
                       <span class="p">,</span> <span class="n">_shoppingCartUserAddresses</span> <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">AddressT</span><span class="p">)</span> <span class="p">}</span>
-                        <span class="kr">deriving</span> <span class="kt">Generic</span>
-
-<span class="kr">instance</span> <span class="kt">Database</span> <span class="n">be</span> <span class="kt">ShoppingCartDb</span>
+                        <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Database</span> <span class="n">be</span><span class="p">)</span>
 </pre></div>
 
 
@@ -924,33 +931,42 @@ access <code>_addressLine1</code> and <code>_addressLine2</code> respectively.</
 <span class="nf">shoppingCartDb</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span> <span class="p">`</span><span class="n">withDbModification</span><span class="p">`</span>
                  <span class="n">dbModification</span> <span class="p">{</span>
                    <span class="n">_shoppingCartUserAddresses</span> <span class="ow">=</span>
-                     <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;addresses&quot;</span><span class="p">)</span> <span class="o">$</span>
-                     <span class="n">tableModification</span> <span class="p">{</span>
-                       <span class="n">_addressLine1</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;address1&quot;</span><span class="p">,</span>
-                       <span class="n">_addressLine2</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;address2&quot;</span>
-                     <span class="p">}</span>
+                     <span class="n">setEntityName</span> <span class="s">&quot;addresses&quot;</span> <span class="o">&lt;&gt;</span>
+                     <span class="n">modifyTableFields</span>
+                       <span class="n">tableModification</span> <span class="p">{</span>
+                         <span class="n">_addressLine1</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;address1&quot;</span><span class="p">,</span>
+                         <span class="n">_addressLine2</span> <span class="ow">=</span> <span class="n">fieldNamed</span> <span class="s">&quot;address2&quot;</span>
+                       <span class="p">}</span>
                  <span class="p">}</span>
 </pre></div>
 
 
-<p>Above, we use <code>dbModification</code> to produce a default modification, then we
-override the <code>_shoppingCartUserAddresses</code> modification to change the addresses
-table. The <code>modifyTable</code> function takes a function to transform the default
-table name and a table modification. Like the <code>dbModification</code> value,
-<code>tableModification</code> produces a modification for each table field that does
-nothing.</p>
+<p>Above, we use <code>dbModification</code> to produce a default modification, then
+we override the <code>_shoppingCartUserAddresses</code> modification to change
+the addresses table. We modify the table in two ways. First, we use
+the <code>setEntityName</code> function to change the name of the table. Then, we
+use <code>modifyTableFields</code> to change the names of each field. The
+modifications can be combined with the semigroup operator <code>(&lt;&gt;)</code>.</p>
 <p>We only override the <code>_addressLine1</code> and <code>_addressLine2</code> modifications with
 <code>fieldNamed "address1"</code> and <code>fieldNamed "address2"</code>. Because <code>tableModification</code>
 produces a default modification, the other columns are kept at their default
 value.</p>
-<p>If you didn't need to modify any of the table names, simply do not update any of
-the table fields. For example, to simply produce a database with the first table
-named <code>users</code> and the second named <code>user_addresses</code>, you can do</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>The <code>OverloadedStrings</code> extension lets us avoid typing <code>fieldNamed</code>. For example, instead of</p>
+<p><code>_addressLine1 = fieldNamed "address1"</code></p>
+<p>we could have written</p>
+<p><code>_addressLine1 = "address1"</code></p>
+</div>
+<p>If you didn't need to modify any of the field names, you can omit
+<code>modifyTableFields</code>. For example, to simply produce a database with
+the first table named <code>users</code> and the second named <code>user_addresses</code>,
+you can do</p>
 <div class="codehilite"><pre><span></span><span class="nf">shoppingCartDb1</span> <span class="ow">::</span> <span class="kt">DatabaseSettings</span> <span class="n">be</span> <span class="kt">ShoppingCartDb</span>
 <span class="nf">shoppingCartDb1</span> <span class="ow">=</span> <span class="n">defaultDbSettings</span> <span class="p">`</span><span class="n">withDbModification</span><span class="p">`</span>
                   <span class="n">dbModification</span> <span class="p">{</span>
-                    <span class="n">_shoppingCartUsers</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;users&quot;</span><span class="p">)</span> <span class="n">tableModification</span><span class="p">,</span>
-                    <span class="n">_shoppingCartUserAddresses</span> <span class="ow">=</span> <span class="n">modifyTable</span> <span class="p">(</span><span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="s">&quot;user_addresses&quot;</span><span class="p">)</span> <span class="n">tableModification</span>
+                    <span class="n">_shoppingCartUsers</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;users&quot;</span><span class="p">,</span>
+                    <span class="n">_shoppingCartUserAddresses</span> <span class="ow">=</span> <span class="n">setEntityName</span> <span class="s">&quot;user_addresses&quot;</span>
                   <span class="p">}</span>
 </pre></div>
 
@@ -1002,7 +1018,24 @@ the top-level. Older GHCs were more lenient.</p>
 
 
 <p>We can ask GHCi for the type of a column lens.</p>
-<p>And a table lens.</p>
+<div class="codehilite"><pre><span></span>Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple&gt; :t addressId
+addressId
+  :: Functor f2 =&gt;
+     (Columnar f1 Int -&gt; f2 (Columnar f1 Int))
+     -&gt; AddressT f1 -&gt; f2 (AddressT f1)
+</pre></div>
+
+
+<p>This lens is compatible with those of the <code>lens</code> library.</p>
+<p>And a table lens, for good measure</p>
+<div class="codehilite"><pre><span></span>Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple&gt; :t shoppingCartUsers
+shoppingCartUsers
+  :: Functor f1 =&gt;
+     (f2 (TableEntity UserT) -&gt; f1 (f2 (TableEntity UserT)))
+     -&gt; ShoppingCartDb f2 -&gt; f1 (ShoppingCartDb f2)
+</pre></div>
+
+
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p>These lens generating functions are <em>awesome</em> but if you use them in a
@@ -1024,7 +1057,7 @@ opening up a connection for us to use in the rest of the tutorial.</p>
 <span class="go">SQLite version 3.14.0 2016-07-26 15:17:14</span>
 <span class="go">Enter &quot;.help&quot; for usage hints.</span>
 <span class="go">sqlite&gt; CREATE TABLE cart_users (email VARCHAR NOT NULL, first_name VARCHAR NOT NULL, last_name VARCHAR NOT NULL, password VARCHAR NOT NULL, PRIMARY KEY( email ));</span>
-<span class="go">sqlite&gt; CREATE TABLE addresses ( id INT AUTO_INCREMENT PRIMARY KEY, address1 VARCHAR NOT NULL, address2 VARCHAR, city VARCHAR NOT NULL, state VARCHAR NOT NULL, zip VARCHAR NOT NULL, for_user__email VARCHAR NOT NULL );</span>
+<span class="go">sqlite&gt; CREATE TABLE addresses ( id INTEGER PRIMARY KEY, address1 VARCHAR NOT NULL, address2 VARCHAR, city VARCHAR NOT NULL, state VARCHAR NOT NULL, zip VARCHAR NOT NULL, for_user__email VARCHAR NOT NULL );</span>
 </pre></div>
 
 
@@ -1061,16 +1094,10 @@ literal value into an expression.</p>
 </pre></div>
 
 
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>Previous versions of beam used a type called <code>Auto</code> to insert values into
-default fields. It was found to be a leaky abstraction and removed in version
-0.7.0.0. Current best practices are to use <code>default_</code> instead.</p>
-</div>
 <p>Notice that we used the <code>pk</code> function to assign the reference to the <code>UserT</code>
 table. <code>pk</code> is a synonym of the <code>primaryKey</code> function from the <code>Table</code> type
 class. It should be clear what's going on, but if it's not, let's ask GHCi.</p>
-<div class="codehilite"><pre><span></span><span class="go">*NextSteps&gt; pk (james :: User)</span>
+<div class="codehilite"><pre><span></span><span class="go">*NextSteps&gt; pk (james :: User)p</span>
 <span class="go">UserId &quot;james@example.com&quot;</span>
 </pre></div>
 
@@ -1600,7 +1627,7 @@ update the corresponding record in the database.</p>
 <span class="k">SET</span> <span class="ss">&quot;first_name&quot;</span><span class="o">=?</span><span class="p">,</span>
     <span class="ss">&quot;last_name&quot;</span><span class="o">=?</span><span class="p">,</span>
     <span class="ss">&quot;password&quot;</span><span class="o">=?</span>
-<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;email&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="o">?</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="ss">&quot;email&quot;</span><span class="p">);</span>
 
 <span class="c1">-- With values: [SQLText &quot;James&quot;,SQLText &quot;Smith&quot;,SQLText &quot;52a516ca6df436828d9c0d26e31ef704&quot;,SQLText &quot;james@example.com&quot;]</span>
 
@@ -1667,7 +1694,8 @@ to use the new name and ZIP code.</p>
   <span class="n">runBeamSqliteDebug</span> <span class="n">putStrLn</span> <span class="n">conn</span> <span class="o">$</span>
     <span class="kr">do</span> <span class="n">runUpdate</span> <span class="o">$</span>
          <span class="n">update</span> <span class="p">(</span><span class="n">shoppingCartDb</span> <span class="o">^.</span> <span class="n">shoppingCartUserAddresses</span><span class="p">)</span>
-                <span class="p">(</span><span class="nf">\</span><span class="n">address</span> <span class="ow">-&gt;</span> <span class="p">[</span> <span class="n">address</span> <span class="o">^.</span> <span class="n">addressCity</span> <span class="o">&lt;-.</span> <span class="n">val_</span> <span class="s">&quot;Sugarville&quot;</span>
+                <span class="p">(</span><span class="nf">\</span><span class="n">address</span> <span class="ow">-&gt;</span> <span class="n">mconcat</span>
+                             <span class="p">[</span> <span class="n">address</span> <span class="o">^.</span> <span class="n">addressCity</span> <span class="o">&lt;-.</span> <span class="n">val_</span> <span class="s">&quot;Sugarville&quot;</span>
                              <span class="p">,</span> <span class="n">address</span> <span class="o">^.</span> <span class="n">addressZip</span> <span class="o">&lt;-.</span> <span class="n">val_</span> <span class="s">&quot;12345&quot;</span> <span class="p">])</span>
                 <span class="p">(</span><span class="nf">\</span><span class="n">address</span> <span class="ow">-&gt;</span> <span class="n">address</span> <span class="o">^.</span> <span class="n">addressCity</span> <span class="o">==.</span> <span class="n">val_</span> <span class="s">&quot;Sugarland&quot;</span> <span class="o">&amp;&amp;.</span>
                              <span class="n">address</span> <span class="o">^.</span> <span class="n">addressState</span> <span class="o">==.</span> <span class="n">val_</span> <span class="s">&quot;TX&quot;</span><span class="p">)</span>
