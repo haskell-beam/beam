@@ -37,18 +37,15 @@ data AddressT f = Address
                 , _addressZip   :: C f Text
 
                 , _addressForUser :: PrimaryKey UserT f }
-                  deriving Generic
+                  deriving (Generic, Beamable)
 type Address = AddressT Identity
 deriving instance Show (PrimaryKey UserT Identity)
 deriving instance Show Address
 
 instance Table AddressT where
-    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
+    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving (Generic, Beamable)
     primaryKey = AddressId . _addressId
 type AddressId = PrimaryKey AddressT Identity -- For convenience
-
-instance Beamable AddressT
-instance Beamable (PrimaryKey AddressT)
 ```
 
 !!! tip "Tip"
@@ -71,9 +68,7 @@ database type.
 data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers         :: f (TableEntity UserT)
                       , _shoppingCartUserAddresses :: f (TableEntity AddressT) }
-                        deriving Generic
-
-instance Database be ShoppingCartDb
+                        deriving (Generic, Database be)
 ```
 
 Modifying the default naming choices
@@ -140,36 +135,47 @@ shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings `withDbModification`
                  dbModification {
                    _shoppingCartUserAddresses =
-                     modifyTable (\_ -> "addresses") $
-                     tableModification {
-                       _addressLine1 = fieldNamed "address1",
-                       _addressLine2 = fieldNamed "address2"
-                     }
+                     setEntityName "addresses" <>
+                     modifyTableFields
+                       tableModification {
+                         _addressLine1 = fieldNamed "address1",
+                         _addressLine2 = fieldNamed "address2"
+                       }
                  }
 ```
 
-Above, we use `dbModification` to produce a default modification, then we
-override the `_shoppingCartUserAddresses` modification to change the addresses
-table. The `modifyTable` function takes a function to transform the default
-table name and a table modification. Like the `dbModification` value,
-`tableModification` produces a modification for each table field that does
-nothing.
+Above, we use `dbModification` to produce a default modification, then
+we override the `_shoppingCartUserAddresses` modification to change
+the addresses table. We modify the table in two ways. First, we use
+the `setEntityName` function to change the name of the table. Then, we
+use `modifyTableFields` to change the names of each field. The
+modifications can be combined with the semigroup operator `(<>)`.
 
 We only override the `_addressLine1` and `_addressLine2` modifications with
 `fieldNamed "address1"` and `fieldNamed "address2"`. Because `tableModification`
 produces a default modification, the other columns are kept at their default
 value.
 
-If you didn't need to modify any of the table names, simply do not update any of
-the table fields. For example, to simply produce a database with the first table
-named `users` and the second named `user_addresses`, you can do
+!!! tip "Tip"
+    The `OverloadedStrings` extension lets us avoid typing `fieldNamed`. For example, instead of
+
+    `_addressLine1 = fieldNamed "address1"`
+
+    we could have written
+
+    `_addressLine1 = "address1"`
+
+If you didn't need to modify any of the field names, you can omit
+`modifyTableFields`. For example, to simply produce a database with
+the first table named `users` and the second named `user_addresses`,
+you can do
 
 ```haskell
 shoppingCartDb1 :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb1 = defaultDbSettings `withDbModification`
                   dbModification {
-                    _shoppingCartUsers = modifyTable (\_ -> "users") tableModification,
-                    _shoppingCartUserAddresses = modifyTable (\_ -> "user_addresses") tableModification
+                    _shoppingCartUsers = setEntityName "users",
+                    _shoppingCartUserAddresses = setEntityName "user_addresses"
                   }
 ```
 
@@ -228,7 +234,25 @@ ShoppingCartDb (TableLens shoppingCartUsers)
 
 We can ask GHCi for the type of a column lens.
 
-And a table lens.
+```
+Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple> :t addressId
+addressId
+  :: Functor f2 =>
+     (Columnar f1 Int -> f2 (Columnar f1 Int))
+     -> AddressT f1 -> f2 (AddressT f1)
+```
+
+This lens is compatible with those of the `lens` library.
+
+And a table lens, for good measure
+
+```
+Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple> :t shoppingCartUsers
+shoppingCartUsers
+  :: Functor f1 =>
+     (f2 (TableEntity UserT) -> f1 (f2 (TableEntity UserT)))
+     -> ShoppingCartDb f2 -> f1 (ShoppingCartDb f2)
+```
 
 !!! warning "Warning"
     These lens generating functions are *awesome* but if you use them in a
@@ -296,17 +320,12 @@ runBeamSqliteDebug putStrLn conn $ runInsert $
   insertExpressions addresses
 ```
 
-!!! warning "Warning"
-    Previous versions of beam used a type called `Auto` to insert values into
-    default fields. It was found to be a leaky abstraction and removed in version
-    0.7.0.0. Current best practices are to use `default_` instead.
-
 Notice that we used the `pk` function to assign the reference to the `UserT`
 table. `pk` is a synonym of the `primaryKey` function from the `Table` type
 class. It should be clear what's going on, but if it's not, let's ask GHCi.
 
 ```console
-*NextSteps> pk (james :: User)
+*NextSteps> pk (james :: User)p
 UserId "james@example.com"
 ```
 

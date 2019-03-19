@@ -9,16 +9,36 @@ look at some of the important query types.
 Beam queries are built using the `Q` data type. `Q`'s signature is as follows
 
 ```haskell
-data Q syntax db s a
+data Q be db s a
 ```
 
 In this definition
 
-* `syntax` is the particular dialect of SQL this `Q` monad will evaluate to.
-  Often times, this is any instance of `IsSql92SelectSyntax`, but sometimes you
-  use syntax-specific features. For example, if you want to use named windows in
-  postgres, you'll likely have to specialize this to `PgSelectSyntax` from
-  `Database.Beam.Postgres.Syntax`.
+* `be` is the particular Beam backend this `Q` monad is written
+  for. Each beam backend defines a custom tag type. For example,
+  `beam-sqlite` provides the `Sqlite` tag, and `beam-postgres`
+  provides the `Postgres` tag. You can see what SQL backends are available
+  in GHCi by asking for info on the `BeamSqlBackend` class.
+
+```
+Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple Lens.Micro Data.Time Database.Beam.Backend.SQL T> :info BeamSqlBackend
+ass (Database.Beam.Backend.Types.BeamBackend be,
+     IsSql92Syntax (BeamSqlBackendSyntax be),
+     Sql92SanityCheck (BeamSqlBackendSyntax be),
+     HasSqlValueSyntax (BeamSqlBackendValueSyntax be) Bool,
+     HasSqlValueSyntax (BeamSqlBackendValueSyntax be) SqlNull,
+     Eq (BeamSqlBackendExpressionSyntax be)) =>
+    BeamSqlBackend be
+	-- Defined at /Users/travis/Projects/beam/beam-core/Database/Beam/Backend/SQL.hs:212:1
+stance BeamSqlBackend Sqlite
+-- Defined at /Users/travis/Projects/beam/beam-sqlite/Database/Beam/Sqlite/Connection.hs:157:10
+stance (IsSql92Syntax syntax, Sql92SanityCheck syntax,
+        HasSqlValueSyntax (Sql92ValueSyntax syntax) Bool,
+        HasSqlValueSyntax (Sql92ValueSyntax syntax) SqlNull,
+        Eq (Sql92ExpressionSyntax syntax)) =>
+       BeamSqlBackend (MockSqlBackend syntax)
+-- Defined at /Users/travis/Projects/beam/beam-core/Database/Beam/Backend/SQL.hs:238:10
+```
 
 * `db` is the type of the database (as we defined above). This is used to ensure
   you only query database entities that are in scope in this database.
@@ -43,23 +63,25 @@ While `Q` represents the result of whole queries (entire `SELECT`s for example),
 type parameters:
 
 ```haskell
-data QGenExpr context syntax s a
+data QGenExpr context be s a
 ```
 
 * `context` is the particular way in which this expression is being used. For
   example, expressions containing aggregates have `context ~ QAggregateContext`.
   Expressions returning scalar values have `context ~ QValueContext`.
 
-* `syntax` is the particular SQL dialect this expression is written in. Note
-  that this is usually different than the `syntax` for `Q`, because `Q`'s syntax
-  refers to a particular syntax for `SELECT` expressions (a type implementing
-  `IsSql92SelectSyntax`), while `QGenExpr`'s syntax usually refers to an
-  expression syntax (a type implementing `IsSql92ExpressionSyntax`). Of course,
-  since syntaxes are related, you can get from a `Q` `SELECT` syntax to a
-  `QGenExpr` `syntax` with the `Sql92SelectExpressionSyntax` type family.
+* `be` is the backend for which this expression is written. For
+  example, expressions destined for execution in PostgreSQL, will
+  substitute this for `Postgres` (from `Database.Beam.Postgres` in the
+  `beam-postgres` package). You can also leave this polymorphic if you
+  want your expression to be useable across multiple backends.
 
-  Thus, a `QGenExpr` with syntax `Sql92SelectExpressionSyntax select` can be
-  used in the `FILTER` clause of a query with type `Q select db s a`.
+
+!!! note "Note"
+    In previous versions of beam `be` indicated the 'syntax' rather
+    than the backend. This was confusing because the syntax and backend
+    types were not obviously related. Beam >=0.8.0.0 uses the backend
+    type consistently to indicate where an expression is being used.
 
 * `s` is a scoping parameter, which will match the `s` in `Q`.
 
@@ -78,8 +100,8 @@ type QWindowFrame = QGenExpr QWindowFrameContext
 type QGroupExpr = QGenExpr QGroupingContext
 ```
 
-Thus, value expressions can be given the simpler type of `QExpr syntax s a`.
-Expressions containing aggregates are typed as `QAgg syntax s a`.
+Thus, value expressions can be given the simpler type of `QExpr be s a`.
+Expressions containing aggregates are typed as `QAgg be s a`.
 
 ### A note on type inference
 
@@ -97,8 +119,8 @@ utility function `as_` for this. With `-XTypeApplications` enabled,
 as_ @Int (ambiguous expression)
 ```
 
-ensures that `ambiguous expression` has the type `QGenExpr ctxt syntax s Int`
-with the `ctxt`, `syntax`, and `s` types appropriately inferred.
+ensures that `ambiguous expression` has the type `QGenExpr ctxt be s Int`
+with the `ctxt`, `be`, and `s` types appropriately inferred.
 
 ## Simple queries
 
@@ -111,7 +133,7 @@ For example, to retrieve all `PersonT` entries in the `exampleDb` we defined in
 the last section, we can say
 
 ```haskell
-all_ (persons exampleDb) :: Q syntax ExampleDb s (PersonT (QExpr s))
+all_ (persons exampleDb) :: Q be ExampleDb s (PersonT (QExpr s))
 ```
 
 !!! note "Note"
@@ -126,7 +148,7 @@ types allow.
 Thus,
 
 ```haskell
-personFirstName (all_ (persons exampleDb)) :: QExpr s Text
+personFirstName (all_ (persons exampleDb)) :: QExpr be s Text
 ```
 
 and
@@ -162,11 +184,8 @@ type `PersonT`. As expected, the `SqlSelect` will return us concrete `Person`
 values (recall that `Person` is equivalent to `PersonT Identity`).
 
 ```haskell
-select (all_ (persons exampleDb)) :: (...) => SqlSelect syntax Person
+select (all_ (persons exampleDb)) :: HasQBuilder be => SqlSelect be Person
 ```
-
-The `...` in the context represents a bunch of requirements for `syntax` that
-GHC will generate.
 
 Normally, you'd ship this select statement off to a backend to run, but for the
 purposes of this tutorial, we can also ask beam to dump what the standard SQL
@@ -174,7 +193,7 @@ expression this query encodes.
 
 ```haskell
 dumpSqlSelect (all_ (persons exampleDb))
-SELECT "t0"."first_name" AS "res0", "t0"."last_name" AS "res1", "t0"."age" AS "res2", "t0"."email" AS "res3", "t0"."phone" AS "res4" FROM "person" AS "t0"
+SELECT `t0`.`email` AS "res0", `t0`.`first_name` AS "res1", `t0`.`last_name` AS "res2", `t0`.`password` AS "res3" FROM "cart_users" AS "t0"
 ```
 
 Internally, `dumpSqlSelect` uses a `beam-core` provided syntax to generate

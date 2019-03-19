@@ -15,8 +15,7 @@ data ExampleDb f
     = ExampleDb
     { persons :: f (TableEntity PersonT)
     , posts   :: f (TableEntity PostT)
-    } deriving Generic
-instance Database be ExampleDb
+    } deriving (Generic, Database be)
 
 exampleDb :: DatabaseSettings be ExampleDb
 exampleDb = defaultDbSettings
@@ -35,8 +34,7 @@ data PostAndPosterView f
     = PostAndPosterView
     { post   :: PostT f
     , poster :: PersonT f
-    } deriving Generic
-instance Beamable PostAndPosterView
+    } deriving (Generic, Beamable)
 ```
 
 We can include this in our database:
@@ -47,7 +45,7 @@ data ExampleDb f
     { persons        :: f (TableEntity PersonT)
     , posts          :: f (TableEntity PostT)
     , postAndPosters :: f (ViewEntity PostAndPosterView)
-    } deriving Generic
+    } deriving (Generic, Database be)
 ```
 
 Now we can use `postAndPosters` wherever we'd use a table. Note that you do not
@@ -175,13 +173,17 @@ is with the `dbModification` function, which produces a modification that makes
 no changes.
 
 You can then use Haskell record syntax to specify table or other entity
-modifications. For example, the `modifyTable` function can be used to produce a
-table modification given a modifier function for the table name and a table
-modification. Like database modifications, an identity table modification can be
-constructed with the `tableModification` function. Modifications to field names
-con be accomplished using Haskell record syntax on the result of
-`tableModification`. The `fieldNamed` field modification will give a field an
-explicit new name.
+modifications. Modifications can be combined with the `(<>)` semigroup operator.
+
+One common operation is renaming an entity. The `setEntityName`
+function can be used to set the name of any entity (table, view,
+etc). The `modifyEntityName` function can be used to derive a new name
+based on the default-assigned beam one.
+
+Another common operation is renaming table fields. You can use the
+`modifyTableFields` modification for this. Simply pass a
+`tableModification` where each record contains the new name of the
+field.
 
 For example, to rename the `persons` table as `people` in the database above,
 
@@ -189,20 +191,35 @@ For example, to rename the `persons` table as `people` in the database above,
 exampleDb :: DatabaseSettings be ExampleDb
 exampleDb = defaultDbSettings `withDbModification`
             dbModification {
-              persons = modifyTable (\_ -> "people") tableModification
+              persons = setEntityName "people"
             }
 ```
 
-Or, to keep the `persons` table named as it is, but change the name of the `personEmail` field from `"email"` to `"email_address"`
+Or, to keep the `persons` table named as it is, but change the name of
+the `personEmail` field from `"email"` to `"email_address"`
 
 ```haskell
 exampleDb :: DatabaseSettings be ExampleDb
 exampleDb = defaultDbSettings `withDbModification`
             dbModification {
-              persons = modifyTable id $
-                        tableModification {
-                          personEmail = fieldNamed "email_address"
-                        }
+              persons = modifyTableFields
+                          tableModification {
+                            personEmail = fieldNamed "email_address"
+                          }
+            }
+```
+
+To do both,
+
+```haskell
+exampleDb :: DatabaseSettings be ExampleDb
+exampleDb = defaultDbSettings `withDbModification`
+            dbModification {
+              persons = setEntityName "people" <>
+                        modifyTableFields
+                          tableModification {
+                            personEmail = fieldNamed "email_address"
+                          }
             }
 ```
 
@@ -213,9 +230,10 @@ An appropriate `IsString` instance is also given so you can avoid the use of
 exampleDb :: DatabaseSettings be ExampleDb
 exampleDb = defaultDbSettings `withDbModification`
             dbModification {
-              persons = modifyTable id $
-                        tableModification {
-                          personEmail = "email_address"
-                        }
+              persons = setEntityName "people" <>
+                        modifyTableFields
+                          tableModification {
+                            personEmail = "email_address"
+                          }
             }
 ```
