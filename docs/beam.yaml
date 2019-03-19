@@ -89,7 +89,7 @@ backends:
       - utf8
 
   beam-mssql:
-    backend-name: Microsoft SQL
+    backend-name: MsSQL
     backend-module: Database.Beam.MsSQL
     backend-options: "sa Testtest1 test2"
     src:
