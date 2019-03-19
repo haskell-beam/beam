@@ -27,11 +27,11 @@ Beam features
 
 ## How to install
 
-Beam is available via Hackage and Stackage, and can be included in your stack
-project by adding `beam-core` and an appropriate beam backend to your
-`stack.yaml` as an `extra-dep`. Some projects may want to follow the latest
-master, for the newest features. If so, put the following in your `stack.yaml`
-to build and use beam in your project!
+Beam is available via Hackage and Stackage, and can be included in
+your stack project by adding `beam-core` and an appropriate beam
+backend to your `.cabal` file. Some projects may want to follow the
+latest master, for the newest features. If so, put the following in
+your `stack.yaml` to build and use beam in your project!
 
 ```yaml
 packages:
