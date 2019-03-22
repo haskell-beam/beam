@@ -26,9 +26,10 @@ import           Control.Monad.Writer
 import           GHC.TypeLits
 import           GHC.Types
 
+import           Unsafe.Coerce
+
 type ProjectibleInBackend be a =
-  ( -- Eq (Sql92SelectExpressionSyntax syntax)
-    Projectible be a
+  ( Projectible be a
   , ProjectibleValue be a )
 
 type TablePrefix = T.Text
@@ -665,3 +666,6 @@ tableNameFromEntity :: IsSql92TableNameSyntax name
                     -> name
 
 tableNameFromEntity = tableName <$> dbTableSchema <*> dbTableCurrentName
+
+rescopeQ :: QM be db s res -> QM be db s' res
+rescopeQ = unsafeCoerce
