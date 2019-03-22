@@ -479,6 +479,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#ad-hoc-queries" title="Ad-hoc queries" class="md-nav__link">
+    Ad-hoc queries
+  </a>
+  
+</li>
+      
       
       
     </ul>
@@ -883,6 +890,13 @@
         <li class="md-nav__item">
   <a href="#values-support" title="VALUES support" class="md-nav__link">
     VALUES support
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ad-hoc-queries" title="Ad-hoc queries" class="md-nav__link">
+    Ad-hoc queries
   </a>
   
 </li>
@@ -2178,6 +2192,90 @@ the database.</p>
 <p><code>beam-sqlite</code> does not support <code>VALUES</code> clauses anywhere within a
 query, but only within a common table expression.</p>
 </div>
+<h2 id="ad-hoc-queries">Ad-hoc queries</h2>
+<p>Sometimes you want to quickly query a database without having to write
+out all the boilerplate. Beam supports this with a feature called
+'ad-hoc' queries.</p>
+<p>For example, to get all the names of customers, without having to use
+<code>chinookDb</code> at all.</p>
+<p>To use this functionality, import <code>Database.Beam.Query.Adhoc</code>. Note
+that we use <code>TypeApplications</code> to give each field an explicit type. If
+you don't, GHC will often infer the type, but it's nice to be explicit.</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-59-Haskell" aria-controls="tab-59-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-59-Sqlite" aria-controls="tab-59-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-59-Postgres" aria-controls="tab-59-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-59-Mysql" aria-controls="tab-59-Mysql" role="tab" data-toggle="tab" data-lang="sql">Mysql</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-59-Haskell">
+            <div class="codehilite"><pre><span></span><span class="c1">-- import qualified Database.Beam.Query.Adhoc as Adhoc</span>
+<span class="kr">do</span> <span class="p">(</span> <span class="n">cId</span><span class="p">,</span> <span class="n">firstName</span><span class="p">,</span> <span class="n">lastName</span> <span class="p">)</span>
+     <span class="ow">&lt;-</span> <span class="kt">Adhoc</span><span class="o">.</span><span class="n">table_</span> <span class="kt">Nothing</span> <span class="cm">{- Schema Name -}</span>
+          <span class="s">&quot;Customer&quot;</span>
+          <span class="p">(</span> <span class="kt">Adhoc</span><span class="o">.</span><span class="n">field_</span> <span class="o">@</span><span class="kt">Int32</span> <span class="s">&quot;CustomerId&quot;</span>
+          <span class="p">,</span> <span class="kt">Adhoc</span><span class="o">.</span><span class="n">field_</span> <span class="o">@</span><span class="kt">Text</span> <span class="s">&quot;FirstName&quot;</span>
+          <span class="p">,</span> <span class="kt">Adhoc</span><span class="o">.</span><span class="n">field_</span> <span class="o">@</span><span class="kt">Text</span> <span class="s">&quot;LastName&quot;</span> <span class="p">)</span>
+   <span class="n">guard_</span> <span class="p">(</span><span class="n">firstName</span> <span class="p">`</span><span class="n">like_</span><span class="p">`</span> <span class="s">&quot;Jo%&quot;</span><span class="p">)</span>
+   <span class="n">return</span> <span class="p">(</span><span class="n">cId</span><span class="p">,</span> <span class="n">firstName</span><span class="p">,</span> <span class="n">lastName</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-59-Sqlite">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;LastName&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Customer&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span> <span class="k">LIKE</span> <span class="p">(</span><span class="o">?</span><span class="p">);</span>
+
+<span class="c1">-- With values: [SQLText &quot;Jo%&quot;]</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-59-Postgres">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+       <span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;LastName&quot;</span> <span class="k">AS</span> <span class="ss">&quot;res2&quot;</span>
+<span class="k">FROM</span> <span class="ss">&quot;Customer&quot;</span> <span class="k">AS</span> <span class="ss">&quot;t0&quot;</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span> <span class="k">LIKE</span> <span class="p">(</span><span class="s1">&#39;Jo%&#39;</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-59-Mysql">
+            <div class="codehilite"><pre><span></span><span class="k">SELECT</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">CustomerId</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res0</span><span class="o">`</span><span class="p">,</span>
+       <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">FirstName</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res1</span><span class="o">`</span><span class="p">,</span>
+       <span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">LastName</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">res2</span><span class="o">`</span>
+<span class="k">FROM</span> <span class="o">`</span><span class="n">Customer</span><span class="o">`</span> <span class="k">AS</span> <span class="o">`</span><span class="n">t0</span><span class="o">`</span>
+<span class="k">WHERE</span> <span class="p">(</span><span class="o">`</span><span class="n">t0</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">FirstName</span><span class="o">`</span><span class="p">)</span> <span class="k">LIKE</span> <span class="p">(</span><span class="s1">&#39;Jo%&#39;</span><span class="p">)</span>
+</pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
                 
                   
                 
