@@ -200,6 +200,10 @@ limit_ 10 $
   all_ (customer chinookDb)
 ```
 
+!!! note "Note"
+    If you want to filter for primary keys you have to manually unwrap them,
+    for more information see [here](https://github.com/tathougies/beam/issues/333#issuecomment-444728791).
+
 ## `CASE .. WHEN .. ELSE ..` statements
 
 The SQL `CASE .. WHEN .. ELSE` construct can be used to implement a multi-way
