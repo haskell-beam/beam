@@ -230,7 +230,7 @@ data ShoppingCartDb f = ShoppingCartDb
 !!! note "Note"
     By deriving `Database be` we actually allowed our database to be used with any Beam
     backend that supports it. We could also have explicitly listed the database backends we
-    liked. For example, specifying `deriving (Generic, Database Sqlite, Database Postgres` would
+    liked. For example, specifying `deriving (Generic, Database Sqlite, Database Postgres)` would
     derive instances only for SQLite or Postgres.
 
 The next step is to create a description of the particular database we'd like to create. This
