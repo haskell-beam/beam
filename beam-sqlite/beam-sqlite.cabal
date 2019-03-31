@@ -10,7 +10,7 @@ license-file:        LICENSE
 author:              Travis Athougies
 maintainer:          travis@athougies.net
 copyright:           (C) 2017-2018 Travis Athougies
-category:            Web
+category:            Database
 build-type:          Simple
 extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
