@@ -62,21 +62,18 @@ fromScientificOrIntegral = do
   sciVal <- fmap (toBoundedInteger =<<) peekField
   case sciVal of
     Just sciVal' -> do
-      -- If the parse succeeded, consume the field
-      _ <- parseOneField @Postgres @Scientific
       pure sciVal'
     Nothing -> fromIntegral <$> fromBackendRow @Postgres @Integer
 
 -- | Deserialize integral fields, possibly downcasting from a larger integral
 -- type, but only if we won't lose data
 fromPgIntegral :: forall a
-                . (Pg.FromField a, Integral a)
+                . (Pg.FromField a, Integral a, Typeable a)
                => FromBackendRowM Postgres a
 fromPgIntegral = do
   val <- peekField
   case val of
     Just val' -> do
-      _ <- parseOneField @Postgres @a
       pure val'
     Nothing -> do
       val' <- parseOneField @Postgres @Integer
@@ -122,7 +119,7 @@ instance FromBackendRow Postgres LocalTime where
   fromBackendRow =
     peekField >>=
     \case
-      Just (_ :: LocalTime) -> parseOneField
+      Just (x :: LocalTime) -> pure x
 
       -- Also accept 'TIMESTAMP WITH TIME ZONE'. Considered as
       -- 'LocalTime', because postgres always returns times in the
@@ -130,7 +127,7 @@ instance FromBackendRow Postgres LocalTime where
       Nothing ->
         peekField >>=
         \case
-          Just (_ :: ZonedTime) -> zonedTimeToLocalTime <$> parseOneField
+          Just (x :: ZonedTime) -> pure (zonedTimeToLocalTime x)
           Nothing -> fail "'TIMESTAMP WITH TIME ZONE' or 'TIMESTAMP WITHOUT TIME ZONE' required for LocalTime"
 instance FromBackendRow Postgres TimeOfDay
 instance FromBackendRow Postgres Day
@@ -147,7 +144,7 @@ instance FromBackendRow Postgres (Ratio Integer)
 instance FromBackendRow Postgres (CI Text)
 instance FromBackendRow Postgres (CI TL.Text)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Vector a) where
-    fromBackendRow = do
+  fromBackendRow = do
       isNull <- peekField
       case isNull of
         Just SqlNull -> pure mempty
@@ -156,7 +153,7 @@ instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGArray a)
 instance FromBackendRow Postgres (Pg.Binary ByteString)
 instance FromBackendRow Postgres (Pg.Binary BL.ByteString)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGRange a)
-instance (Pg.FromField a, Pg.FromField b) => FromBackendRow Postgres (Either a b)
+instance (Pg.FromField a, Pg.FromField b, Typeable a, Typeable b) => FromBackendRow Postgres (Either a b)
 
 instance BeamSqlBackend Postgres
 instance BeamMigrateOnlySqlBackend Postgres

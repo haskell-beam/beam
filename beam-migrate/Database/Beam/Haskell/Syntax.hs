@@ -14,8 +14,9 @@ module Database.Beam.Haskell.Syntax where
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Backend.SQL.AST
+import           Database.Beam.Backend.SQL.Builder
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.SQL.Types
 import           Database.Beam.Migrate.Serialization
@@ -91,6 +92,8 @@ instance Hashable HsDataType where
   hashWithSalt salt (HsDataType mig ty _) = hashWithSalt salt (mig, ty)
 instance Sql92DisplaySyntax HsDataType where
   displaySyntax = show
+instance HasDataTypeCreatedCheck HsDataType where
+  dataTypeHasBeenCreated _ _ = True -- TODO make this more robust
 
 data HsType
   = HsType
@@ -617,6 +620,14 @@ instance IsSql92ReferentialActionSyntax HsNone where
   referentialActionSetDefaultSyntax = HsNone
   referentialActionSetNullSyntax = HsNone
 
+instance IsSql92ExtractFieldSyntax HsExpr where
+  secondsField = hsVar "secondsField"
+  minutesField = hsVar "minutesField"
+  hourField    = hsVar "hourField"
+  yearField    = hsVar "yearField"
+  monthField   = hsVar "monthField"
+  dayField     = hsVar "dayField"
+
 instance IsSql92ExpressionSyntax HsExpr where
   type Sql92ExpressionFieldNameSyntax HsExpr = HsExpr
   type Sql92ExpressionSelectSyntax HsExpr = SqlSyntaxBuilder
@@ -945,6 +956,8 @@ beamMigrateSqlBackend =
   HsBackendConstraint $ \beTy ->
   Hs.ClassA () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend")) [ beTy ]
 
+
+
 -- * Orphans
 
 instance Hashable (Hs.Exp ())
@@ -957,7 +970,9 @@ instance Hashable (Hs.Name ())
 instance Hashable (Hs.Type ())
 instance Hashable (Hs.QOp ())
 instance Hashable (Hs.TyVarBind ())
+#if !MIN_VERSION_haskell_src_exts(1, 21, 0)
 instance Hashable (Hs.Kind ())
+#endif
 instance Hashable (Hs.Context ())
 instance Hashable (Hs.SpecialCon ())
 instance Hashable (Hs.Pat ())

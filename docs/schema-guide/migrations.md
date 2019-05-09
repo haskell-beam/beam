@@ -60,7 +60,7 @@ necessary. You can also directly interpret the `beam-migrate` DSL to hook your
 Haskell migrations into your own system.
 
 `beam-migrate` is described in more detail in the [`beam-migrate` migrations
-guide](schema-guide/library.md)
+guide](library.md)
 
 ### The `beam-migrate` tool
 
@@ -70,7 +70,7 @@ There is an optional `beam-migrate` command line tool, available in the
 The `beam-migrate` tool can generate a beam schema from a pre-existing database,
 manage migrations for several production databases, automatically generate
 migrations between two schemas, and much more. It is rather opinionated, and is
-described in more detail in the [`beam-migrate` CLI guide](schema-guide/tool.md)
+described in more detail in the [`beam-migrate` CLI guide](tool.md)
 
 
 

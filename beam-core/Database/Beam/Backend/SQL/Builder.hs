@@ -21,7 +21,7 @@ module Database.Beam.Backend.SQL.Builder
 import           Database.Beam.Backend.SQL
 --import           Database.Beam.Backend.Types
 
---import           Control.Monad.IO.Class
+import           Control.Monad.IO.Class
 
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder
@@ -34,6 +34,7 @@ import           Data.Coerce
 import           Data.Hashable
 import           Data.Int
 import           Data.String
+import qualified Control.Monad.Fail as Fail
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
@@ -187,6 +188,14 @@ instance IsSql92QuantifierSyntax SqlSyntaxBuilder where
   quantifyOverAll = SqlSyntaxBuilder "ALL"
   quantifyOverAny = SqlSyntaxBuilder "ANY"
 
+instance IsSql92ExtractFieldSyntax SqlSyntaxBuilder where
+  secondsField = SqlSyntaxBuilder (byteString "SECOND")
+  minutesField = SqlSyntaxBuilder (byteString "MINUTE")
+  hourField    = SqlSyntaxBuilder (byteString "HOUR")
+  dayField     = SqlSyntaxBuilder (byteString "DAY")
+  monthField   = SqlSyntaxBuilder (byteString "MONTH")
+  yearField    = SqlSyntaxBuilder (byteString "YEAR")
+
 instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   type Sql92ExpressionValueSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92ExpressionSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
@@ -222,7 +231,7 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
   positionE needle haystack =
     SqlSyntaxBuilder $ byteString "POSITION(" <> buildSql needle <> byteString ") IN (" <> buildSql haystack <> byteString ")"
   extractE what from =
-    SqlSyntaxBuilder $ buildSql what <> byteString " FROM (" <> buildSql from <> byteString ")"
+    SqlSyntaxBuilder $ byteString "EXTRACT(" <> buildSql what <> byteString " FROM (" <> buildSql from <> byteString "))"
   absE = sqlFuncOp "ABS"
   charLengthE = sqlFuncOp "CHAR_LENGTH"
   bitLengthE = sqlFuncOp "BIT_LENGTH"
@@ -293,6 +302,7 @@ instance IsSql2003ExpressionSyntax SqlSyntaxBuilder where
   overE expr frame =
       SqlSyntaxBuilder $
       buildSql expr <> buildSql frame
+  rowNumberE = SqlSyntaxBuilder (byteString "ROW_NUMBER()")
 
 instance IsSql2003WindowFrameSyntax SqlSyntaxBuilder where
   type Sql2003WindowFrameExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
@@ -524,11 +534,5 @@ sqlFuncOp fun a =
 -- class Trivial a
 -- instance Trivial a
 
--- instance BeamBackend SqlSyntaxBackend where
---   type BackendFromField SqlSyntaxBackend = Trivial
--- instance BeamSqlBackend SqlSyntaxBackend where
---   type BeamSqlBackendSyntax SqlSyntaxBackend = SqlSyntaxBuilder
--- instance BeamSqlBackendIsString SqlSyntaxBackend Text
-
--- newtype SqlSyntaxM a = SqlSyntaxM (IO a)
---   deriving (Applicative, Functor, Monad, MonadIO)
+newtype SqlSyntaxM a = SqlSyntaxM (IO a)
+  deriving (Applicative, Functor, Monad, MonadIO, Fail.MonadFail)

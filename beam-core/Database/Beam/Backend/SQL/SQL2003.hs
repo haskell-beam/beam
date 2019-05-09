@@ -59,6 +59,7 @@ class ( IsSql99ExpressionSyntax expr
     overE :: expr
           -> Sql2003ExpressionWindowFrameSyntax expr
           -> expr
+    rowNumberE :: expr
 
 -- | Optional SQL2003 "Advanced OLAP operations" T612 support
 class IsSql2003ExpressionSyntax expr =>

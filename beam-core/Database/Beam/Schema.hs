@@ -34,6 +34,7 @@ module Database.Beam.Schema
     , withDbModification, withTableModification
     , dbModification, tableModification
     , modifyTable, fieldNamed
+    , setEntityName , modifyEntityName, modifyTableFields
 
     -- * Types for lens generation
     , Lenses, LensFor(..)

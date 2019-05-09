@@ -26,6 +26,8 @@ module Database.Beam.Query
 
     , module Database.Beam.Query.CTE
 
+    , module Database.Beam.Query.Extract
+
     -- * Operators
     , module Database.Beam.Query.Operator
 
@@ -97,6 +99,7 @@ import qualified Database.Beam.Query.CTE as CTE
 import Database.Beam.Query.CustomSQL
 import Database.Beam.Query.DataTypes
 import Database.Beam.Query.Extensions
+import Database.Beam.Query.Extract
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Operator hiding (SqlBool)
 import qualified Database.Beam.Query.Operator as Beam
@@ -105,7 +108,6 @@ import Database.Beam.Query.Relationships
 import Database.Beam.Query.Types (QGenExpr) -- hide QGenExpr constructor
 import Database.Beam.Query.Types hiding (QGenExpr)
 
-import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
 import Database.Beam.Backend.SQL.Builder
 import Database.Beam.Schema.Tables

@@ -38,6 +38,7 @@ library
                        Database.Beam.Backend.Types
                        Database.Beam.Backend.URI
                        Database.Beam.Backend.SQL
+                       Database.Beam.Backend.SQL.Row
                        Database.Beam.Backend.SQL.Types
                        Database.Beam.Backend.SQL.BeamExtensions
                        Database.Beam.Backend.SQL.SQL92
@@ -48,6 +49,7 @@ library
   other-modules:       Database.Beam.Query.Aggregate
                        Database.Beam.Query.Combinators
                        Database.Beam.Query.Extensions
+                       Database.Beam.Query.Extract
                        Database.Beam.Query.Operator
                        Database.Beam.Query.Ord
                        Database.Beam.Query.Relationships
@@ -65,17 +67,17 @@ library
                        time         >=1.6     && <1.10,
                        hashable     >=1.1     && <1.3,
                        network-uri  >=2.6     && <2.7,
-                       containers   >=0.5     && <0.6,
+                       containers   >=0.5     && <0.7,
                        scientific   >=0.3     && <0.4,
                        vector       >=0.11    && <0.13,
-                       vector-sized >=0.5     && <1.1,
+                       vector-sized >=0.5     && <1.3,
                        tagged       >=0.8     && <0.9
   Default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
-  ghc-options:         -Wall
+  ghc-options:         -Wall -O3
   if flag(werror)
     ghc-options:       -Werror
 

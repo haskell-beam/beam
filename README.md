@@ -2,6 +2,8 @@
 
 [![Build status](https://api.travis-ci.org/tathougies/beam.svg?branch=master)](https://travis-ci.org/tathougies/beam)
 
+If you use beam commercially, please consider a donation to make this project possible: https://liberapay.com/tathougies
+
 Beam is a Haskell interface to relational databases. Beam uses the Haskell type
 system to verify that queries are type-safe before sending them to the database
 server. Queries are written in a straightforward, natural monadic syntax.

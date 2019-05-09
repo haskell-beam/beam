@@ -23,20 +23,23 @@ library
                       Database.Beam.Postgres.Conduit
                       Database.Beam.Postgres.Full
 
-  other-modules:      Database.Beam.Postgres.Types
-                      Database.Beam.Postgres.Connection
-                      Database.Beam.Postgres.PgSpecific
+  other-modules:      Database.Beam.Postgres.Connection
+                      Database.Beam.Postgres.Debug
                       Database.Beam.Postgres.Extensions
+                      Database.Beam.Postgres.PgSpecific
+                      Database.Beam.Postgres.Types
+
   build-depends:      base                 >=4.7  && <5.0,
                       beam-core            >=0.8  && <0.9,
                       beam-migrate         >=0.4  && <0.5,
 
                       postgresql-libpq     >=0.8  && <0.10,
-                      postgresql-simple    >=0.5  && <0.6,
+                      postgresql-simple    >=0.5  && <0.7,
 
                       text                 >=1.0  && <1.3,
                       bytestring           >=0.10 && <0.11,
 
+                      attoparsec           >=0.13 && <0.14,
                       hashable             >=1.1  && <1.3,
                       lifted-base          >=0.2  && <0.3,
                       free                 >=4.12 && <5.2,
@@ -53,8 +56,7 @@ library
                       unordered-containers >= 0.2 && <0.3,
                       tagged               >=0.8  && <0.9,
 
-                      haskell-src-exts     >=1.18 && <1.21,
-                      attoparsec
+                      haskell-src-exts     >=1.18 && <1.22
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
@@ -67,9 +69,13 @@ test-suite beam-postgres-tests
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
-  other-modules: Database.Beam.Postgres.Test, Database.Beam.Postgres.Test.Marshal, Database.Beam.Postgres.Test.Select
+  other-modules: Database.Beam.Postgres.Test,
+                 Database.Beam.Postgres.Test.Marshal,
+                 Database.Beam.Postgres.Test.Select,
+                 Database.Beam.Postgres.Test.DataTypes,
+                 Database.Beam.Postgres.Test.Migrate
   build-depends: base, beam-core, beam-migrate, beam-postgres, text, bytestring, tasty, tasty-hunit,
-                 postgresql-simple, process, network, temporary, hedgehog, uuid
+                 postgresql-simple, process, temporary, hedgehog, uuid, filepath, directory
   default-language: Haskell2010
   default-extensions: OverloadedStrings, FlexibleInstances, FlexibleContexts, TypeFamilies,
                       ScopedTypeVariables, MultiParamTypeClasses, TypeApplications, DeriveGeneric,

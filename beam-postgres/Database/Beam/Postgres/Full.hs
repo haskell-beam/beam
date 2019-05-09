@@ -132,24 +132,25 @@ locked_ (DatabaseEntity dt) = do
 --
 -- If you want to use the most common behavior (lock all rows in every table mentioned), the
 -- 'lockingAllTablesFor_' function may be what you're after.
-lockingFor_ :: ( Database Postgres db, Projectible Postgres a )
+lockingFor_ :: forall a db s
+             . ( Database Postgres db, Projectible Postgres a, ThreadRewritable (QNested s) a )
             => PgSelectLockingStrength
             -> Maybe PgSelectLockingOptions
             -> Q Postgres db (QNested s) (PgWithLocking (QNested s) a)
-            -> Q Postgres db s a
+            -> Q Postgres db s (WithRewrittenThread (QNested s) s a)
 lockingFor_ lockStrength mLockOptions (Q q) =
   Q (liftF (QForceSelect (\(PgWithLocking (PgLockedTables tblNms) _) tbl ords limit offset ->
                             let locking = PgSelectLockingClauseSyntax lockStrength tblNms mLockOptions
                             in pgSelectStmt tbl ords limit offset (Just locking))
-                         q (\(PgWithLocking _ a) -> a)))
+                         q (\(PgWithLocking _ a) -> rewriteThread (Proxy @s) a)))
 
 -- | Like 'lockingFor_', but does not require an explicit set of locked tables. This produces an
 -- empty @FOR .. OF@ clause.
-lockingAllTablesFor_ :: ( Database Postgres db, Projectible Postgres a )
+lockingAllTablesFor_ :: ( Database Postgres db, Projectible Postgres a, ThreadRewritable (QNested s) a )
                      => PgSelectLockingStrength
                      -> Maybe PgSelectLockingOptions
                      -> Q Postgres db (QNested s) a
-                     -> Q Postgres db s a
+                     -> Q Postgres db s (WithRewrittenThread (QNested s) s a)
 lockingAllTablesFor_ lockStrength mLockOptions q =
   lockingFor_ lockStrength mLockOptions (lockAll_ <$> q)
 
@@ -240,6 +241,27 @@ newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
 newtype PgConflictAction (tbl :: (* -> *) -> *) =
     PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
 
+-- | Postgres @LATERAL JOIN@ support
+--
+-- Allows the use of variables introduced on the left side of a @JOIN@ to be used on the right hand
+-- side.
+--
+-- Because of the default scoping rules, we can't use the typical monadic bind (@>>=@) operator to
+-- create this join.
+--
+-- Instead, 'lateral_'  takes two  arguments. The first  is the  left hand side  of the  @JOIN@. The
+-- second is a function that  takes the result of the first join and  uses those variables to create
+-- the right hand side.
+--
+-- For example, to join table A with a subquery that returns the first three rows in B which matches
+-- a column in A, ordered by another column in B:
+--
+-- > lateral_ (_tableA database) $ \tblA ->
+-- >   limit_ 3 $
+-- >   ordering_ (\(_, b) -> asc_ (_bField2 b)) $ do
+-- >     b <- _tableB database
+-- >     guard_ (_bField1 b ==. _aField1 a)
+-- >     pure (a, b0
 lateral_ :: forall s a b db
           . ( ThreadRewritable s a, ThreadRewritable (QNested s) b, Projectible Postgres b )
          => a -> (WithRewrittenThread s (QNested s) a -> Q Postgres db (QNested s) b)

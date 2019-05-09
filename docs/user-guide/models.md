@@ -225,7 +225,9 @@ data BadT f
 instance Beamable BadT
 instance Table BadT where
   data PrimaryKey BadT f = BadNoId
+    deriving Generic
   primaryKey _ = BadNoId
+instance Beamable (PrimaryKey BadT)
 ```
 
 ## Foreign references

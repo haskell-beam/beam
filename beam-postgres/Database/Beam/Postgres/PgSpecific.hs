@@ -410,7 +410,7 @@ instance PgIsArrayContext QWindowingContext
 -- containing expressions.
 array_ :: forall context f s a.
           (PgIsArrayContext context, Foldable f)
-       => f (QGenExpr PgArrayValueContext Postgres s a)
+       => f (QGenExpr context Postgres s a)
        -> QGenExpr context Postgres s (V.Vector a)
 array_ vs =
   QExpr $ fmap (PgExpressionSyntax . mkArraySyntax (Proxy @context) . mconcat) $
@@ -503,7 +503,7 @@ data PgDateRange
 instance PgIsRange PgDateRange where
   rangeName = "daterange"
 
-instance (Pg.FromField a, Typeable a, Ord a) => Pg.FromField (PgRange n a) where
+instance (Pg.FromField a, Typeable a, Typeable n, Ord a) => Pg.FromField (PgRange n a) where
   fromField field d = do
     pgR :: Pg.PGRange a <- Pg.fromField field d
     if Pg.isEmpty pgR
@@ -534,7 +534,7 @@ instance (Pg.ToField (Pg.PGRange a)) => Pg.ToField (PgRange n a) where
 instance HasSqlEqualityCheck Postgres (PgRange n a)
 instance HasSqlQuantifiedEqualityCheck Postgres (PgRange n a)
 
-instance (Pg.FromField a, Typeable a, Ord a) => FromBackendRow Postgres (PgRange n a)
+instance (Pg.FromField a, Typeable a, Typeable n, Ord a) => FromBackendRow Postgres (PgRange n a)
 instance (HasSqlValueSyntax PgValueSyntax a, PgIsRange n) =>
   HasSqlValueSyntax PgValueSyntax (PgRange n a) where
   sqlValueSyntax PgEmptyRange =

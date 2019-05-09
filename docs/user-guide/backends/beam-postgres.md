@@ -338,9 +338,9 @@ runInsert $
       (Pg.conflictingFields primaryKey)
       (Pg.onConflictUpdateSet
         -- tbl is the old row, tblExcluded is the row proposed for insertion
-        (\tbl tblExcluded ->
-          [ (customerFirstName tbl) <-. concat_ [ current_ (customerFirstName tbl),  customerFirstName tblExcluded ]
-          , (customerLastName tbl) <-. (customerLastName tblExcluded) ]
+        (\tbl tblExcluded -> mconcat
+          [ customerFirstName tbl <-. concat_ [ current_ (customerFirstName tbl),  customerFirstName tblExcluded ]
+          , customerLastName tbl <-. customerLastName tblExcluded ]
         )
       )
 ```

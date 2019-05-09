@@ -304,7 +304,7 @@ createTableActionProvider =
            do columnP@
                 (TableHasColumn tblNm colNm schema :: TableHasColumn be) <-
                 findPostConditions
-              guard (tblNm == postTblNm)
+              guard (tblNm == postTblNm && dataTypeHasBeenCreated schema findPreConditions)
 
               (constraintsP, constraints) <-
                 pure . unzip $ do
@@ -371,15 +371,26 @@ addColumnProvider =
       do colP@(TableHasColumn tblNm colNm colType :: TableHasColumn be)
            <- findPostConditions
          TableExistsPredicate tblNm' <- findPreConditions
-         guard (tblNm' == tblNm)
+         guard (tblNm'  == tblNm && dataTypeHasBeenCreated colType findPreConditions)
          ensuringNot_ $ do
            TableHasColumn tblNm'' colNm' _ :: TableHasColumn be <-
              findPreConditions
            guard (tblNm'' == tblNm && colNm == colNm') -- This column exists as a different type
 
+         (constraintsP, constraints) <-
+           pure . unzip $ do
+           constraintP@
+             (TableColumnHasConstraint tblNm'' colNm' c
+              :: TableColumnHasConstraint be) <-
+             findPostConditions
+           guard (tblNm == tblNm'')
+           guard (colNm == colNm')
+
+           pure (p constraintP, c)
+
          let cmd = alterTableCmd (alterTableSyntax (qnameAsTableName tblNm) (addColumnSyntax colNm schema))
-             schema = columnSchemaSyntax colType Nothing [] Nothing
-         pure (PotentialAction mempty (HS.fromList [SomeDatabasePredicate colP])
+             schema = columnSchemaSyntax colType Nothing constraints Nothing
+         pure (PotentialAction mempty (HS.fromList ([SomeDatabasePredicate colP] ++ constraintsP))
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Add column " <> colNm <> " to " <> qnameAsText tblNm)
                 (addColumnWeight + fromIntegral (T.length (qnameAsText tblNm) + T.length colNm)))

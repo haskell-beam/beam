@@ -95,7 +95,7 @@ instance IsCheckedDatabaseEntity be (DomainTypeEntity ty) where
   type CheckedDatabaseEntityDefaultRequirements be (DomainTypeEntity ty) =
     DatabaseEntityDefaultRequirements be (DomainTypeEntity ty)
 
-  unChecked f (CheckedDatabaseDomainType x1 x2) = (\y1 -> CheckedDatabaseDomainType y1 x2) <$> f x1
+  unChecked f (CheckedDatabaseDomainType x cks) = fmap (\x' -> CheckedDatabaseDomainType x' cks) (f x)
   collectEntityChecks (CheckedDatabaseDomainType dt domainChecks) =
     map (\(DomainCheck mkCheck) -> mkCheck (qname dt)) domainChecks
   checkedDbEntityAuto domTypeName =
@@ -115,8 +115,7 @@ instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
     , GMigratableTableSettings be (Rep (tbl Identity)) (Rep (tbl (Const [FieldCheck])))
     , BeamSqlBackend be )
 
-  unChecked f (CheckedDatabaseTable x1 x2 x3) = (\y1 -> CheckedDatabaseTable y1 x2 x3) <$> f x1
-
+  unChecked f (CheckedDatabaseTable x cks fcks) = fmap (\x' -> CheckedDatabaseTable x' cks fcks) (f x)
   collectEntityChecks (CheckedDatabaseTable dt tblChecks tblFieldChecks) =
     map (\(TableCheck mkCheck) -> mkCheck (qname dt) (dbTableSettings dt)) tblChecks <>
     execWriter (zipBeamFieldsM (\(Columnar' fd) c@(Columnar' (Const fieldChecks)) ->

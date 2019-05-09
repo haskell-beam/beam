@@ -18,15 +18,8 @@
 -- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ its manual>.
 
 module Database.Beam.Postgres
-  (
-    -- * @beam-postgres@ errors
-    -- @beam-postgres@ query and data manipulation functions may throw any error
-    -- thrown by @postgresql-simple@ as well as the following two beam-specific
-    -- errors.
-    PgRowReadError(..), PgError(..)
-
-    -- * Beam Postgres backend
-  , Postgres(..), Pg
+  (  -- * Beam Postgres backend
+    Postgres(..), Pg
 
     -- ** Postgres syntax
   , PgCommandSyntax, PgSyntax
@@ -55,6 +48,12 @@ module Database.Beam.Postgres
   , pgCreateExtension, pgDropExtension
   , getPgExtension
 
+    -- ** Debug support
+
+  , PgDebugStmt
+  , pgTraceStmtIO, pgTraceStmtIO'
+  , pgTraceStmt
+
   -- * @postgresql-simple@ re-exports
 
   , Pg.ResultError(..), Pg.SqlError(..)
@@ -77,5 +76,6 @@ import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unbounde
 import Database.Beam.Postgres.Extensions ( PgExtensionEntity, IsPgExtension(..)
                                          , pgCreateExtension, pgDropExtension
                                          , getPgExtension )
+import Database.Beam.Postgres.Debug
 
 import qualified Database.PostgreSQL.Simple as Pg

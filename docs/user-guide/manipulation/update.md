@@ -52,8 +52,9 @@ want to update a few columns. Moreover, if you have several large columns, using
 syntax allows you to set or modify each column individually and to even
 calculate a new value based off the result of an expression.
 
-The beam `update` function exposes this functionality. `update` takes a table, a
-set of assignments, and a boolean expression, and returns a `SqlUpdate`.
+The beam `update` function exposes this functionality. `update` takes
+a table, a set of assignments (which can be combined monoidally), and
+a boolean expression, and returns a `SqlUpdate`.
 
 For example, suppose Canada and the USA became one country and we needed to
 update all customer addresses to reflect that.
@@ -76,7 +77,7 @@ putStrLn ("Before, there were " ++ show canadianCount ++ " addresses in Canada a
 
 -- This is the important part!
 runUpdate $ update (customer chinookDb)
-                   (\c -> [ addressCountry (customerAddress c) <-. val_ (Just "USA") ])
+                   (\c -> addressCountry (customerAddress c) <-. val_ (Just "USA"))
                    (\c -> addressCountry (customerAddress c) ==. val_ (Just "Canada"))
 
 Just canadianCount' <-
@@ -108,7 +109,7 @@ Just totalLineItems <-
 putStrLn ("Before, we had " ++ show totalLineItems ++ " total products sold\n")
 
 runUpdate $ update (invoiceLine chinookDb)
-                   (\ln -> [ invoiceLineQuantity ln <-. current_ (invoiceLineQuantity ln) * 2 ])
+                   (\ln -> invoiceLineQuantity ln <-. current_ (invoiceLineQuantity ln) * 2)
                    (\_ -> val_ True)
 
 Just totalLineItems' <-

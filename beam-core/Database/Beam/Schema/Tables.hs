@@ -22,7 +22,8 @@ module Database.Beam.Schema.Tables
     , DatabaseModification, EntityModification(..)
     , FieldModification(..)
     , dbModification, tableModification, withDbModification
-    , withTableModification, modifyTable, fieldNamed
+    , withTableModification, modifyTable, modifyEntityName
+    , setEntityName, modifyTableFields, fieldNamed
     , defaultDbSettings
 
     , RenamableWithRule(..), RenamableField(..)
@@ -53,7 +54,8 @@ module Database.Beam.Schema.Tables
     , tableValuesNeeded
     , pk
     , allBeamValues, changeBeamRep
-    , alongsideTable )
+    , alongsideTable
+    , defaultFieldName )
     where
 
 import           Database.Beam.Backend.Types
@@ -64,6 +66,7 @@ import           Control.Monad.Identity
 import           Control.Monad.Writer hiding ((<>))
 
 import           Data.Char (isUpper, toLower)
+import           Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
 import           Data.Monoid (Endo(..))
 import           Data.Proxy
@@ -216,6 +219,10 @@ modifyTable modTblNm modFields = modifyEntityName modTblNm <> modifyTableFields 
 -- | Construct an 'EntityModification' to rename any database entity
 modifyEntityName :: IsDatabaseEntity be entity => (Text -> Text) -> EntityModification (DatabaseEntity be db) be entity
 modifyEntityName modTblNm = EntityModification (Endo (\(DatabaseEntity tbl) -> DatabaseEntity (tbl & dbEntityName %~ modTblNm)))
+
+-- | Change the entity name without consulting the beam-assigned one
+setEntityName :: IsDatabaseEntity be entity => Text -> EntityModification (DatabaseEntity be db) be entity
+setEntityName nm = modifyEntityName (\_ -> nm)
 
 -- | Construct an 'EntityModification' to rename the fields of a 'TableEntity'
 modifyTableFields :: tbl (FieldModification (TableField tbl)) -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)
@@ -482,7 +489,7 @@ newtype ComposeColumnar f g a = ComposeColumnar (f (Columnar g a))
 --
 --   Usually you use the 'defaultDbSettings' function to generate an appropriate
 --   naming convention for you, and then modify it with 'withDbModification' if
---   necessary. Under this scheme, the field can be renamed using the 'IsString'
+--   necessary. Under this scheme, the field n be renamed using the 'IsString'
 --   instance for 'TableField', or the 'fieldNamed' function.
 data TableField (table :: (* -> *) -> *) ty
   = TableField
@@ -977,3 +984,7 @@ unCamelCaseSel original =
                  [] -> symbolLeft
                  [xs] -> xs
                  _:xs -> T.intercalate "_" xs
+
+-- | Produce the beam default field name for the given path
+defaultFieldName :: NE.NonEmpty Text -> Text
+defaultFieldName comps = fold (NE.intersperse (T.pack "__") (unCamelCaseSel <$> comps))

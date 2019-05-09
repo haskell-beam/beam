@@ -12,7 +12,6 @@ module Database.Beam.Sqlite.Connection
   , runBeamSqlite, runBeamSqliteDebug
 
     -- * Emulated @INSERT RETURNING@ support
-  , SqliteInsertReturning
   , insertReturning, runInsertReturningList
   ) where
 
@@ -31,7 +30,6 @@ import           Database.Beam.Query ( QExpr, SqlInsert(..), SqlInsertValues(..)
 import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( Beamable
                                              , DatabaseEntity(..)
-                                             , DatabaseEntityDescriptor(..)
                                              , TableEntity)
 import           Database.Beam.Sqlite.Syntax
 
@@ -46,19 +44,22 @@ import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
 
-import           Control.Exception (bracket_, onException, mask)
-import           Control.Monad (forM_, replicateM_)
+import           Control.Exception (SomeException(..), bracket_, onException, mask)
+import           Control.Monad (forM_)
+import           Control.Monad.Fail (MonadFail)
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Identity (Identity)
-import           Control.Monad.Reader (ReaderT, MonadReader(..), runReaderT)
-import           Control.Monad.State.Strict (MonadState(..), runStateT)
+import           Control.Monad.Reader (ReaderT(..), MonadReader(..), runReaderT)
+import           Control.Monad.State.Strict (MonadState(..), StateT(..), runStateT)
+import           Control.Monad.Trans (lift)
 
 import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
 import           Data.Int
+import           Data.Maybe (mapMaybe)
 import           Data.Proxy (Proxy(..))
 import           Data.Scientific (Scientific)
 import           Data.String (fromString)
@@ -67,6 +68,7 @@ import qualified Data.Text.Encoding as T (decodeUtf8)
 import qualified Data.Text.Lazy as TL
 import           Data.Time ( LocalTime, UTCTime, Day
                            , ZonedTime, utc, utcToLocalTime )
+import           Data.Typeable (cast)
 import           Data.Word
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
@@ -172,7 +174,7 @@ newtype SqliteM a
   { runSqliteM :: ReaderT (String -> IO (), Connection) IO a
     -- ^ Run an IO action with access to a SQLite connection and a debug logging
     -- function, called or each query submitted on the connection.
-  } deriving (Monad, Functor, Applicative, MonadIO)
+  } deriving (Monad, Functor, Applicative, MonadIO, MonadFail)
 
 newtype BeamSqliteParams = BeamSqliteParams [SQLData]
 instance ToRow BeamSqliteParams where
@@ -184,28 +186,48 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
       where
         FromBackendRowM fromBackendRow' = fromBackendRow :: FromBackendRowM Sqlite a
 
+        translateErrors :: Maybe Int -> SomeException -> Maybe SomeException
+        translateErrors col (SomeException e) =
+          case cast e of
+            Just (ConversionFailed { errSQLType     = typeString
+                                   , errHaskellType = hsString
+                                   , errMessage     = msg }) ->
+              Just (SomeException (BeamRowReadError col (ColumnTypeMismatch hsString typeString ("conversion failed: " ++ msg))))
+            Just (UnexpectedNull {}) ->
+              Just (SomeException (BeamRowReadError col ColumnUnexpectedNull))
+            Just (Incompatible { errSQLType     = typeString
+                               , errHaskellType = hsString
+                               , errMessage     = msg }) ->
+              Just (SomeException (BeamRowReadError col (ColumnTypeMismatch hsString typeString ("incompatible: " ++ msg))))
+            Nothing -> Nothing
+
         finish = pure
 
-        step :: FromBackendRowF Sqlite (RowParser a) -> RowParser a
+        step :: forall a'. FromBackendRowF Sqlite (RowParser a') -> RowParser a'
         step (ParseOneField next) =
-            field >>= next
-        step (PeekField next) =
-            RP $ do
-              ro <- ask
-              st <- get
-              case runStateT (runReaderT (unRP field) ro) st of
-                Ok (a, _) -> unRP (next (Just a))
-                _ -> unRP (next Nothing)
-        step (CheckNextNNull n next) =
-            RP $ do
-              ro <- ask
-              st <- get
-              case runStateT (runReaderT (unRP (replicateM_ n (field :: RowParser Null))) ro) st of
-                Ok ((), st') ->
-                  do put st'
-                     unRP (next True)
-                _ -> unRP (next False)
-        step (FailParseWith err) = RP (fail err) -- TODO fail with a separate beam error here
+            RP $ ReaderT $ \ro -> StateT $ \st@(col, _) ->
+            case runStateT (runReaderT (unRP field) ro) st of
+              Ok (x, st') -> runStateT (runReaderT (unRP (next x)) ro) st'
+              Errors errs -> Errors (mapMaybe (translateErrors (Just col)) errs)
+        step (Alt (FromBackendRowM a) (FromBackendRowM b) next) = do
+          RP $ do
+            let RP a' = runF a finish step
+                RP b' = runF b finish step
+
+            st <- get
+            ro <- ask
+            case runStateT (runReaderT a' ro) st of
+              Ok (ra, st') -> do
+                put st'
+                unRP (next ra)
+              Errors aErrs ->
+                case runStateT (runReaderT b' ro) st of
+                  Ok (rb, st') -> do
+                    put st'
+                    unRP (next rb)
+                  Errors bErrs ->
+                    lift (lift (Errors (aErrs ++ bErrs)))
+        step (FailParseWith err) = RP (lift (lift (Errors [SomeException err])))
 
 -- * Equality checks
 #define HAS_SQLITE_EQUALITY_CHECK(ty)                       \
@@ -297,8 +319,7 @@ instance MonadBeam Sqlite SqliteM where
       , "for emulation" ]
 
 instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
-  runInsertReturningList tbl values =
-    runInsertReturningList (insertReturning tbl values)
+  runInsertReturningList = runInsertReturningList
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
 runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
@@ -319,34 +340,21 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
 
 -- * emulated INSERT returning support
 
--- | Represents an @INSERT@ statement, from which we can retrieve inserted rows.
--- Beam also offers a backend-agnostic way of using this functionality in the
--- 'MonadBeamInsertReturning' extension. This functionality is emulated in
--- SQLite using a temporary table and a trigger.
-data SqliteInsertReturning (table :: (* -> *) -> *)
-  = SqliteInsertReturning !SqliteTableNameSyntax !SqliteInsertSyntax
-  | SqliteInsertReturningNoRows
-
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
 -- into the given table. Use 'runInsertReturningList'
 insertReturning :: Beamable table
                 => DatabaseEntity Sqlite db (TableEntity table)
                 -> SqlInsertValues Sqlite (table (QExpr Sqlite s))
-                -> SqliteInsertReturning table
-insertReturning tbl@(DatabaseEntity dt) vs =
-  case insert tbl vs of
-    SqlInsert _ s ->
-      SqliteInsertReturning (tableName (dbTableSchema dt) (dbTableCurrentName dt)) s
-    SqlInsertNoRows ->
-      SqliteInsertReturningNoRows
+                -> SqlInsert Sqlite table
+insertReturning = insert
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
 -- inserted row.
 runInsertReturningList :: FromBackendRow Sqlite (table Identity)
-                       => SqliteInsertReturning table
+                       => SqlInsert Sqlite table
                        -> SqliteM [ table Identity ]
-runInsertReturningList SqliteInsertReturningNoRows = pure []
-runInsertReturningList (SqliteInsertReturning nm insertStmt_) =
+runInsertReturningList SqlInsertNoRows = pure []
+runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _)) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $ do
 

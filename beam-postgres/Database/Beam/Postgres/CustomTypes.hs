@@ -29,7 +29,6 @@ module Database.Beam.Postgres.CustomTypes
 import           Database.Beam
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.Types
 import           Database.Beam.Migrate
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax
@@ -40,7 +39,6 @@ import           Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BC
 import           Data.Functor.Const
 import qualified Data.HashSet as HS
-import           Data.Hashable (Hashable)
 import           Data.Proxy (Proxy(..))
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
@@ -59,17 +57,6 @@ data PgDataTypeSchema a where
 class IsPgCustomDataType a where
     pgDataTypeName :: Proxy a -> Text
     pgDataTypeDescription :: PgDataTypeSchema a
-
-data PgHasEnum = PgHasEnum Text {- Enumeration name -} [Text] {- enum values -}
-    deriving (Show, Eq, Generic, Hashable)
-instance DatabasePredicate PgHasEnum where
-    englishDescription (PgHasEnum enumName values) =
-        "Has postgres enumeration " ++ show enumName ++ " with values " ++ show values
-
-    predicateSpecificity _ = PredicateSpecificityOnlyBackend "postgres"
-    serializePredicate (PgHasEnum name values) =
-        object [ "has-postgres-enum" .= object [ "name" .= name
-                                               , "values" .= values ] ]
 
 pgCustomEnumSchema :: HasSqlValueSyntax PgValueSyntax a => [a] -> PgDataTypeSchema a
 pgCustomEnumSchema = PgDataTypeEnum
@@ -116,7 +103,8 @@ pgChecksForTypeSchema (PgDataTypeEnum vals) =
         let PgValueSyntax (PgSyntax syntax) = sqlValueSyntax val
         in runF syntax (\_ -> error "Expecting a simple text encoding for enumeration type")
                        (\case
-                           EscapeString s _ -> TE.decodeUtf8 s
+                           EmitByteString "'" next -> next
+                           EscapeString s _ -> TE.decodeUtf8 s -- TODO Make this more robust
                            _ -> error "Expecting a simple text encoding for enumeration type")
   in [ PgTypeCheck (\nm -> p (PgHasEnum nm valTxts)) ]
 

@@ -130,7 +130,7 @@ qualified.
 ```haskell
 !example chinookdml !on:MySQL
 [newInvoice] <-
-  BeamExtensions.runInsertReturningList (invoice chinookDb) $
+  BeamExtensions.runInsertReturningList $ insert (invoice chinookDb) $
   insertExpressions [ Invoice default_ -- Ask the database to give us a default id
                               (val_ (CustomerId 1)) currentTimestamp_
                               (val_ (Address (Just "123 My Street") (Just "Buenos Noches") (Just "Rio") (Just "Mozambique") (Just "ABCDEF")))
@@ -145,16 +145,6 @@ specified in your `SqlInsertValues`. If you know what this is statically, then
 you can feel free to pattern match directly. Otherwise (if you used
 `insertFrom`, for example), you'll need to handle the possibility that nothing
 was inserted.
-
-!!! tip "Tip"
-    Note that unlike the standard beam `INSERT` functionality, which can run any
-    `SqlInsert`, `runInsertReturningList` requires that we supply a table and a
-    `SqlInsertValues`.
-
-    This is because this functionality is emulated on some backends. Some
-    backends (such as postgres) provide a more advanced `INSERT .. RETURNING`
-    statement that can be used more like `SqlInsert`. See the backend
-    documentation for more details.
 
 !!! note "Note"
     Although SQLite has no support for the `DEFAULT` clause,

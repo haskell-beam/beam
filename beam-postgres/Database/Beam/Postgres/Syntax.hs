@@ -52,8 +52,10 @@ module Database.Beam.Postgres.Syntax
     , PgSelectLockingOptions(..)
     , fromPgSelectLockingClause
     , pgSelectStmt
+    , defaultPgValueSyntax
 
     , PgDataTypeDescr(..)
+    , PgHasEnum(..)
 
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
     , pgCreateEnumSyntax, pgDropTypeSyntax
@@ -85,10 +87,12 @@ module Database.Beam.Postgres.Syntax
 
 import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate.SQL
+import           Database.Beam.Migrate
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.Serialization
 
+import           Control.Monad (guard)
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
@@ -106,22 +110,23 @@ import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
+#if !MIN_VERSION_base(4, 11, 0)
+import           Data.Semigroup
+#endif
 import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
-import           Data.Time (LocalTime, UTCTime, ZonedTime, TimeOfDay, NominalDiffTime, Day)
+import           Data.Time (LocalTime, UTCTime, TimeOfDay, NominalDiffTime, Day)
 import           Data.UUID.Types (UUID)
 import           Data.Word
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
+import qualified Data.Vector as V
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..), Binary(..), Null(..))
-import qualified Database.PostgreSQL.Simple.Time as Pg (Date, ZonedTimestamp, LocalTimestamp, UTCTimestamp)
+import qualified Database.PostgreSQL.Simple.Time as Pg (Date, LocalTimestamp, UTCTimestamp)
 import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreList, HStoreMap, HStoreBuilder)
 
 data PostgresInaccessible
@@ -383,6 +388,13 @@ instance Hashable PgDataTypeSyntax where
 instance Eq PgDataTypeSyntax where
   PgDataTypeSyntax a _ _ == PgDataTypeSyntax b _ _ = a == b
 
+instance HasDataTypeCreatedCheck PgDataTypeSyntax where
+  dataTypeHasBeenCreated (PgDataTypeSyntax (PgDataTypeDescrOid {}) _ _) _ = True
+  dataTypeHasBeenCreated (PgDataTypeSyntax (PgDataTypeDescrDomain d) _ _) pre =
+    not . null $
+    do PgHasEnum nm _ <- pre
+       guard (nm == d)
+
 instance Eq PgColumnConstraintDefinitionSyntax where
   PgColumnConstraintDefinitionSyntax a _ ==
     PgColumnConstraintDefinitionSyntax b _ =
@@ -508,7 +520,7 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
   domainType nm = PgDataTypeSyntax (PgDataTypeDescrDomain nm) (pgQuotedIdentifier nm)
                                    (domainType nm)
 
-  charType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (fmap fromIntegral prec))
+  charType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bpchar) (Just (fromIntegral (fromMaybe 1 prec))))
                                            (emit "CHAR" <> pgOptPrec prec <> pgOptCharSet charSet)
                                            (charType prec charSet)
   varCharType prec charSet = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.varchar) (fmap fromIntegral prec))
@@ -666,9 +678,12 @@ mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. 
 instance IsCustomSqlSyntax PgExpressionSyntax where
   newtype CustomSqlSyntax PgExpressionSyntax =
     PgCustomExpressionSyntax { fromPgCustomExpression :: PgSyntax }
-    deriving (Monoid, Semigroup)
+    deriving Monoid
   customExprSyntax = PgExpressionSyntax . fromPgCustomExpression
   renderSyntax = PgCustomExpressionSyntax . pgParens . fromPgExpression
+
+instance Semigroup (CustomSqlSyntax PgExpressionSyntax) where
+  (<>) = mappend
 
 instance IsString (CustomSqlSyntax PgExpressionSyntax) where
   fromString = PgCustomExpressionSyntax . emit . fromString
@@ -676,6 +691,14 @@ instance IsString (CustomSqlSyntax PgExpressionSyntax) where
 instance IsSql92QuantifierSyntax PgComparisonQuantifierSyntax where
   quantifyOverAll = PgComparisonQuantifierSyntax (emit "ALL")
   quantifyOverAny = PgComparisonQuantifierSyntax (emit "ANY")
+
+instance IsSql92ExtractFieldSyntax PgExtractFieldSyntax where
+  secondsField = PgExtractFieldSyntax (emit "SECOND")
+  minutesField = PgExtractFieldSyntax (emit "MINUTE")
+  hourField    = PgExtractFieldSyntax (emit "HOUR")
+  dayField     = PgExtractFieldSyntax (emit "DAY")
+  monthField   = PgExtractFieldSyntax (emit "MONTH")
+  yearField    = PgExtractFieldSyntax (emit "YEAR")
 
 instance IsSql92ExpressionSyntax PgExpressionSyntax where
   type Sql92ExpressionValueSyntax PgExpressionSyntax = PgValueSyntax
@@ -786,6 +809,7 @@ instance IsSql2003ExpressionSyntax PgExpressionSyntax where
   overE expr frame =
     PgExpressionSyntax $
     fromPgExpression expr <> emit " " <> fromPgWindowFrame frame
+  rowNumberE = PgExpressionSyntax $ emit "ROW_NUMBER()"
 
 instance IsSql2003EnhancedNumericFunctionsExpressionSyntax PgExpressionSyntax where
   lnE    x = PgExpressionSyntax (emit "LN("    <> fromPgExpression x <> emit ")")
@@ -1135,6 +1159,20 @@ defaultPgValueSyntax :: Pg.ToField a => a -> PgValueSyntax
 defaultPgValueSyntax =
     PgValueSyntax . pgBuildAction . pure . Pg.toField
 
+-- Database Predicates
+
+data PgHasEnum = PgHasEnum T.Text {- Enumeration name -} [T.Text] {- enum values -}
+    deriving (Show, Eq, Generic)
+instance Hashable PgHasEnum
+instance DatabasePredicate PgHasEnum where
+    englishDescription (PgHasEnum enumName values) =
+        "Has postgres enumeration " ++ show enumName ++ " with values " ++ show values
+
+    predicateSpecificity _ = PredicateSpecificityOnlyBackend "postgres"
+    serializePredicate (PgHasEnum name values) =
+        object [ "has-postgres-enum" .= object [ "name" .= name
+                                               , "values" .= values ] ]
+
 #define DEFAULT_SQL_SYNTAX(ty)                                  \
            instance HasSqlValueSyntax PgValueSyntax ty where    \
              sqlValueSyntax = defaultPgValueSyntax
@@ -1155,11 +1193,10 @@ DEFAULT_SQL_SYNTAX(Word32)
 DEFAULT_SQL_SYNTAX(Word64)
 DEFAULT_SQL_SYNTAX(T.Text)
 DEFAULT_SQL_SYNTAX(TL.Text)
-DEFAULT_SQL_SYNTAX(UTCTime)
 DEFAULT_SQL_SYNTAX(Value)
 DEFAULT_SQL_SYNTAX(Pg.Oid)
 DEFAULT_SQL_SYNTAX(LocalTime)
-DEFAULT_SQL_SYNTAX(ZonedTime)
+DEFAULT_SQL_SYNTAX(UTCTime)
 DEFAULT_SQL_SYNTAX(TimeOfDay)
 DEFAULT_SQL_SYNTAX(NominalDiffTime)
 DEFAULT_SQL_SYNTAX(Day)
@@ -1169,7 +1206,6 @@ DEFAULT_SQL_SYNTAX(Pg.HStoreMap)
 DEFAULT_SQL_SYNTAX(Pg.HStoreList)
 DEFAULT_SQL_SYNTAX(Pg.HStoreBuilder)
 DEFAULT_SQL_SYNTAX(Pg.Date)
-DEFAULT_SQL_SYNTAX(Pg.ZonedTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.LocalTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.UTCTimestamp)
 DEFAULT_SQL_SYNTAX(Scientific)
@@ -1191,6 +1227,9 @@ instance HasSqlValueSyntax PgValueSyntax B.ByteString where
 
 instance HasSqlValueSyntax PgValueSyntax BL.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
+
+instance Pg.ToField a => HasSqlValueSyntax PgValueSyntax (V.Vector a) where
+  sqlValueSyntax = defaultPgValueSyntax
 
 pgQuotedIdentifier :: T.Text -> PgSyntax
 pgQuotedIdentifier t =
