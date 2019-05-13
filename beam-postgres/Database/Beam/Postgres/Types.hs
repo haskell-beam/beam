@@ -174,7 +174,7 @@ instance HasDefaultSqlDataType Postgres LocalTime where
   defaultSqlDataType _ _ _ = timestampType Nothing False
 
 instance HasDefaultSqlDataType Postgres UTCTime where
-  defaultSqlDataType _ _ _ = timestampType Nothing False
+  defaultSqlDataType _ _ _ = timestampType Nothing True
 
 #if WORD_SIZE_IN_BITS == 32
 instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
