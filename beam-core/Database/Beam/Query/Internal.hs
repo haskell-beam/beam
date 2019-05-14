@@ -126,7 +126,7 @@ data QField s ty
   deriving (Show, Eq, Ord)
 
 newtype QAssignment be s
-  = QAssignment [(BeamSqlBackendFieldNameSyntax be, BeamSqlBackendExpressionSyntax be)]
+  = QAssignment { unQAssignment :: [(BeamSqlBackendFieldNameSyntax be, BeamSqlBackendExpressionSyntax be)] }
   deriving (Monoid, Semigroup)
 
 newtype QFieldAssignment be tbl a
@@ -593,7 +593,7 @@ instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Nullable (
     zipBeamFieldsM (\_ _ -> Columnar' . QField False "" <$> mkM (Proxy @()) (Proxy @()))
                    (tblSkeleton :: TableSkeleton t) (tblSkeleton :: TableSkeleton t)
 
-instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Const T.Text)) where
+instance Beamable t => ProjectibleWithPredicate AnyType () res (t (Const res)) where
   project' _ be mutateM a =
     zipBeamFieldsM (\(Columnar' f) _ ->
                       Columnar' <$> project' (Proxy @AnyType) be mutateM f) a a
@@ -611,7 +611,7 @@ instance Beamable t => ProjectibleWithPredicate AnyType () T.Text (t (Nullable (
     zipBeamFieldsM (\_ _ -> Columnar' . Const <$> mkM (Proxy @()) (Proxy @()))
                    (tblSkeleton :: TableSkeleton t) (tblSkeleton :: TableSkeleton t)
 
-instance ProjectibleWithPredicate AnyType () T.Text (Const T.Text a) where
+instance ProjectibleWithPredicate AnyType () res (Const res a) where
   project' _ _ mutateM (Const a) = Const <$> mutateM (Proxy @()) (Proxy @()) a
 
   projectSkeleton' _ _ mkM =
