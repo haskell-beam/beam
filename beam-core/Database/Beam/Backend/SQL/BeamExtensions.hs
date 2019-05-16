@@ -146,6 +146,10 @@ class BeamSqlBackend be => BeamHasInsertOnConflict be where
   type SqlConflictTarget be (table :: (* -> *) -> *) :: *
   type SqlConflictAction be (table :: (* -> *) -> *) :: *
 
+  -- | This is necessary for places that we can't use a forall because the
+  -- variable would escape its scope in the projection type.
+  type Inaccessible be :: *
+
   insertOnConflict
     :: Beamable table
     => DatabaseEntity be db (TableEntity table)
@@ -157,11 +161,11 @@ class BeamSqlBackend be => BeamHasInsertOnConflict be where
   anyConflict :: SqlConflictTarget be table
   conflictingFields
     :: Projectible be proj
-    => (forall s. table (QExpr be s) -> proj)
+    => (table (QExpr be (Inaccessible be)) -> proj)
     -> SqlConflictTarget be table
   conflictingFieldsWhere
     :: Projectible be proj
-    => (forall s. table (QExpr be s) -> proj)
+    => (table (QExpr be (Inaccessible be)) -> proj)
     -> (forall s. table (QExpr be s) -> QExpr be s Bool)
     -> SqlConflictTarget be table
 

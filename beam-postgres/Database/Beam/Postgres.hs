@@ -77,7 +77,7 @@ import Database.Beam.Schema.Tables
 
 import Database.Beam.Postgres.Connection
 import Database.Beam.Postgres.Full
-import Database.Beam.Postgres.Syntax hiding (PostgresInaccessible)
+import Database.Beam.Postgres.Syntax
 import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.PgSpecific
 import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unboundedArray
@@ -93,6 +93,8 @@ import qualified Database.PostgreSQL.Simple as Pg
 instance BeamHasInsertOnConflict Postgres where
   type SqlConflictTarget Postgres table = PgInsertOnConflictTarget table
   type SqlConflictAction Postgres table = PgConflictAction table
+
+  type Inaccessible Postgres = PostgresInaccessible
 
   insertOnConflict tbl vs target action = insert tbl vs $ onConflict target action
 

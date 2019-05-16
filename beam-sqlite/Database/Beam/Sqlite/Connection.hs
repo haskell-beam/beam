@@ -406,13 +406,17 @@ runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
            return x
 
 newtype SqliteConflictTarget (table :: (* -> *) -> *) = SqliteConflictTarget
-  { unSqliteConflictTarget :: forall s. table (QExpr Sqlite s) -> SqliteSyntax }
+  { unSqliteConflictTarget :: table (QExpr Sqlite SqliteInaccessible) -> SqliteSyntax }
 newtype SqliteConflictAction (table :: (* -> *) -> *) = SqliteConflictAction
   { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
+
+data SqliteInaccessible
 
 instance Beam.BeamHasInsertOnConflict Sqlite where
   type SqlConflictTarget Sqlite table = SqliteConflictTarget table
   type SqlConflictAction Sqlite table = SqliteConflictAction table
+
+  type Inaccessible Sqlite = SqliteInaccessible
 
   insertOnConflict
     :: forall db table s. Beamable table
@@ -427,7 +431,7 @@ instance Beam.BeamHasInsertOnConflict Sqlite where
       let getFieldName
             :: forall a
             .  Columnar' (TableField table) a
-            -> Columnar' (QField s) a
+            -> Columnar' (QField SqliteInaccessible) a
           getFieldName (Columnar' fd) =
             Columnar' $ QField False (dbTableCurrentName dt) $ _fieldName fd
           tableFields = changeBeamRep getFieldName $ dbTableSettings dt
@@ -436,8 +440,8 @@ instance Beam.BeamHasInsertOnConflict Sqlite where
             project' (Proxy @AnyType) (Proxy @((), T.Text)) tellFieldName tableFields
           currentField
             :: forall a
-            .  Columnar' (QField s) a
-            -> Columnar' (QExpr Sqlite s) a
+            .  Columnar' (QField SqliteInaccessible) a
+            -> Columnar' (QExpr Sqlite SqliteInaccessible) a
           currentField (Columnar' f) = Columnar' $ current_ f
           tableCurrent = changeBeamRep currentField tableFields
       in SqliteInsertSyntax (tableNameFromEntity dt) fieldNames vs $ Just $
