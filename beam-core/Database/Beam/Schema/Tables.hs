@@ -55,7 +55,11 @@ module Database.Beam.Schema.Tables
     , pk
     , allBeamValues, changeBeamRep
     , alongsideTable
-    , defaultFieldName )
+    , defaultFieldName
+
+    , ChooseSubTableStrategy
+    , SubTableStrategy (..)
+    )
     where
 
 import           Database.Beam.Backend.Types
