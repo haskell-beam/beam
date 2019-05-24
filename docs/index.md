@@ -52,7 +52,7 @@ beam-core,
 <backend>
 ```
 
-You may alse want to add the `beam-migrate` package if you want to
+You may also want to add the `beam-migrate` package if you want to
 manage your database schemas in Haskell as well.
 
 Available backends are:
