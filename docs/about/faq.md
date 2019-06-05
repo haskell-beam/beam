@@ -119,6 +119,15 @@ means this will be packaged separately from core.
 
 ### `groundhog`
 
+Groundhog is a fork of `persistent` and it shares many of the same
+goals as well as restrictions. It, also, does not offer a DSL for
+expressing joins or complex queries. Moreover it currently lacks
+a companion library similar to `esqueleto`.
+
+Thus, `groundhog` can be useful for making some basic queries safe,
+while more complex things must be handled through a raw query escape
+hatch or directly through a backend library such as `postgresql-simple`.
+
 ### `hasql`
 
 `hasql` is a library offering compile-time checking of queries using a
