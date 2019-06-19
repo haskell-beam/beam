@@ -64,11 +64,7 @@ import           Data.Proxy
 import           Data.String
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
-#if MIN_VERSION_base(4,12,0)
 import           Data.Typeable (cast)
-#else
-import           Data.Typeable (cast, typeOf)
-#endif
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
