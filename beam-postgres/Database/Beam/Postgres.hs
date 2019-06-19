@@ -94,8 +94,6 @@ instance BeamHasInsertOnConflict Postgres where
   type SqlConflictTarget Postgres table = PgInsertOnConflictTarget table
   type SqlConflictAction Postgres table = PgConflictAction table
 
-  type Inaccessible Postgres = PostgresInaccessible
-
   insertOnConflict tbl vs target action = insert tbl vs $ onConflict target action
 
   -- | Perform the conflict action when any constraint or index conflict occurs.

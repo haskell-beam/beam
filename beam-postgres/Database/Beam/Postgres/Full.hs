@@ -229,15 +229,15 @@ runPgInsertReturningList = \case
 -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
 -- that violates a constraint.
 newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
-    PgInsertOnConflict (tbl (QField PostgresInaccessible) -> PgInsertOnConflictSyntax)
+    PgInsertOnConflict (tbl (QField QInternal) -> PgInsertOnConflictSyntax)
 
 -- | Specifies the kind of constraint that must be violated for the action to occur
 newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
-    PgInsertOnConflictTarget (tbl (QExpr Postgres PostgresInaccessible) -> PgInsertOnConflictTargetSyntax)
+    PgInsertOnConflictTarget (tbl (QExpr Postgres QInternal) -> PgInsertOnConflictTargetSyntax)
 
 -- | A description of what to do when a constraint or index is violated.
 newtype PgConflictAction (tbl :: (* -> *) -> *) =
-    PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
+    PgConflictAction (tbl (QField QInternal) -> PgConflictActionSyntax)
 
 -- | Postgres @LATERAL JOIN@ support
 --
