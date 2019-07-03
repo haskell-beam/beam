@@ -77,7 +77,7 @@ import Database.Beam.Schema.Tables
 
 import Database.Beam.Postgres.Connection
 import Database.Beam.Postgres.Full
-import Database.Beam.Postgres.Syntax hiding (PostgresInaccessible)
+import Database.Beam.Postgres.Syntax
 import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.PgSpecific
 import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unboundedArray

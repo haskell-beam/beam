@@ -157,11 +157,11 @@ class BeamSqlBackend be => BeamHasInsertOnConflict be where
   anyConflict :: SqlConflictTarget be table
   conflictingFields
     :: Projectible be proj
-    => (forall s. table (QExpr be s) -> proj)
+    => (table (QExpr be QInternal) -> proj)
     -> SqlConflictTarget be table
   conflictingFieldsWhere
     :: Projectible be proj
-    => (forall s. table (QExpr be s) -> proj)
+    => (table (QExpr be QInternal) -> proj)
     -> (forall s. table (QExpr be s) -> QExpr be s Bool)
     -> SqlConflictTarget be table
 
