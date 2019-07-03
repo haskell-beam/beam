@@ -26,6 +26,7 @@ import           Database.Beam.Query ( QExpr, SqlInsert(..), SqlInsertValues(..)
                                      , HasQBuilder(..), HasSqlEqualityCheck
                                      , HasSqlQuantifiedEqualityCheck
                                      , DataType(..)
+                                     , HasSqlInTable
                                      , insert )
 import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( Beamable
@@ -97,6 +98,8 @@ instance BeamBackend Sqlite where
 
 instance HasQBuilder Sqlite where
   buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
+
+instance HasSqlInTable Sqlite where
 
 instance BeamSqlBackendIsString Sqlite T.Text
 instance BeamSqlBackendIsString Sqlite String
