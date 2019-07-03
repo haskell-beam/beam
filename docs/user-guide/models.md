@@ -1,4 +1,4 @@
-A beam model is any single-constructer Haskell record type parameterized by a
+A beam model is any single-constructor Haskell record type parameterized by a
 type of kind `* -> *`. The model must have an instance of `Generic`, `Beamable`,
 and `Table`. `Generic` can be derived using the `DeriveGeneric` extension of
 GHC. `Beamable` must be given an empty instance declaration (`instance Beamable
