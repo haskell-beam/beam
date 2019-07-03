@@ -20,7 +20,8 @@
 --
 -- > x >*. allOf_ ..
 module Database.Beam.Query.Ord
-  ( SqlEq(..), SqlEqQuantified(..)
+  ( SqlEq(..), SqlEqQuantified(..), SqlIn(..)
+  , HasSqlInTable
   , SqlOrd(..), SqlOrdQuantified(..)
   , QQuantified(..)
 
@@ -38,8 +39,7 @@ module Database.Beam.Query.Ord
   , allOf_, allIn_
 
   , between_
-
-  , in_ ) where
+  ) where
 
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Types
@@ -173,13 +173,25 @@ between_ :: BeamSqlBackend be
 between_ (QExpr a) (QExpr min_) (QExpr max_) =
   QExpr (liftA3 betweenE a min_ max_)
 
--- | SQL @IN@ predicate
-in_ :: BeamSqlBackend be
-    => QGenExpr context be s a
-    -> [ QGenExpr context be s a ]
-    -> QGenExpr context be s Bool
-in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
-in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
+class SqlIn expr a | a -> expr where
+  -- | SQL @IN@ predicate
+  in_ :: a -> [ a ] -> expr Bool
+
+instance BeamSqlBackend be => SqlIn (QGenExpr context be s) (QGenExpr context be s a) where
+  in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
+  in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
+
+-- | Class for backends which support SQL @IN@ on lists of tuples, which is not
+-- part of ANSI SQL. This is useful for @IN@ on primary keys.
+class BeamSqlBackend be => HasSqlInTable be where
+
+instance ( HasSqlInTable be, Beamable table ) =>
+  SqlIn (QGenExpr context be s) (table (QGenExpr context be s)) where
+
+  in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
+  in_ row options = QExpr (inE <$> toExpr row <*> (mapM toExpr options))
+    where toExpr :: table (QGenExpr context be s) -> TablePrefix -> BeamSqlBackendExpressionSyntax be
+          toExpr = fmap rowE . sequence . allBeamValues (\(Columnar' (QExpr x)) -> x)
 
 infix 4 `between_`, `in_`
 

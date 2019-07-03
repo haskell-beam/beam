@@ -42,14 +42,14 @@ module Database.Beam.Query
 
     -- ** Unquantified comparison operators
     , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
-    , SqlEq(..), SqlOrd(..)
+    , SqlEq(..), SqlOrd(..), SqlIn(..)
+    , HasSqlInTable
 
     -- ** Quantified Comparison Operators #quantified-comparison-operator#
     , SqlEqQuantified(..), SqlOrdQuantified(..)
     , QQuantified
     , anyOf_, allOf_, anyIn_, allIn_
     , between_
-    , in_
 
     , module Database.Beam.Query.Aggregate
 

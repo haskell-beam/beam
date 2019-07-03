@@ -237,7 +237,8 @@ bettyShippingInfo <-
 
 If you run this, you'll get an error from GHCi.
 
-```<interactive>:845:7: error:
+```
+<interactive>:845:7: error:
     • No instance for (FromBackendRow Sqlite ShippingCarrier)
         arising from a use of ‘runInsertReturningList’
     • In a stmt of a 'do' block:
