@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
@@ -30,8 +31,7 @@ module Database.Beam.Postgres.Full
 
   -- ** Specifying conflict actions
 
-  , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
-  , PgConflictAction(..)
+  , PgInsertOnConflict(..)
 
   , onConflictDefault, onConflict
   , conflictingConstraint
@@ -231,14 +231,6 @@ runPgInsertReturningList = \case
 newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
     PgInsertOnConflict (tbl (QField QInternal) -> PgInsertOnConflictSyntax)
 
--- | Specifies the kind of constraint that must be violated for the action to occur
-newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
-    PgInsertOnConflictTarget (tbl (QExpr Postgres QInternal) -> PgInsertOnConflictTargetSyntax)
-
--- | A description of what to do when a constraint or index is violated.
-newtype PgConflictAction (tbl :: (* -> *) -> *) =
-    PgConflictAction (tbl (QField QInternal) -> PgConflictActionSyntax)
-
 -- | Postgres @LATERAL JOIN@ support
 --
 -- Allows the use of variables introduced on the left side of a @JOIN@ to be used on the right hand
@@ -294,8 +286,8 @@ onConflictDefault = PgInsertOnConflict (\_ -> PgInsertOnConflictSyntax mempty)
 -- See the
 -- <https://www.postgresql.org/docs/current/static/sql-insert.html Postgres documentation>.
 onConflict :: Beamable tbl
-           => PgInsertOnConflictTarget tbl
-           -> PgConflictAction tbl
+           => SqlConflictTarget Postgres tbl
+           -> SqlConflictAction Postgres tbl
            -> PgInsertOnConflict tbl
 onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update_) =
   PgInsertOnConflict $ \tbl ->
@@ -307,7 +299,7 @@ onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update_) =
                          <> fromPgConflictAction (update_ tbl)
 
 -- | Perform the action only if the given named constraint is violated
-conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
+conflictingConstraint :: T.Text -> SqlConflictTarget Postgres tbl
 conflictingConstraint nm =
   PgInsertOnConflictTarget $ \_ ->
   PgInsertOnConflictTargetSyntax $
@@ -443,3 +435,77 @@ instance PgReturning SqlDelete where
 
     where
       tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr . pure . fieldE . unqualifiedField . _fieldName $ f)) tblSettings
+
+instance BeamHasInsertOnConflict Postgres where
+  data SqlConflictTarget Postgres table =
+    PgInsertOnConflictTarget (table (QExpr Postgres QInternal) -> PgInsertOnConflictTargetSyntax)
+  data SqlConflictAction Postgres table =
+    PgConflictAction (table (QField QInternal) -> PgConflictActionSyntax)
+
+  insertOnConflict tbl vs target action = insert tbl vs $ onConflict target action
+
+  -- | Perform the conflict action when any constraint or index conflict occurs.
+  -- Syntactically, this is the @ON CONFLICT@ clause, without any /conflict target/.
+  anyConflict = PgInsertOnConflictTarget (\_ -> PgInsertOnConflictTargetSyntax mempty)
+
+  -- | The Postgres @DO NOTHING@ action
+  onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
+
+  -- | The Postgres @DO UPDATE SET@ action, without the @WHERE@ clause. The
+  -- argument takes an updatable row (like the one used in 'update') and the
+  -- conflicting row. Use 'current_' on the first argument to get the current
+  -- value of the row in the database.
+  onConflictUpdateSet mkAssignments =
+    PgConflictAction $ \tbl ->
+    let QAssignment assignments = mkAssignments tbl tblExcluded
+        tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
+
+        assignmentSyntaxes =
+          [ fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr)
+          | (fieldNm, expr) <- assignments ]
+    in PgConflictActionSyntax $
+       emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
+
+  -- | The Postgres @DO UPDATE SET@ action, with the @WHERE@ clause. This is like
+  -- 'onConflictUpdateSet', but only rows satisfying the given condition are
+  -- updated. Sometimes this results in more efficient locking. See the Postgres
+  -- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
+  -- more information.
+  onConflictUpdateSetWhere mkAssignments where_ =
+    PgConflictAction $ \tbl ->
+    let QAssignment assignments = mkAssignments tbl tblExcluded
+        QExpr where_' = where_ (changeBeamRep (\(Columnar' f) -> Columnar' (current_ f)) tbl)
+        tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
+
+        assignmentSyntaxes =
+          [ fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr)
+          | (fieldNm, expr) <- assignments ]
+    in PgConflictActionSyntax $
+       emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes <> emit " WHERE " <> fromPgExpression (where_' "t")
+
+  -- | Perform the conflict action only when these fields conflict. The first
+  -- argument gets the current row as a table of expressions. Return the conflict
+  -- key. For more information, see the @beam-postgres@ manual.
+  conflictingFields makeProjection =
+    PgInsertOnConflictTarget $ \tbl ->
+    PgInsertOnConflictTargetSyntax $
+    pgParens (pgSepBy (emit ", ") $
+              map fromPgExpression $
+              project (Proxy @Postgres) (makeProjection tbl) "t") <>
+    emit " "
+
+  -- | Like 'conflictingFields', but only perform the action if the condition
+  -- given in the second argument is met. See the postgres
+  -- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
+  -- more information.
+  conflictingFieldsWhere makeProjection makeWhere =
+    PgInsertOnConflictTarget $ \tbl ->
+    PgInsertOnConflictTargetSyntax $
+    pgParens (pgSepBy (emit ", ") $
+              map fromPgExpression (project (Proxy @Postgres)
+                                            (makeProjection tbl) "t")) <>
+    emit " WHERE " <>
+    pgParens (let QExpr mkE = makeWhere tbl
+                  PgExpressionSyntax e = mkE "t"
+              in e) <>
+    emit " "
