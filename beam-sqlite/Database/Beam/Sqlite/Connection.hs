@@ -408,14 +408,11 @@ runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
            releaseSavepoint
            return x
 
-newtype SqliteConflictTarget (table :: (* -> *) -> *) = SqliteConflictTarget
-  { unSqliteConflictTarget :: table (QExpr Sqlite QInternal) -> SqliteSyntax }
-newtype SqliteConflictAction (table :: (* -> *) -> *) = SqliteConflictAction
-  { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
-
 instance Beam.BeamHasInsertOnConflict Sqlite where
-  type SqlConflictTarget Sqlite table = SqliteConflictTarget table
-  type SqlConflictAction Sqlite table = SqliteConflictAction table
+  data SqlConflictTarget Sqlite table = SqliteConflictTarget
+    { unSqliteConflictTarget :: table (QExpr Sqlite QInternal) -> SqliteSyntax }
+  data SqlConflictAction Sqlite table = SqliteConflictAction
+    { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
 
   insertOnConflict
     :: forall db table s. Beamable table

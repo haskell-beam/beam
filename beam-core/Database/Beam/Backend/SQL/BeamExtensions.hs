@@ -143,8 +143,11 @@ instance (MonadBeamDeleteReturning be m, Monoid w)
     runDeleteReturningList = lift . runDeleteReturningList
 
 class BeamSqlBackend be => BeamHasInsertOnConflict be where
-  type SqlConflictTarget be (table :: (* -> *) -> *) :: *
-  type SqlConflictAction be (table :: (* -> *) -> *) :: *
+  -- | Specifies the kind of constraint that must be violated for the action to occur
+  data SqlConflictTarget be (table :: (* -> *) -> *) :: *
+  -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
+  -- that violates a constraint.
+  data SqlConflictAction be (table :: (* -> *) -> *) :: *
 
   insertOnConflict
     :: Beamable table
@@ -216,5 +219,4 @@ onConflictUpdateAll
      , Beamable table
      )
   => SqlConflictAction be table
-onConflictUpdateAll =
-  onConflictUpdateInstead (id @(table (Const (InaccessibleQAssignment be))))
+onConflictUpdateAll = onConflictUpdateInstead id
