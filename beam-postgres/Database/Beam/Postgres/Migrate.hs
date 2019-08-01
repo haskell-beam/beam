@@ -358,8 +358,17 @@ getDbConstraints conn =
 
      uniqueChecks <- do
        uniqueTblCols <- do
-         tblUniqs' <- Pg.query_ conn "SELECT cl.relname, conname FROM pg_constraint co JOIN pg_namespace na ON co.connamespace = na.oid JOIN pg_class cl ON cl.relfilenode = co.conrelid WHERE co.contype = 'u'"
-         pure $ flip fmap tblUniqs' $ \(tbl, nm') -> (tbl,) . T.drop (T.length tbl + 1) . T.intercalate "_" . join (take . (subtract 1) . length) . T.split (=='_') $ nm'
+         tblUniqs' <- Pg.query_ conn (fromString (unlines [ "SELECT cl.relname, conname"
+                                                          , "FROM pg_constraint co"
+                                                          , "JOIN pg_namespace na ON co.connamespace = na.oid"
+                                                          , "JOIN pg_class cl ON cl.relfilenode = co.conrelid"
+                                                          , "WHERE co.contype = 'u'"
+                                                          ]))
+         pure $ flip fmap tblUniqs' $ \(tbl, nm') ->
+           let splitConstraint =  T.split (=='_') nm'
+               withoutKeyId = T.intercalate "_" . join (take . (subtract 1) . length) $ splitConstraint
+               withoutTableName = T.drop (T.length tbl + 1) withoutKeyId
+           in (tbl,withoutTableName)
 
        pure $ flip fmap uniqueTblCols $ \(tbl,nm) ->
          Db.SomeDatabasePredicate
@@ -367,7 +376,6 @@ getDbConstraints conn =
              (Db.QualifiedName Nothing tbl)
              nm
              (Db.constraintDefinitionSyntax Nothing Db.uniqueColumnConstraintSyntax Nothing) :: Db.TableColumnHasConstraint Postgres)
-     putStrLn (show uniqueChecks)
 
      primaryKeys <-
        map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey (Db.QualifiedName Nothing relnm) (V.toList cols))) <$>
