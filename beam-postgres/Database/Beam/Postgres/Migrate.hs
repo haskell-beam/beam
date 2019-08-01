@@ -359,7 +359,7 @@ getDbConstraints conn =
      uniqueChecks <- do
        uniqueTblCols <- do
          tblUniqs' <- Pg.query_ conn "SELECT cl.relname, conname FROM pg_constraint co JOIN pg_namespace na ON co.connamespace = na.oid JOIN pg_class cl ON cl.relfilenode = co.conrelid WHERE co.contype = 'u'"
-         pure $ flip fmap tblUniqs' $ \(tbl, nm') -> (tbl,) . T.drop (T.length tbl + 1) . (T.intercalate "_" . join (take . (subtract 1) . length)) . T.split (=='_') $ nm'
+         pure $ flip fmap tblUniqs' $ \(tbl, nm') -> (tbl,) . T.drop (T.length tbl + 1) . T.intercalate "_" . join (take . (subtract 1) . length) . T.split (=='_') $ nm'
 
        pure $ flip fmap uniqueTblCols $ \(tbl,nm) ->
          Db.SomeDatabasePredicate
