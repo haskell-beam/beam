@@ -355,6 +355,15 @@ getDbConstraints conn =
 
           pure (columnChecks ++ notNullChecks)
 
+     uniqueChecks <- do
+       uniqueTblCols <- fmap (T.split (=='_') . Pg.fromOnly) <$> Pg.query_ conn "SELECT conname FROM pg_catalog.pg_constraint con WHERE con.contype = 'u'"
+       pure $ fmap (\(tbl:nm:_) ->
+         Db.SomeDatabasePredicate
+           (Db.TableColumnHasConstraint
+             (Db.QualifiedName Nothing tbl)
+             nm
+             (Db.constraintDefinitionSyntax Nothing Db.uniqueColumnConstraintSyntax Nothing) :: Db.TableColumnHasConstraint Postgres)) uniqueTblCols
+
      primaryKeys <-
        map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey (Db.QualifiedName Nothing relnm) (V.toList cols))) <$>
        Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname ORDER BY k.n ASC)"
@@ -367,7 +376,7 @@ getDbConstraints conn =
      let enumerations =
            map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData
 
-     pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations)
+     pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations ++ uniqueChecks)
 
 -- * Postgres-specific data types
 
