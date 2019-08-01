@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-type-defaults #-}
@@ -356,13 +357,17 @@ getDbConstraints conn =
           pure (columnChecks ++ notNullChecks)
 
      uniqueChecks <- do
-       uniqueTblCols <- fmap (T.split (=='_') . Pg.fromOnly) <$> Pg.query_ conn "SELECT conname FROM pg_catalog.pg_constraint con WHERE con.contype = 'u'"
-       pure $ fmap (\(tbl:nm:_) ->
+       uniqueTblCols <- do
+         tblUniqs' <- Pg.query_ conn "SELECT cl.relname, conname FROM pg_constraint co JOIN pg_namespace na ON co.connamespace = na.oid JOIN pg_class cl ON cl.relfilenode = co.conrelid WHERE co.contype = 'u'"
+         pure $ flip fmap tblUniqs' $ \(tbl, nm') -> (tbl,) . T.drop (T.length tbl + 1) . (T.intercalate "_" . join (take . (subtract 1) . length)) . T.split (=='_') $ nm'
+
+       pure $ flip fmap uniqueTblCols $ \(tbl,nm) ->
          Db.SomeDatabasePredicate
            (Db.TableColumnHasConstraint
              (Db.QualifiedName Nothing tbl)
              nm
-             (Db.constraintDefinitionSyntax Nothing Db.uniqueColumnConstraintSyntax Nothing) :: Db.TableColumnHasConstraint Postgres)) uniqueTblCols
+             (Db.constraintDefinitionSyntax Nothing Db.uniqueColumnConstraintSyntax Nothing) :: Db.TableColumnHasConstraint Postgres)
+     putStrLn (show uniqueChecks)
 
      primaryKeys <-
        map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey (Db.QualifiedName Nothing relnm) (V.toList cols))) <$>
