@@ -165,6 +165,18 @@ value.
 
     `_addressLine1 = "address1"`
 
+When renaming the name of a field refering to a primary key (for example
+the `_addressForUser` field), remember to specify the field name as a
+`PrimaryKey` field like:
+
+`_addressForUser = UserId "user"`
+
+Given that in part one we defined `UserId` as a type alias:
+
+```haskell
+type UserId = PrimaryKey UserT Identity
+```
+
 If you didn't need to modify any of the field names, you can omit
 `modifyTableFields`. For example, to simply produce a database with
 the first table named `users` and the second named `user_addresses`,
