@@ -42,7 +42,7 @@ instance Table Tbl where
 
 ## The `Identity` trick
 
-Beam table types are commonly prefixed by a `T` to indicate the name of the
+Beam table types are commonly suffixed by a `T` to indicate the name of the
 generic table type. Usually, a type synonym named by leaving out the `T` is
 defined by applying the table to `Identity`. Recall each field in the table is
 either another table or an application of `Columnar` to the type parameter. When
