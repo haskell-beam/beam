@@ -27,27 +27,23 @@ Beam features
 
 ## How to install
 
-Beam is available via Hackage and Stackage, and can be included in your stack
-project by adding `beam-core` and an appropriate beam backend to your
-`stack.yaml` as an `extra-dep`. Some projects may want to follow the latest
-master, for the newest features. If so, put the following in your `stack.yaml`
-to build and use beam in your project!
+Beam is available via Hackage and Stackage, and can be included in
+your stack project by adding `beam-core` and an appropriate beam
+backend to your `.cabal` file. Some projects may want to follow the
+latest master, for the newest features. If so, put the following in
+your `stack.yaml` to build and use beam in your project!
 
 ```yaml
 packages:
 - .
 - location:
     git: https://github.com/tathougies/beam.git
-    commit: a3b5e0763843fed48c7eef53fa7d08cfe710342d
+    commit: <latest master commit>
   extra-dep: true
   subdirs:
     - beam-core
     - <backend>
 ```
-
-!!! note "Note"
-    the commit will need to be changed to whatever the latest commit of master is,
-    or whichever commit you want to build from even.
 
 and add the following to your `.cabal` file, in the `build-depends` section:
 
@@ -56,7 +52,7 @@ beam-core,
 <backend>
 ```
 
-You may alse want to add the `beam-migrate` package if you want to
+You may also want to add the `beam-migrate` package if you want to
 manage your database schemas in Haskell as well.
 
 Available backends are:

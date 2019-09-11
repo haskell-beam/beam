@@ -2,6 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -22,15 +23,22 @@ import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL ( BeamMigrateOnlySqlBackend, FieldReturnType(..) )
 import qualified Database.Beam.Migrate.SQL as Beam
 import           Database.Beam.Migrate.SQL.BeamExtensions
-import           Database.Beam.Query ( QExpr, SqlInsert(..), SqlInsertValues(..)
+import           Database.Beam.Query ( QExpr, QField
+                                     , SqlInsert(..), SqlInsertValues(..)
                                      , HasQBuilder(..), HasSqlEqualityCheck
                                      , HasSqlQuantifiedEqualityCheck
                                      , DataType(..)
-                                     , insert )
+                                     , HasSqlInTable
+                                     , insert, current_ )
+import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( Beamable
+                                             , Columnar'(..)
                                              , DatabaseEntity(..)
-                                             , TableEntity)
+                                             , DatabaseEntityDescriptor(..)
+                                             , TableEntity
+                                             , TableField(..)
+                                             , changeBeamRep )
 import           Database.Beam.Sqlite.Syntax
 
 import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
@@ -53,6 +61,7 @@ import           Control.Monad.Identity (Identity)
 import           Control.Monad.Reader (ReaderT(..), MonadReader(..), runReaderT)
 import           Control.Monad.State.Strict (MonadState(..), StateT(..), runStateT)
 import           Control.Monad.Trans (lift)
+import           Control.Monad.Writer (tell, execWriter)
 
 import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -97,6 +106,8 @@ instance BeamBackend Sqlite where
 
 instance HasQBuilder Sqlite where
   buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
+
+instance HasSqlInTable Sqlite where
 
 instance BeamSqlBackendIsString Sqlite T.Text
 instance BeamSqlBackendIsString Sqlite String
@@ -322,18 +333,18 @@ instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
   runInsertReturningList = runInsertReturningList
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
-runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
+runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs onConflict)
     -- If all expressions are simple expressions (no default), then just
 
   | SqliteInsertExpressions es <- vs, any (any (== SqliteExpressionDefault)) es =
       forM_ es $ \row -> do
         let (fields', row') = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row
-            SqliteSyntax cmd vals = formatSqliteInsert tbl fields' (SqliteInsertExpressions [ row' ])
+            SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl fields' (SqliteInsertExpressions [ row' ]) onConflict
             cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
         logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
         execute conn (fromString cmdString) (D.toList vals)
   | otherwise = do
-      let SqliteSyntax cmd vals = formatSqliteInsert tbl fields vs
+      let SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl fields vs onConflict
           cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
       logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
       execute conn (fromString cmdString) (D.toList vals)
@@ -354,7 +365,7 @@ runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqlInsert Sqlite table
                        -> SqliteM [ table Identity ]
 runInsertReturningList SqlInsertNoRows = pure []
-runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _)) =
+runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $ do
 
@@ -396,3 +407,81 @@ runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _)) =
                 fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT * FROM inserted_values_" <> processId))
            releaseSavepoint
            return x
+
+newtype SqliteConflictTarget (table :: (* -> *) -> *) = SqliteConflictTarget
+  { unSqliteConflictTarget :: table (QExpr Sqlite QInternal) -> SqliteSyntax }
+newtype SqliteConflictAction (table :: (* -> *) -> *) = SqliteConflictAction
+  { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
+
+instance Beam.BeamHasInsertOnConflict Sqlite where
+  type SqlConflictTarget Sqlite table = SqliteConflictTarget table
+  type SqlConflictAction Sqlite table = SqliteConflictAction table
+
+  insertOnConflict
+    :: forall db table s. Beamable table
+    => DatabaseEntity Sqlite db (TableEntity table)
+    -> SqlInsertValues Sqlite (table (QExpr Sqlite s))
+    -> Beam.SqlConflictTarget Sqlite table
+    -> Beam.SqlConflictAction Sqlite table
+    -> SqlInsert Sqlite table
+  insertOnConflict (DatabaseEntity dt) values target action = case values of
+    SqlInsertValuesEmpty -> SqlInsertNoRows
+    SqlInsertValues vs -> SqlInsert (dbTableSettings dt) $
+      let getFieldName
+            :: forall a
+            .  Columnar' (TableField table) a
+            -> Columnar' (QField QInternal) a
+          getFieldName (Columnar' fd) =
+            Columnar' $ QField False (dbTableCurrentName dt) $ _fieldName fd
+          tableFields = changeBeamRep getFieldName $ dbTableSettings dt
+          tellFieldName _ _ f = tell [f] >> pure f
+          fieldNames = execWriter $
+            project' (Proxy @AnyType) (Proxy @((), T.Text)) tellFieldName tableFields
+          currentField
+            :: forall a
+            .  Columnar' (QField QInternal) a
+            -> Columnar' (QExpr Sqlite QInternal) a
+          currentField (Columnar' f) = Columnar' $ current_ f
+          tableCurrent = changeBeamRep currentField tableFields
+      in SqliteInsertSyntax (tableNameFromEntity dt) fieldNames vs $ Just $
+           SqliteOnConflictSyntax $ mconcat
+             [ emit "ON CONFLICT "
+             , unSqliteConflictTarget target tableCurrent
+             , emit " DO "
+             , unSqliteConflictAction action tableFields
+             ]
+
+  anyConflict = SqliteConflictTarget $ const mempty
+  conflictingFields makeProjection = SqliteConflictTarget $ \table ->
+    parens $ commas $ map fromSqliteExpression $
+      project (Proxy @Sqlite) (makeProjection table) "t"
+  conflictingFieldsWhere makeProjection makeWhere =
+    SqliteConflictTarget $ \table -> mconcat
+      [ unSqliteConflictTarget (Beam.conflictingFields makeProjection) table
+      , emit " WHERE "
+      , let QExpr mkE = makeWhere table
+        in fromSqliteExpression $ mkE "t"
+      ]
+
+  onConflictDoNothing = SqliteConflictAction $ const $ emit "NOTHING"
+  onConflictUpdateSet makeAssignments = SqliteConflictAction $ \table -> mconcat
+    [ emit "UPDATE SET "
+    , let excludedField (Columnar' (QField _ _ name)) =
+            Columnar' $ QExpr $ const $ fieldE $ qualifiedField "excluded" name
+          tableExcluded = changeBeamRep excludedField table
+          QAssignment assignments = makeAssignments table tableExcluded
+          emitAssignment (fieldName, expr) = mconcat
+            [ fromSqliteFieldNameSyntax fieldName
+            , emit " = "
+            , fromSqliteExpression expr
+            ]
+      in commas $ map emitAssignment assignments
+    ]
+  onConflictUpdateSetWhere makeAssignments makeWhere =
+    SqliteConflictAction $ \table -> mconcat
+      [ unSqliteConflictAction (Beam.onConflictUpdateSet makeAssignments) table
+      , emit " WHERE "
+      , let currentField (Columnar' f) = Columnar' $ current_ f
+            QExpr mkE = makeWhere $ changeBeamRep currentField table
+        in fromSqliteExpression $ mkE "t"
+      ]

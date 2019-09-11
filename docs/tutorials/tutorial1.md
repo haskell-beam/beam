@@ -27,7 +27,7 @@ backend.
 Before starting, we'll need to enable some extensions.
 
 ```
-> :set -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications
+> :set -XDeriveGeneric -XGADTs -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XDeriveAnyClass
 ```
 
 And import some modules...
@@ -75,12 +75,11 @@ User
      -> Columnar f Text -> Columnar f Text -> Columnar f Text -> UserT f
 ```
 
-Hmm... That did not help much. However, consider the type of the following:
+Hmm... That did not help much. Let's see what happens if we bind `f` to something concrete, like `Identity`. Using the `TypeApplications` extension:
 
 ```
-Prelude Database.Beam.Sqlite Database.Beam Data.Text> :t (\email firstName lastName password -> User email firstName lastName password :: UserT Identity)
-(\email firstName lastName password -> User email firstName lastName password :: UserT Identity)
-  :: Text -> Text -> Text -> Text -> UserT Identity
+Prelude Database.Beam Database.Beam.Sqlite Data.Text> :t (User @Identity)
+(User @Identity) :: Text -> Text -> Text -> Text -> UserT Identity
 ```
 
 Woah! That looks a lot like what we'd expect if we had declared the type in the "regular" Haskell way:
@@ -95,7 +94,7 @@ data User = User
 
 This functionality is due to the fact that `Columnar` is a type family defined
 such that for any `x`, `Columnar Identity x = x`. This strategy is known as
-*defunctionalization* [^1].
+*defunctionalization* [^1] or *higher-kinded data types* [^4].
 
 Knowing this, let's define a type synonym to make our life easier.
 
@@ -141,6 +140,13 @@ Prelude Database.Beam.Sqlite Database.Beam Data.Text> User "john@example.com" "J
 User {_userEmail = "john@example.com", _userFirstName = "John", _userLastName = "Smith", _userPassword = "password!"}
 ```
 
+You can also use type applications, if you like that style better:
+
+```
+Prelude Database.Beam Database.Beam.Sqlite Data.Text> User @Identity "john@example.com" "John" "Smith" "password!"
+User {_userEmail = "john@example.com", _userFirstName = "John", _userLastName = "Smith", _userPassword = "password!"}
+```
+
 Usually, you won't need to deal with this, as you'll explicitly annotate your
 top-level functions to use the `User` type.
 
@@ -157,6 +163,31 @@ for us by the compiler at compile-time!
 instance Beamable UserT
 ```
 
+!!! tip "Tip"
+    If you turn on the `DeriveAnyClass` feature, you can simply `derive` the `Beamable` type class. For example, the type
+
+    ```
+    data UserT f
+        = User
+        { _userEmail     :: Columnar f Text
+        , _userFirstName :: Columnar f Text
+        , _userLastName  :: Columnar f Text
+        , _userPassword  :: Columnar f Text }
+        deriving Generic
+    ```
+
+    could be written
+
+    ```
+    data UserT f
+        = User
+        { _userEmail     :: Columnar f Text
+        , _userFirstName :: Columnar f Text
+        , _userLastName  :: Columnar f Text
+        , _userPassword  :: Columnar f Text }
+        deriving (Generic, Beamable)
+    ```
+
 Additionally, all beam tables must implement the `Table` type class, which we
 can use to declare a primary key.
 
@@ -164,11 +195,10 @@ The only thing we need to provide is the type of the primary keys for users, and
 a function that can extract the primary key from any `UserT f` object. To do
 this, add the following lines to the instance declaration.
 
-```haskell
+```
 instance Table UserT where
-    data PrimaryKey UserT f = UserId (Columnar f Text) deriving Generic
-    primaryKey = UserId . _userEmail
-instance Beamable (PrimaryKey UserT)
+   data PrimaryKey UserT f = UserId (Columnar f Text) deriving (Generic, Beamable)
+   primaryKey = UserId . _userEmail
 ```
 
 The `data` declaration is similar to a toplevel data definition, construct a key
@@ -177,13 +207,6 @@ for `UserT` with the `UserId` constructor like a regular table.
 ```haskell
 userKey = UserId "john@doe.org"
 ```
-
-!!! note "Note"
-    The standalone `Beamable` instances are quite ugly. Luckily, the new
-    deriving strategies extension in GHC 8.2 will allow us to write the
-    `Beamable` instance 'in-line', so we can write `deriving (Generic,
-    Beamable)` instead.
-
 
 ## Defining our database
 
@@ -201,10 +224,14 @@ Our database consists of only one table.
 ```haskell
 data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers :: f (TableEntity UserT) }
-                        deriving Generic
-
-instance Database be ShoppingCartDb
+                        deriving (Generic, Database be)
 ```
+
+!!! note "Note"
+    By deriving `Database be` we actually allowed our database to be used with any Beam
+    backend that supports it. We could also have explicitly listed the database backends we
+    liked. For example, specifying `deriving (Generic, Database Sqlite, Database Postgres)` would
+    derive instances only for SQLite or Postgres.
 
 The next step is to create a description of the particular database we'd like to create. This
 involves giving each of the tables in our database a name. If you've named all your database
@@ -241,13 +268,6 @@ import Database.SQLite.Simple
 
 conn <- open "shoppingcart1.db"
 ```
-
-!!! note "Note"
-    Previous versions of beam would attempt automatic schema migration. This is
-    dangerous and not required for many use cases. A more powerful
-    implementation of this functionality has been moved into the optional
-    `beam-migrate` package.
-    See [the appropriate documentation](../schema-guide/migrations.md)
 
 Now let's add a few users. We'll give each user an MD5 encoded password too.
 We'll use the `runBeamSqliteDebug` function (supplied by `beam-sqlite`) to
@@ -323,27 +343,14 @@ We can use `limit_` and `offset_` in a similar manner to `take` and `drop` respe
 ```haskell
 !employee1sql sql
 !employee1out output
-let boundedQuery :: Q Sqlite _ _ _
-    boundedQuery = limit_ 1 $ offset_ 1 $
+let boundedQuery = limit_ 1 $ offset_ 1 $
                    orderBy_ (asc_ . _userFirstName) $
                    all_ (_shoppingCartUsers shoppingCartDb)
 
 runBeamSqliteDebug putStrLn conn $ do
-  users <- runSelectReturningList (select boundedQuery :: SqlSelect Sqlite _)
+  users <- runSelectReturningList (select boundedQuery)
   mapM_ (liftIO . putStrLn . show) users
 ```
-
-!!! note "Note"
-    The type signatures above are not necessary when run in GHCi. The
-    documentation automates building and testing the queries, but the above
-    results in strange type errors in GHC. This may be a compiler type-inference
-    bug. More investigation is being carried out.
-
-    Nevertheless, this shows how you could limit your queries to only work in a
-    particular syntax.
-
-    The `_` are type holes, which means GHC will happily infer these types, if
-    the `PartialTypeSignatures` extension is turned on.
 
 ## Aggregations
 
@@ -422,6 +429,9 @@ on [GitHub](https://github.com/tathougies/beam).
 [^1]:
    Thanks to various bloggers for pointing this out. You can read more about this technique
    [here](https://typesandkinds.wordpress.com/2013/04/01/defunctionalization-for-the-win/).
+
+[^4]:
+   https://reasonablypolymorphic.com/blog/higher-kinded-data/
 
 [^2]:
    Adding entities other than tables is covered in more depth in

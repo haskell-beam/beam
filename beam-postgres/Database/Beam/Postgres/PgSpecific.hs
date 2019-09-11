@@ -56,6 +56,12 @@ module Database.Beam.Postgres.PgSpecific
   , PgBox(..), PgPath(..), PgPolygon(..)
   , PgCircle(..)
 
+    -- ** Regular expressions
+  , PgRegex(..), pgRegex_
+  , (~.), (~*.), (!~.), (!~*.)
+  , pgRegexpReplace_, pgRegexpMatch_
+  , pgRegexpSplitToTable, pgRegexpSplitToArray
+
     -- ** Set-valued functions
     -- $set-valued-funs
   , PgSetOf, pgUnnest
@@ -86,7 +92,7 @@ module Database.Beam.Postgres.PgSpecific
 
     -- *** Building ranges from expressions
   , range_
-  
+
     -- *** Building @PgRangeBound@s
   , inclusive, exclusive, unbounded
 
@@ -98,7 +104,7 @@ module Database.Beam.Postgres.PgSpecific
   , rLower_, rUpper_, isEmpty_
   , lowerInc_, upperInc_, lowerInf_, upperInf_
   , rangeMerge_
-  
+
     -- ** Postgres functions and aggregates
   , pgBoolOr, pgBoolAnd, pgStringAgg, pgStringAggOver
 
@@ -1260,6 +1266,100 @@ instance Pg.FromField PgBox where
                             <*> pgPointParser
 instance FromBackendRow Postgres PgBox
 
+-- ** Regular expressions
+
+-- | The type of Postgres regular expressions. Only a
+-- 'HasSqlValueSyntax' instance is supplied, because you won't need to
+-- be reading these back from the database.
+--
+-- If you're generating regexes dynamically, then use 'pgRegex_' to
+-- convert a string expression into a regex one.
+newtype PgRegex = PgRegex T.Text
+  deriving (Show, Eq, Ord, IsString)
+
+instance HasSqlValueSyntax PgValueSyntax PgRegex where
+  sqlValueSyntax (PgRegex r) = sqlValueSyntax r
+
+-- | Convert a string valued expression (which could be generated
+-- dynamically) into a 'PgRegex'-typed one.
+pgRegex_ :: BeamSqlBackendIsString Postgres text => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+pgRegex_ (QExpr e) = QExpr e
+
+-- | Match regular expression, case-sensitive
+(~.) :: BeamSqlBackendIsString Postgres text
+     => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+     -> QGenExpr ctxt Postgres s Bool
+QExpr t ~. QExpr re = QExpr (pgBinOp "~" <$> t <*> re)
+
+-- | Match regular expression, case-insensitive
+(~*.) :: BeamSqlBackendIsString Postgres text
+      => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+      -> QGenExpr ctxt Postgres s Bool
+QExpr t ~*. QExpr re = QExpr (pgBinOp "~*" <$> t <*> re)
+
+-- | Does not match regular expression, case-sensitive
+(!~.) :: BeamSqlBackendIsString Postgres text
+      => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+      -> QGenExpr ctxt Postgres s Bool
+QExpr t !~. QExpr re = QExpr (pgBinOp "!~" <$> t <*> re)
+
+-- | Does not match regular expression, case-insensitive
+(!~*.) :: BeamSqlBackendIsString Postgres text
+       => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+       -> QGenExpr ctxt Postgres s Bool
+QExpr t !~*. QExpr re = QExpr (pgBinOp "!~*" <$> t <*> re)
+
+-- | Postgres @regexp_replace@. Replaces all instances of the regex in
+-- the first argument with the third argument. The fourth argument is
+-- the postgres regex options to provide.
+pgRegexpReplace_ :: BeamSqlBackendIsString Postgres text
+                 => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+                 -> QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s T.Text
+                 -> QGenExpr ctxt Postgres s txt
+pgRegexpReplace_ (QExpr haystack) (QExpr needle) (QExpr replacement) (QExpr opts) =
+  QExpr (\t -> PgExpressionSyntax $
+               emit "regexp_replace(" <> fromPgExpression (haystack t) <> emit ", "
+                                      <> fromPgExpression (needle t) <> emit ", "
+                                      <> fromPgExpression (replacement t) <> emit ", "
+                                      <> fromPgExpression (opts t) <> emit ")")
+
+-- | Postgres @regexp_match@. Matches the regular expression against
+-- the string given and returns an array where each element
+-- corresponds to a match in the string, or @NULL@ if nothing was
+-- found
+pgRegexpMatch_ :: BeamSqlBackendIsString Postgres text
+               => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+               -> QGenExpr ctxt Postgres s (Maybe (V.Vector text))
+pgRegexpMatch_ (QExpr s) (QExpr re) =
+  QExpr (\t -> PgExpressionSyntax $
+               emit "regexp_match(" <> fromPgExpression (s t) <> emit ", "
+                                    <> fromPgExpression (re t) <> emit ")")
+
+-- | Postgres @regexp_split_to_array@. Splits the given string by the
+-- given regex and returns the result as an array.
+pgRegexpSplitToArray :: BeamSqlBackendIsString Postgres text
+                     => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+                     -> QGenExpr ctxt Postgres s (V.Vector text)
+pgRegexpSplitToArray (QExpr s) (QExpr re) =
+  QExpr (\t -> PgExpressionSyntax $
+               emit "regexp_split_to_array(" <> fromPgExpression (s t) <> emit ", "
+                                             <> fromPgExpression (re t) <> emit ")")
+
+newtype PgReResultT f
+  = PgReResultT { reResult :: C f T.Text }
+  deriving Generic
+instance Beamable PgReResultT
+
+-- | Postgres @regexp_split_to_table@. Splits the given string by the
+-- given regex and return a result set that can be joined against.
+pgRegexpSplitToTable :: BeamSqlBackendIsString Postgres text
+                     => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+
+                     -> Q Postgres db s (QExpr Postgres s T.Text)
+pgRegexpSplitToTable (QExpr s) (QExpr re) =
+  fmap reResult $
+  pgUnnest' (\t -> emit "regexp_split_to_table(" <> fromPgExpression (s t) <> emit ", "
+                                                 <> fromPgExpression (re t) <> emit ")")
 
 -- ** Set-valued functions
 
@@ -1288,6 +1388,7 @@ pgUnnest' q =
                                       pure (Columnar' (TableField (pure fieldNm) fieldNm)))
                                 tblSkeleton tblSkeleton) (0 :: Int)
 
+-- | Join the results of the given set-valued function to the query
 pgUnnest :: forall tbl db s
           . Beamable tbl
          => QExpr Postgres s (PgSetOf tbl)
@@ -1299,6 +1400,7 @@ data PgUnnestArrayTbl a f = PgUnnestArrayTbl (C f a)
   deriving Generic
 instance Beamable (PgUnnestArrayTbl a)
 
+-- | Introduce each element of the array as a row
 pgUnnestArray :: QExpr Postgres s (V.Vector a)
               -> Q Postgres db s (QExpr Postgres s a)
 pgUnnestArray (QExpr q) =
@@ -1309,6 +1411,8 @@ data PgUnnestArrayWithOrdinalityTbl a f = PgUnnestArrayWithOrdinalityTbl (C f In
   deriving Generic
 instance Beamable (PgUnnestArrayWithOrdinalityTbl a)
 
+-- | Introduce each element of the array as a row, along with the
+-- element's index
 pgUnnestArrayWithOrdinality :: QExpr Postgres s (V.Vector a)
                             -> Q Postgres db s (QExpr Postgres s Int, QExpr Postgres s a)
 pgUnnestArrayWithOrdinality (QExpr q) =

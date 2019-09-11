@@ -30,4 +30,4 @@ build beam-migrate:
 
 build docs:
   stage: docs
-  script: chown -R root /builds/tathougies1 && ./builddocs.sh builddocs
+  script: chown -R root /builds/tathougies1 && ./build-docs.sh builddocs

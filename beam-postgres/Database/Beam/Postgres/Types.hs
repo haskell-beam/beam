@@ -54,6 +54,8 @@ data Postgres
 instance BeamBackend Postgres where
   type BackendFromField Postgres = Pg.FromField
 
+instance HasSqlInTable Postgres where
+
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 

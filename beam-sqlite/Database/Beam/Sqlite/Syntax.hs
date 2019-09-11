@@ -19,10 +19,12 @@ module Database.Beam.Sqlite.Syntax
   , SqliteSelectSyntax(..), SqliteInsertSyntax(..)
   , SqliteUpdateSyntax(..), SqliteDeleteSyntax(..)
 
+  , SqliteOnConflictSyntax(..)
   , SqliteInsertValuesSyntax(..)
   , SqliteColumnSchemaSyntax(..)
   , SqliteExpressionSyntax(..), SqliteValueSyntax(..)
   , SqliteTableNameSyntax(..)
+  , SqliteFieldNameSyntax(..)
   , SqliteAggregationSetQuantifierSyntax(..)
 
   , fromSqliteExpression
@@ -33,9 +35,9 @@ module Database.Beam.Sqlite.Syntax
   , sqliteBigIntType, sqliteSerialType
 
     -- * Building and consuming 'SqliteSyntax'
-  , fromSqliteCommand, formatSqliteInsert
+  , fromSqliteCommand, formatSqliteInsert, formatSqliteInsertOnConflict
 
-  , emit, emitValue, parens
+  , emit, emitValue, parens, commas
 
   , sqliteEscape, withPlaceholders
   , sqliteRenderSyntaxScript
@@ -176,11 +178,14 @@ data SqliteCommandSyntax
 -- | Convert a 'SqliteCommandSyntax' into a renderable 'SqliteSyntax'
 fromSqliteCommand :: SqliteCommandSyntax -> SqliteSyntax
 fromSqliteCommand (SqliteCommandSyntax s) = s
-fromSqliteCommand (SqliteCommandInsert (SqliteInsertSyntax tbl fields values)) =
-    formatSqliteInsert tbl fields values
+fromSqliteCommand (SqliteCommandInsert (SqliteInsertSyntax tbl fields values onConflict)) =
+    formatSqliteInsertOnConflict tbl fields values onConflict
 
 -- | SQLite @SELECT@ syntax
 newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSyntax }
+
+-- | SQLite @ON CONFLICT@ syntax
+newtype SqliteOnConflictSyntax = SqliteOnConflictSyntax { fromSqliteOnConflict :: SqliteSyntax }
 
 -- | SQLite @INSERT@ syntax. This doesn't directly wrap 'SqliteSyntax' because
 -- we need to do some processing on @INSERT@ statements to deal with @AUTO
@@ -188,9 +193,10 @@ newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSynt
 -- into 'SqliteSyntax'.
 data SqliteInsertSyntax
   = SqliteInsertSyntax
-  { sqliteInsertTable  :: !SqliteTableNameSyntax
-  , sqliteInsertFields :: [ T.Text ]
-  , sqliteInsertValues :: !SqliteInsertValuesSyntax
+  { sqliteInsertTable      :: !SqliteTableNameSyntax
+  , sqliteInsertFields     :: [ T.Text ]
+  , sqliteInsertValues     :: !SqliteInsertValuesSyntax
+  , sqliteInsertOnConflict :: !(Maybe SqliteOnConflictSyntax)
   }
 
 -- | SQLite @UPDATE@ syntax
@@ -295,11 +301,22 @@ sqliteExpressionSerialized = BeamSerializedExpression . TE.decodeUtf8 . BL.toStr
 -- | Format a SQLite @INSERT@ expression for the given table name, fields, and values.
 formatSqliteInsert :: SqliteTableNameSyntax -> [ T.Text ] -> SqliteInsertValuesSyntax -> SqliteSyntax
 formatSqliteInsert tblNm fields values =
-  emit "INSERT INTO " <> fromSqliteTableName tblNm <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
-  case values of
-    SqliteInsertFromSql (SqliteSelectSyntax select) -> select
-    SqliteInsertExpressions es ->
-      emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
+  formatSqliteInsertOnConflict tblNm fields values Nothing
+
+-- | Format a SQLite @INSERT@ expression for the given table name, fields,
+-- values, and optionally an @ON CONFLICT@ clause.
+formatSqliteInsertOnConflict :: SqliteTableNameSyntax -> [ T.Text ] -> SqliteInsertValuesSyntax -> Maybe SqliteOnConflictSyntax -> SqliteSyntax
+formatSqliteInsertOnConflict tblNm fields values onConflict = mconcat
+  [ emit "INSERT INTO "
+  , fromSqliteTableName tblNm
+  , parens (commas (map quotedIdentifier fields))
+  , emit " "
+  , case values of
+      SqliteInsertFromSql (SqliteSelectSyntax select) -> select
+      SqliteInsertExpressions es ->
+        emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
+  , maybe mempty ((emit " " <>) . fromSqliteOnConflict) onConflict
+  ]
 
 instance IsSql92Syntax SqliteCommandSyntax where
   type Sql92SelectSyntax SqliteCommandSyntax = SqliteSelectSyntax
@@ -851,7 +868,7 @@ instance IsSql92InsertSyntax SqliteInsertSyntax where
   type Sql92InsertTableNameSyntax SqliteInsertSyntax = SqliteTableNameSyntax
   type Sql92InsertValuesSyntax SqliteInsertSyntax = SqliteInsertValuesSyntax
 
-  insertStmt = SqliteInsertSyntax
+  insertStmt table fields values = SqliteInsertSyntax table fields values Nothing
 
 instance IsSql92InsertValuesSyntax SqliteInsertValuesSyntax where
   type Sql92InsertValuesExpressionSyntax SqliteInsertValuesSyntax = SqliteExpressionSyntax

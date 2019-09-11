@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- | Some functionality is useful enough to be provided across backends, but is
 -- not standardized. For example, many RDBMS systems provide ways of fetching
@@ -10,14 +11,21 @@ module Database.Beam.Backend.SQL.BeamExtensions
   ( MonadBeamInsertReturning(..)
   , MonadBeamUpdateReturning(..)
   , MonadBeamDeleteReturning(..)
+  , BeamHasInsertOnConflict(..)
 
   , SqlSerial(..)
+  , onConflictUpdateInstead
+  , onConflictUpdateAll
   ) where
 
 import Database.Beam.Backend
 import Database.Beam.Query
+import Database.Beam.Query.Internal
 import Database.Beam.Schema
+import Database.Beam.Schema.Tables
 
+import Data.Functor.Const
+import Data.Proxy
 import Control.Monad.Identity
 import Control.Monad.Cont
 import Control.Monad.Except
@@ -133,3 +141,80 @@ instance (MonadBeamDeleteReturning be m, Monoid w)
 instance (MonadBeamDeleteReturning be m, Monoid w)
     => MonadBeamDeleteReturning be (Strict.RWST r w s m) where
     runDeleteReturningList = lift . runDeleteReturningList
+
+class BeamSqlBackend be => BeamHasInsertOnConflict be where
+  type SqlConflictTarget be (table :: (* -> *) -> *) :: *
+  type SqlConflictAction be (table :: (* -> *) -> *) :: *
+
+  insertOnConflict
+    :: Beamable table
+    => DatabaseEntity be db (TableEntity table)
+    -> SqlInsertValues be (table (QExpr be s))
+    -> SqlConflictTarget be table
+    -> SqlConflictAction be table
+    -> SqlInsert be table
+
+  anyConflict :: SqlConflictTarget be table
+  conflictingFields
+    :: Projectible be proj
+    => (table (QExpr be QInternal) -> proj)
+    -> SqlConflictTarget be table
+  conflictingFieldsWhere
+    :: Projectible be proj
+    => (table (QExpr be QInternal) -> proj)
+    -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+    -> SqlConflictTarget be table
+
+  onConflictDoNothing :: SqlConflictAction be table
+  onConflictUpdateSet
+    :: Beamable table
+    => (forall s. table (QField s) -> table (QExpr be s) -> QAssignment be s)
+    -> SqlConflictAction be table
+  onConflictUpdateSetWhere
+    :: Beamable table
+    => (forall s. table (QField s) -> table (QExpr be s) -> QAssignment be s)
+    -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+    -> SqlConflictAction be table
+
+newtype InaccessibleQAssignment be = InaccessibleQAssignment
+  { unInaccessibleQAssignment :: [(BeamSqlBackendFieldNameSyntax be, BeamSqlBackendExpressionSyntax be)]
+  } deriving (Semigroup, Monoid)
+
+onConflictUpdateInstead
+  :: forall be table proj
+  .  ( BeamHasInsertOnConflict be
+     , Beamable table
+     , ProjectibleWithPredicate AnyType () (InaccessibleQAssignment be) proj
+     )
+  => (table (Const (InaccessibleQAssignment be)) -> proj)
+  -> SqlConflictAction be table
+onConflictUpdateInstead mkProj = onConflictUpdateSet mkAssignments
+  where
+    mkAssignments
+      :: forall s
+      .  table (QField s)
+      -> table (QExpr be s)
+      -> QAssignment be s
+    mkAssignments table excluded = QAssignment $ unInaccessibleQAssignment $
+      Strict.execWriter $ project'
+        (Proxy @AnyType)
+        (Proxy @((), InaccessibleQAssignment be))
+        (\_ _ a -> Strict.tell a >> return a)
+        (mkProj $ runIdentity $ zipBeamFieldsM mkAssignment table excluded)
+    mkAssignment
+      :: forall s a
+      .  Columnar' (QField s) a
+      -> Columnar' (QExpr be s) a
+      -> Identity (Columnar' (Const (InaccessibleQAssignment be)) a)
+    mkAssignment (Columnar' field) (Columnar' value) =
+      Identity $ Columnar' $ Const $
+        InaccessibleQAssignment $ unQAssignment $ field <-. value
+
+onConflictUpdateAll
+  :: forall be table
+  .  ( BeamHasInsertOnConflict be
+     , Beamable table
+     )
+  => SqlConflictAction be table
+onConflictUpdateAll =
+  onConflictUpdateInstead (id @(table (Const (InaccessibleQAssignment be))))

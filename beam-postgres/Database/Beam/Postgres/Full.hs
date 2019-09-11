@@ -33,11 +33,10 @@ module Database.Beam.Postgres.Full
   , PgInsertOnConflict(..), PgInsertOnConflictTarget(..)
   , PgConflictAction(..)
 
-  , onConflictDefault, onConflict, anyConflict, conflictingFields
-  , conflictingFieldsWhere, conflictingConstraint
-  , onConflictDoNothing, onConflictUpdateSet
+  , onConflictDefault, onConflict
+  , conflictingConstraint
+  , onConflictUpdateSet
   , onConflictUpdateSetWhere, onConflictUpdateInstead
-  , onConflictSetAll
 
   -- * @UPDATE RETURNING@
   , PgUpdateReturning(..)
@@ -56,15 +55,14 @@ module Database.Beam.Postgres.Full
 import           Database.Beam hiding (insert, insertValues)
 import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
+import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Schema.Tables
 
 import           Database.Beam.Postgres.Types
 import           Database.Beam.Postgres.Syntax
 
 import           Control.Monad.Free.Church
-import           Control.Monad.Writer (execWriter, tell)
 
-import           Data.Functor.Const
 import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 #if !MIN_VERSION_base(4, 11, 0)
@@ -231,15 +229,15 @@ runPgInsertReturningList = \case
 -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
 -- that violates a constraint.
 newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
-    PgInsertOnConflict (tbl (QField PostgresInaccessible) -> PgInsertOnConflictSyntax)
+    PgInsertOnConflict (tbl (QField QInternal) -> PgInsertOnConflictSyntax)
 
 -- | Specifies the kind of constraint that must be violated for the action to occur
 newtype PgInsertOnConflictTarget (tbl :: (* -> *) -> *) =
-    PgInsertOnConflictTarget (tbl (QExpr Postgres PostgresInaccessible) -> PgInsertOnConflictTargetSyntax)
+    PgInsertOnConflictTarget (tbl (QExpr Postgres QInternal) -> PgInsertOnConflictTargetSyntax)
 
 -- | A description of what to do when a constraint or index is violated.
 newtype PgConflictAction (tbl :: (* -> *) -> *) =
-    PgConflictAction (tbl (QField PostgresInaccessible) -> PgConflictActionSyntax)
+    PgConflictAction (tbl (QField QInternal) -> PgConflictActionSyntax)
 
 -- | Postgres @LATERAL JOIN@ support
 --
@@ -308,122 +306,12 @@ onConflict (PgInsertOnConflictTarget tgt) (PgConflictAction update_) =
      emit "ON CONFLICT " <> fromPgInsertOnConflictTarget (tgt exprTbl)
                          <> fromPgConflictAction (update_ tbl)
 
--- | Perform the conflict action when any constraint or index conflict occurs.
--- Syntactically, this is the @ON CONFLICT@ clause, without any /conflict target/.
-anyConflict :: PgInsertOnConflictTarget tbl
-anyConflict = PgInsertOnConflictTarget (\_ -> PgInsertOnConflictTargetSyntax mempty)
-
--- | Perform the conflict action only when these fields conflict. The first
--- argument gets the current row as a table of expressions. Return the conflict
--- key. For more information, see the @beam-postgres@ manual.
-conflictingFields :: Projectible Postgres proj
-                  => (tbl (QExpr Postgres PostgresInaccessible) -> proj)
-                  -> PgInsertOnConflictTarget tbl
-conflictingFields makeProjection =
-  PgInsertOnConflictTarget $ \tbl ->
-  PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") $
-            map fromPgExpression $
-            project (Proxy @Postgres) (makeProjection tbl) "t") <>
-  emit " "
-
--- | Like 'conflictingFields', but only perform the action if the condition
--- given in the second argument is met. See the postgres
--- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
--- more information.
-conflictingFieldsWhere :: Projectible Postgres proj
-                       => (tbl (QExpr Postgres PostgresInaccessible) -> proj)
-                       -> (tbl (QExpr Postgres PostgresInaccessible) ->
-                           QExpr Postgres PostgresInaccessible Bool)
-                       -> PgInsertOnConflictTarget tbl
-conflictingFieldsWhere makeProjection makeWhere =
-  PgInsertOnConflictTarget $ \tbl ->
-  PgInsertOnConflictTargetSyntax $
-  pgParens (pgSepBy (emit ", ") $
-            map fromPgExpression (project (Proxy @Postgres)
-                                          (makeProjection tbl) "t")) <>
-  emit " WHERE " <>
-  pgParens (let QExpr mkE = makeWhere tbl
-                PgExpressionSyntax e = mkE "t"
-            in e) <>
-  emit " "
-
 -- | Perform the action only if the given named constraint is violated
 conflictingConstraint :: T.Text -> PgInsertOnConflictTarget tbl
 conflictingConstraint nm =
   PgInsertOnConflictTarget $ \_ ->
   PgInsertOnConflictTargetSyntax $
   emit "ON CONSTRAINT " <> pgQuotedIdentifier nm <> emit " "
-
--- | The Postgres @DO NOTHING@ action
-onConflictDoNothing :: PgConflictAction tbl
-onConflictDoNothing = PgConflictAction $ \_ -> PgConflictActionSyntax (emit "DO NOTHING")
-
--- | The Postgres @DO UPDATE SET@ action, without the @WHERE@ clause. The
--- argument takes an updatable row (like the one used in 'update') and the
--- conflicting row. Use 'current_' on the first argument to get the current
--- value of the row in the database.
-onConflictUpdateSet :: Beamable tbl
-                    => (tbl (QField PostgresInaccessible) ->
-                        tbl (QExpr Postgres PostgresInaccessible)  ->
-                        QAssignment Postgres PostgresInaccessible)
-                    -> PgConflictAction tbl
-onConflictUpdateSet mkAssignments =
-  PgConflictAction $ \tbl ->
-  let QAssignment assignments = mkAssignments tbl tblExcluded
-      tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
-
-      assignmentSyntaxes =
-        [ fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr)
-        | (fieldNm, expr) <- assignments ]
-  in PgConflictActionSyntax $
-     emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes
-
--- | The Postgres @DO UPDATE SET@ action, with the @WHERE@ clause. This is like
--- 'onConflictUpdateSet', but only rows satisfying the given condition are
--- updated. Sometimes this results in more efficient locking. See the Postgres
--- <https://www.postgresql.org/docs/current/static/sql-insert.html manual> for
--- more information.
-onConflictUpdateSetWhere :: Beamable tbl
-                         => (tbl (QField PostgresInaccessible) ->
-                             tbl (QExpr Postgres PostgresInaccessible)  ->
-                             QAssignment Postgres PostgresInaccessible)
-                         -> (tbl (QExpr Postgres PostgresInaccessible) -> QExpr Postgres PostgresInaccessible Bool)
-                         -> PgConflictAction tbl
-onConflictUpdateSetWhere mkAssignments where_ =
-  PgConflictAction $ \tbl ->
-  let QAssignment assignments = mkAssignments tbl tblExcluded
-      QExpr where_' = where_ (changeBeamRep (\(Columnar' f) -> Columnar' (current_ f)) tbl)
-      tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
-
-      assignmentSyntaxes =
-        [ fromPgFieldName fieldNm <> emit "=" <> pgParens (fromPgExpression expr)
-        | (fieldNm, expr) <- assignments ]
-  in PgConflictActionSyntax $
-     emit "DO UPDATE SET " <> pgSepBy (emit ", ") assignmentSyntaxes <> emit " WHERE " <> fromPgExpression (where_' "t")
-
--- | Sometimes you want to update certain columns in the row. Given a
--- projection from a row to the fields you want, Beam can auto-generate
--- an assignment that assigns the corresponding fields of the conflicting row.
-onConflictUpdateInstead :: (Beamable tbl, ProjectibleWithPredicate AnyType () T.Text proj)
-                        => (tbl (Const T.Text) -> proj)
-                        -> PgConflictAction tbl
-onConflictUpdateInstead mkProj =
-  onConflictUpdateSet $ \tbl _ ->
-  let tblFields = changeBeamRep (\(Columnar' (QField _ _ nm) :: Columnar' (QField PostgresInaccessible) a) -> Columnar' (Const nm) :: Columnar' (Const T.Text) a) tbl
-      proj = execWriter (project' (Proxy @AnyType) (Proxy @((), T.Text))
-                                  (\_ _ e -> tell [e] >> pure e)
-                                  (mkProj tblFields))
-
-  in QAssignment (map (\fieldNm -> (unqualifiedField fieldNm, fieldE (qualifiedField "excluded" fieldNm))) proj)
-
--- | Sometimes you want to update every value in the row. Beam can auto-generate
--- an assignment that assigns the conflicting row to every field in the database
--- row. This may not always be what you want.
-onConflictSetAll :: ( Beamable tbl
-                    , ProjectibleWithPredicate AnyType () T.Text (tbl (Const T.Text)) )
-                 => PgConflictAction tbl
-onConflictSetAll = onConflictUpdateInstead id
 
 -- * @UPDATE@
 

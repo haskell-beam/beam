@@ -25,7 +25,7 @@ import           Data.Typeable
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
-#if !MIN_VERSION_base(4, 12, 0)
+#if !MIN_VERSION_base(4, 7, 0)
 import           Data.Proxy
 #endif
 

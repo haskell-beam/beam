@@ -1,4 +1,4 @@
-A beam model is any single-constructer Haskell record type parameterized by a
+A beam model is any single-constructor Haskell record type parameterized by a
 type of kind `* -> *`. The model must have an instance of `Generic`, `Beamable`,
 and `Table`. `Generic` can be derived using the `DeriveGeneric` extension of
 GHC. `Beamable` must be given an empty instance declaration (`instance Beamable
@@ -59,8 +59,7 @@ classes won't generally work for `ModelT`. However, you can use the standalone
 deriving mechanism to derive these instances for `Model`.
 
 ```haskell
-data ModelT f = Model { .. } deriving Generic
-instance Beamable ModelT
+data ModelT f = Model { .. } deriving (Generic, Beamable)
 
 -- deriving instance Show (ModelT f) -- Won't work because GHC won't get the constraints right
 
@@ -168,8 +167,7 @@ data PersonT f
     , personFirstName :: Columnar f Text
     , personLastName  :: Columnar f Text
     , personAge       :: Columnar f Int
-    } deriving Generic
-instance Beamable PersonT
+    } deriving (Generic, Beamable)
 ```
 
 and you want the `personEmail` field to form the primary key, you would define a `Table` instance as such
@@ -177,9 +175,8 @@ and you want the `personEmail` field to form the primary key, you would define a
 ```haskell
 instance Table PersonT where
   data PrimaryKey PersonT f
-      = PersonKey (Columnar f Text) deriving Generic
+      = PersonKey (Columnar f Text) deriving (Generic, Beamable)
   primaryKey person = PersonKey <$> personEmail
-instance Beamable (PrimaryKey PersonT) -- PrimaryKey's must be 'Beamable'
 ```
 
 !!! tip "Tip"
@@ -221,13 +218,12 @@ data BadT f
   = BadT
   { badFirstName :: C f Text
   , badLastName  :: C f Text
-  } deriving Generic
+  } deriving (Generic, Beamable)
 instance Beamable BadT
 instance Table BadT where
   data PrimaryKey BadT f = BadNoId
-    deriving Generic
+    deriving (Generic, Beamable)
   primaryKey _ = BadNoId
-instance Beamable (PrimaryKey BadT)
 ```
 
 ## Foreign references
@@ -240,16 +236,15 @@ representing a post by a user.
 ```haskell
 data PostT f
     = Post
-    { postId       :: Columnar f (Auto Int)
+    { postId       :: Columnar f (SqlSerial Int)
     , postPostedAt :: Columnar f LocalTime
     , postContent  :: Columnar f Text
     , postPoster   :: PrimaryKey PersonT f
-    } deriving Generic
-instance Beamable PostT
+    } deriving (Generic, Beamable)
 
 instance Table PostT where
   data PrimaryKey PostT f
-      = PostId (Columnar f (Auto Int)) deriving Generic
+      = PostId (Columnar f (SqlSerial Int)) deriving (Generic, Beamable)
   primaryKey = PostId . postId
 
 type Post = PostT Identity
@@ -270,12 +265,11 @@ For example, to make the poster optional above.
 ```haskell
 data PostT f
     = Post
-    { postId       :: Columnar f (Auto Int)
+    { postId       :: Columnar f (SqlSerial Int)
     , postPostedAt :: Columnar f LocalTime
     , postContent  :: Columnar f Text
     , postPoster   :: PrimaryKey PersonT (Nullable f)
-    } deriving Generic
-instance Beamable PostT
+    } deriving (Generic, Beamable)
 ```
 
 ### More complicated relationships
@@ -312,8 +306,7 @@ data AddressMixin f
   , addressState      :: Columnar f (Maybe Text)
   , addressCountry    :: Columnar f (Maybe Text)
   , addressPostalCode :: Columnar f (Maybe Text)
-  } deriving Generic
-instance Beamable AddressMixin
+  } deriving (Generic, Beamable)
 type Address = AddressMixin Identity
 deriving instance Show (AddressMixin Identity)
 ```
@@ -334,7 +327,7 @@ data EmployeeT f
   , employeePhone     :: Columnar f (Maybe Text)
   , employeeFax       :: Columnar f (Maybe Text)
   , employeeEmail     :: Columnar f (Maybe Text)
-  } deriving Generic
+  } deriving (Generic, Beamable)
 -- ...
 data CustomerT f
   = Customer
@@ -347,7 +340,7 @@ data CustomerT f
   , customerFax       :: Columnar f (Maybe Text)
   , customerEmail     :: Columnar f Text
   , customerSupportRep :: PrimaryKey EmployeeT (Nullable f)
-  } deriving Generic
+  } deriving (Generic, Beamable)
 ```
 
 ## Defaults

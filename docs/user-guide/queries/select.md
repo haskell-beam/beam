@@ -230,3 +230,30 @@ do c <- all_ (customer chinookDb)
 !!! note "Note"
     `beam-sqlite` does not support `VALUES` clauses anywhere within a
     query, but only within a common table expression.
+
+## Ad-hoc queries
+
+Sometimes you want to quickly query a database without having to write
+out all the boilerplate. Beam supports this with a feature called
+'ad-hoc' queries.
+
+For example, to get all the names of customers, without having to use
+`chinookDb` at all.
+
+To use this functionality, import `Database.Beam.Query.Adhoc`. Note
+that we use `TypeApplications` to give each field an explicit type. If
+you don't, GHC will often infer the type, but it's nice to be explicit.
+
+!beam-query
+```haskell
+!example chinook-adhoc
+-- import qualified Database.Beam.Query.Adhoc as Adhoc
+do ( cId, firstName, lastName )
+     <- Adhoc.table_ Nothing {- Schema Name -}
+          "Customer"
+          ( Adhoc.field_ @Int32 "CustomerId"
+          , Adhoc.field_ @Text "FirstName"
+          , Adhoc.field_ @Text "LastName" )
+   guard_ (firstName `like_` "Jo%")
+   return (cId, firstName, lastName)
+```

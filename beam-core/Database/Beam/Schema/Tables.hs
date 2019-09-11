@@ -24,6 +24,7 @@ module Database.Beam.Schema.Tables
     , dbModification, tableModification, withDbModification
     , withTableModification, modifyTable, modifyEntityName
     , setEntityName, modifyTableFields, fieldNamed
+    , modifyEntitySchema, setEntitySchema
     , defaultDbSettings
 
     , RenamableWithRule(..), RenamableField(..)
@@ -224,9 +225,16 @@ modifyTable modTblNm modFields = modifyEntityName modTblNm <> modifyTableFields 
 modifyEntityName :: IsDatabaseEntity be entity => (Text -> Text) -> EntityModification (DatabaseEntity be db) be entity
 modifyEntityName modTblNm = EntityModification (Endo (\(DatabaseEntity tbl) -> DatabaseEntity (tbl & dbEntityName %~ modTblNm)))
 
+-- | Construct an 'EntityModification' to set the schema of a database entity
+modifyEntitySchema :: IsDatabaseEntity be entity => (Maybe Text -> Maybe Text) -> EntityModification (DatabaseEntity be db) be entity
+modifyEntitySchema modSchema = EntityModification (Endo (\(DatabaseEntity tbl) -> DatabaseEntity (tbl & dbEntitySchema %~ modSchema)))
+
 -- | Change the entity name without consulting the beam-assigned one
 setEntityName :: IsDatabaseEntity be entity => Text -> EntityModification (DatabaseEntity be db) be entity
 setEntityName nm = modifyEntityName (\_ -> nm)
+
+setEntitySchema :: IsDatabaseEntity be entity => Maybe Text -> EntityModification (DatabaseEntity be db) be entity
+setEntitySchema nm = modifyEntitySchema (\_ -> nm)
 
 -- | Construct an 'EntityModification' to rename the fields of a 'TableEntity'
 modifyTableFields :: tbl (FieldModification (TableField tbl)) -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)

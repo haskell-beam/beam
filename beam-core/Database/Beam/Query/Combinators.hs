@@ -109,6 +109,8 @@ allFromView_ (DatabaseEntity vw) =
                     (tableFieldsToExpressions (dbViewSettings vw))
                     (\_ -> Nothing) snd)
 
+-- | SQL @VALUES@ clause. Introduce the elements of the given list as
+-- rows in a joined table.
 values_ :: forall be db s a
          . ( Projectible be a
            , BeamSqlBackend be )

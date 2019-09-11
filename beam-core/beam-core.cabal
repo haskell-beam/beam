@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                beam-core
-version:             0.8.0.0
+version:             0.8.1.0
 synopsis:            Type-safe, feature-complete SQL query and manipulation interface for Haskell
 description:         Beam is a Haskell library for type-safe querying and manipulation of SQL databases.
                      Beam is modular and supports various backends. In order to use beam, you will need to use
@@ -25,6 +25,7 @@ extra-doc-files:     ChangeLog.md
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
                        Database.Beam.Query
+                       Database.Beam.Query.Adhoc
                        Database.Beam.Query.Internal
                        Database.Beam.Query.CustomSQL
                        Database.Beam.Query.CTE
