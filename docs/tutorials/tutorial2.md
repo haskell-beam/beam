@@ -165,7 +165,7 @@ value.
 
     `_addressLine1 = "address1"`
 
-When renaming the name of a field referring to a primary key (for example
+When renaming the name of a field referring to a foreign key (for example
 the `_addressForUser` field), remember to specify the field name as a
 `PrimaryKey` field like:
 
