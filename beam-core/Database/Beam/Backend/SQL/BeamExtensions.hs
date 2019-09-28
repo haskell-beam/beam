@@ -26,6 +26,7 @@ import Database.Beam.Schema.Tables
 
 import Data.Functor.Const
 import Data.Proxy
+import Data.Semigroup
 import Control.Monad.Identity
 import Control.Monad.Cont
 import Control.Monad.Except
@@ -181,7 +182,7 @@ class BeamSqlBackend be => BeamHasInsertOnConflict be where
 
 newtype InaccessibleQAssignment be = InaccessibleQAssignment
   { unInaccessibleQAssignment :: [(BeamSqlBackendFieldNameSyntax be, BeamSqlBackendExpressionSyntax be)]
-  } deriving (Semigroup, Monoid)
+  } deriving (Data.Semigroup.Semigroup, Monoid)
 
 onConflictUpdateInstead
   :: forall be table proj

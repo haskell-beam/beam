@@ -41,6 +41,8 @@ import qualified Data.HashSet as HS
 import           Data.Semigroup (Max(..))
 import qualified Data.Text as T
 
+import qualified Control.Monad.Fail as Fail
+
 data BringUpToDateHooks m
   = BringUpToDateHooks
   { runIrreversibleHook :: m Bool
@@ -69,31 +71,31 @@ data BringUpToDateHooks m
 
 -- | Default set of 'BringUpToDateHooks'. Refuses to run irreversible
 -- migrations, and fails in case of error, using 'fail'.
-defaultUpToDateHooks :: Monad m => BringUpToDateHooks m
+defaultUpToDateHooks :: Fail.MonadFail m => BringUpToDateHooks m
 defaultUpToDateHooks =
   BringUpToDateHooks
   { runIrreversibleHook = pure False
   , startStepHook       = \_ _ -> pure ()
   , endStepHook         = \_ _ -> pure ()
   , runCommandHook      = \_ _ -> pure ()
-  , queryFailedHook     = fail "Log entry query fails"
+  , queryFailedHook     = Fail.fail "Log entry query fails"
   , discontinuousMigrationsHook =
-      \ix -> fail ("Discontinuous migration log: missing migration at " ++ show ix)
+      \ix -> Fail.fail ("Discontinuous migration log: missing migration at " ++ show ix)
   , logMismatchHook =
       \ix actual expected ->
-        fail ("Log mismatch at index " ++ show ix ++ ":\n" ++
+        Fail.fail ("Log mismatch at index " ++ show ix ++ ":\n" ++
               "  expected: " ++ T.unpack expected ++ "\n" ++
               "  actual  : " ++ T.unpack actual)
   , databaseAheadHook =
       \aheadBy ->
-        fail ("The database is ahead of the known schema by " ++ show aheadBy ++ " migration(s)")
+        Fail.fail ("The database is ahead of the known schema by " ++ show aheadBy ++ " migration(s)")
   }
 
 -- | Equivalent to calling 'bringUpToDateWithHooks' with 'defaultUpToDateHooks'.
 --
 -- Tries to bring the database up to date, using the database log and the given
 -- 'MigrationSteps'. Fails if the migration is irreversible, or an error occurs.
-bringUpToDate :: ( Database be db
+bringUpToDate :: ( Database be db, Fail.MonadFail m
                  , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) )
               => BeamMigrationBackend be m
               -> MigrationSteps be () (CheckedDatabaseSettings be db)
@@ -109,7 +111,7 @@ bringUpToDate be@BeamMigrationBackend {} =
 -- documentation for 'BringUpToDateHooks' for more information. Calling this
 -- with 'defaultUpToDateHooks' is the same as using 'bringUpToDate'.
 bringUpToDateWithHooks :: forall db be m
-                        . ( Database be db
+                        . ( Database be db, Fail.MonadFail m
                           , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) )
                        => BringUpToDateHooks m
                        -> BeamMigrationBackend be m
@@ -191,13 +193,13 @@ simpleSchema provider settings =
 -- attempt to create the schema from scratch in the current database.
 --
 -- May 'fail' if we cannot find a schema
-createSchema :: Database be db
+createSchema :: (Database be db, Fail.MonadFail m)
              => BeamMigrationBackend be m
              -> CheckedDatabaseSettings be db
              -> m ()
 createSchema BeamMigrationBackend { backendActionProvider = actions } db =
   case simpleSchema actions db of
-    Nothing -> fail "createSchema: Could not determine schema"
+    Nothing -> Fail.fail "createSchema: Could not determine schema"
     Just cmds ->
         mapM_ runNoReturn cmds
 
@@ -205,7 +207,7 @@ createSchema BeamMigrationBackend { backendActionProvider = actions } db =
 -- database up-to-date with the given 'CheckedDatabaseSettings'. Fails (via
 -- 'fail') if this involves an irreversible migration (one that may result in
 -- data loss).
-autoMigrate :: Database be db
+autoMigrate :: (Database be db, Fail.MonadFail m)
             => BeamMigrationBackend be m
             -> CheckedDatabaseSettings be db
             -> m ()
@@ -215,12 +217,12 @@ autoMigrate BeamMigrationBackend { backendActionProvider = actions
   do actual <- getCs
      let expected = collectChecks db
      case finalSolution (heuristicSolver actions actual expected) of
-       Candidates {} -> fail "autoMigrate: Could not determine migration"
+       Candidates {} -> Fail.fail "autoMigrate: Could not determine migration"
        Solved cmds ->
          -- Check if any of the commands are irreversible
          case foldMap migrationCommandDataLossPossible cmds of
            MigrationKeepsData -> mapM_ (runNoReturn . migrationCommand) cmds
-           _ -> fail "autoMigrate: Not performing automatic migration due to data loss"
+           _ -> Fail.fail "autoMigrate: Not performing automatic migration due to data loss"
 
 -- | Given a migration backend, a handle to a database, and a checked database,
 -- attempt to find a schema. This should always return 'Just', unless the
@@ -301,7 +303,7 @@ backendMigrationScript render mig =
 --
 -- Backends that have a migration backend typically export it under the module
 -- name @Database.Beam./Backend/.Migrate@.
-haskellSchema :: MonadBeam be m
+haskellSchema :: (MonadBeam be m, Fail.MonadFail m)
               => BeamMigrationBackend be m
               -> m String
 haskellSchema BeamMigrationBackend { backendGetDbConstraints = getCs
@@ -315,6 +317,6 @@ haskellSchema BeamMigrationBackend { backendGetDbConstraints = getCs
     Solved cmds   ->
       let hsModule = hsActionsToModule "NewBeamSchema" (map migrationCommand cmds)
       in case renderHsSchema hsModule of
-           Left err -> fail ("Error writing Haskell schema: " ++ err)
+           Left err -> Fail.fail ("Error writing Haskell schema: " ++ err)
            Right modStr -> pure modStr
-    Candidates {} -> fail "Could not form Haskell schema"
+    Candidates {} -> Fail.fail "Could not form Haskell schema"
