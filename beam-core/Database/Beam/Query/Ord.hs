@@ -219,7 +219,7 @@ class SqlEq expr a => SqlEqQuantified expr quantified a | a -> expr quantified w
   -- | Quantified equality and inequality using /SQL semantics/ (tri-state boolean)
   (==*.), (/=*.) :: a -> quantified -> expr SqlBool
 
-infix 4 ==., /=., ==*., /=*.
+infix 4 ==., /=., ==?., /=?., ==*., /=*.
 infix 4 <., >., <=., >=.
 infix 4 <*., >*., <=*., >=*.
 
