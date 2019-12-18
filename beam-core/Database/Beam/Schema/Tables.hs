@@ -44,6 +44,7 @@ module Database.Beam.Schema.Tables
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint
     , FieldsFulfillConstraintNullable
     , WithConstraint(..)
+    , HasConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
     , withConstrainedFields, withConstraints
     , withNullableConstrainedFields, withNullableConstraints
@@ -709,54 +710,58 @@ instance ( Retaggable f' a, Retaggable f' b, Retaggable f' c, Retaggable f' d
     ( retag transform a, retag transform b, retag transform c, retag transform d
     , retag transform e, retag transform f, retag transform g, retag transform h )
 
--- Carry a constraint instance
+-- | Carry a constraint instance and the value it applies to.
 data WithConstraint (c :: * -> Constraint) x where
   WithConstraint :: c x => x -> WithConstraint c x
 
-class GFieldsFulfillConstraint (c :: * -> Constraint) (exposed :: * -> *) values withconstraint where
-  gWithConstrainedFields :: Proxy c -> Proxy exposed -> values () -> withconstraint ()
-instance GFieldsFulfillConstraint c exposed values withconstraint =>
-    GFieldsFulfillConstraint c (M1 s m exposed) (M1 s m values) (M1 s m withconstraint) where
-  gWithConstrainedFields c _ (M1 x) = M1 (gWithConstrainedFields c (Proxy @exposed) x)
-instance GFieldsFulfillConstraint c U1 U1 U1 where
-  gWithConstrainedFields _ _ _ = U1
-instance (GFieldsFulfillConstraint c aExp a aC, GFieldsFulfillConstraint c bExp b bC) =>
-  GFieldsFulfillConstraint c (aExp :*: bExp) (a :*: b) (aC :*: bC) where
-  gWithConstrainedFields be _ (a :*: b) = gWithConstrainedFields be (Proxy @aExp) a :*: gWithConstrainedFields be (Proxy @bExp) b
-instance (c x) => GFieldsFulfillConstraint c (K1 Generic.R (Exposed x)) (K1 Generic.R x) (K1 Generic.R (WithConstraint c x)) where
-  gWithConstrainedFields _ _ (K1 x) = K1 (WithConstraint x)
+-- | Carry a constraint instance.
+data HasConstraint (c :: * -> Constraint) x where
+  HasConstraint :: c x => HasConstraint c x
+
+class GFieldsFulfillConstraint (c :: * -> Constraint) (exposed :: * -> *) withconstraint where
+  gWithConstrainedFields :: Proxy c -> Proxy exposed -> withconstraint ()
+instance GFieldsFulfillConstraint c exposed withconstraint =>
+    GFieldsFulfillConstraint c (M1 s m exposed) (M1 s m withconstraint) where
+  gWithConstrainedFields c _ = M1 (gWithConstrainedFields c (Proxy @exposed))
+instance GFieldsFulfillConstraint c U1 U1 where
+  gWithConstrainedFields _ _ = U1
+instance (GFieldsFulfillConstraint c aExp aC, GFieldsFulfillConstraint c bExp bC) =>
+  GFieldsFulfillConstraint c (aExp :*: bExp) (aC :*: bC) where
+  gWithConstrainedFields be _ = gWithConstrainedFields be (Proxy @aExp) :*: gWithConstrainedFields be (Proxy @bExp)
+instance (c x) => GFieldsFulfillConstraint c (K1 Generic.R (Exposed x)) (K1 Generic.R (HasConstraint c x)) where
+  gWithConstrainedFields _ _ = K1 HasConstraint
 instance FieldsFulfillConstraint c t =>
-    GFieldsFulfillConstraint c (K1 Generic.R (t Exposed)) (K1 Generic.R (t Identity)) (K1 Generic.R (t (WithConstraint c))) where
-  gWithConstrainedFields _ _ (K1 x) = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t Exposed))) (from x)))
+    GFieldsFulfillConstraint c (K1 Generic.R (t Exposed)) (K1 Generic.R (t (HasConstraint c))) where
+  gWithConstrainedFields _ _ = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t Exposed)))))
 instance FieldsFulfillConstraintNullable c t =>
-    GFieldsFulfillConstraint c (K1 Generic.R (t (Nullable Exposed))) (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (WithConstraint c)))) where
-  gWithConstrainedFields _ _ (K1 x) = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t (Nullable Exposed)))) (from x)))
+    GFieldsFulfillConstraint c (K1 Generic.R (t (Nullable Exposed))) (K1 Generic.R (t (Nullable (HasConstraint c)))) where
+  gWithConstrainedFields _ _ = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t (Nullable Exposed))))))
 
 withConstrainedFields :: forall c tbl
-                       . FieldsFulfillConstraint c tbl => tbl Identity -> tbl (WithConstraint c)
-withConstrainedFields =
-  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl Exposed))) . from
+                       . (FieldsFulfillConstraint c tbl, Beamable tbl) => tbl Identity -> tbl (WithConstraint c)
+withConstrainedFields = runIdentity . zipBeamFieldsM f (withConstraints @c @tbl)
+  where f :: forall a. Columnar' (HasConstraint c) a -> Columnar' Identity a -> Identity (Columnar' (WithConstraint c) a)
+        f (Columnar' HasConstraint) (Columnar' a) = Identity $ Columnar' $ WithConstraint a
 
-withConstraints :: forall c tbl. (Beamable tbl, FieldsFulfillConstraint c tbl) => tbl (WithConstraint c)
-withConstraints =
-  withConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
+withConstraints :: forall c tbl. (Beamable tbl, FieldsFulfillConstraint c tbl) => tbl (HasConstraint c)
+withConstraints = to $ gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl Exposed)))
 
 withNullableConstrainedFields :: forall c tbl
-                               . FieldsFulfillConstraintNullable c tbl => tbl (Nullable Identity) -> tbl (Nullable (WithConstraint c))
-withNullableConstrainedFields =
-  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl (Nullable Exposed)))) . from
+                               . (FieldsFulfillConstraintNullable c tbl, Beamable tbl) => tbl (Nullable Identity) -> tbl (Nullable (WithConstraint c))
+withNullableConstrainedFields = runIdentity . zipBeamFieldsM f (withNullableConstraints @c @tbl)
+  where f :: forall a. Columnar' (Nullable (HasConstraint c)) a -> Columnar' (Nullable Identity) a -> Identity (Columnar' (Nullable (WithConstraint c)) a)
+        f (Columnar' HasConstraint) (Columnar' a) = Identity $ Columnar' $ WithConstraint a
 
-withNullableConstraints ::  forall c tbl. (Beamable tbl, FieldsFulfillConstraintNullable c tbl) => tbl (Nullable (WithConstraint c))
-withNullableConstraints =
-  withNullableConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
+withNullableConstraints ::  forall c tbl. (Beamable tbl, FieldsFulfillConstraintNullable c tbl) => tbl (Nullable (HasConstraint c))
+withNullableConstraints = to $ gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl (Nullable Exposed))))
 
 type FieldsFulfillConstraint (c :: * -> Constraint) t =
-  ( Generic (t (WithConstraint c)), Generic (t Identity), Generic (t Exposed)
-  , GFieldsFulfillConstraint c (Rep (t Exposed)) (Rep (t Identity)) (Rep (t (WithConstraint c))))
+  ( Generic (t (HasConstraint c)), Generic (t Identity), Generic (t Exposed)
+  , GFieldsFulfillConstraint c (Rep (t Exposed)) (Rep (t (HasConstraint c))))
 
 type FieldsFulfillConstraintNullable (c :: * -> Constraint) t =
-  ( Generic (t (Nullable (WithConstraint c))), Generic (t (Nullable Identity)), Generic (t (Nullable Exposed))
-  , GFieldsFulfillConstraint c (Rep (t (Nullable Exposed))) (Rep (t (Nullable Identity))) (Rep (t (Nullable (WithConstraint c)))))
+  ( Generic (t (Nullable (HasConstraint c))), Generic (t (Nullable Identity)), Generic (t (Nullable Exposed))
+  , GFieldsFulfillConstraint c (Rep (t (Nullable Exposed))) (Rep (t (Nullable (HasConstraint c)))))
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f

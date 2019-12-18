@@ -305,7 +305,7 @@ instance ( BeamSqlBackend be, Beamable tbl
          SqlEq (QGenExpr context be s) (tbl (QGenExpr context be s)) where
 
   a ==. b = let (_, e) = runState (zipBeamFieldsM
-                                   (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                   (\x'@(Columnar' (Columnar' HasConstraint :*: Columnar' x)) (Columnar' y) ->
                                        do modify (\expr ->
                                                     case expr of
                                                       Nothing -> Just $ x ==. y
@@ -315,7 +315,7 @@ instance ( BeamSqlBackend be, Beamable tbl
   a /=. b = not_ (a ==. b)
 
   a ==?. b = let (_, e) = runState (zipBeamFieldsM
-                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                    (\x'@(Columnar' (Columnar' HasConstraint :*: Columnar' x)) (Columnar' y) ->
                                         do modify (\expr ->
                                                      case expr of
                                                        Nothing -> Just $ x ==?. y
@@ -329,7 +329,7 @@ instance ( BeamSqlBackend be, Beamable tbl
     => SqlEq (QGenExpr context be s) (tbl (Nullable (QGenExpr context be s))) where
 
   a ==. b = let (_, e) = runState (zipBeamFieldsM
-                                      (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) -> do
+                                      (\x'@(Columnar' (Columnar' HasConstraint :*: Columnar' x)) (Columnar' y) -> do
                                           modify (\expr ->
                                                     case expr of
                                                       Nothing -> Just $ x ==. y
@@ -340,7 +340,7 @@ instance ( BeamSqlBackend be, Beamable tbl
   a /=. b = not_ (a ==. b)
 
   a ==?. b = let (_, e) = runState (zipBeamFieldsM
-                                    (\x'@(Columnar' (Columnar' (WithConstraint _) :*: Columnar' x)) (Columnar' y) ->
+                                    (\x'@(Columnar' (Columnar' HasConstraint :*: Columnar' x)) (Columnar' y) ->
                                         do modify (\expr ->
                                                      case expr of
                                                        Nothing -> Just $ x ==?. y
