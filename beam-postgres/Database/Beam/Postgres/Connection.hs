@@ -53,7 +53,6 @@ import qualified Database.PostgreSQL.Simple.Types as Pg (Query(..))
 
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Fail (MonadFail)
 import qualified Control.Monad.Fail as Fail
 
 import           Data.ByteString (ByteString)
@@ -289,8 +288,8 @@ deriving instance Functor PgF
 newtype Pg a = Pg { runPg :: F PgF a }
     deriving (Monad, Applicative, Functor, MonadFree PgF)
 
-instance MonadFail Pg where
-    fail e = fail $ "Internal Error with: " <> show e
+instance Fail.MonadFail Pg where
+    fail e =  liftIO (Fail.fail $ "Internal Error with: " <> show e)
 
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)

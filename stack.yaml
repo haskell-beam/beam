@@ -3,7 +3,7 @@
 #resolver: lts-10.5
 #resolver: lts-12.17
 resolver: lts-13.6
-# resolver: nightly-2018-11-05
+#resolver: nightly-2019-09-28
 packages:
   - beam-sqlite
   - beam-postgres
@@ -13,3 +13,7 @@ packages:
 
 nix:
   shell-file: shell.nix
+
+#extra-deps:
+#  - dependent-map-0.2.4.0
+#  - dependent-sum-0.5

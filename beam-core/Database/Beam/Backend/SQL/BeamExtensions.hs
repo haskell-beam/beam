@@ -26,6 +26,7 @@ import Database.Beam.Schema.Tables
 
 import Data.Functor.Const
 import Data.Proxy
+import Data.Semigroup
 import Control.Monad.Identity
 import Control.Monad.Cont
 import Control.Monad.Except
@@ -143,8 +144,11 @@ instance (MonadBeamDeleteReturning be m, Monoid w)
     runDeleteReturningList = lift . runDeleteReturningList
 
 class BeamSqlBackend be => BeamHasInsertOnConflict be where
-  type SqlConflictTarget be (table :: (* -> *) -> *) :: *
-  type SqlConflictAction be (table :: (* -> *) -> *) :: *
+  -- | Specifies the kind of constraint that must be violated for the action to occur
+  data SqlConflictTarget be (table :: (* -> *) -> *) :: *
+  -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
+  -- that violates a constraint.
+  data SqlConflictAction be (table :: (* -> *) -> *) :: *
 
   insertOnConflict
     :: Beamable table
@@ -173,12 +177,12 @@ class BeamSqlBackend be => BeamHasInsertOnConflict be where
   onConflictUpdateSetWhere
     :: Beamable table
     => (forall s. table (QField s) -> table (QExpr be s) -> QAssignment be s)
-    -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+    -> (forall s. table (QField s) -> table (QExpr be s) -> QExpr be s Bool)
     -> SqlConflictAction be table
 
 newtype InaccessibleQAssignment be = InaccessibleQAssignment
   { unInaccessibleQAssignment :: [(BeamSqlBackendFieldNameSyntax be, BeamSqlBackendExpressionSyntax be)]
-  } deriving (Semigroup, Monoid)
+  } deriving (Data.Semigroup.Semigroup, Monoid)
 
 onConflictUpdateInstead
   :: forall be table proj
@@ -216,5 +220,4 @@ onConflictUpdateAll
      , Beamable table
      )
   => SqlConflictAction be table
-onConflictUpdateAll =
-  onConflictUpdateInstead (id @(table (Const (InaccessibleQAssignment be))))
+onConflictUpdateAll = onConflictUpdateInstead id

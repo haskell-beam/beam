@@ -408,14 +408,11 @@ runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
            releaseSavepoint
            return x
 
-newtype SqliteConflictTarget (table :: (* -> *) -> *) = SqliteConflictTarget
-  { unSqliteConflictTarget :: table (QExpr Sqlite QInternal) -> SqliteSyntax }
-newtype SqliteConflictAction (table :: (* -> *) -> *) = SqliteConflictAction
-  { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
-
 instance Beam.BeamHasInsertOnConflict Sqlite where
-  type SqlConflictTarget Sqlite table = SqliteConflictTarget table
-  type SqlConflictAction Sqlite table = SqliteConflictAction table
+  data SqlConflictTarget Sqlite table = SqliteConflictTarget
+    { unSqliteConflictTarget :: table (QExpr Sqlite QInternal) -> SqliteSyntax }
+  data SqlConflictAction Sqlite table = SqliteConflictAction
+    { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
 
   insertOnConflict
     :: forall db table s. Beamable table
@@ -466,10 +463,7 @@ instance Beam.BeamHasInsertOnConflict Sqlite where
   onConflictDoNothing = SqliteConflictAction $ const $ emit "NOTHING"
   onConflictUpdateSet makeAssignments = SqliteConflictAction $ \table -> mconcat
     [ emit "UPDATE SET "
-    , let excludedField (Columnar' (QField _ _ name)) =
-            Columnar' $ QExpr $ const $ fieldE $ qualifiedField "excluded" name
-          tableExcluded = changeBeamRep excludedField table
-          QAssignment assignments = makeAssignments table tableExcluded
+    , let QAssignment assignments = makeAssignments table $ excluded table
           emitAssignment (fieldName, expr) = mconcat
             [ fromSqliteFieldNameSyntax fieldName
             , emit " = "
@@ -481,7 +475,15 @@ instance Beam.BeamHasInsertOnConflict Sqlite where
     SqliteConflictAction $ \table -> mconcat
       [ unSqliteConflictAction (Beam.onConflictUpdateSet makeAssignments) table
       , emit " WHERE "
-      , let currentField (Columnar' f) = Columnar' $ current_ f
-            QExpr mkE = makeWhere $ changeBeamRep currentField table
+      , let QExpr mkE = makeWhere table $ excluded table
         in fromSqliteExpression $ mkE "t"
       ]
+
+excluded
+  :: forall table s
+  .  Beamable table
+  => table (QField s)
+  -> table (QExpr Sqlite s)
+excluded table = changeBeamRep excludedField table
+  where excludedField (Columnar' (QField _ _ name)) =
+          Columnar' $ QExpr $ const $ fieldE $ qualifiedField "excluded" name
