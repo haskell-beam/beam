@@ -13,6 +13,7 @@ module Database.Beam.Query.Combinators
     -- ** @IF-THEN-ELSE@ support
     , if_, then_, else_
     , then_'
+    , ifThenElse_, bool_
 
     -- * SQL @UPDATE@ assignments
     , (<-.), current_
@@ -786,6 +787,22 @@ if_ :: BeamSqlBackend be
     -> QGenExpr context be s a
 if_ conds (QIfElse (QExpr elseExpr)) =
   QExpr (\tbl -> caseE (map (\(QIfCond (QExpr cond) (QExpr res)) -> (cond tbl, res tbl)) conds) (elseExpr tbl))
+
+ifThenElse_
+  :: BeamSqlBackend be
+  => QGenExpr context be s Bool
+  -> QGenExpr context be s a
+  -> QGenExpr context be s a
+  -> QGenExpr context be s a
+ifThenElse_ c t f = if_ [c `then_` t] (else_ f)
+
+bool_
+  :: BeamSqlBackend be
+  => QGenExpr context be s a
+  -> QGenExpr context be s a
+  -> QGenExpr context be s Bool
+  -> QGenExpr context be s a
+bool_ f t c = ifThenElse_ c t f
 
 -- | SQL @COALESCE@ support
 coalesce_ :: BeamSqlBackend be
