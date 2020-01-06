@@ -71,7 +71,7 @@ library
                        vector               >=0.11    && <0.13,
                        containers           >=0.5     && <0.7,
                        unordered-containers >=0.2     && <0.3,
-                       hashable             >=1.2     && <1.3,
+                       hashable             >=1.2     && <1.4,
                        microlens            >=0.4     && <0.5,
                        parallel             >=3.2     && <3.3,
                        deepseq              >=1.4     && <1.5,
@@ -79,8 +79,8 @@ library
                        containers           >=0.5     && <0.7,
                        haskell-src-exts     >=1.18    && <1.22,
                        pretty               >=1.1     && <1.2,
-                       dependent-map        >=0.2     && <0.3,
-                       dependent-sum        >=0.4     && <0.6,
+                       dependent-map        >=0.2     && <0.4,
+                       dependent-sum        >=0.4     && <0.7,
                        pqueue               >=1.3     && <1.5,
                        uuid-types           >=1.0     && <1.1
   default-language:    Haskell2010

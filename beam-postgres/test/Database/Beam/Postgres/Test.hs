@@ -82,7 +82,11 @@ startTempPostgres = do
        , void (callProcess "pg_ctl" [ "stop", "-D", pgDataDir ]))
 
 #if MIN_VERSION_base(4,12,0)
+#if !MIN_VERSION_hedgehog(1,0,0)
 -- TODO orphan instances are bad
+-- Would be easier to say 'build-depends: hedgehog >= 1.0',
+-- but it's difficult to propagate to older Stackage snapshots
 instance Monad m => MonadFail (Hedgehog.PropertyT m) where
     fail _ = Hedgehog.failure
+#endif
 #endif

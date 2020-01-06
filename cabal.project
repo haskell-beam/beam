@@ -1,1 +1,6 @@
-packages: beam-core, beam-migrate, beam-migrate-cli, beam-postgres, beam-sqlite
+packages:
+  beam-core
+  beam-migrate
+  beam-migrate-cli
+  beam-postgres
+  beam-sqlite

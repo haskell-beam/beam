@@ -29,7 +29,7 @@ library
                       Database.Beam.Postgres.PgSpecific
                       Database.Beam.Postgres.Types
 
-  build-depends:      base                 >=4.7  && <5.0,
+  build-depends:      base                 >=4.9  && <5.0,
                       beam-core            >=0.8  && <0.9,
                       beam-migrate         >=0.4  && <0.5,
 
@@ -40,7 +40,7 @@ library
                       bytestring           >=0.10 && <0.11,
 
                       attoparsec           >=0.13 && <0.14,
-                      hashable             >=1.1  && <1.3,
+                      hashable             >=1.1  && <1.4,
                       lifted-base          >=0.2  && <0.3,
                       free                 >=4.12 && <5.2,
                       time                 >=1.6  && <1.10,

@@ -88,8 +88,6 @@ import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
 
-import GHC.Generics
-
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: ( Database be db, BeamSqlBackend be )
        => DatabaseEntity be db (TableEntity table)
@@ -545,8 +543,7 @@ instance ( Beamable table, BeamSqlBackend be
   SqlValable (table (QGenExpr ctxt be s)) where
   val_ tbl =
     let fields :: table (WithConstraint (BeamSqlBackendCanSerialize be))
-        fields = to (gWithConstrainedFields (Proxy @(BeamSqlBackendCanSerialize be))
-                                            (Proxy @(Rep (table Exposed))) (from tbl))
+        fields = withConstrainedFields tbl
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (BeamSqlBackendCanSerialize be) x)) ->
                          Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
 instance ( Beamable table, BeamSqlBackend be
@@ -556,8 +553,7 @@ instance ( Beamable table, BeamSqlBackend be
 
   val_ tbl =
     let fields :: table (Nullable (WithConstraint (BeamSqlBackendCanSerialize be)))
-        fields = to (gWithConstrainedFields (Proxy @(BeamSqlBackendCanSerialize be))
-                                            (Proxy @(Rep (table (Nullable Exposed)))) (from tbl))
+        fields = withNullableConstrainedFields tbl
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (BeamSqlBackendCanSerialize be) (Maybe x))) ->
                          Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
 

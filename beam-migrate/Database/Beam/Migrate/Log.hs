@@ -17,6 +17,8 @@ import Data.Time (LocalTime)
 import Data.UUID.Types (UUID)
 import Data.Maybe (fromMaybe)
 
+import qualified Control.Monad.Fail as Fail
+
 data LogEntryT f
   = LogEntry
   { _logEntryId       :: C f Int
@@ -143,7 +145,7 @@ recordCommit commitId = do
 
 -- Ensure the backend tables exist
 ensureBackendTables :: forall be m
-                     . BeamSqlBackendCanSerialize be Text
+                     . (BeamSqlBackendCanSerialize be Text, Fail.MonadFail m)
                     => BeamMigrationBackend be m
                     -> m ()
 ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } =
