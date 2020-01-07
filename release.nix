@@ -20,14 +20,16 @@ let
     ];
     hsPkgs = lib.genAttrs compilers (ghc: let
       ghc' = reflex-platform.${ghc}.override {
-        overrides = self: super: {
+        overrides = self: super: let
+          haskellLib = native-reflex-platform.nixpkgs.haskell.lib;
+        in {
           beam-core = self.callCabal2nix "beam-core" ./beam-core { };
           beam-migrate = self.callCabal2nix "beam-migrate" ./beam-migrate { };
           beam-migrate-cli = self.callCabal2nix "beam-migrate-cli" ./beam-migrate-cli { };
-          beam-postgres = self.callCabal2nix "beam-postgres" ./beam-postgres { };
+          beam-postgres = haskellLib.dontCheck (self.callCabal2nix "beam-postgres" ./beam-postgres { });
           beam-sqlite = self.callCabal2nix "beam-sqlite" ./beam-sqlite { };
 
-          postgresql-simple = native-reflex-platform.nixpkgs.haskell.lib.dontCheck
+          postgresql-simple = haskellLib.dontCheck
             (self.callCabal2nix "postgresql-simple" (reflex-platform.hackGet ./dep/postgresql-simple) {});
         };
       };
