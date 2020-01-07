@@ -252,7 +252,9 @@ executeMigrationPlan (BeamMigrationBackend {}) cmds =
        MigrationKeepsData -> mapM_ (runNoReturn . migrationCommand) cmds
        _ -> Fail.fail "executeMigrationPlan: Not performing automatic migration due to data loss"
 
-autoMigrateVerbose :: (Database be db, Sql92DisplaySyntax (BeamSqlBackendSyntax be), MonadIO m)
+autoMigrateVerbose :: ( Database be db, Sql92DisplaySyntax (BeamSqlBackendSyntax be), MonadIO m
+                      , Fail.MonadFail m
+                      )
                    => BeamMigrationBackend be m
                    -> CheckedDatabaseSettings be db
                    -> m ()
