@@ -54,6 +54,7 @@ import           Database.Beam.Migrate.Types
 import           Database.Beam.Haskell.Syntax
 
 import           Control.Applicative
+import qualified Control.Monad.Fail as Fail
 
 #if ! MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
@@ -96,6 +97,7 @@ data BeamMigrationBackend be m where
 -- polymorphism
 data SomeBeamMigrationBackend where
   SomeBeamMigrationBackend :: ( BeamMigrateSqlBackend be
+                              , Fail.MonadFail m
                               , Typeable be )
                            => BeamMigrationBackend be m
                            -> SomeBeamMigrationBackend

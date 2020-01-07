@@ -42,6 +42,7 @@ module Database.Beam.Schema.Tables
     , TableSettings, HaskellTable
     , TableSkeleton, Ignored(..)
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint
+    , GDefaultTableFieldSettings(..)
     , FieldsFulfillConstraintNullable
     , WithConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
