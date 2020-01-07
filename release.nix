@@ -29,7 +29,16 @@ let
         };
       };
     in {
-      inherit (ghc') beam-core beam-migrate beam-migrate-cli beam-postgres beam-sqlite;
+      inherit (ghc')
+        beam-core
+        ;
+    } // lib.optionalAttrs (ghc == "ghc") {
+      inherit (ghc')
+        beam-migrate
+        beam-migrate-cli
+        beam-postgres
+        beam-sqlite
+        ;
     });
   in hsPkgs // {
     cache = reflex-platform.pinBuildInputs "reflex-${system}"
