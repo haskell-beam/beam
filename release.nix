@@ -26,6 +26,9 @@ let
           beam-migrate-cli = self.callCabal2nix "beam-migrate-cli" ./beam-migrate-cli { };
           beam-postgres = self.callCabal2nix "beam-postgres" ./beam-postgres { };
           beam-sqlite = self.callCabal2nix "beam-sqlite" ./beam-sqlite { };
+
+          postgresql-simple = native-reflex-platform.nixpkgs.haskell.lib.dontCheck
+            (self.callCabal2nix "postgresql-simple" (reflex-platform.hackGet ./dep/postgresql-simple) {});
         };
       };
     in {
