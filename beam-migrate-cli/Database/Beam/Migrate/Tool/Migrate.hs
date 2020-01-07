@@ -10,6 +10,7 @@ import           Database.Beam.Migrate.Tool.Status
 import           Control.Applicative
 import           Control.Exception
 import           Control.Monad
+import qualified Control.Monad.Fail as Fail
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.Char as Char
@@ -52,7 +53,8 @@ showCommands cmds = do
     yellow x = setSGRCode [ SetColor Foreground Dull Yellow ] ++ x ++ setSGRCode [ Reset ]
     green x = setSGRCode [ SetColor Foreground Dull Green ] ++ x ++ setSGRCode [ Reset ]
 
-getSchemaCommandsForBackend :: MigrationRegistry -> Maybe (BeamMigrationBackend be m)
+getSchemaCommandsForBackend :: Fail.MonadFail m
+                            => MigrationRegistry -> Maybe (BeamMigrationBackend be m)
                             -> UUID -> IO [ MigrateDDLCommand cmd ]
 getSchemaCommandsForBackend reg Nothing id = fail "Asked to get haskell schema"
 getSchemaCommandsForBackend reg (Just be@(BeamMigrationBackend {})) commitId =
