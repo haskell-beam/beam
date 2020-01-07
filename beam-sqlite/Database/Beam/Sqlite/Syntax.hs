@@ -790,9 +790,9 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
     SqliteExpressionSyntax $
     emit "NULLIF" <> parens (fromSqliteExpression a <> emit ", " <> fromSqliteExpression b)
   absE x = SqliteExpressionSyntax (emit "ABS" <> parens (fromSqliteExpression x))
-  bitLengthE x = SqliteExpressionSyntax (emit "BIT_LENGTH" <> parens (fromSqliteExpression x))
-  charLengthE x = SqliteExpressionSyntax (emit "CHAR_LENGTH" <> parens (fromSqliteExpression x))
-  octetLengthE x = SqliteExpressionSyntax (emit "OCTET_LENGTH" <> parens (fromSqliteExpression x))
+  bitLengthE x = SqliteExpressionSyntax (emit "8 * LENGTH" <> parens (emit "CAST" <> parens (parens (fromSqliteExpression x) <> emit " AS BLOB")))
+  charLengthE x = SqliteExpressionSyntax (emit "LENGTH" <> parens (fromSqliteExpression x))
+  octetLengthE x = SqliteExpressionSyntax (emit "LENGTH" <> parens (emit "CAST" <> parens (parens (fromSqliteExpression x) <> emit " AS BLOB")))
   lowerE x = SqliteExpressionSyntax (emit "LOWER" <> parens (fromSqliteExpression x))
   upperE x = SqliteExpressionSyntax (emit "UPPER" <> parens (fromSqliteExpression x))
   trimE x = SqliteExpressionSyntax (emit "TRIM" <> parens (fromSqliteExpression x))

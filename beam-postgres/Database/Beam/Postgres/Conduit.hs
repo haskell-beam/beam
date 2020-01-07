@@ -29,6 +29,8 @@ import           Data.Maybe (fromMaybe)
 import           Data.Semigroup
 #endif
 
+import qualified Control.Monad.Fail as Fail
+
 #if MIN_VERSION_conduit(1,3,0)
 #define CONDUIT_TRANSFORMER C.ConduitT
 #else
@@ -38,7 +40,7 @@ import           Data.Semigroup
 -- * @SELECT@
 
 -- | Run a PostgreSQL @SELECT@ statement in any 'MonadIO'.
-runSelect :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a )
+runSelect :: ( MonadIO m, Fail.MonadFail m, MonadBaseControl IO m, FromBackendRow Postgres a )
           => Pg.Connection -> SqlSelect Postgres a
           -> (CONDUIT_TRANSFORMER () a m () -> m b) -> m b
 runSelect conn (SqlSelect (PgSelectSyntax syntax)) withSrc =
@@ -56,7 +58,7 @@ runInsert conn (SqlInsert _ (PgInsertSyntax i)) =
 
 -- | Run a PostgreSQL @INSERT ... RETURNING ...@ statement in any 'MonadIO' and
 -- get a 'C.Source' of the newly inserted rows.
-runInsertReturning :: ( MonadIO m,  MonadBaseControl IO m, FromBackendRow Postgres a )
+runInsertReturning :: ( MonadIO m, Fail.MonadFail m, MonadBaseControl IO m, FromBackendRow Postgres a )
                    => Pg.Connection
                    -> PgInsertReturning a
                    -> (CONDUIT_TRANSFORMER () a m () -> m b)
@@ -77,7 +79,7 @@ runUpdate conn (SqlUpdate _ (PgUpdateSyntax i)) =
 
 -- | Run a PostgreSQL @UPDATE ... RETURNING ...@ statement in any 'MonadIO' and
 -- get a 'C.Source' of the newly updated rows.
-runUpdateReturning :: ( MonadIO m, MonadBaseControl IO m, FromBackendRow Postgres a)
+runUpdateReturning :: ( MonadIO m, Fail.MonadFail m, MonadBaseControl IO m, FromBackendRow Postgres a)
                    => Pg.Connection
                    -> PgUpdateReturning a
                    -> (CONDUIT_TRANSFORMER () a m () -> m b)
@@ -98,7 +100,7 @@ runDelete conn (SqlDelete _ (PgDeleteSyntax d)) =
 
 -- | Run a PostgreSQl @DELETE ... RETURNING ...@ statement in any
 -- 'MonadIO' and get a 'C.Source' of the deleted rows.
-runDeleteReturning :: ( MonadIO m, MonadBaseControl IO m, FromBackendRow Postgres a )
+runDeleteReturning :: ( MonadIO m, Fail.MonadFail m, MonadBaseControl IO m, FromBackendRow Postgres a )
                    => Pg.Connection -> PgDeleteReturning a
                    -> (CONDUIT_TRANSFORMER () a m () -> m b) -> m b
 runDeleteReturning conn (PgDeleteReturning d) withSrc =
@@ -115,7 +117,7 @@ executeStatement conn x =
 
 -- | Runs any query that returns a set of values
 runQueryReturning
-  :: ( MonadIO m, MonadBaseControl IO m, Functor m, FromBackendRow Postgres r )
+  :: ( MonadIO m, Fail.MonadFail m, MonadBaseControl IO m, Functor m, FromBackendRow Postgres r )
   => Pg.Connection -> PgSyntax
   -> (CONDUIT_TRANSFORMER () r m () -> m b)
   -> m b
@@ -130,10 +132,10 @@ runQueryReturning conn x withSrc = do
       singleRowModeSet <- liftIO (Pg.withConnection conn Pg.setSingleRowMode)
       if singleRowModeSet
          then withSrc (streamResults Nothing) `finally` gracefulShutdown
-         else fail "Could not enable single row mode"
+         else Fail.fail "Could not enable single row mode"
     else do
       errMsg <- fromMaybe "No libpq error provided" <$> liftIO (Pg.withConnection conn Pg.errorMessage)
-      fail (show errMsg)
+      Fail.fail (show errMsg)
 
   where
     streamResults fields = do
@@ -152,15 +154,15 @@ runQueryReturning conn x withSrc = do
                      do C.yield parsedRow'
                         streamResults (Just fields')
             Pg.TuplesOk -> liftIO (Pg.withConnection conn finishQuery)
-            Pg.EmptyQuery -> fail "No query"
+            Pg.EmptyQuery -> Fail.fail "No query"
             Pg.CommandOk -> pure ()
             _ -> do errMsg <- liftIO (Pg.resultErrorMessage row)
-                    fail ("Postgres error: " <> show errMsg)
+                    Fail.fail ("Postgres error: " <> show errMsg)
 
     bailEarly row errorString = do
       Pg.unsafeFreeResult row
       Pg.withConnection conn $ cancelQuery
-      fail errorString
+      Fail.fail errorString
 
     cancelQuery conn' = do
       cancel <- Pg.getCancel conn'
@@ -170,7 +172,7 @@ runQueryReturning conn x withSrc = do
           res <- Pg.cancel cancel'
           case res of
             Right () -> liftIO (finishQuery conn')
-            Left err -> fail ("Could not cancel: " <> show err)
+            Left err -> Fail.fail ("Could not cancel: " <> show err)
 
     finishQuery conn' = do
       nextRow <- Pg.getResult conn'
