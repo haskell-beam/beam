@@ -74,6 +74,7 @@ type DdlError = String
 data BeamMigrationBackend be m where
   BeamMigrationBackend ::
     ( MonadBeam be m
+    , Fail.MonadFail m -- TODO check whether this is good
     , HasQBuilder be
     , BeamMigrateSqlBackend be
     , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
@@ -96,10 +97,7 @@ data BeamMigrationBackend be m where
 -- | Monomorphic wrapper for use with plugin loaders that cannot handle
 -- polymorphism
 data SomeBeamMigrationBackend where
-  SomeBeamMigrationBackend :: ( BeamMigrateSqlBackend be
-                              , Typeable be
-                              , Fail.MonadFail m -- TODO check whether this is good
-                              )
+  SomeBeamMigrationBackend :: Typeable be
                            => BeamMigrationBackend be m
                            -> SomeBeamMigrationBackend
 
