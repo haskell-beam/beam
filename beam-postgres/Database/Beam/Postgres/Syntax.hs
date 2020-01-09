@@ -231,6 +231,9 @@ data PgCommandSyntax
     { pgCommandType :: PgCommandType
     , fromPgCommand :: PgSyntax }
 
+instance Sql92DisplaySyntax PgCommandSyntax where
+  displaySyntax = displaySyntax . fromPgCommand
+
 -- | 'IsSql92SelectSyntax' for Postgres
 newtype PgSelectSyntax = PgSelectSyntax { fromPgSelect :: PgSyntax }
 

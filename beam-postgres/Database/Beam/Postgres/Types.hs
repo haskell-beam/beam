@@ -1,14 +1,18 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Database.Beam.Postgres.Types
   ( Postgres(..) ) where
+
+#include "MachDeps.h"
 
 import           Database.Beam
 import           Database.Beam.Backend
@@ -28,6 +32,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import           Data.CaseInsensitive (CI)
 import           Data.Int
+import           Data.Proxy
 import           Data.Ratio (Ratio)
 import           Data.Scientific (Scientific, toBoundedInteger)
 import           Data.Tagged
@@ -170,9 +175,30 @@ instance HasDefaultSqlDataType Postgres ByteString where
 instance HasDefaultSqlDataType Postgres LocalTime where
   defaultSqlDataType _ _ _ = timestampType Nothing False
 
+instance HasDefaultSqlDataType Postgres UTCTime where
+  defaultSqlDataType _ _ _ = timestampType Nothing True
+
+#if WORD_SIZE_IN_BITS == 32
 instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy @(SqlSerial Int32))
+#elif WORD_SIZE_IN_BITS == 64
+instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy @(SqlSerial Int64))
+#else
+#error "Unsupported word size; check the value of WORD_SIZE_IN_BITS"
+#endif
+
+instance HasDefaultSqlDataType Postgres (SqlSerial Int16) where
+  defaultSqlDataType _ _ False = pgSmallSerialType
+  defaultSqlDataType _ _ _ = smallIntType
+
+instance HasDefaultSqlDataType Postgres (SqlSerial Int32) where
   defaultSqlDataType _ _ False = pgSerialType
   defaultSqlDataType _ _ _ = intType
+
+instance HasDefaultSqlDataType Postgres (SqlSerial Int64) where
+  defaultSqlDataType _ _ False = pgBigSerialType
+  defaultSqlDataType _ _ _ = bigIntType
 
 instance HasDefaultSqlDataType Postgres UUID where
   defaultSqlDataType _ _ _ = pgUuidType
