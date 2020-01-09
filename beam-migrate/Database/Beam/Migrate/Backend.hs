@@ -74,7 +74,7 @@ type DdlError = String
 data BeamMigrationBackend be m where
   BeamMigrationBackend ::
     ( MonadBeam be m
-    , Fail.MonadFail m -- TODO check whether this is good
+    , Fail.MonadFail m
     , HasQBuilder be
     , BeamMigrateSqlBackend be
     , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
