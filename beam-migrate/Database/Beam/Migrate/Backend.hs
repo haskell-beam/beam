@@ -97,9 +97,7 @@ data BeamMigrationBackend be m where
 -- | Monomorphic wrapper for use with plugin loaders that cannot handle
 -- polymorphism
 data SomeBeamMigrationBackend where
-  SomeBeamMigrationBackend :: ( BeamMigrateSqlBackend be
-                              , Fail.MonadFail m
-                              , Typeable be )
+  SomeBeamMigrationBackend :: Typeable be
                            => BeamMigrationBackend be m
                            -> SomeBeamMigrationBackend
 
