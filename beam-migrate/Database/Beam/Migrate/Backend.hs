@@ -54,6 +54,7 @@ import           Database.Beam.Migrate.Types
 import           Database.Beam.Haskell.Syntax
 
 import           Control.Applicative
+import qualified Control.Monad.Fail as Fail
 
 #if ! MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
@@ -73,6 +74,7 @@ type DdlError = String
 data BeamMigrationBackend be m where
   BeamMigrationBackend ::
     ( MonadBeam be m
+    , Fail.MonadFail m
     , HasQBuilder be
     , BeamMigrateSqlBackend be
     , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
@@ -95,8 +97,7 @@ data BeamMigrationBackend be m where
 -- | Monomorphic wrapper for use with plugin loaders that cannot handle
 -- polymorphism
 data SomeBeamMigrationBackend where
-  SomeBeamMigrationBackend :: ( BeamMigrateSqlBackend be
-                              , Typeable be )
+  SomeBeamMigrationBackend :: Typeable be
                            => BeamMigrationBackend be m
                            -> SomeBeamMigrationBackend
 
