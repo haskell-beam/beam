@@ -444,6 +444,12 @@ instance (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
   gZipDatabase _ combine ~(K1 x) ~(K1 y) =
     K1 <$> combine x y
 
+instance Database be db =>
+  GZipDatabase be f g h (K1 Generic.R (db f)) (K1 Generic.R (db g)) (K1 Generic.R (db h)) where
+
+  gZipDatabase _ combine ~(K1 x) ~(K1 y) =
+    K1 <$> zipTables (Proxy :: Proxy be) combine x y
+
 data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
