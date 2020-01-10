@@ -400,6 +400,29 @@ instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements 
   autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto name)))
     where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
 
+instance ( Selector f
+         , Generic (DatabaseSettings be innerDb)
+         , GAutoDbSettings (Rep (DatabaseSettings be innerDb) ())
+         , Database be innerDb
+         ) =>
+  GAutoDbSettings (S1 f (K1 Generic.R (innerDb (DatabaseEntity be outerDb))) p) where
+  autoDbSettings' =
+    M1 (K1 (runIdentity $ zipTables (Proxy :: Proxy be)
+                          (\_ -> pure . changeDatabaseEntityDb @innerDb @outerDb @be outerPrefix)
+                          settings
+                          settings :: innerDb (DatabaseEntity be outerDb)))
+    where outerPrefix = T.pack (selName (undefined :: S1 f (Rec0 (innerDb (DatabaseEntity be outerDb))) ()))
+          settings :: DatabaseSettings be innerDb
+          settings = defaultDbSettings
+          changeDatabaseEntityDb
+            :: forall db1 db2 be entityType
+            .  Text
+            -> DatabaseEntity be db1 entityType
+            -> DatabaseEntity be db2 entityType
+          changeDatabaseEntityDb outerPrefix (DatabaseEntity a) =
+            DatabaseEntity (over dbEntityName (`mappend` outerPrefix) a)
+
+
 class GZipDatabase be f g h x y z where
   gZipDatabase :: Monad m =>
                   (Proxy f, Proxy g, Proxy h, Proxy be)
