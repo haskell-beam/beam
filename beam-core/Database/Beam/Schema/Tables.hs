@@ -112,9 +112,9 @@ class Database be db where
     --
     --   The idea is that, for any two databases over particular entity tags 'f'
     --   and 'g', if we can take any entity in 'f' and 'g' to the corresponding
-    --   entity in 'h' (in the possibly effectful monad 'm'), then we can
+    --   entity in 'h' (in the possibly effectful applicative functor 'm'), then we can
     --   transform the two databases over 'f' and 'g' to a database in 'h',
-    --   within the monad 'm'.
+    --   within 'm'.
     --
     --   If that doesn't make sense, don't worry. This is mostly beam internal
     zipTables :: Applicative m
