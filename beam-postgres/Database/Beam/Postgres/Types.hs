@@ -170,6 +170,9 @@ instance HasDefaultSqlDataType Postgres ByteString where
 instance HasDefaultSqlDataType Postgres LocalTime where
   defaultSqlDataType _ _ _ = timestampType Nothing False
 
+instance HasDefaultSqlDataType Postgres UTCTime where
+  defaultSqlDataType _ _ _ = timestampType Nothing True
+
 instance HasDefaultSqlDataType Postgres (SqlSerial Int) where
   defaultSqlDataType _ _ False = pgSerialType
   defaultSqlDataType _ _ _ = intType
