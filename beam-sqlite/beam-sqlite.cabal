@@ -51,7 +51,7 @@ library
   if os(windows)
     cpp-options:      -DWINDOWS
     build-depends:    Win32         >=2.4 && <2.8
-  if os(freebsd) || os(netbsd) || os(darwin) || os(linux) || os(solaris) || os(android)
+  if os(freebsd) || os(netbsd) || os(openbsd) || os(darwin) || os(linux) || os(solaris) || os(android)
     cpp-options:      -DUNIX
     build-depends:    unix          >=2.0 && <2.8
 
