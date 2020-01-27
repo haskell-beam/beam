@@ -41,8 +41,10 @@ checked type becomes `[TableExistsPredicate "table", TableHasColumn "table"
 !!! note "Note"
     The types are a bit more complicated than what they appear. In particular, a
     predicate can be of any type that satisfies the `DatabasePredicate` type
-    class. The predicates can be stored in a list because they are wrapped in
-    the `SomeDatabasePredicate` GADT that holds the type class instance as well.
+    class. The predicates can be stored in a 
+    ([heterogenous](https://wiki.haskell.org/Heterogenous_collections#Existential_types))
+    list because they are wrapped in the `SomeDatabasePredicate` GADT that holds
+    the type class instance as well.
 
 
 ## Usage modes
