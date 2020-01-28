@@ -362,7 +362,8 @@ getDbConstraints conn =
                                            , "CROSS JOIN unnest(i.indkey) WITH ORDINALITY k(attid, n)"
                                            , "JOIN pg_attribute a ON a.attnum=k.attid AND a.attrelid=i.indrelid"
                                            , "JOIN pg_class c ON c.oid=i.indrelid"
-                                           , "WHERE c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
+                                           , "JOIN pg_namespace ns ON ns.oid=c.relnamespace"
+                                           , "WHERE ns.nspname = any (current_schemas(false)) AND c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
 
      let enumerations =
            map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData
