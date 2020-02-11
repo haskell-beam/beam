@@ -725,10 +725,13 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
 --
 -- Fields with this type are automatically given the Postgres @JSONB@ type
 newtype PgJSONB a = PgJSONB a
-  deriving ( Show, Eq, Ord, Hashable, Monoid, Semigroup )
+  deriving ( Show, Eq, Ord, Hashable, Monoid, Semigroup, Generic )
 
 instance HasSqlEqualityCheck Postgres (PgJSONB a)
 instance HasSqlQuantifiedEqualityCheck Postgres (PgJSONB a)
+
+instance ToJSON a => ToJSON (PgJSONB a)
+instance FromJSON a => FromJSON (PgJSONB a)
 
 instance (Typeable x, FromJSON x) => Pg.FromField (PgJSONB x) where
   fromField field d =
