@@ -36,9 +36,10 @@ module Database.Beam.Postgres.Full
   , onConflictDefault, onConflict
   , conflictingConstraint
   , onConflictUpdateSet
-  , onConflictUpdateSetWhere, onConflictUpdateInstead
-  , conflictingFields, conflictingFieldsWhere
-  , onConflictDoNothing
+  , onConflictUpdateSetWhere,
+  , BeamHasInsertOnConflict(..)
+  , onConflictUpdateAll
+  , onConflictUpdateInstead
 
   -- * @UPDATE RETURNING@
   , PgUpdateReturning(..)
