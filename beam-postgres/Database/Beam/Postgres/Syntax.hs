@@ -541,7 +541,7 @@ instance IsSql92DataTypeSyntax PgDataTypeSyntax where
                                       (emit "NUMERIC" <> pgOptNumericPrec prec)
                                       (numericType prec)
   decimalType prec = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.numeric) (mkNumericPrec prec))
-                                      (emit "DOUBLE" <> pgOptNumericPrec prec)
+                                      (emit "DECIMAL" <> pgOptNumericPrec prec)
                                       (decimalType prec)
 
   intType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int4) Nothing) (emit "INT") intType
