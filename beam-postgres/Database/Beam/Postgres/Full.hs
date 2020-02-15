@@ -35,8 +35,6 @@ module Database.Beam.Postgres.Full
 
   , onConflictDefault, onConflict
   , conflictingConstraint
-  , onConflictUpdateSet
-  , onConflictUpdateSetWhere,
   , BeamHasInsertOnConflict(..)
   , onConflictUpdateAll
   , onConflictUpdateInstead
