@@ -2,6 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE CPP #-}
 module Database.Beam.Postgres.CustomTypes
     ( PgType, PgTypeCheck(..)
     , PgDataTypeSchema
