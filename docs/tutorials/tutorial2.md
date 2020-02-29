@@ -165,16 +165,19 @@ value.
 
     `_addressLine1 = "address1"`
 
-When renaming the name of a field referring to a foreign key (for example
-the `_addressForUser` field), remember to specify the field name as a
-`PrimaryKey` field like:
+When renaming a field referring to a foreign key (for example the
+`_addressForUser` field), remember to wrap the field name with the table's
+`PrimaryKey` constructor:
 
 `_addressForUser = UserId "user"`
 
-Given that in part one we defined `UserId` as a type alias:
+Given that in part one we defined `UserId` as the `PrimaryKey` constructor for
+`UserT`:
 
 ```haskell
-type UserId = PrimaryKey UserT Identity
+instance Table UserT where
+   data PrimaryKey UserT f = UserId (Columnar f Text) deriving (Generic, Beamable)
+   primaryKey = UserId . _userEmail
 ```
 
 If you didn't need to modify any of the field names, you can omit
