@@ -709,9 +709,11 @@ instance (Typeable x, FromJSON x) => Pg.FromField (PgJSON x) where
   fromField field d =
     if Pg.typeOid field /= Pg.typoid Pg.json
     then Pg.returnError Pg.Incompatible field ""
-    else case decodeStrict =<< d of
-           Just d' -> pure (PgJSON d')
+    else case d of
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
+           Just d' -> case eitherDecodeStrict d' of
+                        Left e -> Pg.returnError Pg.ConversionFailed field e
+                        Right d'' -> pure (PgJSON d'')
 
 instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSON a)
 instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
@@ -737,9 +739,11 @@ instance (Typeable x, FromJSON x) => Pg.FromField (PgJSONB x) where
   fromField field d =
     if Pg.typeOid field /= Pg.typoid Pg.jsonb
     then Pg.returnError Pg.Incompatible field ""
-    else case decodeStrict =<< d of
-           Just d' -> pure (PgJSONB d')
+    else case d of
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
+           Just d' -> case eitherDecodeStrict d' of
+                        Left e -> Pg.returnError Pg.ConversionFailed field e
+                        Right d'' -> pure (PgJSONB d'')
 
 instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSONB a)
 instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
