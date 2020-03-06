@@ -8,7 +8,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Database.Beam.Postgres.Types
-  ( Postgres(..) ) where
+  ( Postgres(..)
+  , fromPgIntegral
+  , fromPgScientificOrIntegral
+  ) where
 
 import           Database.Beam
 import           Database.Beam.Backend
@@ -54,8 +57,11 @@ instance HasSqlInTable Postgres where
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 
-fromScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
-fromScientificOrIntegral = do
+-- | Deserialize integral fields, possibly downcasting from a larger numeric type
+-- via 'Scientific' if we won't lose data, and then falling back to any integral
+-- type via 'Integer'
+fromPgScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
+fromPgScientificOrIntegral = do
   sciVal <- fmap (toBoundedInteger =<<) peekField
   case sciVal of
     Just sciVal' -> do
@@ -96,13 +102,13 @@ instance FromBackendRow Postgres Int64 where
 -- Word values are serialized as SQL @NUMBER@ types to guarantee full domain coverage.
 -- However, we want them te be serialized/deserialized as whichever type makes sense
 instance FromBackendRow Postgres Word where
-  fromBackendRow = fromScientificOrIntegral
+  fromBackendRow = fromPgScientificOrIntegral
 instance FromBackendRow Postgres Word16 where
-  fromBackendRow = fromScientificOrIntegral
+  fromBackendRow = fromPgScientificOrIntegral
 instance FromBackendRow Postgres Word32 where
-  fromBackendRow = fromScientificOrIntegral
+  fromBackendRow = fromPgScientificOrIntegral
 instance FromBackendRow Postgres Word64 where
-  fromBackendRow = fromScientificOrIntegral
+  fromBackendRow = fromPgScientificOrIntegral
 instance FromBackendRow Postgres Integer
 instance FromBackendRow Postgres ByteString
 instance FromBackendRow Postgres Scientific
