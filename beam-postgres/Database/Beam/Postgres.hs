@@ -48,6 +48,10 @@ module Database.Beam.Postgres
   , pgCreateExtension, pgDropExtension
   , getPgExtension
 
+    -- ** Utilities for defining custom instances
+  , fromPgIntegral
+  , fromPgScientificOrIntegral
+
     -- ** Debug support
 
   , PgDebugStmt
