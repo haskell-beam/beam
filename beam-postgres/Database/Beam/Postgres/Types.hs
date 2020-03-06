@@ -94,7 +94,7 @@ instance FromBackendRow Postgres Int32 where
 instance FromBackendRow Postgres Int64 where
   fromBackendRow = fromPgIntegral
 -- Word values are serialized as SQL @NUMBER@ types to guarantee full domain coverage.
--- However, we wan them te be serialized/deserialized as whichever type makes sense
+-- However, we want them te be serialized/deserialized as whichever type makes sense
 instance FromBackendRow Postgres Word where
   fromBackendRow = fromScientificOrIntegral
 instance FromBackendRow Postgres Word16 where
