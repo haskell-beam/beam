@@ -841,7 +841,7 @@ instance BeamSqlBackend be => SqlDeconstructMaybe be (QGenExpr ctxt be s (Maybe 
 
 instance ( BeamSqlBackend be, Beamable t)
     => SqlDeconstructMaybe be (t (Nullable (QGenExpr ctxt be s))) (t (QGenExpr ctxt be s)) s where
-    isJust_ t = allE (allBeamValues (\(Columnar' e) -> isJust_ e) t)
+    isJust_ = not_ . isNothing_
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
     maybe_ (QExpr onNothing) onJust tbl =
       let QExpr onJust' = onJust (changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (QExpr e)) tbl)
