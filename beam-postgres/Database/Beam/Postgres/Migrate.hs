@@ -54,7 +54,6 @@ import           Control.Applicative ((<|>))
 import           Control.Arrow
 import           Control.Exception (bracket)
 import           Control.Monad
-import           Control.Monad.Free.Church (liftF)
 
 import           Data.Aeson hiding (json)
 import           Data.Bits
@@ -89,7 +88,7 @@ migrationBackend = Tool.BeamMigrationBackend
                                  , "  postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]"
                                  , ""
                                  , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
-                        (liftF (PgLiftWithHandle getDbConstraints id))
+                        (liftIOWithHandle getDbConstraints)
                         (Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
                          Db.sql2008BigIntDataTypeDeserializers <>
                          postgresDataTypeDeserializers <>

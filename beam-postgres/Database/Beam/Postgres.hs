@@ -19,7 +19,7 @@
 
 module Database.Beam.Postgres
   (  -- * Beam Postgres backend
-    Postgres(..), Pg
+    Postgres(..), Pg, liftIOWithHandle
 
     -- ** Postgres syntax
   , PgCommandSyntax, PgSyntax

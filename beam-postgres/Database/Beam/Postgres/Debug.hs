@@ -4,7 +4,8 @@ module Database.Beam.Postgres.Debug where
 import           Database.Beam.Query
 import           Database.Beam.Postgres.Types (Postgres(..))
 import           Database.Beam.Postgres.Connection
-  ( Pg, PgF(..)
+  ( Pg
+  , liftIOWithHandle
   , pgRenderSyntax )
 import           Database.Beam.Postgres.Full
   ( PgInsertReturning(..)
@@ -16,8 +17,6 @@ import Database.Beam.Postgres.Syntax
   , PgInsertSyntax(..)
   , PgUpdateSyntax(..)
   , PgDeleteSyntax(..) )
-
-import           Control.Monad.Free ( liftF )
 
 import qualified Data.ByteString.Char8 as BC
 import           Data.Maybe (maybe)
@@ -69,5 +68,5 @@ pgTraceStmtIO' conn stmt =
 
 pgTraceStmt :: PgDebugStmt statement => statement -> Pg ()
 pgTraceStmt stmt =
-  liftF (PgLiftWithHandle (flip pgTraceStmtIO stmt) id)
+  liftIOWithHandle (flip pgTraceStmtIO stmt)
 
