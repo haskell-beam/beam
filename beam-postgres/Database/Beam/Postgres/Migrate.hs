@@ -14,6 +14,7 @@ module Database.Beam.Postgres.Migrate
   , postgresDataTypeDeserializers
   , pgPredConverter
   , getDbConstraints
+  , getDbConstraintsForSchemas
   , pgTypeToHs
   , migrateScript
   , writeMigrationScript
@@ -323,8 +324,13 @@ pgUnknownDataType oid@(Pg.Oid oid') pgMod =
 -- * Create constraints from a connection
 
 getDbConstraints :: Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
-getDbConstraints conn =
-  do tbls <- Pg.query_ conn "SELECT cl.oid, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname = any (current_schemas(false)) and relkind='r'"
+getDbConstraints = getDbConstraintsForSchemas Nothing
+
+getDbConstraintsForSchemas :: Maybe [String] -> Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
+getDbConstraintsForSchemas subschemas conn =
+  do tbls <- case subschemas of
+        Nothing -> Pg.query_ conn "SELECT cl.oid, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname = any (current_schemas(false)) and relkind='r'"
+        Just ss -> Pg.query  conn "SELECT cl.oid, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname IN ? and relkind='r'" (Pg.Only (Pg.In ss))
      let tblsExist = map (\(_, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate (Db.QualifiedName Nothing tbl))) tbls
 
      enumerationData <-
