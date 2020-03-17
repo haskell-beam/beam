@@ -15,6 +15,8 @@
 module Database.Beam.Postgres.Connection
   ( Pg(..), PgF(..)
 
+  , liftIOWithHandle
+
   , runBeamPostgres, runBeamPostgresDebug
 
   , pgRenderSyntax, runPgRowReader, getFields
@@ -293,6 +295,9 @@ instance Fail.MonadFail Pg where
 
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)
+
+liftIOWithHandle :: (Pg.Connection -> IO a) -> Pg a
+liftIOWithHandle f = liftF (PgLiftWithHandle f id)
 
 runBeamPostgresDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO a
 runBeamPostgresDebug dbg conn action =
