@@ -87,7 +87,7 @@ do tracks <- all_ (track chinookDb)
    pure (trackName tracks, trackComposer tracks, trackMilliseconds tracks `div_` 1000)
 ```
 
-Beam includes instances to support returning up to 6-tuples. To return more,
+Beam includes instances to support returning up to 8-tuples. To return more,
 feel free to nest tuples. As an example, we can write the above query as
 
 !beam-query
