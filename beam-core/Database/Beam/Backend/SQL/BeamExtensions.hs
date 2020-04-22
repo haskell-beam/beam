@@ -15,7 +15,9 @@ module Database.Beam.Backend.SQL.BeamExtensions
 
   , SqlSerial(..)
   , onConflictUpdateInstead
+  , onConflictUpdateInsteadWhere
   , onConflictUpdateAll
+  , onConflictUpdateAllWhere
   ) where
 
 import Database.Beam.Backend
@@ -192,27 +194,18 @@ onConflictUpdateInstead
      )
   => (table (Const (InaccessibleQAssignment be)) -> proj)
   -> SqlConflictAction be table
-onConflictUpdateInstead mkProj = onConflictUpdateSet mkAssignments
-  where
-    mkAssignments
-      :: forall s
-      .  table (QField s)
-      -> table (QExpr be s)
-      -> QAssignment be s
-    mkAssignments table excluded = QAssignment $ unInaccessibleQAssignment $
-      Strict.execWriter $ project'
-        (Proxy @AnyType)
-        (Proxy @((), InaccessibleQAssignment be))
-        (\_ _ a -> Strict.tell a >> return a)
-        (mkProj $ runIdentity $ zipBeamFieldsM mkAssignment table excluded)
-    mkAssignment
-      :: forall s a
-      .  Columnar' (QField s) a
-      -> Columnar' (QExpr be s) a
-      -> Identity (Columnar' (Const (InaccessibleQAssignment be)) a)
-    mkAssignment (Columnar' field) (Columnar' value) =
-      Identity $ Columnar' $ Const $
-        InaccessibleQAssignment $ unQAssignment $ field <-. value
+onConflictUpdateInstead mkProj = onConflictUpdateSet (assignmentsFromProjection mkProj)
+
+onConflictUpdateInsteadWhere
+  :: forall be table proj
+  .  ( BeamHasInsertOnConflict be
+     , Beamable table
+     , ProjectibleWithPredicate AnyType () (InaccessibleQAssignment be) proj
+     )
+  => (table (Const (InaccessibleQAssignment be)) -> proj)
+  -> (forall s. table (QField s) -> table (QExpr be s) -> QExpr be s Bool)
+  -> SqlConflictAction be table
+onConflictUpdateInsteadWhere mkProj whereClause = onConflictUpdateSetWhere (assignmentsFromProjection mkProj) whereClause
 
 onConflictUpdateAll
   :: forall be table
@@ -221,3 +214,38 @@ onConflictUpdateAll
      )
   => SqlConflictAction be table
 onConflictUpdateAll = onConflictUpdateInstead id
+
+onConflictUpdateAllWhere
+  :: forall be table
+  .  ( BeamHasInsertOnConflict be
+     , Beamable table
+     )
+  => (forall s. table (QField s) -> table (QExpr be s) -> QExpr be s Bool)
+  -> SqlConflictAction be table
+onConflictUpdateAllWhere = onConflictUpdateInsteadWhere id
+
+assignmentsFromProjection
+  :: forall be table proj s
+  .  ( Beamable table
+     , BeamSqlBackend be
+     , ProjectibleWithPredicate AnyType () (InaccessibleQAssignment be) proj
+     )
+  => (table (Const (InaccessibleQAssignment be)) -> proj)
+  -> table (QField s)
+  -> table (QExpr be s)
+  -> QAssignment be s
+assignmentsFromProjection mkProj table excluded = QAssignment $ unInaccessibleQAssignment $
+  Strict.execWriter $ project'
+    (Proxy @AnyType)
+    (Proxy @((), InaccessibleQAssignment be))
+    (\_ _ a -> Strict.tell a >> return a)
+    (mkProj $ runIdentity $ zipBeamFieldsM mkAssignment table excluded)
+  where
+    mkAssignment
+      :: forall s a
+      .  Columnar' (QField s) a
+      -> Columnar' (QExpr be s) a
+      -> Identity (Columnar' (Const (InaccessibleQAssignment be)) a)
+    mkAssignment (Columnar' field) (Columnar' value) =
+      Identity $ Columnar' $ Const $
+        InaccessibleQAssignment $ unQAssignment $ field <-. value
