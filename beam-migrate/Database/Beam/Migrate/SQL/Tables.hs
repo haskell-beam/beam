@@ -50,6 +50,7 @@ import Control.Monad.State
 import Data.Text (Text)
 import Data.Typeable
 import qualified Data.Kind as Kind (Constraint)
+import Data.List.NonEmpty (NonEmpty (..))
 
 import GHC.TypeLits
 
@@ -89,7 +90,7 @@ createTable newTblName tblSettings =
              cols -> [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableHasPrimaryKey tblName cols)) ]
 
      upDown command Nothing
-     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable Nothing newTblName newTblName tbl') tblChecks fieldChecks) [])
+     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable Nothing (newTblName :| []) newTblName tbl') tblChecks fieldChecks) [])
 
 -- | Add a @DROP TABLE@ statement to this migration.
 dropTable :: BeamMigrateSqlBackend be
@@ -208,7 +209,7 @@ alterTable (CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks tblFieldChe
                           newTbl
  in forM_ cmds (\cmd -> upDown (alterTableCmd cmd) Nothing) >>
     pure (CheckedDatabaseEntity (CheckedDatabaseTable
-                                  (DatabaseTable tblSchema' (dbTableOrigName dt)
+                                  (DatabaseTable tblSchema' (dbTablePath dt)
                                      tblNm' tbl')
                                    tblChecks' fieldChecks') entityChecks)
 

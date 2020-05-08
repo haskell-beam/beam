@@ -25,6 +25,7 @@ import           Control.Monad
 import           Data.Aeson
 import qualified Data.HashSet as HS
 import           Data.Hashable (Hashable)
+import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Proxy
 import           Data.Text (Text)
 #if !MIN_VERSION_base(4, 11, 0)
@@ -139,7 +140,7 @@ pgCreateExtension :: forall extension db
                    . IsPgExtension extension
                   => Migration Postgres (CheckedDatabaseEntity Postgres db (PgExtensionEntity extension))
 pgCreateExtension =
-  let entity = checkedDbEntityAuto ""
+  let entity = checkedDbEntityAuto ("" :| [])
       extName = pgExtensionName (Proxy @extension)
   in upDown (pgCreateExtensionSyntax extName) Nothing >>
      pure (CheckedDatabaseEntity entity (collectEntityChecks entity))

@@ -7,6 +7,7 @@ import           Database.Beam.Schema.Tables
 import           Data.Functor.Identity
 import           Data.Proxy
 import qualified Data.Text as T
+import           Data.List.NonEmpty (NonEmpty (..))
 
 import           GHC.Generics
 
@@ -28,7 +29,7 @@ instance ( Selector f, IsCheckedDatabaseEntity be x
   GAutoMigratableDb be (S1 f (Rec0 (CheckedDatabaseEntity be db x))) where
 
   defaultMigratableDbSettings' _ = M1 (K1 (CheckedDatabaseEntity (checkedDbEntityAuto name) []))
-    where name = T.pack (selName (undefined :: S1 f (Rec0 (CheckedDatabaseEntity be db x)) ()))
+    where name = T.pack (selName (undefined :: S1 f (Rec0 (CheckedDatabaseEntity be db x)) ())) :| []
 
 instance ( Selector f
          , Generic (CheckedDatabaseSettings be innerDb)

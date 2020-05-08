@@ -74,6 +74,7 @@ import           Control.Monad.Writer hiding ((<>))
 
 import           Data.Char (isUpper, toLower)
 import           Data.Foldable (fold)
+import           Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 import           Data.Monoid (Endo(..))
 import           Data.Proxy
@@ -296,10 +297,11 @@ class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) 
   type DatabaseEntityRegularRequirements be entityType :: Constraint
 
   dbEntityName :: Lens' (DatabaseEntityDescriptor be entityType) Text
+  dbEntityPath :: Lens' (DatabaseEntityDescriptor be entityType) (NonEmpty Text)
   dbEntitySchema :: Traversal' (DatabaseEntityDescriptor be entityType) (Maybe Text)
 
   dbEntityAuto :: DatabaseEntityDefaultRequirements be entityType =>
-                  Text -> DatabaseEntityDescriptor be entityType
+                  NonEmpty Text -> DatabaseEntityDescriptor be entityType
 
 instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (TableEntity tbl))) where
   renamingFields renamer =
@@ -317,7 +319,7 @@ instance Beamable tbl => IsDatabaseEntity be (TableEntity tbl) where
     DatabaseTable
       :: Table tbl =>
        { dbTableSchema      :: Maybe Text
-       , dbTableOrigName    :: Text
+       , dbTablePath        :: NonEmpty Text
        , dbTableCurrentName :: Text
        , dbTableSettings    :: TableSettings tbl }
       -> DatabaseEntityDescriptor be (TableEntity tbl)
@@ -328,9 +330,10 @@ instance Beamable tbl => IsDatabaseEntity be (TableEntity tbl) where
     ( Table tbl, Beamable tbl )
 
   dbEntityName f tbl = fmap (\t' -> tbl { dbTableCurrentName = t' }) (f (dbTableCurrentName tbl))
+  dbEntityPath f tbl = fmap (\t' -> tbl { dbTablePath = t' }) (f (dbTablePath tbl))
   dbEntitySchema f tbl = fmap (\s' -> tbl { dbTableSchema = s'}) (f (dbTableSchema tbl))
   dbEntityAuto nm =
-    DatabaseTable Nothing nm (unCamelCaseSel nm) defTblFieldSettings
+    DatabaseTable Nothing nm (defaultEntityName nm) defTblFieldSettings
 
 instance Beamable tbl => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (ViewEntity tbl))) where
   renamingFields renamer =
@@ -347,7 +350,7 @@ instance Beamable tbl => IsDatabaseEntity be (ViewEntity tbl) where
   data DatabaseEntityDescriptor be (ViewEntity tbl) where
     DatabaseView
       :: { dbViewSchema :: Maybe Text
-         , dbViewOrigName :: Text
+         , dbViewPath :: NonEmpty Text
          , dbViewCurrentName :: Text
          , dbViewSettings :: TableSettings tbl }
       -> DatabaseEntityDescriptor be (ViewEntity tbl)
@@ -358,22 +361,23 @@ instance Beamable tbl => IsDatabaseEntity be (ViewEntity tbl) where
     (  Beamable tbl )
 
   dbEntityName f vw = fmap (\t' -> vw { dbViewCurrentName = t' }) (f (dbViewCurrentName vw))
+  dbEntityPath f tbl = fmap (\t' -> tbl { dbViewPath = t' }) (f (dbViewPath tbl))
   dbEntitySchema f vw = fmap (\s' -> vw { dbViewSchema = s' }) (f (dbViewSchema vw))
   dbEntityAuto nm =
-    DatabaseView Nothing nm (unCamelCaseSel nm) defTblFieldSettings
+    DatabaseView Nothing nm (defaultEntityName nm) defTblFieldSettings
 
 instance RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be (DomainTypeEntity ty))) where
   renamingFields _ = FieldRenamer id
 
 instance IsDatabaseEntity be (DomainTypeEntity ty) where
   data DatabaseEntityDescriptor be (DomainTypeEntity ty)
-    = DatabaseDomainType !(Maybe Text) !Text
+    = DatabaseDomainType !(Maybe Text) !(NonEmpty Text) !Text
   type DatabaseEntityDefaultRequirements be (DomainTypeEntity ty) = ()
   type DatabaseEntityRegularRequirements be (DomainTypeEntity ty) = ()
 
-  dbEntityName f (DatabaseDomainType s t) = DatabaseDomainType s <$> f t
-  dbEntitySchema f (DatabaseDomainType s t) = DatabaseDomainType <$> f s <*> pure t
-  dbEntityAuto = DatabaseDomainType Nothing
+  dbEntityName f (DatabaseDomainType s p t) = DatabaseDomainType s p <$> f t
+  dbEntitySchema f (DatabaseDomainType s p t) = DatabaseDomainType <$> f s <*> pure p <*> pure t
+  dbEntityAuto nm = DatabaseDomainType Nothing nm (defaultEntityName nm)
 
 -- | Represents a meta-description of a particular entityType. Mostly, a wrapper
 --   around 'DatabaseEntityDescriptor be entityType', but carries around the
@@ -403,7 +407,7 @@ instance (GAutoDbSettings (x p), GAutoDbSettings (y p)) => GAutoDbSettings ((x :
     autoDbSettings' = autoDbSettings' :*: autoDbSettings'
 instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements be x ) =>
   GAutoDbSettings (S1 f (K1 Generic.R (DatabaseEntity be db x)) p) where
-  autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto name)))
+  autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto (name :| []))))
     where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
 
 instance ( Selector f
@@ -425,7 +429,7 @@ instance ( Selector f
             .  DatabaseEntity be innerDb entityType
             -> DatabaseEntity be outerDb entityType
           changeDatabaseEntityDb (DatabaseEntity a) =
-            DatabaseEntity (over dbEntityName (`mappend` outerPrefix) a)
+            DatabaseEntity (over dbEntityName ((unCamelCaseSel outerPrefix <> "__") <>) $ over dbEntityPath ((outerPrefix :| []) <>) a)
 
 class GZipDatabase be f g h x y z where
   gZipDatabase :: Applicative m =>
@@ -1033,3 +1037,7 @@ unCamelCaseSel original =
 -- | Produce the beam default field name for the given path
 defaultFieldName :: NE.NonEmpty Text -> Text
 defaultFieldName comps = fold (NE.intersperse (T.pack "__") (unCamelCaseSel <$> comps))
+
+-- | Produce the beam default entity name for the given path
+defaultEntityName :: NE.NonEmpty Text -> Text
+defaultEntityName comps = fold (NE.intersperse (T.pack "__") (unCamelCaseSel <$> comps))
