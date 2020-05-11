@@ -1510,7 +1510,7 @@ instance HasDefaultSqlDataType Postgres a
 -- know the shape of the data stored, substitute 'Value' for this type
 -- parameter.
 --
--- For more information on Psotgres json support see the postgres
+-- For more information on Postgres JSON support see the postgres
 -- <https://www.postgresql.org/docs/current/static/functions-json.html manual>.
 
 
