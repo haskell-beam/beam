@@ -721,7 +721,7 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
 
 -- | The Postgres @JSONB@ type, which stores JSON-encoded data in a
 -- postgres-specific binary format. Like 'PgJSON', the type parameter indicates
--- the Hgaskell type which the JSON encodes.
+-- the Haskell type which the JSON encodes.
 --
 -- Fields with this type are automatically given the Postgres @JSONB@ type
 newtype PgJSONB a = PgJSONB a
@@ -1510,7 +1510,7 @@ instance HasDefaultSqlDataType Postgres a
 -- know the shape of the data stored, substitute 'Value' for this type
 -- parameter.
 --
--- For more information on Psotgres json support see the postgres
+-- For more information on Postgres JSON support see the postgres
 -- <https://www.postgresql.org/docs/current/static/functions-json.html manual>.
 
 
