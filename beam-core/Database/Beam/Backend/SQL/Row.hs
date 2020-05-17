@@ -3,6 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE PolyKinds #-}
 
 module Database.Beam.Backend.SQL.Row
   ( FromBackendRowF(..), FromBackendRowM(..)
