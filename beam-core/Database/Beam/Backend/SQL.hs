@@ -1,3 +1,4 @@
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Backend.SQL
   ( module Database.Beam.Backend.SQL.Row
