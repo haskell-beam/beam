@@ -244,7 +244,7 @@ For example, the playlist/track relationship above can be defined as follows
 
 ```haskell
 playlistTrackRelationship :: ManyToMany ChinookDb PlaylistT TrackT
-playlistTrackRelationshipu =
+playlistTrackRelationship =
   manyToMany_ (playlistTrack chinookDb) playlistTrackPlaylistId playlistTrackTrackId
 ```
 
