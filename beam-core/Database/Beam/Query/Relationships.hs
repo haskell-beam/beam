@@ -117,7 +117,7 @@ type ManyToManyThrough be db through left right =
 --   related tables. Also takes two `Q`s representing the table sources to relate.
 --
 --   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
---   for more indformation.
+--   for more information.
 manyToMany_
   :: ( Database be db
      , Table joinThrough, Table left, Table right
@@ -138,7 +138,7 @@ manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, l, r) -> (l, r)) $
 --   tables. Also takes two `Q`s representing the table sources to relate.
 --
 --   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
---   for more indformation.
+--   for more information.
 manyToManyPassthrough_
   :: ( Database be db
      , Table joinThrough, Table left, Table right
