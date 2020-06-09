@@ -665,4 +665,4 @@ using beam to generate advanced queries. More information on the Beam API is
 havailable on [hackage](http://hackage.haskell.org/package/beam). Happy beaming!
 
 Beam is a work in progress. Please submit bugs and patches
-on [GitHub](https://github.com/tathougies/beam).
+on [GitHub](https://github.com/haskell-beam/beam).
