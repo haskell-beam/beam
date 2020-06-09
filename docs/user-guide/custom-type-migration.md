@@ -10,7 +10,7 @@ data ShippingCarrier = USPS | FedEx | UPS | DHL
   deriving (Show, Read, Eq, Ord, Enum)
 ```
 
-From this [example](https://github.com/tathougies/beam/blob/master/beam-postgres/examples/Pagila/Schema/V0001.hs),
+From this [example](https://github.com/haskell-beam/beam/blob/master/beam-postgres/examples/Pagila/Schema/V0001.hs),
 let us take the `AddressT` table and add a column `addressShipper` to it.
 ```haskell
 -- | Address table
