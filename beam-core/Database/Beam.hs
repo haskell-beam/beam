@@ -5,7 +5,7 @@
 --   The most interesting modules are "Database.Beam.Schema" and "Database.Beam.Query".
 --
 --   This is mainly reference documentation. Most users will want to consult the
---   [manual](https://tathougies.github.io/beam).
+--   [manual](https://haskell-beam.github.io/beam).
 module Database.Beam
      ( module Database.Beam.Query
      , module Database.Beam.Schema

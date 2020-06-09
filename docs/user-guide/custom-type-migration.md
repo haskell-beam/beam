@@ -1,7 +1,7 @@
 **Note**: The code used in this guide is in `beam-postgres/examples/Pagila/Schema/CustomMigrateExample.hs`.
 
 ### Using Custom Types in migration ###
-In Beam [Tutorial 3](https://tathougies.github.io/beam/tutorials/tutorial3/) we looked at marshalling custom types.
+In Beam [Tutorial 3](https://haskell-beam.github.io/beam/tutorials/tutorial3/) we looked at marshalling custom types.
 Beam provides functionality to represent custom defined types in migration as well.
 
 From the tutorials, let us take our custom type `ShippingCarrier`.

@@ -2,9 +2,9 @@ name:                beam-sqlite
 version:             0.4.0.0
 synopsis:            Beam driver for SQLite
 description:         Beam driver for the <https://sqlite.org/ SQLite> embedded database.
-                     See <http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/ here>
+                     See <https://haskell-beam.github.io/beam/user-guide/backends/beam-sqlite/ here>
                      for more information
-homepage:            http://tathougies.github.io/beam/user-guide/backends/beam-sqlite/
+homepage:            https://haskell-beam.github.io/beam/user-guide/backends/beam-sqlite/
 license:             MIT
 license-file:        LICENSE
 author:              Travis Athougies

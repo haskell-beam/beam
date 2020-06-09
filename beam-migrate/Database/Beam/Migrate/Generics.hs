@@ -3,7 +3,7 @@
 -- | Support for creating checked databases from Haskell ADTs, using 'Generic's.
 --
 -- For more information, see
--- <http://tathougies.github.io/beam/schema-guide/migrations/ the manual>
+-- <https://haskell-beam.github.io/beam/schema-guide/migrations/ the manual>
 
 module Database.Beam.Migrate.Generics
  ( -- * Default checked database settings
@@ -24,7 +24,7 @@ import GHC.Generics
 
 -- | Produce a checked database for the given Haskell database type
 --
--- See <http://tathougies.github.io/beam/schema-guide/migrations/ the manual>
+-- See <https://haskell-beam.github.io/beam/schema-guide/migrations/ the manual>
 -- for more information on the defaults.
 defaultMigratableDbSettings
   :: forall be db.

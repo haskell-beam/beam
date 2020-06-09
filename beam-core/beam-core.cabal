@@ -10,7 +10,7 @@ description:         Beam is a Haskell library for type-safe querying and manipu
                      well as the corresponding backend.
 
                      For more information, see the user manual and tutorial on
-                     <https://tathougies.github.io/beam GitHub pages>.
+                     <https://haskell-beam.github.io/beam GitHub pages>.
 homepage:            http://travis.athougies.net/projects/beam.html
 license:             MIT
 license-file:        LICENSE

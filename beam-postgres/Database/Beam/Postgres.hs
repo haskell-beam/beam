@@ -15,7 +15,7 @@
 -- <https://www.postgresql.org/docs/current/static/index.html behavior>.
 --
 -- For examples on how to use @beam-postgres@ usage, see
--- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ its manual>.
+-- <https://haskell-beam.github.io/beam/user-guide/backends/beam-postgres/ its manual>.
 
 module Database.Beam.Postgres
   (  -- * Beam Postgres backend
