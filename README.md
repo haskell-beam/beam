@@ -10,7 +10,7 @@ server. Queries are written in a straightforward, natural monadic syntax.
 Combinators are provided for all standard SQL92 features, and a significant
 subset of SQL99, SQL2003, and SQL2008 features. For your convenience a thorough
 compatibility matrix is
-maintained [here](http://tathougies.github.io/beam/about/compatibility/).
+maintained [here](https://haskell-beam.github.io/beam/about/compatibility/).
 
 Beam is standards compliant but not naive. We recognize that different database
 backends provide different guarantees, syntaxes, and advantages. To reflect
@@ -38,7 +38,7 @@ a number of rich data types on top of the standard SQL data types. To reflect
 this, `beam-postgres` offers pluggable support for postgres-specific data types
 and features.
 
-For more information, see the [user guide](https://tathougies.github.io/beam).
+For more information, see the [user guide](https://haskell-beam.github.io/beam).
 
 For questions, feel free to join
 our [mailing list](https://groups.google.com/forum/#!forum/beam-discussion) or

@@ -93,7 +93,7 @@ lockAll_ :: a -> PgWithLocking s a
 lockAll_ = PgWithLocking mempty
 
 -- | Return and lock the given tables. Typically used as an infix operator. See the
--- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ the user guide> for usage
+-- <https://haskell-beam.github.io/beam/user-guide/backends/beam-postgres/ the user guide> for usage
 -- examples
 withLocks_ :: a -> PgLockedTables s -> PgWithLocking s a
 withLocks_ = flip PgWithLocking
@@ -112,7 +112,7 @@ locked_ (DatabaseEntity dt) = do
 
 -- | Lock some tables during the execution of a query. This is rather complicated, and there are
 -- several usage examples in
--- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ the user guide>
+-- <https://haskell-beam.github.io/beam/user-guide/backends/beam-postgres/ the user guide>
 --
 -- The Postgres locking clause is rather complex, and beam currently does not check several
 -- pre-conditions. It is assumed you kinda know what you're doing.

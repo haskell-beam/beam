@@ -1,7 +1,7 @@
 module Database.Beam.Query.Aggregate
   ( -- * Aggregates
     -- | See the corresponding
-    --   <https://tathougies.github.io/beam/user-guide/queries/aggregates.md manual section>
+    --   <https://haskell-beam.github.io/beam/user-guide/queries/aggregates.md manual section>
     --   for more detail
 
     aggregate_
@@ -61,7 +61,7 @@ type Aggregable be a =
 --   'QExpr's).
 --
 --   For usage examples, see
---   <https://tathougies.github.io/beam/user-guide/queries/aggregates/ the manual>.
+--   <https://haskell-beam.github.io/beam/user-guide/queries/aggregates/ the manual>.
 aggregate_ :: forall be a r db s.
               ( BeamSqlBackend be
               , Aggregable be a, Projectible be r, Projectible be a

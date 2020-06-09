@@ -45,7 +45,7 @@ instance Semigroup (Recursiveness be) where
 -- (with @RecursiveDo@ enabled) to bind result values (again, using
 -- 'reuse') even /before/ they're introduced.
 --
--- See further documentation <http://tathougies.github.io/beam/user-guide/queries/common-table-expressions/ here>.
+-- See further documentation <https://haskell-beam.github.io/beam/user-guide/queries/common-table-expressions/ here>.
 newtype With be (db :: (* -> *) -> *) a
     = With { runWith :: WriterT (Recursiveness be, [ BeamSql99BackendCTESyntax be ])
                                 (State Int) a }
