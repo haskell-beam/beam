@@ -37,7 +37,7 @@ your `stack.yaml` to build and use beam in your project!
 packages:
 - .
 - location:
-    git: https://github.com/tathougies/beam.git
+    git: https://github.com/haskell-beam/beam.git
     commit: <latest master commit>
   extra-dep: true
   subdirs:
@@ -89,10 +89,10 @@ to add support for a new backend. Help is available on the
 [`beam-discussion` Google Group](https://groups.google.com/forum/#!forum/beam-discussion).
 The following is a quick step-by-step guide of contributing a new feature:
 
-1. Fork the github repository at `https://github.com/tathougies/beam`
+1. Fork the github repository at `https://github.com/haskell-beam/beam`
    and clone the fork to a local directory.
 2. Work on your feature on your own branch, or pick
-   an [issue](https://github.com/tathougies/beam/issues).
+   an [issue](https://github.com/haskell-beam/beam/issues).
 3. When you feel ready to contribute the feature back to `beam-core`, send a
    Pull Request on Github, with an explanation of what your patch does and
    whether it breaks the API.
@@ -104,7 +104,7 @@ The following is a quick step-by-step guide of contributing a new feature:
 !!! tip "Tip"
     Be sure to add your name to
     the
-    [`CONTRIBUTORS`](https://github.com/tathougies/beam/blob/master/CONTRIBUTORS) file
+    [`CONTRIBUTORS`](https://github.com/haskell-beam/beam/blob/master/CONTRIBUTORS) file
     for eternal fame and glory!
 
 ## Questions, Feedback, Discussion
@@ -113,7 +113,7 @@ The following is a quick step-by-step guide of contributing a new feature:
 * For general questions, feedback on patches, support, or other concerns, please
   write to the mailing list
 * For bugs or feature requests,
-  please [open an issue](https://github.com/tathougies/beam/issues)
+  please [open an issue](https://github.com/haskell-beam/beam/issues)
 
 ## Why Beam?
 
