@@ -39,7 +39,7 @@ data JsonDb entity
     { jsonTable :: entity (TableEntity JsonT) }
     deriving (Generic, Database Postgres)
 
--- | Regression test for <https://github.com/tathougies/beam/issues/297 #297>
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/297 #297>
 jsonNulTest :: IO ByteString -> TestTree
 jsonNulTest pgConn =
     testCase "JSON NUL handling (#297)" $
@@ -109,7 +109,7 @@ data WrongDb entity
     = WrongDb { _wrongTbl :: entity (TableEntity WrongTblT) }
       deriving (Generic, Database Postgres)
 
--- | Regression test for <https://github.com/tathougies/beam/issues/112>
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/112>
 errorOnSchemaMismatch :: IO ByteString -> TestTree
 errorOnSchemaMismatch pgConn =
     testCase "runInsertReturningList should error on schema mismatch (#112)" $
