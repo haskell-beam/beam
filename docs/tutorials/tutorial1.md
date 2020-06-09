@@ -424,7 +424,7 @@ Until next time!
 
 If you have any questions about beam, feel free to send them to
 travis@athougies.net . Pull requests and bug reports are welcome
-on [GitHub](https://github.com/tathougies/beam).
+on [GitHub](https://github.com/haskell-beam/beam).
 
 [^1]:
    Thanks to various bloggers for pointing this out. You can read more about this technique
