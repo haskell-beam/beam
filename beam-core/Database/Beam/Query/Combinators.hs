@@ -31,7 +31,7 @@ module Database.Beam.Query.Combinators
     , related_, relatedBy_, relatedBy_'
     , leftJoin_, leftJoin_'
     , perhaps_, outerJoin_, outerJoin_'
-    , subselect_, references_
+    , subselect_, references_, references_'
 
     , nub_
 
@@ -312,10 +312,19 @@ relatedBy_' = join_'
 
 -- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
 --   to the given table. Useful for creating join conditions.
+--   Use 'references_'' for a 'SqlBool' comparison.
 references_ :: ( Table t, BeamSqlBackend be
                , HasTableEquality be (PrimaryKey t) )
             => PrimaryKey t (QGenExpr ctxt be s) -> t (QGenExpr ctxt be s) -> QGenExpr ctxt be s Bool
 references_ fk tbl = fk ==. pk tbl
+
+-- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
+--   to the given table. Useful for creating join conditions.
+--   Use 'references_' for a 'Bool' comparison.
+references_' :: ( Table t, BeamSqlBackend be
+                , HasTableEquality be (PrimaryKey t) )
+             => PrimaryKey t (QGenExpr ctxt be s) -> t (QGenExpr ctxt be s) -> QGenExpr ctxt be s SqlBool
+references_' fk tbl = fk ==?. pk tbl
 
 -- | Only return distinct values from a query
 nub_ :: ( BeamSqlBackend be, Projectible be r )
