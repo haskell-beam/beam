@@ -9,15 +9,12 @@ import           Database.Beam.Migrate.Simple (autoMigrate)
 import           Database.Beam.Postgres
 import           Database.Beam.Postgres.Migrate (migrationBackend)
 import           Database.Beam.Postgres.Test
-import qualified Database.PostgreSQL.Simple as Pg
 
 import           Data.ByteString (ByteString)
 import           Data.Functor.Classes
 import           Data.Int
 import           Data.Proxy (Proxy(..))
-import           Data.Semigroup
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import           Data.Typeable
 import           Data.UUID (UUID, fromWords)
 import           Data.Word

@@ -8,7 +8,6 @@ import           Database.Beam.Migrate.Tool.Registry
 import           Database.Beam.Migrate.Tool.Status
 
 import           Control.Applicative
-import           Control.Exception
 import           Control.Monad
 import qualified Control.Monad.Fail as Fail
 
@@ -16,13 +15,11 @@ import qualified Data.ByteString.Char8 as BS
 import           Data.Char as Char
 import           Data.Graph.Inductive.Graph
 import qualified Data.Graph.Inductive.Query as Gr
-import qualified Data.HashSet as HS
 import           Data.List (find)
 import           Data.List.Split (splitWhen)
 import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Data.Typeable
 import           Data.UUID (UUID)
 
 import           System.IO
