@@ -32,6 +32,9 @@ import           Test.Tasty.HUnit
 
 import           Unsafe.Coerce
 
+textGen :: Hedgehog.Gen T.Text
+textGen = Gen.text (Range.constant 0 1000) $ Gen.filter (/= '\NUL') Gen.unicode
+
 uuidGen :: Hedgehog.Gen UUID
 uuidGen = fromWords <$> Gen.integral Range.constantBounded
                     <*> Gen.integral Range.constantBounded
@@ -72,7 +75,7 @@ tests postgresConn =
     , marshalTest (Gen.integral (Range.constantBounded @Word16)) postgresConn
     , marshalTest (Gen.integral (Range.constantBounded @Word32)) postgresConn
     , marshalTest (Gen.integral (Range.constantBounded @Word64)) postgresConn
-    , marshalTest (Gen.text (Range.constant 0 1000) Gen.unicode) postgresConn
+    , marshalTest textGen postgresConn
     , marshalTest uuidGen postgresConn
 
     , marshalTest' (\a b -> Hedgehog.assert (ptCmp a b))  pointGen postgresConn
@@ -85,7 +88,7 @@ tests postgresConn =
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word16))) postgresConn
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word32))) postgresConn
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word64))) postgresConn
-    , marshalTest (Gen.maybe (Gen.text (Range.constant 0 1000) Gen.unicode)) postgresConn
+    , marshalTest (Gen.maybe textGen) postgresConn
     , marshalTest (Gen.maybe uuidGen) postgresConn
 
     , marshalTest' (\a b -> Hedgehog.assert (liftEq ptCmp a b))  (Gen.maybe pointGen) postgresConn
