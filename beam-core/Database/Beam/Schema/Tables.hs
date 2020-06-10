@@ -62,6 +62,7 @@ module Database.Beam.Schema.Tables
 
 import           Database.Beam.Backend.Types
 
+import           Control.Applicative (liftA2)
 import           Control.Arrow (first)
 import           Control.Monad.Identity
 import           Control.Monad.Writer hiding ((<>))
@@ -106,18 +107,18 @@ class Database be db where
     --
     --   The idea is that, for any two databases over particular entity tags 'f'
     --   and 'g', if we can take any entity in 'f' and 'g' to the corresponding
-    --   entity in 'h' (in the possibly effectful monad 'm'), then we can
+    --   entity in 'h' (in the possibly effectful applicative functor 'm'), then we can
     --   transform the two databases over 'f' and 'g' to a database in 'h',
-    --   within the monad 'm'.
+    --   within 'm'.
     --
     --   If that doesn't make sense, don't worry. This is mostly beam internal
-    zipTables :: Monad m
+    zipTables :: Applicative m
               => Proxy be
               -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
                   f tbl -> g tbl -> m (h tbl))
               -> db f -> db g -> m (db h)
     default zipTables :: ( Generic (db f), Generic (db g), Generic (db h)
-                         , Monad m
+                         , Applicative m
                          , GZipDatabase be f g h
                                         (Rep (db f)) (Rep (db g)) (Rep (db h)) ) =>
                          Proxy be ->
@@ -401,7 +402,7 @@ instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements 
     where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
 
 class GZipDatabase be f g h x y z where
-  gZipDatabase :: Monad m =>
+  gZipDatabase :: Applicative m =>
                   (Proxy f, Proxy g, Proxy h, Proxy be)
                -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl))
                -> x () -> y () -> m (z ())
@@ -412,9 +413,7 @@ instance ( GZipDatabase be f g h ax ay az
          , GZipDatabase be f g h bx by bz ) =>
   GZipDatabase be f g h (ax :*: bx) (ay :*: by) (az :*: bz) where
   gZipDatabase p combine ~(ax :*: bx) ~(ay :*: by) =
-    do a <- gZipDatabase p combine ax ay
-       b <- gZipDatabase p combine bx by
-       pure (a :*: b)
+    liftA2 (:*:) (gZipDatabase p combine ax ay) (gZipDatabase p combine bx by)
 instance (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
   GZipDatabase be f g h (K1 Generic.R (f tbl)) (K1 Generic.R (g tbl)) (K1 Generic.R (h tbl)) where
 

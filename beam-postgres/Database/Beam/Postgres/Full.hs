@@ -438,9 +438,9 @@ instance PgReturning SqlDelete where
       tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr . pure . fieldE . unqualifiedField . _fieldName $ f)) tblSettings
 
 instance BeamHasInsertOnConflict Postgres where
-  data SqlConflictTarget Postgres table =
+  newtype SqlConflictTarget Postgres table =
     PgInsertOnConflictTarget (table (QExpr Postgres QInternal) -> PgInsertOnConflictTargetSyntax)
-  data SqlConflictAction Postgres table =
+  newtype SqlConflictAction Postgres table =
     PgConflictAction (table (QField QInternal) -> PgConflictActionSyntax)
 
   insertOnConflict tbl vs target action = insert tbl vs $ onConflict target action

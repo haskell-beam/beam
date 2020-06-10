@@ -10,7 +10,6 @@ module Database.Beam.Test.SQL
 import Database.Beam.Test.Schema hiding (tests)
 
 import Database.Beam
-import Database.Beam.Query.Internal
 import Database.Beam.Backend.SQL (MockSqlBackend)
 import Database.Beam.Backend.SQL.AST
 

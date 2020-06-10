@@ -4,7 +4,6 @@ module Database.Beam.Postgres.Test.DataTypes where
 
 import Database.Beam
 import Database.Beam.Postgres
-import Database.Beam.Postgres.Migrate
 import Database.Beam.Postgres.Test
 import Database.Beam.Migrate
 import Database.Beam.Backend.SQL.BeamExtensions
@@ -68,7 +67,7 @@ jsonNulTest pgConn =
           fmap (fmap (\(PgJSON v) -> v)) $
             runSelectReturningList $ select $
             fmap (\(JsonT _ v) -> v) $
-            orderBy_ (\(JsonT pk _) -> asc_ pk) $
+            orderBy_ (\(JsonT k _) -> asc_ k) $
             all_ (jsonTable db)
 
       readback @?= [ "hello\0world"
@@ -129,7 +128,7 @@ errorOnSchemaMismatch pgConn =
                                                         (WrongTbl (field "key" int notNull)
                                                                   (field "value" int notNull)))
 
-      didFail <- handle (\(e :: SomeException) -> pure True) $
+      didFail <- handle (\(_ :: SomeException) -> pure True) $
         runBeamPostgres conn $ do
           _ <- runInsertReturningList $ insert (_wrongTbl wrongDb) $ insertValues [ WrongTbl 4 23, WrongTbl 5 24, WrongTbl 6 24 ]
           pure False
