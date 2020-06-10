@@ -16,11 +16,8 @@ module Database.Beam.Test.Schema
 import           Database.Beam
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend
-import           Database.Beam.Backend.SQL.AST
 
 import           Data.List.NonEmpty ( NonEmpty((:|)) )
-import           Data.Monoid
-import           Data.Proxy
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time.Clock (UTCTime)
@@ -117,9 +114,6 @@ instance Beamable (PrimaryKey RoleT)
 deriving instance Show (TableSettings (PrimaryKey RoleT))
 deriving instance Eq (TableSettings (PrimaryKey RoleT))
 
-roleTableSchema :: TableSettings RoleT
-roleTableSchema = defTblFieldSettings
-
 -- * Ensure that fields of a nullable primary key are given the proper Maybe type
 
 data DepartmentT f
@@ -134,9 +128,6 @@ instance Table DepartmentT where
 instance Beamable (PrimaryKey DepartmentT)
 deriving instance Show (TableSettings DepartmentT)
 deriving instance Eq (TableSettings DepartmentT)
-
-departmentTableSchema :: TableSettings DepartmentT
-departmentTableSchema = defTblFieldSettings
 
 -- nullableForeignKeysGivenMaybeType :: TestTree
 -- nullableForeignKeysGivenMaybeType =
@@ -227,7 +218,6 @@ parametricAndFixedNestedBeamsAreEquivalent =
 -- `ADepartmentVehiculeT` and `BDepartmentVehiculeT` are equivalent, but one was using params while
 -- the other had its sub-beams fixed.
 
-type ADepartmentVehicule   = ADepartmentVehiculeT Identity
 type ADepartmentVehiculeT  = DepartamentRelatedT VehiculeInformationT VehiculeT
 data DepartamentRelatedT metaInfo prop f = DepartamentProperty
       { _aDepartament  :: PrimaryKey DepartmentT f
@@ -235,7 +225,6 @@ data DepartamentRelatedT metaInfo prop f = DepartamentProperty
       , _aMetaInfo     :: metaInfo (Nullable f)
       } deriving Generic
 
-type BDepartmentVehicule    = BDepartmentVehiculeT Identity
 data BDepartmentVehiculeT f = BDepartmentVehicule
       { _bDepartament  :: PrimaryKey DepartmentT f
       , _bRelatesTo    :: VehiculeT f
@@ -323,7 +312,7 @@ employeeDbSettingsRuleMods = defaultDbSettings `withDbModification`
                                                 let defName = defaultFieldName field
                                                 in case T.stripPrefix "funny" defName of
                                                   Nothing -> defName
-                                                  Just fieldNm -> "pfx_" <> defName)
+                                                  Just _ -> "pfx_" <> defName)
 
 -- employeeDbSettingsModified :: DatabaseSettings EmployeeDb
 -- employeeDbSettingsModified =
