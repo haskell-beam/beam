@@ -63,7 +63,7 @@ library
                       CPP, TypeApplications, FlexibleContexts
   ghc-options:        -Wall
   if flag(werror)
-    ghc-options:       -Werror
+    ghc-options: -Werror
 
 test-suite beam-postgres-tests
   type: exitcode-stdio-1.0
