@@ -3,6 +3,7 @@ module Database.Beam.Postgres.Test.Migrate where
 import Database.Beam
 import Database.Beam.Postgres
 import Database.Beam.Postgres.Migrate
+import Database.Beam.Postgres.PgCrypto (PgCrypto)
 import Database.Beam.Postgres.Test
 import Database.Beam.Migrate
 import Database.Beam.Migrate.Simple
@@ -20,6 +21,7 @@ tests postgresConn =
       , charNoWidthVerification postgresConn "VARCHAR" varchar
       , charWidthVerification postgresConn "CHAR" char
       , charNoWidthVerification postgresConn "CHAR" char
+      , extensionVerification postgresConn
       ]
 
 data CharT f
@@ -35,6 +37,11 @@ instance Table CharT where
 data CharDb entity
     = CharDb
     { vcTbl :: entity (TableEntity CharT) }
+    deriving (Generic, Database Postgres)
+
+data CryptoDb entity
+    = CryptoDb
+    { cryptoExtension :: entity (PgExtensionEntity PgCrypto) }
     deriving (Generic, Database Postgres)
 
 -- | Verifies that 'verifySchema' correctly checks the width of
@@ -67,6 +74,18 @@ charNoWidthVerification pgConn tyName charTy =
 
           res <- verifySchema migrationBackend db
 
+          case res of
+            VerificationSucceeded -> return ()
+            VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
+
+-- | Verifies that 'verifySchema' correctly checks enabled PgCrypto extension
+extensionVerification :: IO ByteString -> TestTree
+extensionVerification pgConn =
+    testCase "verifySchema correctly checks enabled PgCrypto extension" $
+      withTestPostgres "db_extension_pgcrypto" pgConn $ \conn ->
+        runBeamPostgres conn $ do
+          db <- executeMigration runNoReturn (CryptoDb <$> pgCreateExtension)
+          res <- verifySchema migrationBackend db
           case res of
             VerificationSucceeded -> return ()
             VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
