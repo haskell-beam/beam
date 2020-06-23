@@ -172,14 +172,14 @@ runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
              bRes <- runF b (\x curCol' colCount' cols' -> pure (Right (next x curCol' colCount' cols'))) step curCol colCount cols
              case bRes of
                Right next' -> next'
-               Left {} -> pure (Left aErr)
+               Left {}     -> pure (Left aErr)
 
     step (FailParseWith err) _ _ _ =
       pure (Left err)
 
     finish x _ _ _ = pure (Right x)
 
-withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either BeamRowReadError a)
+withPgDebug :: (Text -> IO ()) -> Pg.Connection -> Pg a -> IO (Either BeamRowReadError a)
 withPgDebug dbg conn (Pg action) =
   let finish x = pure (Right x)
       step (PgLiftIO io next) = io >>= next
@@ -190,7 +190,7 @@ withPgDebug dbg conn (Pg action) =
                            next) =
         do query <- pgRenderSyntax conn syntax
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-           dbg (T.unpack (decodeUtf8 query))
+           dbg (decodeUtf8 query)
            action' <- runF process finishProcess stepProcess Nothing
            case action' of
              PgStreamDone (Right x) -> Pg.execute_ conn (Pg.Query query) >> next x
@@ -204,7 +204,7 @@ withPgDebug dbg conn (Pg action) =
                in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query) (PgStreamContinue nextStream) runConsumer >>= finishUp
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (T.unpack (decodeUtf8 query))
+           dbg (decodeUtf8 query)
 
            res <- Pg.exec conn query
            sts <- Pg.resultStatus res
@@ -216,7 +216,7 @@ withPgDebug dbg conn (Pg action) =
                                       res sts
       step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (T.unpack (decodeUtf8 query))
+           dbg (decodeUtf8 query)
            _ <- Pg.execute_ conn (Pg.Query query)
 
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
@@ -299,7 +299,7 @@ instance MonadIO Pg where
 liftIOWithHandle :: (Pg.Connection -> IO a) -> Pg a
 liftIOWithHandle f = liftF (PgLiftWithHandle f id)
 
-runBeamPostgresDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO a
+runBeamPostgresDebug :: (Text -> IO ()) -> Pg.Connection -> Pg a -> IO a
 runBeamPostgresDebug dbg conn action =
     withPgDebug dbg conn action >>= either throwIO pure
 
