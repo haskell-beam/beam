@@ -199,7 +199,7 @@ evaluateDatabase (MigrationSteps f) = runF (runKleisli f ()) id (\(MigrationStep
     runMigration :: forall a'. Migration be a' -> a'
     runMigration migration = runF migration id (\(MigrationRunCommand _ _ next) -> next)
 
--- | Collect the names of all steps in hte given 'MigrationSteps'
+-- | Collect the names of all steps in the given 'MigrationSteps'
 stepNames :: forall be a. MigrationSteps be () a -> [Text]
 stepNames (MigrationSteps f) = runF (runKleisli f ()) (\_ x -> x) (\(MigrationStep nm migration next) x -> next (runMigration migration) (x ++ [nm])) []
   where
