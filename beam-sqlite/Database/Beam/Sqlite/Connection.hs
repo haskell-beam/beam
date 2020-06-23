@@ -73,6 +73,7 @@ import           Data.Proxy (Proxy(..))
 import           Data.Scientific (Scientific)
 import           Data.String (fromString)
 import qualified Data.Text as T
+import           Data.Text (Text)
 import qualified Data.Text.Encoding as T (decodeUtf8)
 import qualified Data.Text.Lazy as TL
 import           Data.Time ( LocalTime, UTCTime, Day

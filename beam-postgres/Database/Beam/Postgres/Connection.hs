@@ -63,6 +63,7 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Maybe (listToMaybe, fromMaybe)
 import           Data.Proxy
 import           Data.String
+import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Typeable (cast)
