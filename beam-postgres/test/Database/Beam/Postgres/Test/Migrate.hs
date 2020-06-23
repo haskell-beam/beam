@@ -84,8 +84,15 @@ extensionVerification pgConn =
     testCase "verifySchema correctly checks enabled PgCrypto extension" $
       withTestPostgres "db_extension_pgcrypto" pgConn $ \conn ->
         runBeamPostgres conn $ do
-          db <- executeMigration runNoReturn (CryptoDb <$> pgCreateExtension)
-          res <- verifySchema migrationBackend db
-          case res of
+          let migration = CryptoDb <$> pgCreateExtension
+          dbBefore <- executeMigration (const $ return ()) migration
+          resBefore <- verifySchema migrationBackend dbBefore
+          case resBefore of
+            VerificationSucceeded -> fail "Verification succeeded before migration when it should have failed"
+            VerificationFailed _ -> return ()
+
+          dbAfter <- executeMigration runNoReturn migration
+          resAfter <- verifySchema migrationBackend dbAfter
+          case resAfter of
             VerificationSucceeded -> return ()
             VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
