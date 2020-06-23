@@ -23,7 +23,7 @@ builddocs () {
 
 cleandocs () {
     if [ -f "docs/.beam-query-cache" ]; then
-	rm -rf docs/.beam-query-cache
+        rm -rf docs/.beam-query-cache
     fi
 }
 
@@ -40,11 +40,10 @@ usage () {
 case $1 in
     clean) cleandocs ;;
     servedocs)
-	servedocs ;;
+        servedocs ;;
     builddocs)
         builddocs ;;
     ghpages)
-	ghpages ;;
+        ghpages ;;
     *) usage ;;
 esac
-
