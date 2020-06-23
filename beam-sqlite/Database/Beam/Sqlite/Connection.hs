@@ -292,8 +292,8 @@ sqliteUriSyntax =
         hdl <- open sqliteName
         pure (hdl, close hdl))
 
-runBeamSqliteDebug :: (String -> IO ()) -> Connection -> SqliteM a -> IO a
-runBeamSqliteDebug debugStmt conn x = runReaderT (runSqliteM x) (debugStmt, conn)
+runBeamSqliteDebug :: (Text -> IO ()) -> Connection -> SqliteM a -> IO a
+runBeamSqliteDebug debugStmt conn x = runReaderT (runSqliteM x) (debugStmt . T.pack, conn)
 
 runBeamSqlite :: Connection -> SqliteM a -> IO a
 runBeamSqlite = runBeamSqliteDebug (\_ -> pure ())
