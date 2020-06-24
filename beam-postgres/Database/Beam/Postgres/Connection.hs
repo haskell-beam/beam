@@ -202,7 +202,8 @@ withPgDebug dbg conn (Pg action) =
                    finishUp (PgStreamContinue next') = next' Nothing >>= finishUp
 
                    columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
-               in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query) (PgStreamContinue nextStream) runConsumer >>= finishUp
+               in do resp <- Pg.queryWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query)
+                     foldM runConsumer (PgStreamContinue nextStream) resp >>= finishUp
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
            dbg (decodeUtf8 query)
