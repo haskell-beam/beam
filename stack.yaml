@@ -1,4 +1,4 @@
-resolver: lts-15.14
+resolver: lts-15.16
 
 packages:
   - beam-sqlite
