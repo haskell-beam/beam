@@ -72,5 +72,5 @@ flag werror
 
 source-repository head
   type: git
-  location: https://github.com/tathougies/beam.git
+  location: https://github.com/haskell-beam/beam.git
   subdir: beam-migrate-cli

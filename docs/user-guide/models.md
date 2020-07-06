@@ -295,7 +295,7 @@ Sometimes, we want to declare multiple models with fields in common. Beam allows
 you to simple embed such fields in common types and embed those directly into
 models. For example, in
 the
-[Chinook example schema](https://github.com/tathougies/beam/blob/master/beam-sqlite/examples/Chinook/Schema.hs),
+[Chinook example schema](https://github.com/haskell-beam/beam/blob/master/beam-sqlite/examples/Chinook/Schema.hs),
 we define the following structure for addresses.
 
 ```haskell

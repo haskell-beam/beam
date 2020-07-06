@@ -58,5 +58,5 @@ markdown_extensions:
   - footnotes
 extra:
   logo: 'img/logo.svg'
-repo_name: 'tathougies/beam'
-repo_url: 'https://github.com/tathougies/beam'
+repo_name: 'haskell-beam/beam'
+repo_url: 'https://github.com/haskell-beam/beam'
