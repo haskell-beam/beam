@@ -56,7 +56,7 @@ library
                       unordered-containers >= 0.2 && <0.3,
                       tagged               >=0.8  && <0.9,
 
-                      haskell-src-exts     >=1.18 && <1.22,
+                      haskell-src-exts     >=1.18 && <1.24,
                       clock
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
