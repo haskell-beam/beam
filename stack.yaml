@@ -1,4 +1,4 @@
-resolver: lts-15.16
+resolver: lts-16.7
 
 packages:
   - beam-sqlite
@@ -11,7 +11,7 @@ nix:
   shell-file: shell.nix
 
 extra-deps:
-  - constraints-extras-0.3.0.2
+  - constraints-extras-0.3.0.2@rev:2
   - direct-sqlite-2.3.26
   - dependent-map-0.3
   - dependent-sum-0.6.2.0
