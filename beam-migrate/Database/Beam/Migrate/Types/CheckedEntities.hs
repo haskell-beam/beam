@@ -15,6 +15,7 @@ import Control.Applicative
 import Control.Monad.Writer
 import Control.Monad.Identity
 
+import Data.Maybe
 import Data.Proxy
 import Data.Text (Text)
 import Data.String
@@ -117,7 +118,7 @@ instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
 
   unChecked f (CheckedDatabaseTable x cks fcks) = fmap (\x' -> CheckedDatabaseTable x' cks fcks) (f x)
   collectEntityChecks (CheckedDatabaseTable dt tblChecks tblFieldChecks) =
-    map (\(TableCheck mkCheck) -> mkCheck (qname dt) (dbTableSettings dt)) tblChecks <>
+    catMaybes (map (\(TableCheck mkCheck) -> mkCheck (qname dt) (dbTableSettings dt)) tblChecks) <>
     execWriter (zipBeamFieldsM (\(Columnar' fd) c@(Columnar' (Const fieldChecks)) ->
                                     tell (map (\(FieldCheck mkCheck) -> mkCheck (qname dt) (fd ^. fieldName)) fieldChecks) >>
                                     pure c)
@@ -125,10 +126,13 @@ instance Beamable tbl => IsCheckedDatabaseEntity be (TableEntity tbl) where
 
   checkedDbEntityAuto tblTypeName =
     let tblChecks =
-          [ TableCheck (\tblName _ -> SomeDatabasePredicate (TableExistsPredicate tblName))
-          , TableCheck (\tblName tblFields ->
-                           let pkFields = allBeamValues (\(Columnar' fd) -> fd ^. fieldName) (primaryKey tblFields)
-                           in SomeDatabasePredicate (TableHasPrimaryKey tblName pkFields)) ]
+          [ TableCheck $ \tblName _ ->
+              Just (SomeDatabasePredicate (TableExistsPredicate tblName))
+          , TableCheck $ \tblName tblFields ->
+              case allBeamValues (\(Columnar' fd) -> fd ^. fieldName) (primaryKey tblFields) of
+                [] -> Nothing
+                pkFields -> Just (SomeDatabasePredicate (TableHasPrimaryKey tblName pkFields))
+          ]
 
         fieldChecks = to (gDefaultTblSettingsChecks (Proxy @be) (Proxy @(Rep (tbl Identity))) False)
     in CheckedDatabaseTable (dbEntityAuto tblTypeName) tblChecks fieldChecks

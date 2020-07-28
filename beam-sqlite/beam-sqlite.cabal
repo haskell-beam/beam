@@ -55,6 +55,34 @@ library
     cpp-options:      -DUNIX
     build-depends:    unix          >=2.0 && <2.8
 
+test-suite beam-sqlite-tests
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends:
+    base,
+    beam-core,
+    beam-migrate,
+    beam-sqlite,
+    sqlite-simple,
+    tasty,
+    tasty-hunit
+  other-modules:
+    Database.Beam.Sqlite.Test.Migrate
+  default-language: Haskell2010
+  default-extensions:
+    DeriveAnyClass,
+    DeriveGeneric,
+    FlexibleContexts,
+    FlexibleInstances,
+    LambdaCase,
+    MultiParamTypeClasses,
+    OverloadedStrings,
+    RankNTypes,
+    ScopedTypeVariables,
+    TypeApplications,
+    TypeFamilies
+
 flag werror
   description: Enable -Werror during development
   default:     False
