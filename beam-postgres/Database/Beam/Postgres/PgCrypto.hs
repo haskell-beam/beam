@@ -11,6 +11,7 @@ import Database.Beam.Backend.SQL
 import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.Extensions
 
+import Data.Int
 import Data.Text (Text)
 import Data.ByteString (ByteString)
 import Data.Vector (Vector)
@@ -41,7 +42,7 @@ data PgCrypto
   , pgCryptoCrypt ::
       forall ctxt s. LiftPg ctxt s (Text -> Text -> Text)
   , pgCryptoGenSalt ::
-      forall ctxt s. LiftPg ctxt s (Text -> Maybe Int -> Text)
+      forall ctxt s. LiftPg ctxt s (Text -> Maybe Int32 -> Text)
 
   -- Pgp functions
   , pgCryptoPgpSymEncrypt ::
