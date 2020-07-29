@@ -85,6 +85,7 @@ import Control.Monad.Writer hiding ((<>))
 import Data.Semigroup
 #endif
 
+import Data.Int
 import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
@@ -360,18 +361,18 @@ subquery_ q =
   QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
 -- | SQL @CHAR_LENGTH@ function
-charLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text )
-            => QGenExpr context be s text -> QGenExpr context be s Int
+charLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text, Integral a )
+            => QGenExpr context be s text -> QGenExpr context be s a
 charLength_ (QExpr s) = QExpr (charLengthE <$> s)
 
 -- | SQL @OCTET_LENGTH@ function
-octetLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text )
-             => QGenExpr context be s text -> QGenExpr context be s Int
+octetLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text, Integral a )
+             => QGenExpr context be s text -> QGenExpr context be s a
 octetLength_ (QExpr s) = QExpr (octetLengthE <$> s)
 
 -- | SQL @BIT_LENGTH@ function
-bitLength_ :: BeamSqlBackend be
-           => QGenExpr context be s SqlBitString -> QGenExpr context be s Int
+bitLength_ :: ( BeamSqlBackend be, Integral a )
+           => QGenExpr context be s SqlBitString -> QGenExpr context be s a
 bitLength_ (QExpr x) = QExpr (bitLengthE <$> x)
 
 -- | SQL @CURRENT_TIMESTAMP@ function
@@ -513,7 +514,7 @@ exceptAll_ (Q a) (Q b) = Q (liftF (QSetOp (exceptTable True) a b (rewriteThread 
 --
 --   But this is not
 --
--- > aggregate_ (\_ -> as_ @Int countAll_) ..
+-- > aggregate_ (\_ -> as_ @Int32 countAll_) ..
 --
 as_ :: forall a ctxt be s. QGenExpr ctxt be s a -> QGenExpr ctxt be s a
 as_ = id
@@ -586,10 +587,10 @@ nrows_ :: BeamSql2003ExpressionBackend be
        => Int -> QFrameBound be
 nrows_ x = QFrameBound (nrowsBoundSyntax x)
 
-noPartition_ :: Maybe (QExpr be s Int)
+noPartition_ :: Integral a => Maybe (QExpr be s a)
 noPartition_ = Nothing
 
-noOrder_ :: Maybe (QOrd be s Int)
+noOrder_ :: Integral a => Maybe (QOrd be s a)
 noOrder_ = Nothing
 
 partitionBy_, orderPartitionBy_ :: partition -> Maybe partition
