@@ -14,18 +14,22 @@ let
     "beam-postgres"
     "beam-sqlite"
   ];
-  ghcVersions = [
-    "ghc844"
-    "ghc865"
-    "ghc883"
-  ];
-  hackageVersions = {
+  ghcVersions = {
+    ghc844 = haskell.packages.ghc844;
+    ghc865 = haskell.packages.ghc865;
+    ghc883 = haskell.packages.ghc883.extend (composeExtensionList [
+      (pinHackageVersions {
+        haskell-src-exts = "1.23.0";
+      })
+    ]);
+  };
+  baseHackageVersions = {
     hashable = "1.3.0.0";
     network = "2.6.3.1";
     postgresql-libpq = "0.9.4.2";
     vector-sized = "1.4.0.0";
   };
-  hackageDirectVersions = {
+  baseHackageDirectVersions = {
     sqlite-simple = {
       version = "0.4.18.0";
       sha256 = "1crp86argxqv5ryfiyj5v17a3wb8ngnb1zbhhx6d99i83skm5i86";
@@ -37,13 +41,18 @@ let
   applyToPackages = f: packages: _: super: lib.genAttrs packages
     (name: f super."${name}");
 
-  mkPackageSet = ghc: ghc.extend (composeExtensionList [
-    (self: _: lib.mapAttrs (n: v: self.callHackage n v {}) hackageVersions)
-    (self: _: lib.mapAttrs (n: v: self.callHackageDirect {
+  pinHackageVersions = versions: self: _:
+    lib.mapAttrs (n: v: self.callHackage n v {}) versions;
+  pinHackageDirectVersions = versions: self: _:
+    lib.mapAttrs (n: v: self.callHackageDirect {
       pkg = n;
       ver = v.version;
       sha256 = v.sha256;
-    } {}) hackageDirectVersions)
+    } {}) versions;
+
+  mkPackageSet = ghc: ghc.extend (composeExtensionList [
+    (pinHackageVersions baseHackageVersions)
+    (pinHackageDirectVersions baseHackageDirectVersions)
     (self: _: lib.genAttrs beamPackages (name:
       self.callCabal2nix name (./. + "/${name}") {}
     ))
@@ -56,10 +65,8 @@ let
       beam-postgres = haskell.lib.addBuildTool super.beam-postgres postgresql;
     })
   ]);
-  mkPrefixedPackages = version: lib.mapAttrs'
-    (name: value: lib.nameValuePair "${version}_${name}" value)
-    (lib.genAttrs beamPackages
-      (name: (mkPackageSet haskell.packages."${version}")."${name}")
-    );
+  mkPrefixedPackages = ghc: lib.mapAttrs'
+    (name: value: lib.nameValuePair "${ghc.name}_${name}" value)
+    (lib.genAttrs beamPackages (name: (mkPackageSet ghc.value)."${name}"));
 
-in mergeMaps (map mkPrefixedPackages ghcVersions)
+in mergeMaps (map mkPrefixedPackages (lib.mapAttrsToList lib.nameValuePair ghcVersions))
