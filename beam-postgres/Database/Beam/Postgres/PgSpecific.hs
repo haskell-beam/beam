@@ -38,6 +38,7 @@ module Database.Beam.Postgres.PgSpecific
   , withoutKeys
 
   , pgJsonArrayLength
+  , pgArrayToJson
   , pgJsonbUpdate, pgJsonbSet
   , pgJsonbPretty
 
@@ -133,6 +134,7 @@ import           Data.ByteString.Builder
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
+import           Data.Functor
 import           Data.Hashable
 import qualified Data.List.NonEmpty as NE
 import           Data.Proxy
@@ -997,6 +999,16 @@ pgJsonArrayLength :: IsPgJSON json => QGenExpr ctxt Postgres s (json a)
 pgJsonArrayLength (QExpr a) =
   QExpr $ \tbl ->
   PgExpressionSyntax (emit "json_array_length(" <> fromPgExpression (a tbl) <> emit ")")
+
+-- | Postgres @array_to_json@ function.
+pgArrayToJson
+  :: IsPgJSON json
+  => QGenExpr ctxt Postgres s (V.Vector e)
+  -> QGenExpr ctxt Postgres s (json a)
+pgArrayToJson (QExpr a) = QExpr $ a <&> PgExpressionSyntax .
+  mappend (emit "array_to_json") .
+  pgParens .
+  fromPgExpression
 
 -- | The postgres @jsonb_set@ function. 'pgJsonUpdate' expects the value
 -- specified by the path in the second argument to exist. If it does not, the
