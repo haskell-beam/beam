@@ -40,6 +40,7 @@ library
                       bytestring           >=0.10 && <0.11,
 
                       attoparsec           >=0.13 && <0.14,
+                      base16-bytestring    >=0.1  && <0.2,
                       hashable             >=1.1  && <1.4,
                       lifted-base          >=0.2  && <0.3,
                       free                 >=4.12 && <5.2,
