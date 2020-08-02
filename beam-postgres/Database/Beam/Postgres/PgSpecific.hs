@@ -134,6 +134,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
 import           Data.Hashable
+import           Data.Int
 import qualified Data.List.NonEmpty as NE
 import           Data.Proxy
 import           Data.Scientific (Scientific, formatScientific, FPFormat(Fixed))
@@ -888,7 +889,7 @@ QExpr a <@ QExpr b =
 -- See '(->$)' for the corresponding operator for object access.
 (->#) :: IsPgJSON json
       => QGenExpr ctxt Postgres s (json a)
-      -> QGenExpr ctxt Postgres s Int
+      -> QGenExpr ctxt Postgres s Int32
       -> QGenExpr ctxt Postgres s (json b)
 QExpr a -># QExpr b =
   QExpr (pgBinOp "->" <$> a <*> b)
@@ -907,7 +908,7 @@ QExpr a ->$ QExpr b =
 -- corresponding operator on objects.
 (->>#) :: IsPgJSON json
        => QGenExpr ctxt Postgres s (json a)
-       -> QGenExpr ctxt Postgres s Int
+       -> QGenExpr ctxt Postgres s Int32
        -> QGenExpr ctxt Postgres s T.Text
 QExpr a ->># QExpr b =
   QExpr (pgBinOp "->>" <$> a <*> b)
@@ -976,7 +977,7 @@ QExpr a `withoutKey` QExpr b =
 -- corresponding operator on objects.
 withoutIdx :: IsPgJSON json
            => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s Int
+           -> QGenExpr ctxt Postgres s Int32
            -> QGenExpr ctxt Postgres s (json b)
 QExpr a `withoutIdx` QExpr b =
   QExpr (pgBinOp "-" <$> a <*> b)
@@ -993,7 +994,7 @@ QExpr a `withoutKeys` QExpr b =
 -- | Postgres @json_array_length@ function. The supplied json object should be
 -- an array, but this isn't checked at compile-time.
 pgJsonArrayLength :: IsPgJSON json => QGenExpr ctxt Postgres s (json a)
-                  -> QGenExpr ctxt Postgres s Int
+                  -> QGenExpr ctxt Postgres s Int32
 pgJsonArrayLength (QExpr a) =
   QExpr $ \tbl ->
   PgExpressionSyntax (emit "json_array_length(" <> fromPgExpression (a tbl) <> emit ")")
@@ -1409,14 +1410,14 @@ pgUnnestArray (QExpr q) =
   fmap (\(PgUnnestArrayTbl x) -> x) $
   pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)))
 
-data PgUnnestArrayWithOrdinalityTbl a f = PgUnnestArrayWithOrdinalityTbl (C f Int) (C f a)
+data PgUnnestArrayWithOrdinalityTbl a f = PgUnnestArrayWithOrdinalityTbl (C f Int64) (C f a)
   deriving Generic
 instance Beamable (PgUnnestArrayWithOrdinalityTbl a)
 
 -- | Introduce each element of the array as a row, along with the
 -- element's index
 pgUnnestArrayWithOrdinality :: QExpr Postgres s (V.Vector a)
-                            -> Q Postgres db s (QExpr Postgres s Int, QExpr Postgres s a)
+                            -> Q Postgres db s (QExpr Postgres s Int64, QExpr Postgres s a)
 pgUnnestArrayWithOrdinality (QExpr q) =
   fmap (\(PgUnnestArrayWithOrdinalityTbl i x) -> (i, x)) $
   pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)) <> emit " WITH ORDINALITY")
