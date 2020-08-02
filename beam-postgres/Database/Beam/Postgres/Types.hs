@@ -50,7 +50,7 @@ import           Data.Word
 -- | The Postgres backend type, used to parameterize 'MonadBeam'. See the
 -- definitions there for more information. The corresponding query monad is
 -- 'Pg'. See documentation for 'MonadBeam' and the
--- <https://tathougies.github/beam/ user guide> for more information on using
+-- <https://haskell-beam.github/beam/ user guide> for more information on using
 -- this backend.
 data Postgres
   = Postgres

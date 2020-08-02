@@ -14,7 +14,7 @@ category:            Database
 build-type:          Simple
 extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
-bug-reports:          https://github.com/tathougies/beam/issues
+bug-reports:          https://github.com/haskell-beam/beam/issues
 cabal-version:       1.18
 
 library
@@ -90,5 +90,5 @@ flag werror
 
 source-repository head
   type: git
-  location: https://github.com/tathougies/beam.git
+  location: https://github.com/haskell-beam/beam.git
   subdir: beam-sqlite
