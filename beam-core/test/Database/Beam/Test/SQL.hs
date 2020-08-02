@@ -13,6 +13,7 @@ import Database.Beam
 import Database.Beam.Backend.SQL (MockSqlBackend)
 import Database.Beam.Backend.SQL.AST
 
+import Data.Int
 import Data.Time.Clock
 import Data.Text (Text)
 
@@ -274,7 +275,7 @@ aggregates =
                           , selectOrdering = [] } <-
            pure $ selectMock $
            do (age, maxNameLength) <- aggregate_ (\e -> ( group_ (_employeeAge e)
-                                                        , fromMaybe_ 0 (max_ (charLength_ (_employeeFirstName e)))) ) $
+                                                        , fromMaybe_ 0 (max_ (as_ @Int32 (charLength_ (_employeeFirstName e))))) ) $
                                       all_ (_employees employeeDbSettings)
               guard_ (maxNameLength >. 42)
               pure (age, maxNameLength)
@@ -282,13 +283,13 @@ aggregates =
          Just (FromTable (TableNamed (TableName Nothing "employees")) (Just (t0, Nothing))) <- pure selectFrom
          selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0 "age"), Just "res0" )
                                         , ( ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ]
-                                                               , ExpressionValue (Value (0 :: Int)) ], Just "res1" ) ]
+                                                               , ExpressionValue (Value (0 :: Int32)) ], Just "res1" ) ]
          selectWhere @?= Nothing
          selectGrouping @?= Just (Grouping [ ExpressionFieldName (QualifiedField t0 "age") ])
          selectHaving @?= Just (ExpressionCompOp ">" Nothing
                                 (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name")) ]
-                                                    , ExpressionValue (Value (0 :: Int)) ])
-                                (ExpressionValue (Value (42 :: Int))))
+                                                    , ExpressionValue (Value (0 :: Int32)) ])
+                                (ExpressionValue (Value (42 :: Int32))))
 
     aggregateInJoin =
       testCase "Aggregate in JOIN" $
@@ -398,24 +399,24 @@ aggregates =
            pure $ selectMock $
            filter_ (\(_, l) -> l <. 10 ||. l >. 20) $
            aggregate_ (\e -> ( group_ (_employeeAge e)
-                             , fromMaybe_ 0 (max_ (charLength_ (_employeeFirstName e)))) ) $
+                             , fromMaybe_ 0 (max_ (as_ @Int32 (charLength_ (_employeeFirstName e))))) ) $
            limit_ 10 (all_ (_employees employeeDbSettings))
          Just (FromTable (TableFromSubSelect subselect) (Just (t0, Nothing))) <- pure selectFrom
 
          selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField t0 "res3"),Just "res0")
                                         , (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0"))]
-                                                              , ExpressionValue (Value (0 :: Int)) ], Just "res1")
+                                                              , ExpressionValue (Value (0 :: Int32)) ], Just "res1")
                                         ]
          selectWhere @?= Nothing
          selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "res3")])
          selectHaving @?= Just (ExpressionBinOp "OR" (ExpressionCompOp "<" Nothing
                                                       (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ]
-                                                                          , ExpressionValue (Value (0 :: Int)) ])
-                                                      (ExpressionValue (Value (10 :: Int))))
+                                                                          , ExpressionValue (Value (0 :: Int32)) ])
+                                                      (ExpressionValue (Value (10 :: Int32))))
                                                      (ExpressionCompOp ">" Nothing
                                                       (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "res0")) ]
-                                                                          , ExpressionValue (Value (0 :: Int)) ])
-                                                      (ExpressionValue (Value (20 :: Int)))))
+                                                                          , ExpressionValue (Value (0 :: Int32)) ])
+                                                      (ExpressionValue (Value (20 :: Int32)))))
 
          selectLimit subselect @?= Just 10
          selectOffset subselect @?= Nothing
@@ -445,7 +446,7 @@ aggregates =
            pure $ selectMock $
            do (lastName, firstNameLength) <-
                   filter_ (\(_, charLength) -> fromMaybe_ 0 charLength >. 10) $
-                  aggregate_ (\e -> (group_ (_employeeLastName e), max_ (charLength_ (_employeeFirstName e)))) $
+                  aggregate_ (\e -> (group_ (_employeeLastName e), max_ (as_ @Int32 (charLength_ (_employeeFirstName e))))) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               role <- relatedBy_ (_roles employeeDbSettings) (\r -> _roleName r ==. lastName)
               pure (firstNameLength, role, lastName)
@@ -473,8 +474,8 @@ aggregates =
          Just (FromTable (TableFromSubSelect employeesSelect) (Just (t0', Nothing))) <- pure selectFrom
          selectWhere @?= Nothing
          selectHaving @?= Just (ExpressionCompOp ">" Nothing (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))]
-                                                                                 , ExpressionValue (Value (0 :: Int)) ])
-                                                             (ExpressionValue (Value (10 :: Int))))
+                                                                                 , ExpressionValue (Value (0 :: Int32)) ])
+                                                             (ExpressionValue (Value (10 :: Int32))))
          selectGrouping @?= Just (Grouping [ (ExpressionFieldName (QualifiedField t0' "res1")) ])
          selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0' "res1"), Just "res0" )
                                         , ( ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))], Just "res1" ) ]
@@ -506,7 +507,7 @@ aggregates =
               (lastName, firstNameLength) <-
                   filter_ (\(_, charLength) -> charLength >. 10) $
                   aggregate_ (\e -> ( group_ (_employeeLastName e)
-                                    , fromMaybe_ 0 $ max_ (charLength_ (_employeeFirstName e))) ) $
+                                    , fromMaybe_ 0 $ max_ (as_ @Int32 (charLength_ (_employeeFirstName e)))) ) $
                   limit_ 10 (all_ (_employees employeeDbSettings))
               guard_ (_roleName role ==. lastName)
               pure (firstNameLength, role, lastName)
@@ -516,7 +517,7 @@ aggregates =
                          Nothing) <-
            pure selectFrom
          selectWhere @?= Just (ExpressionBinOp "AND"
-                               (ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField t1 "res1")) (ExpressionValue (Value (10 :: Int))))
+                               (ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField t1 "res1")) (ExpressionValue (Value (10 :: Int32))))
                                (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField t0 "name")) (ExpressionFieldName (QualifiedField t1 "res0"))))
          selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t1 "res1"), Just "res0" )
                                         , ( ExpressionFieldName (QualifiedField t0 "for_employee__first_name"), Just "res1" )
@@ -537,7 +538,7 @@ aggregates =
          selectGrouping @?= Just (Grouping [ (ExpressionFieldName (QualifiedField t0' "res1")) ])
          selectProjection @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0' "res1"), Just "res0" )
                                         , ( ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0' "res0"))]
-                                                               , ExpressionValue (Value (0 :: Int)) ]
+                                                               , ExpressionValue (Value (0 :: Int32)) ]
                                           , Just "res1" ) ]
 
          Select { selectTable = SelectTable { .. }, selectLimit = Just 10
@@ -752,7 +753,7 @@ joinHaving =
                       , selectOrdering = [] } <-
        pure $ selectMock $
        do (age, maxFirstNameLength) <- filter_ (\(_, nameLength) -> fromMaybe_ 0 nameLength >=. 20) $
-                                       aggregate_ (\e -> (group_ (_employeeAge e), max_ (charLength_ (_employeeFirstName e)))) $
+                                       aggregate_ (\e -> (group_ (_employeeAge e), max_ (as_ @Int32 (charLength_ (_employeeFirstName e))))) $
                                        all_ (_employees employeeDbSettings)
           role <- all_ (_roles employeeDbSettings)
           pure (age, maxFirstNameLength, _roleName role)
@@ -778,8 +779,8 @@ joinHaving =
      selectGrouping @?= Just (Grouping [ExpressionFieldName (QualifiedField t0 "age")])
      selectHaving @?= Just (ExpressionCompOp ">=" Nothing
                             (ExpressionCoalesce [ ExpressionAgg "MAX" Nothing [ExpressionCharLength (ExpressionFieldName (QualifiedField t0 "first_name"))]
-                                                , ExpressionValue (Value (0 :: Int)) ])
-                            (ExpressionValue (Value (20 :: Int))))
+                                                , ExpressionValue (Value (0 :: Int32)) ])
+                            (ExpressionValue (Value (20 :: Int32))))
 
 -- | Ensure that isJustE and isNothingE work correctly for simple types
 
