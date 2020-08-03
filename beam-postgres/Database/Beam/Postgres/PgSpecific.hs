@@ -1002,9 +1002,8 @@ pgJsonArrayLength (QExpr a) =
 
 -- | Postgres @array_to_json@ function.
 pgArrayToJson
-  :: IsPgJSON json
-  => QGenExpr ctxt Postgres s (V.Vector e)
-  -> QGenExpr ctxt Postgres s (json a)
+  :: QGenExpr ctxt Postgres s (V.Vector e)
+  -> QGenExpr ctxt Postgres s (PgJSON a)
 pgArrayToJson (QExpr a) = QExpr $ a <&> PgExpressionSyntax .
   mappend (emit "array_to_json") .
   pgParens .
