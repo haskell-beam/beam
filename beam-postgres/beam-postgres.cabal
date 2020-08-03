@@ -74,8 +74,24 @@ test-suite beam-postgres-tests
                  Database.Beam.Postgres.Test.Select,
                  Database.Beam.Postgres.Test.DataTypes,
                  Database.Beam.Postgres.Test.Migrate
-  build-depends: base, beam-core, beam-migrate, beam-postgres, text, bytestring, tasty, tasty-hunit,
-                 postgresql-simple, process, temporary, hedgehog, uuid, filepath, directory
+  build-depends:
+    aeson,
+    base,
+    beam-core,
+    beam-migrate,
+    beam-postgres,
+    bytestring,
+    directory,
+    filepath,
+    hedgehog,
+    postgresql-simple,
+    process,
+    tasty,
+    tasty-hunit,
+    temporary,
+    text,
+    uuid,
+    vector
   default-language: Haskell2010
   default-extensions: OverloadedStrings, FlexibleInstances, FlexibleContexts, TypeFamilies,
                       ScopedTypeVariables, MultiParamTypeClasses, TypeApplications, DeriveGeneric,
