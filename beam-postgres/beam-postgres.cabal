@@ -16,16 +16,19 @@ bug-reports:          https://github.com/haskell-beam/beam/issues
 library
   exposed-modules:    Database.Beam.Postgres
                       Database.Beam.Postgres.Migrate
-                      Database.Beam.Postgres.PgCrypto
                       Database.Beam.Postgres.Syntax
                       Database.Beam.Postgres.CustomTypes
 
                       Database.Beam.Postgres.Conduit
                       Database.Beam.Postgres.Full
 
+                      Database.Beam.Postgres.PgCrypto
+                      Database.Beam.Postgres.Extensions.UuidOssp
+
   other-modules:      Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.Debug
                       Database.Beam.Postgres.Extensions
+                      Database.Beam.Postgres.Extensions.Internal
                       Database.Beam.Postgres.PgSpecific
                       Database.Beam.Postgres.Types
 
