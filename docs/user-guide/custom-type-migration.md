@@ -16,7 +16,7 @@ let us take the `AddressT` table and add a column `addressShipper` to it.
 -- | Address table
 data AddressT f
   = AddressT
-  { addressId         :: Columnar f (SqlSerial Int)
+  { addressId         :: Columnar f (SqlSerial Int32)
   , addressAddress1   :: Columnar f T.Text
   , addressAddress2   :: Columnar f (Maybe T.Text)
   , addressDistrict   :: Columnar f T.Text
@@ -30,7 +30,7 @@ deriving instance Show Address
 deriving instance Eq Address
 
 instance Table AddressT where
-  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int)) deriving Generic
+  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int32)) deriving Generic
   primaryKey = AddressId . addressId
 type AddressId = PrimaryKey AddressT Identity
 deriving instance Show AddressId

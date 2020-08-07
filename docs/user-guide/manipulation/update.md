@@ -65,12 +65,12 @@ update all customer addresses to reflect that.
 
 Just canadianCount <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int countAll_) $
+  aggregate_ (\_ -> as_ @Int32 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "Canada")) $
   all_ (customer chinookDb)
 Just usaCount <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int countAll_) $
+  aggregate_ (\_ -> as_ @Int32 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "USA")) $
   all_ (customer chinookDb)
 putStrLn ("Before, there were " ++ show canadianCount ++ " addresses in Canada and " ++ show usaCount ++ " in the USA.")
@@ -82,12 +82,12 @@ runUpdate $ update (customer chinookDb)
 
 Just canadianCount' <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int countAll_) $
+  aggregate_ (\_ -> as_ @Int32 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "Canada")) $
   all_ (customer chinookDb)
 Just usaCount' <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int countAll_) $
+  aggregate_ (\_ -> as_ @Int32 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "USA")) $
   all_ (customer chinookDb)
 putStrLn ("Now, there are " ++ show canadianCount' ++ " addresses in Canada and " ++ show usaCount' ++ " in the USA.")

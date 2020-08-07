@@ -12,7 +12,7 @@ translation.
 !beam-query
 ```haskell
 !example chinook t611
-aggregate_ (\i -> (group_ (invoiceCustomer i), as_ @Int $ countAll_ `filterWhere_` (invoiceTotal i >. 500), as_ @Int $ countAll_ `filterWhere_` (invoiceTotal i <. 100))) $
+aggregate_ (\i -> (group_ (invoiceCustomer i), as_ @Int32 $ countAll_ `filterWhere_` (invoiceTotal i >. 500), as_ @Int32 $ countAll_ `filterWhere_` (invoiceTotal i <. 100))) $
 all_ (invoice chinookDb)
 ```
 

@@ -29,7 +29,7 @@ Let's build the `AddressT` table. `AddressT` will follow a similar formula to
 
 ```haskell
 data AddressT f = Address
-                { _addressId    :: C f Int
+                { _addressId    :: C f Int32
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -43,7 +43,7 @@ deriving instance Show (PrimaryKey UserT Identity)
 deriving instance Show Address
 
 instance Table AddressT where
-    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving (Generic, Beamable)
+    data PrimaryKey AddressT f = AddressId (Columnar f Int32) deriving (Generic, Beamable)
     primaryKey = AddressId . _addressId
 type AddressId = PrimaryKey AddressT Identity -- For convenience
 ```
@@ -110,7 +110,7 @@ data UserT f
     deriving Generic
 
 data AddressT f = Address
-                { _addressId    :: C f Int
+                { _addressId    :: C f Int32
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -253,7 +253,7 @@ We can ask GHCi for the type of a column lens.
 Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple> :t addressId
 addressId
   :: Functor f2 =>
-     (Columnar f1 Int -> f2 (Columnar f1 Int))
+     (Columnar f1 Int32 -> f2 (Columnar f1 Int32))
      -> AddressT f1 -> f2 (AddressT f1)
 ```
 
