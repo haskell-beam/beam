@@ -433,7 +433,7 @@ instance IsSql92DataTypeSyntax SqlSyntaxBuilder where
     varBitType prec = SqlSyntaxBuilder ("BIT VARYING" <> sqlOptPrec prec)
 
     numericType prec = SqlSyntaxBuilder ("NUMERIC" <> sqlOptNumericPrec prec)
-    decimalType prec = SqlSyntaxBuilder ("DOUBLE" <> sqlOptNumericPrec prec)
+    decimalType prec = SqlSyntaxBuilder ("DECIMAL" <> sqlOptNumericPrec prec)
 
     intType = SqlSyntaxBuilder "INT"
     smallIntType = SqlSyntaxBuilder "SMALLINT"
