@@ -113,7 +113,7 @@ simpleWhere =
      Just (FromTable (TableNamed (TableName Nothing "employees")) (Just (employees, Nothing))) <- pure selectFrom
 
      let salaryCond = ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField employees "salary")) (ExpressionValue (Value (120202 :: Double)))
-         ageCond = ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField employees "age")) (ExpressionValue (Value (30 :: Int)))
+         ageCond = ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField employees "age")) (ExpressionValue (Value (30 :: Int32)))
          nameCond = ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField employees "first_name")) (ExpressionFieldName (QualifiedField employees "last_name"))
 
      selectWhere @?= Just (ExpressionBinOp "AND" salaryCond (ExpressionBinOp "AND" ageCond nameCond))
@@ -913,7 +913,7 @@ selectCombinators =
 
     fieldNamesCapturedCorrectly =
       testCase "UNION field names are propagated correctly" $
-      do let -- leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Int, QExpr Expression s (Maybe _) )
+      do let -- leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Int32, QExpr Expression s (Maybe _) )
              hireDates = do e <- all_ (_employees employeeDbSettings)
                             pure (as_ @Text $ val_ "hire", _employeeAge e, just_ (_employeeHireDate e))
              leaveDates = do e <- all_ (_employees employeeDbSettings)
@@ -928,11 +928,11 @@ selectCombinators =
          Just (FromTable (TableFromSubSelect subselect) (Just (subselectTbl, Nothing))) <- pure selectFrom
          selectProjection @?= ProjExprs [ (ExpressionFieldName (QualifiedField subselectTbl "res0"), Just "res0")
                                         , (ExpressionBinOp "+" (ExpressionFieldName (QualifiedField subselectTbl "res1"))
-                                                               (ExpressionValue (Value (23 :: Int))), Just "res1")
+                                                               (ExpressionValue (Value (23 :: Int32))), Just "res1")
                                         , (ExpressionFieldName (QualifiedField subselectTbl "res2"), Just "res2") ]
          selectHaving @?= Nothing
          selectGrouping @?= Nothing
-         selectWhere @?= Just (ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField subselectTbl "res1")) (ExpressionValue (Value (22 :: Int))))
+         selectWhere @?= Just (ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField subselectTbl "res1")) (ExpressionValue (Value (22 :: Int32))))
 
          Select { selectTable = UnionTables False hireDatesQuery leaveDatesQuery
                 , selectLimit = Just 10, selectOffset = Nothing
@@ -976,7 +976,7 @@ selectCombinators =
 
     equalProjectionsDontHaveSubSelects =
       testCase "Equal projections dont have sub-selects" $
-      do let -- leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Text, QExpr Expression s Int )
+      do let -- leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Text, QExpr Expression s Int32 )
              hireDates = do e <- all_ (_employees employeeDbSettings)
                             pure (_employeeFirstName e, _employeeLastName e, _employeeAge e)
              leaveDates = do e <- all_ (_employees employeeDbSettings)
@@ -990,7 +990,7 @@ selectCombinators =
 
     unionWithGuards =
       testCase "UNION with guards" $
-      do let -- leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Int, QExpr Expression s (Maybe _) )
+      do let -- leaveDates, hireDates :: Q _ _ s ( QExpr Expression s Text, QExpr Expression s Int32, QExpr Expression s (Maybe _) )
              hireDates = do e <- all_ (_employees employeeDbSettings)
                             pure (as_ @Text $ val_ "hire", _employeeAge e, just_ (_employeeHireDate e))
              leaveDates = do e <- all_ (_employees employeeDbSettings)
@@ -1023,7 +1023,7 @@ selectCombinators =
          proj @?= ProjExprs [ ( ExpressionFieldName (QualifiedField t0 "res0"), Just "res0" )
                             , ( ExpressionFieldName (QualifiedField t0 "res1"), Just "res1" )
                             , ( ExpressionFieldName (QualifiedField t0 "res2"), Just "res2" ) ]
-         where_ @?= ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField "t0" "res1")) (ExpressionValue (Value (40 :: Int)))
+         where_ @?= ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField "t0" "res1")) (ExpressionValue (Value (40 :: Int32)))
          pure ()
 
 
@@ -1077,7 +1077,7 @@ limitOffset =
                                           , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res6")
                                           , (ExpressionFieldName (QualifiedField "t0" "created"), Just "res7") ]
          selectFrom a @?= Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing)))
-         selectWhere a @?= Just (ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField "t0" "age")) (ExpressionValue (Value (40 :: Int))))
+         selectWhere a @?= Just (ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField "t0" "age")) (ExpressionValue (Value (40 :: Int32))))
          selectGrouping a @?= Nothing
          selectHaving a @?= Nothing
 
@@ -1090,7 +1090,7 @@ limitOffset =
                                           , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res6")
                                           , (ExpressionFieldName (QualifiedField "t0" "created"), Just "res7") ]
          selectFrom b @?= Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing)))
-         selectWhere b @?= Just (ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField "t0" "age")) (ExpressionValue (Value (50 :: Int))))
+         selectWhere b @?= Just (ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField "t0" "age")) (ExpressionValue (Value (50 :: Int32))))
          selectGrouping b @?= Nothing
          selectHaving b @?= Nothing
 
@@ -1110,7 +1110,7 @@ existsTest =
              role <- all_ (_roles employeeDbSettings)
              guard_ (not_ (exists_ (do dept <- all_ (_departments employeeDbSettings)
                                        guard_ (_departmentName dept ==. _roleName role)
-                                       pure (as_ @Int 1))))
+                                       pure (as_ @Int32 1))))
              pure role
 
          let existsQuery = Select
@@ -1118,7 +1118,7 @@ existsTest =
                          , selectOrdering = []
                          , selectTable = SelectTable
                                        { selectQuantifier = Nothing
-                                       , selectProjection = ProjExprs [ (ExpressionValue (Value (1 :: Int)), Just "res0") ]
+                                       , selectProjection = ProjExprs [ (ExpressionValue (Value (1 :: Int32)), Just "res0") ]
                                        , selectGrouping = Nothing
                                        , selectHaving = Nothing
                                        , selectWhere = Just joinExpr
@@ -1143,7 +1143,7 @@ updateCurrent =
                          (\employee -> _employeeFirstName employee ==. "Joe")
 
      updateTable @?= (TableName Nothing "employees")
-     updateFields @?= [ (UnqualifiedField "age", ExpressionBinOp "+" (ExpressionFieldName (UnqualifiedField "age")) (ExpressionValue (Value (1 :: Int)))) ]
+     updateFields @?= [ (UnqualifiedField "age", ExpressionBinOp "+" (ExpressionFieldName (UnqualifiedField "age")) (ExpressionValue (Value (1 :: Int32)))) ]
      updateWhere @?= Just (ExpressionCompOp "==" Nothing (ExpressionFieldName (UnqualifiedField "first_name")) (ExpressionValue (Value ("Joe" :: String))))
 
 updateNullable :: TestTree

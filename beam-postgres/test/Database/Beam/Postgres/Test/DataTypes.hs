@@ -11,6 +11,7 @@ import Database.Beam.Backend.SQL.BeamExtensions
 import Control.Exception (SomeException(..), handle)
 
 import Data.ByteString (ByteString)
+import Data.Int
 import Data.Text (Text)
 
 import Test.Tasty
@@ -24,12 +25,12 @@ tests postgresConn =
 
 data JsonT f
     = JsonT
-    { _key :: C f Int
+    { _key :: C f Int32
     , _field1 :: C f (PgJSON String) }
     deriving (Generic, Beamable)
 
 instance Table JsonT where
-    data PrimaryKey JsonT f = JsonKey (C f Int)
+    data PrimaryKey JsonT f = JsonKey (C f Int32)
       deriving (Generic, Beamable)
     primaryKey = JsonKey <$> _key
 
@@ -80,23 +81,23 @@ jsonNulTest pgConn =
       return ()
 
 data TblT f
-    = Tbl { _tblKey :: C f Int, _tblValue :: C f Text }
+    = Tbl { _tblKey :: C f Int32, _tblValue :: C f Text }
       deriving (Generic, Beamable)
 
 deriving instance Show (TblT Identity)
 deriving instance Eq (TblT Identity)
 
 instance Table TblT where
-    data PrimaryKey TblT f = TblKey (C f Int)
+    data PrimaryKey TblT f = TblKey (C f Int32)
       deriving (Generic, Beamable)
     primaryKey = TblKey <$> _tblKey
 
 data WrongTblT f
-    = WrongTbl { _wrongTblKey :: C f Int, _wrongTblValue :: C f Int }
+    = WrongTbl { _wrongTblKey :: C f Int32, _wrongTblValue :: C f Int32 }
       deriving (Generic, Beamable)
 
 instance Table WrongTblT where
-    data PrimaryKey WrongTblT f = WrongTblKey (C f Int)
+    data PrimaryKey WrongTblT f = WrongTblKey (C f Int32)
       deriving (Generic, Beamable)
     primaryKey = WrongTblKey <$> _wrongTblKey
 

@@ -23,6 +23,7 @@ import           Database.Beam.Migrate.Serialization
 
 import           Data.Char (toLower, toUpper)
 import           Data.Hashable
+import           Data.Int
 import           Data.List (find, nub)
 import qualified Data.Map as M
 import           Data.Maybe
@@ -717,7 +718,7 @@ instance IsSql92ConstraintAttributesSyntax HsNone where
   notDeferrableAttributeSyntax = HsNone
   deferrableAttributeSyntax = HsNone
 
-instance HasSqlValueSyntax HsExpr Int where
+instance HasSqlValueSyntax HsExpr Int32 where
   sqlValueSyntax = hsInt
 instance HasSqlValueSyntax HsExpr Bool where
   sqlValueSyntax True = hsVar "True"

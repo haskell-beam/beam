@@ -17,6 +17,7 @@ module Database.Beam.Sqlite.Connection
   ) where
 
 import           Database.Beam.Backend
+import           Database.Beam.Backend.Internal.Compat
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import           Database.Beam.Backend.URI
 import           Database.Beam.Migrate.Generics
@@ -82,6 +83,7 @@ import           Data.Word
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
 #endif
+import           GHC.TypeLits
 
 import           Network.URI
 
@@ -115,13 +117,11 @@ instance BeamSqlBackendIsString Sqlite String
 instance FromBackendRow Sqlite Bool
 instance FromBackendRow Sqlite Double
 instance FromBackendRow Sqlite Float
-instance FromBackendRow Sqlite Int
 instance FromBackendRow Sqlite Int8
 instance FromBackendRow Sqlite Int16
 instance FromBackendRow Sqlite Int32
 instance FromBackendRow Sqlite Int64
 instance FromBackendRow Sqlite Integer
-instance FromBackendRow Sqlite Word
 instance FromBackendRow Sqlite Word8
 instance FromBackendRow Sqlite Word16
 instance FromBackendRow Sqlite Word32
@@ -147,6 +147,9 @@ instance FromBackendRow Sqlite LocalTime where
 instance FromBackendRow Sqlite Scientific where
   fromBackendRow = unSqliteScientific <$> fromBackendRow
 instance FromBackendRow Sqlite SqliteScientific
+
+instance TypeError (PreferExplicitSize Int Int32) => FromBackendRow Sqlite Int
+instance TypeError (PreferExplicitSize Word Word32) => FromBackendRow Sqlite Word
 
 newtype SqliteScientific = SqliteScientific { unSqliteScientific :: Scientific }
 instance FromField SqliteScientific where
@@ -245,12 +248,10 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
   instance HasSqlEqualityCheck Sqlite (ty); \
   instance HasSqlQuantifiedEqualityCheck Sqlite (ty);
 
-HAS_SQLITE_EQUALITY_CHECK(Int)
 HAS_SQLITE_EQUALITY_CHECK(Int8)
 HAS_SQLITE_EQUALITY_CHECK(Int16)
 HAS_SQLITE_EQUALITY_CHECK(Int32)
 HAS_SQLITE_EQUALITY_CHECK(Int64)
-HAS_SQLITE_EQUALITY_CHECK(Word)
 HAS_SQLITE_EQUALITY_CHECK(Word8)
 HAS_SQLITE_EQUALITY_CHECK(Word16)
 HAS_SQLITE_EQUALITY_CHECK(Word32)
@@ -270,7 +271,17 @@ HAS_SQLITE_EQUALITY_CHECK(Char)
 HAS_SQLITE_EQUALITY_CHECK(Integer)
 HAS_SQLITE_EQUALITY_CHECK(Scientific)
 
-instance HasDefaultSqlDataType Sqlite (SqlSerial Int) where
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlEqualityCheck Sqlite Int
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlQuantifiedEqualityCheck Sqlite Int
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlEqualityCheck Sqlite Word
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlQuantifiedEqualityCheck Sqlite Word
+
+class HasDefaultSqlDataType Sqlite a => IsSqliteSerialIntegerType a
+instance IsSqliteSerialIntegerType Int32
+instance IsSqliteSerialIntegerType Int64
+instance TypeError (PreferExplicitSize Int Int32) => IsSqliteSerialIntegerType Int
+
+instance IsSqliteSerialIntegerType a => HasDefaultSqlDataType Sqlite (SqlSerial a) where
   defaultSqlDataType _ _ False = sqliteSerialType
   defaultSqlDataType _ _ True = intType
 

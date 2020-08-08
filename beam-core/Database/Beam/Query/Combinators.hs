@@ -85,7 +85,6 @@ import Control.Monad.Writer hiding ((<>))
 import Data.Semigroup
 #endif
 
-import Data.Int
 import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
