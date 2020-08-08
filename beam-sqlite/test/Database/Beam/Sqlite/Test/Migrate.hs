@@ -1,6 +1,5 @@
-module Database.Beam.Sqlite.Test.Migrate where
+module Database.Beam.Sqlite.Test.Migrate (tests) where
 
-import Control.Exception
 import Database.SQLite.Simple
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -10,6 +9,8 @@ import Database.Beam.Sqlite
 import Database.Beam.Sqlite.Migrate
 import Database.Beam.Migrate
 import Database.Beam.Migrate.Simple
+
+import Database.Beam.Sqlite.Test
 
 tests :: TestTree
 tests = testGroup "Migration tests"
@@ -71,6 +72,3 @@ testVerifySchema conn db =
     VerificationSucceeded -> return ()
     VerificationFailed failures ->
       fail $ "Verification failed: " ++ show failures
-
-withTestDb :: (Connection -> IO a) -> IO a
-withTestDb = bracket (open ":memory:") close
