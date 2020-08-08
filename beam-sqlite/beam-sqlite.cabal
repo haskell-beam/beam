@@ -66,9 +66,12 @@ test-suite beam-sqlite-tests
     beam-sqlite,
     sqlite-simple,
     tasty,
+    tasty-expected-failure,
     tasty-hunit
   other-modules:
+    Database.Beam.Sqlite.Test
     Database.Beam.Sqlite.Test.Migrate
+    Database.Beam.Sqlite.Test.Select
   default-language: Haskell2010
   default-extensions:
     DeriveAnyClass,
