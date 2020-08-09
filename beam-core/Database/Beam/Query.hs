@@ -32,7 +32,6 @@ module Database.Beam.Query
     , module Database.Beam.Query.Operator
 
     -- ** ANSI SQL Booleans
-    , SqlBool
     , isTrue_, isNotTrue_
     , isFalse_, isNotFalse_
     , isUnknown_, isNotUnknown_
@@ -300,13 +299,13 @@ data SqlUpdate be (table :: (* -> *) -> *)
 --   Allows to choose boolean type in the @WHERE@ clause.
 updateImpl :: forall bool table db be
             . ( BeamSqlBackend be, Beamable table )
-	   => DatabaseEntity be db (TableEntity table)
-	      -- ^ The table to insert into
-	   -> (forall s. table (QField s) -> QAssignment be s)
-	      -- ^ A sequence of assignments to make.
-	   -> (forall s. table (QExpr be s) -> QExpr be s bool)
-	      -- ^ Build a @WHERE@ clause given a table containing expressions
-	   -> SqlUpdate be table
+           => DatabaseEntity be db (TableEntity table)
+              -- ^ The table to insert into
+           -> (forall s. table (QField s) -> QAssignment be s)
+              -- ^ A sequence of assignments to make.
+           -> (forall s. table (QExpr be s) -> QExpr be s bool)
+              -- ^ Build a @WHERE@ clause given a table containing expressions
+           -> SqlUpdate be table
 updateImpl (DatabaseEntity dt@(DatabaseTable {})) mkAssignments mkWhere =
   case assignments of
     [] -> SqlIdentityUpdate
@@ -398,13 +397,13 @@ updateRow' tbl row assignments =
 --   An internal implementation of 'updateTable' and 'updateTable'' functions.
 --   Allows choosing between 'Bool' and 'SqlBool'.
 updateTableImpl :: forall bool table db be
-	         . ( BeamSqlBackend be, Beamable table )
-	        => DatabaseEntity be db (TableEntity table)
-	           -- ^ The table to update
-	        -> table (QFieldAssignment be table)
-	           -- ^ Updates to be made (use 'set' to construct an empty field)
-	        -> (forall s. table (QExpr be s) -> QExpr be s bool)
-	        -> SqlUpdate be table
+                 . ( BeamSqlBackend be, Beamable table )
+                => DatabaseEntity be db (TableEntity table)
+                   -- ^ The table to update
+                -> table (QFieldAssignment be table)
+                   -- ^ Updates to be made (use 'set' to construct an empty field)
+                -> (forall s. table (QExpr be s) -> QExpr be s bool)
+                -> SqlUpdate be table
 updateTableImpl tblEntity assignments mkWhere =
   let mkAssignments :: forall s. table (QField s) -> QAssignment be s
       mkAssignments tblFields =
