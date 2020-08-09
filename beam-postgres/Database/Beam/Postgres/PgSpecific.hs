@@ -878,10 +878,10 @@ instance IsPgJSON PgJSONB where
 -- | Postgres @&#x40;>@ and @<&#x40;@ operators for JSON. Return true if the
 -- json object pointed to by the arrow is completely contained in the other. See
 -- the Postgres documentation for more in formation on what this means.
-(@>), (<@) :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s (json b)
-           -> QGenExpr ctxt Postgres s Bool
+(@>), (<@)
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
+  -> QGenExpr ctxt Postgres s Bool
 QExpr a @> QExpr b =
   QExpr (pgBinOp "@>" <$> a <*> b)
 QExpr a <@ QExpr b =
@@ -947,19 +947,19 @@ QExpr a #>> QExpr b =
 
 -- | Postgres @?@ operator. Checks if the given string exists as top-level key
 -- of the json object.
-(?) :: IsPgJSON json
-    => QGenExpr ctxt Postgres s (json a)
-    -> QGenExpr ctxt Postgres s T.Text
-    -> QGenExpr ctxt Postgres s Bool
+(?)
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s T.Text
+  -> QGenExpr ctxt Postgres s Bool
 QExpr a ? QExpr b =
   QExpr (pgBinOp "?" <$> a <*> b)
 
 -- | Postgres @?|@ and @?&@ operators. Check if any or all of the given strings
 -- exist as top-level keys of the json object respectively.
-(?|), (?&) :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s (V.Vector T.Text)
-           -> QGenExpr ctxt Postgres s Bool
+(?|), (?&)
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s (V.Vector T.Text)
+  -> QGenExpr ctxt Postgres s Bool
 QExpr a ?| QExpr b =
   QExpr (pgBinOp "?|" <$> a <*> b)
 QExpr a ?& QExpr b =
@@ -968,28 +968,28 @@ QExpr a ?& QExpr b =
 -- | Postgres @-@ operator on json objects. Returns the supplied json object
 -- with the supplied key deleted. See 'withoutIdx' for the corresponding
 -- operator on arrays.
-withoutKey :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s T.Text
-           -> QGenExpr ctxt Postgres s (json b)
+withoutKey
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s T.Text
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
 QExpr a `withoutKey` QExpr b =
   QExpr (pgBinOp "-" <$> a <*> b)
 
 -- | Postgres @-@ operator on json arrays. See 'withoutKey' for the
 -- corresponding operator on objects.
-withoutIdx :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s Int32
-           -> QGenExpr ctxt Postgres s (json b)
+withoutIdx
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s Int32
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
 QExpr a `withoutIdx` QExpr b =
   QExpr (pgBinOp "-" <$> a <*> b)
 
 -- | Postgres @#-@ operator. Removes all the keys specificied from the JSON
 -- object and returns the result.
-withoutKeys :: IsPgJSON json
-            => QGenExpr ctxt Postgres s (json a)
-            -> QGenExpr ctxt Postgres s (V.Vector T.Text)
-            -> QGenExpr ctxt Postgres s (json b)
+withoutKeys
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s (V.Vector T.Text)
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
 QExpr a `withoutKeys` QExpr b =
   QExpr (pgBinOp "#-" <$> a <*> b)
 
