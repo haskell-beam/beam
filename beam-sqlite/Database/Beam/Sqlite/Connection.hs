@@ -97,7 +97,7 @@ import           Text.Read (readMaybe)
 
 -- | The SQLite backend. Used to parameterize 'MonadBeam' and 'FromBackendRow'
 -- to provide support for SQLite databases. See the documentation for
--- 'MonadBeam' and the <https://tathougies.github.io/beam/ user guide> for more
+-- 'MonadBeam' and the <https://haskell-beam.github.io/beam/ user guide> for more
 -- information on how to use this backend.
 data Sqlite = Sqlite
 
@@ -179,7 +179,7 @@ instance BeamSqlBackendHasSerial Sqlite where
   genericSerial nm = Beam.field nm (DataType sqliteSerialType) SqliteHasDefault
 
 -- | 'MonadBeam' instance inside whiche SQLite queries are run. See the
--- <https://tathougies.github.io/beam/ user guide> for more information
+-- <https://haskell-beam.github.io/beam/ user guide> for more information
 newtype SqliteM a
   = SqliteM
   { runSqliteM :: ReaderT (String -> IO (), Connection) IO a
@@ -409,9 +409,9 @@ runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
            return x
 
 instance Beam.BeamHasInsertOnConflict Sqlite where
-  data SqlConflictTarget Sqlite table = SqliteConflictTarget
+  newtype SqlConflictTarget Sqlite table = SqliteConflictTarget
     { unSqliteConflictTarget :: table (QExpr Sqlite QInternal) -> SqliteSyntax }
-  data SqlConflictAction Sqlite table = SqliteConflictAction
+  newtype SqlConflictAction Sqlite table = SqliteConflictAction
     { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
 
   insertOnConflict

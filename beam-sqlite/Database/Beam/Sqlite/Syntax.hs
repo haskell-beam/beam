@@ -521,7 +521,7 @@ instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
   varBitType prec = SqliteDataTypeSyntax (emit "BIT VARYING" <> sqliteOptPrec prec) (varBitType prec) (varBitType prec) False
 
   numericType prec = SqliteDataTypeSyntax (emit "NUMERIC" <> sqliteOptNumericPrec prec) (numericType prec) (numericType prec) False
-  decimalType prec = SqliteDataTypeSyntax (emit "DOUBLE" <> sqliteOptNumericPrec prec) (decimalType prec) (decimalType prec) False
+  decimalType prec = SqliteDataTypeSyntax (emit "DECIMAL" <> sqliteOptNumericPrec prec) (decimalType prec) (decimalType prec) False
 
   intType = SqliteDataTypeSyntax (emit "INTEGER") intType intType False
   smallIntType = SqliteDataTypeSyntax (emit "SMALLINT") smallIntType smallIntType False

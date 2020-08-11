@@ -1,7 +1,7 @@
 **Note**: The code used in this guide is in `beam-postgres/examples/Pagila/Schema/CustomMigrateExample.hs`.
 
 ### Using Custom Types in migration ###
-In Beam [Tutorial 3](https://tathougies.github.io/beam/tutorials/tutorial3/) we looked at marshalling custom types.
+In Beam [Tutorial 3](https://haskell-beam.github.io/beam/tutorials/tutorial3/) we looked at marshalling custom types.
 Beam provides functionality to represent custom defined types in migration as well.
 
 From the tutorials, let us take our custom type `ShippingCarrier`.
@@ -10,13 +10,13 @@ data ShippingCarrier = USPS | FedEx | UPS | DHL
   deriving (Show, Read, Eq, Ord, Enum)
 ```
 
-From this [example](https://github.com/tathougies/beam/blob/master/beam-postgres/examples/Pagila/Schema/V0001.hs),
+From this [example](https://github.com/haskell-beam/beam/blob/master/beam-postgres/examples/Pagila/Schema/V0001.hs),
 let us take the `AddressT` table and add a column `addressShipper` to it.
 ```haskell
 -- | Address table
 data AddressT f
   = AddressT
-  { addressId         :: Columnar f (SqlSerial Int)
+  { addressId         :: Columnar f (SqlSerial Int32)
   , addressAddress1   :: Columnar f T.Text
   , addressAddress2   :: Columnar f (Maybe T.Text)
   , addressDistrict   :: Columnar f T.Text
@@ -30,7 +30,7 @@ deriving instance Show Address
 deriving instance Eq Address
 
 instance Table AddressT where
-  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int)) deriving Generic
+  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int32)) deriving Generic
   primaryKey = AddressId . addressId
 type AddressId = PrimaryKey AddressT Identity
 deriving instance Show AddressId

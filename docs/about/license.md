@@ -1,9 +1,9 @@
 The MIT License (MIT)
 =====================
 
-Copyright © 2015-2018 Travis Athougies
+Copyright © 2015-2020 Travis Athougies
 and
-[the Beam authors](https://github.com/tathougies/beam/blob/master/CONTRIBUTORS)
+[the Beam authors](https://github.com/haskell-beam/beam/blob/master/CONTRIBUTORS)
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation

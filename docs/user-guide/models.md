@@ -166,7 +166,7 @@ data PersonT f
     { personEmail     :: Columnar f Text
     , personFirstName :: Columnar f Text
     , personLastName  :: Columnar f Text
-    , personAge       :: Columnar f Int
+    , personAge       :: Columnar f Int32
     } deriving (Generic, Beamable)
 ```
 
@@ -236,7 +236,7 @@ representing a post by a user.
 ```haskell
 data PostT f
     = Post
-    { postId       :: Columnar f (SqlSerial Int)
+    { postId       :: Columnar f (SqlSerial Int32)
     , postPostedAt :: Columnar f LocalTime
     , postContent  :: Columnar f Text
     , postPoster   :: PrimaryKey PersonT f
@@ -244,7 +244,7 @@ data PostT f
 
 instance Table PostT where
   data PrimaryKey PostT f
-      = PostId (Columnar f (SqlSerial Int)) deriving (Generic, Beamable)
+      = PostId (Columnar f (SqlSerial Int32)) deriving (Generic, Beamable)
   primaryKey = PostId . postId
 
 type Post = PostT Identity
@@ -265,7 +265,7 @@ For example, to make the poster optional above.
 ```haskell
 data PostT f
     = Post
-    { postId       :: Columnar f (SqlSerial Int)
+    { postId       :: Columnar f (SqlSerial Int32)
     , postPostedAt :: Columnar f LocalTime
     , postContent  :: Columnar f Text
     , postPoster   :: PrimaryKey PersonT (Nullable f)
@@ -295,7 +295,7 @@ Sometimes, we want to declare multiple models with fields in common. Beam allows
 you to simple embed such fields in common types and embed those directly into
 models. For example, in
 the
-[Chinook example schema](https://github.com/tathougies/beam/blob/master/beam-sqlite/examples/Chinook/Schema.hs),
+[Chinook example schema](https://github.com/haskell-beam/beam/blob/master/beam-sqlite/examples/Chinook/Schema.hs),
 we define the following structure for addresses.
 
 ```haskell

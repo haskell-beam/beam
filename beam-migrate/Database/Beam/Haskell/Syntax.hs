@@ -954,9 +954,11 @@ inst = Hs.IRule () Nothing Nothing . Hs.IHCon () . Hs.UnQual () . Hs.Ident ()
 beamMigrateSqlBackend :: HsBackendConstraint
 beamMigrateSqlBackend =
   HsBackendConstraint $ \beTy ->
-    Hs.TypeA () $ Hs.TyApp () (Hs.TyCon () c) beTy
-  where
-    c = Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend")
+#if MIN_VERSION_haskell_src_exts(1, 22, 0)
+  Hs.TypeA () (Hs.TyApp () (Hs.TyCon () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend"))) beTy)
+#else
+  Hs.ClassA () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend")) [ beTy ]
+#endif
 
 -- * Orphans
 

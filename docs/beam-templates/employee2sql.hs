@@ -43,7 +43,7 @@ instance Beamable (PrimaryKey UserT)
 type UserId = PrimaryKey UserT Identity
 
 data AddressT f = Address
-                { _addressId    :: C f Int
+                { _addressId    :: C f Int32
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -57,7 +57,7 @@ deriving instance Show (PrimaryKey UserT Identity)
 deriving instance Show Address
 
 instance Table AddressT where
-    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
+    data PrimaryKey AddressT f = AddressId (Columnar f Int32) deriving Generic
     primaryKey = AddressId . _addressId
 
 instance Beamable AddressT

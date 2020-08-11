@@ -373,7 +373,11 @@ getDbConstraintsForSchemas subschemas conn =
      let enumerations =
            map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData
 
-     pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations)
+     extensions <-
+       map (\(Pg.Only extname) -> Db.SomeDatabasePredicate (PgHasExtension extname)) <$>
+       Pg.query_ conn "SELECT extname from pg_extension"
+
+     pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations ++ extensions)
 
 -- * Postgres-specific data types
 

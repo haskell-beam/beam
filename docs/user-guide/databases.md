@@ -81,7 +81,7 @@ combinator instead.
 <!--     = Person -->
 <!--     { personFirstName :: Columnar f Text -->
 <!--     , personLastName  :: Columnar f Text -->
-<!--     , personAge       :: Columnar f Int -->
+<!--     , personAge       :: Columnar f Int32 -->
 <!--     , personEmail     :: Columnar f Text -->
 <!--     , personPhone     :: Columnar f Text -->
 <!--     } deriving Generic -->

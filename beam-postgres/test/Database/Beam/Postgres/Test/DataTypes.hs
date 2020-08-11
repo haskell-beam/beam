@@ -4,7 +4,6 @@ module Database.Beam.Postgres.Test.DataTypes where
 
 import Database.Beam
 import Database.Beam.Postgres
-import Database.Beam.Postgres.Migrate
 import Database.Beam.Postgres.Test
 import Database.Beam.Migrate
 import Database.Beam.Backend.SQL.BeamExtensions
@@ -39,7 +38,7 @@ data JsonDb entity
     { jsonTable :: entity (TableEntity JsonT) }
     deriving (Generic, Database Postgres)
 
--- | Regression test for <https://github.com/tathougies/beam/issues/297 #297>
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/297 #297>
 jsonNulTest :: IO ByteString -> TestTree
 jsonNulTest pgConn =
     testCase "JSON NUL handling (#297)" $
@@ -68,7 +67,7 @@ jsonNulTest pgConn =
           fmap (fmap (\(PgJSON v) -> v)) $
             runSelectReturningList $ select $
             fmap (\(JsonT _ v) -> v) $
-            orderBy_ (\(JsonT pk _) -> asc_ pk) $
+            orderBy_ (\(JsonT k _) -> asc_ k) $
             all_ (jsonTable db)
 
       readback @?= [ "hello\0world"
@@ -109,7 +108,7 @@ data WrongDb entity
     = WrongDb { _wrongTbl :: entity (TableEntity WrongTblT) }
       deriving (Generic, Database Postgres)
 
--- | Regression test for <https://github.com/tathougies/beam/issues/112>
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/112>
 errorOnSchemaMismatch :: IO ByteString -> TestTree
 errorOnSchemaMismatch pgConn =
     testCase "runInsertReturningList should error on schema mismatch (#112)" $
@@ -129,7 +128,7 @@ errorOnSchemaMismatch pgConn =
                                                         (WrongTbl (field "key" int notNull)
                                                                   (field "value" int notNull)))
 
-      didFail <- handle (\(e :: SomeException) -> pure True) $
+      didFail <- handle (\(_ :: SomeException) -> pure True) $
         runBeamPostgres conn $ do
           _ <- runInsertReturningList $ insert (_wrongTbl wrongDb) $ insertValues [ WrongTbl 4 23, WrongTbl 5 24, WrongTbl 6 24 ]
           pure False
