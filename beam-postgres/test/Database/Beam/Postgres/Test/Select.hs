@@ -35,6 +35,7 @@ tests getConn = testGroup "Selection Tests"
       , testUuidFunction getConn "uuid_generate_v5" $ \ext ->
           pgUuidGenerateV5 ext (val_ nil) "nil"
       ]
+  , testInRowValues getConn
   ]
 
 testPgArrayToJSON :: IO ByteString -> TestTree
@@ -61,6 +62,20 @@ testUuidFunction getConn name mkUuid = testFunction getConn name $ \conn ->
     [_] <- runSelectReturningList $ select $
       return $ mkUuid $ getPgExtension $ _uuidOssp $ unCheckDatabase db
     return ()
+
+data Pair f = Pair
+  { _left :: C f Bool
+  , _right :: C f Bool
+  } deriving (Generic, Beamable)
+
+testInRowValues :: IO ByteString -> TestTree
+testInRowValues getConn = testCase "IN with row values works" $
+  withTestPostgres "db_in_row_values" getConn $ \conn -> do
+    result <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+      let p :: forall ctx s. Pair (QGenExpr ctx Postgres s)
+          p = val_ $ Pair False False
+      return $ p `in_` [p, p]
+    assertEqual "result" [True] result
 
 testFunction :: IO ByteString -> String -> (Connection -> Assertion) -> TestTree
 testFunction getConn name mkAssertion = testCase name $

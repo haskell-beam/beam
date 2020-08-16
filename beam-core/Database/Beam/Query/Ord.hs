@@ -21,7 +21,7 @@
 -- > x >*. allOf_ ..
 module Database.Beam.Query.Ord
   ( SqlEq(..), SqlEqQuantified(..), SqlIn(..)
-  , HasSqlInTable
+  , HasSqlInTable(..)
   , SqlOrd(..), SqlOrdQuantified(..)
   , QQuantified(..)
 
@@ -181,15 +181,21 @@ instance BeamSqlBackend be => SqlIn (QGenExpr context be s) (QGenExpr context be
   in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
   in_ (QExpr row) options = QExpr (inE <$> row <*> mapM (\(QExpr o) -> o) options)
 
--- | Class for backends which support SQL @IN@ on lists of tuples, which is not
--- part of ANSI SQL. This is useful for @IN@ on primary keys.
+-- | Class for backends which support SQL @IN@ on lists of row values, which is
+-- not part of ANSI SQL. This is useful for @IN@ on primary keys.
 class BeamSqlBackend be => HasSqlInTable be where
+  inRowValuesE
+    :: Proxy be
+    -> BeamSqlBackendExpressionSyntax be
+    -> [ BeamSqlBackendExpressionSyntax be ]
+    -> BeamSqlBackendExpressionSyntax be
+  inRowValuesE Proxy = inE
 
 instance ( HasSqlInTable be, Beamable table ) =>
   SqlIn (QGenExpr context be s) (table (QGenExpr context be s)) where
 
   in_ _ [] = QExpr (pure (valueE (sqlValueSyntax False)))
-  in_ row options = QExpr (inE <$> toExpr row <*> (mapM toExpr options))
+  in_ row options = QExpr (inRowValuesE (Proxy @be) <$> toExpr row <*> (mapM toExpr options))
     where toExpr :: table (QGenExpr context be s) -> TablePrefix -> BeamSqlBackendExpressionSyntax be
           toExpr = fmap rowE . sequence . allBeamValues (\(Columnar' (QExpr x)) -> x)
 

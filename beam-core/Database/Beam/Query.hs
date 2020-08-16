@@ -42,7 +42,7 @@ module Database.Beam.Query
     -- ** Unquantified comparison operators
     , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
     , SqlEq(..), SqlOrd(..), SqlIn(..)
-    , HasSqlInTable
+    , HasSqlInTable(..)
 
     -- ** Quantified Comparison Operators #quantified-comparison-operator#
     , SqlEqQuantified(..), SqlOrdQuantified(..)
