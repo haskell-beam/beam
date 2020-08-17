@@ -28,7 +28,7 @@ import           Database.Beam.Query ( QExpr, QField
                                      , HasQBuilder(..), HasSqlEqualityCheck
                                      , HasSqlQuantifiedEqualityCheck
                                      , DataType(..)
-                                     , HasSqlInTable
+                                     , HasSqlInTable(..)
                                      , insert, current_ )
 import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
@@ -108,6 +108,11 @@ instance HasQBuilder Sqlite where
   buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
 
 instance HasSqlInTable Sqlite where
+  inRowValuesE Proxy e es = SqliteExpressionSyntax $ mconcat
+    [ parens $ fromSqliteExpression e
+    , emit " IN "
+    , parens $ emit "VALUES " <> commas (map fromSqliteExpression es)
+    ]
 
 instance BeamSqlBackendIsString Sqlite T.Text
 instance BeamSqlBackendIsString Sqlite String
