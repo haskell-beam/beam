@@ -11,6 +11,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Data types for Postgres syntax. Access is given mainly for extension
 -- modules. The types and definitions here are likely to change.
@@ -86,6 +87,7 @@ module Database.Beam.Postgres.Syntax
     , PostgresInaccessible ) where
 
 import           Database.Beam hiding (insert)
+import           Database.Beam.Backend.Internal.Compat
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate
 import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
@@ -122,6 +124,7 @@ import           Data.Time (LocalTime, UTCTime, TimeOfDay, NominalDiffTime, Day)
 import           Data.UUID.Types (UUID)
 import           Data.Word
 import qualified Data.Vector as V
+import           GHC.TypeLits
 
 import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
@@ -1177,13 +1180,11 @@ instance DatabasePredicate PgHasEnum where
 DEFAULT_SQL_SYNTAX(Bool)
 DEFAULT_SQL_SYNTAX(Double)
 DEFAULT_SQL_SYNTAX(Float)
-DEFAULT_SQL_SYNTAX(Int)
 DEFAULT_SQL_SYNTAX(Int8)
 DEFAULT_SQL_SYNTAX(Int16)
 DEFAULT_SQL_SYNTAX(Int32)
 DEFAULT_SQL_SYNTAX(Int64)
 DEFAULT_SQL_SYNTAX(Integer)
-DEFAULT_SQL_SYNTAX(Word)
 DEFAULT_SQL_SYNTAX(Word8)
 DEFAULT_SQL_SYNTAX(Word16)
 DEFAULT_SQL_SYNTAX(Word32)
@@ -1226,6 +1227,12 @@ instance HasSqlValueSyntax PgValueSyntax BL.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
 
 instance Pg.ToField a => HasSqlValueSyntax PgValueSyntax (V.Vector a) where
+  sqlValueSyntax = defaultPgValueSyntax
+
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlValueSyntax PgValueSyntax Int where
+  sqlValueSyntax = defaultPgValueSyntax
+
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlValueSyntax PgValueSyntax Word where
   sqlValueSyntax = defaultPgValueSyntax
 
 pgQuotedIdentifier :: T.Text -> PgSyntax

@@ -28,7 +28,7 @@ import Data.Scientific (Scientific)
 
 data AddressT f
   = AddressT
-  { addressId         :: Columnar f (SqlSerial Int)
+  { addressId         :: Columnar f (SqlSerial Int32)
   , addressAddress1   :: Columnar f Text
   , addressAddress2   :: Columnar f (Maybe Text)
   , addressDistrict   :: Columnar f Text
@@ -42,7 +42,7 @@ deriving instance Show Address
 deriving instance Eq Address
 
 instance Table AddressT where
-  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int)) deriving Generic
+  data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int32)) deriving Generic
   primaryKey = AddressId . addressId
 type AddressId = PrimaryKey AddressT Identity
 deriving instance Show AddressId
@@ -52,7 +52,7 @@ deriving instance Eq AddressId
 
 data CityT f
   = CityT
-  { cityId         :: Columnar f Int
+  { cityId         :: Columnar f Int32
   , cityName       :: Columnar f Text
   , cityCountryId  :: PrimaryKey CountryT f
   , cityLastUpdate :: Columnar f LocalTime
@@ -62,7 +62,7 @@ deriving instance Show City
 deriving instance Eq City
 
 instance Table CityT where
-  data PrimaryKey CityT f = CityId (Columnar f Int) deriving Generic
+  data PrimaryKey CityT f = CityId (Columnar f Int32) deriving Generic
   primaryKey = CityId . cityId
 type CityId = PrimaryKey CityT Identity
 deriving instance Show CityId
@@ -72,7 +72,7 @@ deriving instance Eq CityId
 
 data CountryT f
   = CountryT
-  { countryId          :: Columnar f Int
+  { countryId          :: Columnar f Int32
   , countryName        :: Columnar f Text
   , countryLastUpdated :: Columnar f LocalTime
   } deriving Generic
@@ -81,7 +81,7 @@ deriving instance Show Country
 deriving instance Eq Country
 
 instance Table CountryT where
-  data PrimaryKey CountryT f = CountryId (Columnar f Int) deriving Generic
+  data PrimaryKey CountryT f = CountryId (Columnar f Int32) deriving Generic
   primaryKey = CountryId . countryId
 type CountryId = PrimaryKey CountryT Identity
 deriving instance Show CountryId
@@ -91,7 +91,7 @@ deriving instance Eq CountryId
 
 data ActorT f
   = ActorT
-  { actorId :: Columnar f (SqlSerial Int)
+  { actorId :: Columnar f (SqlSerial Int32)
   , actorFirstName :: Columnar f Text
   , actorLastName :: Columnar f Text
   , actorLastUpdate :: Columnar f LocalTime
@@ -100,7 +100,7 @@ type Actor = ActorT Identity
 deriving instance Show Actor; deriving instance Eq Actor
 
 instance Table ActorT where
-  data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int))
+  data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int23))
                              deriving Generic
   primaryKey = ActorId . actorId
 type ActorId = PrimaryKey ActorT Identity
@@ -110,7 +110,7 @@ deriving instance Show ActorId; deriving instance Eq ActorId
 
 data CategoryT f
   = CategoryT
-  { categoryId :: Columnar f Int
+  { categoryId :: Columnar f Int32
   , categoryName :: Columnar f Text
   , categoryLastUpdate :: Columnar f LocalTime
   } deriving Generic
@@ -118,7 +118,7 @@ type Category = CategoryT Identity
 deriving instance Show Category; deriving instance Eq Category
 
 instance Table CategoryT where
-  data PrimaryKey CategoryT f = CategoryId (Columnar f Int) deriving Generic
+  data PrimaryKey CategoryT f = CategoryId (Columnar f Int32) deriving Generic
   primaryKey = CategoryId . categoryId
 type CategoryId = PrimaryKey CategoryT Identity
 deriving instance Show CategoryId; deriving instance Eq CategoryId
@@ -127,7 +127,7 @@ deriving instance Show CategoryId; deriving instance Eq CategoryId
 
 data CustomerT f
   = CustomerT
-  { customerId        :: Columnar f (SqlSerial Int)
+  { customerId        :: Columnar f (SqlSerial Int32)
   , customerStore     :: PrimaryKey StoreT f
   , customerFirstName :: Columnar f Text
   , customerLastName  :: Columnar f Text
@@ -141,7 +141,7 @@ type Customer = CustomerT Identity
 deriving instance Show Customer; deriving instance Eq Customer
 
 instance Table CustomerT where
-  data PrimaryKey CustomerT f = CustomerId (Columnar f (SqlSerial Int))
+  data PrimaryKey CustomerT f = CustomerId (Columnar f (SqlSerial Int32))
                                 deriving Generic
   primaryKey = CustomerId . customerId
 type CustomerId = PrimaryKey CustomerT Identity
@@ -151,7 +151,7 @@ deriving instance Show CustomerId; deriving instance Eq CustomerId
 
 data StoreT f
   = StoreT
-  { storeId      :: Columnar f Int
+  { storeId      :: Columnar f Int32
   , storeManager :: PrimaryKey StaffT f
   , storeAddress :: PrimaryKey AddressT f
   , lastUpdate   :: Columnar f LocalTime
@@ -160,7 +160,7 @@ type Store = StoreT Identity
 deriving instance Show Store; deriving instance Eq Store
 
 instance Table StoreT where
-  data PrimaryKey StoreT f = StoreId (Columnar f Int) deriving Generic
+  data PrimaryKey StoreT f = StoreId (Columnar f Int32) deriving Generic
   primaryKey = StoreId . storeId
 type StoreId = PrimaryKey StoreT Identity
 deriving instance Show StoreId; deriving instance Eq StoreId
@@ -169,7 +169,7 @@ deriving instance Show StoreId; deriving instance Eq StoreId
 
 data StaffT f
   = StaffT
-  { staffId        :: Columnar f Int
+  { staffId        :: Columnar f Int32
   , staffFirstName :: Columnar f Text
   , staffLastName  :: Columnar f Text
   , staffAddress   :: PrimaryKey AddressT f
@@ -185,7 +185,7 @@ type Staff = StaffT Identity
 deriving instance Eq Staff; deriving instance Show Staff
 
 instance Table StaffT where
-  data PrimaryKey StaffT f = StaffId (Columnar f Int) deriving Generic
+  data PrimaryKey StaffT f = StaffId (Columnar f Int32) deriving Generic
   primaryKey = StaffId . staffId
 type StaffId = PrimaryKey StaffT Identity
 deriving instance Eq StaffId; deriving instance Show StaffId
@@ -194,15 +194,15 @@ deriving instance Eq StaffId; deriving instance Show StaffId
 
 data FilmT f
   = FilmT
-  { filmId             :: Columnar f (SqlSerial Int)
+  { filmId             :: Columnar f (SqlSerial Int32)
   , filmTitle          :: Columnar f Text
   , filmDescription    :: Columnar f Text
-  , filmReleaseYear    :: Columnar f Int
+  , filmReleaseYear    :: Columnar f Int32
   , filmLanguage       :: PrimaryKey LanguageT f
   , filmOriginalLanguage :: PrimaryKey LanguageT f
-  , filmRentalDuration :: Columnar f Int
+  , filmRentalDuration :: Columnar f Int32
   , filmRentalRate     :: Columnar f Scientific
-  , filmLength         :: Columnar f Int
+  , filmLength         :: Columnar f Int32
   , filmReplacementCost :: Columnar f Scientific
   , filmRating         :: Columnar f Text
   , filmLastUpdate     :: Columnar f LocalTime
@@ -211,7 +211,7 @@ type Film = FilmT Identity
 deriving instance Eq Film; deriving instance Show Film
 
 instance Table FilmT where
-  data PrimaryKey FilmT f = FilmId (Columnar f (SqlSerial Int))
+  data PrimaryKey FilmT f = FilmId (Columnar f (SqlSerial Int32))
                             deriving Generic
   primaryKey = FilmId . filmId
 type FilmId = PrimaryKey FilmT Identity
@@ -239,7 +239,7 @@ deriving instance Eq FilmCategoryId; deriving instance Show FilmCategoryId
 
 data LanguageT f
   = LanguageT
-  { languageId   :: Columnar f (SqlSerial Int)
+  { languageId   :: Columnar f (SqlSerial Int32)
   , languageName :: Columnar f Text
   , languageLastUpdate :: Columnar f LocalTime
   }  deriving Generic
@@ -247,7 +247,7 @@ type Language = LanguageT Identity
 deriving instance Eq Language; deriving instance Show Language
 
 instance Table LanguageT where
-  data PrimaryKey LanguageT f = LanguageId (Columnar f (SqlSerial Int))
+  data PrimaryKey LanguageT f = LanguageId (Columnar f (SqlSerial Int32))
                                 deriving Generic
   primaryKey = LanguageId . languageId
 type LanguageId = PrimaryKey LanguageT Identity

@@ -17,6 +17,7 @@ import           Database.Beam
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend
 
+import           Data.Int
 import           Data.List.NonEmpty ( NonEmpty((:|)) )
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -49,7 +50,7 @@ data EmployeeT f
   , _employeeLastName  :: Columnar f Text
   , _employeePhoneNumber :: Columnar f Text
 
-  , _employeeAge       :: Columnar f Int
+  , _employeeAge       :: Columnar f Int32
   , _employeeSalary    :: Columnar f Double
 
   , _employeeHireDate  :: Columnar f UTCTime
@@ -146,7 +147,7 @@ data FunnyT f
   , funny_first_name :: Columnar f Text
   , _funny_lastName :: Columnar f Text
   , _funny_middle_Name :: Columnar f Text
-  , ___ :: Columnar f Int }
+  , ___ :: Columnar f Int32 }
   deriving Generic
 instance Beamable FunnyT
 instance Table FunnyT where
@@ -247,7 +248,7 @@ instance (Table metaInfo, Table prop) => Beamable (PrimaryKey (DepartamentRelate
 data VehiculeT f = VehiculeT
       { _vehiculeId     :: C f Text
       , _vehiculeType   :: C f Text
-      , _numberOfWheels :: C f Int
+      , _numberOfWheels :: C f Int32
       } deriving Generic
 
 instance Beamable VehiculeT

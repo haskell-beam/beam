@@ -11,6 +11,7 @@ import Database.Beam.Migrate.Types.Predicates (QualifiedName(..))
 
 import Control.Monad (when)
 
+import Data.Int
 import Data.String (fromString)
 import Data.Text (Text)
 import Data.Time (LocalTime)
@@ -21,7 +22,7 @@ import qualified Control.Monad.Fail as Fail
 
 data LogEntryT f
   = LogEntry
-  { _logEntryId       :: C f Int
+  { _logEntryId       :: C f Int32
   , _logEntryCommitId :: C f Text
   , _logEntryDate     :: C f LocalTime
   } deriving Generic
@@ -31,7 +32,7 @@ type LogEntry = LogEntryT Identity
 deriving instance Show LogEntry
 
 instance Table LogEntryT where
-  data PrimaryKey LogEntryT f = LogEntryKey (C f Int)
+  data PrimaryKey LogEntryT f = LogEntryKey (C f Int32)
     deriving Generic
   primaryKey = LogEntryKey <$> _logEntryId
 
@@ -42,7 +43,7 @@ deriving instance Show LogEntryKey
 
 newtype BeamMigrateVersionT f
   = BeamMigrateVersion
-  { _beamMigrateVersion :: C f Int
+  { _beamMigrateVersion :: C f Int32
   } deriving Generic
 
 instance Beamable BeamMigrateVersionT
@@ -50,7 +51,7 @@ type BeamMigrateVersion = BeamMigrateVersionT Identity
 deriving instance Show BeamMigrateVersion
 
 instance Table BeamMigrateVersionT where
-  data PrimaryKey BeamMigrateVersionT f = BeamMigrateVersionKey (C f Int)
+  data PrimaryKey BeamMigrateVersionT f = BeamMigrateVersionKey (C f Int32)
     deriving Generic
   primaryKey = BeamMigrateVersionKey <$> _beamMigrateVersion
 
@@ -94,13 +95,13 @@ beamMigrateDbMigration =
                       (LogEntry (field "id" int notNull) (field "commitId" (varchar Nothing) notNull)
                                 (field "date" timestamp notNull))
 
-beamMigrateSchemaVersion :: Int
+beamMigrateSchemaVersion :: Int32
 beamMigrateSchemaVersion = 1
 
 getLatestLogEntry :: forall be m
                    . ( BeamMigrateSqlBackend be
                      , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
-                     , BeamSqlBackendCanDeserialize be Int
+                     , BeamSqlBackendCanDeserialize be Int32
                      , BeamSqlBackendCanDeserialize be LocalTime
                      , BeamSqlBackendSupportsDataType be Text
                      , HasQBuilder be
@@ -126,7 +127,7 @@ recordCommit :: forall be m
              . ( BeamMigrateSqlBackend be
                , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
                , BeamSqlBackendSupportsDataType be Text
-               , BeamSqlBackendCanDeserialize be Int
+               , BeamSqlBackendCanDeserialize be Int32
                , BeamSqlBackendCanDeserialize be LocalTime
                , HasQBuilder be
                , MonadBeam be m )
@@ -181,7 +182,7 @@ ensureBackendTables be@BeamMigrationBackend { backendGetDbConstraints = getCs } 
         totalCnt <-
           fmap (fromMaybe 0) $ -- Should never return 'Nothing', but this prevents an irrefutable pattern match
           runSelectReturningOne $ select $
-          aggregate_ (\_ -> as_ @Int countAll_) $
+          aggregate_ (\_ -> as_ @Int32 countAll_) $
           all_ (_beamMigrateLogEntries (beamMigrateDb @be @m))
         when (totalCnt > 0) (fail "beam-migrate: No versioning information, but log entries present")
         runNoReturn (dropTableCmd (dropTableSyntax (tableName Nothing "beam_migration")))

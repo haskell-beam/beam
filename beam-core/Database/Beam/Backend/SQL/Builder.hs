@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Provides a syntax 'SqlSyntaxBuilder' that uses a
 --   'Data.ByteString.Builder.Builder' to construct SQL expressions as strings.
@@ -18,8 +19,8 @@ module Database.Beam.Backend.SQL.Builder
   , quoteSql
   , renderSql ) where
 
+import           Database.Beam.Backend.Internal.Compat
 import           Database.Beam.Backend.SQL
---import           Database.Beam.Backend.Types
 
 import           Control.Monad.IO.Class
 
@@ -38,6 +39,7 @@ import qualified Control.Monad.Fail as Fail
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
+import           GHC.TypeLits
 
 -- | The main syntax. A wrapper over 'Builder'
 newtype SqlSyntaxBuilder
@@ -461,9 +463,6 @@ sqlOptNumericPrec (Just (prec, Nothing)) = sqlOptPrec (Just prec)
 sqlOptNumericPrec (Just (prec, Just dec)) = "(" <> fromString (show prec) <> ", " <> fromString (show dec) <> ")"
 
 -- TODO These instances are wrong (Text doesn't handle quoting for example)
-instance HasSqlValueSyntax SqlSyntaxBuilder Int where
-  sqlValueSyntax x = SqlSyntaxBuilder $
-    byteString (fromString (show x))
 instance HasSqlValueSyntax SqlSyntaxBuilder Int32 where
   sqlValueSyntax x = SqlSyntaxBuilder $
     byteString (fromString (show x))
@@ -475,6 +474,10 @@ instance HasSqlValueSyntax SqlSyntaxBuilder Text where
     byteString (fromString (show x))
 instance HasSqlValueSyntax SqlSyntaxBuilder SqlNull where
   sqlValueSyntax _ = SqlSyntaxBuilder (byteString "NULL")
+
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlValueSyntax SqlSyntaxBuilder Int where
+  sqlValueSyntax x = SqlSyntaxBuilder $
+    byteString (fromString (show x))
 
 renderSql :: SqlSyntaxBuilder -> String
 renderSql (SqlSyntaxBuilder b) = BL.unpack (toLazyByteString b)

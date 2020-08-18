@@ -128,9 +128,9 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
            case log of
              [] -> pure ()
              LogEntry actId actStepNm _:log'
-               | actId == stepIx && actStepNm == stepNm ->
+               | fromIntegral actId == stepIx && actStepNm == stepNm ->
                    tell (Max stepIx) >> put log'
-               | actId /= stepIx ->
+               | fromIntegral actId /= stepIx ->
                    lift . lift $ discontinuousMigrationsHook hooks stepIx
                | otherwise ->
                    lift . lift $ logMismatchHook hooks stepIx actStepNm stepNm
@@ -168,7 +168,7 @@ bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = re
                      step
 
                  runInsert $ insert (_beamMigrateLogEntries (beamMigrateDb @be @m)) $
-                   insertExpressions [ LogEntry (val_ stepIx) (val_ stepName) currentTimestamp_ ]
+                   insertExpressions [ LogEntry (val_ $ fromIntegral stepIx) (val_ stepName) currentTimestamp_ ]
                  endStepHook hooks stepIx stepName
 
                  return ret)

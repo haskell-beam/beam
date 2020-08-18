@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -13,9 +12,8 @@ module Database.Beam.Migrate.Generics.Tables
   , HasNullableConstraint, NullableStatus
   ) where
 
-#include "MachDeps.h"
-
 import Database.Beam
+import Database.Beam.Backend.Internal.Compat
 import Database.Beam.Backend.SQL
 
 import Database.Beam.Migrate.Types.Predicates
@@ -34,6 +32,7 @@ import Data.Int
 import Data.Word
 
 import GHC.Generics
+import GHC.TypeLits
 
 class BeamMigrateSqlBackend be => GMigratableTableSettings be (i :: * -> *) fieldCheck where
   gDefaultTblSettingsChecks :: Proxy be -> Proxy i -> Bool -> fieldCheck ()
@@ -137,26 +136,12 @@ instance (BeamMigrateSqlBackend be, HasDefaultSqlDataType be ty) =>
 
 -- TODO Not sure if individual databases will want to customize these types
 
-
-#if WORD_SIZE_IN_BITS == 32
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy @Int32)
-#elif WORD_SIZE_IN_BITS == 64
-instance ( BeamMigrateSqlBackend be, BeamSqlT071Backend be ) => HasDefaultSqlDataType be Int where
-  defaultSqlDataType _ = defaultSqlDataType (Proxy @Int64)
-#else
-#error "Unsupported word size; check the value of WORD_SIZE_IN_BITS"
-#endif
-
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int32 where
   defaultSqlDataType _ _ _ = intType
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Int16 where
   defaultSqlDataType _ _ _ = smallIntType
 instance ( BeamMigrateSqlBackend be, BeamSqlT071Backend be ) => HasDefaultSqlDataType be Int64 where
     defaultSqlDataType _ _ _ = bigIntType
-
-instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Word where
-  defaultSqlDataType _ _ _ = numericType (Just (10, Nothing))
 
 instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be Word16 where
   defaultSqlDataType _ _ _ = numericType (Just (5, Nothing))
@@ -184,3 +169,9 @@ instance BeamMigrateSqlBackend be => HasDefaultSqlDataType be TimeOfDay where
 
 instance BeamMigrateSql99Backend be => HasDefaultSqlDataType be Bool where
   defaultSqlDataType _ _ _ = booleanType
+
+instance (TypeError (PreferExplicitSize Int Int32), BeamMigrateSqlBackend be) => HasDefaultSqlDataType be Int where
+  defaultSqlDataType _ = defaultSqlDataType (Proxy @Int32)
+
+instance (TypeError (PreferExplicitSize Word Word32), BeamMigrateSqlBackend be) => HasDefaultSqlDataType be Word where
+  defaultSqlDataType _ _ _ = numericType (Just (10, Nothing))

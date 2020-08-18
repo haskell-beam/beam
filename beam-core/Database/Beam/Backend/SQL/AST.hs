@@ -6,6 +6,7 @@ module Database.Beam.Backend.SQL.AST where
 
 import Prelude hiding (Ordering)
 
+import Database.Beam.Backend.Internal.Compat
 import Database.Beam.Backend.SQL.SQL92
 import Database.Beam.Backend.SQL.SQL99
 import Database.Beam.Backend.SQL.SQL2003
@@ -17,6 +18,7 @@ import Data.Time
 import Data.Word (Word16, Word32, Word64)
 import Data.Typeable
 import Data.Int
+import GHC.TypeLits
 
 data Command
   = SelectCommand Select
@@ -502,11 +504,9 @@ data Value where
   Value :: (Show a, Eq a, Typeable a) => a -> Value
 
 #define VALUE_SYNTAX_INSTANCE(ty) instance HasSqlValueSyntax Value ty where { sqlValueSyntax = Value }
-VALUE_SYNTAX_INSTANCE(Int)
 VALUE_SYNTAX_INSTANCE(Int16)
 VALUE_SYNTAX_INSTANCE(Int32)
 VALUE_SYNTAX_INSTANCE(Int64)
-VALUE_SYNTAX_INSTANCE(Word)
 VALUE_SYNTAX_INSTANCE(Word16)
 VALUE_SYNTAX_INSTANCE(Word32)
 VALUE_SYNTAX_INSTANCE(Word64)
@@ -521,6 +521,12 @@ VALUE_SYNTAX_INSTANCE(TimeOfDay)
 VALUE_SYNTAX_INSTANCE(SqlNull)
 VALUE_SYNTAX_INSTANCE(Double)
 VALUE_SYNTAX_INSTANCE(Bool)
+
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlValueSyntax Value Int where
+  sqlValueSyntax = Value
+
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlValueSyntax Value Word where
+  sqlValueSyntax = Value
 
 instance HasSqlValueSyntax Value x => HasSqlValueSyntax Value (Maybe x) where
   sqlValueSyntax (Just x) = sqlValueSyntax x

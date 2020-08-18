@@ -20,10 +20,10 @@
 --
 --   The returned function is polymorphic in the types of SQL expressions it
 --   will accept, but you can give it a more specific signature. For example, to
---   mandate that we receive two 'Int's and a 'T.Text' and return a 'Bool'.
+--   mandate that we receive two 'Int32's and a 'T.Text' and return a 'Bool'.
 --
 -- @
--- myFunc_ :: QGenExpr e ctxt s Int -> QGenExpr e ctxt s Int -> QGenExpr e ctxt s T.Text -> QGenExpr e ctxt s Bool
+-- myFunc_ :: QGenExpr e ctxt s Int32 -> QGenExpr e ctxt s Int32 -> QGenExpr e ctxt s T.Text -> QGenExpr e ctxt s Bool
 -- myFunc_ = customExpr_ myFuncImpl
 -- @
 --

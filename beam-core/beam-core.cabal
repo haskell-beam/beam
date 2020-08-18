@@ -47,6 +47,9 @@ library
                        Database.Beam.Backend.SQL.SQL2003
                        Database.Beam.Backend.SQL.Builder
                        Database.Beam.Backend.SQL.AST
+
+                       Database.Beam.Backend.Internal.Compat
+
   other-modules:       Database.Beam.Query.Aggregate
                        Database.Beam.Query.Combinators
                        Database.Beam.Query.Extensions
@@ -56,6 +59,7 @@ library
                        Database.Beam.Query.Relationships
 
                        Database.Beam.Schema.Lenses
+
   build-depends:       base         >=4.9     && <5.0,
                        aeson        >=0.11    && <1.5,
                        text         >=1.2.2.0 && <1.3,
