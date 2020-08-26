@@ -19,10 +19,12 @@ module Database.Beam.Sqlite.Syntax
   , SqliteSelectSyntax(..), SqliteInsertSyntax(..)
   , SqliteUpdateSyntax(..), SqliteDeleteSyntax(..)
 
+  , SqliteOnConflictSyntax(..)
   , SqliteInsertValuesSyntax(..)
   , SqliteColumnSchemaSyntax(..)
   , SqliteExpressionSyntax(..), SqliteValueSyntax(..)
   , SqliteTableNameSyntax(..)
+  , SqliteFieldNameSyntax(..)
   , SqliteAggregationSetQuantifierSyntax(..)
 
   , fromSqliteExpression
@@ -33,14 +35,15 @@ module Database.Beam.Sqlite.Syntax
   , sqliteBigIntType, sqliteSerialType
 
     -- * Building and consuming 'SqliteSyntax'
-  , fromSqliteCommand, formatSqliteInsert
+  , fromSqliteCommand, formatSqliteInsert, formatSqliteInsertOnConflict
 
-  , emit, emitValue, parens
+  , emit, emitValue, parens, commas
 
   , sqliteEscape, withPlaceholders
   , sqliteRenderSyntaxScript
   ) where
 
+import           Database.Beam.Backend.Internal.Compat
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.AST (ExtractField(..))
 import           Database.Beam.Haskell.Syntax
@@ -69,6 +72,7 @@ import           Data.Word
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
 #endif
+import           GHC.TypeLits
 
 import           Database.SQLite.Simple (SQLData(..))
 
@@ -176,11 +180,14 @@ data SqliteCommandSyntax
 -- | Convert a 'SqliteCommandSyntax' into a renderable 'SqliteSyntax'
 fromSqliteCommand :: SqliteCommandSyntax -> SqliteSyntax
 fromSqliteCommand (SqliteCommandSyntax s) = s
-fromSqliteCommand (SqliteCommandInsert (SqliteInsertSyntax tbl fields values)) =
-    formatSqliteInsert tbl fields values
+fromSqliteCommand (SqliteCommandInsert (SqliteInsertSyntax tbl fields values onConflict)) =
+    formatSqliteInsertOnConflict tbl fields values onConflict
 
 -- | SQLite @SELECT@ syntax
 newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSyntax }
+
+-- | SQLite @ON CONFLICT@ syntax
+newtype SqliteOnConflictSyntax = SqliteOnConflictSyntax { fromSqliteOnConflict :: SqliteSyntax }
 
 -- | SQLite @INSERT@ syntax. This doesn't directly wrap 'SqliteSyntax' because
 -- we need to do some processing on @INSERT@ statements to deal with @AUTO
@@ -188,9 +195,10 @@ newtype SqliteSelectSyntax = SqliteSelectSyntax { fromSqliteSelect :: SqliteSynt
 -- into 'SqliteSyntax'.
 data SqliteInsertSyntax
   = SqliteInsertSyntax
-  { sqliteInsertTable  :: !SqliteTableNameSyntax
-  , sqliteInsertFields :: [ T.Text ]
-  , sqliteInsertValues :: !SqliteInsertValuesSyntax
+  { sqliteInsertTable      :: !SqliteTableNameSyntax
+  , sqliteInsertFields     :: [ T.Text ]
+  , sqliteInsertValues     :: !SqliteInsertValuesSyntax
+  , sqliteInsertOnConflict :: !(Maybe SqliteOnConflictSyntax)
   }
 
 -- | SQLite @UPDATE@ syntax
@@ -295,11 +303,22 @@ sqliteExpressionSerialized = BeamSerializedExpression . TE.decodeUtf8 . BL.toStr
 -- | Format a SQLite @INSERT@ expression for the given table name, fields, and values.
 formatSqliteInsert :: SqliteTableNameSyntax -> [ T.Text ] -> SqliteInsertValuesSyntax -> SqliteSyntax
 formatSqliteInsert tblNm fields values =
-  emit "INSERT INTO " <> fromSqliteTableName tblNm <> parens (commas (map quotedIdentifier fields)) <> emit " " <>
-  case values of
-    SqliteInsertFromSql (SqliteSelectSyntax select) -> select
-    SqliteInsertExpressions es ->
-      emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
+  formatSqliteInsertOnConflict tblNm fields values Nothing
+
+-- | Format a SQLite @INSERT@ expression for the given table name, fields,
+-- values, and optionally an @ON CONFLICT@ clause.
+formatSqliteInsertOnConflict :: SqliteTableNameSyntax -> [ T.Text ] -> SqliteInsertValuesSyntax -> Maybe SqliteOnConflictSyntax -> SqliteSyntax
+formatSqliteInsertOnConflict tblNm fields values onConflict = mconcat
+  [ emit "INSERT INTO "
+  , fromSqliteTableName tblNm
+  , parens (commas (map quotedIdentifier fields))
+  , emit " "
+  , case values of
+      SqliteInsertFromSql (SqliteSelectSyntax select) -> select
+      SqliteInsertExpressions es ->
+        emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
+  , maybe mempty ((emit " " <>) . fromSqliteOnConflict) onConflict
+  ]
 
 instance IsSql92Syntax SqliteCommandSyntax where
   type Sql92SelectSyntax SqliteCommandSyntax = SqliteSelectSyntax
@@ -504,7 +523,7 @@ instance IsSql92DataTypeSyntax SqliteDataTypeSyntax where
   varBitType prec = SqliteDataTypeSyntax (emit "BIT VARYING" <> sqliteOptPrec prec) (varBitType prec) (varBitType prec) False
 
   numericType prec = SqliteDataTypeSyntax (emit "NUMERIC" <> sqliteOptNumericPrec prec) (numericType prec) (numericType prec) False
-  decimalType prec = SqliteDataTypeSyntax (emit "DOUBLE" <> sqliteOptNumericPrec prec) (decimalType prec) (decimalType prec) False
+  decimalType prec = SqliteDataTypeSyntax (emit "DECIMAL" <> sqliteOptNumericPrec prec) (decimalType prec) (decimalType prec) False
 
   intType = SqliteDataTypeSyntax (emit "INTEGER") intType intType False
   smallIntType = SqliteDataTypeSyntax (emit "SMALLINT") smallIntType smallIntType False
@@ -671,8 +690,6 @@ instance IsSql92OrderingSyntax SqliteOrderingSyntax where
   ascOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " ASC")
   descOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " DESC")
 
-instance HasSqlValueSyntax SqliteValueSyntax Int where
-  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Int8 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Int16 where
@@ -680,8 +697,6 @@ instance HasSqlValueSyntax SqliteValueSyntax Int16 where
 instance HasSqlValueSyntax SqliteValueSyntax Int32 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Int64 where
-  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
-instance HasSqlValueSyntax SqliteValueSyntax Word where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word8 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
@@ -698,7 +713,7 @@ instance HasSqlValueSyntax SqliteValueSyntax Float where
 instance HasSqlValueSyntax SqliteValueSyntax Double where
   sqlValueSyntax f = SqliteValueSyntax (emitValue (SQLFloat f))
 instance HasSqlValueSyntax SqliteValueSyntax Bool where
-  sqlValueSyntax = sqlValueSyntax . (\b -> if b then 1 else 0 :: Int)
+  sqlValueSyntax = sqlValueSyntax . (\b -> if b then 1 else 0 :: Int32)
 instance HasSqlValueSyntax SqliteValueSyntax SqlNull where
   sqlValueSyntax _ = SqliteValueSyntax (emit "NULL")
 instance HasSqlValueSyntax SqliteValueSyntax String where
@@ -711,6 +726,12 @@ instance HasSqlValueSyntax SqliteValueSyntax x =>
   HasSqlValueSyntax SqliteValueSyntax (Maybe x) where
   sqlValueSyntax (Just x) = sqlValueSyntax x
   sqlValueSyntax Nothing = sqlValueSyntax SqlNull
+
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlValueSyntax SqliteValueSyntax Int where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlValueSyntax SqliteValueSyntax Word where
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 
 instance IsCustomSqlSyntax SqliteExpressionSyntax where
   newtype CustomSqlSyntax SqliteExpressionSyntax =
@@ -773,9 +794,9 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
     SqliteExpressionSyntax $
     emit "NULLIF" <> parens (fromSqliteExpression a <> emit ", " <> fromSqliteExpression b)
   absE x = SqliteExpressionSyntax (emit "ABS" <> parens (fromSqliteExpression x))
-  bitLengthE x = SqliteExpressionSyntax (emit "BIT_LENGTH" <> parens (fromSqliteExpression x))
-  charLengthE x = SqliteExpressionSyntax (emit "CHAR_LENGTH" <> parens (fromSqliteExpression x))
-  octetLengthE x = SqliteExpressionSyntax (emit "OCTET_LENGTH" <> parens (fromSqliteExpression x))
+  bitLengthE x = SqliteExpressionSyntax (emit "8 * LENGTH" <> parens (emit "CAST" <> parens (parens (fromSqliteExpression x) <> emit " AS BLOB")))
+  charLengthE x = SqliteExpressionSyntax (emit "LENGTH" <> parens (fromSqliteExpression x))
+  octetLengthE x = SqliteExpressionSyntax (emit "LENGTH" <> parens (emit "CAST" <> parens (parens (fromSqliteExpression x) <> emit " AS BLOB")))
   lowerE x = SqliteExpressionSyntax (emit "LOWER" <> parens (fromSqliteExpression x))
   upperE x = SqliteExpressionSyntax (emit "UPPER" <> parens (fromSqliteExpression x))
   trimE x = SqliteExpressionSyntax (emit "TRIM" <> parens (fromSqliteExpression x))
@@ -851,7 +872,7 @@ instance IsSql92InsertSyntax SqliteInsertSyntax where
   type Sql92InsertTableNameSyntax SqliteInsertSyntax = SqliteTableNameSyntax
   type Sql92InsertValuesSyntax SqliteInsertSyntax = SqliteInsertValuesSyntax
 
-  insertStmt = SqliteInsertSyntax
+  insertStmt table fields values = SqliteInsertSyntax table fields values Nothing
 
 instance IsSql92InsertValuesSyntax SqliteInsertValuesSyntax where
   type Sql92InsertValuesExpressionSyntax SqliteInsertValuesSyntax = SqliteExpressionSyntax

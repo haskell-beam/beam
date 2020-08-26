@@ -15,11 +15,11 @@
 -- <https://www.postgresql.org/docs/current/static/index.html behavior>.
 --
 -- For examples on how to use @beam-postgres@ usage, see
--- <http://tathougies.github.io/beam/user-guide/backends/beam-postgres/ its manual>.
+-- <https://haskell-beam.github.io/beam/user-guide/backends/beam-postgres/ its manual>.
 
 module Database.Beam.Postgres
   (  -- * Beam Postgres backend
-    Postgres(..), Pg
+    Postgres(..), Pg, liftIOWithHandle
 
     -- ** Postgres syntax
   , PgCommandSyntax, PgSyntax
@@ -48,6 +48,10 @@ module Database.Beam.Postgres
   , pgCreateExtension, pgDropExtension
   , getPgExtension
 
+    -- ** Utilities for defining custom instances
+  , fromPgIntegral
+  , fromPgScientificOrIntegral
+
     -- ** Debug support
 
   , PgDebugStmt
@@ -67,7 +71,8 @@ module Database.Beam.Postgres
   ) where
 
 import Database.Beam.Postgres.Connection
-import Database.Beam.Postgres.Syntax hiding (PostgresInaccessible)
+import Database.Beam.Postgres.Full () -- for BeamHasInsertOnConflict instance
+import Database.Beam.Postgres.Syntax
 import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.PgSpecific
 import Database.Beam.Postgres.Migrate ( tsquery, tsvector, text, bytea, unboundedArray

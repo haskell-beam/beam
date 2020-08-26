@@ -16,11 +16,9 @@ module Database.Beam.Test.Schema
 import           Database.Beam
 import           Database.Beam.Schema.Tables
 import           Database.Beam.Backend
-import           Database.Beam.Backend.SQL.AST
 
+import           Data.Int
 import           Data.List.NonEmpty ( NonEmpty((:|)) )
-import           Data.Monoid
-import           Data.Proxy
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time.Clock (UTCTime)
@@ -52,7 +50,7 @@ data EmployeeT f
   , _employeeLastName  :: Columnar f Text
   , _employeePhoneNumber :: Columnar f Text
 
-  , _employeeAge       :: Columnar f Int
+  , _employeeAge       :: Columnar f Int32
   , _employeeSalary    :: Columnar f Double
 
   , _employeeHireDate  :: Columnar f UTCTime
@@ -117,9 +115,6 @@ instance Beamable (PrimaryKey RoleT)
 deriving instance Show (TableSettings (PrimaryKey RoleT))
 deriving instance Eq (TableSettings (PrimaryKey RoleT))
 
-roleTableSchema :: TableSettings RoleT
-roleTableSchema = defTblFieldSettings
-
 -- * Ensure that fields of a nullable primary key are given the proper Maybe type
 
 data DepartmentT f
@@ -134,9 +129,6 @@ instance Table DepartmentT where
 instance Beamable (PrimaryKey DepartmentT)
 deriving instance Show (TableSettings DepartmentT)
 deriving instance Eq (TableSettings DepartmentT)
-
-departmentTableSchema :: TableSettings DepartmentT
-departmentTableSchema = defTblFieldSettings
 
 -- nullableForeignKeysGivenMaybeType :: TestTree
 -- nullableForeignKeysGivenMaybeType =
@@ -155,7 +147,7 @@ data FunnyT f
   , funny_first_name :: Columnar f Text
   , _funny_lastName :: Columnar f Text
   , _funny_middle_Name :: Columnar f Text
-  , ___ :: Columnar f Int }
+  , ___ :: Columnar f Int32 }
   deriving Generic
 instance Beamable FunnyT
 instance Table FunnyT where
@@ -227,7 +219,6 @@ parametricAndFixedNestedBeamsAreEquivalent =
 -- `ADepartmentVehiculeT` and `BDepartmentVehiculeT` are equivalent, but one was using params while
 -- the other had its sub-beams fixed.
 
-type ADepartmentVehicule   = ADepartmentVehiculeT Identity
 type ADepartmentVehiculeT  = DepartamentRelatedT VehiculeInformationT VehiculeT
 data DepartamentRelatedT metaInfo prop f = DepartamentProperty
       { _aDepartament  :: PrimaryKey DepartmentT f
@@ -235,7 +226,6 @@ data DepartamentRelatedT metaInfo prop f = DepartamentProperty
       , _aMetaInfo     :: metaInfo (Nullable f)
       } deriving Generic
 
-type BDepartmentVehicule    = BDepartmentVehiculeT Identity
 data BDepartmentVehiculeT f = BDepartmentVehicule
       { _bDepartament  :: PrimaryKey DepartmentT f
       , _bRelatesTo    :: VehiculeT f
@@ -258,7 +248,7 @@ instance (Table metaInfo, Table prop) => Beamable (PrimaryKey (DepartamentRelate
 data VehiculeT f = VehiculeT
       { _vehiculeId     :: C f Text
       , _vehiculeType   :: C f Text
-      , _numberOfWheels :: C f Int
+      , _numberOfWheels :: C f Int32
       } deriving Generic
 
 instance Beamable VehiculeT
@@ -323,7 +313,7 @@ employeeDbSettingsRuleMods = defaultDbSettings `withDbModification`
                                                 let defName = defaultFieldName field
                                                 in case T.stripPrefix "funny" defName of
                                                   Nothing -> defName
-                                                  Just fieldNm -> "pfx_" <> defName)
+                                                  Just _ -> "pfx_" <> defName)
 
 -- employeeDbSettingsModified :: DatabaseSettings EmployeeDb
 -- employeeDbSettingsModified =

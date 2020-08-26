@@ -2,15 +2,9 @@
 
 ### `opaleye`
 
-`opaleye` has similar aims as beam. However, `beam`'s DSL is monadic,
-and eschews the use of arrows. We use a phantom scope parameter to
-achieve the same result (it's the `s` parameter in the `Q` and `QExpr`
-types). This allows you to write queries in the same way you'd use the
-list monad. Some people think this is more intuitive than arrows.
-
-Beam also uses higher-kinded types to allow the use of 'normal'
-haskell data types, rather than a fully polymorphic type. For example,
-in opaleye you may have to write
+`opaleye` has similar aims as beam. Beam uses higher-kinded types to
+allow the use of 'normal' haskell data types, rather than a fully
+polymorphic type. For example, in opaleye you may have to write
 
 ```haskell
 data Table column1 column2 column3 =
@@ -118,6 +112,15 @@ modules. An OpenGIS package is also in the works, and beam's approach
 means this will be packaged separately from core.
 
 ### `groundhog`
+
+Groundhog is a fork of `persistent` and it shares many of the same
+goals as well as restrictions. It, also, does not offer a DSL for
+expressing joins or complex queries. Moreover it currently lacks
+a companion library similar to `esqueleto`.
+
+Thus, `groundhog` can be useful for making some basic queries safe,
+while more complex things must be handled through a raw query escape
+hatch or directly through a backend library such as `postgresql-simple`.
 
 ### `hasql`
 

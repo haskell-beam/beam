@@ -24,6 +24,7 @@ module Database.Beam.Schema.Tables
     , dbModification, tableModification, withDbModification
     , withTableModification, modifyTable, modifyEntityName
     , setEntityName, modifyTableFields, fieldNamed
+    , modifyEntitySchema, setEntitySchema
     , defaultDbSettings
 
     , RenamableWithRule(..), RenamableField(..)
@@ -43,6 +44,7 @@ module Database.Beam.Schema.Tables
     , GFieldsFulfillConstraint(..), FieldsFulfillConstraint
     , FieldsFulfillConstraintNullable
     , WithConstraint(..)
+    , HasConstraint(..)
     , TagReducesTo(..), ReplaceBaseTag
     , withConstrainedFields, withConstraints
     , withNullableConstrainedFields, withNullableConstraints
@@ -60,6 +62,7 @@ module Database.Beam.Schema.Tables
 
 import           Database.Beam.Backend.Types
 
+import           Control.Applicative (liftA2)
 import           Control.Arrow (first)
 import           Control.Monad.Identity
 import           Control.Monad.Writer hiding ((<>))
@@ -97,25 +100,25 @@ import qualified Lens.Micro as Lens
 --
 --   Entities are documented under [the corresponding
 --   section](Database.Beam.Schema#entities) and in the
---   [manual](http://tathougies.github.io/beam/user-guide/databases/)
+--   [manual](https://haskell-beam.github.io/beam/user-guide/databases/)
 class Database be db where
 
     -- | Default derived function. Do not implement this yourself.
     --
     --   The idea is that, for any two databases over particular entity tags 'f'
     --   and 'g', if we can take any entity in 'f' and 'g' to the corresponding
-    --   entity in 'h' (in the possibly effectful monad 'm'), then we can
+    --   entity in 'h' (in the possibly effectful applicative functor 'm'), then we can
     --   transform the two databases over 'f' and 'g' to a database in 'h',
-    --   within the monad 'm'.
+    --   within 'm'.
     --
     --   If that doesn't make sense, don't worry. This is mostly beam internal
-    zipTables :: Monad m
+    zipTables :: Applicative m
               => Proxy be
               -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
                   f tbl -> g tbl -> m (h tbl))
               -> db f -> db g -> m (db h)
     default zipTables :: ( Generic (db f), Generic (db g), Generic (db h)
-                         , Monad m
+                         , Applicative m
                          , GZipDatabase be f g h
                                         (Rep (db f)) (Rep (db g)) (Rep (db h)) ) =>
                          Proxy be ->
@@ -134,7 +137,7 @@ class Database be db where
 -- | Automatically provide names for tables, and descriptions for tables (using
 --   'defTblFieldSettings'). Your database must implement 'Generic', and must be
 --   auto-derivable. For more information on name generation, see the
---   [manual](https://tathougies.github.io/beam/user-guide/models)
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models)
 defaultDbSettings :: ( Generic (DatabaseSettings be db)
                      , GAutoDbSettings (Rep (DatabaseSettings be db) ()) ) =>
                      DatabaseSettings be db
@@ -219,9 +222,16 @@ modifyTable modTblNm modFields = modifyEntityName modTblNm <> modifyTableFields 
 modifyEntityName :: IsDatabaseEntity be entity => (Text -> Text) -> EntityModification (DatabaseEntity be db) be entity
 modifyEntityName modTblNm = EntityModification (Endo (\(DatabaseEntity tbl) -> DatabaseEntity (tbl & dbEntityName %~ modTblNm)))
 
+-- | Construct an 'EntityModification' to set the schema of a database entity
+modifyEntitySchema :: IsDatabaseEntity be entity => (Maybe Text -> Maybe Text) -> EntityModification (DatabaseEntity be db) be entity
+modifyEntitySchema modSchema = EntityModification (Endo (\(DatabaseEntity tbl) -> DatabaseEntity (tbl & dbEntitySchema %~ modSchema)))
+
 -- | Change the entity name without consulting the beam-assigned one
 setEntityName :: IsDatabaseEntity be entity => Text -> EntityModification (DatabaseEntity be db) be entity
 setEntityName nm = modifyEntityName (\_ -> nm)
+
+setEntitySchema :: IsDatabaseEntity be entity => Maybe Text -> EntityModification (DatabaseEntity be db) be entity
+setEntitySchema nm = modifyEntitySchema (\_ -> nm)
 
 -- | Construct an 'EntityModification' to rename the fields of a 'TableEntity'
 modifyTableFields :: tbl (FieldModification (TableField tbl)) -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)
@@ -264,7 +274,7 @@ instance IsString (FieldModification (TableField tbl) a) where
 -- * Database entity types
 
 -- | An entity tag for tables. See the documentation for 'Table' or consult the
---   [manual](https://tathougies.github.io/beam/user-guide/models) for more.
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models) for more.
 data TableEntity (tbl :: (* -> *) -> *)
 data ViewEntity (view :: (* -> *) -> *)
 --data UniqueConstraint (tbl :: (* -> *) -> *) (c :: (* -> *) -> *)
@@ -392,7 +402,7 @@ instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements 
     where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
 
 class GZipDatabase be f g h x y z where
-  gZipDatabase :: Monad m =>
+  gZipDatabase :: Applicative m =>
                   (Proxy f, Proxy g, Proxy h, Proxy be)
                -> (forall tbl. (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) => f tbl -> g tbl -> m (h tbl))
                -> x () -> y () -> m (z ())
@@ -403,9 +413,7 @@ instance ( GZipDatabase be f g h ax ay az
          , GZipDatabase be f g h bx by bz ) =>
   GZipDatabase be f g h (ax :*: bx) (ay :*: by) (az :*: bz) where
   gZipDatabase p combine ~(ax :*: bx) ~(ay :*: by) =
-    do a <- gZipDatabase p combine ax ay
-       b <- gZipDatabase p combine bx by
-       pure (a :*: b)
+    liftA2 (:*:) (gZipDatabase p combine ax ay) (gZipDatabase p combine bx by)
 instance (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
   GZipDatabase be f g h (K1 Generic.R (f tbl)) (K1 Generic.R (g tbl)) (K1 Generic.R (h tbl)) where
 
@@ -583,7 +591,7 @@ class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (ta
 --   to "zip" tables with different column tags together. Always instantiate an
 --   empty 'Beamable' instance for tables, primary keys, and any type that you
 --   would like to embed within either. See the
---   [manual](https://tathougies.github.io/beam/user-guide/models) for more
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models) for more
 --   information on embedding.
 class Beamable table where
     zipBeamFieldsM :: Applicative m =>
@@ -701,54 +709,58 @@ instance ( Retaggable f' a, Retaggable f' b, Retaggable f' c, Retaggable f' d
     ( retag transform a, retag transform b, retag transform c, retag transform d
     , retag transform e, retag transform f, retag transform g, retag transform h )
 
--- Carry a constraint instance
+-- | Carry a constraint instance and the value it applies to.
 data WithConstraint (c :: * -> Constraint) x where
   WithConstraint :: c x => x -> WithConstraint c x
 
-class GFieldsFulfillConstraint (c :: * -> Constraint) (exposed :: * -> *) values withconstraint where
-  gWithConstrainedFields :: Proxy c -> Proxy exposed -> values () -> withconstraint ()
-instance GFieldsFulfillConstraint c exposed values withconstraint =>
-    GFieldsFulfillConstraint c (M1 s m exposed) (M1 s m values) (M1 s m withconstraint) where
-  gWithConstrainedFields c _ (M1 x) = M1 (gWithConstrainedFields c (Proxy @exposed) x)
-instance GFieldsFulfillConstraint c U1 U1 U1 where
-  gWithConstrainedFields _ _ _ = U1
-instance (GFieldsFulfillConstraint c aExp a aC, GFieldsFulfillConstraint c bExp b bC) =>
-  GFieldsFulfillConstraint c (aExp :*: bExp) (a :*: b) (aC :*: bC) where
-  gWithConstrainedFields be _ (a :*: b) = gWithConstrainedFields be (Proxy @aExp) a :*: gWithConstrainedFields be (Proxy @bExp) b
-instance (c x) => GFieldsFulfillConstraint c (K1 Generic.R (Exposed x)) (K1 Generic.R x) (K1 Generic.R (WithConstraint c x)) where
-  gWithConstrainedFields _ _ (K1 x) = K1 (WithConstraint x)
+-- | Carry a constraint instance.
+data HasConstraint (c :: * -> Constraint) x where
+  HasConstraint :: c x => HasConstraint c x
+
+class GFieldsFulfillConstraint (c :: * -> Constraint) (exposed :: * -> *) withconstraint where
+  gWithConstrainedFields :: Proxy c -> Proxy exposed -> withconstraint ()
+instance GFieldsFulfillConstraint c exposed withconstraint =>
+    GFieldsFulfillConstraint c (M1 s m exposed) (M1 s m withconstraint) where
+  gWithConstrainedFields c _ = M1 (gWithConstrainedFields c (Proxy @exposed))
+instance GFieldsFulfillConstraint c U1 U1 where
+  gWithConstrainedFields _ _ = U1
+instance (GFieldsFulfillConstraint c aExp aC, GFieldsFulfillConstraint c bExp bC) =>
+  GFieldsFulfillConstraint c (aExp :*: bExp) (aC :*: bC) where
+  gWithConstrainedFields be _ = gWithConstrainedFields be (Proxy @aExp) :*: gWithConstrainedFields be (Proxy @bExp)
+instance (c x) => GFieldsFulfillConstraint c (K1 Generic.R (Exposed x)) (K1 Generic.R (HasConstraint c x)) where
+  gWithConstrainedFields _ _ = K1 HasConstraint
 instance FieldsFulfillConstraint c t =>
-    GFieldsFulfillConstraint c (K1 Generic.R (t Exposed)) (K1 Generic.R (t Identity)) (K1 Generic.R (t (WithConstraint c))) where
-  gWithConstrainedFields _ _ (K1 x) = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t Exposed))) (from x)))
+    GFieldsFulfillConstraint c (K1 Generic.R (t Exposed)) (K1 Generic.R (t (HasConstraint c))) where
+  gWithConstrainedFields _ _ = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t Exposed)))))
 instance FieldsFulfillConstraintNullable c t =>
-    GFieldsFulfillConstraint c (K1 Generic.R (t (Nullable Exposed))) (K1 Generic.R (t (Nullable Identity))) (K1 Generic.R (t (Nullable (WithConstraint c)))) where
-  gWithConstrainedFields _ _ (K1 x) = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t (Nullable Exposed)))) (from x)))
+    GFieldsFulfillConstraint c (K1 Generic.R (t (Nullable Exposed))) (K1 Generic.R (t (Nullable (HasConstraint c)))) where
+  gWithConstrainedFields _ _ = K1 (to (gWithConstrainedFields (Proxy @c) (Proxy @(Rep (t (Nullable Exposed))))))
 
 withConstrainedFields :: forall c tbl
-                       . FieldsFulfillConstraint c tbl => tbl Identity -> tbl (WithConstraint c)
-withConstrainedFields =
-  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl Exposed))) . from
+                       . (FieldsFulfillConstraint c tbl, Beamable tbl) => tbl Identity -> tbl (WithConstraint c)
+withConstrainedFields = runIdentity . zipBeamFieldsM f (withConstraints @c @tbl)
+  where f :: forall a. Columnar' (HasConstraint c) a -> Columnar' Identity a -> Identity (Columnar' (WithConstraint c) a)
+        f (Columnar' HasConstraint) (Columnar' a) = Identity $ Columnar' $ WithConstraint a
 
-withConstraints :: forall c tbl. (Beamable tbl, FieldsFulfillConstraint c tbl) => tbl (WithConstraint c)
-withConstraints =
-  withConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
+withConstraints :: forall c tbl. (Beamable tbl, FieldsFulfillConstraint c tbl) => tbl (HasConstraint c)
+withConstraints = to $ gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl Exposed)))
 
 withNullableConstrainedFields :: forall c tbl
-                               . FieldsFulfillConstraintNullable c tbl => tbl (Nullable Identity) -> tbl (Nullable (WithConstraint c))
-withNullableConstrainedFields =
-  to . gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl (Nullable Exposed)))) . from
+                               . (FieldsFulfillConstraintNullable c tbl, Beamable tbl) => tbl (Nullable Identity) -> tbl (Nullable (WithConstraint c))
+withNullableConstrainedFields = runIdentity . zipBeamFieldsM f (withNullableConstraints @c @tbl)
+  where f :: forall a. Columnar' (Nullable (HasConstraint c)) a -> Columnar' (Nullable Identity) a -> Identity (Columnar' (Nullable (WithConstraint c)) a)
+        f (Columnar' HasConstraint) (Columnar' a) = Identity $ Columnar' $ WithConstraint a
 
-withNullableConstraints ::  forall c tbl. (Beamable tbl, FieldsFulfillConstraintNullable c tbl) => tbl (Nullable (WithConstraint c))
-withNullableConstraints =
-  withNullableConstrainedFields (changeBeamRep (\_ -> Columnar' undefined) tblSkeleton)
+withNullableConstraints ::  forall c tbl. (Beamable tbl, FieldsFulfillConstraintNullable c tbl) => tbl (Nullable (HasConstraint c))
+withNullableConstraints = to $ gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl (Nullable Exposed))))
 
 type FieldsFulfillConstraint (c :: * -> Constraint) t =
-  ( Generic (t (WithConstraint c)), Generic (t Identity), Generic (t Exposed)
-  , GFieldsFulfillConstraint c (Rep (t Exposed)) (Rep (t Identity)) (Rep (t (WithConstraint c))))
+  ( Generic (t (HasConstraint c)), Generic (t Identity), Generic (t Exposed)
+  , GFieldsFulfillConstraint c (Rep (t Exposed)) (Rep (t (HasConstraint c))))
 
 type FieldsFulfillConstraintNullable (c :: * -> Constraint) t =
-  ( Generic (t (Nullable (WithConstraint c))), Generic (t (Nullable Identity)), Generic (t (Nullable Exposed))
-  , GFieldsFulfillConstraint c (Rep (t (Nullable Exposed))) (Rep (t (Nullable Identity))) (Rep (t (Nullable (WithConstraint c)))))
+  ( Generic (t (Nullable (HasConstraint c))), Generic (t (Nullable Identity)), Generic (t (Nullable Exposed))
+  , GFieldsFulfillConstraint c (Rep (t (Nullable Exposed))) (Rep (t (Nullable (HasConstraint c)))))
 
 -- | Synonym for 'primaryKey'
 pk :: Table t => t f -> PrimaryKey t f
@@ -756,7 +768,7 @@ pk = primaryKey
 
 -- | Return a 'TableSettings' for the appropriate 'table' type where each column
 --   has been given its default name. See the
---   [manual](https://tathougies.github.io/beam/user-guide/models) for
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models) for
 --   information on the default naming convention.
 defTblFieldSettings :: ( Generic (TableSettings table)
                        , GDefaultTableFieldSettings (Rep (TableSettings table) ())) =>

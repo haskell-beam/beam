@@ -3,6 +3,7 @@ module Pagila.Test where
 
 import Control.Arrow
 
+import Data.Int
 import Data.Proxy
 import Data.Text(Text)
 
@@ -20,13 +21,13 @@ import Database.Beam.Migrate.SQL.Types
 
 data SimpleTbl f
   = SimpleTbl
-  { simpletblField1 :: Columnar f Int
+  { simpletblField1 :: Columnar f Int32
   , simpletblField2 :: Columnar f (Maybe Text) }
   deriving Generic
 instance Beamable SimpleTbl
 
 instance Table SimpleTbl where
-  data PrimaryKey SimpleTbl f = SimpleTblId (Columnar f Int) deriving Generic
+  data PrimaryKey SimpleTbl f = SimpleTblId (Columnar f Int32) deriving Generic
   primaryKey = SimpleTblId <$> simpletblField1
 instance Beamable (PrimaryKey SimpleTbl)
 

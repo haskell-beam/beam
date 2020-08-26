@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                beam-core
-version:             0.8.0.0
+version:             0.9.0.0
 synopsis:            Type-safe, feature-complete SQL query and manipulation interface for Haskell
 description:         Beam is a Haskell library for type-safe querying and manipulation of SQL databases.
                      Beam is modular and supports various backends. In order to use beam, you will need to use
@@ -10,7 +10,7 @@ description:         Beam is a Haskell library for type-safe querying and manipu
                      well as the corresponding backend.
 
                      For more information, see the user manual and tutorial on
-                     <https://tathougies.github.io/beam GitHub pages>.
+                     <https://haskell-beam.github.io/beam GitHub pages>.
 homepage:            http://travis.athougies.net/projects/beam.html
 license:             MIT
 license-file:        LICENSE
@@ -19,12 +19,13 @@ maintainer:          travis@athougies.net
 category:            Database
 build-type:          Simple
 cabal-version:       1.18
-bug-reports:         https://github.com/tathougies/beam/issues
+bug-reports:         https://github.com/haskell-beam/beam/issues
 extra-doc-files:     ChangeLog.md
 
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
                        Database.Beam.Query
+                       Database.Beam.Query.Adhoc
                        Database.Beam.Query.Internal
                        Database.Beam.Query.CustomSQL
                        Database.Beam.Query.CTE
@@ -46,6 +47,9 @@ library
                        Database.Beam.Backend.SQL.SQL2003
                        Database.Beam.Backend.SQL.Builder
                        Database.Beam.Backend.SQL.AST
+
+                       Database.Beam.Backend.Internal.Compat
+
   other-modules:       Database.Beam.Query.Aggregate
                        Database.Beam.Query.Combinators
                        Database.Beam.Query.Extensions
@@ -55,29 +59,33 @@ library
                        Database.Beam.Query.Relationships
 
                        Database.Beam.Schema.Lenses
-  build-depends:       base         >=4.7     && <5.0,
+
+  build-depends:       base         >=4.9     && <5.0,
                        aeson        >=0.11    && <1.5,
-                       text         >=1.0     && <1.3,
+                       text         >=1.2.2.0 && <1.3,
                        bytestring   >=0.10    && <0.11,
-                       mtl          >=2.1     && <2.3,
+                       mtl          >=2.2.1   && <2.3,
                        microlens    >=0.4     && <0.5,
                        ghc-prim     >=0.5     && <0.6,
                        free         >=4.12    && <5.2,
                        dlist        >=0.7.1.2 && <0.9,
                        time         >=1.6     && <1.10,
-                       hashable     >=1.1     && <1.3,
+                       hashable     >=1.2.4.0 && <1.4,
                        network-uri  >=2.6     && <2.7,
                        containers   >=0.5     && <0.7,
                        scientific   >=0.3     && <0.4,
                        vector       >=0.11    && <0.13,
-                       vector-sized >=0.5     && <1.3,
+                       vector-sized >=0.5     && <1.5,
                        tagged       >=0.8     && <0.9
+
   Default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
                        GeneralizedNewtypeDeriving, RankNTypes, TupleSections, ConstraintKinds, StandaloneDeriving, TypeOperators,
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
   ghc-options:         -Wall -O3
+  if impl(ghc >= 8.8)
+    ghc-options: -Wcompat
   if flag(werror)
     ghc-options:       -Werror
 
@@ -99,5 +107,5 @@ test-suite beam-core-tests
 
 source-repository head
   type: git
-  location: https://github.com/tathougies/beam.git
+  location: https://github.com/haskell-beam/beam.git
   subdir: beam-core

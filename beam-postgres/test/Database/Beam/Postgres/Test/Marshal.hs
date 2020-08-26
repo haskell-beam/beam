@@ -9,15 +9,12 @@ import           Database.Beam.Migrate.Simple (autoMigrate)
 import           Database.Beam.Postgres
 import           Database.Beam.Postgres.Migrate (migrationBackend)
 import           Database.Beam.Postgres.Test
-import qualified Database.PostgreSQL.Simple as Pg
 
 import           Data.ByteString (ByteString)
 import           Data.Functor.Classes
 import           Data.Int
 import           Data.Proxy (Proxy(..))
-import           Data.Semigroup
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import           Data.Typeable
 import           Data.UUID (UUID, fromWords)
 import           Data.Word
@@ -31,6 +28,9 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 
 import           Unsafe.Coerce
+
+textGen :: Hedgehog.Gen T.Text
+textGen = Gen.text (Range.constant 0 1000) $ Gen.filter (/= '\NUL') Gen.unicode
 
 uuidGen :: Hedgehog.Gen UUID
 uuidGen = fromWords <$> Gen.integral Range.constantBounded
@@ -72,7 +72,7 @@ tests postgresConn =
     , marshalTest (Gen.integral (Range.constantBounded @Word16)) postgresConn
     , marshalTest (Gen.integral (Range.constantBounded @Word32)) postgresConn
     , marshalTest (Gen.integral (Range.constantBounded @Word64)) postgresConn
-    , marshalTest (Gen.text (Range.constant 0 1000) Gen.unicode) postgresConn
+    , marshalTest textGen postgresConn
     , marshalTest uuidGen postgresConn
 
     , marshalTest' (\a b -> Hedgehog.assert (ptCmp a b))  pointGen postgresConn
@@ -85,7 +85,7 @@ tests postgresConn =
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word16))) postgresConn
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word32))) postgresConn
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word64))) postgresConn
-    , marshalTest (Gen.maybe (Gen.text (Range.constant 0 1000) Gen.unicode)) postgresConn
+    , marshalTest (Gen.maybe textGen) postgresConn
     , marshalTest (Gen.maybe uuidGen) postgresConn
 
     , marshalTest' (\a b -> Hedgehog.assert (liftEq ptCmp a b))  (Gen.maybe pointGen) postgresConn
@@ -104,13 +104,13 @@ tests postgresConn =
 
 data MarshalTable a f
     = MarshalTable
-    { _marshalTableId    :: C f (SqlSerial Int)
+    { _marshalTableId    :: C f (SqlSerial Int32)
     , _marshalTableEntry :: C f a
     } deriving (Generic)
 instance Beamable (MarshalTable a)
 
 instance Typeable a => Table (MarshalTable a) where
-    data PrimaryKey (MarshalTable a) f = MarshalTableKey (C f (SqlSerial Int))
+    data PrimaryKey (MarshalTable a) f = MarshalTableKey (C f (SqlSerial Int32))
       deriving (Generic, Beamable)
     primaryKey = MarshalTableKey . _marshalTableId
 

@@ -3,6 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE PolyKinds #-}
 
 module Database.Beam.Backend.SQL.Row
   ( FromBackendRowF(..), FromBackendRowM(..)
@@ -25,7 +26,9 @@ import           Data.Typeable
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
-#if !MIN_VERSION_base(4, 12, 0)
+import qualified Control.Monad.Fail as Fail
+
+#if !MIN_VERSION_base(4, 7, 0)
 import           Data.Proxy
 #endif
 
@@ -67,11 +70,16 @@ instance Monad (FromBackendRowM be) where
     FromBackendRowM $
     a >>= (\x -> let FromBackendRowM b' = b x in b')
 
+#if !MIN_VERSION_base(4,13,0)
+  fail = Fail.fail
+#endif
+
+instance Fail.MonadFail (FromBackendRowM be) where
   fail = FromBackendRowM . liftF . FailParseWith .
          BeamRowReadError Nothing . ColumnErrorInternal
 
 instance Alternative (FromBackendRowM be) where
-  empty   = fail "empty"
+  empty   = Fail.fail "empty"
   a <|> b =
     FromBackendRowM (liftF (Alt a b id))
 

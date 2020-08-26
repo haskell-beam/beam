@@ -71,7 +71,7 @@ type Sql92SanityCheck cmd =
   )
 
 type Sql92ReasonableMarshaller be =
-   ( FromBackendRow be Int, FromBackendRow be SqlNull
+   ( FromBackendRow be SqlNull
    , FromBackendRow be Text, FromBackendRow be Bool
    , FromBackendRow be Char
    , FromBackendRow be Int16, FromBackendRow be Int32, FromBackendRow be Int64
@@ -229,7 +229,7 @@ class IsSql92DataTypeSyntax dataType where
   timestampType :: Maybe Word -> Bool {-^ With time zone -} -> dataType
   -- TODO interval type
 
-class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
+class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int32
       , HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Bool
       , IsSql92FieldNameSyntax (Sql92ExpressionFieldNameSyntax expr)
       , IsSql92QuantifierSyntax (Sql92ExpressionQuantifierSyntax expr)

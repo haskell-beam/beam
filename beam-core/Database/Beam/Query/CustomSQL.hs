@@ -20,10 +20,10 @@
 --
 --   The returned function is polymorphic in the types of SQL expressions it
 --   will accept, but you can give it a more specific signature. For example, to
---   mandate that we receive two 'Int's and a 'T.Text' and return a 'Bool'.
+--   mandate that we receive two 'Int32's and a 'T.Text' and return a 'Bool'.
 --
 -- @
--- myFunc_ :: QGenExpr e ctxt s Int -> QGenExpr e ctxt s Int -> QGenExpr e ctxt s T.Text -> QGenExpr e ctxt s Bool
+-- myFunc_ :: QGenExpr e ctxt s Int32 -> QGenExpr e ctxt s Int32 -> QGenExpr e ctxt s T.Text -> QGenExpr e ctxt s Bool
 -- myFunc_ = customExpr_ myFuncImpl
 -- @
 --
@@ -31,7 +31,7 @@
 --   is called with arguments representing SQL expressions, that, when
 --   evaluated, will evaluate to the result of the expressions supplied as
 --   arguments to 'customExpr_'. See the section on
---   <http://tathougies.github.io/beam/user-guide/extensibility/ extensibility>
+--   <https://haskell-beam.github.io/beam/user-guide/extensibility/ extensibility>
 --   in the user guide for example usage.
 module Database.Beam.Query.CustomSQL
   (

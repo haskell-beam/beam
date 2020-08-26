@@ -1,7 +1,7 @@
 -- | Combinators and types specific to relationships.
 --
 --   These types and functions correspond with the relationships section in the
---   <http://tathougies.github.io/beam/user-guide/queries/relationships/ user guide>.
+--   <https://haskell-beam.github.io/beam/user-guide/queries/relationships/ user guide>.
 module Database.Beam.Query.Relationships
   ( -- * Relationships
 
@@ -33,7 +33,7 @@ type OneToOne be db s one many = OneToMany be db s one many
 
 -- | Convenience type to declare one-to-many relationships. See the manual
 --   section on
---   <http://tathougies.github.io/beam/user-guide/queries/relationships/ relationships>
+--   <https://haskell-beam.github.io/beam/user-guide/queries/relationships/ relationships>
 --   for more information
 type OneToMany be db s one many =
   ( BeamSqlBackend be, BeamSqlBackendCanSerialize be Bool ) =>
@@ -45,7 +45,7 @@ type OneToMaybe be db s tbl rel = OneToManyOptional be db s tbl rel
 
 -- | Convenience type to declare one-to-many relationships with a nullable
 --   foreign key. See the manual section on
---   <http://tathougies.github.io/beam/user-guide/queries/relationships/ relationships>
+--   <https://haskell-beam.github.io/beam/user-guide/queries/relationships/ relationships>
 --   for more information
 type OneToManyOptional be db s tbl rel =
   ( BeamSqlBackend be, BeamSqlBackendCanSerialize be Bool
@@ -88,7 +88,7 @@ oneToMaybe_ = oneToManyOptional_
 
 -- | Convenience type to declare many-to-many relationships. See the manual
 --   section on
---   <http://tathougies.github.io/beam/user-guide/queries/relationships/ relationships>
+--   <https://haskell-beam.github.io/beam/user-guide/queries/relationships/ relationships>
 --   for more information
 type ManyToMany be db left right =
   forall s.
@@ -101,7 +101,7 @@ type ManyToMany be db left right =
 
 -- | Convenience type to declare many-to-many relationships with additional
 --   data. See the manual section on
---   <http://tathougies.github.io/beam/user-guide/queries/relationships/ relationships>
+--   <https://haskell-beam.github.io/beam/user-guide/queries/relationships/ relationships>
 --   for more information
 type ManyToManyThrough be db through left right =
   forall s.
@@ -116,8 +116,8 @@ type ManyToManyThrough be db through left right =
 --   Takes the join table and two key extraction functions from that table to the
 --   related tables. Also takes two `Q`s representing the table sources to relate.
 --
---   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
---   for more indformation.
+--   See <https://haskell-beam.github.io/beam/user-guide/queries/relationships/ the manual>
+--   for more information.
 manyToMany_
   :: ( Database be db
      , Table joinThrough, Table left, Table right
@@ -137,8 +137,8 @@ manyToMany_ joinTbl leftKey rightKey left right = fmap (\(_, l, r) -> (l, r)) $
 --   join table and two key extraction functions from that table to the related
 --   tables. Also takes two `Q`s representing the table sources to relate.
 --
---   See <http://tathougies.github.io/beam/user-guide/queries/relationships/ the manual>
---   for more indformation.
+--   See <https://haskell-beam.github.io/beam/user-guide/queries/relationships/ the manual>
+--   for more information.
 manyToManyPassthrough_
   :: ( Database be db
      , Table joinThrough, Table left, Table right

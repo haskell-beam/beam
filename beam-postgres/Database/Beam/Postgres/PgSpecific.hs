@@ -38,6 +38,7 @@ module Database.Beam.Postgres.PgSpecific
   , withoutKeys
 
   , pgJsonArrayLength
+  , pgArrayToJson
   , pgJsonbUpdate, pgJsonbSet
   , pgJsonbPretty
 
@@ -55,6 +56,12 @@ module Database.Beam.Postgres.PgSpecific
   , PgPoint(..), PgLine(..), PgLineSegment(..)
   , PgBox(..), PgPath(..), PgPolygon(..)
   , PgCircle(..)
+
+    -- ** Regular expressions
+  , PgRegex(..), pgRegex_
+  , (~.), (~*.), (!~.), (!~*.)
+  , pgRegexpReplace_, pgRegexpMatch_
+  , pgRegexpSplitToTable, pgRegexpSplitToArray
 
     -- ** Set-valued functions
     -- $set-valued-funs
@@ -86,7 +93,7 @@ module Database.Beam.Postgres.PgSpecific
 
     -- *** Building ranges from expressions
   , range_
-  
+
     -- *** Building @PgRangeBound@s
   , inclusive, exclusive, unbounded
 
@@ -98,7 +105,7 @@ module Database.Beam.Postgres.PgSpecific
   , rLower_, rUpper_, isEmpty_
   , lowerInc_, upperInc_, lowerInf_, upperInf_
   , rangeMerge_
-  
+
     -- ** Postgres functions and aggregates
   , pgBoolOr, pgBoolAnd, pgStringAgg, pgStringAggOver
 
@@ -127,7 +134,9 @@ import           Data.ByteString.Builder
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import           Data.Foldable
+import           Data.Functor
 import           Data.Hashable
+import           Data.Int
 import qualified Data.List.NonEmpty as NE
 import           Data.Proxy
 import           Data.Scientific (Scientific, formatScientific, FPFormat(Fixed))
@@ -703,9 +712,10 @@ instance (Typeable x, FromJSON x) => Pg.FromField (PgJSON x) where
   fromField field d =
     if Pg.typeOid field /= Pg.typoid Pg.json
     then Pg.returnError Pg.Incompatible field ""
-    else case decodeStrict =<< d of
-           Just d' -> pure (PgJSON d')
+    else case eitherDecodeStrict <$> d of
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
+           Just (Left e) -> Pg.returnError Pg.ConversionFailed field e
+           Just (Right d') -> pure (PgJSON d')
 
 instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSON a)
 instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
@@ -715,7 +725,7 @@ instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSON a) where
 
 -- | The Postgres @JSONB@ type, which stores JSON-encoded data in a
 -- postgres-specific binary format. Like 'PgJSON', the type parameter indicates
--- the Hgaskell type which the JSON encodes.
+-- the Haskell type which the JSON encodes.
 --
 -- Fields with this type are automatically given the Postgres @JSONB@ type
 newtype PgJSONB a = PgJSONB a
@@ -728,9 +738,10 @@ instance (Typeable x, FromJSON x) => Pg.FromField (PgJSONB x) where
   fromField field d =
     if Pg.typeOid field /= Pg.typoid Pg.jsonb
     then Pg.returnError Pg.Incompatible field ""
-    else case decodeStrict =<< d of
-           Just d' -> pure (PgJSONB d')
+    else case eitherDecodeStrict <$> d of
            Nothing -> Pg.returnError Pg.UnexpectedNull field ""
+           Just (Left e) -> Pg.returnError Pg.ConversionFailed field e
+           Just (Right d') -> pure (PgJSONB d')
 
 instance (Typeable a, FromJSON a) => FromBackendRow Postgres (PgJSONB a)
 instance ToJSON a => HasSqlValueSyntax PgValueSyntax (PgJSONB a) where
@@ -867,10 +878,10 @@ instance IsPgJSON PgJSONB where
 -- | Postgres @&#x40;>@ and @<&#x40;@ operators for JSON. Return true if the
 -- json object pointed to by the arrow is completely contained in the other. See
 -- the Postgres documentation for more in formation on what this means.
-(@>), (<@) :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s (json b)
-           -> QGenExpr ctxt Postgres s Bool
+(@>), (<@)
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
+  -> QGenExpr ctxt Postgres s Bool
 QExpr a @> QExpr b =
   QExpr (pgBinOp "@>" <$> a <*> b)
 QExpr a <@ QExpr b =
@@ -880,7 +891,7 @@ QExpr a <@ QExpr b =
 -- See '(->$)' for the corresponding operator for object access.
 (->#) :: IsPgJSON json
       => QGenExpr ctxt Postgres s (json a)
-      -> QGenExpr ctxt Postgres s Int
+      -> QGenExpr ctxt Postgres s Int32
       -> QGenExpr ctxt Postgres s (json b)
 QExpr a -># QExpr b =
   QExpr (pgBinOp "->" <$> a <*> b)
@@ -899,7 +910,7 @@ QExpr a ->$ QExpr b =
 -- corresponding operator on objects.
 (->>#) :: IsPgJSON json
        => QGenExpr ctxt Postgres s (json a)
-       -> QGenExpr ctxt Postgres s Int
+       -> QGenExpr ctxt Postgres s Int32
        -> QGenExpr ctxt Postgres s T.Text
 QExpr a ->># QExpr b =
   QExpr (pgBinOp "->>" <$> a <*> b)
@@ -936,19 +947,19 @@ QExpr a #>> QExpr b =
 
 -- | Postgres @?@ operator. Checks if the given string exists as top-level key
 -- of the json object.
-(?) :: IsPgJSON json
-    => QGenExpr ctxt Postgres s (json a)
-    -> QGenExpr ctxt Postgres s T.Text
-    -> QGenExpr ctxt Postgres s Bool
+(?)
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s T.Text
+  -> QGenExpr ctxt Postgres s Bool
 QExpr a ? QExpr b =
   QExpr (pgBinOp "?" <$> a <*> b)
 
 -- | Postgres @?|@ and @?&@ operators. Check if any or all of the given strings
 -- exist as top-level keys of the json object respectively.
-(?|), (?&) :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s (V.Vector T.Text)
-           -> QGenExpr ctxt Postgres s Bool
+(?|), (?&)
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s (V.Vector T.Text)
+  -> QGenExpr ctxt Postgres s Bool
 QExpr a ?| QExpr b =
   QExpr (pgBinOp "?|" <$> a <*> b)
 QExpr a ?& QExpr b =
@@ -957,38 +968,47 @@ QExpr a ?& QExpr b =
 -- | Postgres @-@ operator on json objects. Returns the supplied json object
 -- with the supplied key deleted. See 'withoutIdx' for the corresponding
 -- operator on arrays.
-withoutKey :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s T.Text
-           -> QGenExpr ctxt Postgres s (json b)
+withoutKey
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s T.Text
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
 QExpr a `withoutKey` QExpr b =
   QExpr (pgBinOp "-" <$> a <*> b)
 
 -- | Postgres @-@ operator on json arrays. See 'withoutKey' for the
 -- corresponding operator on objects.
-withoutIdx :: IsPgJSON json
-           => QGenExpr ctxt Postgres s (json a)
-           -> QGenExpr ctxt Postgres s Int
-           -> QGenExpr ctxt Postgres s (json b)
+withoutIdx
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s Int32
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
 QExpr a `withoutIdx` QExpr b =
   QExpr (pgBinOp "-" <$> a <*> b)
 
 -- | Postgres @#-@ operator. Removes all the keys specificied from the JSON
 -- object and returns the result.
-withoutKeys :: IsPgJSON json
-            => QGenExpr ctxt Postgres s (json a)
-            -> QGenExpr ctxt Postgres s (V.Vector T.Text)
-            -> QGenExpr ctxt Postgres s (json b)
+withoutKeys
+  :: QGenExpr ctxt Postgres s (PgJSONB a)
+  -> QGenExpr ctxt Postgres s (V.Vector T.Text)
+  -> QGenExpr ctxt Postgres s (PgJSONB b)
 QExpr a `withoutKeys` QExpr b =
   QExpr (pgBinOp "#-" <$> a <*> b)
 
 -- | Postgres @json_array_length@ function. The supplied json object should be
 -- an array, but this isn't checked at compile-time.
 pgJsonArrayLength :: IsPgJSON json => QGenExpr ctxt Postgres s (json a)
-                  -> QGenExpr ctxt Postgres s Int
+                  -> QGenExpr ctxt Postgres s Int32
 pgJsonArrayLength (QExpr a) =
   QExpr $ \tbl ->
   PgExpressionSyntax (emit "json_array_length(" <> fromPgExpression (a tbl) <> emit ")")
+
+-- | Postgres @array_to_json@ function.
+pgArrayToJson
+  :: QGenExpr ctxt Postgres s (V.Vector e)
+  -> QGenExpr ctxt Postgres s (PgJSON a)
+pgArrayToJson (QExpr a) = QExpr $ a <&> PgExpressionSyntax .
+  mappend (emit "array_to_json") .
+  pgParens .
+  fromPgExpression
 
 -- | The postgres @jsonb_set@ function. 'pgJsonUpdate' expects the value
 -- specified by the path in the second argument to exist. If it does not, the
@@ -1260,6 +1280,100 @@ instance Pg.FromField PgBox where
                             <*> pgPointParser
 instance FromBackendRow Postgres PgBox
 
+-- ** Regular expressions
+
+-- | The type of Postgres regular expressions. Only a
+-- 'HasSqlValueSyntax' instance is supplied, because you won't need to
+-- be reading these back from the database.
+--
+-- If you're generating regexes dynamically, then use 'pgRegex_' to
+-- convert a string expression into a regex one.
+newtype PgRegex = PgRegex T.Text
+  deriving (Show, Eq, Ord, IsString)
+
+instance HasSqlValueSyntax PgValueSyntax PgRegex where
+  sqlValueSyntax (PgRegex r) = sqlValueSyntax r
+
+-- | Convert a string valued expression (which could be generated
+-- dynamically) into a 'PgRegex'-typed one.
+pgRegex_ :: BeamSqlBackendIsString Postgres text => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+pgRegex_ (QExpr e) = QExpr e
+
+-- | Match regular expression, case-sensitive
+(~.) :: BeamSqlBackendIsString Postgres text
+     => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+     -> QGenExpr ctxt Postgres s Bool
+QExpr t ~. QExpr re = QExpr (pgBinOp "~" <$> t <*> re)
+
+-- | Match regular expression, case-insensitive
+(~*.) :: BeamSqlBackendIsString Postgres text
+      => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+      -> QGenExpr ctxt Postgres s Bool
+QExpr t ~*. QExpr re = QExpr (pgBinOp "~*" <$> t <*> re)
+
+-- | Does not match regular expression, case-sensitive
+(!~.) :: BeamSqlBackendIsString Postgres text
+      => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+      -> QGenExpr ctxt Postgres s Bool
+QExpr t !~. QExpr re = QExpr (pgBinOp "!~" <$> t <*> re)
+
+-- | Does not match regular expression, case-insensitive
+(!~*.) :: BeamSqlBackendIsString Postgres text
+       => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+       -> QGenExpr ctxt Postgres s Bool
+QExpr t !~*. QExpr re = QExpr (pgBinOp "!~*" <$> t <*> re)
+
+-- | Postgres @regexp_replace@. Replaces all instances of the regex in
+-- the first argument with the third argument. The fourth argument is
+-- the postgres regex options to provide.
+pgRegexpReplace_ :: BeamSqlBackendIsString Postgres text
+                 => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+                 -> QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s T.Text
+                 -> QGenExpr ctxt Postgres s txt
+pgRegexpReplace_ (QExpr haystack) (QExpr needle) (QExpr replacement) (QExpr opts) =
+  QExpr (\t -> PgExpressionSyntax $
+               emit "regexp_replace(" <> fromPgExpression (haystack t) <> emit ", "
+                                      <> fromPgExpression (needle t) <> emit ", "
+                                      <> fromPgExpression (replacement t) <> emit ", "
+                                      <> fromPgExpression (opts t) <> emit ")")
+
+-- | Postgres @regexp_match@. Matches the regular expression against
+-- the string given and returns an array where each element
+-- corresponds to a match in the string, or @NULL@ if nothing was
+-- found
+pgRegexpMatch_ :: BeamSqlBackendIsString Postgres text
+               => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+               -> QGenExpr ctxt Postgres s (Maybe (V.Vector text))
+pgRegexpMatch_ (QExpr s) (QExpr re) =
+  QExpr (\t -> PgExpressionSyntax $
+               emit "regexp_match(" <> fromPgExpression (s t) <> emit ", "
+                                    <> fromPgExpression (re t) <> emit ")")
+
+-- | Postgres @regexp_split_to_array@. Splits the given string by the
+-- given regex and returns the result as an array.
+pgRegexpSplitToArray :: BeamSqlBackendIsString Postgres text
+                     => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+                     -> QGenExpr ctxt Postgres s (V.Vector text)
+pgRegexpSplitToArray (QExpr s) (QExpr re) =
+  QExpr (\t -> PgExpressionSyntax $
+               emit "regexp_split_to_array(" <> fromPgExpression (s t) <> emit ", "
+                                             <> fromPgExpression (re t) <> emit ")")
+
+newtype PgReResultT f
+  = PgReResultT { reResult :: C f T.Text }
+  deriving Generic
+instance Beamable PgReResultT
+
+-- | Postgres @regexp_split_to_table@. Splits the given string by the
+-- given regex and return a result set that can be joined against.
+pgRegexpSplitToTable :: BeamSqlBackendIsString Postgres text
+                     => QGenExpr ctxt Postgres s text -> QGenExpr ctxt Postgres s PgRegex
+
+                     -> Q Postgres db s (QExpr Postgres s T.Text)
+pgRegexpSplitToTable (QExpr s) (QExpr re) =
+  fmap reResult $
+  pgUnnest' (\t -> emit "regexp_split_to_table(" <> fromPgExpression (s t) <> emit ", "
+                                                 <> fromPgExpression (re t) <> emit ")")
 
 -- ** Set-valued functions
 
@@ -1288,6 +1402,7 @@ pgUnnest' q =
                                       pure (Columnar' (TableField (pure fieldNm) fieldNm)))
                                 tblSkeleton tblSkeleton) (0 :: Int)
 
+-- | Join the results of the given set-valued function to the query
 pgUnnest :: forall tbl db s
           . Beamable tbl
          => QExpr Postgres s (PgSetOf tbl)
@@ -1299,18 +1414,21 @@ data PgUnnestArrayTbl a f = PgUnnestArrayTbl (C f a)
   deriving Generic
 instance Beamable (PgUnnestArrayTbl a)
 
+-- | Introduce each element of the array as a row
 pgUnnestArray :: QExpr Postgres s (V.Vector a)
               -> Q Postgres db s (QExpr Postgres s a)
 pgUnnestArray (QExpr q) =
   fmap (\(PgUnnestArrayTbl x) -> x) $
   pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)))
 
-data PgUnnestArrayWithOrdinalityTbl a f = PgUnnestArrayWithOrdinalityTbl (C f Int) (C f a)
+data PgUnnestArrayWithOrdinalityTbl a f = PgUnnestArrayWithOrdinalityTbl (C f Int64) (C f a)
   deriving Generic
 instance Beamable (PgUnnestArrayWithOrdinalityTbl a)
 
+-- | Introduce each element of the array as a row, along with the
+-- element's index
 pgUnnestArrayWithOrdinality :: QExpr Postgres s (V.Vector a)
-                            -> Q Postgres db s (QExpr Postgres s Int, QExpr Postgres s a)
+                            -> Q Postgres db s (QExpr Postgres s Int64, QExpr Postgres s a)
 pgUnnestArrayWithOrdinality (QExpr q) =
   fmap (\(PgUnnestArrayWithOrdinalityTbl i x) -> (i, x)) $
   pgUnnest' (\t -> emit "UNNEST" <> pgParens (fromPgExpression (q t)) <> emit " WITH ORDINALITY")
@@ -1406,7 +1524,7 @@ instance HasDefaultSqlDataType Postgres a
 -- know the shape of the data stored, substitute 'Value' for this type
 -- parameter.
 --
--- For more information on Psotgres json support see the postgres
+-- For more information on Postgres JSON support see the postgres
 -- <https://www.postgresql.org/docs/current/static/functions-json.html manual>.
 
 

@@ -2,6 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -16,21 +17,29 @@ module Database.Beam.Sqlite.Connection
   ) where
 
 import           Database.Beam.Backend
+import           Database.Beam.Backend.Internal.Compat
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import           Database.Beam.Backend.URI
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL ( BeamMigrateOnlySqlBackend, FieldReturnType(..) )
 import qualified Database.Beam.Migrate.SQL as Beam
 import           Database.Beam.Migrate.SQL.BeamExtensions
-import           Database.Beam.Query ( QExpr, SqlInsert(..), SqlInsertValues(..)
+import           Database.Beam.Query ( QExpr, QField
+                                     , SqlInsert(..), SqlInsertValues(..)
                                      , HasQBuilder(..), HasSqlEqualityCheck
                                      , HasSqlQuantifiedEqualityCheck
                                      , DataType(..)
-                                     , insert )
+                                     , HasSqlInTable(..)
+                                     , insert, current_ )
+import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( Beamable
+                                             , Columnar'(..)
                                              , DatabaseEntity(..)
-                                             , TableEntity)
+                                             , DatabaseEntityDescriptor(..)
+                                             , TableEntity
+                                             , TableField(..)
+                                             , changeBeamRep )
 import           Database.Beam.Sqlite.Syntax
 
 import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
@@ -53,6 +62,7 @@ import           Control.Monad.Identity (Identity)
 import           Control.Monad.Reader (ReaderT(..), MonadReader(..), runReaderT)
 import           Control.Monad.State.Strict (MonadState(..), StateT(..), runStateT)
 import           Control.Monad.Trans (lift)
+import           Control.Monad.Writer (tell, execWriter)
 
 import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -73,6 +83,7 @@ import           Data.Word
 #if !MIN_VERSION_base(4,11,0)
 import           Data.Semigroup
 #endif
+import           GHC.TypeLits
 
 import           Network.URI
 
@@ -88,7 +99,7 @@ import           Text.Read (readMaybe)
 
 -- | The SQLite backend. Used to parameterize 'MonadBeam' and 'FromBackendRow'
 -- to provide support for SQLite databases. See the documentation for
--- 'MonadBeam' and the <https://tathougies.github.io/beam/ user guide> for more
+-- 'MonadBeam' and the <https://haskell-beam.github.io/beam/ user guide> for more
 -- information on how to use this backend.
 data Sqlite = Sqlite
 
@@ -98,19 +109,24 @@ instance BeamBackend Sqlite where
 instance HasQBuilder Sqlite where
   buildSqlQuery = buildSql92Query' False -- SQLite does not support arbitrarily nesting UNION, INTERSECT, and EXCEPT
 
+instance HasSqlInTable Sqlite where
+  inRowValuesE Proxy e es = SqliteExpressionSyntax $ mconcat
+    [ parens $ fromSqliteExpression e
+    , emit " IN "
+    , parens $ emit "VALUES " <> commas (map fromSqliteExpression es)
+    ]
+
 instance BeamSqlBackendIsString Sqlite T.Text
 instance BeamSqlBackendIsString Sqlite String
 
 instance FromBackendRow Sqlite Bool
 instance FromBackendRow Sqlite Double
 instance FromBackendRow Sqlite Float
-instance FromBackendRow Sqlite Int
 instance FromBackendRow Sqlite Int8
 instance FromBackendRow Sqlite Int16
 instance FromBackendRow Sqlite Int32
 instance FromBackendRow Sqlite Int64
 instance FromBackendRow Sqlite Integer
-instance FromBackendRow Sqlite Word
 instance FromBackendRow Sqlite Word8
 instance FromBackendRow Sqlite Word16
 instance FromBackendRow Sqlite Word32
@@ -136,6 +152,9 @@ instance FromBackendRow Sqlite LocalTime where
 instance FromBackendRow Sqlite Scientific where
   fromBackendRow = unSqliteScientific <$> fromBackendRow
 instance FromBackendRow Sqlite SqliteScientific
+
+instance TypeError (PreferExplicitSize Int Int32) => FromBackendRow Sqlite Int
+instance TypeError (PreferExplicitSize Word Word32) => FromBackendRow Sqlite Word
 
 newtype SqliteScientific = SqliteScientific { unSqliteScientific :: Scientific }
 instance FromField SqliteScientific where
@@ -168,7 +187,7 @@ instance BeamSqlBackendHasSerial Sqlite where
   genericSerial nm = Beam.field nm (DataType sqliteSerialType) SqliteHasDefault
 
 -- | 'MonadBeam' instance inside whiche SQLite queries are run. See the
--- <https://tathougies.github.io/beam/ user guide> for more information
+-- <https://haskell-beam.github.io/beam/ user guide> for more information
 newtype SqliteM a
   = SqliteM
   { runSqliteM :: ReaderT (String -> IO (), Connection) IO a
@@ -234,12 +253,10 @@ instance FromBackendRow Sqlite a => FromRow (BeamSqliteRow a) where
   instance HasSqlEqualityCheck Sqlite (ty); \
   instance HasSqlQuantifiedEqualityCheck Sqlite (ty);
 
-HAS_SQLITE_EQUALITY_CHECK(Int)
 HAS_SQLITE_EQUALITY_CHECK(Int8)
 HAS_SQLITE_EQUALITY_CHECK(Int16)
 HAS_SQLITE_EQUALITY_CHECK(Int32)
 HAS_SQLITE_EQUALITY_CHECK(Int64)
-HAS_SQLITE_EQUALITY_CHECK(Word)
 HAS_SQLITE_EQUALITY_CHECK(Word8)
 HAS_SQLITE_EQUALITY_CHECK(Word16)
 HAS_SQLITE_EQUALITY_CHECK(Word32)
@@ -259,7 +276,17 @@ HAS_SQLITE_EQUALITY_CHECK(Char)
 HAS_SQLITE_EQUALITY_CHECK(Integer)
 HAS_SQLITE_EQUALITY_CHECK(Scientific)
 
-instance HasDefaultSqlDataType Sqlite (SqlSerial Int) where
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlEqualityCheck Sqlite Int
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlQuantifiedEqualityCheck Sqlite Int
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlEqualityCheck Sqlite Word
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlQuantifiedEqualityCheck Sqlite Word
+
+class HasDefaultSqlDataType Sqlite a => IsSqliteSerialIntegerType a
+instance IsSqliteSerialIntegerType Int32
+instance IsSqliteSerialIntegerType Int64
+instance TypeError (PreferExplicitSize Int Int32) => IsSqliteSerialIntegerType Int
+
+instance IsSqliteSerialIntegerType a => HasDefaultSqlDataType Sqlite (SqlSerial a) where
   defaultSqlDataType _ _ False = sqliteSerialType
   defaultSqlDataType _ _ True = intType
 
@@ -322,18 +349,18 @@ instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
   runInsertReturningList = runInsertReturningList
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
-runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs)
+runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs onConflict)
     -- If all expressions are simple expressions (no default), then just
 
   | SqliteInsertExpressions es <- vs, any (any (== SqliteExpressionDefault)) es =
       forM_ es $ \row -> do
         let (fields', row') = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row
-            SqliteSyntax cmd vals = formatSqliteInsert tbl fields' (SqliteInsertExpressions [ row' ])
+            SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl fields' (SqliteInsertExpressions [ row' ]) onConflict
             cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
         logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
         execute conn (fromString cmdString) (D.toList vals)
   | otherwise = do
-      let SqliteSyntax cmd vals = formatSqliteInsert tbl fields vs
+      let SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl fields vs onConflict
           cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
       logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
       execute conn (fromString cmdString) (D.toList vals)
@@ -354,7 +381,7 @@ runInsertReturningList :: FromBackendRow Sqlite (table Identity)
                        => SqlInsert Sqlite table
                        -> SqliteM [ table Identity ]
 runInsertReturningList SqlInsertNoRows = pure []
-runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _)) =
+runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $ do
 
@@ -396,3 +423,83 @@ runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _)) =
                 fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT * FROM inserted_values_" <> processId))
            releaseSavepoint
            return x
+
+instance Beam.BeamHasInsertOnConflict Sqlite where
+  newtype SqlConflictTarget Sqlite table = SqliteConflictTarget
+    { unSqliteConflictTarget :: table (QExpr Sqlite QInternal) -> SqliteSyntax }
+  newtype SqlConflictAction Sqlite table = SqliteConflictAction
+    { unSqliteConflictAction :: forall s. table (QField s) -> SqliteSyntax }
+
+  insertOnConflict
+    :: forall db table s. Beamable table
+    => DatabaseEntity Sqlite db (TableEntity table)
+    -> SqlInsertValues Sqlite (table (QExpr Sqlite s))
+    -> Beam.SqlConflictTarget Sqlite table
+    -> Beam.SqlConflictAction Sqlite table
+    -> SqlInsert Sqlite table
+  insertOnConflict (DatabaseEntity dt) values target action = case values of
+    SqlInsertValuesEmpty -> SqlInsertNoRows
+    SqlInsertValues vs -> SqlInsert (dbTableSettings dt) $
+      let getFieldName
+            :: forall a
+            .  Columnar' (TableField table) a
+            -> Columnar' (QField QInternal) a
+          getFieldName (Columnar' fd) =
+            Columnar' $ QField False (dbTableCurrentName dt) $ _fieldName fd
+          tableFields = changeBeamRep getFieldName $ dbTableSettings dt
+          tellFieldName _ _ f = tell [f] >> pure f
+          fieldNames = execWriter $
+            project' (Proxy @AnyType) (Proxy @((), T.Text)) tellFieldName tableFields
+          currentField
+            :: forall a
+            .  Columnar' (QField QInternal) a
+            -> Columnar' (QExpr Sqlite QInternal) a
+          currentField (Columnar' f) = Columnar' $ current_ f
+          tableCurrent = changeBeamRep currentField tableFields
+      in SqliteInsertSyntax (tableNameFromEntity dt) fieldNames vs $ Just $
+           SqliteOnConflictSyntax $ mconcat
+             [ emit "ON CONFLICT "
+             , unSqliteConflictTarget target tableCurrent
+             , emit " DO "
+             , unSqliteConflictAction action tableFields
+             ]
+
+  anyConflict = SqliteConflictTarget $ const mempty
+  conflictingFields makeProjection = SqliteConflictTarget $ \table ->
+    parens $ commas $ map fromSqliteExpression $
+      project (Proxy @Sqlite) (makeProjection table) "t"
+  conflictingFieldsWhere makeProjection makeWhere =
+    SqliteConflictTarget $ \table -> mconcat
+      [ unSqliteConflictTarget (Beam.conflictingFields makeProjection) table
+      , emit " WHERE "
+      , let QExpr mkE = makeWhere table
+        in fromSqliteExpression $ mkE "t"
+      ]
+
+  onConflictDoNothing = SqliteConflictAction $ const $ emit "NOTHING"
+  onConflictUpdateSet makeAssignments = SqliteConflictAction $ \table -> mconcat
+    [ emit "UPDATE SET "
+    , let QAssignment assignments = makeAssignments table $ excluded table
+          emitAssignment (fieldName, expr) = mconcat
+            [ fromSqliteFieldNameSyntax fieldName
+            , emit " = "
+            , fromSqliteExpression expr
+            ]
+      in commas $ map emitAssignment assignments
+    ]
+  onConflictUpdateSetWhere makeAssignments makeWhere =
+    SqliteConflictAction $ \table -> mconcat
+      [ unSqliteConflictAction (Beam.onConflictUpdateSet makeAssignments) table
+      , emit " WHERE "
+      , let QExpr mkE = makeWhere table $ excluded table
+        in fromSqliteExpression $ mkE "t"
+      ]
+
+excluded
+  :: forall table s
+  .  Beamable table
+  => table (QField s)
+  -> table (QExpr Sqlite s)
+excluded table = changeBeamRep excludedField table
+  where excludedField (Columnar' (QField _ _ name)) =
+          Columnar' $ QExpr $ const $ fieldE $ qualifiedField "excluded" name

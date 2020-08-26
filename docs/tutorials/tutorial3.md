@@ -17,21 +17,18 @@ the schema should be pretty familiar, so I'm going to skip the explanation.
 
 ```haskell
 data ProductT f = Product
-                { _productId          :: C f Int
+                { _productId          :: C f Int32
                 , _productTitle       :: C f Text
                 , _productDescription :: C f Text
-                , _productPrice       :: C f Int {- Price in cents -} }
-                  deriving Generic
+                , _productPrice       :: C f Int32 {- Price in cents -} }
+                  deriving (Generic, Beamable)
 type Product = ProductT Identity
 deriving instance Show Product
 
 instance Table ProductT where
-  data PrimaryKey ProductT f = ProductId (Columnar f Int)
-                               deriving Generic
+  data PrimaryKey ProductT f = ProductId (Columnar f Int32)
+                               deriving (Generic, Beamable)
   primaryKey = ProductId . _productId
-
-instance Beamable ProductT
-instance Beamable (PrimaryKey ProductT)
 ```
 
 For orders, we want to store an id, date created, and the user who made the
@@ -51,41 +48,36 @@ import Data.Time
 deriving instance Show (PrimaryKey AddressT Identity)
 
 data OrderT f = Order
-              { _orderId      :: Columnar f Int
+              { _orderId      :: Columnar f Int32
               , _orderDate    :: Columnar f LocalTime
               , _orderForUser :: PrimaryKey UserT f
               , _orderShipToAddress :: PrimaryKey AddressT f
               , _orderShippingInfo :: PrimaryKey ShippingInfoT (Nullable f) }
-                deriving Generic
+                deriving (Generic, Beamable)
 type Order = OrderT Identity
 deriving instance Show Order
 
 instance Table OrderT where
-    data PrimaryKey OrderT f = OrderId (Columnar f Int)
-                               deriving Generic
+    data PrimaryKey OrderT f = OrderId (Columnar f Int32)
+                               deriving (Generic, Beamable)
     primaryKey = OrderId . _orderId
-
-instance Beamable OrderT
-instance Beamable (PrimaryKey OrderT)
 
 data ShippingCarrier = USPS | FedEx | UPS | DHL
                        deriving (Show, Read, Eq, Ord, Enum)
 
 data ShippingInfoT f = ShippingInfo
-                     { _shippingInfoId             :: Columnar f Int
+                     { _shippingInfoId             :: Columnar f Int32
                      , _shippingInfoCarrier        :: Columnar f ShippingCarrier
                      , _shippingInfoTrackingNumber :: Columnar f Text }
-                       deriving Generic
+                       deriving (Generic, Beamable)
 type ShippingInfo = ShippingInfoT Identity
 deriving instance Show ShippingInfo
 
 instance Table ShippingInfoT where
-    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int)
-                                      deriving Generic
+    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int32)
+                                      deriving (Generic, Beamable)
     primaryKey = ShippingInfoId . _shippingInfoId
 
-instance Beamable ShippingInfoT
-instance Beamable (PrimaryKey ShippingInfoT)
 deriving instance Show (PrimaryKey ShippingInfoT (Nullable Identity))
 ```
 
@@ -105,18 +97,15 @@ deriving instance Show (PrimaryKey ProductT Identity)
 data LineItemT f = LineItem
                  { _lineItemInOrder    :: PrimaryKey OrderT f
                  , _lineItemForProduct :: PrimaryKey ProductT f
-                 , _lineItemQuantity   :: Columnar f Int }
-                   deriving Generic
+                 , _lineItemQuantity   :: Columnar f Int32 }
+                   deriving (Generic, Beamable)
 type LineItem = LineItemT Identity
 deriving instance Show LineItem
 
 instance Table LineItemT where
     data PrimaryKey LineItemT f = LineItemId (PrimaryKey OrderT f) (PrimaryKey ProductT f)
-                                  deriving Generic
+                                  deriving (Generic, Beamable)
     primaryKey = LineItemId <$> _lineItemInOrder <*> _lineItemForProduct
-
-instance Beamable LineItemT
-instance Beamable (PrimaryKey LineItemT)
 ```
 
 !!! tip "Tip"
@@ -140,9 +129,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartOrders        :: f (TableEntity OrderT)
                       , _shoppingCartShippingInfos :: f (TableEntity ShippingInfoT)
                       , _shoppingCartLineItems     :: f (TableEntity LineItemT) }
-                        deriving Generic
-
-instance Database be ShoppingCartDb
+                        deriving (Generic, Database be)
 
 ShoppingCartDb (TableLens shoppingCartUsers) (TableLens shoppingCartUserAddresses)
                (TableLens shoppingCartProducts) (TableLens shoppingCartOrders)
@@ -152,23 +139,23 @@ shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings `withDbModification`
                  dbModification {
                    _shoppingCartUserAddresses =
-                     modifyTable (\_ -> "addresses") $
-                     tableModification {
-                       _addressLine1 = fieldNamed "address1",
-                       _addressLine2 = fieldNamed "address2"
+                     setEntityName "addresses" <>
+                     modifyTableFields tableModification {
+                       _addressLine1 = "address1",
+                       _addressLine2 = "address2"
                      },
-                   _shoppingCartProducts = modifyTable (\_ -> "products") tableModification,
-                   _shoppingCartOrders = modifyTable (\_ -> "orders") $
-                                         tableModification {
+                   _shoppingCartProducts = setEntityName "products",
+                   _shoppingCartOrders = setEntityName "orders" <>
+                                         modifyTableFields tableModification {
                                            _orderShippingInfo = ShippingInfoId "shipping_info__id"
                                          },
-                   _shoppingCartShippingInfos = modifyTable (\_ -> "shipping_info") $
-                                                tableModification {
+                   _shoppingCartShippingInfos = setEntityName "shipping_info" <>
+                                                modifyTableFields tableModification {
                                                   _shippingInfoId = "id",
                                                   _shippingInfoCarrier = "carrier",
                                                   _shippingInfoTrackingNumber = "tracking_number"
                                                 },
-                   _shoppingCartLineItems = modifyTable (\_ -> "line_items") tableModification
+                   _shoppingCartLineItems = setEntityName "line_items"
                  }
 ```
 
@@ -233,16 +220,6 @@ Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data
 Address {_addressId = 1, _addressLine1 = "123 Little Street", _addressLine2 = Nothing, _addressCity = "Boston", _addressState = "MA", _addressZip = "12345", _addressForUser = UserId "james@example.com"}
 ```
 
-!!! note "Note"
-    `insertReturning` and `runInsertReturningList` are from the `beam-sqlite`
-    package. They emulate the `INSERT .. RETURNING ..` functionatily you may
-    expect in other databases. Because this emulation is backend-specific it is
-    part of the backend package, rather than `beam-core`.
-
-    Other backends may have similar functionality. Please refer to the backend
-    package you're interested in for more information, as well as notes on the
-    implementation.
-
 ## Marshalling a custom type
 
 Now we can insert shipping information. Of course, the shipping information
@@ -261,47 +238,20 @@ bettyShippingInfo <-
 If you run this, you'll get an error from GHCi.
 
 ```
-<interactive>:263:7: error:
-    * No instance for (Database.Beam.Backend.Types.FromBackendRow
-                         Sqlite ShippingCarrier)
-        arising from a use of 'runInsertReturningList'
-    * In a stmt of a 'do' block:
+<interactive>:845:7: error:
+    • No instance for (FromBackendRow Sqlite ShippingCarrier)
+        arising from a use of ‘runInsertReturningList’
+    • In a stmt of a 'do' block:
         [bettyShippingInfo] <- runInsertReturningList
-                               $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                 $ insertExpressions
-                                     [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]
-      In the second argument of '($)', namely
-        'do { [bettyShippingInfo] <- runInsertReturningList
-                                     $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                       $ insertExpressions
-                                           [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")];
-              pure bettyShippingInfo }''
-      In the first argument of 'GHC.GHCi.ghciStepIO ::
-                                  forall a. IO a -> IO a', namely
-        'runBeamSqliteDebug putStrLn conn
-         $ do { [bettyShippingInfo] <- runInsertReturningList
-                                       $ insertReturning
-                                           (shoppingCartDb ^. shoppingCartShippingInfos)
-                                         $ insertExpressions
-                                             [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")];
-                pure bettyShippingInfo }'
+                                 $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+                                     $ insertExpressions
+                                         [ShippingInfo
+                                            default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]
+...
 
-<interactive>:265:7: error:
-    * No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax
-                         SqliteValueSyntax ShippingCarrier)
-        arising from a use of 'insertExpressions'
-    * In the second argument of '($)', namely
-        'insertExpressions
-           [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]''
-      In the second argument of '($)', namely
-        'insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-         $ insertExpressions
-             [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]'
-      In a stmt of a 'do' block:
-        [bettyShippingInfo] <- runInsertReturningList
-                               $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
-                                 $ insertExpressions
-                                     [ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]
+<interactive>:847:50: error:
+    • No instance for (Database.Beam.Backend.SQL.SQL92.HasSqlValueSyntax
+                         Database.Beam.Sqlite.Syntax.SqliteValueSyntax ShippingCarrier)
 ```
 
 These errors are because there's no way to express a `ShippingCarrier` in the
@@ -320,47 +270,20 @@ instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier whe
   sqlValueSyntax = autoSqlValueSyntax
 ```
 
+`autoSqlValueSyntax` uses the underlying `Show` instance to serialize
+a type to a string representation.
+
 The `FromBackendRow` class tells us how to convert a value from the database
-into a corresponding Haskell value. Most often, it is enough to declare an empty
-instance, so long as there is a backend-specific instance for unmarshaling your
-data type.
-
-For example,
+into a corresponding Haskell value.
 
 ```haskell
-Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro> import Database.Beam.Backend
-Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro Database.Beam.Backend> :set -XMultiParamTypeClasses
-Prelude Database.Beam Database.Beam.Sqlite Data.Time Database.SQLite.Simple Data.Text Lens.Micro Database.Beam.Backend> instance FromBackendRow Sqlite ShippingCarrier
+import qualified Data.Text as T -- for unpack
 
-<interactive>:271:10: error:
-    * No instance for (Database.SQLite.Simple.FromField.FromField
-                         ShippingCarrier)
-        arising from a use of 'Database.Beam.Backend.Types.$dmfromBackendRow'
-    * In the expression:
-        Database.Beam.Backend.Types.$dmfromBackendRow
-          @Sqlite @ShippingCarrier
-      In an equation for 'fromBackendRow':
-          fromBackendRow
-            = Database.Beam.Backend.Types.$dmfromBackendRow
-                @Sqlite @ShippingCarrier
-      In the instance declaration for
-        'FromBackendRow Sqlite ShippingCarrier'
+instance FromBackendRow Sqlite ShippingCarrier where
+  fromBackendRow = read . T.unpack <$> fromBackendRow
 ```
 
-Let's see if we can write `Database.SQLite.Simple.FromField.FromField` instance
-for `ShippingCarrier` and then let's try re-instantiating `FromBackendRow`.
-
-```haskell
-import Database.SQLite.Simple.FromField
-import Text.Read
-
-instance FromField ShippingCarrier where
-  fromField f = do x <- readMaybe <$> fromField f
-                   case x of
-                     Nothing -> returnError ConversionFailed f "Could not 'read' value for 'ShippingCarrier'"
-                     Just x -> pure x
-instance FromBackendRow be ShippingCarrier
-```
+Since, `autoSqlValueSyntax` uses the `Show` instance, we can simply use the `Read` instance.
 
 Now, if we try to insert the shipping info again, it works.
 
@@ -526,7 +449,7 @@ values. `maybe_` is polymorphic to either `QExpr`s or full on tables of `QExpr`s
 the type of `maybe_` is
 
 ```haskell
-maybe_ :: QExpr s a -> (QExpr s b -> QExpr s a) -> QExpr s (Maybe b) -> QExpr s a
+maybe_ :: QExpr be s a -> (QExpr be s b -> QExpr be s a) -> QExpr be s (Maybe b) -> QExpr be s a
 ```
 
 With that in mind, we can write the query to get the total spent by user
@@ -632,8 +555,8 @@ shippingInformationByUser <-
     aggregate_ (\(user, order) ->
                    let ShippingInfoId shippingInfoId = _orderShippingInfo order
                    in ( group_ user
-                      , as_ @Int $ count_ (as_ @(Maybe Int) (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId))
-                      , as_ @Int $ count_ shippingInfoId ) ) $
+                      , as_ @Int32 $ count_ (as_ @(Maybe Int32) (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId))
+                      , as_ @Int32 $ count_ shippingInfoId ) ) $
     do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
        order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
        pure (user, order)
@@ -742,4 +665,4 @@ using beam to generate advanced queries. More information on the Beam API is
 havailable on [hackage](http://hackage.haskell.org/package/beam). Happy beaming!
 
 Beam is a work in progress. Please submit bugs and patches
-on [GitHub](https://github.com/tathougies/beam).
+on [GitHub](https://github.com/haskell-beam/beam).

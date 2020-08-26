@@ -7,7 +7,7 @@ import           Prelude hiding (fail)
 
 import qualified Database.PostgreSQL.Simple as Pg
 
-import           Control.Exception (SomeException(..), bracket, catch)
+import           Control.Exception (bracket)
 import           Control.Concurrent (threadDelay)
 
 import           Control.Monad (void)
@@ -16,7 +16,6 @@ import           Control.Monad.Fail (MonadFail(..))
 #endif
 
 import           Data.ByteString (ByteString)
-import           Data.Semigroup
 import           Data.String
 
 import qualified Hedgehog
@@ -38,14 +37,13 @@ withTestPostgres dbName getConnStr action = do
       withTemplate1 = bracket (Pg.connectPostgreSQL connStrTemplate1) Pg.close
 
       createDatabase = withTemplate1 $ \c -> do
-                         Pg.execute_ c (fromString ("CREATE DATABASE " <> dbName))
+                         void $ Pg.execute_ c (fromString ("CREATE DATABASE " <> dbName))
 
                          Pg.connectPostgreSQL connStrDb
       dropDatabase c = do
         Pg.close c
-        withTemplate1 $ \c' -> do
-            Pg.execute_ c' (fromString ("DROP DATABASE " <> dbName))
-            pure ()
+        withTemplate1 $ \c' -> void $
+          Pg.execute_ c' (fromString ("DROP DATABASE " <> dbName))
 
   bracket createDatabase dropDatabase action
 
@@ -57,19 +55,22 @@ startTempPostgres = do
   callProcess "pg_ctl" [ "init", "-D", pgDataDir ]
 
   -- Use 'D' because otherwise, the path is too long on OS X
-  pgHdl <- spawnProcess "postgres"
-                        [ "-D", pgDataDir
-                        , "-k", pgDataDir, "-h", "" ]
+  void $ spawnProcess "postgres"
+    [ "-D", pgDataDir
+    , "-k", pgDataDir, "-h", ""
+    ]
 
   putStrLn ("Using " ++ pgDataDir ++ " as postgres host")
 
-  let waitForPort 10 = fail "Could not connect to postgres"
+  let waitForPort :: Word -> IO ()
+      waitForPort 10 = fail "Could not connect to postgres"
       waitForPort n = do
-        (code, stdout, stderr) <- readProcessWithExitCode "pg_ctl" [ "status", "-D", pgDataDir ] ""
+        (code, _, _) <- readProcessWithExitCode "pg_ctl" [ "status", "-D", pgDataDir ] ""
         case code of
           ExitSuccess -> waitForSocket 0
           ExitFailure _ -> threadDelay 1000000 >> waitForPort (n + 1)
 
+      waitForSocket :: Word -> IO ()
       waitForSocket 10 = fail "Could not connect to postgres (waitForSocket)"
       waitForSocket n = do
         skExists <- doesFileExist (pgDataDir </> ".s.PGSQL.5432")
@@ -82,7 +83,11 @@ startTempPostgres = do
        , void (callProcess "pg_ctl" [ "stop", "-D", pgDataDir ]))
 
 #if MIN_VERSION_base(4,12,0)
+#if !MIN_VERSION_hedgehog(1,0,0)
 -- TODO orphan instances are bad
+-- Would be easier to say 'build-depends: hedgehog >= 1.0',
+-- but it's difficult to propagate to older Stackage snapshots
 instance Monad m => MonadFail (Hedgehog.PropertyT m) where
     fail _ = Hedgehog.failure
+#endif
 #endif

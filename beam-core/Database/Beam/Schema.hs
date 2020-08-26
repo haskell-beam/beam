@@ -47,7 +47,7 @@ import Database.Beam.Schema.Lenses
 -- $db-construction
 -- Types and functions to express database types and auto-generate name mappings
 -- for them. See the
--- [manual](https://tathougies.github.io/beam/user-guide/databases.md) for more
+-- [manual](https://haskell-beam.github.io/beam/user-guide/databases.md) for more
 -- information.
 
 -- $entities

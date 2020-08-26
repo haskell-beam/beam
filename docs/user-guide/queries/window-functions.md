@@ -71,7 +71,7 @@ given album using `countAll_` and `aggregate_`, like so
 !example chinook
 aggregate_ (\t -> ( group_ (trackAlbumId t)
                   , group_ (trackGenreId t)
-                  , as_ @Int countAll_ )) $
+                  , as_ @Int32 countAll_ )) $
 all_ (track chinookDb)
 ```
 
@@ -83,7 +83,7 @@ tracks. We can do this by windowing over the album ID.
 !example chinook window
 let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                 , group_ (trackGenreId t)
-                                , as_ @Int countAll_ )) $
+                                , as_ @Int32 countAll_ )) $
                      all_ (track chinookDb)
 in withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
                (\(albumId, genreId, trackCnt) albumWindow ->
@@ -108,7 +108,7 @@ the window, we use `filter_'` and the nullable ordering operators.
 !example chinook window
 let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                 , group_ (trackGenreId t)
-                                , as_ @Int countAll_ )) $
+                                , as_ @Int32 countAll_ )) $
                      all_ (track chinookDb)
 
     withMaxCounts = withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
