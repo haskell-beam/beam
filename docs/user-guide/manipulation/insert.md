@@ -287,7 +287,7 @@ runInsert $
 
 ### Acting only on certain conflicts
 
-SOmetimes you only want to perform an action if a certain constraint is violated. IF the conflicting
+Sometimes you only want to perform an action if a certain constraint is violated. If the conflicting
 index or constraint is on a field you can specify which fields with the function `conflictingFields`.
 
 !beam-query
@@ -304,7 +304,7 @@ runInsert $
 ```
 
 !!! tip "Tip"
-    To specify a conflict on the primary keys, use `conflictingField primaryKey`.
+    To specify a conflict on the primary keys, use `conflictingFields primaryKey`.
 
 You can also specify how to change the record should it not match. For example, to append the e-mail
 as an alternate when you insert an existing row, you can use the `oldValues` argument to get access
