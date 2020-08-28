@@ -1,0 +1,958 @@
+
+
+
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      
+      
+      
+      
+        <meta name="lang:clipboard.copy" content="Copy to clipboard">
+      
+        <meta name="lang:clipboard.copied" content="Copied to clipboard">
+      
+        <meta name="lang:search.language" content="en">
+      
+        <meta name="lang:search.pipeline.stopwords" content="True">
+      
+        <meta name="lang:search.pipeline.trimmer" content="True">
+      
+        <meta name="lang:search.result.none" content="No matching documents">
+      
+        <meta name="lang:search.result.one" content="1 matching document">
+      
+        <meta name="lang:search.result.other" content="# matching documents">
+      
+        <meta name="lang:search.tokenizer" content="[\s\-]+">
+      
+      <link rel="shortcut icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.0.4, mkdocs-material-4.5.1">
+    
+    
+      
+        <title>Custom type migration - Beam Documentation</title>
+      
+    
+    
+
+      <link rel="stylesheet" href="../../assets/stylesheets/application.1b62728e.css">
+      
+      
+    
+<link rel="stylesheet" type="text/css" href="../../css/beam.css"/>
+
+    
+      <script src="../../assets/javascripts/modernizr.268332fc.js"></script>
+    
+    
+      
+        <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono&display=fallback">
+        <style>body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}</style>
+      
+    
+    <link rel="stylesheet" href="../../assets/fonts/material-icons.css">
+    
+    
+      <link rel="stylesheet" href="../../docs/theme/css/beam.css">
+    
+    
+      
+    
+    
+  </head>
+  
+    <body dir="ltr">
+  
+    <svg class="md-svg">
+      <defs>
+        
+        
+          <svg xmlns="http://www.w3.org/2000/svg" width="416" height="448" viewBox="0 0 416 448" id="__github"><path fill="currentColor" d="M160 304q0 10-3.125 20.5t-10.75 19T128 352t-18.125-8.5-10.75-19T96 304t3.125-20.5 10.75-19T128 256t18.125 8.5 10.75 19T160 304zm160 0q0 10-3.125 20.5t-10.75 19T288 352t-18.125-8.5-10.75-19T256 304t3.125-20.5 10.75-19T288 256t18.125 8.5 10.75 19T320 304zm40 0q0-30-17.25-51T296 232q-10.25 0-48.75 5.25Q229.5 240 208 240t-39.25-2.75Q130.75 232 120 232q-29.5 0-46.75 21T56 304q0 22 8 38.375t20.25 25.75 30.5 15 35 7.375 37.25 1.75h42q20.5 0 37.25-1.75t35-7.375 30.5-15 20.25-25.75T360 304zm56-44q0 51.75-15.25 82.75-9.5 19.25-26.375 33.25t-35.25 21.5-42.5 11.875-42.875 5.5T212 416q-19.5 0-35.5-.75t-36.875-3.125-38.125-7.5-34.25-12.875T37 371.5t-21.5-28.75Q0 312 0 260q0-59.25 34-99-6.75-20.5-6.75-42.5 0-29 12.75-54.5 27 0 47.5 9.875t47.25 30.875Q171.5 96 212 96q37 0 70 8 26.25-20.5 46.75-30.25T376 64q12.75 25.5 12.75 54.5 0 21.75-6.75 42 34 40 34 99.5z"/></svg>
+        
+      </defs>
+    </svg>
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
+    
+      <a href="#using-custom-types-in-migration" tabindex="1" class="md-skip">
+        Skip to content
+      </a>
+    
+    
+      <header class="md-header" data-md-component="header">
+  <nav class="md-header-nav md-grid">
+    <div class="md-flex">
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <a href="../.." title="Beam Documentation" class="md-header-nav__button md-logo">
+          
+            <i class="md-icon"></i>
+          
+        </a>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <label class="md-icon md-icon--menu md-header-nav__button" for="__drawer"></label>
+      </div>
+      <div class="md-flex__cell md-flex__cell--stretch">
+        <div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
+          
+            <span class="md-header-nav__topic">
+              Beam Documentation
+            </span>
+            <span class="md-header-nav__topic">
+              
+                Custom type migration
+              
+            </span>
+          
+        </div>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        
+          <label class="md-icon md-icon--search md-header-nav__button" for="__search"></label>
+          
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="query" data-md-state="active">
+      <label class="md-icon md-search__icon" for="__search"></label>
+      <button type="reset" class="md-icon md-search__icon" data-md-component="reset" tabindex="-1">
+        &#xE5CD;
+      </button>
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="result">
+          <div class="md-search-result__meta">
+            Type to start searching
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+        
+      </div>
+      
+        <div class="md-flex__cell md-flex__cell--shrink">
+          <div class="md-header-nav__source">
+            
+
+
+  
+
+<a href="https://github.com/haskell-beam/beam/" title="Go to repository" class="md-source" data-md-source="github">
+  
+    <div class="md-source__icon">
+      <svg viewBox="0 0 24 24" width="24" height="24">
+        <use xlink:href="#__github" width="24" height="24"></use>
+      </svg>
+    </div>
+  
+  <div class="md-source__repository">
+    haskell-beam/beam
+  </div>
+</a>
+          </div>
+        </div>
+      
+    </div>
+  </nav>
+</header>
+    
+    <div class="md-container">
+      
+        
+      
+      
+      <main class="md-main" role="main">
+        <div class="md-main__inner md-grid" data-md-component="container">
+          
+            
+              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    <nav class="md-nav md-nav--primary" data-md-level="0">
+  <label class="md-nav__title md-nav__title--site" for="__drawer">
+    <a href="../.." title="Beam Documentation" class="md-nav__button md-logo">
+      
+        <i class="md-icon"></i>
+      
+    </a>
+    Beam Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      
+
+
+  
+
+<a href="https://github.com/haskell-beam/beam/" title="Go to repository" class="md-source" data-md-source="github">
+  
+    <div class="md-source__icon">
+      <svg viewBox="0 0 24 24" width="24" height="24">
+        <use xlink:href="#__github" width="24" height="24"></use>
+      </svg>
+    </div>
+  
+  <div class="md-source__repository">
+    haskell-beam/beam
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../.." title="Home" class="md-nav__link">
+      Home
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../../about/faq/" title="Frequently Asked Questions" class="md-nav__link">
+      Frequently Asked Questions
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-3" type="checkbox" id="nav-3">
+    
+    <label class="md-nav__link" for="nav-3">
+      Tutorial
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-3">
+        Tutorial
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../tutorials/tutorial1/" title="Part 1" class="md-nav__link">
+      Part 1
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../tutorials/tutorial2/" title="Part 2" class="md-nav__link">
+      Part 2
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../tutorials/tutorial3/" title="Part 3" class="md-nav__link">
+      Part 3
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4" type="checkbox" id="nav-4">
+    
+    <label class="md-nav__link" for="nav-4">
+      User Guide
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-4">
+        User Guide
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../models/" title="Models" class="md-nav__link">
+      Models
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../databases/" title="Databases" class="md-nav__link">
+      Databases
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../backends/" title="Backends" class="md-nav__link">
+      Backends
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../expressions/" title="Expressions" class="md-nav__link">
+      Expressions
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4-5" type="checkbox" id="nav-4-5">
+    
+    <label class="md-nav__link" for="nav-4-5">
+      Queries
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="2">
+      <label class="md-nav__title" for="nav-4-5">
+        Queries
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/basic/" title="Basic Queries" class="md-nav__link">
+      Basic Queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/select/" title="More complex SELECTs" class="md-nav__link">
+      More complex SELECTs
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/ordering/" title="Ordering" class="md-nav__link">
+      Ordering
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/relationships/" title="Relationships" class="md-nav__link">
+      Relationships
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/aggregates/" title="Aggregates" class="md-nav__link">
+      Aggregates
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/combining-queries/" title="Combining queries" class="md-nav__link">
+      Combining queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/window-functions/" title="Window functions" class="md-nav__link">
+      Window functions
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/advanced-features/" title="Advanced features" class="md-nav__link">
+      Advanced features
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
+      Common table expressions
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../extensibility/" title="Custom queries" class="md-nav__link">
+      Custom queries
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-4-7" type="checkbox" id="nav-4-7">
+    
+    <label class="md-nav__link" for="nav-4-7">
+      Data Manipulation
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="2">
+      <label class="md-nav__title" for="nav-4-7">
+        Data Manipulation
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../manipulation/insert/" title="INSERT" class="md-nav__link">
+      INSERT
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../manipulation/update/" title="UPDATE" class="md-nav__link">
+      UPDATE
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../manipulation/delete/" title="DELETE" class="md-nav__link">
+      DELETE
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-5" type="checkbox" id="nav-5">
+    
+    <label class="md-nav__link" for="nav-5">
+      Schema management
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-5">
+        Schema management
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../schema-guide/migrations/" title="The Migrations Framework" class="md-nav__link">
+      The Migrations Framework
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../schema-guide/tool/" title="The beam-migrate tool" class="md-nav__link">
+      The beam-migrate tool
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
+      The beam-migrate library
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-6" type="checkbox" id="nav-6">
+    
+    <label class="md-nav__link" for="nav-6">
+      Backends
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-6">
+        Backends
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../backends/beam-postgres/" title="beam-postgres" class="md-nav__link">
+      beam-postgres
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../backends/beam-sqlite/" title="beam-sqlite" class="md-nav__link">
+      beam-sqlite
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../custom-backends/" title="Writing a Custom Backend" class="md-nav__link">
+      Writing a Custom Backend
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item md-nav__item--nested">
+    
+      <input class="md-toggle md-nav__toggle" data-md-toggle="nav-7" type="checkbox" id="nav-7">
+    
+    <label class="md-nav__link" for="nav-7">
+      About
+    </label>
+    <nav class="md-nav" data-md-component="collapsible" data-md-level="1">
+      <label class="md-nav__title" for="nav-7">
+        About
+      </label>
+      <ul class="md-nav__list" data-md-scrollfix>
+        
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../about/compatibility/" title="Compatibility Matrix" class="md-nav__link">
+      Compatibility Matrix
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../about/license/" title="License" class="md-nav__link">
+      License
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
+    <a href="../../about/release-notes/" title="Release Notes" class="md-nav__link">
+      Release Notes
+    </a>
+  </li>
+
+        
+      </ul>
+    </nav>
+  </li>
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#using-custom-types-in-migration" class="md-nav__link">
+    Using Custom Types in migration
+  </a>
+  
+</li>
+      
+      
+      
+      
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                  <a href="https://github.com/haskell-beam/beam/edit/master/docs/user-guide/custom-type-migration.md" title="Edit this page" class="md-icon md-content__icon">&#xE3C9;</a>
+                
+                
+                  <h1>Custom type migration</h1>
+                
+                <p><strong>Note</strong>: The code used in this guide is in <code>beam-postgres/examples/Pagila/Schema/CustomMigrateExample.hs</code>.</p>
+<h3 id="using-custom-types-in-migration">Using Custom Types in migration</h3>
+<p>In Beam <a href="https://haskell-beam.github.io/beam/tutorials/tutorial3/">Tutorial 3</a> we looked at marshalling custom types.
+Beam provides functionality to represent custom defined types in migration as well.</p>
+<p>From the tutorials, let us take our custom type <code>ShippingCarrier</code>.</p>
+<div class="codehilite"><pre><span></span><span class="kr">data</span> <span class="kt">ShippingCarrier</span> <span class="ow">=</span> <span class="kt">USPS</span> <span class="o">|</span> <span class="kt">FedEx</span> <span class="o">|</span> <span class="kt">UPS</span> <span class="o">|</span> <span class="kt">DHL</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Show</span><span class="p">,</span> <span class="kt">Read</span><span class="p">,</span> <span class="kt">Eq</span><span class="p">,</span> <span class="kt">Ord</span><span class="p">,</span> <span class="kt">Enum</span><span class="p">)</span>
+</pre></div>
+
+
+<p>From this <a href="https://github.com/haskell-beam/beam/blob/master/beam-postgres/examples/Pagila/Schema/V0001.hs">example</a>,
+let us take the <code>AddressT</code> table and add a column <code>addressShipper</code> to it.</p>
+<div class="codehilite"><pre><span></span><span class="c1">-- | Address table</span>
+<span class="kr">data</span> <span class="kt">AddressT</span> <span class="n">f</span>
+  <span class="ow">=</span> <span class="kt">AddressT</span>
+  <span class="p">{</span> <span class="n">addressId</span>         <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int32</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">addressAddress1</span>   <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">T</span><span class="o">.</span><span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">addressAddress2</span>   <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">T</span><span class="o">.</span><span class="kt">Text</span><span class="p">)</span>
+  <span class="p">,</span> <span class="n">addressDistrict</span>   <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">T</span><span class="o">.</span><span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">addressShipper</span>    <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">ShippingCarrier</span>
+  <span class="p">,</span> <span class="n">addressPostalCode</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">T</span><span class="o">.</span><span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">addressPhone</span>      <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">T</span><span class="o">.</span><span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">addressLastUpdate</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">LocalTime</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">type</span> <span class="kt">Address</span> <span class="ow">=</span> <span class="kt">AddressT</span> <span class="kt">Identity</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Address</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">Address</span>
+
+<span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">AddressT</span> <span class="kr">where</span>
+  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">AddressT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">AddressId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int32</span><span class="p">))</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+  <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">AddressId</span> <span class="o">.</span> <span class="n">addressId</span>
+<span class="kr">type</span> <span class="kt">AddressId</span> <span class="ow">=</span> <span class="kt">PrimaryKey</span> <span class="kt">AddressT</span> <span class="kt">Identity</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">AddressId</span>
+<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">AddressId</span>
+
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="p">(</span><span class="kt">PrimaryKey</span> <span class="kt">AddressT</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">AddressT</span>
+</pre></div>
+
+
+<p>In order to use <code>ShippingCarrier</code> in migration, we need to define a value of <code>DataType</code>,
+which is defined in <code>Database.Beam.Migrate.SQL.Types</code> and re-exported by the exposed module <code>Database.Beam.Migrate</code>.</p>
+<p>If we want our <code>ShippingCarrier</code> type to take up the postgres <code>TEXT</code> type,</p>
+<div class="codehilite"><pre><span></span><span class="kr">import</span> <span class="nn">Database.Beam.Postgres.Syntax</span> <span class="p">(</span><span class="kt">PgDataTypeSyntax</span><span class="p">,</span> <span class="nf">pgTextType</span><span class="p">)</span>
+<span class="kr">import</span> <span class="nn">Database.Beam.Migrate</span> <span class="p">(</span><span class="kt">DataType</span><span class="p">(</span><span class="o">..</span><span class="p">))</span>
+
+<span class="nf">shippingCarrierType</span> <span class="ow">::</span> <span class="kt">DataType</span> <span class="kt">PgDataTypeSyntax</span> <span class="kt">ShippingCarrier</span>
+<span class="nf">shippingCarrierType</span> <span class="ow">=</span> <span class="kt">DataType</span> <span class="n">pgTextType</span>
+</pre></div>
+
+
+<p>Afterwards, we also need to instantiate <code>FromBackendRow</code> and <code>SqlValueSyntax</code> for <code>ShippingCarrier</code>
+for whichever backend and syntax we are using (postgres, in our case).</p>
+<div class="codehilite"><pre><span></span><span class="kr">import</span> <span class="k">qualified</span> <span class="nn">Data.Text</span> <span class="k">as</span> <span class="n">T</span>
+
+<span class="kr">instance</span> <span class="kt">HasSqlValueSyntax</span> <span class="n">be</span> <span class="kt">String</span> <span class="ow">=&gt;</span> <span class="kt">HasSqlValueSyntax</span> <span class="n">be</span> <span class="kt">ShippingCarrier</span> <span class="kr">where</span>
+  <span class="n">sqlValueSyntax</span> <span class="ow">=</span> <span class="n">autoSqlValueSyntax</span>
+
+<span class="c1">-- | An explicit definition of ``fromBackendRow`` is required for each custom type</span>
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">BeamBackend</span> <span class="n">be</span><span class="p">,</span> <span class="kt">FromBackendRow</span> <span class="n">be</span> <span class="kt">T</span><span class="o">.</span><span class="kt">Text</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">FromBackendRow</span> <span class="n">be</span> <span class="kt">ShippingCarrier</span> <span class="kr">where</span>
+  <span class="n">fromBackendRow</span> <span class="ow">=</span> <span class="kr">do</span>
+    <span class="n">val</span> <span class="ow">&lt;-</span> <span class="n">fromBackendRow</span>
+    <span class="kr">case</span> <span class="n">val</span> <span class="ow">::</span> <span class="kt">T</span><span class="o">.</span><span class="kt">Text</span> <span class="kr">of</span>
+      <span class="s">&quot;usps&quot;</span> <span class="ow">-&gt;</span> <span class="n">pure</span> <span class="kt">USPS</span>
+      <span class="s">&quot;fedex&quot;</span> <span class="ow">-&gt;</span> <span class="n">pure</span> <span class="kt">FedEx</span>
+      <span class="s">&quot;ups&quot;</span>  <span class="ow">-&gt;</span> <span class="n">pure</span> <span class="kt">UPS</span>
+      <span class="s">&quot;dhl&quot;</span>  <span class="ow">-&gt;</span> <span class="n">pure</span> <span class="kt">DHL</span>
+      <span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">fail</span> <span class="p">(</span><span class="s">&quot;Invalid value for ShippingCarrier: &quot;</span> <span class="o">++</span> <span class="kt">T</span><span class="o">.</span><span class="n">unpack</span> <span class="n">val</span><span class="p">)</span>
+</pre></div>
+
+
+<p>For data type defaulting support, instantiate <code>HasDefaultSqlDataType</code> and <code>HasDefaultSqlDataTypeConstraints</code>.</p>
+<div class="codehilite"><pre><span></span><span class="kr">instance</span> <span class="p">(</span><span class="kt">IsSql92ColumnSchemaSyntax</span> <span class="n">be</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">HasDefaultSqlDataTypeConstraints</span> <span class="n">be</span> <span class="kt">ShippingCarrier</span>
+</pre></div>
+
+
+<p>Finally, if we defined our <code>Database</code> like this:</p>
+<div class="codehilite"><pre><span></span><span class="c1">-- | Pagila db</span>
+<span class="kr">data</span> <span class="kt">PagilaDb</span> <span class="n">f</span>
+  <span class="ow">=</span> <span class="kt">PagilaDb</span>
+  <span class="p">{</span>
+    <span class="n">address</span>    <span class="ow">::</span> <span class="n">f</span> <span class="p">(</span><span class="kt">TableEntity</span> <span class="kt">AddressT</span><span class="p">)</span>
+  <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">instance</span> <span class="kt">Database</span> <span class="kt">PagilaDb</span>
+</pre></div>
+
+
+<p>We can write our migration function like this:</p>
+<div class="codehilite"><pre><span></span><span class="nf">lastUpdateField</span> <span class="ow">::</span> <span class="kt">TableFieldSchema</span> <span class="kt">PgColumnSchemaSyntax</span> <span class="kt">LocalTime</span>
+<span class="nf">lastUpdateField</span> <span class="ow">=</span> <span class="n">field</span> <span class="s">&quot;last_update&quot;</span> <span class="n">timestamp</span> <span class="p">(</span><span class="n">defaultTo_</span> <span class="n">now_</span><span class="p">)</span> <span class="n">notNull</span>
+
+<span class="nf">migration</span> <span class="ow">::</span> <span class="nb">()</span> <span class="ow">-&gt;</span> <span class="kt">Migration</span> <span class="kt">PgCommandSyntax</span> <span class="p">(</span><span class="kt">CheckedDatabaseSettings</span> <span class="kt">Postgres</span> <span class="kt">PagilaDb</span><span class="p">)</span>
+<span class="nf">migration</span> <span class="nb">()</span> <span class="ow">=</span> <span class="kr">do</span>
+<span class="c1">--  year_ &lt;- createDomain &quot;year&quot; integer (check (\yr -&gt; yr &gt;=. 1901 &amp;&amp;. yr &lt;=. 2155))</span>
+  <span class="kt">PagilaDb</span> <span class="o">&lt;$&gt;</span> <span class="n">createTable</span> <span class="s">&quot;address&quot;</span>
+                 <span class="p">(</span><span class="kt">AddressT</span>
+                    <span class="p">(</span><span class="n">field</span> <span class="s">&quot;address_id&quot;</span> <span class="n">smallserial</span><span class="p">)</span>
+                    <span class="p">(</span><span class="n">field</span> <span class="s">&quot;address&quot;</span> <span class="p">(</span><span class="n">varchar</span> <span class="p">(</span><span class="kt">Just</span> <span class="mi">50</span><span class="p">))</span> <span class="n">notNull</span><span class="p">)</span>
+                    <span class="p">(</span><span class="n">field</span> <span class="s">&quot;address2&quot;</span> <span class="p">(</span><span class="n">maybeType</span> <span class="o">$</span> <span class="n">varchar</span> <span class="p">(</span><span class="kt">Just</span> <span class="mi">50</span><span class="p">)))</span>
+                    <span class="p">(</span><span class="n">field</span> <span class="s">&quot;district&quot;</span> <span class="p">(</span><span class="n">varchar</span> <span class="p">(</span><span class="kt">Just</span> <span class="mi">20</span><span class="p">))</span> <span class="n">notNull</span><span class="p">)</span>
+                    <span class="p">(</span><span class="n">field</span> <span class="s">&quot;shipper&quot;</span> <span class="n">shippingCarrierType</span><span class="p">)</span>
+                    <span class="p">(</span><span class="n">field</span> <span class="s">&quot;postal_code&quot;</span> <span class="p">(</span><span class="n">varchar</span> <span class="p">(</span><span class="kt">Just</span> <span class="mi">10</span><span class="p">)))</span>
+                    <span class="p">(</span><span class="n">field</span> <span class="s">&quot;phone&quot;</span> <span class="p">(</span><span class="n">varchar</span> <span class="p">(</span><span class="kt">Just</span> <span class="mi">20</span><span class="p">))</span> <span class="n">notNull</span><span class="p">)</span> <span class="n">lastUpdateField</span><span class="p">)</span>
+</pre></div>
+
+
+<p>The export list of the module <code>Database.Beam.Postgres.Syntax</code> should serve as a good guide
+for which existing types can be used to represent our custom data types in migration.</p>
+                
+                  
+                
+              
+              
+                
+
+
+              
+            </article>
+          </div>
+        </div>
+      </main>
+      
+        
+<footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+        powered by
+        <a href="https://www.mkdocs.org">MkDocs</a>
+        and
+        <a href="https://squidfunk.github.io/mkdocs-material/">
+          Material for MkDocs</a>
+      </div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    
+
+      <script src="../../assets/javascripts/application.8e03edeb.js"></script>
+      
+      <script>app.initialize({version:"1.0.4",url:{base:"../.."}})</script>
+      
+    
+<script type="text/javascript" language="javascript"  src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<script type="text/javascript" language="javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script type="text/javascript" language="javascript">
+ $(document.body).tab();
+ $(".nav-item:first-child").tab("show");
+</script>
+
+  </body>
+</html>

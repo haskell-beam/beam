@@ -1,0 +1,36 @@
+# The docs machinery can be used to generate examples using multiple
+# backends, including those not included as part of the beam-core
+# repository
+
+backends:
+  beam-postgres:
+    backend-name: Postgres
+    backend-module: Database.Beam.Postgres
+    src:
+      file: ./beam-postgres
+    haskell-names:
+      backend: Postgres
+      monad: Pg
+      command-syntax: PgCommandSyntax
+      expr-syntax: PgExpressionSyntax
+  beam-sqlite:
+    backend-name: Sqlite
+    backend-module: Database.Beam.Sqlite
+    src:
+      file: ./beam-sqlite
+    haskell-names:
+      backend: Sqlite
+      monad: SqliteM
+      command-syntax: SqliteCommandSyntax
+      expr-syntax: SqliteExpressionSyntax
+  beam-mysql:
+    backend-name: MySQL
+    backend-module: Database.Beam.MySQL
+    src:
+      github: tathougies/beam-mysql
+      revision: 13e551212c3c5b661276b5cf3698ac4a2bc02cce
+    haskell-names:
+      backend: MySQL
+      monad: MySQLM
+      command-syntax: MysqlCommandSyntax
+      expr-syntax: MysqlExpressionSyntax

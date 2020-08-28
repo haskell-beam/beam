@@ -17,6 +17,7 @@ import Data.Time
 import Lens.Micro
 
 import Data.Text (Text)
+import Data.Int
 
 import Control.Monad
 
@@ -44,7 +45,7 @@ instance Table UserT where
 instance Beamable (PrimaryKey UserT)
 
 data AddressT f = Address
-                { _addressId    :: C f Int
+                { _addressId    :: C f Int32
                 , _addressLine1 :: C f Text
                 , _addressLine2 :: C f (Maybe Text)
                 , _addressCity  :: C f Text
@@ -58,7 +59,7 @@ deriving instance Show (PrimaryKey UserT Identity)
 deriving instance Show Address
 
 instance Table AddressT where
-    data PrimaryKey AddressT f = AddressId (Columnar f Int) deriving Generic
+    data PrimaryKey AddressT f = AddressId (Columnar f Int32) deriving Generic
     primaryKey = AddressId . _addressId
 type AddressId = PrimaryKey AddressT Identity -- For convenience
 
@@ -66,16 +67,16 @@ instance Beamable AddressT
 instance Beamable (PrimaryKey AddressT)
 
 data ProductT f = Product
-                { _productId          :: C f Int
+                { _productId          :: C f Int32
                 , _productTitle       :: C f Text
                 , _productDescription :: C f Text
-                , _productPrice       :: C f Int {- Price in cents -} }
+                , _productPrice       :: C f Int32 {- Price in cents -} }
                   deriving Generic
 type Product = ProductT Identity
 deriving instance Show Product
 
 instance Table ProductT where
-  data PrimaryKey ProductT f = ProductId (Columnar f Int)
+  data PrimaryKey ProductT f = ProductId (Columnar f Int32)
                                deriving Generic
   primaryKey = ProductId . _productId
 
@@ -84,7 +85,7 @@ instance Beamable (PrimaryKey ProductT)
 deriving instance Show (PrimaryKey AddressT Identity)
 
 data OrderT f = Order
-              { _orderId      :: Columnar f Int
+              { _orderId      :: Columnar f Int32
               , _orderDate    :: Columnar f LocalTime
               , _orderForUser :: PrimaryKey UserT f
               , _orderShipToAddress :: PrimaryKey AddressT f
@@ -94,7 +95,7 @@ type Order = OrderT Identity
 deriving instance Show Order
 
 instance Table OrderT where
-    data PrimaryKey OrderT f = OrderId (Columnar f Int)
+    data PrimaryKey OrderT f = OrderId (Columnar f Int32)
                                deriving Generic
     primaryKey = OrderId . _orderId
 
@@ -114,7 +115,7 @@ instance FromField ShippingCarrier where
 instance (BeamBackend be, BackendFromField be ShippingCarrier) => FromBackendRow be ShippingCarrier
 
 data ShippingInfoT f = ShippingInfo
-                     { _shippingInfoId             :: Columnar f Int
+                     { _shippingInfoId             :: Columnar f Int32
                      , _shippingInfoCarrier        :: Columnar f ShippingCarrier
                      , _shippingInfoTrackingNumber :: Columnar f Text }
                        deriving Generic
@@ -122,7 +123,7 @@ type ShippingInfo = ShippingInfoT Identity
 deriving instance Show ShippingInfo
 
 instance Table ShippingInfoT where
-    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int)
+    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int32)
                                       deriving Generic
     primaryKey = ShippingInfoId . _shippingInfoId
 
@@ -136,7 +137,7 @@ deriving instance Show (PrimaryKey ProductT Identity)
 data LineItemT f = LineItem
                  { _lineItemInOrder    :: PrimaryKey OrderT f
                  , _lineItemForProduct :: PrimaryKey ProductT f
-                 , _lineItemQuantity   :: Columnar f Int }
+                 , _lineItemQuantity   :: Columnar f Int32 }
                    deriving Generic
 type LineItem = LineItemT Identity
 deriving instance Show LineItem
