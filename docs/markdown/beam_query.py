@@ -14,7 +14,7 @@ import os.path
 import yaml
 import json
 
-import urllib
+import urllib.request
 import zipfile
 
 import sys
@@ -38,7 +38,7 @@ def fetch_backend_src(backend_name, cache_dir, base_dir, src):
             print("Downloading beam backend", backend_name, "from", github_url)
 
             local_file = os.path.join(cache_dir, backend_name + "_github.zip")
-            urllib.urlretrieve(github_url, local_file)
+            urllib.request.urlretrieve(github_url, local_file)
 
             print("Verifying archive...")
 
@@ -173,7 +173,7 @@ def save_cached_file(cache_dir, lines_hash, out):
     with open(os.path.join(cache_dir, lines_hash), 'wt') as f:
         f.write(out)
 
-def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
+def run_backend_example(backend, template, cache_dir, base_dir, full_example_lines):
     backend_haskell_names = backend['haskell-names']
     module = backend['backend-module']
     mnemonic = backend_haskell_names['mnemonic']
@@ -182,6 +182,14 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
     backend_type = '%s.%s' % (mnemonic, backend_haskell_names['backend'])
     backend_monad = '%s.%s' % (mnemonic, backend_haskell_names['monad'])
     extra_imports = backend.get('extra-imports', [])
+
+    example_lines = []
+
+    for line in full_example_lines:
+        if line.startswith('--! import'):
+            extra_imports.append(line[len('--! import'):])
+        else:
+            example_lines.append(line)
 
     # Attempt to setup backend
     (open_db_data, stack_env) = setup_backend(cache_dir, base_dir, backend)
@@ -221,8 +229,9 @@ def run_backend_example(backend, template, cache_dir, base_dir, example_lines):
     with open(source_file, 'wt') as source_hdl:
         source_hdl.write(u"\n".join(template_data))
 
-    print("Running backend example", lines_hash)
     build_command = 'stack runhaskell ' + build_options + ' ' + source_file
+    print("Running backend example", lines_hash, ":", build_command)
+    print("With environment", stack_env)
     is_ci = check_ci()
     proc = subprocess.Popen(build_command, shell=True, cwd=os.path.abspath(cache_dir), close_fds=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE if not is_ci else None,
