@@ -15,6 +15,7 @@ import Control.Monad
 import Control.Exception
 
 import Data.IORef
+import Data.Int
 
 import Chinook.Schema
 

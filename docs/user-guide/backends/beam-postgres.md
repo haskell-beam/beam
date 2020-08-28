@@ -256,38 +256,38 @@ Sometimes you only want to perform an action if a certain constraint
 is violated.  If the conflicting index or constraint is on a field,
 you can specify the fields with the function `conflictingFields`.
 
-!beam-query
-```haskell
-!example chinookdml only:Postgres
--- import qualified Database.Beam.Postgres as Pg
-let
-  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
-
-runInsert $
-  Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
-    Pg.onConflict
-      (Pg.conflictingFields primaryKey)
-      Pg.onConflictSetAll
-```
-
-!!! tip "Tip"
-    To specify a conflict on the primary keys, use `conflictingField primaryKey`.
-
-If the conflict target is an index, use `conflictingConstraint`, and supply the name of the constraint
-
-!beam-query
-```haskell
-!example chinookdml only:Postgres
--- import qualified Database.Beam.Postgres as Pg
-let
-  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
-
-runInsert $
-  Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
-    Pg.onConflict
-      (Pg.conflictingConstraint "PK_Customer")
-      Pg.onConflictSetAll
-```
+    !beam-query
+    ```haskell
+    !example chinookdml only:Postgres
+    -- import qualified Database.Beam.Postgres as Pg
+    let
+      newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+    
+    runInsert $
+      Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
+        Pg.onConflict
+          (Pg.conflictingFields primaryKey)
+          Pg.onConflictSetAll
+    ```
+    
+    !!! tip "Tip"
+        To specify a conflict on the primary keys, use `conflictingField primaryKey`.
+    
+    If the conflict target is an index, use `conflictingConstraint`, and supply the name of the constraint
+    
+    !beam-query
+    ```haskell
+    !example chinookdml only:Postgres
+    -- import qualified Database.Beam.Postgres as Pg
+    let
+      newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+    
+    runInsert $
+      Pg.insert (customer chinookDb) (insertValues [newCustomer]) $
+        Pg.onConflict
+          (Pg.conflictingConstraint "PK_Customer")
+          Pg.onConflictSetAll
+    ```
 
 #### Specifying actions
 

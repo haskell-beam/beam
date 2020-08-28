@@ -33,7 +33,7 @@ customer *and* the overall ranking,
 !example chinook window
 withWindow_ (\i -> ( frame_ noPartition_ (orderPartitionBy_ (asc_ (invoiceTotal i))) noBounds_
                    , frame_ (partitionBy_ (invoiceCustomer i)) (orderPartitionBy_ (asc_ (invoiceTotal i))) noBounds_ ))
-            (\i (allInvoices, customerInvoices) -> (i, rank_ `over_` allInvoices, rank_ `over_` customerInvoices))
+            (\i (allInvoices, customerInvoices) -> (i, as_ @Int32 rank_ `over_` allInvoices, as_ @Int32 rank_ `over_` customerInvoices))
             (all_ (invoice chinookDb))
 ```
 
@@ -53,7 +53,7 @@ For example, to get the sum of the totals of the invoices, by rank.
 orderBy_ (\(rank, _) -> asc_ rank) $
 aggregate_ (\(i, rank) -> (group_ rank, sum_ $ invoiceTotal i)) $
 withWindow_ (\i -> frame_ (partitionBy_ (invoiceCustomer i)) (orderPartitionBy_ (asc_ (invoiceTotal i))) noBounds_)
-            (\i w -> (i, rank_ `over_` w))
+            (\i w -> (i, as_ @Int32 rank_ `over_` w))
             (all_ (invoice chinookDb))
 ```
 
@@ -156,7 +156,7 @@ withWindow_ (\i -> ( frame_ noPartition_ noOrder_ noBounds_
                  ( i
                  , avg_ (invoiceTotal i) `over_` allRows_
                  , avg_ (invoiceTotal i) `over_` sameCustomer_
-                 , rank_ `over_` totals_
+                 , as_ @Int32 rank_ `over_` totals_
                  , avg_ (invoiceTotal i) `over_` fourInvoicesAround_ ))
             (all_ (invoice chinookDb))
 ```

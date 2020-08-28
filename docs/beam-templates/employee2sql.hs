@@ -18,6 +18,7 @@ import Database.SQLite.Simple
 import Lens.Micro
 
 import Data.Text (Text)
+import Data.Int
 
 import Control.Monad
 
