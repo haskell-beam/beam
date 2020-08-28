@@ -229,6 +229,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, full_example_lin
     with open(source_file, 'wt') as source_hdl:
         source_hdl.write(u"\n".join(template_data))
 
+    print("Running backend example", lines_hash)
     build_command = 'stack runhaskell ' + build_options + ' ' + source_file
     print("Running backend example", lines_hash, ":", build_command)
     print("With environment", stack_env)
