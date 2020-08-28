@@ -41,7 +41,7 @@ import           Data.Char (isSpace)
 import           Data.Int (Int64)
 import           Data.List (sortBy)
 import           Data.Maybe (mapMaybe, isJust)
-import           Data.Monoid (Endo(..), (<>))
+import           Data.Monoid (Endo(..))
 import           Data.Ord (comparing)
 import           Data.String (fromString)
 import qualified Data.Text as T

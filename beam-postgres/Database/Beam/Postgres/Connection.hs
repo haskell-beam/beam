@@ -34,7 +34,6 @@ import           Database.Beam.Backend.SQL.BeamExtensions
 import           Database.Beam.Backend.SQL.Row ( FromBackendRowF(..), FromBackendRowM(..)
                                                , BeamRowReadError(..), ColumnParseError(..) )
 import           Database.Beam.Backend.URI
-import           Database.Beam.Query.Types (QGenExpr(..))
 import           Database.Beam.Schema.Tables
 
 import           Database.Beam.Postgres.Syntax

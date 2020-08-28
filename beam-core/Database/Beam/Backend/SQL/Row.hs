@@ -21,16 +21,13 @@ import           Control.Applicative
 import           Control.Exception (Exception)
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
+import           Data.Kind (Type)
 import           Data.Tagged
 import           Data.Typeable
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as Vector
 
 import qualified Control.Monad.Fail as Fail
-
-#if !MIN_VERSION_base(4, 7, 0)
-import           Data.Proxy
-#endif
 
 import           GHC.Generics
 import           GHC.TypeLits
@@ -70,10 +67,6 @@ instance Monad (FromBackendRowM be) where
     FromBackendRowM $
     a >>= (\x -> let FromBackendRowM b' = b x in b')
 
-#if !MIN_VERSION_base(4,13,0)
-  fail = Fail.fail
-#endif
-
 instance Fail.MonadFail (FromBackendRowM be) where
   fail = FromBackendRowM . liftF . FailParseWith .
          BeamRowReadError Nothing . ColumnErrorInternal
@@ -103,7 +96,7 @@ class BeamBackend be => FromBackendRow be a where
   valuesNeeded :: Proxy be -> Proxy a -> Int
   valuesNeeded _ _ = 1
 
-class GFromBackendRow be (exposed :: * -> *) rep where
+class GFromBackendRow be (exposed :: Type -> Type) rep where
   gFromBackendRow :: Proxy exposed -> FromBackendRowM be (rep ())
   gValuesNeeded :: Proxy be -> Proxy exposed -> Proxy rep -> Int
 instance GFromBackendRow be e p => GFromBackendRow be (M1 t f e) (M1 t f p) where

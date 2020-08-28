@@ -64,23 +64,24 @@ module Database.Beam.Backend.SQL
   , BeamSqlBackendSupportsDataType
   ) where
 
-import Database.Beam.Backend.SQL.SQL2003
-import Database.Beam.Backend.SQL.Row
-import Database.Beam.Backend.SQL.Types
-import Database.Beam.Backend.Types
+import           Database.Beam.Backend.SQL.SQL2003
+import           Database.Beam.Backend.SQL.Row
+import           Database.Beam.Backend.SQL.Types
+import           Database.Beam.Backend.Types
 
-import Control.Monad.Cont
-import Control.Monad.Except
+import           Control.Monad.Cont
+import           Control.Monad.Except
 import qualified Control.Monad.RWS.Lazy as Lazy
 import qualified Control.Monad.RWS.Strict as Strict
-import Control.Monad.Reader
+import           Control.Monad.Reader
 import qualified Control.Monad.State.Lazy as Lazy
 import qualified Control.Monad.Writer.Lazy as Lazy
 import qualified Control.Monad.State.Strict as Strict
 import qualified Control.Monad.Writer.Strict as Strict
 
-import Data.Tagged (Tagged)
-import Data.Text (Text)
+import           Data.Kind (Type)
+import           Data.Tagged (Tagged)
+import           Data.Text (Text)
 
 -- * MonadBeam class
 
@@ -225,7 +226,7 @@ class ( -- Every SQL backend must be a beam backend
       , Eq (BeamSqlBackendExpressionSyntax be)
       ) => BeamSqlBackend be
 
-type family BeamSqlBackendSyntax be :: *
+type family BeamSqlBackendSyntax be :: Type
 
 -- | Fake backend that cannot deserialize anything, but is useful for testing
 data MockSqlBackend syntax
