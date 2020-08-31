@@ -1,1 +1,1 @@
-import ./nixpkgs/mkshell.nix { docs = true; nixpkgs = import ./nixpkgs/pinned.nix; }
+import ./nixpkgs/mkshell.nix { docs = true; nixpkgs = import ./nixpkgs/pinned.nix {}; }
