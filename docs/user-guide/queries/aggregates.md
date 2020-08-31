@@ -24,7 +24,7 @@ Suppose we wanted to count the number of genres in our database.
 !beam-query
 ```haskell
 !example chinook
-aggregate_ (\_ -> countAll_) (all_ (genre chinookDb))
+aggregate_ (\_ -> as_ @Int32 countAll_) (all_ (genre chinookDb))
 ```
 
 ### Adding a GROUP BY clause

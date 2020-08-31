@@ -200,14 +200,14 @@ class FencedCodeTabsPreprocessor(Preprocessor):
                             tab_set.add_code_tab(tab)
 
                         # Convert our tab set (and tabs) into the appropriate HTML
-                        tab_html = unicode(tab_set)
+                        tab_html = str(tab_set)
                     else:
                         # Convert our single tab into the appropriate HTML
-                        tab_html = unicode(self.tab_items.popleft())
+                        tab_html = str(self.tab_items.popleft())
 
                     start_tab_index = None
                     tab_run_length = 0
-                    transformed_lines += '\n' + self.markdown.htmlStash.store(tab_html, safe=True) + '\n\n'
+                    transformed_lines += '\n' + self.markdown.htmlStash.store(tab_html) + '\n\n'
 
                 transformed_lines += line + '\n'
 
@@ -223,7 +223,7 @@ class FencedCodeTabsPreprocessor(Preprocessor):
 
                 tab_html = str(tab_set)
 
-            transformed_lines += '\n\n' + self.markdown.htmlStash.store(str(tab_html), safe=True) + '\n\n'
+            transformed_lines += '\n\n' + self.markdown.htmlStash.store(str(tab_html)) + '\n\n'
             self.tab_items.clear()
 
         return transformed_lines
@@ -311,7 +311,7 @@ class FencedCodeTabsSet(object):
             tabs += self.TAB_BODY_CONTAINER_TEMPLATE.format(id=tab_set_id,
                                                             isTabActiveClass=tab_active_class,
                                                             lang=tab.get_lang(),
-                                                            tabContent=unicode(tab))
+                                                            tabContent=tab)
             tab_active_class = ''
 
         tab_set_str = self.TAB_SET_HANDLE_CONTAINER_TEMPLATE.format(tabHandles=tab_handles)

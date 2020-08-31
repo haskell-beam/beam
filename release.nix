@@ -1,10 +1,4 @@
-{ nixpkgs ? import ((import <nixpkgs> {}).fetchFromGitHub {
-    owner = "NixOS";
-    repo = "nixpkgs";
-    rev = "48723f48ab92381f0afd50143f38e45cf3080405";
-    sha256 = "0h3b3l867j3ybdgimfn76lw7w6yjhszd5x02pq5827l659ihcf53";
-  }) {}
-}: with nixpkgs;
+{ nixpkgs ? import ./nixpkgs/pinned.nix }: with nixpkgs;
 
 let
   beamPackages = [

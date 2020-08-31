@@ -246,7 +246,7 @@ you don't, GHC will often infer the type, but it's nice to be explicit.
 
 !beam-query
 ```haskell
-!example chinook-adhoc
+!example chinook
 -- import qualified Database.Beam.Query.Adhoc as Adhoc
 do ( cId, firstName, lastName )
      <- Adhoc.table_ Nothing {- Schema Name -}

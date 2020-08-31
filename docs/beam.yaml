@@ -63,49 +63,50 @@ backends:
       - intersect
       - except
 
-  beam-mysql:
-    backend-name: MySQL
-    backend-module: Database.Beam.MySQL
-    backend-options: "127.0.0.1 3306 root '' beam_docs_chinook"
-    src:
-      github: tathougies/beam-mysql
-      revision: f4b5d6d6fc1bd88ae5628cd9c03c83e3eb66d873
-      sha256: 87e091f7bb98a1265bf87793f7ddd07f90029d33fd6b6fe6018f8723d746d7a5
-    haskell-names:
-      package: beam-mysql
-      backend: MySQL
-      monad: MySQLM
-      select-syntax: MysqlSelectSyntax
-      mnemonic: My
-      with-database-debug: runBeamMySQLDebug
-    extra-packages:
-      - mysql-simple
-    extra-imports:
-      - Database.MySQL.Simple
-      - "qualified Database.MySQL.Base as Base"
-    backend-extra: >-
-      docsWithTransaction = withTransaction
-    supports:
-      - utf8
+#  beam-mysql:
+#    backend-name: MySQL
+#    backend-module: Database.Beam.MySQL
+#    backend-options: "127.0.0.1 3306 root '' beam_docs_chinook"
+#    src:
+#      local: ../beam-mysql
+##      github: tathougies/beam-mysql
+##      revision: f4b5d6d6fc1bd88ae5628cd9c03c83e3eb66d873
+##      sha256: 87e091f7bb98a1265bf87793f7ddd07f90029d33fd6b6fe6018f8723d746d7a5
+#    haskell-names:
+#      package: beam-mysql
+#      backend: MySQL
+#      monad: MySQLM
+#      select-syntax: MysqlSelectSyntax
+#      mnemonic: My
+#      with-database-debug: runBeamMySQLDebug
+#    extra-packages:
+#      - mysql-simple
+#    extra-imports:
+#      - Database.MySQL.Simple
+#      - "qualified Database.MySQL.Base as Base"
+#    backend-extra: >-
+#      docsWithTransaction = withTransaction
+#    supports:
+#      - utf8
 
-  beam-mssql:
-    backend-name: Microsoft SQL
-    backend-module: Database.Beam.MsSQL
-    backend-options: "sa Testtest1 test2"
-    src:
-      local: ../beam-mssql
-    haskell-names:
-      package: beam-mssql
-      backend: MsSQL
-      monad: MsSQLM
-      select-syntax: MssqlSelectSyntax
-      mnemonic: Ms
-      with-database-debug: runBeamMsSQLDebug
-    extra-packages:
-      - tds
-    extra-imports:
-      - Database.TDS
-    backend-extra: >-
-      docsWithTransaction = withTransaction
-    supports:
-      - utf8
+#  beam-mssql:
+#    backend-name: MsSQL
+#    backend-module: Database.Beam.MsSQL
+#    backend-options: "sa Testtest1 test2"
+#    src:
+#      local: ../beam-mssql
+#    haskell-names:
+#      package: beam-mssql
+#      backend: MsSQL
+#      monad: MsSQLM
+#      select-syntax: MssqlSelectSyntax
+#      mnemonic: Ms
+#      with-database-debug: runBeamMsSQLDebug
+#    extra-packages:
+#      - tds
+#    extra-imports:
+#      - Database.TDS
+#    backend-extra: >-
+#      docsWithTransaction = withTransaction
+#    supports:
+#      - utf8
