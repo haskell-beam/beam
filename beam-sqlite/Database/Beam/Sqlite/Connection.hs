@@ -54,6 +54,7 @@ import           Database.SQLite.Simple.Types (Null)
 
 import           Control.Exception (SomeException(..), bracket_, onException, mask)
 import           Control.Monad (forM_)
+import           Control.Monad.Fail (MonadFail(..))
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Identity (Identity)
