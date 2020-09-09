@@ -90,7 +90,6 @@ import           Database.Beam hiding (insert)
 import           Database.Beam.Backend.Internal.Compat
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate
-import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.Serialization
 

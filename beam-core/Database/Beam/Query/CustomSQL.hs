@@ -51,17 +51,15 @@ import           Database.Beam.Backend.SQL.Builder
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (byteString, toLazyByteString)
 import           Data.ByteString.Lazy (toStrict)
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
+import           Data.Kind (Type)
 import           Data.String
 import qualified Data.Text as T
 
 -- | A type-class for expression syntaxes that can embed custom expressions.
 class (Monoid (CustomSqlSyntax syntax), Semigroup (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
   IsCustomSqlSyntax syntax where
-  data CustomSqlSyntax syntax :: *
+  data CustomSqlSyntax syntax :: Type
 
   -- | Given an arbitrary string-like expression, produce a 'syntax' that represents the
   --   'ByteString' as a SQL expression.
@@ -80,11 +78,12 @@ instance IsCustomSqlSyntax SqlSyntaxBuilder where
 
 newtype CustomSqlSnippet be = CustomSqlSnippet (T.Text -> CustomSqlSyntax (BeamSqlBackendExpressionSyntax be))
 instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => Semigroup (CustomSqlSnippet be) where
-  (<>) = mappend
+  CustomSqlSnippet a <> CustomSqlSnippet b =
+    CustomSqlSnippet $ \pfx -> a pfx <> b pfx
 instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => Monoid (CustomSqlSnippet be) where
   mempty = CustomSqlSnippet (pure mempty)
-  mappend (CustomSqlSnippet a) (CustomSqlSnippet b) =
-    CustomSqlSnippet $ \pfx -> a pfx <> b pfx
+  mappend = (<>)
+
 instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => IsString (CustomSqlSnippet be) where
   fromString s = CustomSqlSnippet $ \_ -> fromString s
 

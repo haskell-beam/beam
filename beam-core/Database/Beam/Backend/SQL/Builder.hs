@@ -36,9 +36,6 @@ import           Data.Hashable
 import           Data.Int
 import           Data.String
 import qualified Control.Monad.Fail as Fail
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 import           GHC.TypeLits
 
 -- | The main syntax. A wrapper over 'Builder'
@@ -59,12 +56,11 @@ instance Eq SqlSyntaxBuilder where
   a == b = toLazyByteString (buildSql a) == toLazyByteString (buildSql b)
 
 instance Semigroup SqlSyntaxBuilder where
-  (<>) = mappend
+  SqlSyntaxBuilder a <> SqlSyntaxBuilder b =  SqlSyntaxBuilder (a <> b)
 
 instance Monoid SqlSyntaxBuilder where
   mempty = SqlSyntaxBuilder mempty
-  mappend (SqlSyntaxBuilder a) (SqlSyntaxBuilder b) =
-    SqlSyntaxBuilder (mappend a b)
+  mappend = (<>)
 
 instance IsSql92Syntax SqlSyntaxBuilder where
   type Sql92SelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

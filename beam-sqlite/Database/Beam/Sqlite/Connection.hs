@@ -16,6 +16,8 @@ module Database.Beam.Sqlite.Connection
   , insertReturning, runInsertReturningList
   ) where
 
+import           Prelude hiding (fail)
+
 import           Database.Beam.Backend
 import           Database.Beam.Backend.Internal.Compat
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
@@ -24,8 +26,7 @@ import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL ( BeamMigrateOnlySqlBackend, FieldReturnType(..) )
 import qualified Database.Beam.Migrate.SQL as Beam
 import           Database.Beam.Migrate.SQL.BeamExtensions
-import           Database.Beam.Query ( QExpr, QField
-                                     , SqlInsert(..), SqlInsertValues(..)
+import           Database.Beam.Query ( SqlInsert(..), SqlInsertValues(..)
                                      , HasQBuilder(..), HasSqlEqualityCheck
                                      , HasSqlQuantifiedEqualityCheck
                                      , DataType(..)
@@ -55,7 +56,7 @@ import           Database.SQLite.Simple.Types (Null)
 
 import           Control.Exception (SomeException(..), bracket_, onException, mask)
 import           Control.Monad (forM_)
-import           Control.Monad.Fail (MonadFail)
+import           Control.Monad.Fail (MonadFail(..))
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Identity (Identity)
@@ -80,9 +81,6 @@ import           Data.Time ( LocalTime, UTCTime, Day
                            , ZonedTime, utc, utcToLocalTime )
 import           Data.Typeable (cast)
 import           Data.Word
-#if !MIN_VERSION_base(4,11,0)
-import           Data.Semigroup
-#endif
 import           GHC.TypeLits
 
 import           Network.URI
