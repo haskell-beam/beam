@@ -16,6 +16,8 @@ module Database.Beam.Sqlite.Connection
   , insertReturning, runInsertReturningList
   ) where
 
+import           Prelude hiding (fail)
+
 import           Database.Beam.Backend
 import           Database.Beam.Backend.Internal.Compat
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
