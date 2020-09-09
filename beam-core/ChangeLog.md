@@ -107,7 +107,7 @@ included within the `HasDefaultSqlDataType` class.
 
 ## Changes to parseOneField and peekField
 
-Formerly, the `peekField` function would attemt to parse a field
+Formerly, the `peekField` function would attempt to parse a field
 without advancing the column pointer, regardless of whether a field
 was successfully parsed. In order to support more efficient parsing,
 this has been changed. When `peekField` returns a `Just` value, then
