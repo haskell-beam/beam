@@ -84,6 +84,8 @@ library
     ghc-options: -Wcompat
   if flag(werror)
     ghc-options:       -Werror
+  if impl(ghc >= 8.10)
+    default-extensions: TypeFamilyDependencies
 
 flag werror
   description: Enable -Werror during development
