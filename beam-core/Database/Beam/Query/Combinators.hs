@@ -263,14 +263,14 @@ guard_' :: forall be db s
         => QExpr be s SqlBool -> Q be db s ()
 guard_' (QExpr guardE') = Q (liftF (QGuard guardE' ()))
 
--- | Synonym for @clause >>= \x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
+-- | Synonym for @clause >>= \\x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
 filter_ :: forall r be db s
          . BeamSqlBackend be
         => (r -> QExpr be s Bool)
         -> Q be db s r -> Q be db s r
 filter_ mkExpr clause = clause >>= \x -> guard_ (mkExpr x) >> pure x
 
--- | Synonym for @clause >>= \x -> guard_' (mkExpr x)>> pure x@. Use 'filter_' for comparisons with 'Bool'
+-- | Synonym for @clause >>= \\x -> guard_' (mkExpr x)>> pure x@. Use 'filter_' for comparisons with 'Bool'
 filter_' :: forall r be db s
           . BeamSqlBackend be
         => (r -> QExpr be s SqlBool)
