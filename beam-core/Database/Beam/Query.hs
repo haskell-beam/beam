@@ -19,6 +19,7 @@ module Database.Beam.Query
 
     , QBaseScope
 
+
     , module Database.Beam.Query.Combinators
     , module Database.Beam.Query.Extensions
 
@@ -41,6 +42,7 @@ module Database.Beam.Query
 
     -- ** Unquantified comparison operators
     , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
+    , HasTableEquality
     , SqlEq(..), SqlOrd(..), SqlIn(..)
     , HasSqlInTable(..)
 
