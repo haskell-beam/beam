@@ -73,7 +73,8 @@ test-suite beam-postgres-tests
                  Database.Beam.Postgres.Test.Marshal,
                  Database.Beam.Postgres.Test.Select,
                  Database.Beam.Postgres.Test.DataTypes,
-                 Database.Beam.Postgres.Test.Migrate
+                 Database.Beam.Postgres.Test.Migrate,
+                 Database.Beam.Postgres.Test.EscapeText
   build-depends: base, beam-core, beam-migrate, beam-postgres, text, bytestring, tasty, tasty-hunit,
                  postgresql-simple, process, temporary, hedgehog, uuid, filepath, directory
   default-language: Haskell2010

@@ -1,12 +1,13 @@
 module Main where
 
-import Test.Tasty
+import           Test.Tasty
 
-import Database.Beam.Postgres.Test (startTempPostgres)
-import qualified Database.Beam.Postgres.Test.Select as Select
-import qualified Database.Beam.Postgres.Test.Marshal as Marshal
-import qualified Database.Beam.Postgres.Test.DataTypes as DataType
-import qualified Database.Beam.Postgres.Test.Migrate as Migrate
+import           Database.Beam.Postgres.Test            (startTempPostgres)
+import qualified Database.Beam.Postgres.Test.DataTypes  as DataType
+import qualified Database.Beam.Postgres.Test.EscapeText as EscapeText
+import qualified Database.Beam.Postgres.Test.Marshal    as Marshal
+import qualified Database.Beam.Postgres.Test.Migrate    as Migrate
+import qualified Database.Beam.Postgres.Test.Select     as Select
 
 main :: IO ()
 main = defaultMain (withResource startTempPostgres snd $ \getConnStr ->
