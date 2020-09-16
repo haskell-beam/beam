@@ -37,7 +37,7 @@ module Database.Beam.Sqlite.Syntax
     -- * Building and consuming 'SqliteSyntax'
   , fromSqliteCommand, formatSqliteInsert, formatSqliteInsertOnConflict
 
-  , emit, emitValue, parens, commas
+  , emit, emitValue, parens, commas, quotedIdentifier
 
   , sqliteEscape, withPlaceholders
   , sqliteRenderSyntaxScript

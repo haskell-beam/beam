@@ -40,6 +40,7 @@ import           Database.Beam.Schema.Tables ( Beamable
                                              , DatabaseEntityDescriptor(..)
                                              , TableEntity
                                              , TableField(..)
+                                             , allBeamValues
                                              , changeBeamRep )
 import           Database.Beam.Sqlite.Syntax
 
@@ -77,6 +78,7 @@ import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T (decodeUtf8)
 import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TL (decodeUtf8)
 import           Data.Time ( LocalTime, UTCTime, Day
                            , ZonedTime, utc, utcToLocalTime )
 import           Data.Typeable (cast)
@@ -375,11 +377,11 @@ insertReturning = insert
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
 -- inserted row.
-runInsertReturningList :: FromBackendRow Sqlite (table Identity)
+runInsertReturningList :: (Beamable table, FromBackendRow Sqlite (table Identity))
                        => SqlInsert Sqlite table
                        -> SqliteM [ table Identity ]
 runInsertReturningList SqlInsertNoRows = pure []
-runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
+runInsertReturningList (SqlInsert tblSettings insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $ do
 
@@ -418,7 +420,13 @@ runInsertReturningList (SqlInsert _ insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
            x <- bracket_ createInsertedValuesTable dropInsertedValuesTable $
                 bracket_ createInsertTrigger dropInsertTrigger $ do
                 runSqliteInsert logger conn insertStmt_
-                fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT * FROM inserted_values_" <> processId))
+
+                let columns = TL.toStrict $ TL.decodeUtf8 $
+                              sqliteRenderSyntaxScript $ commas $
+                              allBeamValues (\(Columnar' projField) -> quotedIdentifier (_fieldName projField)) $
+                              tblSettings
+
+                fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT " <> columns <> " FROM inserted_values_" <> processId))
            releaseSavepoint
            return x
 

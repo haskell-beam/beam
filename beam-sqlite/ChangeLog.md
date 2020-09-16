@@ -1,5 +1,6 @@
 # 0.5.0.0
 
+=======
 ## Interface changes
 
  * Removed instances for machine-dependent ambiguous integer types `Int` and `Word`
@@ -14,6 +15,7 @@
 
  * Fix emitting and detection of `DECIMAL` and `DOUBLE PRECISION` types
  * Fix `bitLength`, `charLength_`, and `octectLength_` by emulating with `CAST` and `LENGTH`
+ * Fix `runInsertReturningList` for when the database column order and beam column order disagree.
 
 # 0.4.0.0
 
