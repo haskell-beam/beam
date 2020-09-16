@@ -1,3 +1,21 @@
+# 0.5.0.0
+
+## Interface changes
+
+ * Removed instances for machine-dependent ambiguous integer types `Int` and `Word`
+ * Require `MonadFail` for `BeamMigrationBackend`
+
+## Added features
+
+ * GHC 8.8 support
+
+## Bug fixes
+
+ * Map `Int16` to `smallIntType` instead of `intType`
+ * Suppress creation of primary key constraints for tables with no primary keys
+
+## 0.4.0.0
+
 ## 0.3.2.0
 
 Added `haskellSchema` shortcut
