@@ -1,3 +1,7 @@
+# 0.5.0.0
+
+Fix `runInsertReturningList` for when the database column order and beam column order disagree.
+
 # 0.3.2.0
 
 Add `Semigroup` instances to prepare for GHC 8.4 and Stackage nightly
