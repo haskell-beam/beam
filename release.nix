@@ -20,6 +20,7 @@ let
     hashable = "1.3.0.0";
     network = "2.6.3.1";
     postgresql-libpq = "0.9.4.2";
+    tmp-postgres = "1.34.1.0";
     vector-sized = "1.4.0.0";
   };
   baseHackageDirectVersions = {
