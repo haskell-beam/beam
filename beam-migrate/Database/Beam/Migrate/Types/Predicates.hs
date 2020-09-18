@@ -127,8 +127,8 @@ qnameAsText (QualifiedName (Just sch) tbl) = sch <> "." <> tbl
 qnameAsTableName :: IsSql92TableNameSyntax syntax => QualifiedName -> syntax
 qnameAsTableName (QualifiedName sch t) = tableName sch t
 
--- | A predicate that depends on the name of a table as well as its fields
-newtype TableCheck = TableCheck (forall tbl. Table tbl => QualifiedName -> tbl (TableField tbl) -> SomeDatabasePredicate)
+-- | An optional predicate that depends on the name of a table as well as its fields
+newtype TableCheck = TableCheck (forall tbl. Table tbl => QualifiedName -> tbl (TableField tbl) -> Maybe SomeDatabasePredicate)
 
 -- | A predicate that depends on the name of a domain type
 newtype DomainCheck = DomainCheck (QualifiedName -> SomeDatabasePredicate)

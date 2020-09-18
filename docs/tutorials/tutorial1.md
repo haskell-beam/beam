@@ -366,7 +366,7 @@ record from the database.
 ```haskell
 !employee1sql sql
 !employee1out output
-let userCount = aggregate_ (\u -> as_ @Int countAll_) (all_ (_shoppingCartUsers shoppingCartDb))
+let userCount = aggregate_ (\u -> as_ @Int32 countAll_) (all_ (_shoppingCartUsers shoppingCartDb))
 
 runBeamSqliteDebug putStrLn conn $ do
   Just c <- runSelectReturningOne $ select userCount
@@ -375,7 +375,7 @@ runBeamSqliteDebug putStrLn conn $ do
 
 !!! note "Note"
     `countAll_` is happy to unmarshal into any `Integral` type, so we use `as_`
-    to constrain the type to `Int`.
+    to constrain the type to `Int32`.
 
 Maybe we'd like something a little more interesting, such as the number of users
 for each unique first name. We can also express these aggregations using the
@@ -403,7 +403,7 @@ the number of users.
 ```haskell
 !employee1sql-agg sql
 !employee1out-agg output
-let numberOfUsersByName = aggregate_ (\u -> (group_ (_userFirstName u), as_ @Int countAll_)) $
+let numberOfUsersByName = aggregate_ (\u -> (group_ (_userFirstName u), as_ @Int32 countAll_)) $
                           all_ (_shoppingCartUsers shoppingCartDb)
 
 runBeamSqliteDebug putStrLn conn $ do
@@ -424,7 +424,7 @@ Until next time!
 
 If you have any questions about beam, feel free to send them to
 travis@athougies.net . Pull requests and bug reports are welcome
-on [GitHub](https://github.com/tathougies/beam).
+on [GitHub](https://github.com/haskell-beam/beam).
 
 [^1]:
    Thanks to various bloggers for pointing this out. You can read more about this technique

@@ -25,6 +25,7 @@ module Database.Beam.Backend.SQL.SQL2003
 
 import Database.Beam.Backend.SQL.SQL99
 
+import Data.Kind (Type)
 import Data.Text (Text)
 
 type Sql2003SanityCheck syntax =
@@ -36,7 +37,7 @@ type Sql2003SanityCheck syntax =
 class IsSql92FromSyntax from =>
     IsSql2003FromSyntax from where
 
-    type Sql2003FromSampleMethodSyntax from :: *
+    type Sql2003FromSampleMethodSyntax from :: Type
 
     fromTableSample :: Sql92FromTableSourceSyntax from
                     -> Sql2003FromSampleMethodSyntax from
@@ -54,7 +55,7 @@ class ( IsSql99ExpressionSyntax expr
       , IsSql2003WindowFrameSyntax (Sql2003ExpressionWindowFrameSyntax expr) ) =>
     IsSql2003ExpressionSyntax expr where
 
-    type Sql2003ExpressionWindowFrameSyntax expr :: *
+    type Sql2003ExpressionWindowFrameSyntax expr :: Type
 
     overE :: expr
           -> Sql2003ExpressionWindowFrameSyntax expr
@@ -83,9 +84,9 @@ class IsSql99DataTypeSyntax dataType =>
 
 class IsSql2003WindowFrameBoundsSyntax (Sql2003WindowFrameBoundsSyntax frame) =>
     IsSql2003WindowFrameSyntax frame where
-    type Sql2003WindowFrameExpressionSyntax frame :: *
-    type Sql2003WindowFrameOrderingSyntax frame :: *
-    type Sql2003WindowFrameBoundsSyntax frame :: *
+    type Sql2003WindowFrameExpressionSyntax frame :: Type
+    type Sql2003WindowFrameOrderingSyntax frame :: Type
+    type Sql2003WindowFrameBoundsSyntax frame :: Type
 
     frameSyntax :: Maybe [Sql2003WindowFrameExpressionSyntax frame]
                 -> Maybe [Sql2003WindowFrameOrderingSyntax frame]
@@ -94,7 +95,7 @@ class IsSql2003WindowFrameBoundsSyntax (Sql2003WindowFrameBoundsSyntax frame) =>
 
 class IsSql2003WindowFrameBoundSyntax (Sql2003WindowFrameBoundsBoundSyntax bounds) =>
     IsSql2003WindowFrameBoundsSyntax bounds where
-    type Sql2003WindowFrameBoundsBoundSyntax bounds :: *
+    type Sql2003WindowFrameBoundsBoundSyntax bounds :: Type
     fromToBoundSyntax :: Sql2003WindowFrameBoundsBoundSyntax bounds
                       -> Maybe (Sql2003WindowFrameBoundsBoundSyntax bounds)
                       -> bounds

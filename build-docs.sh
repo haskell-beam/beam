@@ -3,7 +3,7 @@
 set -e
 
 get_pythonpath () {
-    export PYTHONPATH="`python -c "import sys; print ':'.join([s for s in sys.path if len(s) > 0])"`:."
+    export PYTHONPATH="`python -c "import sys; print(':'.join([s for s in sys.path if len(s) > 0]))"`:."
 }
 
 servedocs () {

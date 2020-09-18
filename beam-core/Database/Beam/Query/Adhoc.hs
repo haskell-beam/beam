@@ -8,15 +8,16 @@ module Database.Beam.Query.Adhoc
   , table_, field_
   ) where
 
-import Database.Beam.Query.Internal
-import Database.Beam.Backend.SQL
+import           Database.Beam.Query.Internal
+import           Database.Beam.Backend.SQL
 
-import Control.Monad.Free.Church
+import           Control.Monad.Free.Church
 
+import           Data.Kind (Type)
 import qualified Data.Text as T
 
 class Adhoc structure where
-  type AdhocTable structure (f :: * -> *) :: *
+  type AdhocTable structure (f :: Type -> Type) :: Type
 
   mkAdhocField :: (forall a. T.Text -> f a) -> structure -> AdhocTable structure f
 

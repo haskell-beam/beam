@@ -174,7 +174,7 @@ sum_ :: ( BeamSqlBackend be, Num a )
 sum_ = sumOver_ allInGroup_
 
 -- | SQL @COUNT(*)@ function
-countAll_ :: BeamSqlBackend be => QAgg be s Int
+countAll_ :: ( BeamSqlBackend be, Integral a ) => QAgg be s a
 countAll_ = QExpr (pure countAllE)
 
 -- | SQL @COUNT(ALL ..)@ function (but without the explicit ALL)
@@ -193,18 +193,18 @@ percentRank_ :: BeamSqlT612Backend be
 percentRank_ = QExpr (pure percentRankAggE)
 
 -- | SQL2003 @DENSE_RANK@ function (Requires T612 Advanced OLAP operations support)
-denseRank_ :: BeamSqlT612Backend be
-           => QAgg be s Int
+denseRank_ :: ( BeamSqlT612Backend be, Integral a )
+           => QAgg be s a
 denseRank_ = QExpr (pure denseRankAggE)
 
 -- | SQL2003 @ROW_NUMBER@ function
-rowNumber_ :: BeamSql2003ExpressionBackend be
-           =>  QAgg be s Int
+rowNumber_ :: ( BeamSql2003ExpressionBackend be, Integral a )
+           =>  QAgg be s a
 rowNumber_ = QExpr (pure rowNumberE)
 
 -- | SQL2003 @RANK@ function (Requires T611 Elementary OLAP operations support)
-rank_ :: BeamSqlT611Backend be
-      => QAgg be s Int
+rank_ :: ( BeamSqlT611Backend be, Integral a )
+      => QAgg be s a
 rank_ = QExpr (pure rankAggE)
 
 minOver_, maxOver_

@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Provides a syntax 'SqlSyntaxBuilder' that uses a
 --   'Data.ByteString.Builder.Builder' to construct SQL expressions as strings.
@@ -18,8 +19,8 @@ module Database.Beam.Backend.SQL.Builder
   , quoteSql
   , renderSql ) where
 
+import           Database.Beam.Backend.Internal.Compat
 import           Database.Beam.Backend.SQL
---import           Database.Beam.Backend.Types
 
 import           Control.Monad.IO.Class
 
@@ -35,9 +36,7 @@ import           Data.Hashable
 import           Data.Int
 import           Data.String
 import qualified Control.Monad.Fail as Fail
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
+import           GHC.TypeLits
 
 -- | The main syntax. A wrapper over 'Builder'
 newtype SqlSyntaxBuilder
@@ -57,12 +56,11 @@ instance Eq SqlSyntaxBuilder where
   a == b = toLazyByteString (buildSql a) == toLazyByteString (buildSql b)
 
 instance Semigroup SqlSyntaxBuilder where
-  (<>) = mappend
+  SqlSyntaxBuilder a <> SqlSyntaxBuilder b =  SqlSyntaxBuilder (a <> b)
 
 instance Monoid SqlSyntaxBuilder where
   mempty = SqlSyntaxBuilder mempty
-  mappend (SqlSyntaxBuilder a) (SqlSyntaxBuilder b) =
-    SqlSyntaxBuilder (mappend a b)
+  mappend = (<>)
 
 instance IsSql92Syntax SqlSyntaxBuilder where
   type Sql92SelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
@@ -433,7 +431,7 @@ instance IsSql92DataTypeSyntax SqlSyntaxBuilder where
     varBitType prec = SqlSyntaxBuilder ("BIT VARYING" <> sqlOptPrec prec)
 
     numericType prec = SqlSyntaxBuilder ("NUMERIC" <> sqlOptNumericPrec prec)
-    decimalType prec = SqlSyntaxBuilder ("DOUBLE" <> sqlOptNumericPrec prec)
+    decimalType prec = SqlSyntaxBuilder ("DECIMAL" <> sqlOptNumericPrec prec)
 
     intType = SqlSyntaxBuilder "INT"
     smallIntType = SqlSyntaxBuilder "SMALLINT"
@@ -461,9 +459,6 @@ sqlOptNumericPrec (Just (prec, Nothing)) = sqlOptPrec (Just prec)
 sqlOptNumericPrec (Just (prec, Just dec)) = "(" <> fromString (show prec) <> ", " <> fromString (show dec) <> ")"
 
 -- TODO These instances are wrong (Text doesn't handle quoting for example)
-instance HasSqlValueSyntax SqlSyntaxBuilder Int where
-  sqlValueSyntax x = SqlSyntaxBuilder $
-    byteString (fromString (show x))
 instance HasSqlValueSyntax SqlSyntaxBuilder Int32 where
   sqlValueSyntax x = SqlSyntaxBuilder $
     byteString (fromString (show x))
@@ -475,6 +470,10 @@ instance HasSqlValueSyntax SqlSyntaxBuilder Text where
     byteString (fromString (show x))
 instance HasSqlValueSyntax SqlSyntaxBuilder SqlNull where
   sqlValueSyntax _ = SqlSyntaxBuilder (byteString "NULL")
+
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlValueSyntax SqlSyntaxBuilder Int where
+  sqlValueSyntax x = SqlSyntaxBuilder $
+    byteString (fromString (show x))
 
 renderSql :: SqlSyntaxBuilder -> String
 renderSql (SqlSyntaxBuilder b) = BL.unpack (toLazyByteString b)

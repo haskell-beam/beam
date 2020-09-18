@@ -232,3 +232,109 @@ runInsert $ insert (playlist chinookDb) $
   insertValues valuesToInsert
 putStrLn "See! I told you!"
 ```
+
+## `ON CONFLICT`
+
+Several backends (such as Postgres and SQLite) support `ON CONFLICT` subexpressions that specify
+what action to take when an `INSERT` statement conlicts with already present data.
+
+Beam support backend-agnostic `ON CONFLICT` statements via the `BeamHasInsertOnConflict`syntax. This
+class contains a new function to generate an `SqlInsert`. The `insertOnConflict` function can be
+used to attach `ON CONFLICT` actions to a `SqlInsert`.
+
+```haskell
+  insertOnConflict
+    :: Beamable table
+    => DatabaseEntity be db (TableEntity table)
+    -> SqlInsertValues be (table (QExpr be s))
+    -> SqlConflictTarget be table
+    -> SqlConflictAction be table
+    -> SqlInsert be table
+```
+
+The `SqlConflictTarget` specifies on which kinds of conflicts the action should run. You have a few options
+
+* `anyConflict` - run the action on any conflict
+* `conflictingFields` - run the action only when certain fields conflict
+* `conflictingFieldsWhere` - run the action only when certain fields conflict and a particular
+  expression evaluates to true.
+
+The `SqlConflictAction` specifies what to do when a conflict happens.
+
+* `onConflictDoNothing` - this cancels the insertion
+* `onConflictUpdateSet` - sets fields to new values based on the current values
+* `onConflictUpdateSetWhere` - sets fields to new values if a particular condition holds
+
+
+### Acting on any conflict
+
+A common use case of `ON CONFLICT` is to *upsert* rows into a database. *Upsertion* refers to only
+inserting a row if another conflicting row does not already exist. For example, if you have a new
+customer with primary key 42, and you don't know if it's in the database or not, but you want to
+insert it if not, you can use the `insertOnConflict` function with the `anyConflict` target.
+
+!beam-query
+```haskell
+!example chinookdml on:Sqlite on:Postgres
+let
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  insertOnConflict (customer chinookDb) (insertValues [newCustomer])
+     anyConflict
+     onConflictDoNothing
+```
+
+### Acting only on certain conflicts
+
+Sometimes you only want to perform an action if a certain constraint is violated. If the conflicting
+index or constraint is on a field you can specify which fields with the function `conflictingFields`.
+
+!beam-query
+```haskell
+!example chinookdml !on:MySQL
+--! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
+let
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  insertOnConflict (customer chinookDb) (insertValues [newCustomer])
+    (conflictingFields (\tbl -> primaryKey tbl))
+    (onConflictUpdateSet (\fields oldValues -> fields <-. val_ newCustomer))
+```
+
+!!! tip "Tip"
+    To specify a conflict on the primary keys, use `conflictingFields primaryKey`.
+
+You can also specify how to change the record should it not match. For example, to append the e-mail
+as an alternate when you insert an existing row, you can use the `oldValues` argument to get access
+to the old value.
+
+!beam-query
+```haskell
+!example chinookdml !on:MySQL
+--! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
+let
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  insertOnConflict (customer chinookDb) (insertValues [newCustomer])
+    (conflictingFields (\tbl -> primaryKey tbl))
+    (onConflictUpdateSet (\fields oldValues -> customerEmail fields <-. concat_ [ customerEmail oldValues, ";", val_ (customerEmail newCustomer)]))
+```
+
+If you want to be even more particular and only do this transformation on rows corresponding to
+customers from one state, use `conflictingFieldsWhere`.
+
+!beam-query
+```haskell
+!example chinookdml !on:MySQL
+--! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
+let
+  newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
+
+runInsert $
+  insertOnConflict (customer chinookDb) (insertValues [newCustomer])
+    (conflictingFieldsWhere (\tbl -> primaryKey tbl) (\tbl -> addressState (customerAddress tbl) ==. val_ (Just "CA")))
+    (onConflictUpdateSet (\fields oldValues -> customerEmail fields <-. concat_ [ customerEmail oldValues, ";", val_ (customerEmail newCustomer)]))
+```

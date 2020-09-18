@@ -1,3 +1,4 @@
+
 -- | The @pgcrypto@ extension provides several cryptographic functions to
 -- Postgres. This module provides a @beam-postgres@ extension to access this
 -- functionality. For an example of usage, see the documentation for
@@ -8,20 +9,14 @@ module Database.Beam.Postgres.PgCrypto
 import Database.Beam
 import Database.Beam.Backend.SQL
 
-import Database.Beam.Postgres.Types
 import Database.Beam.Postgres.Extensions
+import Database.Beam.Postgres.Extensions.Internal
 
+import Data.Int
 import Data.Text (Text)
 import Data.ByteString (ByteString)
 import Data.Vector (Vector)
 import Data.UUID.Types (UUID)
-
-type PgExpr ctxt s = QGenExpr ctxt Postgres s
-
-type family LiftPg ctxt s fn where
-  LiftPg ctxt s (Maybe a -> b) = Maybe (PgExpr ctxt s a) -> LiftPg ctxt s b
-  LiftPg ctxt s (a -> b) = PgExpr ctxt s a -> LiftPg ctxt s b
-  LiftPg ctxt s a = PgExpr ctxt s a
 
 -- | Data type representing definitions contained in the @pgcrypto@ extension
 --
@@ -41,7 +36,7 @@ data PgCrypto
   , pgCryptoCrypt ::
       forall ctxt s. LiftPg ctxt s (Text -> Text -> Text)
   , pgCryptoGenSalt ::
-      forall ctxt s. LiftPg ctxt s (Text -> Maybe Int -> Text)
+      forall ctxt s. LiftPg ctxt s (Text -> Maybe Int32 -> Text)
 
   -- Pgp functions
   , pgCryptoPgpSymEncrypt ::
@@ -83,9 +78,6 @@ data PgCrypto
   , pgCryptoGenRandomUUID ::
       forall ctxt s. PgExpr ctxt s UUID
   }
-
-funcE :: IsSql99ExpressionSyntax expr => Text -> [expr] -> expr
-funcE nm args = functionCallE (fieldE (unqualifiedField nm)) args
 
 instance IsPgExtension PgCrypto where
   pgExtensionName _ = "pgcrypto"

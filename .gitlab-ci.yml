@@ -7,27 +7,27 @@ stages:
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
-  - /builds/tathougies1/beam/.stack/
+  - /builds/haskell-beam1/beam/.stack/
   - /root/.stack
   - .stack-work/
   - /nix
 
 test beam-core:
   stage: build
-  script: chown -R root /builds/tathougies1 && nix-shell --command "stack test --system-ghc --nix beam-core --flag beam-core:werror"
+  script: chown -R root /builds/haskell-beam1 && nix-shell --command "stack test --system-ghc --nix beam-core --flag beam-core:werror"
 
 test beam-postgres:
   stage: build
-  script: chown -R postgres /builds/tathougies1 && mkdir -p /var/lib/postgresql/.stack && chown -R postgres /var/lib/postgresql && nix-shell --command "su -c 'stack test --system-ghc --nix beam-postgres --flag beam-postgres:werror --allow-different-user' postgres"
+  script: chown -R postgres /builds/haskell-beam1 && mkdir -p /var/lib/postgresql/.stack && chown -R postgres /var/lib/postgresql && nix-shell --command "su -c 'stack test --system-ghc --nix beam-postgres --flag beam-postgres:werror --allow-different-user' postgres"
 
 build beam-sqlite:
   stage: build
-  script: chown -R root /builds/tathougies1 && nix-shell --command "stack build --system-ghc --nix beam-sqlite --flag beam-core:werror --flag beam-sqlite:werror"
+  script: chown -R root /builds/haskell-beam1 && nix-shell --command "stack build --system-ghc --nix beam-sqlite --flag beam-core:werror --flag beam-sqlite:werror"
 
 build beam-migrate:
   stage: build
-  script:  chown -R root /builds/tathougies1 && nix-shell --command "stack build --system-ghc --nix beam-migrate-cli --flag beam-migrate:werror"
+  script:  chown -R root /builds/haskell-beam1 && nix-shell --command "stack build --system-ghc --nix beam-migrate-cli --flag beam-migrate:werror"
 
 build docs:
   stage: docs
-  script: chown -R root /builds/tathougies1 && ./build-docs.sh builddocs
+  script: chown -R root /builds/haskell-beam1 && ./build-docs.sh builddocs

@@ -16,7 +16,7 @@ find the genre representing the most tracks in a particular album.
 !example chinook window
 let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                 , group_ (trackGenreId t)
-                                , as_ @Int countAll_ )) $
+                                , as_ @Int32 countAll_ )) $
                      all_ (track chinookDb)
 
     withMaxCounts = withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
@@ -35,7 +35,7 @@ joining over the above
 !example chinook window
 let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                 , group_ (trackGenreId t)
-                                , as_ @Int countAll_ )) $
+                                , as_ @Int32 countAll_ )) $
                      all_ (track chinookDb)
 
     withMaxCounts = withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
@@ -117,7 +117,7 @@ using `selecting`.
     selecting $
     let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                     , group_ (trackGenreId t)
-                                    , as_ @Int countAll_ )) $
+                                    , as_ @Int32 countAll_ )) $
                          all_ (track chinookDb)
 
         withMaxCounts = withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
@@ -159,7 +159,7 @@ void $ runSelectReturningList $ selectWith $ do
     selecting $
     let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                     , group_ (trackGenreId t)
-                                    , as_ @Int countAll_ )) $
+                                    , as_ @Int32 countAll_ )) $
                          all_ (track chinookDb)
 
         withMaxCounts = withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
@@ -192,7 +192,7 @@ void $ runSelectReturningList $ selectWith $ do
     selecting $
     let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                     , group_ (trackGenreId t)
-                                    , as_ @Int countAll_ )) $
+                                    , as_ @Int32 countAll_ )) $
                          all_ (track chinookDb)
 
     in withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
@@ -225,7 +225,7 @@ void $ runSelectReturningList $ selectWith $ do
     selecting $
     let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                     , group_ (trackGenreId t)
-                                    , as_ @Int countAll_ )) $
+                                    , as_ @Int32 countAll_ )) $
                          all_ (track chinookDb)
 
     in withWindow_ (\(albumId, _, _) -> frame_ (partitionBy_ albumId) noOrder_ noBounds_)
@@ -248,7 +248,7 @@ void $ runSelectReturningList $ selectWith $ do
                      filter_ (\(_, genreCntByAlbum) -> genreCntByAlbum >. 1) $
                      aggregate_ (\t -> let GenreId genreId = trackGenreId t
                                        in ( group_ (trackAlbumId t)
-                                          , as_ @Int (countOver_ distinctInGroup_ genreId))) $
+                                          , as_ @Int32 (countOver_ distinctInGroup_ genreId))) $
                      all_ (track chinookDb)))
 
     pure ( artistName artist_, albumTitle album_, genreName genre_ )
@@ -262,7 +262,7 @@ without CTEs,
 !example chinook cte window
 do let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                                    , group_ (trackGenreId t)
-                                   , as_ @Int countAll_ )) $
+                                   , as_ @Int32 countAll_ )) $
                         all_ (track chinookDb)
 
        albumAndRepresentativeGenres =
@@ -286,7 +286,7 @@ do let albumGenreCnts = aggregate_ (\t -> ( group_ (trackAlbumId t)
                     filter_ (\(_, genreCntByAlbum) -> genreCntByAlbum >. 1) $
                     aggregate_ (\t -> let GenreId genreId = trackGenreId t
                                       in ( group_ (trackAlbumId t)
-                                         , as_ @Int (countOver_ distinctInGroup_ genreId))) $
+                                         , as_ @Int32 (countOver_ distinctInGroup_ genreId))) $
                     all_ (track chinookDb)))
 
    pure ( artistName artist_, albumTitle album_, genreName genre_ )
@@ -326,7 +326,7 @@ example of a recursive query is the Fibonacci sequence:
 ```haskell
 !example chinookdml cte window
 void $ runSelectReturningList $ selectWith $ do
-  rec fib <- selecting (pure (as_ @Int 0, as_ @Int 1) `union_`
+  rec fib <- selecting (pure (as_ @Int32 0, as_ @Int32 1) `union_`
                         (do (a, b) <- reuse fib
                             guard_ (b <. 1000)
                             pure (b, a + b)))

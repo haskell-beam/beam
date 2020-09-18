@@ -17,16 +17,16 @@ the schema should be pretty familiar, so I'm going to skip the explanation.
 
 ```haskell
 data ProductT f = Product
-                { _productId          :: C f Int
+                { _productId          :: C f Int32
                 , _productTitle       :: C f Text
                 , _productDescription :: C f Text
-                , _productPrice       :: C f Int {- Price in cents -} }
+                , _productPrice       :: C f Int32 {- Price in cents -} }
                   deriving (Generic, Beamable)
 type Product = ProductT Identity
 deriving instance Show Product
 
 instance Table ProductT where
-  data PrimaryKey ProductT f = ProductId (Columnar f Int)
+  data PrimaryKey ProductT f = ProductId (Columnar f Int32)
                                deriving (Generic, Beamable)
   primaryKey = ProductId . _productId
 ```
@@ -48,7 +48,7 @@ import Data.Time
 deriving instance Show (PrimaryKey AddressT Identity)
 
 data OrderT f = Order
-              { _orderId      :: Columnar f Int
+              { _orderId      :: Columnar f Int32
               , _orderDate    :: Columnar f LocalTime
               , _orderForUser :: PrimaryKey UserT f
               , _orderShipToAddress :: PrimaryKey AddressT f
@@ -58,7 +58,7 @@ type Order = OrderT Identity
 deriving instance Show Order
 
 instance Table OrderT where
-    data PrimaryKey OrderT f = OrderId (Columnar f Int)
+    data PrimaryKey OrderT f = OrderId (Columnar f Int32)
                                deriving (Generic, Beamable)
     primaryKey = OrderId . _orderId
 
@@ -66,7 +66,7 @@ data ShippingCarrier = USPS | FedEx | UPS | DHL
                        deriving (Show, Read, Eq, Ord, Enum)
 
 data ShippingInfoT f = ShippingInfo
-                     { _shippingInfoId             :: Columnar f Int
+                     { _shippingInfoId             :: Columnar f Int32
                      , _shippingInfoCarrier        :: Columnar f ShippingCarrier
                      , _shippingInfoTrackingNumber :: Columnar f Text }
                        deriving (Generic, Beamable)
@@ -74,7 +74,7 @@ type ShippingInfo = ShippingInfoT Identity
 deriving instance Show ShippingInfo
 
 instance Table ShippingInfoT where
-    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int)
+    data PrimaryKey ShippingInfoT f = ShippingInfoId (Columnar f Int32)
                                       deriving (Generic, Beamable)
     primaryKey = ShippingInfoId . _shippingInfoId
 
@@ -97,7 +97,7 @@ deriving instance Show (PrimaryKey ProductT Identity)
 data LineItemT f = LineItem
                  { _lineItemInOrder    :: PrimaryKey OrderT f
                  , _lineItemForProduct :: PrimaryKey ProductT f
-                 , _lineItemQuantity   :: Columnar f Int }
+                 , _lineItemQuantity   :: Columnar f Int32 }
                    deriving (Generic, Beamable)
 type LineItem = LineItemT Identity
 deriving instance Show LineItem
@@ -555,8 +555,8 @@ shippingInformationByUser <-
     aggregate_ (\(user, order) ->
                    let ShippingInfoId shippingInfoId = _orderShippingInfo order
                    in ( group_ user
-                      , as_ @Int $ count_ (as_ @(Maybe Int) (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId))
-                      , as_ @Int $ count_ shippingInfoId ) ) $
+                      , as_ @Int32 $ count_ (as_ @(Maybe Int32) (maybe_ (just_ 1) (\_ -> nothing_) shippingInfoId))
+                      , as_ @Int32 $ count_ shippingInfoId ) ) $
     do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
        order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders)) (\order -> _orderForUser order `references_` user)
        pure (user, order)
@@ -592,7 +592,7 @@ shippingInformationByUser <-
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
 
        (userEmail, unshippedCount) <-
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
@@ -601,7 +601,7 @@ shippingInformationByUser <-
        guard_ (userEmail `references_` user)
 
        (userEmail, shippedCount) <-
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isJust_ (_orderShippingInfo order))
@@ -632,7 +632,7 @@ shippingInformationByUser <-
 
        (userEmail, unshippedCount) <-
          subselect_ $
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
@@ -642,7 +642,7 @@ shippingInformationByUser <-
 
        (userEmail, shippedCount) <-
          subselect_ $
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isJust_ (_orderShippingInfo order))
@@ -665,4 +665,4 @@ using beam to generate advanced queries. More information on the Beam API is
 havailable on [hackage](http://hackage.haskell.org/package/beam). Happy beaming!
 
 Beam is a work in progress. Please submit bugs and patches
-on [GitHub](https://github.com/tathougies/beam).
+on [GitHub](https://github.com/haskell-beam/beam).

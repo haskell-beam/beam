@@ -86,7 +86,7 @@ data QGenExpr context be s a
 * `s` is a scoping parameter, which will match the `s` in `Q`.
 
 * `a` is the type of this expression. For example, expressions returning SQL
-  `int` values, will have Haskell type `Int`. This ensures that your SQL query
+  `int` values, will have Haskell type `Int32`. This ensures that your SQL query
   won't fail at run-time with a type error.
 
 Beam defines some specializations of `QGenExpr` for common uses.
@@ -116,10 +116,10 @@ the compiler won't know which `Integral` type to use. Beam provides an easy
 utility function `as_` for this. With `-XTypeApplications` enabled,
 
 ```haskell
-as_ @Int (ambiguous expression)
+as_ @Int32 (ambiguous expression)
 ```
 
-ensures that `ambiguous expression` has the type `QGenExpr ctxt be s Int`
+ensures that `ambiguous expression` has the type `QGenExpr ctxt be s Int32`
 with the `ctxt`, `be`, and `s` types appropriately inferred.
 
 ## Simple queries

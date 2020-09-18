@@ -31,7 +31,7 @@ module Database.Beam.Query.Combinators
     , related_, relatedBy_, relatedBy_'
     , leftJoin_, leftJoin_'
     , perhaps_, outerJoin_, outerJoin_'
-    , subselect_, references_
+    , subselect_, references_, references_'
 
     , nub_
 
@@ -79,11 +79,6 @@ import Database.Beam.Schema.Tables
 import Control.Monad.Identity
 import Control.Monad.Free
 import Control.Applicative
-
-#if !MIN_VERSION_base(4, 11, 0)
-import Control.Monad.Writer hiding ((<>))
-import Data.Semigroup
-#endif
 
 import Data.Maybe
 import Data.Proxy
@@ -268,14 +263,14 @@ guard_' :: forall be db s
         => QExpr be s SqlBool -> Q be db s ()
 guard_' (QExpr guardE') = Q (liftF (QGuard guardE' ()))
 
--- | Synonym for @clause >>= \x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
+-- | Synonym for @clause >>= \\x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
 filter_ :: forall r be db s
          . BeamSqlBackend be
         => (r -> QExpr be s Bool)
         -> Q be db s r -> Q be db s r
 filter_ mkExpr clause = clause >>= \x -> guard_ (mkExpr x) >> pure x
 
--- | Synonym for @clause >>= \x -> guard_' (mkExpr x)>> pure x@. Use 'filter_' for comparisons with 'Bool'
+-- | Synonym for @clause >>= \\x -> guard_' (mkExpr x)>> pure x@. Use 'filter_' for comparisons with 'Bool'
 filter_' :: forall r be db s
           . BeamSqlBackend be
         => (r -> QExpr be s SqlBool)
@@ -311,10 +306,19 @@ relatedBy_' = join_'
 
 -- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
 --   to the given table. Useful for creating join conditions.
+--   Use 'references_'' for a 'SqlBool' comparison.
 references_ :: ( Table t, BeamSqlBackend be
                , HasTableEquality be (PrimaryKey t) )
             => PrimaryKey t (QGenExpr ctxt be s) -> t (QGenExpr ctxt be s) -> QGenExpr ctxt be s Bool
 references_ fk tbl = fk ==. pk tbl
+
+-- | Generate an appropriate boolean 'QGenExpr' comparing the given foreign key
+--   to the given table. Useful for creating join conditions.
+--   Use 'references_' for a 'Bool' comparison.
+references_' :: ( Table t, BeamSqlBackend be
+                , HasTableEquality be (PrimaryKey t) )
+             => PrimaryKey t (QGenExpr ctxt be s) -> t (QGenExpr ctxt be s) -> QGenExpr ctxt be s SqlBool
+references_' fk tbl = fk ==?. pk tbl
 
 -- | Only return distinct values from a query
 nub_ :: ( BeamSqlBackend be, Projectible be r )
@@ -360,18 +364,18 @@ subquery_ q =
   QExpr (\tbl -> subqueryE (buildSqlQuery tbl q))
 
 -- | SQL @CHAR_LENGTH@ function
-charLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text )
-            => QGenExpr context be s text -> QGenExpr context be s Int
+charLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text, Integral a )
+            => QGenExpr context be s text -> QGenExpr context be s a
 charLength_ (QExpr s) = QExpr (charLengthE <$> s)
 
 -- | SQL @OCTET_LENGTH@ function
-octetLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text )
-             => QGenExpr context be s text -> QGenExpr context be s Int
+octetLength_ :: ( BeamSqlBackend be, BeamSqlBackendIsString be text, Integral a )
+             => QGenExpr context be s text -> QGenExpr context be s a
 octetLength_ (QExpr s) = QExpr (octetLengthE <$> s)
 
 -- | SQL @BIT_LENGTH@ function
-bitLength_ :: BeamSqlBackend be
-           => QGenExpr context be s SqlBitString -> QGenExpr context be s Int
+bitLength_ :: ( BeamSqlBackend be, Integral a )
+           => QGenExpr context be s SqlBitString -> QGenExpr context be s a
 bitLength_ (QExpr x) = QExpr (bitLengthE <$> x)
 
 -- | SQL @CURRENT_TIMESTAMP@ function
@@ -513,7 +517,7 @@ exceptAll_ (Q a) (Q b) = Q (liftF (QSetOp (exceptTable True) a b (rewriteThread 
 --
 --   But this is not
 --
--- > aggregate_ (\_ -> as_ @Int countAll_) ..
+-- > aggregate_ (\_ -> as_ @Int32 countAll_) ..
 --
 as_ :: forall a ctxt be s. QGenExpr ctxt be s a -> QGenExpr ctxt be s a
 as_ = id
@@ -586,10 +590,10 @@ nrows_ :: BeamSql2003ExpressionBackend be
        => Int -> QFrameBound be
 nrows_ x = QFrameBound (nrowsBoundSyntax x)
 
-noPartition_ :: Maybe (QExpr be s Int)
+noPartition_ :: Integral a => Maybe (QExpr be s a)
 noPartition_ = Nothing
 
-noOrder_ :: Maybe (QOrd be s Int)
+noOrder_ :: Integral a => Maybe (QOrd be s a)
 noOrder_ = Nothing
 
 partitionBy_, orderPartitionBy_ :: partition -> Maybe partition

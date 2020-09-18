@@ -6,9 +6,6 @@ module Database.Beam.Backend.URI where
 import           Control.Exception
 
 import qualified Data.Map as M
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 import           Network.URI
 
@@ -30,12 +27,12 @@ newtype BeamURIOpeners c where
   BeamURIOpeners :: M.Map String (BeamURIOpener c) -> BeamURIOpeners c
 
 instance Semigroup (BeamURIOpeners c) where
-  (<>) = mappend
+  BeamURIOpeners a <> BeamURIOpeners b =
+    BeamURIOpeners (a <> b)
 
 instance Monoid (BeamURIOpeners c) where
   mempty = BeamURIOpeners mempty
-  mappend (BeamURIOpeners a) (BeamURIOpeners b) =
-    BeamURIOpeners (mappend a b)
+  mappend = (<>)
 
 data OpenedBeamConnection c where
   OpenedBeamConnection

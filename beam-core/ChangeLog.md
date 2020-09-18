@@ -1,3 +1,39 @@
+# 0.9.0.0
+
+## Removal of machine-dependent `Int`/`Word` instances
+
+Beam now mandates that you use unambiguous integer types like `Int32`, `Int64`, or `Integer` instead of the machine-dependent `Int` or `Word`.
+Custom type errors have been added to guide migration where required.
+
+Combinators which previously returned `Int`, such as `countAll_` and `rowNumber_`, now match functions such as `count_` in returning any `Integral` type.
+The type of these functions vary across databases and doesn't in general correspond to the `INTEGER` type.
+(For example Postgres uses `bigint` for these.)
+
+## `in_` on row values
+
+Beam now supports using `in_` on row values, for backends which support it.
+This fulfills the often requested ability to use `in_` on `PrimaryKey`s, e.g. ``primaryKey row `in_` [ ... ]``.
+
+## Miscellaneous added features
+
+ * Support for ad-hoc queries on tables which don't have a corresponding `Beamable` type
+ * `HasInsertOnConflict` class for backends which support functionality similar to Postgres and SQLite's `INSERT ... ON CONFLICT`
+ * Convenience functions `setEntitySchema` and `modifyEntitySchema`
+ * Haskell-style conditionals `ifThenElse_` and `bool_`
+ * Poly-kinded instances for `Data.Tagged.Tagged`
+ * Variants of update functions which use tri-value `SqlBool`: `update'`, `save'`, `updateRow'`, `updateTableRow'`, and corresponding combinator `references'`
+ * GHC 8.8 support
+
+## Minor interface changes
+
+ * Split `WithConstraint` apart, to support strict fields
+ * `zipTables` supports `Applicative` actions instead of `Monad`
+
+## Bug fixes
+
+ * Database definition fields can be made strict
+ * `decimalType` properly emits SQL 92 `DECIMAL` instead of `DOUBLE`
+
 # 0.8.0.0
 
 ## Common table expressions
@@ -71,7 +107,7 @@ included within the `HasDefaultSqlDataType` class.
 
 ## Changes to parseOneField and peekField
 
-Formerly, the `peekField` function would attemt to parse a field
+Formerly, the `peekField` function would attempt to parse a field
 without advancing the column pointer, regardless of whether a field
 was successfully parsed. In order to support more efficient parsing,
 this has been changed. When `peekField` returns a `Just` value, then

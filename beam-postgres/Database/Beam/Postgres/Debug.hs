@@ -19,7 +19,6 @@ import Database.Beam.Postgres.Syntax
   , PgDeleteSyntax(..) )
 
 import qualified Data.ByteString.Char8 as BC
-import           Data.Maybe (maybe)
 
 import qualified Database.PostgreSQL.Simple as Pg
 

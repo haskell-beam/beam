@@ -14,7 +14,7 @@ category:            Database
 build-type:          Simple
 extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
-bug-reports:          https://github.com/tathougies/beam/issues
+bug-reports:          https://github.com/haskell-beam/beam/issues
 cabal-version:       1.18
 
 library
@@ -55,6 +55,40 @@ library
     cpp-options:      -DUNIX
     build-depends:    unix          >=2.0 && <2.8
 
+test-suite beam-sqlite-tests
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends:
+    base,
+    beam-core,
+    beam-migrate,
+    beam-sqlite,
+    sqlite-simple,
+    tasty,
+    tasty-expected-failure,
+    tasty-hunit,
+    text,
+    time
+  other-modules:
+    Database.Beam.Sqlite.Test
+    Database.Beam.Sqlite.Test.Migrate
+    Database.Beam.Sqlite.Test.Select
+  default-language: Haskell2010
+  default-extensions:
+    DeriveAnyClass,
+    DeriveGeneric,
+    FlexibleContexts,
+    FlexibleInstances,
+    LambdaCase,
+    MultiParamTypeClasses,
+    OverloadedStrings,
+    RankNTypes,
+    ScopedTypeVariables,
+    StandaloneDeriving,
+    TypeApplications,
+    TypeFamilies
+
 flag werror
   description: Enable -Werror during development
   default:     False
@@ -62,5 +96,5 @@ flag werror
 
 source-repository head
   type: git
-  location: https://github.com/tathougies/beam.git
+  location: https://github.com/haskell-beam/beam.git
   subdir: beam-sqlite
