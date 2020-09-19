@@ -24,6 +24,10 @@ let
     vector-sized = "1.4.0.0";
   };
   baseHackageDirectVersions = {
+    generic-monoid = {
+      version = "0.1.0.1";
+      sha256 = "0n4ry5ag9m5hzvhph7zqrl2scqgy0x58mm88j6q4aqck9rzd8f3j";
+    };
     sqlite-simple = {
       version = "0.4.18.0";
       sha256 = "1crp86argxqv5ryfiyj5v17a3wb8ngnb1zbhhx6d99i83skm5i86";
