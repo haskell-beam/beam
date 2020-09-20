@@ -57,6 +57,7 @@ let
     (applyToPackages haskell.lib.dontCheck [
       "aeson"
       "network"
+      "tmp-postgres"
     ])
     (_: super: {
       # Add postgresql binaries for tests:
