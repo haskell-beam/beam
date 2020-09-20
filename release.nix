@@ -9,7 +9,6 @@ let
     "beam-sqlite"
   ];
   ghcVersions = {
-    ghc844 = haskell.packages.ghc844;
     ghc865 = haskell.packages.ghc865;
     ghc883 = haskell.packages.ghc883.extend (composeExtensionList [
       (pinHackageVersions {
