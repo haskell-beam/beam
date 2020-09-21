@@ -15,13 +15,14 @@ let
         haskell-src-exts = "1.23.0";
       })
     ]);
+    ghc8101 = haskell.packages.ghc8101;
   };
   baseHackageVersions = {
     hashable = "1.3.0.0";
     network = "2.6.3.1";
     postgresql-libpq = "0.9.4.2";
     tmp-postgres = "1.34.1.0";
-    vector-sized = "1.4.0.0";
+    vector-sized = "1.4.1.0";
   };
   baseHackageDirectVersions = {
     generic-monoid = {
