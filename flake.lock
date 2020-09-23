@@ -1,0 +1,96 @@
+{
+  "nodes": {
+    "euler-build": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nix-inclusive": "nix-inclusive",
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1602680967,
+        "narHash": "sha256-1HMQMb/G6xWQ0ujxBwsycs1OZLicgZvMdXf4Kxn9rWs=",
+        "ref": "wip",
+        "rev": "b0c06dde67a97629c544d1287a21059aa248d91a",
+        "revCount": 23,
+        "type": "git",
+        "url": "ssh://git@bitbucket.org/juspay/euler-build"
+      },
+      "original": {
+        "id": "euler-build",
+        "type": "indirect"
+      }
+    },
+    "flake-utils": {
+      "locked": {
+        "lastModified": 1600209923,
+        "narHash": "sha256-zoOWauTliFEjI++esk6Jzk7QO5EKpddWXQm9yQK24iM=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "3cd06d3c1df6879c9e41cb2c33113df10566c760",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "nix-inclusive": {
+      "inputs": {
+        "stdlib": "stdlib"
+      },
+      "locked": {
+        "lastModified": 1592950149,
+        "narHash": "sha256-tZSz9/WkOrtNbW7U2re4WoFPQ2tQX0I0GpCeoF3fY1M=",
+        "owner": "manveru",
+        "repo": "nix-inclusive",
+        "rev": "dd80ddcc6850d130b591fbc9b0aacacfbb3cf47c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "manveru",
+        "repo": "nix-inclusive",
+        "rev": "dd80ddcc6850d130b591fbc9b0aacacfbb3cf47c",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1589844680,
+        "narHash": "sha256-I4OYatIJsEZvEUkAGdTlJjAuUuAq7A1GA/kepUQic1o=",
+        "owner": "NixOS",
+        "repo": "nixpkgs-channels",
+        "rev": "0f5ce2fac0c726036ca69a5524c59a49e2973dd4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs-channels",
+        "rev": "0f5ce2fac0c726036ca69a5524c59a49e2973dd4",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "euler-build": "euler-build"
+      }
+    },
+    "stdlib": {
+      "locked": {
+        "lastModified": 1590026685,
+        "narHash": "sha256-E5INrVvYX/P/UpcoUFDAsuHem+lsqT+/teBs9O7oc9Q=",
+        "owner": "manveru",
+        "repo": "nix-lib",
+        "rev": "99088cf7febcdb21afd375a335dcafa959bef3ed",
+        "type": "github"
+      },
+      "original": {
+        "owner": "manveru",
+        "repo": "nix-lib",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
