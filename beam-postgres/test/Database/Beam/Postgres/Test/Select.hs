@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Database.Beam.Postgres.Test.Select (tests) where
 
 import           Data.Aeson
@@ -10,6 +12,7 @@ import           Test.Tasty.HUnit
 import           Data.UUID (UUID, nil)
 
 import           Database.Beam
+import           Database.Beam.Backend.SQL.SQL92
 import           Database.Beam.Migrate
 import           Database.Beam.Postgres
 import           Database.Beam.Postgres.Extensions.UuidOssp
@@ -36,6 +39,7 @@ tests getConn = testGroup "Selection Tests"
           pgUuidGenerateV5 ext (val_ nil) "nil"
       ]
   , testInRowValues getConn
+  , testReturningMany getConn
   ]
 
 testPgArrayToJSON :: IO ByteString -> TestTree
@@ -76,6 +80,25 @@ testInRowValues getConn = testCase "IN with row values works" $
           p = val_ $ Pair False False
       return $ p `in_` [p, p]
     assertEqual "result" [True] result
+
+testReturningMany :: IO ByteString -> TestTree
+testReturningMany getConn = testCase "runReturningMany (batching via cursor) works" $
+  withTestPostgres "run_returning_many_cursor" getConn $ \conn -> do
+    result <- runBeamPostgres conn $ runSelectReturningMany
+      (select $ pgUnnestArray $ array_ $ (as_ @Int32 . val_) <$> [0..rowCount - 1])
+      (\fetch ->
+        let count n = fetch >>= \case
+              Nothing -> pure n
+              Just _  -> count (n + 1)
+        in count 0)
+    assertEqual "result" rowCount result
+ where
+  rowCount = 500
+  runSelectReturningMany ::
+    (FromBackendRow Postgres x) =>
+    SqlSelect Postgres x -> (Pg (Maybe x) -> Pg a) -> Pg a
+  runSelectReturningMany (SqlSelect s) =
+    runReturningMany (selectCmd s)
 
 testFunction :: IO ByteString -> String -> (Connection -> Assertion) -> TestTree
 testFunction getConn name mkAssertion = testCase name $
