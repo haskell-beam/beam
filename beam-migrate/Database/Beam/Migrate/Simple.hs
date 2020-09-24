@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Utility functions for common use cases
 module Database.Beam.Migrate.Simple
   ( autoMigrate
@@ -9,6 +10,12 @@ module Database.Beam.Migrate.Simple
 
   , VerificationResult(..)
   , verifySchema
+
+  , IgnorePredicates(..)
+  , CheckResult(..)
+  , ignoreTables
+  , ignoreAll
+  , checkSchema
 
   , createSchema
 
@@ -28,7 +35,7 @@ import           Database.Beam.Backend
 import           Database.Beam.Haskell.Syntax
 import           Database.Beam.Migrate.Actions
 import           Database.Beam.Migrate.Backend
-import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck)
+import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck, TableExistsPredicate(..))
 import           Database.Beam.Migrate.Log
 import           Database.Beam.Migrate.SQL (BeamMigrateSqlBackendDataTypeSyntax)
 import           Database.Beam.Migrate.Types
@@ -39,6 +46,8 @@ import           Control.Monad.State
 
 import qualified Data.HashSet as HS
 import           Data.Semigroup (Max(..))
+import           Data.Typeable
+import           Data.Functor
 import qualified Data.Text as T
 
 import qualified Control.Monad.Fail as Fail
@@ -261,16 +270,68 @@ verifySchema :: ( Database be db, MonadBeam be m )
              => BeamMigrationBackend be m
              -> CheckedDatabaseSettings be db
              -> m VerificationResult
-verifySchema BeamMigrationBackend { backendGetDbConstraints = getConstraints } db =
-  do actualSchema <- HS.fromList <$> getConstraints
-     let expectedSchema = HS.fromList (collectChecks db)
-         missingPredicates = expectedSchema `HS.difference` actualSchema
-     if HS.null missingPredicates
-       then pure VerificationSucceeded
-       else pure (VerificationFailed (HS.toList missingPredicates))
+verifySchema backend db = do
+  result <- checkSchema backend db ignoreAll
+  if HS.null $ missingPredicates result
+    then pure VerificationSucceeded
+    else pure $ VerificationFailed $ HS.toList $ missingPredicates result
+
+-- | Result type for 'checkSchema'
+data CheckResult = CheckResult
+  { -- | Expected predicates from the 'CheckedDatabaseSettings' which were not
+    -- found in the live database
+    missingPredicates :: HS.HashSet SomeDatabasePredicate
+  , -- | Predicates found in the live database which are not present in the
+    -- 'CheckedDatabaseSettings' and are not ignored
+    unexpectedPredicates :: HS.HashSet SomeDatabasePredicate
+  } deriving (Eq, Show)
+
+-- | Selects a class of predicates to ignore if detected (e.g. metadata tables
+-- for migrations, other schemas, etc.).
+newtype IgnorePredicates = IgnorePredicates
+  { unIgnorePredicates :: SomeDatabasePredicate -> Any
+  } deriving (Semigroup, Monoid)
+
+-- | Ignore predicates relating to tables matching the given name predicate.
+ignoreTables :: (QualifiedName -> Bool) -> IgnorePredicates
+ignoreTables shouldIgnore = IgnorePredicates $ \(SomeDatabasePredicate dp) ->
+  case cast dp of
+    Just (TableExistsPredicate name) -> Any $ shouldIgnore name
+    Nothing -> Any False
+
+-- | Ignore any unknown predicates. This probably only makes sense to use if
+-- you are only querying and not writing to the database.
+ignoreAll :: IgnorePredicates
+ignoreAll = IgnorePredicates $ const $ Any True
+
+-- | Checks the given database settings against the live database. This is
+-- similar to 'verifySchema', but detects and returns unknown predicates that
+-- are true about the live database (e.g. unknown tables, fields, etc.).
+checkSchema
+  :: (Database be db, Monad m)
+  => BeamMigrationBackend be m
+  -> CheckedDatabaseSettings be db
+  -> IgnorePredicates
+  -> m CheckResult
+checkSchema backend db (IgnorePredicates ignore) = do
+  actual <- HS.fromList <$> backendGetDbConstraints backend
+  let expected = HS.fromList $ collectChecks db
+      missing = expected `HS.difference` actual
+      extra = actual `HS.difference` expected
+      ignored = HS.filter (getAny . ignore) extra
+      unexpected = flip HS.filter extra $ \sdp@(SomeDatabasePredicate dp) ->
+        not $ or
+          [ sdp `HS.member` ignored
+          , or $ HS.toList ignored <&> \(SomeDatabasePredicate ignoredDp) ->
+              dp `predicateCascadesDropOn` ignoredDp
+          ]
+
+  return $ CheckResult
+    { missingPredicates = missing
+    , unexpectedPredicates = unexpected
+    }
 
 -- | Run a sequence of commands on a database
-
 runSimpleMigration :: MonadBeam be m
                    => (forall a. hdl -> m a -> IO a)
                    -> hdl -> [BeamSqlBackendSyntax be] -> IO ()

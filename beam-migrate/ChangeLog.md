@@ -8,6 +8,8 @@
 ## Added features
 
  * GHC 8.8 support
+ * `checkSchema`: Like `verifySchema`, but detects and returns unexpected
+   predicates found in the live database
 
 ## Bug fixes
 
