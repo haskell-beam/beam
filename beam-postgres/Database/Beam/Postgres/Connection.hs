@@ -183,7 +183,8 @@ withPgDebug dbg conn (Pg action) =
       step (PgLiftIO io next) = io >>= next
       step (PgLiftWithHandle withConn next) = withConn conn >>= next
       step (PgFetchNext next) = next Nothing
-      step (PgRunReturning (PgCommandSyntax PgCommandTypeQuery syntax)
+      step (PgRunReturning CursorBatching
+                           (PgCommandSyntax PgCommandTypeQuery syntax)
                            (mkProcess :: Pg (Maybe x) -> Pg a')
                            next) =
         do query <- pgRenderSyntax conn syntax
@@ -200,7 +201,23 @@ withPgDebug dbg conn (Pg action) =
 
                    columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
                in Pg.foldWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query) (PgStreamContinue nextStream) runConsumer >>= finishUp
-      step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
+      step (PgRunReturning AtOnce
+                           (PgCommandSyntax PgCommandTypeQuery syntax)
+                           (mkProcess :: Pg (Maybe x) -> Pg a')
+                           next) =
+        renderExecReturningList "No tuples returned to Postgres query" syntax mkProcess next
+      step (PgRunReturning _ (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
+        renderExecReturningList "No tuples returned to Postgres update/insert returning" syntax mkProcess next
+      step (PgRunReturning _ (PgCommandSyntax _ syntax) mkProcess next) =
+        do query <- pgRenderSyntax conn syntax
+           dbg (T.unpack (decodeUtf8 query))
+           _ <- Pg.execute_ conn (Pg.Query query)
+
+           let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
+           runF process next stepReturningNone
+
+      renderExecReturningList :: (FromBackendRow Postgres x) => _ -> PgSyntax -> (Pg (Maybe x) -> Pg a') -> _ -> _
+      renderExecReturningList errMsg syntax mkProcess next =
         do query <- pgRenderSyntax conn syntax
            dbg (T.unpack (decodeUtf8 query))
 
@@ -210,21 +227,13 @@ withPgDebug dbg conn (Pg action) =
              Pg.TuplesOk -> do
                let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
                runF process (\x _ -> Pg.unsafeFreeResult res >> next x) (stepReturningList res) 0
-             _ -> Pg.throwResultError "No tuples returned to Postgres update/insert returning"
-                                      res sts
-      step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
-        do query <- pgRenderSyntax conn syntax
-           dbg (T.unpack (decodeUtf8 query))
-           _ <- Pg.execute_ conn (Pg.Query query)
-
-           let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-           runF process next stepReturningNone
+             _ -> Pg.throwResultError errMsg res sts
 
       stepReturningNone :: forall a. PgF (IO (Either BeamRowReadError a)) -> IO (Either BeamRowReadError a)
       stepReturningNone (PgLiftIO action' next) = action' >>= next
       stepReturningNone (PgLiftWithHandle withConn next) = withConn conn >>= next
       stepReturningNone (PgFetchNext next) = next Nothing
-      stepReturningNone (PgRunReturning _ _ _) = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal  "Nested queries not allowed")))
+      stepReturningNone (PgRunReturning {}) = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal  "Nested queries not allowed")))
 
       stepReturningList :: forall a. Pg.Result -> PgF (CInt -> IO (Either BeamRowReadError a)) -> CInt -> IO (Either BeamRowReadError a)
       stepReturningList _   (PgLiftIO action' next) rowIdx = action' >>= \x -> next x rowIdx
@@ -236,7 +245,7 @@ withPgDebug dbg conn (Pg action) =
              else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
                     Left err -> pure (Left err)
                     Right r -> next (Just r) (rowIdx + 1)
-      stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
+      stepReturningList _   (PgRunReturning {}) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
       stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
 
       finishProcess :: forall a. a -> Maybe PgI.Row -> IO (PgStream a)
@@ -258,7 +267,7 @@ withPgDebug dbg conn (Pg action) =
         runPgRowReader conn rowIdx res fields fromBackendRow >>= \case
           Left err -> pure (PgStreamDone (Left err))
           Right r -> pure (PgStreamContinue (next (Just r)))
-      stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed"))))
+      stepProcess (PgRunReturning {}) _ = pure (PgStreamDone (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed"))))
       stepProcess (PgLiftWithHandle _ _) _ = pure (PgStreamDone (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed"))))
 
       runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
@@ -272,12 +281,17 @@ data PgF next where
     PgLiftIO :: IO a -> (a -> next) -> PgF next
     PgRunReturning ::
         FromBackendRow Postgres x =>
-        PgCommandSyntax -> (Pg (Maybe x) -> Pg a) -> (a -> next) -> PgF next
+        FetchMode -> PgCommandSyntax -> (Pg (Maybe x) -> Pg a) -> (a -> next) -> PgF next
     PgFetchNext ::
         FromBackendRow Postgres x =>
         (Maybe x -> next) -> PgF next
     PgLiftWithHandle :: (Pg.Connection -> IO a) -> (a -> next) -> PgF next
 deriving instance Functor PgF
+
+-- | How to fetch results.
+data FetchMode
+    = CursorBatching -- ^ Fetch in batches of ~256 rows via cursor for SELECT.
+    | AtOnce         -- ^ Fetch all rows at once.
 
 -- | 'MonadBeam' in which we can run Postgres commands. See the documentation
 -- for 'MonadBeam' on examples of how to use.
@@ -303,7 +317,31 @@ runBeamPostgres = runBeamPostgresDebug (\_ -> pure ())
 
 instance MonadBeam Postgres Pg where
     runReturningMany cmd consume =
-        liftF (PgRunReturning cmd consume id)
+        liftF (PgRunReturning CursorBatching cmd consume id)
+
+    runReturningOne cmd =
+        liftF (PgRunReturning AtOnce cmd consume id)
+      where
+        consume next = do
+          a <- next
+          case a of
+            Nothing -> pure Nothing
+            Just x -> do
+              a' <- next
+              case a' of
+                Nothing -> pure (Just x)
+                Just _ -> pure Nothing
+
+    runReturningList cmd =
+        liftF (PgRunReturning AtOnce cmd consume id)
+      where
+        consume next =
+          let collectM acc = do
+                a <- next
+                case a of
+                  Nothing -> pure (acc [])
+                  Just x -> collectM (acc . (x:))
+          in collectM id
 
 instance MonadBeamInsertReturning Postgres Pg where
     runInsertReturningList i = do

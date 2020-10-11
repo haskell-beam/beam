@@ -1,8 +1,17 @@
-module Database.Beam.Postgres.Test.Select where
+{-# LANGUAGE LambdaCase #-}
+
+module Database.Beam.Postgres.Test.Select (tests) where
+
+import           Data.Aeson
+import           Data.ByteString (ByteString)
+import           Data.Int
+import           Data.Text (Text)
+import qualified Data.Vector as V
+import           Test.Tasty
+import           Test.Tasty.HUnit
 
 import           Database.Beam
-import           Database.Beam.Backend.SQL
-import           Database.Beam.Backend.SQL.BeamExtensions
+import           Database.Beam.Backend.SQL.SQL92
 import           Database.Beam.Migrate
 import           Database.Beam.Migrate.Simple (autoMigrate)
 import           Database.Beam.Postgres
@@ -10,21 +19,6 @@ import           Database.Beam.Postgres.Migrate (migrationBackend)
 import           Database.Beam.Postgres.Test
 import qualified Database.PostgreSQL.Simple as Pg
 
-import           Data.ByteString (ByteString)
-import           Data.Functor.Classes
-import           Data.Int
-import           Data.Proxy (Proxy(..))
-import           Data.Semigroup
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import           Data.Typeable
-import           Data.UUID (UUID, fromWords)
-import           Data.Word
-
-import qualified Hedgehog
-import           Hedgehog ((===))
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
 
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -32,5 +26,26 @@ import           Test.Tasty.HUnit
 import           Unsafe.Coerce
 
 tests :: IO ByteString -> TestTree
-tests postgresConn =
-    testGroup "Postgres Select Tests" []
+tests getConn = testGroup "Selection Tests"
+  [ testReturningMany getConn
+  ]
+
+testReturningMany :: IO ByteString -> TestTree
+testReturningMany getConn = testCase "runReturningMany (batching via cursor) works" $
+  withTestPostgres "run_returning_many_cursor" getConn $ \conn -> do
+    result <- runBeamPostgres conn $ runSelectReturningMany
+      (select $ pgUnnestArray $ array_ $ (as_ @Int32 . val_) <$> [0..rowCount - 1])
+      (\fetch ->
+        let count n = fetch >>= \case
+              Nothing -> pure n
+              Just _  -> count (n + 1)
+        in count 0)
+    assertEqual "result" rowCount result
+ where
+  rowCount = 500
+  runSelectReturningMany ::
+    (FromBackendRow Postgres x) =>
+    SqlSelect Postgres x -> (Pg (Maybe x) -> Pg a) -> Pg a
+  runSelectReturningMany (SqlSelect s) =
+    runReturningMany (selectCmd s)
+
