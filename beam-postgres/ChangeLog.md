@@ -26,6 +26,10 @@
  * Fix emitting of `DECIMAL` type
  * Report JSON correct decoding errors instead of throwing `UnexpectedNull`
 
+## Behavior changes
+
+ * `runReturningOne` and `runResturningList` now fetch all rows at once instead of using cursors
+
 # 0.4.0.0
 
 # 0.3.2.0
