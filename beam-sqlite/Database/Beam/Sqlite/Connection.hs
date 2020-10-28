@@ -57,6 +57,7 @@ import           Database.SQLite.Simple.Types (Null)
 
 import           Control.Exception (SomeException(..), bracket_, onException, mask)
 import           Control.Monad (forM_)
+import           Control.Monad.Base (MonadBase)
 import           Control.Monad.Fail (MonadFail(..))
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class (MonadIO(..))
@@ -64,6 +65,7 @@ import           Control.Monad.Identity (Identity)
 import           Control.Monad.Reader (ReaderT(..), MonadReader(..), runReaderT)
 import           Control.Monad.State.Strict (MonadState(..), StateT(..), runStateT)
 import           Control.Monad.Trans (lift)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Writer (tell, execWriter)
 
 import           Data.ByteString.Builder (toLazyByteString)
@@ -194,6 +196,7 @@ newtype SqliteM a
     -- ^ Run an IO action with access to a SQLite connection and a debug logging
     -- function, called or each query submitted on the connection.
   } deriving (Monad, Functor, Applicative, MonadIO, MonadFail)
+    deriving newtype (MonadBase IO, MonadBaseControl IO)
 
 newtype BeamSqliteParams = BeamSqliteParams [SQLData]
 instance ToRow BeamSqliteParams where
