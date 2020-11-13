@@ -37,13 +37,15 @@ library
                       mtl           >=2.1  && <2.3,
                       free          >=4.12 && <5.2,
                       scientific    >=0.3  && <0.4,
+                      monad-control        >=1.0  && <1.1,
                       network-uri   >=2.6  && <2.7,
                       aeson         >=0.11 && <1.5,
-                      attoparsec    >=0.13 && <0.14
+                      attoparsec    >=0.13 && <0.14,
+                      transformers-base    >=0.4  && <0.5
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
-                      CPP, TypeApplications, FlexibleContexts, ConstraintKinds
+                      CPP, TypeApplications, FlexibleContexts, ConstraintKinds, DerivingStrategies
   ghc-options:        -Wall
   if flag(werror)
     ghc-options:       -Werror

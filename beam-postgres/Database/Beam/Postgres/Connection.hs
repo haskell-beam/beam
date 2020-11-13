@@ -26,8 +26,10 @@ module Database.Beam.Postgres.Connection
   , postgresUriSyntax ) where
 
 import           Control.Exception (SomeException(..), throwIO)
+import           Control.Monad.Base (MonadBase(..))
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Control (MonadBaseControl(..))
 
 import           Database.Beam hiding (runDelete, runUpdate, runInsert, insert)
 import           Database.Beam.Backend.SQL.BeamExtensions
@@ -182,7 +184,7 @@ withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either BeamRowR
 withPgDebug dbg conn (Pg action) =
   let finish x = pure (Right x)
       step (PgLiftIO io next) = io >>= next
-      step (PgLiftWithHandle withConn next) = withConn conn >>= next
+      step (PgLiftWithHandle withConn next) = withConn dbg conn >>= next
       step (PgFetchNext next) = next Nothing
       step (PgRunReturning CursorBatching
                            (PgCommandSyntax PgCommandTypeQuery syntax)
@@ -232,7 +234,7 @@ withPgDebug dbg conn (Pg action) =
 
       stepReturningNone :: forall a. PgF (IO (Either BeamRowReadError a)) -> IO (Either BeamRowReadError a)
       stepReturningNone (PgLiftIO action' next) = action' >>= next
-      stepReturningNone (PgLiftWithHandle withConn next) = withConn conn >>= next
+      stepReturningNone (PgLiftWithHandle withConn next) = withConn dbg conn >>= next
       stepReturningNone (PgFetchNext next) = next Nothing
       stepReturningNone (PgRunReturning {}) = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal  "Nested queries not allowed")))
 
@@ -286,7 +288,7 @@ data PgF next where
     PgFetchNext ::
         FromBackendRow Postgres x =>
         (Maybe x -> next) -> PgF next
-    PgLiftWithHandle :: (Pg.Connection -> IO a) -> (a -> next) -> PgF next
+    PgLiftWithHandle :: ((String -> IO ()) -> Pg.Connection -> IO a) -> (a -> next) -> PgF next
 deriving instance Functor PgF
 
 -- | How to fetch results.
@@ -309,8 +311,19 @@ instance Fail.MonadFail Pg where
 instance MonadIO Pg where
     liftIO x = liftF (PgLiftIO x id)
 
+instance MonadBase IO Pg where
+    liftBase = liftIO
+
+instance MonadBaseControl IO Pg where
+    type StM Pg a = a
+
+    liftBaseWith action =
+      liftF (PgLiftWithHandle (\dbg conn -> action (runBeamPostgresDebug dbg conn)) id)
+
+    restoreM = pure
+
 liftIOWithHandle :: (Pg.Connection -> IO a) -> Pg a
-liftIOWithHandle f = liftF (PgLiftWithHandle f id)
+liftIOWithHandle f = liftF (PgLiftWithHandle (\_ -> f) id)
 
 runBeamPostgresDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO a
 runBeamPostgresDebug dbg conn action =
