@@ -4,7 +4,6 @@ module Database.Beam.Postgres.Test.DataTypes where
 
 import Database.Beam
 import Database.Beam.Postgres
-import Database.Beam.Postgres.Migrate
 import Database.Beam.Postgres.Test
 import Database.Beam.Migrate
 import Database.Beam.Backend.SQL.BeamExtensions
@@ -12,6 +11,7 @@ import Database.Beam.Backend.SQL.BeamExtensions
 import Control.Exception (SomeException(..), handle)
 
 import Data.ByteString (ByteString)
+import Data.Int
 import Data.Text (Text)
 
 import Test.Tasty
@@ -25,12 +25,12 @@ tests postgresConn =
 
 data JsonT f
     = JsonT
-    { _key :: C f Int
+    { _key :: C f Int32
     , _field1 :: C f (PgJSON String) }
     deriving (Generic, Beamable)
 
 instance Table JsonT where
-    data PrimaryKey JsonT f = JsonKey (C f Int)
+    data PrimaryKey JsonT f = JsonKey (C f Int32)
       deriving (Generic, Beamable)
     primaryKey = JsonKey <$> _key
 
@@ -39,7 +39,7 @@ data JsonDb entity
     { jsonTable :: entity (TableEntity JsonT) }
     deriving (Generic, Database Postgres)
 
--- | Regression test for <https://github.com/tathougies/beam/issues/297 #297>
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/297 #297>
 jsonNulTest :: IO ByteString -> TestTree
 jsonNulTest pgConn =
     testCase "JSON NUL handling (#297)" $
@@ -68,7 +68,7 @@ jsonNulTest pgConn =
           fmap (fmap (\(PgJSON v) -> v)) $
             runSelectReturningList $ select $
             fmap (\(JsonT _ v) -> v) $
-            orderBy_ (\(JsonT pk _) -> asc_ pk) $
+            orderBy_ (\(JsonT k _) -> asc_ k) $
             all_ (jsonTable db)
 
       readback @?= [ "hello\0world"
@@ -81,23 +81,23 @@ jsonNulTest pgConn =
       return ()
 
 data TblT f
-    = Tbl { _tblKey :: C f Int, _tblValue :: C f Text }
+    = Tbl { _tblKey :: C f Int32, _tblValue :: C f Text }
       deriving (Generic, Beamable)
 
 deriving instance Show (TblT Identity)
 deriving instance Eq (TblT Identity)
 
 instance Table TblT where
-    data PrimaryKey TblT f = TblKey (C f Int)
+    data PrimaryKey TblT f = TblKey (C f Int32)
       deriving (Generic, Beamable)
     primaryKey = TblKey <$> _tblKey
 
 data WrongTblT f
-    = WrongTbl { _wrongTblKey :: C f Int, _wrongTblValue :: C f Int }
+    = WrongTbl { _wrongTblKey :: C f Int32, _wrongTblValue :: C f Int32 }
       deriving (Generic, Beamable)
 
 instance Table WrongTblT where
-    data PrimaryKey WrongTblT f = WrongTblKey (C f Int)
+    data PrimaryKey WrongTblT f = WrongTblKey (C f Int32)
       deriving (Generic, Beamable)
     primaryKey = WrongTblKey <$> _wrongTblKey
 
@@ -109,7 +109,7 @@ data WrongDb entity
     = WrongDb { _wrongTbl :: entity (TableEntity WrongTblT) }
       deriving (Generic, Database Postgres)
 
--- | Regression test for <https://github.com/tathougies/beam/issues/112>
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/112>
 errorOnSchemaMismatch :: IO ByteString -> TestTree
 errorOnSchemaMismatch pgConn =
     testCase "runInsertReturningList should error on schema mismatch (#112)" $
@@ -129,7 +129,7 @@ errorOnSchemaMismatch pgConn =
                                                         (WrongTbl (field "key" int notNull)
                                                                   (field "value" int notNull)))
 
-      didFail <- handle (\(e :: SomeException) -> pure True) $
+      didFail <- handle (\(_ :: SomeException) -> pure True) $
         runBeamPostgres conn $ do
           _ <- runInsertReturningList $ insert (_wrongTbl wrongDb) $ insertValues [ WrongTbl 4 23, WrongTbl 5 24, WrongTbl 6 24 ]
           pure False

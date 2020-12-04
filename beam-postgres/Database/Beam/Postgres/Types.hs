@@ -8,14 +8,19 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
 
 module Database.Beam.Postgres.Types
-  ( Postgres(..) ) where
+  ( Postgres(..)
+  , fromPgIntegral
+  , fromPgScientificOrIntegral
+  ) where
 
 #include "MachDeps.h"
 
 import           Database.Beam
 import           Database.Beam.Backend
+import           Database.Beam.Backend.Internal.Compat
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL (BeamMigrateOnlySqlBackend)
 import           Database.Beam.Postgres.Syntax
@@ -42,11 +47,12 @@ import           Data.Time (UTCTime, Day, TimeOfDay, LocalTime, NominalDiffTime,
 import           Data.UUID.Types (UUID)
 import           Data.Vector (Vector)
 import           Data.Word
+import           GHC.TypeLits
 
 -- | The Postgres backend type, used to parameterize 'MonadBeam'. See the
 -- definitions there for more information. The corresponding query monad is
 -- 'Pg'. See documentation for 'MonadBeam' and the
--- <https://tathougies.github/beam/ user guide> for more information on using
+-- <https://haskell-beam.github/beam/ user guide> for more information on using
 -- this backend.
 data Postgres
   = Postgres
@@ -59,8 +65,11 @@ instance HasSqlInTable Postgres where
 instance Pg.FromField SqlNull where
   fromField field d = fmap (\Pg.Null -> SqlNull) (Pg.fromField field d)
 
-fromScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
-fromScientificOrIntegral = do
+-- | Deserialize integral fields, possibly downcasting from a larger numeric type
+-- via 'Scientific' if we won't lose data, and then falling back to any integral
+-- type via 'Integer'
+fromPgScientificOrIntegral :: (Bounded a, Integral a) => FromBackendRowM Postgres a
+fromPgScientificOrIntegral = do
   sciVal <- fmap (toBoundedInteger =<<) peekField
   case sciVal of
     Just sciVal' -> do
@@ -90,24 +99,28 @@ instance FromBackendRow Postgres SqlNull
 instance FromBackendRow Postgres Bool
 instance FromBackendRow Postgres Char
 instance FromBackendRow Postgres Double
-instance FromBackendRow Postgres Int where
-  fromBackendRow = fromPgIntegral
 instance FromBackendRow Postgres Int16 where
   fromBackendRow = fromPgIntegral
 instance FromBackendRow Postgres Int32 where
   fromBackendRow = fromPgIntegral
 instance FromBackendRow Postgres Int64 where
   fromBackendRow = fromPgIntegral
+
+instance TypeError (PreferExplicitSize Int Int32) => FromBackendRow Postgres Int where
+  fromBackendRow = fromPgIntegral
+
 -- Word values are serialized as SQL @NUMBER@ types to guarantee full domain coverage.
--- However, we wan them te be serialized/deserialized as whichever type makes sense
-instance FromBackendRow Postgres Word where
-  fromBackendRow = fromScientificOrIntegral
+-- However, we want them te be serialized/deserialized as whichever type makes sense
 instance FromBackendRow Postgres Word16 where
-  fromBackendRow = fromScientificOrIntegral
+  fromBackendRow = fromPgScientificOrIntegral
 instance FromBackendRow Postgres Word32 where
-  fromBackendRow = fromScientificOrIntegral
+  fromBackendRow = fromPgScientificOrIntegral
 instance FromBackendRow Postgres Word64 where
-  fromBackendRow = fromScientificOrIntegral
+  fromBackendRow = fromPgScientificOrIntegral
+
+instance TypeError (PreferExplicitSize Word Word32) => FromBackendRow Postgres Word where
+  fromBackendRow = fromPgScientificOrIntegral
+
 instance FromBackendRow Postgres Integer
 instance FromBackendRow Postgres ByteString
 instance FromBackendRow Postgres Scientific
@@ -212,13 +225,11 @@ instance HasDefaultSqlDataType Postgres UUID where
 PG_HAS_EQUALITY_CHECK(Bool)
 PG_HAS_EQUALITY_CHECK(Double)
 PG_HAS_EQUALITY_CHECK(Float)
-PG_HAS_EQUALITY_CHECK(Int)
 PG_HAS_EQUALITY_CHECK(Int8)
 PG_HAS_EQUALITY_CHECK(Int16)
 PG_HAS_EQUALITY_CHECK(Int32)
 PG_HAS_EQUALITY_CHECK(Int64)
 PG_HAS_EQUALITY_CHECK(Integer)
-PG_HAS_EQUALITY_CHECK(Word)
 PG_HAS_EQUALITY_CHECK(Word8)
 PG_HAS_EQUALITY_CHECK(Word16)
 PG_HAS_EQUALITY_CHECK(Word32)
@@ -247,6 +258,11 @@ PG_HAS_EQUALITY_CHECK(BL.ByteString)
 PG_HAS_EQUALITY_CHECK(Vector a)
 PG_HAS_EQUALITY_CHECK(CI Text)
 PG_HAS_EQUALITY_CHECK(CI TL.Text)
+
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlEqualityCheck Postgres Int
+instance TypeError (PreferExplicitSize Int Int32) => HasSqlQuantifiedEqualityCheck Postgres Int
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlEqualityCheck Postgres Word
+instance TypeError (PreferExplicitSize Word Word32) => HasSqlQuantifiedEqualityCheck Postgres Word
 
 instance HasSqlEqualityCheck Postgres a =>
   HasSqlEqualityCheck Postgres (Tagged t a)

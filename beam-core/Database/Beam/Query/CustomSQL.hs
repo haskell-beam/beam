@@ -20,10 +20,10 @@
 --
 --   The returned function is polymorphic in the types of SQL expressions it
 --   will accept, but you can give it a more specific signature. For example, to
---   mandate that we receive two 'Int's and a 'T.Text' and return a 'Bool'.
+--   mandate that we receive two 'Int32's and a 'T.Text' and return a 'Bool'.
 --
 -- @
--- myFunc_ :: QGenExpr e ctxt s Int -> QGenExpr e ctxt s Int -> QGenExpr e ctxt s T.Text -> QGenExpr e ctxt s Bool
+-- myFunc_ :: QGenExpr e ctxt s Int32 -> QGenExpr e ctxt s Int32 -> QGenExpr e ctxt s T.Text -> QGenExpr e ctxt s Bool
 -- myFunc_ = customExpr_ myFuncImpl
 -- @
 --
@@ -31,7 +31,7 @@
 --   is called with arguments representing SQL expressions, that, when
 --   evaluated, will evaluate to the result of the expressions supplied as
 --   arguments to 'customExpr_'. See the section on
---   <http://tathougies.github.io/beam/user-guide/extensibility/ extensibility>
+--   <https://haskell-beam.github.io/beam/user-guide/extensibility/ extensibility>
 --   in the user guide for example usage.
 module Database.Beam.Query.CustomSQL
   (
@@ -51,17 +51,15 @@ import           Database.Beam.Backend.SQL.Builder
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (byteString, toLazyByteString)
 import           Data.ByteString.Lazy (toStrict)
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
+import           Data.Kind (Type)
 import           Data.String
 import qualified Data.Text as T
 
 -- | A type-class for expression syntaxes that can embed custom expressions.
 class (Monoid (CustomSqlSyntax syntax), Semigroup (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
   IsCustomSqlSyntax syntax where
-  data CustomSqlSyntax syntax :: *
+  data CustomSqlSyntax syntax :: Type
 
   -- | Given an arbitrary string-like expression, produce a 'syntax' that represents the
   --   'ByteString' as a SQL expression.
@@ -80,11 +78,12 @@ instance IsCustomSqlSyntax SqlSyntaxBuilder where
 
 newtype CustomSqlSnippet be = CustomSqlSnippet (T.Text -> CustomSqlSyntax (BeamSqlBackendExpressionSyntax be))
 instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => Semigroup (CustomSqlSnippet be) where
-  (<>) = mappend
+  CustomSqlSnippet a <> CustomSqlSnippet b =
+    CustomSqlSnippet $ \pfx -> a pfx <> b pfx
 instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => Monoid (CustomSqlSnippet be) where
   mempty = CustomSqlSnippet (pure mempty)
-  mappend (CustomSqlSnippet a) (CustomSqlSnippet b) =
-    CustomSqlSnippet $ \pfx -> a pfx <> b pfx
+  mappend = (<>)
+
 instance IsCustomSqlSyntax (BeamSqlBackendExpressionSyntax be) => IsString (CustomSqlSnippet be) where
   fromString s = CustomSqlSnippet $ \_ -> fromString s
 

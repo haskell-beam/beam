@@ -31,10 +31,10 @@ general for the compiler to meaningfully infer types.
   `SqlValable`. This requires that there is an implementation of
   `HasSqlValueSyntax (Sql92ExpressionValueSyntax syntax) x` for the type `x` in
   the appropriate `syntax` for the `QGenExpr`. For example, to construct a value
-  of type `Vector Int` in the `beam-postgres` backend.
+  of type `Vector Int32` in the `beam-postgres` backend.
 
 ```haskell
-val_ (V.fromList [1, 2, 3 :: Int])
+val_ (V.fromList [1, 2, 3 :: Int32])
 ```
 
 * **Explicit tables** can be brought to the SQL value level by using `val_` as

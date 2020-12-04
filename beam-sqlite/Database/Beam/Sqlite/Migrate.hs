@@ -41,7 +41,7 @@ import           Data.Char (isSpace)
 import           Data.Int (Int64)
 import           Data.List (sortBy)
 import           Data.Maybe (mapMaybe, isJust)
-import           Data.Monoid (Endo(..), (<>))
+import           Data.Monoid (Endo(..))
 import           Data.Ord (comparing)
 import           Data.String (fromString)
 import qualified Data.Text as T
@@ -135,7 +135,7 @@ parseSqliteDataType txt =
   where
     dtParser = charP <|> varcharP <|>
                ncharP <|> nvarcharP <|>
-               bitP <|> varbitP <|> numericP <|>
+               bitP <|> varbitP <|> numericP <|> decimalP <|>
                doubleP <|> integerP <|>
                smallIntP <|> bigIntP <|> floatP <|>
                doubleP <|> realP <|> dateP <|>
@@ -170,12 +170,16 @@ parseSqliteDataType txt =
     numericP = do
       asciiCI "NUMERIC"
       numericType <$> numericPrecP
-    doubleP = do
-      asciiCI "DOUBLE" <|> asciiCI "DECIMAL"
+    decimalP = do
+      asciiCI "DECIMAL"
       decimalType <$> numericPrecP
     floatP = do
       asciiCI "FLOAT"
       floatType <$> precP
+    doubleP = do
+      asciiCI "DOUBLE"
+      optional $ skipSpace >> asciiCI "PRECISION"
+      pure doubleType
     realP = realType <$ asciiCI "REAL"
 
     intTypeP =

@@ -12,6 +12,7 @@ import qualified Database.Beam.Sqlite as Sqlite
 import Database.SQLite.Simple
 
 import Data.Text (Text)
+import Data.Int
 
 import Control.Monad
 

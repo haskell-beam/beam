@@ -41,8 +41,8 @@ import Database.Beam.Query.Aggregate
 
 import Database.Beam.Backend.SQL
 
-ntile_ :: (BeamSqlBackend be, BeamSqlT614Backend be)
-       => QExpr be s Int -> QAgg be s a
+ntile_ :: (BeamSqlBackend be, BeamSqlT614Backend be, Integral n)
+       => QExpr be s n -> QAgg be s a
 ntile_ (QExpr a) = QExpr (ntileE <$> a)
 
 lead1_, lag1_
@@ -52,14 +52,14 @@ lead1_ (QExpr a) = QExpr (leadE <$> a <*> pure Nothing <*> pure Nothing)
 lag1_ (QExpr a) = QExpr (lagE <$> a <*> pure Nothing <*> pure Nothing)
 
 lead_, lag_
-  :: (BeamSqlBackend be, BeamSqlT615Backend be)
-  => QExpr be s a -> QExpr be s Int -> QAgg be s a
+  :: (BeamSqlBackend be, BeamSqlT615Backend be, Integral n)
+  => QExpr be s a -> QExpr be s n -> QAgg be s a
 lead_ (QExpr a) (QExpr n) = QExpr (leadE <$> a <*> (Just <$> n) <*> pure Nothing)
 lag_ (QExpr a) (QExpr n) = QExpr (lagE <$> a <*> (Just <$> n) <*> pure Nothing)
 
 leadWithDefault_, lagWithDefault_
-  :: (BeamSqlBackend be, BeamSqlT615Backend be)
-  => QExpr be s a -> QExpr be s Int -> QExpr be s a
+  :: (BeamSqlBackend be, BeamSqlT615Backend be, Integral n)
+  => QExpr be s a -> QExpr be s n -> QExpr be s a
   -> QAgg be s a
 leadWithDefault_ (QExpr a) (QExpr n) (QExpr def) =
   QExpr (leadE <$> a <*> fmap Just n <*> fmap Just def)
@@ -75,8 +75,8 @@ lastValue_ (QExpr a) = QExpr (lastValueE <$> a)
 
 -- TODO see comment for 'firstValue_' and 'lastValue_'
 nthValue_
-  :: (BeamSqlBackend be, BeamSqlT618Backend be)
-  => QExpr be s a -> QExpr be s Int -> QAgg be s a
+  :: (BeamSqlBackend be, BeamSqlT618Backend be, Integral n)
+  => QExpr be s a -> QExpr be s n -> QAgg be s a
 nthValue_ (QExpr a) (QExpr n) = QExpr (nthValueE <$> a <*> n)
 
 ln_, exp_, sqrt_

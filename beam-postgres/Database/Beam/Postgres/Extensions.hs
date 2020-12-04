@@ -40,7 +40,7 @@ import           Data.Semigroup
 -- database,
 --
 -- @
--- import Database.Beam.Migrate.PgCrypto
+-- import Database.Beam.Postgres.PgCrypto
 --
 -- data MyDatabase entity
 --     = MyDatabase

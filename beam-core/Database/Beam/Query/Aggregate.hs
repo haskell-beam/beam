@@ -1,7 +1,7 @@
 module Database.Beam.Query.Aggregate
   ( -- * Aggregates
     -- | See the corresponding
-    --   <https://tathougies.github.io/beam/user-guide/queries/aggregates.md manual section>
+    --   <https://haskell-beam.github.io/beam/user-guide/queries/aggregates.md manual section>
     --   for more detail
 
     aggregate_
@@ -61,7 +61,7 @@ type Aggregable be a =
 --   'QExpr's).
 --
 --   For usage examples, see
---   <https://tathougies.github.io/beam/user-guide/queries/aggregates/ the manual>.
+--   <https://haskell-beam.github.io/beam/user-guide/queries/aggregates/ the manual>.
 aggregate_ :: forall be a r db s.
               ( BeamSqlBackend be
               , Aggregable be a, Projectible be r, Projectible be a
@@ -174,7 +174,7 @@ sum_ :: ( BeamSqlBackend be, Num a )
 sum_ = sumOver_ allInGroup_
 
 -- | SQL @COUNT(*)@ function
-countAll_ :: BeamSqlBackend be => QAgg be s Int
+countAll_ :: ( BeamSqlBackend be, Integral a ) => QAgg be s a
 countAll_ = QExpr (pure countAllE)
 
 -- | SQL @COUNT(ALL ..)@ function (but without the explicit ALL)
@@ -193,18 +193,18 @@ percentRank_ :: BeamSqlT612Backend be
 percentRank_ = QExpr (pure percentRankAggE)
 
 -- | SQL2003 @DENSE_RANK@ function (Requires T612 Advanced OLAP operations support)
-denseRank_ :: BeamSqlT612Backend be
-           => QAgg be s Int
+denseRank_ :: ( BeamSqlT612Backend be, Integral a )
+           => QAgg be s a
 denseRank_ = QExpr (pure denseRankAggE)
 
 -- | SQL2003 @ROW_NUMBER@ function
-rowNumber_ :: BeamSql2003ExpressionBackend be
-           =>  QAgg be s Int
+rowNumber_ :: ( BeamSql2003ExpressionBackend be, Integral a )
+           =>  QAgg be s a
 rowNumber_ = QExpr (pure rowNumberE)
 
 -- | SQL2003 @RANK@ function (Requires T611 Elementary OLAP operations support)
-rank_ :: BeamSqlT611Backend be
-      => QAgg be s Int
+rank_ :: ( BeamSqlT611Backend be, Integral a )
+      => QAgg be s a
 rank_ = QExpr (pure rankAggE)
 
 minOver_, maxOver_

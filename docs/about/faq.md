@@ -2,15 +2,9 @@
 
 ### `opaleye`
 
-`opaleye` has similar aims as beam. However, `beam`'s DSL is monadic,
-and eschews the use of arrows. We use a phantom scope parameter to
-achieve the same result (it's the `s` parameter in the `Q` and `QExpr`
-types). This allows you to write queries in the same way you'd use the
-list monad. Some people think this is more intuitive than arrows.
-
-Beam also uses higher-kinded types to allow the use of 'normal'
-haskell data types, rather than a fully polymorphic type. For example,
-in opaleye you may have to write
+`opaleye` has similar aims as beam. Beam uses higher-kinded types to
+allow the use of 'normal' haskell data types, rather than a fully
+polymorphic type. For example, in opaleye you may have to write
 
 ```haskell
 data Table column1 column2 column3 =

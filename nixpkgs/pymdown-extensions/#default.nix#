@@ -1,0 +1,19 @@
+{ stdenv, buildPythonPackage, markdown, fetchPypi }:
+
+buildPythonPackage rec {
+  pname = "pymdown-extensions";
+  version = "8.0";
+
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "0mkjbq6q6dkqqc57g1p1y9h8xh9asfrkmkl2fj8zk29vhawhs2s4";
+  };
+
+  propagatedBuildInputs = [ markdown ];
+
+  meta = {
+    homepage = https://github.com/facelessuser/pymdown-extensions;;
+    description = "Extension pack for Python Markdown.";
+    license = stdenv.lib.licenses.mit;
+  };
+}

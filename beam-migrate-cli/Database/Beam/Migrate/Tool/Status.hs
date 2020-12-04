@@ -7,7 +7,6 @@ import           Database.Beam.Migrate.Tool.CmdLine
 import           Database.Beam.Migrate.Tool.Diff
 import           Database.Beam.Migrate.Tool.Registry
 
-import           Data.Monoid
 import           Data.Text (unpack)
 import qualified Data.Text as T
 import           Data.Time (LocalTime)

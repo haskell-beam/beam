@@ -28,12 +28,12 @@ executable beam-migrate
                        Database.Beam.Migrate.Tool.Log
                        Database.Beam.Migrate.Tool.Migrate
   build-depends:       base                 >=4.9      && <5.0,
-                       beam-core            >=0.8      && <0.9,
-                       beam-migrate         >=0.4      && <0.5,
+                       beam-core            >=0.9      && <0.10,
+                       beam-migrate         >=0.4      && <0.6,
                        text                 >=1.2      && <1.3,
                        bytestring           >=0.10     && <0.11,
                        time                 >=1.6      && <1.10,
-                       optparse-applicative >=0.13     && <0.15,
+                       optparse-applicative >=0.13     && <0.16,
                        directory            >=1.2      && <1.4,
                        filepath             >=1.4      && <1.5,
                        largeword            >=1.2      && <1.3,
@@ -41,7 +41,7 @@ executable beam-migrate
                        fgl                  >=5.5      && <5.8,
                        containers           >=0.5      && <0.7,
                        unordered-containers >=0.2      && <0.3,
-                       hashable             >=1.2      && <1.3,
+                       hashable             >=1.2      && <1.4,
                        aeson                >=0.11     && <1.5,
                        unix                 >=2.7      && <2.8,
                        network              >=2.6      && <2.9,
@@ -50,7 +50,7 @@ executable beam-migrate
                        hint                 >=0.6      && <0.10,
                        random               >=1.1      && <1.2,
                        ansi-terminal        >=0.6      && <0.10,
-                       haskell-src-exts     >=1.18     && <1.22,
+                       haskell-src-exts     >=1.18     && <1.24,
                        cryptonite           >=0.23     && <0.26,
                        monad-loops          >=0.4      && <0.5,
                        exceptions           >=0.8      && <0.11,
@@ -72,5 +72,5 @@ flag werror
 
 source-repository head
   type: git
-  location: https://github.com/tathougies/beam.git
+  location: https://github.com/haskell-beam/beam.git
   subdir: beam-migrate-cli

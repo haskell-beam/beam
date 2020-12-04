@@ -24,7 +24,7 @@ Suppose we wanted to count the number of genres in our database.
 !beam-query
 ```haskell
 !example chinook
-aggregate_ (\_ -> countAll_) (all_ (genre chinookDb))
+aggregate_ (\_ -> as_ @Int32 countAll_) (all_ (genre chinookDb))
 ```
 
 ### Adding a GROUP BY clause
@@ -37,14 +37,14 @@ group by the genre.
 !beam-query
 ```haskell
 !example chinook
-aggregate_ (\(genre, track) -> (group_ genre, as_ @Int $ count_ (trackId track))) $ do
+aggregate_ (\(genre, track) -> (group_ genre, as_ @Int32 $ count_ (trackId track))) $ do
   g <- all_ (genre chinookDb)
   t <- genreTracks g
   pure (g, t)
 ```
 
 !!! tip "Tip"
-    `count_` can return any `Integral` type. Adding the explicit `as_ @Int` above
+    `count_` can return any `Integral` type. Adding the explicit `as_ @Int32` above
     prevents an ambiguous type error.
 
 ## SQL compatibility
@@ -71,7 +71,7 @@ to be explicit about it, you can use the `allInGroupExplicitly_` quantifier.
 !example chinook
 aggregate_ (\(genre, track) ->
               ( group_ genre
-              , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+              , as_ @Int32 $ countOver_ distinctInGroup_ (trackUnitPrice track)
               , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (fromMaybe_ 0 (trackMilliseconds track))) `div_` 1000)) $ do
   g <- all_ (genre chinookDb)
   t <- genreTracks g
@@ -114,7 +114,7 @@ subselect and add a `WHERE` clause. Either way, this is transparent to the user.
 filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
 aggregate_ (\(genre, track) ->
               ( group_ genre
-              , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+              , as_ @Int32 $ countOver_ distinctInGroup_ (trackUnitPrice track)
               , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
            ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
 ```
@@ -131,7 +131,7 @@ filter_ (\(genre, track, distinctPriceCount, totalTrackLength) -> totalTrackLeng
 do (genre, priceCnt, trackLength) <-
             aggregate_ (\(genre, track) ->
                           ( group_ genre
-                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , as_ @Int32 $ countOver_ distinctInGroup_ (trackUnitPrice track)
                           , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    track <- genreTracks genre
@@ -150,7 +150,7 @@ do (genre, priceCnt, trackLength) <-
             filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
             aggregate_ (\(genre, track) ->
                           ( group_ genre
-                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , as_ @Int32 $ countOver_ distinctInGroup_ (trackUnitPrice track)
                           , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    track <- genreTracks genre
@@ -171,7 +171,7 @@ do track_ <- all_ (track chinookDb)
             filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
             aggregate_ (\(genre, track) ->
                           ( group_ genre
-                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , as_ @Int32 $ countOver_ distinctInGroup_ (trackUnitPrice track)
                           , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    guard_ (trackGenreId track_ ==. just_ (pk genre))
@@ -191,7 +191,7 @@ do track_ <- all_ (track chinookDb)
             filter_ (\(genre, distinctPriceCount, totalTrackLength) -> totalTrackLength >=. 300000) $
             aggregate_ (\(genre, track) ->
                           ( group_ genre
-                          , as_ @Int $ countOver_ distinctInGroup_ (trackUnitPrice track)
+                          , as_ @Int32 $ countOver_ distinctInGroup_ (trackUnitPrice track)
                           , fromMaybe_ 0 (sumOver_ allInGroupExplicitly_ (trackMilliseconds track)) `div_` 1000 )) $
             ((,) <$> all_ (genre chinookDb) <*> all_ (track chinookDb))
    guard_ (trackGenreId track_ ==. just_ (pk genre))

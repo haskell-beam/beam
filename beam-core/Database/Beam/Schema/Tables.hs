@@ -76,11 +76,7 @@ import           Data.Char (isUpper, toLower)
 import           Data.Foldable (fold)
 import           Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
-import           Data.Monoid (Endo(..))
 import           Data.Proxy
-#if !MIN_VERSION_base(4,11,0)
-import           Data.Semigroup
-#endif
 import           Data.String (IsString(..))
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -96,9 +92,10 @@ import qualified Lens.Micro as Lens
 
 -- | Allows introspection into database types.
 --
---   All database types must be of kind '(* -> *) -> *'. If the type parameter
---   is named 'f', each field must be of the type of 'f' applied to some type
---   for which an 'IsDatabaseEntity' instance exists.
+--   All database types must be of kind '(Type -> Type) -> Type'. If
+--   the type parameter is named 'f', each field must be of the type
+--   of 'f' applied to some type for which an 'IsDatabaseEntity'
+--   instance exists.
 --
 --   The 'be' type parameter is necessary so that the compiler can
 --   ensure that backend-specific entities only work on the proper
@@ -106,7 +103,7 @@ import qualified Lens.Micro as Lens
 --
 --   Entities are documented under [the corresponding
 --   section](Database.Beam.Schema#entities) and in the
---   [manual](http://tathougies.github.io/beam/user-guide/databases/)
+--   [manual](https://haskell-beam.github.io/beam/user-guide/databases/)
 class Database be db where
 
     -- | Default derived function. Do not implement this yourself.
@@ -143,7 +140,7 @@ class Database be db where
 -- | Automatically provide names for tables, and descriptions for tables (using
 --   'defTblFieldSettings'). Your database must implement 'Generic', and must be
 --   auto-derivable. For more information on name generation, see the
---   [manual](https://tathougies.github.io/beam/user-guide/models)
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models)
 defaultDbSettings :: ( Generic (DatabaseSettings be db)
                      , GAutoDbSettings (Rep (DatabaseSettings be db) ()) ) =>
                      DatabaseSettings be db
@@ -280,11 +277,11 @@ instance IsString (FieldModification (TableField tbl) a) where
 -- * Database entity types
 
 -- | An entity tag for tables. See the documentation for 'Table' or consult the
---   [manual](https://tathougies.github.io/beam/user-guide/models) for more.
-data TableEntity (tbl :: (* -> *) -> *)
-data ViewEntity (view :: (* -> *) -> *)
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models) for more.
+data TableEntity (tbl :: (Type -> Type) -> Type)
+data ViewEntity (view :: (Type -> Type) -> Type)
 --data UniqueConstraint (tbl :: (* -> *) -> *) (c :: (* -> *) -> *)
-data DomainTypeEntity (ty :: *)
+data DomainTypeEntity (ty :: Type)
 --data CharacterSetEntity
 --data CollationEntity
 --data TranslationEntity
@@ -292,7 +289,7 @@ data DomainTypeEntity (ty :: *)
 
 class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) =>
     IsDatabaseEntity be entityType where
-  data DatabaseEntityDescriptor be entityType :: *
+  data DatabaseEntityDescriptor be entityType :: Type
   type DatabaseEntityDefaultRequirements be entityType :: Constraint
   type DatabaseEntityRegularRequirements be entityType :: Constraint
 
@@ -382,7 +379,7 @@ instance IsDatabaseEntity be (DomainTypeEntity ty) where
 -- | Represents a meta-description of a particular entityType. Mostly, a wrapper
 --   around 'DatabaseEntityDescriptor be entityType', but carries around the
 --   'IsDatabaseEntity' dictionary.
-data DatabaseEntity be (db :: (* -> *) -> *) entityType  where
+data DatabaseEntity be (db :: (Type -> Type) -> Type) entityType  where
     DatabaseEntity ::
       IsDatabaseEntity be entityType =>
       DatabaseEntityDescriptor be entityType ->  DatabaseEntity be db entityType
@@ -456,7 +453,7 @@ instance Database be db =>
   gZipDatabase _ combine ~(K1 x) ~(K1 y) =
     K1 <$> zipTables (Proxy :: Proxy be) combine x y
 
-data Lenses (t :: (* -> *) -> *) (f :: * -> *) x
+data Lenses (t :: (Type -> Type) -> Type) (f :: Type -> Type) x
 data LensFor t x where
     LensFor :: Generic t => Lens' t x -> LensFor t x
 
@@ -498,7 +495,7 @@ data LensFor t x where
 --   turned into query expressions.
 --
 --   The other rules are used within Beam to provide lenses and to expose the inner structure of the data type.
-type family Columnar (f :: * -> *) x where
+type family Columnar (f :: Type -> Type) x where
     Columnar Exposed x = Exposed x
 
     Columnar Identity x = x
@@ -536,7 +533,7 @@ newtype ComposeColumnar f g a = ComposeColumnar (f (Columnar g a))
 --   naming convention for you, and then modify it with 'withDbModification' if
 --   necessary. Under this scheme, the field n be renamed using the 'IsString'
 --   instance for 'TableField', or the 'fieldNamed' function.
-data TableField (table :: (* -> *) -> *) ty
+data TableField (table :: (Type -> Type) -> Type) ty
   = TableField
   { _fieldPath :: NE.NonEmpty T.Text
     -- ^ The path that led to this field. Each element is the haskell
@@ -583,12 +580,15 @@ type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed))
 
 -- | The big Kahuna! All beam tables implement this class.
 --
---   The kind of all table types is '(* -> *) -> *'. This is because all table types are actually /table type constructors/.
---   Every table type takes in another type constructor, called the /column tag/, and uses that constructor to instantiate the column types.
---   See the documentation for 'Columnar'.
+--   The kind of all table types is '(Type -> Type) -> Type'. This is
+--   because all table types are actually /table type constructors/.
+--   Every table type takes in another type constructor, called the
+--   /column tag/, and uses that constructor to instantiate the column
+--   types.  See the documentation for 'Columnar'.
 --
---   This class is mostly Generic-derivable. You need only specify a type for the table's primary key and a method to extract the primary key
---   given the table.
+--   This class is mostly Generic-derivable. You need only specify a
+--   type for the table's primary key and a method to extract the
+--   primary key given the table.
 --
 --   An example table:
 --
@@ -613,11 +613,11 @@ type HasBeamFields table f g h = ( GZipTables f g h (Rep (table Exposed))
 --       `_blogPostTagline` is declared 'Maybe' so 'Nothing' will be stored as NULL in the database. `_blogPostImageGallery` will be allowed to be empty because it uses the 'Nullable' tag modifier.
 --     * `blogPostAuthor` references the `AuthorT` table (not given here) and is required.
 --     * `blogPostImageGallery` references the `ImageGalleryT` table (not given here), but this relation is not required (i.e., it may be 'Nothing'. See 'Nullable').
-class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (table :: (* -> *) -> *) where
+class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (table :: (Type -> Type) -> Type) where
 
     -- | A data type representing the types of primary keys for this table.
     --   In order to play nicely with the default deriving mechanism, this type must be an instance of 'Generic'.
-    data PrimaryKey table (column :: * -> *) :: *
+    data PrimaryKey table (column :: Type -> Type) :: Type
 
     -- | Given a table, this should return the PrimaryKey from the table. By keeping this polymorphic over column,
     --   we ensure that the primary key values come directly from the table (i.e., they can't be arbitrary constants)
@@ -627,7 +627,7 @@ class (Typeable table, Beamable table, Beamable (PrimaryKey table)) => Table (ta
 --   to "zip" tables with different column tags together. Always instantiate an
 --   empty 'Beamable' instance for tables, primary keys, and any type that you
 --   would like to embed within either. See the
---   [manual](https://tathougies.github.io/beam/user-guide/models) for more
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models) for more
 --   information on embedding.
 class Beamable table where
     zipBeamFieldsM :: Applicative m =>
@@ -673,12 +673,12 @@ alongsideTable a b =
   zipBeamFieldsM (\x y -> pure (Columnar' (x :*: y))) a b
 
 class Retaggable f x | x -> f where
-  type Retag (tag :: (* -> *) -> * -> *) x :: *
+  type Retag (tag :: (Type -> Type) -> Type -> Type) x :: Type
 
   retag :: (forall a. Columnar' f a -> Columnar' (tag f) a) -> x
         -> Retag tag x
 
-instance Beamable tbl => Retaggable f (tbl (f :: * -> *)) where
+instance Beamable tbl => Retaggable f (tbl (f :: Type -> Type)) where
   type Retag tag (tbl f) = tbl (tag f)
 
   retag = changeBeamRep
@@ -746,14 +746,14 @@ instance ( Retaggable f' a, Retaggable f' b, Retaggable f' c, Retaggable f' d
     , retag transform e, retag transform f, retag transform g, retag transform h )
 
 -- | Carry a constraint instance and the value it applies to.
-data WithConstraint (c :: * -> Constraint) x where
+data WithConstraint (c :: Type -> Constraint) x where
   WithConstraint :: c x => x -> WithConstraint c x
 
 -- | Carry a constraint instance.
-data HasConstraint (c :: * -> Constraint) x where
+data HasConstraint (c :: Type -> Constraint) x where
   HasConstraint :: c x => HasConstraint c x
 
-class GFieldsFulfillConstraint (c :: * -> Constraint) (exposed :: * -> *) withconstraint where
+class GFieldsFulfillConstraint (c :: Type -> Constraint) (exposed :: Type -> Type) withconstraint where
   gWithConstrainedFields :: Proxy c -> Proxy exposed -> withconstraint ()
 instance GFieldsFulfillConstraint c exposed withconstraint =>
     GFieldsFulfillConstraint c (M1 s m exposed) (M1 s m withconstraint) where
@@ -790,11 +790,11 @@ withNullableConstrainedFields = runIdentity . zipBeamFieldsM f (withNullableCons
 withNullableConstraints ::  forall c tbl. (Beamable tbl, FieldsFulfillConstraintNullable c tbl) => tbl (Nullable (HasConstraint c))
 withNullableConstraints = to $ gWithConstrainedFields (Proxy @c) (Proxy @(Rep (tbl (Nullable Exposed))))
 
-type FieldsFulfillConstraint (c :: * -> Constraint) t =
+type FieldsFulfillConstraint (c :: Type -> Constraint) t =
   ( Generic (t (HasConstraint c)), Generic (t Identity), Generic (t Exposed)
   , GFieldsFulfillConstraint c (Rep (t Exposed)) (Rep (t (HasConstraint c))))
 
-type FieldsFulfillConstraintNullable (c :: * -> Constraint) t =
+type FieldsFulfillConstraintNullable (c :: Type -> Constraint) t =
   ( Generic (t (Nullable (HasConstraint c))), Generic (t (Nullable Identity)), Generic (t (Nullable Exposed))
   , GFieldsFulfillConstraint c (Rep (t (Nullable Exposed))) (Rep (t (Nullable (HasConstraint c)))))
 
@@ -804,7 +804,7 @@ pk = primaryKey
 
 -- | Return a 'TableSettings' for the appropriate 'table' type where each column
 --   has been given its default name. See the
---   [manual](https://tathougies.github.io/beam/user-guide/models) for
+--   [manual](https://haskell-beam.github.io/beam/user-guide/models) for
 --   information on the default naming convention.
 defTblFieldSettings :: ( Generic (TableSettings table)
                        , GDefaultTableFieldSettings (Rep (TableSettings table) ())) =>
@@ -813,7 +813,7 @@ defTblFieldSettings = withProxy $ \proxy -> to' (gDefTblFieldSettings proxy)
     where withProxy :: (Proxy (Rep (TableSettings table) ()) -> TableSettings table) -> TableSettings table
           withProxy f = f Proxy
 
-class GZipTables f g h (exposedRep :: * -> *) fRep gRep hRep where
+class GZipTables f g h (exposedRep :: Type -> Type) fRep gRep hRep where
     gZipTables :: Applicative m => Proxy exposedRep
                                 -> (forall a. Columnar' f a -> Columnar' g a -> m (Columnar' h a))
                                 -> fRep ()
@@ -898,20 +898,20 @@ data SubTableStrategy
   | BeamableStrategy
   | RecursiveKeyStrategy
 
-type family ChooseSubTableStrategy (tbl :: (* -> *) -> *) (sub :: (* -> *) -> *) :: SubTableStrategy where
+type family ChooseSubTableStrategy (tbl :: (Type -> Type) -> Type) (sub :: (Type -> Type) -> Type) :: SubTableStrategy where
   ChooseSubTableStrategy tbl (PrimaryKey tbl) = 'RecursiveKeyStrategy
   ChooseSubTableStrategy tbl (PrimaryKey rel) = 'PrimaryKeyStrategy
   ChooseSubTableStrategy tbl sub = 'BeamableStrategy
 
 -- TODO is this necessary
-type family CheckNullable (f :: * -> *) :: Constraint where
+type family CheckNullable (f :: Type -> Type) :: Constraint where
   CheckNullable (Nullable f) = ()
-  CheckNullable f = TypeError ('Text "Recursive reference without Nullable constraint forms an infinite loop." ':$$:
+  CheckNullable f = TypeError ('Text "Recursive references without Nullable constraint form an infinite loop." ':$$:
                                'Text "Hint: Only embed nullable 'PrimaryKey tbl' within the definition of 'tbl'." ':$$:
                                'Text "      For example, replace 'PrimaryKey tbl f' with 'PrimaryKey tbl (Nullable f)'")
 
 
-class SubTableStrategyImpl (strategy :: SubTableStrategy) (f :: * -> *) sub where
+class SubTableStrategyImpl (strategy :: SubTableStrategy) (f :: Type -> Type) sub where
   namedSubTable :: Proxy strategy -> sub f
 
 -- The defaulting with @TableField rel@ is necessary to avoid infinite loops

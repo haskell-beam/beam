@@ -24,7 +24,7 @@ For example, to delete any invoice with more than five invoice lines
 ```haskell
 !example chinookdml !on:Postgres !on:MySQL
 runDelete $ delete (invoice chinookDb)
-  (\i -> 5 <. subquery_ (aggregate_ (\_ -> countAll_) $
+  (\i -> 5 <. subquery_ (aggregate_ (\_ -> as_ @Int32 countAll_) $
                          invoiceLines i))
 ```
 

@@ -12,12 +12,10 @@ import Control.Monad.Free.Church
 import Control.Monad.Writer hiding ((<>))
 import Control.Monad.State.Strict
 
-import Data.Text (Text)
-import Data.String
+import Data.Kind (Type)
 import Data.Proxy (Proxy(Proxy))
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
+import Data.String
+import Data.Text (Text)
 
 data Recursiveness be where
     Nonrecursive :: Recursiveness be
@@ -26,12 +24,12 @@ data Recursiveness be where
 
 instance Monoid (Recursiveness be) where
     mempty = Nonrecursive
-    mappend Recursive _ = Recursive
-    mappend _ Recursive = Recursive
-    mappend _ _ = Nonrecursive
+    mappend = (<>)
 
 instance Semigroup (Recursiveness be) where
-  (<>) = mappend
+    Recursive <> _ = Recursive
+    _ <> Recursive = Recursive
+    _ <> _ = Nonrecursive
 
 -- | Monad in which @SELECT@ statements can be made (via 'selecting')
 -- and bound to result names for re-use later. This has the advantage
@@ -45,8 +43,8 @@ instance Semigroup (Recursiveness be) where
 -- (with @RecursiveDo@ enabled) to bind result values (again, using
 -- 'reuse') even /before/ they're introduced.
 --
--- See further documentation <http://tathougies.github.io/beam/user-guide/queries/common-table-expressions/ here>.
-newtype With be (db :: (* -> *) -> *) a
+-- See further documentation <https://haskell-beam.github.io/beam/user-guide/queries/common-table-expressions/ here>.
+newtype With be (db :: (Type -> Type) -> Type) a
     = With { runWith :: WriterT (Recursiveness be, [ BeamSql99BackendCTESyntax be ])
                                 (State Int) a }
     deriving (Monad, Applicative, Functor)

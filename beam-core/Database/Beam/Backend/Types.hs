@@ -7,12 +7,12 @@ module Database.Beam.Backend.Types
 
   ) where
 
-import           GHC.Types
+import GHC.Types
 
 -- | Class for all Beam backends
 class BeamBackend be where
   -- | Requirements to marshal a certain type from a database of a particular backend
-  type BackendFromField be :: * -> Constraint
+  type BackendFromField be :: Type -> Constraint
 
 -- | newtype mainly used to inspect the tag structure of a particular
 --   'Beamable'. Prevents overlapping instances in some case. Usually not used
@@ -27,4 +27,4 @@ data Exposed x
 -- >                 deriving (Generic, Typeable)
 --
 -- See 'Columnar' for more information.
-data Nullable (c :: * -> *) x
+data Nullable (c :: Type -> Type) x

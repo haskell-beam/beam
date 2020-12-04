@@ -19,6 +19,7 @@ module Database.Beam.Query
 
     , QBaseScope
 
+
     , module Database.Beam.Query.Combinators
     , module Database.Beam.Query.Extensions
 
@@ -32,7 +33,6 @@ module Database.Beam.Query
     , module Database.Beam.Query.Operator
 
     -- ** ANSI SQL Booleans
-    , Beam.SqlBool
     , isTrue_, isNotTrue_
     , isFalse_, isNotFalse_
     , isUnknown_, isNotUnknown_
@@ -42,8 +42,9 @@ module Database.Beam.Query
 
     -- ** Unquantified comparison operators
     , HasSqlEqualityCheck(..), HasSqlQuantifiedEqualityCheck(..)
+    , HasTableEquality
     , SqlEq(..), SqlOrd(..), SqlIn(..)
-    , HasSqlInTable
+    , HasSqlInTable(..)
 
     -- ** Quantified Comparison Operators #quantified-comparison-operator#
     , SqlEqQuantified(..), SqlOrdQuantified(..)
@@ -79,10 +80,13 @@ module Database.Beam.Query
     -- ** @UPDATE@
     , SqlUpdate(..)
     , update, save
-    , updateTable, set, setFieldsTo
+    , update', save'
+    , updateTable, updateTable'
+    , set, setFieldsTo
     , toNewValue, toOldValue, toUpdatedValue
     , toUpdatedValueMaybe
     , updateRow, updateTableRow
+    , updateRow', updateTableRow'
     , runUpdate
 
     -- ** @DELETE@
@@ -101,8 +105,7 @@ import Database.Beam.Query.DataTypes
 import Database.Beam.Query.Extensions
 import Database.Beam.Query.Extract
 import Database.Beam.Query.Internal
-import Database.Beam.Query.Operator hiding (SqlBool)
-import qualified Database.Beam.Query.Operator as Beam
+import Database.Beam.Query.Operator
 import Database.Beam.Query.Ord
 import Database.Beam.Query.Relationships
 import Database.Beam.Query.Types (QGenExpr) -- hide QGenExpr constructor
@@ -116,6 +119,7 @@ import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.State.Strict
 
+import Data.Kind (Type)
 import Data.Functor.Const (Const(..))
 import Data.Text (Text)
 import Data.Proxy
@@ -202,7 +206,7 @@ dumpSqlSelect q =
 -- * INSERT
 
 -- | Represents a SQL @INSERT@ command that has not yet been run
-data SqlInsert be (table :: (* -> *) -> *)
+data SqlInsert be (table :: (Type -> Type) -> Type)
   = SqlInsert !(TableSettings table) !(BeamSqlBackendInsertSyntax be)
   | SqlInsertNoRows
 
@@ -241,7 +245,7 @@ runInsert (SqlInsert _ i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
 --   'tbl'.
-data SqlInsertValues be proj --(tbl :: (* -> *) -> *)
+data SqlInsertValues be proj
     = SqlInsertValues (BeamSqlBackendInsertValuesSyntax be)
     | SqlInsertValuesEmpty
 
@@ -287,12 +291,42 @@ insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 -- * UPDATE
 
 -- | Represents a SQL @UPDATE@ statement for the given @table@.
-data SqlUpdate be (table :: (* -> *) -> *)
+data SqlUpdate be (table :: (Type -> Type) -> Type)
   = SqlUpdate !(TableSettings table) !(BeamSqlBackendUpdateSyntax be)
   | SqlIdentityUpdate -- An update with no assignments
 
 -- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
 --   build a @WHERE@ clause.
+--
+--   An internal implementation for 'update' and 'update'' functions.
+--   Allows to choose boolean type in the @WHERE@ clause.
+updateImpl :: forall bool table db be
+            . ( BeamSqlBackend be, Beamable table )
+           => DatabaseEntity be db (TableEntity table)
+              -- ^ The table to insert into
+           -> (forall s. table (QField s) -> QAssignment be s)
+              -- ^ A sequence of assignments to make.
+           -> (forall s. table (QExpr be s) -> QExpr be s bool)
+              -- ^ Build a @WHERE@ clause given a table containing expressions
+           -> SqlUpdate be table
+updateImpl (DatabaseEntity dt@(DatabaseTable {})) mkAssignments mkWhere =
+  case assignments of
+    [] -> SqlIdentityUpdate
+    _  -> SqlUpdate (dbTableSettings dt)
+                    (updateStmt (tableNameFromEntity dt)
+                       assignments (Just (where_ "t")))
+  where
+    QAssignment assignments = mkAssignments tblFields
+    QExpr where_ = mkWhere tblFieldExprs
+
+    tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
+                              (dbTableSettings dt)
+    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
+
+-- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
+--   build a @WHERE@ clause.
+--
+--   Use 'update'' for comparisons with 'SqlBool'.
 --
 --   See the '(<-.)' operator for ways to build assignments. The argument to the
 --   second argument is a the table parameterized over 'QField', which
@@ -307,21 +341,31 @@ update :: ( BeamSqlBackend be, Beamable table )
        -> (forall s. table (QExpr be s) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlUpdate be table
-update (DatabaseEntity dt@(DatabaseTable {})) mkAssignments mkWhere =
-  case assignments of
-    [] -> SqlIdentityUpdate
-    _  -> SqlUpdate (dbTableSettings dt)
-                    (updateStmt (tableNameFromEntity dt)
-                       assignments (Just (where_ "t")))
-  where
-    QAssignment assignments = mkAssignments tblFields
-    QExpr where_ = mkWhere tblFieldExprs
+update = updateImpl @Bool
 
-    tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
-                              (dbTableSettings dt)
-    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
+-- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
+--   build a @WHERE@ clause.
+--
+--   Uses a 'SqlBool' comparison. Use 'update' for comparisons with 'Bool'.
+--
+--   See the '(<-.)' operator for ways to build assignments. The argument to the
+--   second argument is a the table parameterized over 'QField', which
+--   represents the left hand side of assignments. Sometimes, you'd like to also
+--   get the current value of a particular column. You can use the 'current_'
+--   function to convert a 'QField' to a 'QExpr'.
+update' :: ( BeamSqlBackend be, Beamable table )
+        => DatabaseEntity be db (TableEntity table)
+           -- ^ The table to insert into
+        -> (forall s. table (QField s) -> QAssignment be s)
+           -- ^ A sequence of assignments to make.
+        -> (forall s. table (QExpr be s) -> QExpr be s SqlBool)
+           -- ^ Build a @WHERE@ clause given a table containing expressions
+        -> SqlUpdate be table
+update' = updateImpl @SqlBool
 
--- | A specialization of 'update' that matches the given (already existing) row
+-- | A specialization of 'update' that matches the given (already existing) row.
+--
+--   Use 'updateRow'' for an internal 'SqlBool' comparison.
 updateRow :: ( BeamSqlBackend be, Table table
              , HasTableEquality be (PrimaryKey table)
              , SqlValableTable be (PrimaryKey table) )
@@ -332,19 +376,38 @@ updateRow :: ( BeamSqlBackend be, Table table
           -> (forall s. table (QField s) -> QAssignment be s)
              -- ^ A sequence of assignments to make.
           -> SqlUpdate be table
-updateRow tbl row update' =
-  update tbl update' (references_ (val_ (pk row)))
+updateRow tbl row assignments =
+  update tbl assignments (references_ (val_ (pk row)))
+
+-- | A specialization of 'update'' that matches the given (already existing) row.
+--
+--   Use 'updateRow' for an internal 'Bool' comparison.
+updateRow' :: ( BeamSqlBackend be, Table table
+              , HasTableEquality be (PrimaryKey table)
+              , SqlValableTable be (PrimaryKey table) )
+           => DatabaseEntity be db (TableEntity table)
+              -- ^ The table to insert into
+           -> table Identity
+              -- ^ The row to update
+           -> (forall s. table (QField s) -> QAssignment be s)
+              -- ^ A sequence of assignments to make.
+           -> SqlUpdate be table
+updateRow' tbl row assignments =
+  update' tbl assignments (references_' (val_ (pk row)))
 
 -- | A specialization of 'update' that is more convenient for normal tables.
-updateTable :: forall table db be
-             . ( BeamSqlBackend be, Beamable table )
-            => DatabaseEntity be db (TableEntity table)
-               -- ^ The table to update
-            -> table (QFieldAssignment be table)
-               -- ^ Updates to be made (use 'set' to construct an empty field)
-            -> (forall s. table (QExpr be s) -> QExpr be s Bool)
-            -> SqlUpdate be table
-updateTable tblEntity assignments mkWhere =
+--
+--   An internal implementation of 'updateTable' and 'updateTable'' functions.
+--   Allows choosing between 'Bool' and 'SqlBool'.
+updateTableImpl :: forall bool table db be
+                 . ( BeamSqlBackend be, Beamable table )
+                => DatabaseEntity be db (TableEntity table)
+                   -- ^ The table to update
+                -> table (QFieldAssignment be table)
+                   -- ^ Updates to be made (use 'set' to construct an empty field)
+                -> (forall s. table (QExpr be s) -> QExpr be s bool)
+                -> SqlUpdate be table
+updateTableImpl tblEntity assignments mkWhere =
   let mkAssignments :: forall s. table (QField s) -> QAssignment be s
       mkAssignments tblFields =
         let tblExprs = changeBeamRep (\(Columnar' fd) -> Columnar' (current_ fd)) tblFields
@@ -359,10 +422,38 @@ updateTable tblEntity assignments mkWhere =
                     pure c)
              tblFields assignments
 
-  in update tblEntity mkAssignments mkWhere
+  in updateImpl tblEntity mkAssignments mkWhere
+
+-- | A specialization of 'update' that is more convenient for normal tables.
+--
+--   Use 'updateTable'' for comparisons with 'SqlBool'.
+updateTable :: forall table db be
+             . ( BeamSqlBackend be, Beamable table )
+            => DatabaseEntity be db (TableEntity table)
+               -- ^ The table to update
+            -> table (QFieldAssignment be table)
+               -- ^ Updates to be made (use 'set' to construct an empty field)
+            -> (forall s. table (QExpr be s) -> QExpr be s Bool)
+            -> SqlUpdate be table
+updateTable = updateTableImpl @Bool
+
+-- | A specialization of 'update'' that is more convenient for normal tables.
+--
+--   Use 'updateTable' for comparisons with 'Bool'.
+updateTable' :: forall table db be
+              . ( BeamSqlBackend be, Beamable table )
+             => DatabaseEntity be db (TableEntity table)
+                -- ^ The table to update
+             -> table (QFieldAssignment be table)
+                -- ^ Updates to be made (use 'set' to construct an empty field)
+             -> (forall s. table (QExpr be s) -> QExpr be s SqlBool)
+             -> SqlUpdate be table
+updateTable' = updateTableImpl @SqlBool
 
 -- | Convenience form of 'updateTable' that generates a @WHERE@ clause
--- that matches only the already existing entity
+-- that matches only the already existing entity.
+--
+-- Use 'updateTableRow'' for an internal 'SqlBool' comparison.
 updateTableRow :: ( BeamSqlBackend be, Table table
                   , HasTableEquality be (PrimaryKey table)
                   , SqlValableTable be (PrimaryKey table) )
@@ -373,8 +464,26 @@ updateTableRow :: ( BeamSqlBackend be, Table table
                -> table (QFieldAssignment be table)
                   -- ^ Updates to be made (use 'set' to construct an empty field)
                -> SqlUpdate be table
-updateTableRow tbl row update' =
-  updateTable tbl update' (references_ (val_ (pk row)))
+updateTableRow tbl row assignments =
+  updateTable tbl assignments (references_ (val_ (pk row)))
+
+-- | Convenience form of 'updateTable'' that generates a @WHERE@ clause
+-- that matches only the already existing entity.
+--
+-- Uses 'update'' with a 'SqlBool' comparison.
+-- Use 'updateTableRow' for an internal 'Bool' comparison.
+updateTableRow' :: ( BeamSqlBackend be, Table table
+                   , HasTableEquality be (PrimaryKey table)
+                   , SqlValableTable be (PrimaryKey table) )
+                => DatabaseEntity be db (TableEntity table)
+                   -- ^ The table to update
+                -> table Identity
+                   -- ^ The row to update
+                -> table (QFieldAssignment be table)
+                   -- ^ Updates to be made (use 'set' to construct an empty field)
+                -> SqlUpdate be table
+updateTableRow' tbl row assignments =
+  updateTable' tbl assignments (references_' (val_ (pk row)))
 
 set :: forall table be table'. Beamable table => table (QFieldAssignment be table')
 set = changeBeamRep (\_ -> Columnar' (QFieldAssignment (\_ -> Nothing))) (tblSkeleton :: TableSkeleton table)
@@ -429,6 +538,8 @@ toUpdatedValueMaybe = QFieldAssignment
 --   the row where each primary key field is exactly what is given.
 --
 --   Note: This is a pure SQL @UPDATE@ command. This does not upsert or merge values.
+--
+--   Use 'save'' for an internal 'SqlBool' comparison.
 save :: forall table be db.
         ( Table table
         , BeamSqlBackend be
@@ -447,6 +558,33 @@ save tbl v =
   updateTableRow tbl v
     (setFieldsTo (val_ v))
 
+-- | Generate a 'SqlUpdate' that will update the given table row with the given value.
+-- This is a variant using 'update'' and a 'SqlBool' comparison.
+--
+--   The SQL @UPDATE@ that is generated will set every non-primary key field for
+--   the row where each primary key field is exactly what is given.
+--
+--   Note: This is a pure SQL @UPDATE@ command. This does not upsert or merge values.
+--
+--   Use 'save' for an internal 'Bool' comparison.
+save' :: forall table be db.
+         ( Table table
+         , BeamSqlBackend be
+
+         , SqlValableTable be (PrimaryKey table)
+         , SqlValableTable be table
+
+         , HasTableEquality be (PrimaryKey table)
+         )
+      => DatabaseEntity be db (TableEntity table)
+         -- ^ Table to update
+      -> table Identity
+         -- ^ Value to set to
+      -> SqlUpdate be table
+save' tbl v =
+  updateTableRow' tbl v
+    (setFieldsTo (val_ v))
+
 -- | Run a 'SqlUpdate' in a 'MonadBeam'.
 runUpdate :: (BeamSqlBackend be, MonadBeam be m)
           => SqlUpdate be tbl -> m ()
@@ -456,7 +594,7 @@ runUpdate SqlIdentityUpdate = pure ()
 -- * DELETE
 
 -- | Represents a SQL @DELETE@ statement for the given @table@
-data SqlDelete be (table :: (* -> *) -> *)
+data SqlDelete be (table :: (Type -> Type) -> Type)
   = SqlDelete !(TableSettings table) !(BeamSqlBackendDeleteSyntax be)
 
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause
