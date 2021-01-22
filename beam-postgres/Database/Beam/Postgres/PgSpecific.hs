@@ -1407,8 +1407,7 @@ pgUnnest :: forall tbl db s
           . Beamable tbl
          => QExpr Postgres s (PgSetOf tbl)
          -> Q Postgres db s (QExprTable Postgres s tbl)
-pgUnnest (QExpr q) =
-  pgUnnest' (\t -> pgParens (fromPgExpression (q t)))
+pgUnnest (QExpr q) = pgUnnest' $ fromPgExpression . q
 
 data PgUnnestArrayTbl a f = PgUnnestArrayTbl (C f a)
   deriving Generic
