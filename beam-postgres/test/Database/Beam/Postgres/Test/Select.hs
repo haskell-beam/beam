@@ -40,6 +40,7 @@ tests getConn = testGroup "Selection Tests"
       ]
   , testInRowValues getConn
   , testReturningMany getConn
+  , testPgUnnest getConn
   ]
 
 testPgArrayToJSON :: IO ByteString -> TestTree
@@ -103,3 +104,13 @@ testReturningMany getConn = testCase "runReturningMany (batching via cursor) wor
 testFunction :: IO ByteString -> String -> (Connection -> Assertion) -> TestTree
 testFunction getConn name mkAssertion = testCase name $
   withTestPostgres name getConn mkAssertion
+
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/541 #541>
+testPgUnnest :: IO ByteString -> TestTree
+testPgUnnest getConn = testCase "pgUnnest works" $
+  withTestPostgres "pg_unnest" getConn $ \conn -> do
+    let values = [Bool True, Number 1]
+    result <- runBeamPostgres conn $ runSelectReturningList $ select $
+      pgUnnest $ pgJsonArrayElements $ val_ $
+        PgJSONB $ Array $ V.fromList values
+    assertEqual "result" (PgJSONB <$> values) $ pgJsonElement <$> result
