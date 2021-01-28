@@ -143,7 +143,7 @@ runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
     step (ParseOneField _) curCol colCount _
       | curCol >= colCount = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
     step (ParseOneField (next' :: next -> _)) curCol colCount (field:remainingFields) =
-      do fieldValue <- Pg.getvalue res rowIdx (Pg.Col curCol)
+      do fieldValue <- Pg.getvalue' res rowIdx (Pg.Col curCol)
          res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res' of
            Pg.Errors errs ->
