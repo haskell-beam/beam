@@ -35,7 +35,6 @@ let
   };
 
   composeExtensionList = lib.foldr lib.composeExtensions (_: _: {});
-  mergeMaps = lib.foldr (a: b: a // b) {};
   applyToPackages = f: packages: _: super: lib.genAttrs packages
     (name: f super."${name}");
 
@@ -64,8 +63,10 @@ let
       beam-postgres = haskell.lib.addBuildTool super.beam-postgres postgresql;
     })
   ]);
-  mkPrefixedPackages = ghc: lib.mapAttrs'
-    (name: value: lib.nameValuePair "${ghc.name}_${name}" value)
-    (lib.genAttrs beamPackages (name: (mkPackageSet ghc.value)."${name}"));
+  mkPrefixedPackages = ghcVersion: ghc: { recurseForDerivations = true; } //
+    (lib.mapAttrs'
+      (name: value: lib.nameValuePair "${ghcVersion}_${name}" value)
+      (lib.genAttrs beamPackages (name: (mkPackageSet ghc)."${name}"))
+    );
 
-in mergeMaps (map mkPrefixedPackages (lib.mapAttrsToList lib.nameValuePair ghcVersions))
+in lib.mapAttrs mkPrefixedPackages ghcVersions
