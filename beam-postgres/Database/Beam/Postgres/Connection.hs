@@ -1,16 +1,17 @@
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-partial-type-signatures #-}
 
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PartialTypeSignatures      #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TupleSections              #-}
 
 module Database.Beam.Postgres.Connection
   ( Pg(..), PgF(..)
@@ -72,6 +73,7 @@ import           Data.Semigroup
 #endif
 
 import           Foreign.C.Types
+import           System.Clock
 
 import           Network.URI (uriToString)
 
@@ -117,7 +119,7 @@ pgRenderSyntax conn (PgSyntax mkQuery) =
       res <- go
       case res of
         Right res' -> pure res'
-        Left res' -> fail (step' <> ": " <> show res')
+        Left res'  -> fail (step' <> ": " <> show res')
 
 -- * Run row readers
 
@@ -191,24 +193,29 @@ withPgDebug dbg conn (Pg action) =
                            next) =
         do query <- pgRenderSyntax conn syntax
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-           dbg (decodeUtf8 query)
            action' <- runF process finishProcess stepProcess Nothing
-           case action' of
-             PgStreamDone (Right x) -> Pg.execute_ conn (Pg.Query query) >> next x
-             PgStreamDone (Left err) -> pure (Left err)
-             PgStreamContinue nextStream ->
-               let finishUp (PgStreamDone (Right x)) = next x
-                   finishUp (PgStreamDone (Left err)) = pure (Left err)
-                   finishUp (PgStreamContinue next') = next' Nothing >>= finishUp
+           (res, extime) <-
+             case action' of
+                PgStreamDone (Right x) -> do
+                  start <- getTime Monotonic
+                  Pg.execute_ conn (Pg.Query query)
+                  end <- getTime Monotonic
+                  (, Just (end - start)) <$> next x
+                PgStreamDone (Left err) -> pure (Left err, Nothing)
+                PgStreamContinue nextStream ->
+                  let finishUp (PgStreamDone (Right x)) = (, Nothing) <$> next x
+                      finishUp (PgStreamDone (Left err)) = pure (Left err, Nothing)
+                      finishUp (PgStreamContinue next') = next' Nothing >>= finishUp
 
-                   columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
-               in do resp <- Pg.queryWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query)
-                     foldM runConsumer (PgStreamContinue nextStream) resp >>= finishUp
+                      columnCount = fromIntegral $ valuesNeeded (Proxy @Postgres) (Proxy @x)
+                  in do resp <- Pg.queryWith_ (Pg.RP (put columnCount >> ask)) conn (Pg.Query query)
+                        foldM runConsumer (PgStreamContinue nextStream) resp >>= finishUp
+           dbg (decodeUtf8 query <> " Executed in: " <> T.pack (show extime) <> " seconds ") >> return res
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (decodeUtf8 query)
 
            res <- Pg.exec conn query
+           dbg (decodeUtf8 query)
            sts <- Pg.resultStatus res
            case sts of
              Pg.TuplesOk -> do
@@ -218,9 +225,8 @@ withPgDebug dbg conn (Pg action) =
                                       res sts
       step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
-           dbg (decodeUtf8 query)
            _ <- Pg.execute_ conn (Pg.Query query)
-
+           dbg (decodeUtf8 query)
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
            runF process next stepReturningNone
 
@@ -239,7 +245,7 @@ withPgDebug dbg conn (Pg action) =
              then next Nothing rowIdx
              else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
                     Left err -> pure (Left err)
-                    Right r -> next (Just r) (rowIdx + 1)
+                    Right r  -> next (Just r) (rowIdx + 1)
       stepReturningList _   (PgRunReturning _ _ _) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
       stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
 
@@ -256,17 +262,17 @@ withPgDebug dbg conn (Pg action) =
             getFields res' >>= \fields ->
             runPgRowReader conn rowIdx res' fields fromBackendRow >>= \case
               Left err -> pure (PgStreamDone (Left err))
-              Right r -> next (Just r) Nothing
+              Right r  -> next (Just r) Nothing
       stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
         getFields res >>= \fields ->
         runPgRowReader conn rowIdx res fields fromBackendRow >>= \case
           Left err -> pure (PgStreamDone (Left err))
-          Right r -> pure (PgStreamContinue (next (Just r)))
+          Right r  -> pure (PgStreamContinue (next (Just r)))
       stepProcess (PgRunReturning _ _ _) _ = pure (PgStreamDone (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed"))))
       stepProcess (PgLiftWithHandle _ _) _ = pure (PgStreamDone (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed"))))
 
       runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
-      runConsumer s@(PgStreamDone {}) _ = pure s
+      runConsumer s@(PgStreamDone {}) _       = pure s
       runConsumer (PgStreamContinue next) row = next (Just row)
   in runF action finish step
 
