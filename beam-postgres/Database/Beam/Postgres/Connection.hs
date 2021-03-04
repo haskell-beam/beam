@@ -214,8 +214,11 @@ withPgDebug dbg conn (Pg action) =
       step (PgRunReturning (PgCommandSyntax PgCommandTypeDataUpdateReturning syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
 
+           start <- getTime Monotonic
            res <- Pg.exec conn query
-           dbg (decodeUtf8 query)
+           end <- getTime Monotonic
+           let extime = end - start
+           dbg (decodeUtf8 query <> " Executed in: " <> T.pack (show extime) <> " seconds ")
            sts <- Pg.resultStatus res
            case sts of
              Pg.TuplesOk -> do
@@ -225,8 +228,11 @@ withPgDebug dbg conn (Pg action) =
                                       res sts
       step (PgRunReturning (PgCommandSyntax _ syntax) mkProcess next) =
         do query <- pgRenderSyntax conn syntax
+           start <- getTime Monotonic
            _ <- Pg.execute_ conn (Pg.Query query)
-           dbg (decodeUtf8 query)
+           end <- getTime Monotonic
+           let extime = end - start
+           dbg (decodeUtf8 query <> " Executed in: " <> T.pack (show extime) <> " seconds ")
            let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
            runF process next stepReturningNone
 
