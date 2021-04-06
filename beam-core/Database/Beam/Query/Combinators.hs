@@ -84,6 +84,8 @@ import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
 
+import GHC.TypeLits
+
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: ( Database be db, BeamSqlBackend be )
        => DatabaseEntity be db (TableEntity table)
@@ -655,6 +657,11 @@ class SqlOrderable be a | a -> be where
     makeSQLOrdering :: Proxy be -> a -> [ WithExprContext (BeamSqlBackendOrderingSyntax be) ]
 instance SqlOrderable be (QOrd be s a) where
     makeSQLOrdering _ (QOrd x) = [x]
+
+instance TypeError ('Text "Use either 'asc_' or 'desc_' to define sorting order.") =>
+    SqlOrderable be (QGenExpr ctx be s a) where
+        makeSQLOrdering = error "SqlOrderable QGenExpr unreachable"
+
 instance SqlOrderable be a => SqlOrderable be [a] where
     makeSQLOrdering be = concatMap (makeSQLOrdering be)
 instance ( SqlOrderable be a, SqlOrderable be b ) => SqlOrderable be (a, b) where
