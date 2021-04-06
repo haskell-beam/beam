@@ -658,7 +658,7 @@ class SqlOrderable be a | a -> be where
 instance SqlOrderable be (QOrd be s a) where
     makeSQLOrdering _ (QOrd x) = [x]
 
-instance TypeError ('Text "Use either 'asc_' or 'desc_' to define sorting order.") =>
+instance TypeError ('Text "Unspecified sorting order" ':<>: 'Text "Use either 'asc_' or 'desc_' to specify sorting order") =>
     SqlOrderable be (QGenExpr ctx be s a) where
         makeSQLOrdering = error "SqlOrderable QGenExpr unreachable"
 
