@@ -84,7 +84,7 @@ import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
 
-import GHC.TypeLits
+import GHC.TypeLits (TypeError, ErrorMessage(Text))
 
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: ( Database be db, BeamSqlBackend be )
@@ -660,7 +660,7 @@ instance SqlOrderable be (QOrd be s a) where
 
 instance TypeError ('Text "Missing mandatory sorting order. Use either 'asc_' or 'desc_' to specify sorting order.") =>
     SqlOrderable be (QGenExpr ctx be s a) where
-        makeSQLOrdering = error "SqlOrderable QGenExpr unreachable"
+        makeSQLOrdering = error "unreachable SqlOrderable QGenExpr instance"
 
 instance SqlOrderable be a => SqlOrderable be [a] where
     makeSQLOrdering be = concatMap (makeSQLOrdering be)
