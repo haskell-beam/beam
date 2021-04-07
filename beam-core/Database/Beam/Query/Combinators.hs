@@ -657,11 +657,9 @@ class SqlOrderable be a | a -> be where
     makeSQLOrdering :: Proxy be -> a -> [ WithExprContext (BeamSqlBackendOrderingSyntax be) ]
 instance SqlOrderable be (QOrd be s a) where
     makeSQLOrdering _ (QOrd x) = [x]
-
 instance TypeError ('Text "Missing mandatory sorting order. Use either 'asc_' or 'desc_' to specify sorting order.") =>
     SqlOrderable be (QGenExpr ctx be s a) where
         makeSQLOrdering = error "unreachable SqlOrderable QGenExpr instance"
-
 instance SqlOrderable be a => SqlOrderable be [a] where
     makeSQLOrdering be = concatMap (makeSQLOrdering be)
 instance ( SqlOrderable be a, SqlOrderable be b ) => SqlOrderable be (a, b) where
