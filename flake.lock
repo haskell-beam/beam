@@ -7,11 +7,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1602680967,
-        "narHash": "sha256-1HMQMb/G6xWQ0ujxBwsycs1OZLicgZvMdXf4Kxn9rWs=",
-        "ref": "wip",
-        "rev": "b0c06dde67a97629c544d1287a21059aa248d91a",
-        "revCount": 23,
+        "lastModified": 1611066903,
+        "narHash": "sha256-W6TW3VUboJeEuanClxs/ZK59Lxavq4toO9H5VlLdXTw=",
+        "ref": "master",
+        "rev": "aa20a46b6ae5d638c23fa009fb1dd9b07727ffa2",
+        "revCount": 27,
         "type": "git",
         "url": "ssh://git@bitbucket.org/juspay/euler-build"
       },
@@ -40,33 +40,33 @@
         "stdlib": "stdlib"
       },
       "locked": {
-        "lastModified": 1592950149,
-        "narHash": "sha256-tZSz9/WkOrtNbW7U2re4WoFPQ2tQX0I0GpCeoF3fY1M=",
-        "owner": "manveru",
+        "lastModified": 1604413592,
+        "narHash": "sha256-3cr2RRBCXNb+6Q1s3tEQiN4LjoFC8OsMSG8WuCyGe/g=",
+        "owner": "juspay",
         "repo": "nix-inclusive",
-        "rev": "dd80ddcc6850d130b591fbc9b0aacacfbb3cf47c",
+        "rev": "2ca1706029bfcf4bb7eaf17b4f32e49f436a148e",
         "type": "github"
       },
       "original": {
-        "owner": "manveru",
+        "owner": "juspay",
         "repo": "nix-inclusive",
-        "rev": "dd80ddcc6850d130b591fbc9b0aacacfbb3cf47c",
+        "rev": "2ca1706029bfcf4bb7eaf17b4f32e49f436a148e",
         "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1589844680,
-        "narHash": "sha256-I4OYatIJsEZvEUkAGdTlJjAuUuAq7A1GA/kepUQic1o=",
+        "lastModified": 1607690238,
+        "narHash": "sha256-9QFXxj6pjmHr+950E3/gXo9cz50l0AbFCHZR5eixkXw=",
         "owner": "NixOS",
-        "repo": "nixpkgs-channels",
-        "rev": "0f5ce2fac0c726036ca69a5524c59a49e2973dd4",
+        "repo": "nixpkgs",
+        "rev": "8006772a054ce57ca18c5955dcd6ec9a62577473",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
-        "repo": "nixpkgs-channels",
-        "rev": "0f5ce2fac0c726036ca69a5524c59a49e2973dd4",
+        "repo": "nixpkgs",
+        "rev": "8006772a054ce57ca18c5955dcd6ec9a62577473",
         "type": "github"
       }
     },
