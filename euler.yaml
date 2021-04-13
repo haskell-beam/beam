@@ -38,8 +38,8 @@ projects:
 default-project: beam-core
 dependencies:
   euler-build:
-    branch: master
-    revision: aa20a46b6ae5d638c23fa009fb1dd9b07727ffa2
+    branch: nixpkgs-darwin
+    revision: 02598dbbb80662947305b394b1b1e8d0bb55d639
 overrides:
   haskell-src-exts:
     source: hackage
