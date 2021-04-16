@@ -75,6 +75,7 @@ import           Data.Semigroup
 import           GHC.TypeLits
 
 import           Database.SQLite.Simple (SQLData(..))
+import           Database.SQLite.Simple.ToField (toField)
 
 import           GHC.Float
 import           GHC.Generics
@@ -963,8 +964,7 @@ instance HasSqlValueSyntax SqliteValueSyntax ByteString where
   sqlValueSyntax bs = SqliteValueSyntax (emitValue (SQLBlob bs))
 
 instance HasSqlValueSyntax SqliteValueSyntax UTCTime where
-  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
-    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S%Q")) tm
+  sqlValueSyntax tm = SqliteValueSyntax (emitValue (toField tm))
 
 instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
