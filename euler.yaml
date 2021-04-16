@@ -46,3 +46,5 @@ overrides:
     version: 1.21.1
     sha256: 06b37iis7hfnc770gb3jn12dy3yngqcfdraynbvy3n7s0hlv2hcw
     enable-profiling: true
+  haskell-src-meta:
+    enable-profiling: true

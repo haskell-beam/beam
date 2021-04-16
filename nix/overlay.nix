@@ -65,6 +65,12 @@ super.eulerBuild.mkEulerHaskellOverlay self super
         enableProfiling = true;
       };
     };
+    haskell-src-meta = self.eulerBuild.fastBuildExternal {
+      drv = super.haskell.lib.unmarkBroken (hsuper.haskell-src-meta);
+      overrides = {
+        enableProfiling = true;
+      };
+    };
     beam-core = self.eulerBuild.fastBuild {
       drv = super.haskell.lib.unmarkBroken (hself.callCabal2nix "beam-core" beam-core-src { });
     };
