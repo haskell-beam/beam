@@ -11,20 +11,20 @@
 -- == Checked databases
 --
 -- A checked database is similar to the 'DatabaseSettings' type from
--- @beam-core@. Whereas a 'DatabaseSettings' object consists of a set of
+-- @beam-core@ except it comes with a set of /predicates/.
+-- Whereas a 'DatabaseSettings' object consists of a set of
 -- database entities, a checked database (represented by the
 -- 'CheckedDatabaseSettings' type) consists of a set of database entities along
 -- with a set of /predicates/ (represented by types implementing
--- 'DatabasePredicate').except it comes with a set of /predicates/.The
--- /predicates/ are facts about a given database schema. For example, a checked
--- database with a table named "Customers", would have a 'TableExistsPredicate'
--- in its predicate set.
+-- 'DatabasePredicate'). The /predicates/ are facts about a given
+-- database schema. For example, a checked database with a table named
+-- "Customers", would have a 'TableExistsPredicate' in its predicate set.
 --
 -- Predicates can be used to verify that a given beam schema is compatible with
 -- a backend database or to generate migrations from a schema satisfying one set
 -- of predicates to a schema satisfying another. Beam migrate provides a solver
 -- for figuring out the exact sequence of steps needed to accomplish this. Beam
--- backends can provide additioqnal predicates and solvers to implement
+-- backends can provide additional predicates and solvers to implement
 -- backend-specific migrations. For example, the @beam-postgres@ backend
 -- provides predicates to assert that extensions have been loaded, and solvers
 -- for emitting proper @CREATE EXTENSION@ statements where appropriate.
@@ -36,7 +36,7 @@
 -- SQL DDL syntax. The @beam-migrate@ module provides a DDL syntax for Haskell
 -- in "Database.Beam.Haskell.Syntax". This allows @beam-migrate@ to translate
 -- predicate sets into the corresponding Haskell schema and the corresponding
--- Haskell migration script. This reflection allows tool based off of
+-- Haskell migration script. This reflection allows tools based off of
 -- @beam-migrate@ to support schema generation from an existing database.
 --
 -- For more information on checked databases, see the

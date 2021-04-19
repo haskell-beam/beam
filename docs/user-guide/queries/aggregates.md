@@ -102,7 +102,7 @@ on that backend (if not, please send a bug report).
 ### The `HAVING` clause
 
 SQL allows users to specify a `HAVING` condition to filter results based on the
-computed result of an aggregate. Beam fully supports `HAVIVG` clauses, but does
+computed result of an aggregate. Beam fully supports `HAVING` clauses, but does
 not use any special syntax. Simply use `filter_` or `guard_` as usual, and beam
 will add a `HAVING` clause if it forms legal SQL. Otherwise, beam will create a
 subselect and add a `WHERE` clause. Either way, this is transparent to the user.
