@@ -288,7 +288,7 @@ related_ :: forall be db rel s
 related_ relTbl relKey =
   join_ relTbl (\rel -> relKey ==. primaryKey rel)
 
--- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
+-- | Introduce all entries of the given table for which the expression (which can depend on the queried table returns true)
 relatedBy_ :: forall be db rel s
             . ( Database be db, Table rel, BeamSqlBackend be )
            => DatabaseEntity be db (TableEntity rel)
@@ -296,7 +296,7 @@ relatedBy_ :: forall be db rel s
            -> Q be db s (rel (QExpr be s))
 relatedBy_ = join_
 
--- | Introduce all entries of the given table which for which the expression (which can depend on the queried table returns true)
+-- | Introduce all entries of the given table for which the expression (which can depend on the queried table returns true)
 relatedBy_' :: forall be db rel s
              . ( Database be db, Table rel, BeamSqlBackend be )
             => DatabaseEntity be db (TableEntity rel)
@@ -816,7 +816,7 @@ coalesce_ qs (QExpr onNull) =
     onNull' <- onNull
     coalesceE . (<> [onNull']) <$> mapM (\(QExpr q) -> q) qs
 
--- | Converta a 'Maybe' value to a concrete value, by suppling a default
+-- | Convert a 'Maybe' value to a concrete value, by suppling a default
 fromMaybe_ :: BeamSqlBackend be
            => QGenExpr ctxt be s a -> QGenExpr ctxt be s (Maybe a) -> QGenExpr ctxt be s a
 fromMaybe_ onNull q = coalesce_ [q] onNull

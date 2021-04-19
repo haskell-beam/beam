@@ -148,7 +148,7 @@ type DatabaseModification f be db = db (EntityModification f be)
 --   contstruct these for you.
 newtype EntityModification f be e = EntityModification (Endo (f e))
   deriving (Monoid, Semigroup)
--- | A newtype wrapper around 'Columnar f a -> Columnar f ' (i.e., an
+-- | A newtype wrapper around 'Columnar f a -> Columnar f a' (i.e., an
 --   endomorphism between 'Columnar's over 'f'). You usually want to use
 --   'fieldNamed' or the 'IsString' instance to rename the field, when 'f ~
 --   TableField'

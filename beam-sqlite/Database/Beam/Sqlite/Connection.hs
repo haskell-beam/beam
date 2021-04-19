@@ -188,7 +188,7 @@ instance FieldReturnType 'True 'False Sqlite resTy a =>
 instance BeamSqlBackendHasSerial Sqlite where
   genericSerial nm = Beam.field nm (DataType sqliteSerialType) SqliteHasDefault
 
--- | 'MonadBeam' instance inside whiche SQLite queries are run. See the
+-- | 'MonadBeam' instance inside which SQLite queries are run. See the
 -- <https://haskell-beam.github.io/beam/ user guide> for more information
 newtype SqliteM a
   = SqliteM

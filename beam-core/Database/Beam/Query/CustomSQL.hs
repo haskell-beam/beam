@@ -31,7 +31,7 @@
 --   is called with arguments representing SQL expressions, that, when
 --   evaluated, will evaluate to the result of the expressions supplied as
 --   arguments to 'customExpr_'. See the section on
---   <https://haskell-beam.github.io/beam/user-guide/extensibility/ extensibility>
+--   <https://haskell-beam.github.io/beam/user-guide/extensibility/extensibility>
 --   in the user guide for example usage.
 module Database.Beam.Query.CustomSQL
   (
@@ -108,4 +108,3 @@ valueExpr_ = id
 --   aggregates for use in 'aggregate_'.
 agg_ :: QAgg be s a -> QAgg be s a
 agg_ = id
-
