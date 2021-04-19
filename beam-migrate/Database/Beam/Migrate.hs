@@ -16,10 +16,9 @@
 -- database entities, a checked database (represented by the
 -- 'CheckedDatabaseSettings' type) consists of a set of database entities along
 -- with a set of /predicates/ (represented by types implementing
--- 'DatabasePredicate').The
--- /predicates/ are facts about a given database schema. For example, a checked
--- database with a table named "Customers", would have a 'TableExistsPredicate'
--- in its predicate set.
+-- 'DatabasePredicate'). The /predicates/ are facts about a given
+-- database schema. For example, a checked database with a table named
+-- "Customers", would have a 'TableExistsPredicate' in its predicate set.
 --
 -- Predicates can be used to verify that a given beam schema is compatible with
 -- a backend database or to generate migrations from a schema satisfying one set
