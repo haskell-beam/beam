@@ -842,6 +842,8 @@ instance GDefaultTableFieldSettings (p x) => GDefaultTableFieldSettings (C1 f p 
     gDefTblFieldSettings (_ :: Proxy (C1 f p x)) = M1 $ gDefTblFieldSettings (Proxy :: Proxy (p x))
 instance (GDefaultTableFieldSettings (a p), GDefaultTableFieldSettings (b p)) => GDefaultTableFieldSettings ((a :*: b) p) where
     gDefTblFieldSettings (_ :: Proxy ((a :*: b) p)) = gDefTblFieldSettings (Proxy :: Proxy (a p)) :*: gDefTblFieldSettings (Proxy :: Proxy (b p))
+instance GDefaultTableFieldSettings (U1 p) where
+    gDefTblFieldSettings _ = U1
 
 instance Selector f  =>
     GDefaultTableFieldSettings (S1 f (K1 Generic.R (TableField table field)) p) where
