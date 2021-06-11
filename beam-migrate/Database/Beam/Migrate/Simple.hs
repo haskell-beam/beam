@@ -129,7 +129,7 @@ bringUpToDateWithHooks :: forall db be m
 bringUpToDateWithHooks hooks be@(BeamMigrationBackend { backendRenderSyntax = renderSyntax' }) steps = do
   ensureBackendTables be
 
-  entries <- runSelectReturningList $ select $
+  entries <- runSelectReturningList $ select $ orderBy_ (asc_ . _logEntryId) $
              all_ (_beamMigrateLogEntries (beamMigrateDb @be @m))
   let verifyMigration :: Int -> T.Text -> Migration be a -> StateT [LogEntry] (WriterT (Max Int) m) a
       verifyMigration stepIx stepNm step =
