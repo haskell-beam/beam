@@ -59,16 +59,18 @@ infixr 3 &&., &&?.
 infixr 2 ||., ||?.
 
 -- | SQL @LIKE@ operator
-like_ :: ( BeamSqlBackendIsString be text
+like_ :: ( BeamSqlBackendIsString be left
+         , BeamSqlBackendIsString be right
          , BeamSqlBackend be )
-      => QGenExpr ctxt be s text -> QGenExpr ctxt be s text -> QGenExpr ctxt be s Bool
+      => QGenExpr ctxt be s left -> QGenExpr ctxt be s right -> QGenExpr ctxt be s Bool
 like_ (QExpr scrutinee) (QExpr search) =
   QExpr (liftA2 likeE scrutinee search)
 
 -- | SQL99 @SIMILAR TO@ operator
-similarTo_ :: ( BeamSqlBackendIsString be text
+similarTo_ :: ( BeamSqlBackendIsString be left
+              , BeamSqlBackendIsString be right
               , BeamSql99ExpressionBackend be )
-           => QGenExpr ctxt be s text -> QGenExpr ctxt be s text -> QGenExpr ctxt be s text
+           => QGenExpr ctxt be s left -> QGenExpr ctxt be s right -> QGenExpr ctxt be s left
 similarTo_ (QExpr scrutinee) (QExpr search) =
   QExpr (liftA2 similarToE scrutinee search)
 

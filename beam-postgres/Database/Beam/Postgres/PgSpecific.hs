@@ -164,9 +164,11 @@ now_ :: QExpr Postgres s LocalTime
 now_ = QExpr (\_ -> PgExpressionSyntax (emit "NOW()"))
 
 -- | Postgres @ILIKE@ operator. A case-insensitive version of 'like_'.
-ilike_ :: BeamSqlBackendIsString Postgres text
-       => QExpr Postgres s text
-       -> QExpr Postgres s text
+ilike_ :: ( BeamSqlBackendIsString Postgres left
+          , BeamSqlBackendIsString Postgres right
+          )
+       => QExpr Postgres s left
+       -> QExpr Postgres s right
        -> QExpr Postgres s Bool
 ilike_ (QExpr a) (QExpr b) = QExpr (pgBinOp "ILIKE" <$> a <*> b)
 
@@ -1551,4 +1553,3 @@ instance HasDefaultSqlDataType Postgres a
 -- 'pgUnnestArrayWithOrdinality' function allows you to join against the
 -- elements of an array along with its index. This corresponds to the
 -- @UNNEST .. WITH ORDINALITY@ clause.
-
