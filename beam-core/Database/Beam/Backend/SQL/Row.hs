@@ -3,6 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PolyKinds #-}
 
 module Database.Beam.Backend.SQL.Row
@@ -57,7 +58,11 @@ data FromBackendRowF be f where
   ParseOneField :: (BackendFromField be a, Typeable a) => (a -> f) -> FromBackendRowF be f
   Alt :: FromBackendRowM be a -> FromBackendRowM be a -> (a -> f) -> FromBackendRowF be f
   FailParseWith :: BeamRowReadError -> FromBackendRowF be f
-deriving instance Functor (FromBackendRowF be)
+instance Functor (FromBackendRowF be) where
+  fmap f = \case
+    ParseOneField p -> ParseOneField $ f . p
+    Alt a b p -> Alt a b $ f . p
+    FailParseWith e -> FailParseWith e
 newtype FromBackendRowM be a = FromBackendRowM (F (FromBackendRowF be) a)
   deriving (Functor, Applicative)
 
