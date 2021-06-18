@@ -66,7 +66,7 @@ library
                        bytestring   >=0.10    && <0.11,
                        mtl          >=2.2.1   && <2.3,
                        microlens    >=0.4     && <0.5,
-                       ghc-prim     >=0.5     && <0.7,
+                       ghc-prim     >=0.5     && <0.8,
                        free         >=4.12    && <5.2,
                        dlist        >=0.7.1.2 && <0.9,
                        time         >=1.6     && <1.10,
