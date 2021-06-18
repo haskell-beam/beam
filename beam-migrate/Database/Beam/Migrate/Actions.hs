@@ -301,16 +301,13 @@ createTableActionProvider =
               guard (preTblNm == postTblNm)
 
          (columnsP, columns) <- pure . unzip $
-           do columnP@
-                (TableHasColumn tblNm colNm schema :: TableHasColumn be) <-
+           do columnP@(TableHasColumn tblNm colNm schema :: TableHasColumn be) <-
                 findPostConditions
               guard (tblNm == postTblNm && dataTypeHasBeenCreated schema findPreConditions)
 
               (constraintsP, constraints) <-
                 pure . unzip $ do
-                constraintP@
-                  (TableColumnHasConstraint tblNm' colNm' c
-                   :: TableColumnHasConstraint be) <-
+                constraintP@(TableColumnHasConstraint tblNm' colNm' c :: TableColumnHasConstraint be) <-
                   findPostConditions
                 guard (postTblNm == tblNm')
                 guard (colNm == colNm')
@@ -379,9 +376,7 @@ addColumnProvider =
 
          (constraintsP, constraints) <-
            pure . unzip $ do
-           constraintP@
-             (TableColumnHasConstraint tblNm'' colNm' c
-              :: TableColumnHasConstraint be) <-
+           constraintP@(TableColumnHasConstraint tblNm'' colNm' c :: TableColumnHasConstraint be) <-
              findPostConditions
            guard (tblNm == tblNm'')
            guard (colNm == colNm')
