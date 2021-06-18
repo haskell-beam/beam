@@ -289,7 +289,12 @@ data PgF next where
         FromBackendRow Postgres x =>
         (Maybe x -> next) -> PgF next
     PgLiftWithHandle :: ((String -> IO ()) -> Pg.Connection -> IO a) -> (a -> next) -> PgF next
-deriving instance Functor PgF
+instance Functor PgF where
+  fmap f = \case
+    PgLiftIO io n -> PgLiftIO io $ f . n
+    PgRunReturning mode cmd consume n -> PgRunReturning mode cmd consume $ f . n
+    PgFetchNext n -> PgFetchNext $ f . n
+    PgLiftWithHandle withConn n -> PgLiftWithHandle withConn $ f . n
 
 -- | How to fetch results.
 data FetchMode
