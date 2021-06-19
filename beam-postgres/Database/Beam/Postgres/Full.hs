@@ -381,7 +381,7 @@ deleteReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSett
   emit " RETURNING " <>
   pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t"))
   where
-    SqlDelete _ pgDelete = delete table mkWhere
+    SqlDelete _ pgDelete = delete table $ \t -> mkWhere t
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
 runPgDeleteReturningList

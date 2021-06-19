@@ -25,16 +25,19 @@ tests getConn = testGroup "Selection Tests"
       [ testPgArrayToJSON getConn
       ]
   , testGroup "UUID"
-      [ testUuidFunction getConn "uuid_nil" pgUuidNil
-      , testUuidFunction getConn "uuid_ns_dns" pgUuidNsDns
-      , testUuidFunction getConn "uuid_ns_url" pgUuidNsUrl
-      , testUuidFunction getConn "uuid_ns_oid" pgUuidNsOid
-      , testUuidFunction getConn "uuid_ns_x500" pgUuidNsX500
-      , testUuidFunction getConn "uuid_generate_v1" pgUuidGenerateV1
-      , testUuidFunction getConn "uuid_generate_v1mc" pgUuidGenerateV1Mc
+      [ testUuidFunction getConn "uuid_nil" $ \ext -> pgUuidNil ext
+      , testUuidFunction getConn "uuid_ns_dns" $ \ext -> pgUuidNsDns ext
+      , testUuidFunction getConn "uuid_ns_url" $ \ext -> pgUuidNsUrl ext
+      , testUuidFunction getConn "uuid_ns_oid" $ \ext -> pgUuidNsOid ext
+      , testUuidFunction getConn "uuid_ns_x500" $ \ext -> pgUuidNsX500 ext
+      , testUuidFunction getConn "uuid_generate_v1" $ \ext ->
+          pgUuidGenerateV1 ext
+      , testUuidFunction getConn "uuid_generate_v1mc" $ \ext ->
+          pgUuidGenerateV1Mc ext
       , testUuidFunction getConn "uuid_generate_v3" $ \ext ->
           pgUuidGenerateV3 ext (val_ nil) "nil"
-      , testUuidFunction getConn "uuid_generate_v4" pgUuidGenerateV4
+      , testUuidFunction getConn "uuid_generate_v4" $ \ext ->
+          pgUuidGenerateV4 ext
       , testUuidFunction getConn "uuid_generate_v5" $ \ext ->
           pgUuidGenerateV5 ext (val_ nil) "nil"
       ]
