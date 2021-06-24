@@ -1,3 +1,14 @@
+# 0.5.1.0
+
+## Added features
+
+ * `MonadBase` and `MonadBaseControl` instances for `Pg`
+
+## Bug fixes
+
+ * Fix possible memory corruption by copying row data
+ * Remove invalid parentheses emitted by `pgUnnest`
+
 # 0.5.0.0
 
 ## Interface changes

@@ -1,6 +1,11 @@
+# 0.5.1.0
+
+## Added features
+
+ * `MonadBase` and `MonadBaseControl` instances for `SqliteM`
+
 # 0.5.0.0
 
-=======
 ## Interface changes
 
  * Removed instances for machine-dependent ambiguous integer types `Int` and `Word`
