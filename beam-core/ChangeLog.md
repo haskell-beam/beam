@@ -1,3 +1,9 @@
+# 0.9.1.0
+
+## Added features
+
+ * Improve error message when `asc_` or `desc_` is missing in `orderBy_`
+
 # 0.9.0.0
 
 ## Removal of machine-dependent `Int`/`Word` instances
