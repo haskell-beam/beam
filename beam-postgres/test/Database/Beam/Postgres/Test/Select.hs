@@ -5,7 +5,6 @@ module Database.Beam.Postgres.Test.Select (tests) where
 import           Data.Aeson
 import           Data.ByteString (ByteString)
 import           Data.Int
-import           Data.Text (Text)
 import qualified Data.Vector as V
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -80,9 +79,9 @@ testInRowValues :: IO ByteString -> TestTree
 testInRowValues getConn = testCase "IN with row values works" $
   withTestPostgres "db_in_row_values" getConn $ \conn -> do
     result <- runBeamPostgres conn $ runSelectReturningList $ select $ do
-      let p :: forall ctx s. Pair (QGenExpr ctx Postgres s)
-          p = val_ $ Pair False False
-      return $ p `in_` [p, p]
+      let pair :: forall ctx s. Pair (QGenExpr ctx Postgres s)
+          pair = val_ $ Pair False False
+      return $ pair `in_` [pair, pair]
     assertEqual "result" [True] result
 
 testReturningMany :: IO ByteString -> TestTree

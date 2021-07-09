@@ -29,7 +29,7 @@ module Database.Beam.Migrate.SQL.Tables
     -- ** Internal classes
     --    Provided without documentation for use in type signatures
   , FieldReturnType(..)
-  , IsNotNull(..)
+  , IsNotNull
   ) where
 
 import Database.Beam

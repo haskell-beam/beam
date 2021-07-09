@@ -7,7 +7,6 @@ import Database.Beam
 import Database.Beam.Backend.SQL
 import Database.Beam.Migrate
 import Database.Beam.Migrate.Backend
-import Database.Beam.Migrate.Types.Predicates (QualifiedName(..))
 
 import Control.Monad (when)
 

@@ -2,7 +2,6 @@
 
 module Database.Beam.Sqlite.Test.Select (tests) where
 
-import Control.Exception
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
 import Test.Tasty.HUnit
