@@ -1,5 +1,4 @@
 site_name: Beam Documentation
-theme: material #readthedocs
 theme:
   name: material
   custom_dir: docs/theme
