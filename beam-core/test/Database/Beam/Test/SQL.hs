@@ -868,7 +868,7 @@ tableEquality =
 related :: TestTree
 related =
   testCase "related_ generate the correct ON conditions" $
-  do SqlSelect Select { .. } <-
+  do SqlSelect Select{} <-
        pure $ selectMock $
        do r <- all_ (_roles employeeDbSettings)
           e <- related_ (_employees employeeDbSettings) (_roleForEmployee r)

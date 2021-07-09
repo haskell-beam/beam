@@ -13,7 +13,6 @@ import           Database.Beam.Postgres.Test
 import           Data.ByteString (ByteString)
 import           Data.Functor.Classes
 import           Data.Int
-import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import           Data.Typeable
 import           Data.UUID (UUID, fromWords)

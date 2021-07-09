@@ -139,7 +139,7 @@ data DatabaseState be
 deriving instance Show (BeamSqlBackendSyntax be) => Show (DatabaseState be)
 
 instance NFData (DatabaseState cmd) where
-  rnf d@DatabaseState {..} = d `seq` ()
+  rnf d@DatabaseState{} = d `seq` ()
 
 -- | Wrapper for 'DatabaseState' that keeps track of the command sequence length
 -- and goal distance. Used for sorting states when conducting the search.
