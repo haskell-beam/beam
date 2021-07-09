@@ -21,3 +21,5 @@ site
 TAGS
 .DS_Store
 docs/ChinookData
+result
+result-*
