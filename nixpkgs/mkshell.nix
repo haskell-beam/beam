@@ -1,7 +1,11 @@
-{ nixpkgs ? import <nixpkgs> {}, ghc ? nixpkgs.haskell.packages.ghc884.ghc, docs ? false }:
-with nixpkgs;
+{ nixpkgs ? import <nixpkgs> {}
+, nixpkgs-docs ? import ./pinned-docs.nix {}
+, ghc ? nixpkgs.ghc
+, docs ? false
+}:
 
 let
+  python37Packages = nixpkgs-docs.python37Packages;
   fetchPypi = python37Packages.fetchPypi;
 
   pep562 = python37Packages.callPackage ./pep562 {};
@@ -10,16 +14,34 @@ let
   mkdocs-minify-plugin = python37Packages.callPackage ./mkdocs-minify-plugin { inherit mkdocs; };
   mkdocs-material = python37Packages.callPackage ./mkdocs-material { inherit pymdown-extensions mkdocs-minify-plugin mkdocs; };
 
-  beamPython = python37.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ps.pyyaml ]);
+  beamPython = nixpkgs-docs.python37.withPackages (ps: [ mkdocs mkdocs-material ps.sqlparse ps.pyyaml ]);
 
-  docsRequirements = [ bash beamPython mkdocs pv sqlite
-                       ncurses libcxx icu gcc mysql zlib openssl stack
-                       gnupg dos2unix vim pcre git ];
+  docsRequirements = [
+    beamPython
+    mkdocs
+  ] ++ (with nixpkgs-docs; [
+    bash
+    pv
+    sqlite
+    ncurses
+    libcxx
+    icu
+    gcc
+    mysql
+    zlib
+    openssl
+    stack
+    gnupg
+    dos2unix
+    vim
+    pcre
+    git
+  ]);
 in
-  haskell.lib.buildStackProject {
+  nixpkgs.haskell.lib.buildStackProject {
     inherit ghc;
     name = "beam-env";
-    buildInputs = [ postgresql ] ++ stdenv.lib.optionals docs docsRequirements;
+    buildInputs = [ nixpkgs.postgresql ] ++ nixpkgs.stdenv.lib.optionals docs docsRequirements;
     LANG = "en_us.UTF-8";
     python = beamPython;
   }
