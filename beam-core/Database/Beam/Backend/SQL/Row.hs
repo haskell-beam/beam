@@ -12,6 +12,9 @@ module Database.Beam.Backend.SQL.Row
   , ColumnParseError(..), BeamRowReadError(..)
 
   , FromBackendRow(..)
+
+    -- * Exported so we can override defaults
+  , GFromBackendRow(..) -- for 'runSelectReturningList' and co
   ) where
 
 import           Database.Beam.Backend.SQL.Types
