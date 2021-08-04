@@ -33,7 +33,7 @@ library
                       bytestring    >=0.10 && <0.11,
                       hashable      >=1.2  && <1.4,
                       time          >=1.6  && <1.10,
-                      dlist         >=0.8  && <0.9,
+                      dlist         >=0.8  && <1.1,
                       mtl           >=2.1  && <2.3,
                       free          >=4.12 && <5.2,
                       scientific    >=0.3  && <0.4,
