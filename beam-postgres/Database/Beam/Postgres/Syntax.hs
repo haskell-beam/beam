@@ -120,7 +120,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import           Data.Time (LocalTime, UTCTime, TimeOfDay, NominalDiffTime, Day)
-import           Data.UUID.Types (UUID)
+import           Data.UUID.Types (UUID, toASCIIBytes)
 import           Data.Word
 import qualified Data.Vector as V
 import           GHC.TypeLits
@@ -1197,7 +1197,6 @@ DEFAULT_SQL_SYNTAX(UTCTime)
 DEFAULT_SQL_SYNTAX(TimeOfDay)
 DEFAULT_SQL_SYNTAX(NominalDiffTime)
 DEFAULT_SQL_SYNTAX(Day)
-DEFAULT_SQL_SYNTAX(UUID)
 DEFAULT_SQL_SYNTAX([Char])
 DEFAULT_SQL_SYNTAX(Pg.HStoreMap)
 DEFAULT_SQL_SYNTAX(Pg.HStoreList)
@@ -1224,6 +1223,12 @@ instance HasSqlValueSyntax PgValueSyntax B.ByteString where
 
 instance HasSqlValueSyntax PgValueSyntax BL.ByteString where
   sqlValueSyntax = defaultPgValueSyntax . Pg.Binary
+
+-- This should be removed in favor of the default syntax if/when
+-- https://github.com/lpsmith/postgresql-simple/issues/277 is fixed upstream.
+instance HasSqlValueSyntax PgValueSyntax UUID where
+  sqlValueSyntax v = PgValueSyntax $
+    emit "'" <> emit (toASCIIBytes v) <> emit "'::uuid"
 
 instance Pg.ToField a => HasSqlValueSyntax PgValueSyntax (V.Vector a) where
   sqlValueSyntax = defaultPgValueSyntax

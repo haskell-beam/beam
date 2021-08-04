@@ -9,6 +9,7 @@ import qualified Data.Vector as V
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Data.UUID (UUID, nil)
+import qualified Data.UUID.V5 as V5
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL.SQL92
@@ -39,6 +40,7 @@ tests getConn = testGroup "Selection Tests"
           pgUuidGenerateV4 ext
       , testUuidFunction getConn "uuid_generate_v5" $ \ext ->
           pgUuidGenerateV5 ext (val_ nil) "nil"
+      , testUuuidInValues getConn
       ]
   , testInRowValues getConn
   , testReturningMany getConn
@@ -69,6 +71,19 @@ testUuidFunction getConn name mkUuid = testFunction getConn name $ \conn ->
     [_] <- runSelectReturningList $ select $
       return $ mkUuid $ getPgExtension $ _uuidOssp $ unCheckDatabase db
     return ()
+
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/555 #555>
+testUuuidInValues :: IO ByteString -> TestTree
+testUuuidInValues getConn = testCase "UUID in values_ works" $
+  withTestPostgres "uuid_values" getConn $ \conn -> do
+    result <- runBeamPostgres conn $ do
+      db <- executeMigration runNoReturn $ UuidSchema <$>
+        pgCreateExtension @UuidOssp
+      let ext = getPgExtension $ _uuidOssp $ unCheckDatabase db
+      runSelectReturningList $ select $ do
+        v <- values_ [val_ nil]
+        return $ pgUuidGenerateV5 ext v ""
+    assertEqual "result" [V5.generateNamed nil []] result
 
 data Pair f = Pair
   { _left :: C f Bool
