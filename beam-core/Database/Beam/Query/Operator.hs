@@ -6,6 +6,7 @@ module Database.Beam.Query.Operator
   , (&&?.), (||?.), sqlNot_
 
   , like_, similarTo_
+  , like_', similarTo_'
 
   , concat_
   ) where
@@ -59,19 +60,43 @@ infixr 3 &&., &&?.
 infixr 2 ||., ||?.
 
 -- | SQL @LIKE@ operator
-like_ :: ( BeamSqlBackendIsString be left
-         , BeamSqlBackendIsString be right
-         , BeamSqlBackend be )
-      => QGenExpr ctxt be s left -> QGenExpr ctxt be s right -> QGenExpr ctxt be s Bool
-like_ (QExpr scrutinee) (QExpr search) =
+like_
+  :: (BeamSqlBackendIsString be text, BeamSqlBackend be)
+  => QGenExpr ctxt be s text
+  -> QGenExpr ctxt be s text
+  -> QGenExpr ctxt be s Bool
+like_ = like_'
+
+-- | SQL @LIKE@ operator but heterogeneous over the text type
+like_'
+  :: ( BeamSqlBackendIsString be left
+     , BeamSqlBackendIsString be right
+     , BeamSqlBackend be
+     )
+  => QGenExpr ctxt be s left
+  -> QGenExpr ctxt be s right
+  -> QGenExpr ctxt be s Bool
+like_' (QExpr scrutinee) (QExpr search) =
   QExpr (liftA2 likeE scrutinee search)
 
 -- | SQL99 @SIMILAR TO@ operator
-similarTo_ :: ( BeamSqlBackendIsString be left
-              , BeamSqlBackendIsString be right
-              , BeamSql99ExpressionBackend be )
-           => QGenExpr ctxt be s left -> QGenExpr ctxt be s right -> QGenExpr ctxt be s left
-similarTo_ (QExpr scrutinee) (QExpr search) =
+similarTo_
+  :: (BeamSqlBackendIsString be text, BeamSql99ExpressionBackend be)
+  => QGenExpr ctxt be s text
+  -> QGenExpr ctxt be s text
+  -> QGenExpr ctxt be s text
+similarTo_ = similarTo_'
+
+-- | SQL99 @SIMILAR TO@ operator but heterogeneous over the text type
+similarTo_'
+  :: ( BeamSqlBackendIsString be left
+     , BeamSqlBackendIsString be right
+     , BeamSql99ExpressionBackend be
+     )
+  => QGenExpr ctxt be s left
+  -> QGenExpr ctxt be s right
+  -> QGenExpr ctxt be s left
+similarTo_' (QExpr scrutinee) (QExpr search) =
   QExpr (liftA2 similarToE scrutinee search)
 
 infix 4 `like_`, `similarTo_`
