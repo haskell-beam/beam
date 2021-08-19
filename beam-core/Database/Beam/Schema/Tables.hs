@@ -57,7 +57,20 @@ module Database.Beam.Schema.Tables
     , pk
     , allBeamValues, changeBeamRep
     , alongsideTable
-    , defaultFieldName )
+    , defaultFieldName
+
+    -- * Exported so we can override defaults
+    -- For 'Beamable'
+    , GZipTables(..)
+    , GTableSkeleton(..)
+    -- For 'Database'
+    , GZipDatabase(..)
+    -- for 'defaultDbSettings'
+    , GAutoDbSettings(..)
+    , GDefaultTableFieldSettings(..)
+    , ChooseSubTableStrategy
+    , SubTableStrategyImpl
+    )
     where
 
 import           Database.Beam.Backend.Types
