@@ -47,6 +47,9 @@ tests = testGroup "SQL generation tests"
 
                   , noEmptyIns
 
+                  , exprAllTest
+                  , exprAnyTest
+
                   -- Regressions for github issues
                   , testGroup "Regression tests"
                     [ gh70OrderByInFirstJoinCausesIncorrectProjection
@@ -1366,3 +1369,52 @@ gh70OrderByInFirstJoinCausesIncorrectProjection =
                    , selectLimit = Nothing , selectOffset = Nothing }
 
       actual @?= expected
+
+-- | Test ExprAll
+
+exprAllTest :: TestTree
+exprAllTest =
+  testCase "guard_ clauses are successfully translated into WHERE statements" $
+  do SqlSelect Select { selectTable = SelectTable { .. }
+                      , .. } <- pure $ selectMock $
+                                do e <- all_ (_employees employeeDbSettings)
+                                   guard_ (getExprAll (mconcat (map ExprAll
+                                            [ _employeeSalary e >. 120202
+                                            , _employeeAge e <. 30
+                                            , _employeeFirstName e ==. _employeeLastName e
+                                            ]
+                                          )))
+                                   pure e
+
+     Just (FromTable (TableNamed (TableName Nothing "employees")) (Just (employees, Nothing))) <- pure selectFrom
+
+     let salaryCond = ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField employees "salary")) (ExpressionValue (Value (120202 :: Double)))
+         ageCond = ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField employees "age")) (ExpressionValue (Value (30 :: Int32)))
+         nameCond = ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField employees "first_name")) (ExpressionFieldName (QualifiedField employees "last_name"))
+
+     selectWhere @?= Just (ExpressionBinOp "AND" salaryCond (ExpressionBinOp "AND" ageCond nameCond))
+
+-- | Test ExprAny
+
+
+exprAnyTest :: TestTree
+exprAnyTest =
+  testCase "guard_ clauses are successfully translated into WHERE statements" $
+  do SqlSelect Select { selectTable = SelectTable { .. }
+                      , .. } <- pure $ selectMock $
+                                do e <- all_ (_employees employeeDbSettings)
+                                   guard_ (getExprAny (mconcat (map ExprAny
+                                            [ _employeeSalary e >. 120202
+                                            , _employeeAge e <. 30
+                                            , _employeeFirstName e ==. _employeeLastName e
+                                            ]
+                                          )))
+                                   pure e
+
+     Just (FromTable (TableNamed (TableName Nothing "employees")) (Just (employees, Nothing))) <- pure selectFrom
+
+     let salaryCond = ExpressionCompOp ">" Nothing (ExpressionFieldName (QualifiedField employees "salary")) (ExpressionValue (Value (120202 :: Double)))
+         ageCond = ExpressionCompOp "<" Nothing (ExpressionFieldName (QualifiedField employees "age")) (ExpressionValue (Value (30 :: Int32)))
+         nameCond = ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField employees "first_name")) (ExpressionFieldName (QualifiedField employees "last_name"))
+
+     selectWhere @?= Just (ExpressionBinOp "OR" salaryCond (ExpressionBinOp "OR" ageCond nameCond))

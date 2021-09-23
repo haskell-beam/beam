@@ -58,6 +58,8 @@ module Database.Beam.Query
 
     , module Database.Beam.Query.DataTypes
 
+    , module Database.Beam.Query.Monoid
+
     -- * SQL Command construction and execution
     -- ** @SELECT@
     , SqlSelect(..)
@@ -105,6 +107,7 @@ import Database.Beam.Query.DataTypes
 import Database.Beam.Query.Extensions
 import Database.Beam.Query.Extract
 import Database.Beam.Query.Internal
+import Database.Beam.Query.Monoid
 import Database.Beam.Query.Operator
 import Database.Beam.Query.Ord
 import Database.Beam.Query.Relationships

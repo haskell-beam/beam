@@ -30,6 +30,7 @@ library
                        Database.Beam.Query.CustomSQL
                        Database.Beam.Query.CTE
                        Database.Beam.Query.DataTypes
+                       Database.Beam.Query.Monoid
                        Database.Beam.Query.SQL92
                        Database.Beam.Query.Types
 
