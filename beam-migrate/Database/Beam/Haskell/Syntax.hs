@@ -1038,5 +1038,7 @@ instance Hashable (Hs.CName ())
 instance Hashable (Hs.DerivStrategy ())
 instance Hashable (Hs.MaybePromotedName ())
 #endif
+#if !MIN_VERSION_hashable(1, 3, 4)
 instance Hashable a => Hashable (S.Set a) where
   hashWithSalt s a = hashWithSalt s (S.toList a)
+#endif
