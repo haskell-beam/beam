@@ -233,6 +233,9 @@ streamResults (conn@Pg.Connection {connectionHandle}) conn' fields = do
         Pg.TuplesOk -> liftIO (finishQuery conn')
         Pg.EmptyQuery -> Fail.fail "No query"
         Pg.CommandOk -> pure ()
+        status@Pg.BadResponse -> liftIO (Pg.throwResultError "streamResults" row status)
+        status@Pg.NonfatalError -> liftIO (Pg.throwResultError "streamResults" row status)
+        status@Pg.FatalError -> liftIO (Pg.throwResultError "streamResults" row status)
         _ -> do errMsg <- liftIO (Pg.resultErrorMessage row)
                 Fail.fail ("Postgres error: " <> show errMsg)
 
