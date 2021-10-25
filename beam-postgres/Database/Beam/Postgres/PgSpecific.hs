@@ -111,7 +111,7 @@ module Database.Beam.Postgres.PgSpecific
 
     -- * Postgres @EXTRACT@ fields
   , century_, decade_, dow_, doy_, epoch_, isodow_, isoyear_
-  , microseconds_, milliseconds_, millennium_, quarter_, week_
+  , microseconds_, milliseconds_, millennium_, quarter_
 
     -- ** Postgres functions and aggregates
   , pgBoolOr, pgBoolAnd, pgStringAgg, pgStringAggOver
@@ -1674,9 +1674,6 @@ millennium_ = ExtractField (PgExtractFieldSyntax (emit "MILLENNIUM"))
 
 quarter_ :: HasSqlDate tgt => ExtractField Postgres tgt Int32
 quarter_ = ExtractField (PgExtractFieldSyntax (emit "QUARTER"))
-
-week_ :: HasSqlDate tgt => ExtractField Postgres tgt Int32
-week_ = ExtractField (PgExtractFieldSyntax (emit "WEEK"))
 
 -- $full-text-search
 --
