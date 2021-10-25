@@ -206,6 +206,7 @@ class IsSql92ExtractFieldSyntax extractField where
   minutesField :: extractField
   hourField :: extractField
   dayField :: extractField
+  weekField :: extractField
   monthField :: extractField
   yearField :: extractField
 

@@ -931,6 +931,7 @@ sqliteExtract field from =
       ExtractFieldDateTimeYear   -> extractStrftime "%Y"
       ExtractFieldDateTimeMonth  -> extractStrftime "%m"
       ExtractFieldDateTimeDay    -> extractStrftime "%d"
+      ExtractFieldDateTimeWeek   -> extractStrftime "%W"
       ExtractFieldDateTimeHour   -> extractStrftime "%H"
       ExtractFieldDateTimeMinute -> extractStrftime "%M"
       ExtractFieldDateTimeSecond -> extractStrftime "%S"
