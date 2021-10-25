@@ -191,6 +191,7 @@ instance IsSql92ExtractFieldSyntax SqlSyntaxBuilder where
   minutesField = SqlSyntaxBuilder (byteString "MINUTE")
   hourField    = SqlSyntaxBuilder (byteString "HOUR")
   dayField     = SqlSyntaxBuilder (byteString "DAY")
+  weekField    = SqlSyntaxBuilder (byteString "WEEK")
   monthField   = SqlSyntaxBuilder (byteString "MONTH")
   yearField    = SqlSyntaxBuilder (byteString "YEAR")
 
