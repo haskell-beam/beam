@@ -312,10 +312,21 @@ formatSqliteInsertOnConflict :: SqliteTableNameSyntax -> [ T.Text ] -> SqliteIns
 formatSqliteInsertOnConflict tblNm fields values onConflict = mconcat
   [ emit "INSERT INTO "
   , fromSqliteTableName tblNm
-  , parens (commas (map quotedIdentifier fields))
+  , if null fields
+      then mempty
+      else parens (commas (map quotedIdentifier fields))
   , emit " "
   , case values of
       SqliteInsertFromSql (SqliteSelectSyntax select) -> select
+      -- Because SQLite doesn't support explicit DEFAULT values, if an insert
+      -- batch contains any defaults, we split it into a series of single-row
+      -- inserts specifying only the non-default columns (which could differ
+      -- between rows in the batch). To insert all default values, there is
+      -- special DEFAULT VALUES syntax, which only supports one row anyway.
+      -- Unfortunately, SQLite doesn't currently support DEFAULT VALUES with ON
+      -- CONFLICT. We don't specially catch that in hopes that SQLite will some
+      -- day support it, since there is really no reason it shouldn't.
+      SqliteInsertExpressions [[]] -> emit "DEFAULT VALUES"
       SqliteInsertExpressions es ->
         emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
   , maybe mempty ((emit " " <>) . fromSqliteOnConflict) onConflict
