@@ -31,6 +31,28 @@ rec {
         "pqueue"
       ])
     ]);
+    ghc921 = haskell.packages.ghc921.extend (composeExtensionList [
+      (applyToPackages haskell.lib.doJailbreak [
+        "postgresql-libpq"
+        "postgresql-simple"
+        "pqueue"
+      ])
+      (pinHackageVersions {
+        "some" = "1.0.3";
+      })
+      (pinHackageDirectVersions {
+        constraints-extras = {
+          pkg = "constraints-extras";
+          ver = "0.3.2.1";
+          sha256 = "03hsja50vzflqqmvvxgc9w32dqg51dlw8i0blpqb2ipv7njx4q2q";
+        };
+        hint = {
+          pkg = "hint";
+          ver = "0.9.0.5";
+          sha256 = "0x3yyq4vdpz4rqymbrq70swjpi0k6bnja0vhwlpgbgpzdb3ij7vc";
+        };
+      })
+    ]);
   };
 
   composeExtensionList = lib.foldr lib.composeExtensions (_: _: {});
@@ -39,6 +61,8 @@ rec {
 
   pinHackageVersions = versions: self: _:
     lib.mapAttrs (n: v: self.callHackage n v {}) versions;
+  pinHackageDirectVersions = versions: self: _:
+    lib.mapAttrs (n: v: self.callHackageDirect v {}) versions;
 
   # Extend a package set with Beam packages
   makeBeamGhc = ghc: ghc.extend (composeExtensionList [
