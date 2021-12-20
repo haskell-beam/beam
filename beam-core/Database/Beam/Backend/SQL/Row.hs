@@ -197,7 +197,9 @@ instance (FromBackendRow be x, FromBackendRow be SqlNull) => FromBackendRow be (
                       pure ()))
   valuesNeeded be _ = valuesNeeded be (Proxy @x)
 
+#if !MIN_VERSION_base(4, 16, 0)
 deriving instance Generic (a, b, c, d, e, f, g, h)
+#endif
 
 instance (BeamBackend be, FromBackendRow be t) => FromBackendRow be (Tagged tag t) where
   fromBackendRow = Tagged <$> fromBackendRow
