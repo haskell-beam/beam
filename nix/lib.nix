@@ -39,6 +39,8 @@ rec {
       ])
       (pinHackageVersions {
         "some" = "1.0.3";
+        # This is not needed, but it tests the version bounds:
+        "vector-sized" = "1.5.0";
       })
       (pinHackageDirectVersions {
         constraints-extras = {
