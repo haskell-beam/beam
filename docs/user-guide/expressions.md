@@ -235,7 +235,7 @@ For example, suppose we wish to offer a discount on all "short" tracks, where a 
 
 !beam-query
 ```haskell
-!example chinook
+!example chinookdml
 runUpdate $ update (track chinookDb)
   (\track' -> trackUnitPrice track' <-. current_ (trackUnitPrice track') / 2)
   (\track' ->
