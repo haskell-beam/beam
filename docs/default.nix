@@ -68,7 +68,7 @@ stdenv.mkDerivation {
     mkdir -p docs/.beam-query-cache/chinook-data
     cp ${chinookPostgres} docs/.beam-query-cache/chinook-data/Chinook_PostgreSql.sql
     cp ${chinookSqlite} docs/.beam-query-cache/chinook-data/Chinook_Sqlite.sql
-    bash ./build-docs.sh builddocs
+    CI=true BEAM_DOC_BACKEND="beam-postgres beam-sqlite" bash ./build-docs.sh builddocs
   '';
   installPhase = ''
     cp -r site $out
