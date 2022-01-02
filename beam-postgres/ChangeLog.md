@@ -1,3 +1,17 @@
+# 0.5.2.0
+
+## Added features
+
+ * New `conduit` streaming variants which work directly in `MonadResource`
+ * Heterogeneous variant of `ilike_`: `ilike_'`
+ * Postgres-specific `EXTRACT` fields
+ * GHC 9.2 and 9.0 support
+
+## Bug fixes
+
+ * Throw correct exception for row errors in `conduit` implementation
+ * Support emitting UUID values in context where type cannot be inferred by Postgres
+
 # 0.5.1.0
 
 ## Added features
