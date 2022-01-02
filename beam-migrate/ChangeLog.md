@@ -1,3 +1,9 @@
+# 0.5.1.1
+
+## Added features
+
+ * GHC 9.2 and 9.0 support
+
 # 0.5.1.0
 
 ## Added features
