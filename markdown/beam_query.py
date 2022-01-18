@@ -85,9 +85,9 @@ def setup_backend(cache_dir, base_dir, backend):
     if not os.path.exists(status_file):
         # Set up the database
         print("bash environment is",
-              ['/usr/bin/env', 'bash', '-c', backend_cmd + ' ' + opts],
+              ['env', 'bash', '-c', backend_cmd + ' ' + opts],
               os.path.join(base_dir, 'docs/beam-docs-library.sh'))
-        setup_cmd = subprocess.Popen(['/usr/bin/env', 'bash', '-c',
+        setup_cmd = subprocess.Popen(['env', 'bash', '-c',
                                       backend_cmd + ' ' + opts],
                                      cwd=os.path.abspath(cache_dir), close_fds=True,
                                      stdout=subprocess.PIPE,
@@ -208,10 +208,9 @@ def run_backend_example(backend, template, cache_dir, base_dir, full_example_lin
                                            })
 
     packages = [ "beam-core", backend_haskell_names['package'] ] + backend.get('extra-packages', [])
-    packages = [ "--package %s" % pkgname for pkgname in packages ]
+    packages = [ "-package %s" % pkgname for pkgname in packages ]
     decl_options = options.get('BUILD_OPTIONS', '').replace("$$BEAM_SOURCE$$", base_dir)
-    build_options = " ".join(packages) + \
-                    " -- -XCPP -DBEAM_BACKEND=%s -DBEAM_BACKEND_MONAD=%s -DBEAM_WITH_DATABASE_DEBUG=%s " % (backend_type, backend_monad, with_database_debug) + \
+    build_options = " -XCPP -DBEAM_BACKEND=%s -DBEAM_BACKEND_MONAD=%s -DBEAM_WITH_DATABASE_DEBUG=%s " % (backend_type, backend_monad, with_database_debug) + \
                     decl_options
     extra_deps = options.get('EXTRA_DEPS', '').split()
     output_format = options.get('OUTPUT_FORMAT', 'sql')
@@ -229,7 +228,7 @@ def run_backend_example(backend, template, cache_dir, base_dir, full_example_lin
     with open(source_file, 'wt') as source_hdl:
         source_hdl.write(u"\n".join(template_data))
 
-    build_command = 'stack runhaskell ' + build_options + ' ' + source_file
+    build_command = 'runhaskell ' + build_options + ' ' + source_file
     print("Running backend example", lines_hash, ":", build_command)
     print("With environment", stack_env)
     is_ci = check_ci()
