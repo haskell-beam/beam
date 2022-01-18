@@ -39,6 +39,9 @@ import           Control.Applicative
 import           Control.Monad
 
 import           Data.Aeson
+#if MIN_VERSION_aeson(2,0,0)
+import Data.Aeson.Key (fromText)
+#endif
 import           Data.Aeson.Types (Parser)
 import qualified Data.Dependent.Map as D
 import qualified Data.GADT.Compare as D
@@ -322,8 +325,11 @@ sql92Deserializers = mconcat
                    , beamDeserializer deserializeSql92Attributes ]
   where
     parseSub nm o key parse =
+#if MIN_VERSION_aeson(2,0,0)
+      withObject (unpack (nm <> "." <> key)) parse =<< o .: fromText key
+#else
       withObject (unpack (nm <> "." <> key)) parse =<< o .: key
-
+#endif
     deserializeSql92DataType :: BeamDeserializers be' -> Value
                              -> Parser (BeamSqlBackendDataTypeSyntax be)
     deserializeSql92DataType _ o =
