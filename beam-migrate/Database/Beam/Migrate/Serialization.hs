@@ -325,9 +325,9 @@ sql92Deserializers = mconcat
                    , beamDeserializer deserializeSql92Attributes ]
   where
 #if MIN_VERSION_aeson(2,0,0)
-      makeKey = DAK.fromKey
+    makeKey = DAK.fromText
 #else
-      makeKey = id
+    makeKey = id
 #endif
     parseSub nm o key parse =
       withObject (unpack (nm <> "." <> key)) parse =<< o .: makeKey key
