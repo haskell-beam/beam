@@ -54,6 +54,10 @@ rec {
           sha256 = "0x3yyq4vdpz4rqymbrq70swjpi0k6bnja0vhwlpgbgpzdb3ij7vc";
         };
       })
+      (self: _: {
+        # This is not needed, but it tests the version bounds:
+        aeson = self.aeson_2_0_1_0;
+      })
     ]);
   };
 
