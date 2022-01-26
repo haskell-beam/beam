@@ -340,7 +340,7 @@ table. `pk` is a synonym of the `primaryKey` function from the `Table` type
 class. It should be clear what's going on, but if it's not, let's ask GHCi.
 
 ```console
-*NextSteps> pk (james :: User)p
+*NextSteps> pk (james :: User)
 UserId "james@example.com"
 ```
 
