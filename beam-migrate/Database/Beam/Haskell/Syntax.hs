@@ -696,6 +696,7 @@ instance IsSql92ExpressionSyntax HsExpr where
   leE q a b = hsApp (hsVar "leE")   [hsMaybe q, a, b]
 
   inE a b = hsApp (hsVar "inE") [a, hsList b]
+  inSelectE _ _ = error "inSelectE"
 
 instance IsSql92QuantifierSyntax HsExpr where
   quantifyOverAll = hsVar "quantifyOverAll"

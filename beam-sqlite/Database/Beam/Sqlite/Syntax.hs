@@ -825,6 +825,8 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
 
   defaultE = SqliteExpressionDefault
   inE e es = SqliteExpressionSyntax (parens (fromSqliteExpression e) <> emit " IN " <> parens (commas (map fromSqliteExpression es)))
+  inSelectE e sel =
+      SqliteExpressionSyntax (parens (fromSqliteExpression e) <> emit " IN " <> parens (fromSqliteSelect sel))
 
 instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
   concatE [] = valueE (sqlValueSyntax ("" :: T.Text))

@@ -99,6 +99,14 @@ testInRowValues getConn = testCase "IN with row values works" $
       return $ pair `in_` [pair, pair]
     assertEqual "result" [True] result
 
+testInSelect :: IO ByteString -> TestTree
+testInSelect getConn = testCase "IN (SELECT ...) works" $
+  withTestPostgres "db_in_row_values" getConn $ \conn -> do
+    result <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+      let x  = as_ @Int32 (val_ 1)
+      return $ x `inQuery_` ( pgUnnestArray $ array_ $ (as_ @Int32 . val_) <$> [0..100])
+    assertEqual "result" [True] result
+
 testReturningMany :: IO ByteString -> TestTree
 testReturningMany getConn = testCase "runReturningMany (batching via cursor) works" $
   withTestPostgres "run_returning_many_cursor" getConn $ \conn -> do
