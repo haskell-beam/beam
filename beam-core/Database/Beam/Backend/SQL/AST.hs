@@ -234,6 +234,7 @@ data Expression
   | ExpressionRow [ Expression ]
 
   | ExpressionIn Expression [ Expression ]
+  | ExpressionInSelect Expression Select
 
   | ExpressionIsNull Expression
   | ExpressionIsNotNull Expression
@@ -359,6 +360,7 @@ instance IsSql92ExpressionSyntax Expression where
 
   defaultE = ExpressionDefault
   inE = ExpressionIn
+  inSelectE = ExpressionInSelect
 
 instance IsSql99FunctionExpressionSyntax Expression where
   functionNameE = ExpressionNamedFunction
