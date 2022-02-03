@@ -133,6 +133,11 @@ class (BeamBackend be, Monad m) =>
                  Nothing -> pure (Just x)
                  Just _ -> pure Nothing
 
+  -- | Run the given command and fetch the first result. The result is
+  --   'Nothing' if no results are returned.
+  runReturningFirst :: FromBackendRow be x => BeamSqlBackendSyntax be -> m (Maybe x)
+  runReturningFirst cmd = runReturningMany cmd id
+
   -- | Run the given command, collect all the results, and return them as a
   --   list. May be more convenient than 'runReturningMany', but reads the entire
   --   result set into memory.
