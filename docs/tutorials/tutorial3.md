@@ -662,7 +662,7 @@ tutorials, we saw how to create tables using regular Haskell data types, how to
 link those tables up using relations, how to query tables using both the monadic
 interface and the list-like functions on queries. We saw ha few examples of
 using beam to generate advanced queries. More information on the Beam API is
-havailable on [hackage](http://hackage.haskell.org/package/beam). Happy beaming!
+available on [hackage](https://hackage.haskell.org/package/beam-core). Happy beaming!
 
 Beam is a work in progress. Please submit bugs and patches
 on [GitHub](https://github.com/haskell-beam/beam).
