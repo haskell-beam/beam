@@ -43,6 +43,7 @@ tests getConn = testGroup "Selection Tests"
       , testUuuidInValues getConn
       ]
   , testInRowValues getConn
+  , testInSelect getConn
   , testReturningMany getConn
   , testPgUnnest getConn
   ]

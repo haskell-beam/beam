@@ -1,4 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Database.Beam.Sqlite.Test.Select (tests) where
+
+import Data.Int (Int32)
 
 import Database.Beam
 import Database.Beam.Sqlite
@@ -12,6 +16,7 @@ tests :: TestTree
 tests = testGroup "Selection tests"
   [ expectFail testExceptValues
   , testInRowValues
+  , testInSelect
   ]
 
 data Pair f = Pair
@@ -27,6 +32,19 @@ testInRowValues = testCase "IN with row values works" $
           p = val_ $ Pair False False
       return $ p `in_` [p, p]
     assertEqual "result" [True] result
+
+testInSelect :: TestTree
+testInSelect = testCase "IN (SELECT ...) works" $
+  withTestDb $ \conn -> do
+    result <- runBeamSqlite conn $ runSelectReturningList $ select $ do
+      let x  = as_ @Int32 (val_ 1)
+      return $ x `inQuery_` (pure (as_ @Int32 $ val_ 1))
+    assertEqual "result" [True] result
+
+    result <- runBeamSqlite conn $ runSelectReturningList $ select $ do
+      let x  = as_ @Int32 (val_ 1)
+      return $ x `inQuery_`  (pure (as_ @Int32 $ val_ 2))
+    assertEqual "result" [False] result
 
 -- | Regression test for <https://github.com/haskell-beam/beam/issues/326 #326>
 testExceptValues :: TestTree
