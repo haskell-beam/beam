@@ -1,3 +1,9 @@
+# 0.5.1.2
+
+## Added features
+
+ * Aeson 2.0 support
+
 # 0.5.1.1
 
 ## Added features

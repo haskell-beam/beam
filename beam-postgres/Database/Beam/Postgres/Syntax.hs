@@ -923,8 +923,8 @@ instance IsSql99AggregationExpressionSyntax PgExpressionSyntax where
 
   -- According to the note at <https://www.postgresql.org/docs/9.2/static/functions-aggregate.html>
   -- the following functions are equivalent.
-  someE = pgUnAgg "BOOL_ANY"
-  anyE = pgUnAgg "BOOL_ANY"
+  someE = pgUnAgg "BOOL_OR"
+  anyE = pgUnAgg "BOOL_OR"
 
 instance IsSql92AggregationSetQuantifierSyntax PgAggregationSetQuantifierSyntax where
   setQuantifierDistinct = PgAggregationSetQuantifierSyntax $ emit "DISTINCT"
