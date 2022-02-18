@@ -41,7 +41,8 @@ module Database.Beam.Query.Combinators
     , QIfCond, QIfElse
     , (<|>.)
 
-    , limit_, offset_
+    , limit_, limitMaybe_
+    , offset_, offsetMaybe_
 
     , as_
 
@@ -66,8 +67,8 @@ module Database.Beam.Query.Combinators
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
     ) where
 
-import Database.Beam.Backend.Types
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.Types
 
 import Database.Beam.Query.Internal
 import Database.Beam.Query.Ord
@@ -83,6 +84,7 @@ import Control.Applicative
 import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
+import Unsafe.Coerce (unsafeCoerce)
 
 import GHC.TypeLits (TypeError, ErrorMessage(Text))
 
@@ -335,6 +337,15 @@ limit_ :: forall s a be db
 limit_ limit' (Q q) =
   Q (liftF (QLimit limit' q (rewriteThread (Proxy @s))))
 
+-- | Conditionally limit the number of results returned by a query.
+limitMaybe_ :: forall s a be db
+        . ( Projectible be a
+          , ThreadRewritable (QNested s) a )
+        => Maybe Integer -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
+limitMaybe_ (Just limit') (Q q) =
+  Q (liftF (QLimit limit' q (rewriteThread (Proxy @s))))
+limitMaybe_ Nothing (Q q) = Q (unsafeCoerce q)
+
 -- | Drop the first `offset'` results.
 offset_ :: forall s a be db
          . ( Projectible be a
@@ -342,6 +353,15 @@ offset_ :: forall s a be db
         => Integer -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
 offset_ offset' (Q q) =
   Q (liftF (QOffset offset' q (rewriteThread (Proxy @s))))
+
+-- | Conditionally drop the first `offset'` results.
+offsetMaybe_ :: forall s a be db
+         . ( Projectible be a
+           , ThreadRewritable (QNested s) a )
+        => Maybe Integer -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
+offsetMaybe_ (Just offset') (Q q) =
+  Q (liftF (QOffset offset' q (rewriteThread (Proxy @s))))
+offsetMaybe_ Nothing (Q q) = Q (unsafeCoerce q)
 
 -- | Use the SQL @EXISTS@ operator to determine if the given query returns any results
 exists_ :: ( BeamSqlBackend be, HasQBuilder be, Projectible be a)
