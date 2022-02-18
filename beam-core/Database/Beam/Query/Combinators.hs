@@ -339,9 +339,9 @@ limit_ limit' (Q q) =
 
 -- | Conditionally limit the number of results returned by a query.
 limitMaybe_ :: forall s a be db
-        . ( Projectible be a
-          , ThreadRewritable (QNested s) a )
-        => Maybe Integer -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
+            . ( Projectible be a
+              , ThreadRewritable (QNested s) a )
+            => Maybe Integer -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
 limitMaybe_ (Just limit') (Q q) =
   Q (liftF (QLimit limit' q (rewriteThread (Proxy @s))))
 limitMaybe_ Nothing (Q q) = Q (unsafeCoerce q)
@@ -356,9 +356,9 @@ offset_ offset' (Q q) =
 
 -- | Conditionally drop the first `offset'` results.
 offsetMaybe_ :: forall s a be db
-         . ( Projectible be a
-           , ThreadRewritable (QNested s) a )
-        => Maybe Integer -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
+              . ( Projectible be a
+                , ThreadRewritable (QNested s) a )
+             => Maybe Integer -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
 offsetMaybe_ (Just offset') (Q q) =
   Q (liftF (QOffset offset' q (rewriteThread (Proxy @s))))
 offsetMaybe_ Nothing (Q q) = Q (unsafeCoerce q)
