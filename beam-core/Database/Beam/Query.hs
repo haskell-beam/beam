@@ -198,6 +198,7 @@ runSelectReturningOne (SqlSelect s) =
 
 -- | Run a 'SqlSelect' in a 'MonadBeam' and get the first result, if there is
 --   one.
+--   This is not guaranteed to automatically apply LIMIT 1 to the query.
 runSelectReturningFirst ::
   (MonadBeam be m, BeamSqlBackend be, FromBackendRow be a) =>
   SqlSelect be a -> m (Maybe a)

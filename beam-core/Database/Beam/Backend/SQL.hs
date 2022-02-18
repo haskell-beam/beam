@@ -135,6 +135,7 @@ class (BeamBackend be, Monad m) =>
 
   -- | Run the given command and fetch the first result. The result is
   --   'Nothing' if no results are returned.
+  --   This is not guaranteed to automatically apply LIMIT 1 to the query.
   runReturningFirst :: FromBackendRow be x => BeamSqlBackendSyntax be -> m (Maybe x)
   runReturningFirst cmd = runReturningMany cmd id
 
