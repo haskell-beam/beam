@@ -43,6 +43,7 @@ tests getConn = testGroup "Selection Tests"
       , testUuuidInValues getConn
       ]
   , testInRowValues getConn
+  , testInSelect getConn
   , testReturningMany getConn
   , testPgUnnest getConn
   ]
@@ -97,6 +98,14 @@ testInRowValues getConn = testCase "IN with row values works" $
       let pair :: forall ctx s. Pair (QGenExpr ctx Postgres s)
           pair = val_ $ Pair False False
       return $ pair `in_` [pair, pair]
+    assertEqual "result" [True] result
+
+testInSelect :: IO ByteString -> TestTree
+testInSelect getConn = testCase "IN (SELECT ...) works" $
+  withTestPostgres "db_in_row_values" getConn $ \conn -> do
+    result <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+      let x  = as_ @Int32 (val_ 1)
+      return $ x `inQuery_` ( pgUnnestArray $ array_ $ (as_ @Int32 . val_) <$> [0..100])
     assertEqual "result" [True] result
 
 testReturningMany :: IO ByteString -> TestTree

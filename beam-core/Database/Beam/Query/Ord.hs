@@ -38,6 +38,8 @@ module Database.Beam.Query.Ord
   , anyOf_, anyIn_
   , allOf_, allIn_
 
+  , inQuery_
+
   , between_
   ) where
 
@@ -199,7 +201,11 @@ instance ( HasSqlInTable be, Beamable table ) =>
     where toExpr :: table (QGenExpr context be s) -> TablePrefix -> BeamSqlBackendExpressionSyntax be
           toExpr = fmap rowE . sequence . allBeamValues (\(Columnar' (QExpr x)) -> x)
 
-infix 4 `between_`, `in_`
+infix 4 `between_`, `in_`, `inQuery_`
+
+inQuery_ :: (HasQBuilder be, BeamSqlBackend be)
+         => QGenExpr ctx be s a -> Q be db s (QExpr be s a) -> QGenExpr ctx be s Bool
+inQuery_ (QExpr needle) haystack = QExpr (inSelectE <$> needle <*> flip buildSqlQuery haystack)
 
 -- | Class for expression types or expression containers for which there is a
 --   notion of equality.

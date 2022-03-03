@@ -272,7 +272,9 @@ instance IsSql92ExpressionSyntax SqlSyntaxBuilder where
 
   defaultE = SqlSyntaxBuilder (byteString "DEFAULT")
   inE a es = SqlSyntaxBuilder (byteString "(" <> buildSql a <> byteString ") IN (" <>
-                               buildSepBy (byteString ", ") (map buildSql es))
+                               buildSepBy (byteString ", ") (map buildSql es) <> byteString ")")
+  inSelectE a sel = SqlSyntaxBuilder (byteString "(" <> buildSql a <> byteString ") IN (" <>
+                                      buildSql sel <> byteString ")")
 
 instance IsSql99FunctionExpressionSyntax SqlSyntaxBuilder where
   functionNameE fn = SqlSyntaxBuilder (byteString (TE.encodeUtf8 fn))

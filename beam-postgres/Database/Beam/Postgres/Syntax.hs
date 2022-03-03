@@ -774,6 +774,8 @@ instance IsSql92ExpressionSyntax PgExpressionSyntax where
 
   inE e es = PgExpressionSyntax $ pgParens (fromPgExpression e) <> emit " IN " <>
                                   pgParens (pgSepBy (emit ", ") (map fromPgExpression es))
+  inSelectE e sel = PgExpressionSyntax $ pgParens (fromPgExpression e) <> emit " IN " <>
+                                         pgParens (fromPgSelect sel)
 
 instance IsSql99FunctionExpressionSyntax PgExpressionSyntax where
   functionCallE name args =
