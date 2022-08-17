@@ -20,6 +20,7 @@ module Database.Beam.Schema.Tables
     , DatabaseEntity(..), TableEntity, ViewEntity, DomainTypeEntity
     , dbEntityDescriptor
     , DatabaseModification, EntityModification(..)
+    , withEntityModification
     , FieldModification(..)
     , dbModification, tableModification, withDbModification
     , withTableModification, modifyTable, modifyEntityName
@@ -148,6 +149,10 @@ type DatabaseModification f be db = db (EntityModification f be)
 --   contstruct these for you.
 newtype EntityModification f be e = EntityModification (Endo (f e))
   deriving (Monoid, Semigroup)
+
+withEntityModification :: f e -> EntityModification f be e -> f e
+withEntityModification e (EntityModification (Endo f)) = f e
+
 -- | A newtype wrapper around 'Columnar f a -> Columnar f a' (i.e., an
 --   endomorphism between 'Columnar's over 'f'). You usually want to use
 --   'fieldNamed' or the 'IsString' instance to rename the field, when 'f ~
@@ -393,10 +398,26 @@ instance GAutoDbSettings (x p) => GAutoDbSettings (C1 f x p) where
     autoDbSettings' = M1 autoDbSettings'
 instance (GAutoDbSettings (x p), GAutoDbSettings (y p)) => GAutoDbSettings ((x :*: y) p) where
     autoDbSettings' = autoDbSettings' :*: autoDbSettings'
+instance (Selector f, Database be subDb, Generic (DatabaseSettings be subDb), GAutoDbSettings (Rep (DatabaseSettings be subDb) ())) =>
+  GAutoDbSettings (S1 f (K1 Generic.R (subDb (DatabaseEntity be db))) p) where
+  autoDbSettings' = M1 (K1 (runIdentity $ zipTables (Proxy :: Proxy be) (\_ -> pure . (`withEntityModification` renameEntity ((name <> "_") <>)) . changeDatabaseEntityDb @subDb @db @be) settings settings :: subDb (DatabaseEntity be db)))
+    where name = T.pack (selName (undefined :: S1 f (Rec0 (subDb (DatabaseEntity be db))) p))
+          settings :: DatabaseSettings be subDb
+          settings = defaultDbSettings
 instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements be x ) =>
   GAutoDbSettings (S1 f (K1 Generic.R (DatabaseEntity be db x)) p) where
   autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto name)))
     where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
+
+changeDatabaseEntityDb
+  :: forall db1 db2 be entityType
+  .  DatabaseEntity be db1 entityType
+  -> DatabaseEntity be db2 entityType
+changeDatabaseEntityDb (DatabaseEntity a) = DatabaseEntity a
+
+renameEntity :: (Text -> Text) -> EntityModification (DatabaseEntity be db) be ent
+renameEntity renamer =
+  EntityModification (Endo (\(DatabaseEntity desc) -> DatabaseEntity (desc & dbEntityName %~ renamer)))
 
 class GZipDatabase be f g h x y z where
   gZipDatabase :: Applicative m =>
@@ -411,6 +432,11 @@ instance ( GZipDatabase be f g h ax ay az
   GZipDatabase be f g h (ax :*: bx) (ay :*: by) (az :*: bz) where
   gZipDatabase p combine ~(ax :*: bx) ~(ay :*: by) =
     liftA2 (:*:) (gZipDatabase p combine ax ay) (gZipDatabase p combine bx by)
+instance Database be db =>
+  GZipDatabase be f g h (K1 Generic.R (db f)) (K1 Generic.R (db g)) (K1 Generic.R (db h)) where
+
+  gZipDatabase be combine ~(K1 x) ~(K1 y) =
+    K1 <$> zipTables (Proxy :: Proxy be) combine x y
 instance (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
   GZipDatabase be f g h (K1 Generic.R (f tbl)) (K1 Generic.R (g tbl)) (K1 Generic.R (h tbl)) where
 
