@@ -447,7 +447,7 @@ data LensFor t x where
 -- >                   { _refToAnotherTable :: PrimaryKey AnotherTableT (Nullable f)
 -- >                   , ... }
 --
---   Now we can use 'justRef' and 'nothingRef' to refer to this table optionally. The embedded 'PrimaryKey' in '_refToAnotherTable'
+--   Now we can use 'just_' and 'nothing_' to refer to this table optionally. The embedded 'PrimaryKey' in '_refToAnotherTable'
 --   automatically has its fields converted into 'Maybe' using 'Nullable'.
 --
 --   The last 'Columnar' rule is
