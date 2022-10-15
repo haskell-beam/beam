@@ -854,7 +854,7 @@ instance ( BeamSqlBackend be, Beamable t)
     isNothing_ t = allE (allBeamValues (\(Columnar' e) -> isNothing_ e) t)
     maybe_ (QExpr onNothing) onJust tbl =
       let QExpr onJust' = onJust (changeBeamRep (\(Columnar' (QExpr e)) -> Columnar' (QExpr e)) tbl)
-          QExpr cond = isJust_ tbl
+          QExpr cond = isJust_ @be tbl
       in QExpr (\tblPfx -> caseE [(cond tblPfx, onJust' tblPfx)] (onNothing tblPfx))
 
 infixl 3 <|>.
