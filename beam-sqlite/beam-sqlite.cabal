@@ -29,17 +29,17 @@ library
                       beam-migrate  >=0.5  && <0.6,
 
                       sqlite-simple >=0.4  && <0.5,
-                      text          >=1.0  && <1.3,
+                      text          >=1.0  && <2.1,
                       bytestring    >=0.10 && <0.12,
                       hashable      >=1.2  && <1.5,
-                      time          >=1.6  && <1.12,
+                      time          >=1.6  && <1.13,
                       dlist         >=0.8  && <1.1,
                       mtl           >=2.1  && <2.3,
                       free          >=4.12 && <5.2,
                       scientific    >=0.3  && <0.4,
                       monad-control        >=1.0  && <1.1,
                       network-uri   >=2.6  && <2.7,
-                      aeson         >=0.11 && <2.1,
+                      aeson         >=0.11 && <2.2,
                       attoparsec    >=0.13 && <0.15,
                       transformers-base    >=0.4  && <0.5
   default-language:   Haskell2010
