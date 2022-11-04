@@ -321,7 +321,7 @@ updateImpl (DatabaseEntity dt@(DatabaseTable {})) mkAssignments mkWhere =
 
     tblFields = changeBeamRep (\(Columnar' fd) -> Columnar' (QField False (dbTableCurrentName dt) (fd ^. fieldName)))
                               (dbTableSettings dt)
-    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (pure (fieldE (unqualifiedField nm))))) tblFields
+    tblFieldExprs = changeBeamRep (\(Columnar' (QField _ tbl nm)) -> Columnar' (QExpr (pure (fieldE (qualifiedField tbl nm))))) tblFields
 
 -- | Build a 'SqlUpdate' given a table, a list of assignments, and a way to
 --   build a @WHERE@ clause.

@@ -1144,7 +1144,7 @@ updateCurrent =
 
      updateTable @?= (TableName Nothing "employees")
      updateFields @?= [ (UnqualifiedField "age", ExpressionBinOp "+" (ExpressionFieldName (UnqualifiedField "age")) (ExpressionValue (Value (1 :: Int32)))) ]
-     updateWhere @?= Just (ExpressionCompOp "==" Nothing (ExpressionFieldName (UnqualifiedField "first_name")) (ExpressionValue (Value ("Joe" :: String))))
+     updateWhere @?= Just (ExpressionCompOp "==" Nothing (ExpressionFieldName (QualifiedField "employees" "first_name")) (ExpressionValue (Value ("Joe" :: String))))
 
 updateNullable :: TestTree
 updateNullable =
@@ -1164,7 +1164,7 @@ updateNullable =
                       , (UnqualifiedField "head__last_name", ExpressionValue (Value ("Smith" :: Text)))
                       , (UnqualifiedField "head__created", ExpressionValue (Value curTime)) ]
      updateWhere @?= Just (ExpressionCompOp "==" Nothing
-                             (ExpressionFieldName (UnqualifiedField "name"))
+                             (ExpressionFieldName (QualifiedField "departments" "name"))
                              (ExpressionValue (Value ("Sales" :: String))))
 
 -- | Ensure empty IN operators transform into FALSE
