@@ -497,12 +497,14 @@ instance Beam.BeamHasInsertOnConflict Sqlite where
       in commas $ map emitAssignment assignments
     ]
   onConflictUpdateSetWhere makeAssignments makeWhere =
-    SqliteConflictAction $ \table -> mconcat
-      [ unSqliteConflictAction (Beam.onConflictUpdateSet makeAssignments) table
-      , emit " WHERE "
-      , let QExpr mkE = makeWhere table $ excluded table
-        in fromSqliteExpression $ mkE "t"
-      ]
+    SqliteConflictAction $ \table ->
+      let tableExpr = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField nm)))) table
+      in mconcat
+           [ unSqliteConflictAction (Beam.onConflictUpdateSet makeAssignments) table
+           , emit " WHERE "
+           , let QExpr mkE = makeWhere tableExpr $ excluded table
+             in fromSqliteExpression $ mkE "t"
+           ]
 
 excluded
   :: forall table s

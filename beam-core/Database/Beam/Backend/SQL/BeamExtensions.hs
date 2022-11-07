@@ -178,7 +178,7 @@ class BeamSqlBackend be => BeamHasInsertOnConflict be where
   onConflictUpdateSetWhere
     :: Beamable table
     => (forall s. table (QField s) -> table (QExpr be s) -> QAssignment be s)
-    -> (forall s. table (QField s) -> table (QExpr be s) -> QExpr be s Bool)
+    -> (forall s. table (QExpr be s) -> table (QExpr be s) -> QExpr be s Bool)
     -> SqlConflictAction be table
 
 newtype InaccessibleQAssignment be = InaccessibleQAssignment

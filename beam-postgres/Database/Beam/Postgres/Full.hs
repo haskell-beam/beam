@@ -54,9 +54,9 @@ module Database.Beam.Postgres.Full
   ) where
 
 import           Database.Beam hiding (insert, insertValues)
-import           Database.Beam.Query.Internal
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.BeamExtensions
+import           Database.Beam.Query.Internal
 import           Database.Beam.Schema.Tables
 
 import           Database.Beam.Postgres.Types
@@ -475,7 +475,8 @@ instance BeamHasInsertOnConflict Postgres where
   onConflictUpdateSetWhere mkAssignments where_ =
     PgConflictAction $ \tbl ->
     let QAssignment assignments = mkAssignments tbl tblExcluded
-        QExpr where_' = where_ tbl tblExcluded
+        QExpr where_' = where_ tblExpr tblExcluded
+        tblExpr = changeBeamRep (\(Columnar' (QField _ tblName nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField tblName nm)))) tbl
         tblExcluded = changeBeamRep (\(Columnar' (QField _ _ nm)) -> Columnar' (QExpr (\_ -> fieldE (qualifiedField "excluded" nm)))) tbl
 
         assignmentSyntaxes =
