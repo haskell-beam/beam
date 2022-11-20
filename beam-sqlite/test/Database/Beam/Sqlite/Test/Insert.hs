@@ -2,7 +2,7 @@ module Database.Beam.Sqlite.Test.Insert (tests) where
 
 import Data.Int (Int32)
 import Data.Text (Text)
-import Data.Time (LocalTime)
+import Data.Time (LocalTime, Day(..), UTCTime(..), fromGregorian, getCurrentTime, secondsToDiffTime)
 import Database.Beam
 import Database.Beam.Backend.SQL.BeamExtensions
 import Database.Beam.Sqlite hiding (runInsertReturningList)
@@ -27,6 +27,7 @@ data TestTableT f
   , ttLastName  :: C f Text
   , ttAge       :: C f Int32
   , ttDateJoined :: C f LocalTime
+  , ttDateLoggedIn :: C f UTCTime
   } deriving (Generic, Beamable)
 
 deriving instance Show (TestTableT Identity)
@@ -47,20 +48,24 @@ testDatabase = defaultDbSettings
 
 testInsertReturningColumnOrder :: TestTree
 testInsertReturningColumnOrder = testCase "runInsertReturningList with mismatching column order" $ do
+  now <- getCurrentTime
+  let zeroUtcTime = UTCTime (ModifiedJulianDay 0) 0
+  let oneUtcTime = UTCTime (fromGregorian 1 0 0) (secondsToDiffTime 0)
+
   withTestDb $ \conn -> do
-    execute_ conn "CREATE TABLE test_table ( date_joined TIMESTAMP NOT NULL, first_name TEXT NOT NULL, id INT PRIMARY KEY, age INT NOT NULL, last_name TEXT NOT NULL )"
+    execute_ conn "CREATE TABLE test_table ( date_joined TIMESTAMP NOT NULL, date_logged_in TIMESTAMP WITH TIME ZONE NOT NULL, first_name TEXT NOT NULL, id INT PRIMARY KEY, age INT NOT NULL, last_name TEXT NOT NULL )"
     inserted <-
       runBeamSqlite conn $ runInsertReturningList $
       insert (dbTestTable testDatabase) $
-      insertExpressions [ TestTable 0 (concat_ [ "j", "im" ]) "smith" 19 currentTimestamp_
-                        , TestTable 1 "sally" "apple" ((val_ 56 + val_ 109) `div_` 5) currentTimestamp_
-                        , TestTable 4 "blah" "blah" (-1) currentTimestamp_ ]
+      insertExpressions [ TestTable 0 (concat_ [ "j", "im" ]) "smith" 19 currentTimestamp_ (val_ zeroUtcTime)
+                        , TestTable 1 "sally" "apple" ((val_ 56 + val_ 109) `div_` 5) currentTimestamp_ (val_ oneUtcTime)
+                        , TestTable 4 "blah" "blah" (-1) currentTimestamp_ (val_ now) ]
 
     let dateJoined = ttDateJoined (head inserted)
 
-        expected = [ TestTable 0 "jim" "smith" 19 dateJoined
-                   , TestTable 1 "sally" "apple" 33 dateJoined
-                   , TestTable 4 "blah" "blah" (-1) dateJoined ]
+        expected = [ TestTable 0 "jim" "smith" 19 dateJoined zeroUtcTime
+                   , TestTable 1 "sally" "apple" 33 dateJoined oneUtcTime
+                   , TestTable 4 "blah" "blah" (-1) dateJoined now ]
 
     assertEqual "insert values" inserted expected
 
