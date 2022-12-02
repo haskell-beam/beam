@@ -47,6 +47,7 @@ data QF be (db :: (Type -> Type) -> Type) s next where
 
   QArbitraryJoin :: Projectible be r
                  => QM be db (QNested s) r
+                 -> T.Text -- Table namespace
                  -> (BeamSqlBackendFromSyntax be -> BeamSqlBackendFromSyntax be ->
                      Maybe (BeamSqlBackendExpressionSyntax be) ->
                      BeamSqlBackendFromSyntax be)
