@@ -50,8 +50,8 @@ rec {
         };
         hint = {
           pkg = "hint";
-          ver = "0.9.0.5";
-          sha256 = "0x3yyq4vdpz4rqymbrq70swjpi0k6bnja0vhwlpgbgpzdb3ij7vc";
+          ver = "0.9.0.6";
+          sha256 = "1j7jzx8i1rc66xw4c6gf4kjv0a8ma96j25kfz6rzswik4vp5xmky";
         };
       })
       (self: _: {
