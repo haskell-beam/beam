@@ -17,7 +17,7 @@ let
     ${glibc.bin}/bin/iconv -f ISO-8859-2 -t UTF-8 ${chinookPostgresRaw} > $out
   '';
   chinookSqliteRaw = fetchurl {
-    url = "https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_Sqlite.sql";
+    url = "https://raw.githubusercontent.com/lerocha/chinook-database/e7e6d5f008e35d3f89d8b8a4f8d38e3bfa7e34bd/ChinookDatabase/DataSources/Chinook_Sqlite.sql";
     sha256 = "sha256-Zu+IP8fhmYwpgofjtMJLvL8jFRlKJ43mjLANivq6Q9s=";
   };
   chinookSqlite = runCommand "chinook-sqlite" {} ''
