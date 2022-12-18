@@ -10,7 +10,7 @@ let
     projectDir = ./.;
   };
   chinookPostgresRaw = fetchurl {
-    url = "https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_PostgreSql.sql";
+    url = "https://raw.githubusercontent.com/lerocha/chinook-database/e7e6d5f008e35d3f89d8b8a4f8d38e3bfa7e34bd/ChinookDatabase/DataSources/Chinook_PostgreSql.sql";
     sha256 = "sha256-CVQAyq0WlAn7+0d72nsm9krVDLtMA1QcgHJhwdttNC4=";
   };
   chinookPostgres = runCommand "chinook-postgres" {} ''
