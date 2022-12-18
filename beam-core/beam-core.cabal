@@ -21,6 +21,8 @@ build-type:          Simple
 cabal-version:       1.18
 bug-reports:         https://github.com/haskell-beam/beam/issues
 extra-doc-files:     ChangeLog.md
+tested-with:
+  GHC==9.2.2, GHC==9.0.2
 
 library
   exposed-modules:     Database.Beam Database.Beam.Backend
