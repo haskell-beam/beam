@@ -51,7 +51,7 @@ rec {
         hint = {
           pkg = "hint";
           ver = "0.9.0.6";
-          sha256 = "1j7jzx8i1rc66xw4c6gf4kjv0a8ma96j25kfz6rzswik4vp5xmky";
+          sha256 = "sha256-6IahCrVNaryAInmEVKHr3xjXmjc0dYXQs+KvEHt33+w=";
         };
       })
       (self: _: {

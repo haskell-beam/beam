@@ -11,14 +11,14 @@ let
   };
   chinookPostgresRaw = fetchurl {
     url = "https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_PostgreSql.sql";
-    sha256 = "6945d59e3bca94591e2a96451b9bd69084b026f7fb7dbda3d15d06114ffb34c4";
+    sha256 = "sha256-CVQAyq0WlAn7+0d72nsm9krVDLtMA1QcgHJhwdttNC4=";
   };
   chinookPostgres = runCommand "chinook-postgres" {} ''
     ${glibc.bin}/bin/iconv -f ISO-8859-2 -t UTF-8 ${chinookPostgresRaw} > $out
   '';
   chinookSqliteRaw = fetchurl {
     url = "https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_Sqlite.sql";
-    sha256 = "b2e430ec8cb389509d25ec5bda2f958bbf6f0ca42e276fa5eb3de45eb816a460";
+    sha256 = "sha256-Zu+IP8fhmYwpgofjtMJLvL8jFRlKJ43mjLANivq6Q9s=";
   };
   chinookSqlite = runCommand "chinook-sqlite" {} ''
     tail -c +4 ${chinookSqliteRaw} > $out
