@@ -354,6 +354,9 @@ instance MonadBeam Postgres Pg where
                 Nothing -> pure (Just x)
                 Just _ -> pure Nothing
 
+    runReturningFirst cmd =
+        liftF (PgRunReturning AtOnce cmd id id)
+
     runReturningList cmd =
         liftF (PgRunReturning AtOnce cmd consume id)
       where

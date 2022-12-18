@@ -65,6 +65,7 @@ module Database.Beam.Query
     , select, selectWith, lookup_
     , runSelectReturningList
     , runSelectReturningOne
+    , runSelectReturningFirst
     , dumpSqlSelect
 
     -- ** @INSERT@
@@ -195,6 +196,15 @@ runSelectReturningOne ::
   SqlSelect be a -> m (Maybe a)
 runSelectReturningOne (SqlSelect s) =
   runReturningOne (selectCmd s)
+
+-- | Run a 'SqlSelect' in a 'MonadBeam' and get the first result, if there is
+--   one.
+--   This is not guaranteed to automatically limit the query to one result.
+runSelectReturningFirst ::
+  (MonadBeam be m, BeamSqlBackend be, FromBackendRow be a) =>
+  SqlSelect be a -> m (Maybe a)
+runSelectReturningFirst (SqlSelect s) =
+  runReturningFirst (selectCmd s)
 
 -- | Use a special debug syntax to print out an ANSI Standard @SELECT@ statement
 --   that may be generated for a given 'Q'.
