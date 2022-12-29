@@ -12,6 +12,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- | Data types for Postgres syntax. Access is given mainly for extension
 -- modules. The types and definitions here are likely to change.
@@ -93,7 +94,7 @@ import           Database.Beam.Migrate
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.Serialization
 
-import           Control.Monad (guard)
+import           Control.Monad (guard,void)
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
@@ -290,11 +291,11 @@ fromPgSelectLockingClause s =
     PgSelectLockingStrengthShare -> emit "SHARE"
     PgSelectLockingStrengthKeyShare -> emit "KEY SHARE") <>
   emitTables <>
-  (maybe mempty emitOptions $ pgSelectLockingClauseOptions s)
+  maybe mempty emitOptions (pgSelectLockingClauseOptions s)
   where
     emitTables = case pgSelectLockingTables s of
       [] -> mempty
-      tableNames -> emit " OF " <> (pgSepBy (emit ", ") (map pgQuotedIdentifier tableNames))
+      tableNames -> emit " OF " <> pgSepBy (emit ", ") (map pgQuotedIdentifier tableNames)
 
     emitOptions PgSelectLockingOptionsNoWait = emit " NOWAIT"
     emitOptions PgSelectLockingOptionsSkipLocked = emit " SKIP LOCKED"
@@ -470,10 +471,10 @@ instance IsSql92SelectTableSyntax PgSelectTableSyntax where
     emit "SELECT " <>
     maybe mempty (\setQuantifier' -> fromPgSelectSetQuantifier setQuantifier' <> emit " ") setQuantifier <>
     fromPgProjection proj <>
-    (maybe mempty (emit " FROM " <> ) (coerce from)) <>
-    (maybe mempty (emit " WHERE " <>) (coerce where_)) <>
-    (maybe mempty (emit " GROUP BY " <>) (coerce grouping)) <>
-    (maybe mempty (emit " HAVING " <>) (coerce having))
+    maybe mempty (emit " FROM " <>) (coerce from) <>
+    maybe mempty (emit " WHERE " <>) (coerce where_) <>
+    maybe mempty (emit " GROUP BY " <>) (coerce grouping) <>
+    maybe mempty (emit " HAVING " <>) (coerce having)
 
   unionTables all = pgTableOp (if all then "UNION ALL" else "UNION")
   intersectTables all = pgTableOp (if all then "INTERSECT ALL" else "INTERSECT")
@@ -494,7 +495,7 @@ instance IsSql92FromSyntax PgFromSyntax where
   fromTable tableSrc (Just (nm, colNms)) =
       PgFromSyntax $
       coerce tableSrc <> emit " AS " <> pgQuotedIdentifier nm <>
-      maybe mempty (\colNms' -> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier colNms'))) colNms
+      maybe mempty (pgParens . pgSepBy (emit ",") . map pgQuotedIdentifier) colNms
 
   innerJoin a b Nothing = PgFromSyntax (fromPgFrom a <> emit " CROSS JOIN " <> fromPgFrom b)
   innerJoin a b (Just e) = pgJoin "INNER JOIN" a b (Just e)
@@ -967,8 +968,7 @@ instance IsSql92TableSourceSyntax PgTableSourceSyntax where
   tableFromValues vss = PgTableSourceSyntax . pgParens $
                         emit "VALUES " <>
                         pgSepBy (emit ", ")
-                                (map (\vs -> pgParens (pgSepBy (emit ", ")
-                                                               (map fromPgExpression vs))) vss)
+                                (map (pgParens . pgSepBy (emit ", ") . map fromPgExpression) vss)
 
 instance IsSql92ProjectionSyntax PgProjectionSyntax where
   type Sql92ProjectionExpressionSyntax PgProjectionSyntax = PgExpressionSyntax
@@ -1301,7 +1301,7 @@ pgDebugRenderSyntax (PgSyntax p) = go p Nothing
             (EmitBuilder s next, lastBs) ->
               step (EmitByteString (toStrict (toLazyByteString s)) next) lastBs
             (x, Nothing) ->
-              nextSyntaxStep x (Just (fmap (const ()) x))
+              nextSyntaxStep x (Just (void x))
             (EmitByteString x next, Just (EmitByteString before _)) ->
               next (Just (EmitByteString (before <> x) ()))
             (EscapeString x next, Just (EscapeString before _)) ->
@@ -1312,7 +1312,7 @@ pgDebugRenderSyntax (PgSyntax p) = go p Nothing
               next (Just (EscapeIdentifier (before <> x) ()))
             (s, Just e) ->
               renderStep e >>
-              nextSyntaxStep s (Just (fmap (const ()) s))
+              nextSyntaxStep s (Just (void s))
 
         renderStep (EmitByteString x _) = putStrLn ("EmitByteString " <> show x)
         renderStep (EmitBuilder x _) = putStrLn ("EmitBuilder " <> show (toLazyByteString x))
@@ -1325,8 +1325,7 @@ pgDebugRenderSyntax (PgSyntax p) = go p Nothing
 
 pgBuildAction :: [ Pg.Action ] -> PgSyntax
 pgBuildAction =
-  foldMap $ \action ->
-  case action of
+  foldMap $ \case
     Pg.Plain x -> emitBuilder x
     Pg.Escape str -> emit "'" <> escapeString str <> emit "'"
     Pg.EscapeByteA bin -> emit "'" <> escapeBytea bin <> emit "'"
