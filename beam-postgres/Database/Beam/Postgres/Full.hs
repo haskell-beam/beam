@@ -260,6 +260,7 @@ lateral_ :: forall s a b db
 lateral_ using mkSubquery = do
   let Q subquery = mkSubquery (rewriteThread (Proxy @(QNested s)) using)
   Q (liftF (QArbitraryJoin subquery
+                           "lat_"
                            (\a b on' ->
                               case on' of
                                 Nothing ->
