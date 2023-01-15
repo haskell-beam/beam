@@ -13,25 +13,14 @@ rec {
     "beam-migrate-cli"
   ];
   ghcVersions = {
-    ghc865 = haskell.packages.ghc865Binary.extend (composeExtensionList [
-      (_: super: {
-       # Similar weird library issue as with beam-migrate-cli:
-        constraints-extras = haskell.lib.disableCabalFlag
-          super.constraints-extras
-          "build-readme";
-      })
-      (applyToPackages haskell.lib.doJailbreak [
-        "mono-traversable"
-      ])
-    ]);
     inherit (haskell.packages) ghc884;
     inherit (haskell.packages) ghc8107;
-    ghc901 = haskell.packages.ghc901.extend (composeExtensionList [
+    ghc902 = haskell.packages.ghc902.extend (composeExtensionList [
       (applyToPackages haskell.lib.doJailbreak [
         "pqueue"
       ])
     ]);
-    ghc921 = haskell.packages.ghc921.extend (composeExtensionList [
+    ghc925 = haskell.packages.ghc925.extend (composeExtensionList [
       (applyToPackages haskell.lib.doJailbreak [
         "postgresql-libpq"
         "postgresql-simple"
@@ -56,7 +45,7 @@ rec {
       })
       (self: _: {
         # This is not needed, but it tests the version bounds:
-        aeson = self.aeson_2_0_1_0;
+        aeson = self.aeson_2_1_1_0;
       })
     ]);
   };
