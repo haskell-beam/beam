@@ -33,7 +33,7 @@ executable beam-migrate
                        text                 >=1.2      && <2.1,
                        bytestring           >=0.10     && <0.12,
                        time                 >=1.6      && <1.13,
-                       optparse-applicative >=0.13     && <0.17,
+                       optparse-applicative >=0.13     && <0.18,
                        directory            >=1.2      && <1.4,
                        filepath             >=1.4      && <1.5,
                        largeword            >=1.2      && <1.3,
