@@ -31,18 +31,6 @@ rec {
         # This is not needed, but it tests the version bounds:
         "vector-sized" = "1.5.0";
       })
-      (pinHackageDirectVersions {
-        constraints-extras = {
-          pkg = "constraints-extras";
-          ver = "0.3.2.1";
-          sha256 = "03hsja50vzflqqmvvxgc9w32dqg51dlw8i0blpqb2ipv7njx4q2q";
-        };
-        hint = {
-          pkg = "hint";
-          ver = "0.9.0.6";
-          sha256 = "sha256-6IahCrVNaryAInmEVKHr3xjXmjc0dYXQs+KvEHt33+w=";
-        };
-      })
       (self: _: {
         # This is not needed, but it tests the version bounds:
         aeson = self.aeson_2_1_1_0;
