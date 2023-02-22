@@ -230,11 +230,11 @@ setEntitySchema :: IsDatabaseEntity be entity => Maybe Text -> EntityModificatio
 setEntitySchema nm = modifyEntitySchema (\_ -> nm)
 
 -- | Modify an embedded database
-embedDatabase :: forall be embedded db. Database be embedded => DatabaseSettings be embedded -> embedded (DatabaseEntity be db)
+embedDatabase :: forall be embedded db. Database be embedded => DatabaseSettings be embedded -> embedded (EntityModification (DatabaseEntity be db) be)
 embedDatabase db =
     runIdentity $
     zipTables (Proxy @be)
-              (\(DatabaseEntity x) _ -> pure (DatabaseEntity x))
+              (\(DatabaseEntity x) _ -> pure (EntityModification (\_ -> DatabaseEntity x)))
               db db
 
 -- | Construct an 'EntityModification' to rename the fields of a 'TableEntity'
