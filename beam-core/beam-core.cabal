@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                beam-core
-version:             0.10.0.0
+version:             0.10.1.0
 synopsis:            Type-safe, feature-complete SQL query and manipulation interface for Haskell
 description:         Beam is a Haskell library for type-safe querying and manipulation of SQL databases.
                      Beam is modular and supports various backends. In order to use beam, you will need to use
@@ -101,7 +101,7 @@ test-suite beam-core-tests
   hs-source-dirs: test
   main-is: Main.hs
   other-modules: Database.Beam.Test.Schema Database.Beam.Test.SQL
-  build-depends: base, beam-core, text, bytestring, time, tasty, tasty-hunit
+  build-depends: base, beam-core, text, bytestring, time, tasty, tasty-hunit, microlens
   default-language: Haskell2010
   default-extensions: OverloadedStrings, FlexibleInstances, FlexibleContexts, GADTs, TypeFamilies,
                       DeriveGeneric, DefaultSignatures, RankNTypes, StandaloneDeriving, KindSignatures,
