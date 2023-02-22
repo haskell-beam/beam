@@ -334,7 +334,7 @@ superDbSettingsDefault :: DatabaseSettings be SuperDb
 superDbSettingsDefault = defaultDbSettings
 
 superDbSettingsCustom :: DatabaseSettings be SuperDb
-superDbSettingsCustom = defaultDbSettings { _embedVehicleDb = embedDatabase customVehicleDb }
+superDbSettingsCustom = defaultDbSettings `withDbModification` dbModification { _embedVehicleDb = embedDatabase customVehicleDb }
 
 customVehicleDb :: DatabaseSettings be VehicleDb
 customVehicleDb = defaultDbSettings `withDbModification` dbModification

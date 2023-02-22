@@ -229,12 +229,12 @@ setEntityName nm = modifyEntityName (\_ -> nm)
 setEntitySchema :: IsDatabaseEntity be entity => Maybe Text -> EntityModification (DatabaseEntity be db) be entity
 setEntitySchema nm = modifyEntitySchema (\_ -> nm)
 
--- | Modify an embedded database
+-- | Embed database settings in a larger database
 embedDatabase :: forall be embedded db. Database be embedded => DatabaseSettings be embedded -> embedded (EntityModification (DatabaseEntity be db) be)
 embedDatabase db =
     runIdentity $
     zipTables (Proxy @be)
-              (\(DatabaseEntity x) _ -> pure (EntityModification (\_ -> DatabaseEntity x)))
+              (\(DatabaseEntity x) _ -> pure (EntityModification (Endo (\_ -> DatabaseEntity x))))
               db db
 
 -- | Construct an 'EntityModification' to rename the fields of a 'TableEntity'
@@ -408,7 +408,12 @@ instance ( Database be embedded
          , Generic (DatabaseSettings be embedded)
          , GAutoDbSettings (Rep (DatabaseSettings be embedded) ()) ) =>
     GAutoDbSettings (S1 f (K1 Generic.R (embedded (DatabaseEntity be super))) p) where
-  autoDbSettings' = M1 (K1 (embedDatabase defaultDbSettings))
+  autoDbSettings' =
+    M1 . K1 . runIdentity $
+    zipTables (Proxy @be)
+              (\(DatabaseEntity x) _ -> pure (DatabaseEntity x))
+              db db
+    where db = defaultDbSettings @be
 
 class GZipDatabase be f g h x y z where
   gZipDatabase :: Applicative m =>
