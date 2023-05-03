@@ -10,6 +10,7 @@ import Database.Beam.Schema.Tables
 
 import Control.Monad.Identity
 
+import Data.Function
 import Data.Kind (Type)
 import Data.Proxy
 

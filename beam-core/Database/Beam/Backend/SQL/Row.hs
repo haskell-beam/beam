@@ -20,6 +20,7 @@ import           Database.Beam.Backend.Types
 
 import           Control.Applicative
 import           Control.Exception (Exception)
+import           Control.Monad
 import           Control.Monad.Free.Church
 import           Control.Monad.Identity
 import           Data.Kind (Type)

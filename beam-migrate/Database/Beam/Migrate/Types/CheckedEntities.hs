@@ -16,6 +16,7 @@ import Control.Monad.Writer
 import Control.Monad.Identity
 
 import Data.Maybe
+import Data.Monoid
 import Data.Proxy
 import Data.Text (Text)
 import Data.String

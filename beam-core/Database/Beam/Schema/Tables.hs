@@ -70,6 +70,7 @@ import           Control.Monad.Writer hiding ((<>))
 import           Data.Char (isUpper, toLower)
 import           Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
+import           Data.Monoid
 import           Data.Proxy
 import           Data.String (IsString(..))
 import           Data.Text (Text)
