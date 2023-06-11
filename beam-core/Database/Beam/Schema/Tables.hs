@@ -25,7 +25,7 @@ module Database.Beam.Schema.Tables
     , withTableModification, modifyTable, modifyEntityName
     , setEntityName, modifyTableFields, fieldNamed
     , modifyEntitySchema, setEntitySchema
-    , defaultDbSettings
+    , defaultDbSettings, embedDatabase
 
     , RenamableWithRule(..), RenamableField(..)
     , FieldRenamer(..)
@@ -204,7 +204,6 @@ withTableModification mods tbl =
   runIdentity $ zipBeamFieldsM (\(Columnar' field :: Columnar' f a) (Columnar' (FieldModification fieldFn :: FieldModification f a)) ->
                                   pure (Columnar' (fieldFn field))) tbl mods
 
-
 -- | Provide an 'EntityModification' for 'TableEntity's. Allows you to modify
 --   the name of the table and provide a modification for each field in the
 --   table. See the examples for 'withDbModification' for more.
@@ -229,6 +228,14 @@ setEntityName nm = modifyEntityName (\_ -> nm)
 
 setEntitySchema :: IsDatabaseEntity be entity => Maybe Text -> EntityModification (DatabaseEntity be db) be entity
 setEntitySchema nm = modifyEntitySchema (\_ -> nm)
+
+-- | Embed database settings in a larger database
+embedDatabase :: forall be embedded db. Database be embedded => DatabaseSettings be embedded -> embedded (EntityModification (DatabaseEntity be db) be)
+embedDatabase db =
+    runIdentity $
+    zipTables (Proxy @be)
+              (\(DatabaseEntity x) _ -> pure (EntityModification (Endo (\_ -> DatabaseEntity x))))
+              db db
 
 -- | Construct an 'EntityModification' to rename the fields of a 'TableEntity'
 modifyTableFields :: tbl (FieldModification (TableField tbl)) -> EntityModification (DatabaseEntity be db) be (TableEntity tbl)
@@ -397,6 +404,16 @@ instance ( Selector f, IsDatabaseEntity be x, DatabaseEntityDefaultRequirements 
   GAutoDbSettings (S1 f (K1 Generic.R (DatabaseEntity be db x)) p) where
   autoDbSettings' = M1 (K1 (DatabaseEntity (dbEntityAuto name)))
     where name = T.pack (selName (undefined :: S1 f (K1 Generic.R (DatabaseEntity be db x)) p))
+instance ( Database be embedded
+         , Generic (DatabaseSettings be embedded)
+         , GAutoDbSettings (Rep (DatabaseSettings be embedded) ()) ) =>
+    GAutoDbSettings (S1 f (K1 Generic.R (embedded (DatabaseEntity be super))) p) where
+  autoDbSettings' =
+    M1 . K1 . runIdentity $
+    zipTables (Proxy @be)
+              (\(DatabaseEntity x) _ -> pure (DatabaseEntity x))
+              db db
+    where db = defaultDbSettings @be
 
 class GZipDatabase be f g h x y z where
   gZipDatabase :: Applicative m =>
@@ -416,6 +433,11 @@ instance (IsDatabaseEntity be tbl, DatabaseEntityRegularRequirements be tbl) =>
 
   gZipDatabase _ combine ~(K1 x) ~(K1 y) =
     K1 <$> combine x y
+instance Database be db =>
+    GZipDatabase be f g h (K1 Generic.R (db f)) (K1 Generic.R (db g)) (K1 Generic.R (db h)) where
+
+  gZipDatabase _ combine ~(K1 x) ~(K1 y) =
+      K1 <$> zipTables (Proxy @be) combine x y
 
 data Lenses (t :: (Type -> Type) -> Type) (f :: Type -> Type) x
 data LensFor t x where
