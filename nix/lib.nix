@@ -6,6 +6,8 @@ rec {
     "beam-migrate"
     "beam-postgres"
     "beam-sqlite"
+  ] ++ lib.optionals (builtins.compareVersions ghc.ghc.version "9.4" < 0) [
+    # hint doesn't yet support 9.4+
     "beam-migrate-cli"
   ];
   ghcVersions = {
@@ -13,6 +15,11 @@ rec {
     inherit (haskell.packages) ghc810;
     inherit (haskell.packages) ghc90;
     inherit (haskell.packages) ghc92;
+    ghc94 = haskell.packages.ghc94.extend (composeExtensionList [
+      (self: _: {
+        postgresql-simple = self.postgresql-simple_0_6_5;
+      })
+    ]);
   };
 
   # Currently unused as we don't need any overrides with current nixpkgs
