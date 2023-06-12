@@ -1,5 +1,5 @@
 { nixpkgs ? import ../nix/nixpkgs.nix {}
-, ghc ? nixpkgs.haskellPackages
+, ghc ? nixpkgs.haskell.packages.ghc88 # TODO: Fixes for GHC 9+
 }:
 with nixpkgs;
 
