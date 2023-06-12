@@ -28,6 +28,7 @@ import           Database.Beam.Sqlite.Syntax
 
 import           Control.Applicative
 import           Control.Exception
+import           Control.Monad
 import           Control.Monad.Reader
 
 import           Database.SQLite.Simple (open, close, query_)
