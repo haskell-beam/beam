@@ -34,7 +34,7 @@ library
                       hashable      >=1.2  && <1.5,
                       time          >=1.6  && <1.13,
                       dlist         >=0.8  && <1.1,
-                      mtl           >=2.1  && <2.3,
+                      mtl           >=2.1  && <2.4,
                       free          >=4.12 && <5.2,
                       scientific    >=0.3  && <0.4,
                       monad-control        >=1.0  && <1.1,
@@ -55,7 +55,7 @@ library
     build-depends:    Win32         >=2.4 && <2.8
   if os(freebsd) || os(netbsd) || os(openbsd) || os(darwin) || os(linux) || os(solaris) || os(android)
     cpp-options:      -DUNIX
-    build-depends:    unix          >=2.0 && <2.8
+    build-depends:    unix          >=2.0 && <2.9
 
 test-suite beam-sqlite-tests
   type: exitcode-stdio-1.0

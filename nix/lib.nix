@@ -4,11 +4,13 @@ rec {
   beamPackageNames = ghc: [
     "beam-core"
     "beam-migrate"
-    "beam-postgres"
     "beam-sqlite"
   ] ++ lib.optionals (builtins.compareVersions ghc.ghc.version "9.4" < 0) [
     # hint doesn't yet support 9.4+
     "beam-migrate-cli"
+  ] ++ lib.optionals (builtins.compareVersions ghc.ghc.version "9.6" < 0) [
+    # postgres-options doesn't yet support 9.6+
+    "beam-postgres"
   ];
   ghcVersions = {
     inherit (haskell.packages) ghc88;
@@ -19,6 +21,11 @@ rec {
       (self: _: {
         postgresql-simple = self.postgresql-simple_0_6_5;
       })
+    ]);
+    ghc96 = haskell.packages.ghc96.extend (composeExtensionList [
+      (applyToPackages haskell.lib.doJailbreak [
+        "pqueue"
+      ])
     ]);
   };
 
