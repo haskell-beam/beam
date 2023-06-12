@@ -11,6 +11,6 @@ in beamGhc.shellFor {
   packages = beamLib.beamPackageList;
   nativeBuildInputs = [
     postgresql
-    sqliteInteractive
+    sqlite-interactive
   ];
 }
