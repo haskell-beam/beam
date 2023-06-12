@@ -73,7 +73,7 @@ data SelectBuilder be (db :: (* -> *) -> *) a where
     , sbOrdering        :: [ BeamSqlBackendOrderingSyntax be ]
     , sbTable           :: SelectBuilder be db a
     , sbSelectFn        :: Maybe (SelectStmtFn be)
-    , sbIndexHints      :: Maybe (BeamSqlBackendIndexHintsSyntax be)
+    , sbIndexHints      :: Maybe T.Text
                         -- ^ Which 'SelectStmtFn' to use to build this select. If 'Nothing', use the default
     } -> SelectBuilder be db a
 
@@ -144,6 +144,11 @@ setSelectBuilderProjection (SelectBuilderGrouping _ q grouping having d) proj = 
 setSelectBuilderProjection (SelectBuilderSelectSyntax containsSetOp _ q) proj = SelectBuilderSelectSyntax containsSetOp proj q
 setSelectBuilderProjection (SelectBuilderTopLevel limit offset ord sb s indexing) proj =
     SelectBuilderTopLevel limit offset ord (setSelectBuilderProjection sb proj) s indexing
+
+indexHintsSelectBuilder :: T.Text -> SelectBuilder syntax db a -> SelectBuilder syntax db a
+indexHintsSelectBuilder indexHints (SelectBuilderTopLevel limit' offset ordering tbl build indexing) =
+    SelectBuilderTopLevel limit' offset ordering tbl build  (Just indexHints)
+indexHintsSelectBuilder indexHints x = SelectBuilderTopLevel Nothing Nothing [] x Nothing (Just indexHints)
 
 limitSelectBuilder, offsetSelectBuilder :: Integer -> SelectBuilder syntax db a -> SelectBuilder syntax db a
 limitSelectBuilder limit (SelectBuilderTopLevel limit' offset ordering tbl build indexing) =
@@ -350,6 +355,15 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
              Pure x' -> setSelectBuilderProjection sb x'
 
              -- Otherwise, this is going to be part of a join...
+             _ -> let (x', qb) = selectBuilderToQueryBuilder tblPfx sb
+                  in buildJoinedQuery (next x') qb
+
+    buildQuery (Free (QIndexHints indexHints q' next)) =
+        let x = sbProj sb
+            sb = indexHintsSelectBuilder indexHints (buildQuery (fromF q'))
+        in case next x of
+             Pure x' -> setSelectBuilderProjection sb x'
+
              _ -> let (x', qb) = selectBuilderToQueryBuilder tblPfx sb
                   in buildJoinedQuery (next x') qb
 

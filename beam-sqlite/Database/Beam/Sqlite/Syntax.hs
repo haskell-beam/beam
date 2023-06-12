@@ -603,13 +603,14 @@ instance IsSql92SelectSyntax SqliteSelectSyntax where
 
 instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   type Sql92SelectTableSelectSyntax SqliteSelectTableSyntax = SqliteSelectSyntax
+  type Sql92SelectTableSetIndexHintsSyntax SqliteSelectTableSyntax = SqliteExpressionSyntax
   type Sql92SelectTableExpressionSyntax SqliteSelectTableSyntax = SqliteExpressionSyntax
   type Sql92SelectTableProjectionSyntax SqliteSelectTableSyntax = SqliteProjectionSyntax
   type Sql92SelectTableFromSyntax SqliteSelectTableSyntax = SqliteFromSyntax
   type Sql92SelectTableGroupingSyntax SqliteSelectTableSyntax = SqliteGroupingSyntax
   type Sql92SelectTableSetQuantifierSyntax SqliteSelectTableSyntax = SqliteAggregationSetQuantifierSyntax
 
-  selectTableStmt setQuantifier proj from where_ grouping having =
+  selectTableStmt setQuantifier indexHints proj from where_ grouping having =
     SqliteSelectTableSyntax $
     emit "SELECT " <>
     maybe mempty (<> emit " ") (fromSqliteAggregationSetQuantifier <$> setQuantifier) <>
@@ -863,6 +864,10 @@ unAgg fn q e =
 instance IsSql92AggregationSetQuantifierSyntax SqliteAggregationSetQuantifierSyntax where
   setQuantifierDistinct = SqliteAggregationSetQuantifierSyntax (emit "DISTINCT")
   setQuantifierAll = SqliteAggregationSetQuantifierSyntax (emit "ALL")
+
+instance IsSql92AggregationIndexHintsSyntax SqliteExpressionSyntax where
+  setIndexForce = undefined
+  setIndexUse = undefined
 
 instance IsSql92InsertSyntax SqliteInsertSyntax where
   type Sql92InsertTableNameSyntax SqliteInsertSyntax = SqliteTableNameSyntax

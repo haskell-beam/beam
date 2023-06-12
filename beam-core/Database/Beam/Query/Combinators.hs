@@ -64,6 +64,8 @@ module Database.Beam.Query.Combinators
 
     -- * Ordering primitives
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
+
+    , forceIndex_
     ) where
 
 import Database.Beam.Backend.Types
@@ -88,6 +90,7 @@ import Data.Semigroup
 import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
+import Data.Text (Text)
 
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: ( Database be db, BeamSqlBackend be )
@@ -329,6 +332,14 @@ references_' fk tbl = fk ==?. pk tbl
 nub_ :: ( BeamSqlBackend be, Projectible be r )
      => Q be db s r -> Q be db s r
 nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
+
+forceIndex_ :: ( BeamSqlBackend be, Projectible be r )
+     => Text -> Q be db s r -> Q be db s r
+forceIndex_ str (Q sub) = Q $ liftF (QIndexHints ("FORCE INDEX " <> str) sub id)
+
+useIndex_ :: ( BeamSqlBackend be, Projectible be r )
+     => Text -> Q be db s r -> Q be db s r
+useIndex_ str (Q sub) = Q $ liftF (QIndexHints ("USE INDEX " <> str) sub id)
 
 -- | Limit the number of results returned by a query.
 limit_ :: forall s a be db
@@ -733,6 +744,26 @@ desc_ :: forall be s a
        . BeamSqlBackend be
       => QExpr be s a -> QOrd be s a
 desc_ (QExpr e) = QOrd (descOrdering <$> e)
+
+-- indexHints_ :: forall s a be db
+--         . ( Projectible be a
+--           , ThreadRewritable (QNested s) a )
+--         => BeamSqlBackendIndexHintsSyntax be -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
+-- indexHints_ indexHints (Q q) =
+--   Q (liftF (QIndexHints indexHints q (rewriteThread (Proxy @s))))
+
+
+-- indexHintsForce_ :: forall s a be db
+--         . ( Projectible be a
+--           , ThreadRewritable (QNested s) a )
+--         => Expression -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
+-- indexHintsForce_ indexHints (Q q) =
+--   Q (liftF (QIndexHints (setIndexForce indexHints) q (rewriteThread (Proxy @s))))
+
+-- asc_' :: forall be s a
+--       . BeamSqlBackend be
+--      => QExpr be s a -> QOrd be s a
+-- asc_' (QExpr e) = QOrd (setIndexForce <$> e)
 
 -- * Subqueries
 

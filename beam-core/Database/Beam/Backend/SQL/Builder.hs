@@ -111,7 +111,7 @@ instance IsSql92SelectTableSyntax SqlSyntaxBuilder where
     maybe mempty (\setQuantifier' -> buildSql setQuantifier' <> byteString " ") setQuantifier <>
     buildSql proj <>
     maybe mempty ((byteString " FROM " <>) . buildSql) from <>
-    maybe mempty (\e -> buildSql e) indexHints <>
+    maybe mempty (\e -> byteString $ TE.encodeUtf8 e) indexHints <>
     maybe mempty (\w -> byteString " WHERE " <> buildSql w) where_ <>
     maybe mempty (\g -> byteString " GROUP BY " <> buildSql g) grouping <>
     maybe mempty (\e -> byteString " HAVING " <> buildSql e) having

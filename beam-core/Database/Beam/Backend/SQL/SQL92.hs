@@ -134,7 +134,7 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
   type Sql92SelectTableSetIndexHintsSyntax select :: *
 
   selectTableStmt :: Maybe (Sql92SelectTableSetQuantifierSyntax select)
-                  -> Maybe (Sql92SelectTableSetIndexHintsSyntax select)
+                  -> Maybe (Text)
                   -> Sql92SelectTableProjectionSyntax select
                   -> Maybe (Sql92SelectTableFromSyntax select)
                   -> Maybe (Sql92SelectTableExpressionSyntax select)   {-^ Where clause -}

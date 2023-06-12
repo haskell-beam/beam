@@ -83,6 +83,8 @@ data QF be (db :: (* -> *) -> *) s next where
            => (r -> WithExprContext [ BeamSqlBackendOrderingSyntax be ])
            -> QM be db (QNested s) r -> (r -> next) -> QF be db s next
 
+  QIndexHints  :: Projectible be r => T.Text -> QM be db s r -> (r -> next) -> QF be db s next
+
   QWindowOver :: ( ProjectibleWithPredicate WindowFrameContext be (WithExprContext (BeamSqlBackendWindowFrameSyntax' be)) window
                  , Projectible be r
                  , Projectible be a )
@@ -155,6 +157,7 @@ data QWindowFrameContext
 --   from depending on the result of previous joins (so-called @LATERAL@ joins).
 newtype QGenExpr context be s t = QExpr (TablePrefix -> BeamSqlBackendExpressionSyntax be)
 newtype QOrd be s t = QOrd (TablePrefix -> BeamSqlBackendOrderingSyntax be)
+
 
 type WithExprContext a = TablePrefix -> a
 
