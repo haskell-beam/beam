@@ -52,6 +52,7 @@ instance IsSql92SelectSyntax Select where
 data SelectTable
   = SelectTable
   { selectQuantifier :: Maybe SetQuantifier
+  , selectIndexHints :: Maybe IndexHints
   , selectProjection :: Projection
   , selectFrom       :: Maybe From
   , selectWhere      :: Maybe Expression
@@ -64,6 +65,7 @@ data SelectTable
 
 instance IsSql92SelectTableSyntax SelectTable where
   type Sql92SelectTableSelectSyntax SelectTable = Select
+  type Sql92SelectTableSetIndexHintsSyntax SelectTable = IndexHints
   type Sql92SelectTableExpressionSyntax SelectTable = Expression
   type Sql92SelectTableProjectionSyntax SelectTable = Projection
   type Sql92SelectTableFromSyntax SelectTable = From
@@ -225,6 +227,14 @@ data SetQuantifier
 instance IsSql92AggregationSetQuantifierSyntax SetQuantifier where
   setQuantifierDistinct = SetQuantifierDistinct
   setQuantifierAll = SetQuantifierAll
+
+data IndexHints
+  = IndexForce | IndexUse
+  deriving (Show, Eq)
+
+instance IsSql92AggregationIndexHintsSyntax IndexHints where
+  setIndexForce = IndexForce
+  setIndexUse = IndexUse
 
 data Expression
   = ExpressionValue Value

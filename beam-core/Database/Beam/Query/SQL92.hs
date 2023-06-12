@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-unused-binds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.SQL92
@@ -72,6 +73,7 @@ data SelectBuilder be (db :: (* -> *) -> *) a where
     , sbOrdering        :: [ BeamSqlBackendOrderingSyntax be ]
     , sbTable           :: SelectBuilder be db a
     , sbSelectFn        :: Maybe (SelectStmtFn be)
+    , sbIndexHints      :: Maybe (BeamSqlBackendIndexHintsSyntax be)
                         -- ^ Which 'SelectStmtFn' to use to build this select. If 'Nothing', use the default
     } -> SelectBuilder be db a
 
@@ -97,25 +99,25 @@ defaultProjection be pfx =
 buildSelect :: forall be db a
              . ( BeamSqlBackend be, Projectible be a )
             => TablePrefix -> SelectBuilder be db a -> BeamSqlBackendSelectSyntax be
-buildSelect _ (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ _ table) selectStmt') =
+buildSelect _ (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ _ table) selectStmt' indexing) =
     (fromMaybe selectStmt selectStmt') table ordering limit offset
-buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_)) selectStmt') =
-    (fromMaybe selectStmt selectStmt') (selectTableStmt Nothing (projExprs (defaultProjection (Proxy @be) pfx proj)) from where_ Nothing Nothing) ordering limit offset
-buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ from where_) grouping having distinct) selectStmt') =
-    (fromMaybe selectStmt selectStmt') (selectTableStmt distinct (projExprs (defaultProjection (Proxy @be) pfx proj)) from where_ grouping having) ordering limit offset
-buildSelect pfx x = buildSelect pfx (SelectBuilderTopLevel Nothing Nothing [] x Nothing)
+buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_)) selectStmt' indexing) =
+    (fromMaybe selectStmt selectStmt') (selectTableStmt Nothing indexing (projExprs (defaultProjection (Proxy @be) pfx proj)) from where_ Nothing Nothing) ordering limit offset
+buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ from where_) grouping having distinct) selectStmt' indexing) =
+    (fromMaybe selectStmt selectStmt') (selectTableStmt distinct indexing (projExprs (defaultProjection (Proxy @be) pfx proj)) from where_ grouping having) ordering limit offset
+buildSelect pfx x = buildSelect pfx (SelectBuilderTopLevel Nothing Nothing [] x Nothing Nothing)
 
 selectBuilderToTableSource :: forall be db a
                             . ( BeamSqlBackend be, Projectible be a )
                            => TablePrefix -> SelectBuilder be db a -> BeamSqlBackendSelectTableSyntax be
 selectBuilderToTableSource _ (SelectBuilderSelectSyntax _ _ x) = x
 selectBuilderToTableSource pfx (SelectBuilderQ x (QueryBuilder _ from where_)) =
-  selectTableStmt Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
+  selectTableStmt Nothing Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
 selectBuilderToTableSource pfx (SelectBuilderGrouping x (QueryBuilder _ from where_) grouping having distinct) =
-  selectTableStmt distinct (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ grouping having
+  selectTableStmt distinct Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ grouping having
 selectBuilderToTableSource pfx sb =
     let (x, QueryBuilder _ from where_) = selectBuilderToQueryBuilder pfx sb
-    in selectTableStmt Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
+    in selectTableStmt Nothing Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
 
 selectBuilderToQueryBuilder :: forall be db a
                              . ( BeamSqlBackend be, Projectible be a)
@@ -133,26 +135,26 @@ sbProj :: SelectBuilder syntax db a -> a
 sbProj (SelectBuilderQ proj _) = proj
 sbProj (SelectBuilderGrouping proj _ _ _ _) = proj
 sbProj (SelectBuilderSelectSyntax _ proj _) = proj
-sbProj (SelectBuilderTopLevel _ _ _ sb _) = sbProj sb
+sbProj (SelectBuilderTopLevel _ _ _ sb _ _) = sbProj sb
 
 setSelectBuilderProjection :: Projectible be b
                            => SelectBuilder be db a -> b -> SelectBuilder be db b
 setSelectBuilderProjection (SelectBuilderQ _ q) proj = SelectBuilderQ proj q
 setSelectBuilderProjection (SelectBuilderGrouping _ q grouping having d) proj = SelectBuilderGrouping proj q grouping having d
 setSelectBuilderProjection (SelectBuilderSelectSyntax containsSetOp _ q) proj = SelectBuilderSelectSyntax containsSetOp proj q
-setSelectBuilderProjection (SelectBuilderTopLevel limit offset ord sb s) proj =
-    SelectBuilderTopLevel limit offset ord (setSelectBuilderProjection sb proj) s
+setSelectBuilderProjection (SelectBuilderTopLevel limit offset ord sb s indexing) proj =
+    SelectBuilderTopLevel limit offset ord (setSelectBuilderProjection sb proj) s indexing
 
 limitSelectBuilder, offsetSelectBuilder :: Integer -> SelectBuilder syntax db a -> SelectBuilder syntax db a
-limitSelectBuilder limit (SelectBuilderTopLevel limit' offset ordering tbl build) =
-    SelectBuilderTopLevel (Just $ maybe limit (min limit) limit') offset ordering tbl build
-limitSelectBuilder limit x = SelectBuilderTopLevel (Just limit) Nothing [] x Nothing
+limitSelectBuilder limit (SelectBuilderTopLevel limit' offset ordering tbl build indexing) =
+    SelectBuilderTopLevel (Just $ maybe limit (min limit) limit') offset ordering tbl build indexing
+limitSelectBuilder limit x = SelectBuilderTopLevel (Just limit) Nothing [] x Nothing Nothing
 
-offsetSelectBuilder offset (SelectBuilderTopLevel Nothing offset' ordering tbl build) =
-    SelectBuilderTopLevel Nothing (Just $ offset + fromMaybe 0 offset') ordering tbl build
-offsetSelectBuilder offset (SelectBuilderTopLevel (Just limit) offset' ordering tbl build) =
-    SelectBuilderTopLevel (Just $ max 0 (limit - offset)) (Just $ offset + fromMaybe 0 offset') ordering tbl build
-offsetSelectBuilder offset x = SelectBuilderTopLevel Nothing (Just offset) [] x Nothing
+offsetSelectBuilder offset (SelectBuilderTopLevel Nothing offset' ordering tbl build indexing) =
+    SelectBuilderTopLevel Nothing (Just $ offset + fromMaybe 0 offset') ordering tbl build indexing
+offsetSelectBuilder offset (SelectBuilderTopLevel (Just limit) offset' ordering tbl build indexing) =
+    SelectBuilderTopLevel (Just $ max 0 (limit - offset)) (Just $ offset + fromMaybe 0 offset') ordering tbl build indexing
+offsetSelectBuilder offset x = SelectBuilderTopLevel Nothing (Just offset) [] x Nothing Nothing
 
 exprWithContext :: TablePrefix -> WithExprContext a -> a
 exprWithContext pfx = ($ nextTblPfx pfx)
@@ -285,18 +287,18 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
             doJoined =
                 let sb' = case sb of
                             SelectBuilderQ {} ->
-                                SelectBuilderTopLevel Nothing Nothing ordering sb Nothing
+                                SelectBuilderTopLevel Nothing Nothing ordering sb Nothing Nothing
                             SelectBuilderGrouping {} ->
-                                SelectBuilderTopLevel Nothing Nothing ordering sb Nothing
+                                SelectBuilderTopLevel Nothing Nothing ordering sb Nothing Nothing
                             SelectBuilderSelectSyntax {} ->
-                                SelectBuilderTopLevel Nothing Nothing ordering sb Nothing
-                            SelectBuilderTopLevel Nothing Nothing [] sb' build ->
-                                SelectBuilderTopLevel Nothing Nothing ordering sb' build
-                            SelectBuilderTopLevel Nothing (Just 0) [] sb' build ->
-                                SelectBuilderTopLevel Nothing (Just 0) ordering sb' build
-                            SelectBuilderTopLevel {}
+                                SelectBuilderTopLevel Nothing Nothing ordering sb Nothing Nothing
+                            SelectBuilderTopLevel Nothing Nothing [] sb' build indexing ->
+                                SelectBuilderTopLevel Nothing Nothing ordering sb' build indexing
+                            SelectBuilderTopLevel Nothing (Just 0) [] sb' build indexing ->
+                                SelectBuilderTopLevel Nothing (Just 0) ordering sb' build indexing
+                            SelectBuilderTopLevel {..}
                                 | (proj'', qb) <- selectBuilderToQueryBuilder tblPfx sb ->
-                                    SelectBuilderTopLevel Nothing Nothing (exprWithContext tblPfx (mkOrdering proj'')) (SelectBuilderQ proj'' qb) Nothing
+                                    SelectBuilderTopLevel Nothing Nothing (exprWithContext tblPfx (mkOrdering proj'')) (SelectBuilderQ proj'' qb) Nothing sbIndexHints
                                 | otherwise -> error "buildQuery (Free (QOrderBy ...)): query inspected expression"
 
                     (joinedProj, qb) = selectBuilderToQueryBuilder tblPfx sb'
@@ -308,19 +310,19 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                  ordering ->
                      case sb of
                        SelectBuilderQ {} ->
-                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj') Nothing
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj') Nothing Nothing
                        SelectBuilderGrouping {} ->
-                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj') Nothing
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj') Nothing Nothing
                        SelectBuilderSelectSyntax {} ->
-                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj') Nothing
-                       SelectBuilderTopLevel Nothing Nothing [] sb' build ->
-                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb' proj') build
-                       SelectBuilderTopLevel (Just 0) (Just 0) [] sb' build ->
-                           SelectBuilderTopLevel (Just 0) (Just 0) ordering (setSelectBuilderProjection sb' proj') build
-                       SelectBuilderTopLevel {}
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb proj') Nothing Nothing
+                       SelectBuilderTopLevel Nothing Nothing [] sb' build indexing ->
+                           SelectBuilderTopLevel Nothing Nothing ordering (setSelectBuilderProjection sb' proj') build indexing
+                       SelectBuilderTopLevel (Just 0) (Just 0) [] sb' build indexing ->
+                           SelectBuilderTopLevel (Just 0) (Just 0) ordering (setSelectBuilderProjection sb' proj') build indexing
+                       SelectBuilderTopLevel {..}
                            | (proj'', qb) <- selectBuilderToQueryBuilder tblPfx sb,
                              Pure proj''' <- next proj'' ->
-                               SelectBuilderTopLevel Nothing Nothing (exprWithContext tblPfx (mkOrdering proj'')) (SelectBuilderQ proj''' qb) Nothing
+                               SelectBuilderTopLevel Nothing Nothing (exprWithContext tblPfx (mkOrdering proj'')) (SelectBuilderQ proj''' qb) Nothing sbIndexHints
                            | otherwise -> error "buildQuery (Free (QOrderBy ...)): query inspected expression"
              _ -> doJoined
 
@@ -334,8 +336,8 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
              Pure x' ->
                -- Windowing makes this automatically a top-level (this prevents aggregates from being added directly)
                case setSelectBuilderProjection sb x' of
-                 sb'@SelectBuilderTopLevel {} -> sb'
-                 sb' -> SelectBuilderTopLevel Nothing Nothing [] sb' Nothing
+                 sb'@SelectBuilderTopLevel {..} -> sb'
+                 sb' -> SelectBuilderTopLevel Nothing Nothing [] sb' Nothing (sbIndexHints sb')
              _       ->
                let (x', qb) = selectBuilderToQueryBuilder tblPfx (setSelectBuilderProjection sb projection)
                in buildJoinedQuery (next x') qb
@@ -375,7 +377,7 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
                     sb { sbSelectFn = Just selectStmt'' }
                   SelectBuilderTopLevel { sbSelectFn = Just {} } ->
                     error "Force select too hard"
-                  _ -> SelectBuilderTopLevel Nothing Nothing [] sb (Just selectStmt'')
+                  _ -> SelectBuilderTopLevel Nothing Nothing [] sb (Just selectStmt'') Nothing
       in case next (sbProj sb') of
            Pure x' -> setSelectBuilderProjection sb' x'
            _ -> let (x', qb) = selectBuilderToQueryBuilder tblPfx sb'

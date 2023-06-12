@@ -117,6 +117,7 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
       , IsSql92FromSyntax (Sql92SelectTableFromSyntax select)
       , IsSql92GroupingSyntax (Sql92SelectTableGroupingSyntax select)
       , IsSql92AggregationSetQuantifierSyntax (Sql92SelectTableSetQuantifierSyntax select)
+      , IsSql92AggregationIndexHintsSyntax (Sql92SelectTableSetIndexHintsSyntax select)
 
       , Sql92GroupingExpressionSyntax (Sql92SelectTableGroupingSyntax select) ~ Sql92SelectTableExpressionSyntax select
       , Sql92FromExpressionSyntax (Sql92SelectTableFromSyntax select) ~ Sql92SelectTableExpressionSyntax select
@@ -130,8 +131,10 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
   type Sql92SelectTableFromSyntax select :: *
   type Sql92SelectTableGroupingSyntax select :: *
   type Sql92SelectTableSetQuantifierSyntax select :: *
+  type Sql92SelectTableSetIndexHintsSyntax select :: *
 
   selectTableStmt :: Maybe (Sql92SelectTableSetQuantifierSyntax select)
+                  -> Maybe (Sql92SelectTableSetIndexHintsSyntax select)
                   -> Sql92SelectTableProjectionSyntax select
                   -> Maybe (Sql92SelectTableFromSyntax select)
                   -> Maybe (Sql92SelectTableExpressionSyntax select)   {-^ Where clause -}
@@ -329,6 +332,18 @@ class IsSql92AggregationSetQuantifierSyntax (Sql92AggregationSetQuantifierSyntax
 
 class IsSql92AggregationSetQuantifierSyntax q where
   setQuantifierDistinct, setQuantifierAll :: q
+
+class IsSql92AggregationIndexHintsSyntax (Sql92AggregationIndexHintsSyntax expr) =>
+  IsSql92IndexingExpressionSyntax expr where
+
+  type Sql92AggregationIndexHintsSyntax expr :: *
+
+  setIndexes :: expr
+  setForce, setUse
+    :: Maybe (Sql92AggregationIndexHintsSyntax expr) -> expr -> expr
+
+class IsSql92AggregationIndexHintsSyntax q where
+  setIndexForce, setIndexUse :: q
 
 class IsSql92ExpressionSyntax (Sql92ProjectionExpressionSyntax proj) => IsSql92ProjectionSyntax proj where
   type Sql92ProjectionExpressionSyntax proj :: *

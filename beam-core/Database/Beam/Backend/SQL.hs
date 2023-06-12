@@ -42,6 +42,7 @@ module Database.Beam.Backend.SQL
   , BeamSqlBackendSelectTableSyntax
   , BeamSqlBackendAggregationQuantifierSyntax
   , BeamSqlBackendSetQuantifierSyntax
+  , BeamSqlBackendIndexHintsSyntax
   , BeamSqlBackendFromSyntax
   , BeamSqlBackendTableNameSyntax
 
@@ -299,6 +300,7 @@ type BeamSqlBackendCastTargetSyntax be
 type BeamSqlBackendExpressionQuantifierSyntax be = Sql92ExpressionQuantifierSyntax (Sql92ExpressionSyntax (BeamSqlBackendSyntax be))
 type BeamSqlBackendValueSyntax be = Sql92ValueSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendSetQuantifierSyntax be = Sql92SelectTableSetQuantifierSyntax (BeamSqlBackendSelectTableSyntax be)
+type BeamSqlBackendIndexHintsSyntax be = Sql92SelectTableSetIndexHintsSyntax (BeamSqlBackendSelectTableSyntax be)
 type BeamSqlBackendAggregationQuantifierSyntax be = Sql92AggregationSetQuantifierSyntax (BeamSqlBackendExpressionSyntax be)
 type BeamSqlBackendSelectTableSyntax be = Sql92SelectSelectTableSyntax (BeamSqlBackendSelectSyntax be)
 type BeamSqlBackendFromSyntax be = Sql92SelectFromSyntax (BeamSqlBackendSelectSyntax be)
