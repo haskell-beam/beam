@@ -9,4 +9,5 @@ let
 
 in lib.mapAttrs makePrefixedPackages beamGhcs // {
   docs = import ./docs { inherit nixpkgs; };
+  shell = import ./shell.nix { inherit nixpkgs; };
 }
