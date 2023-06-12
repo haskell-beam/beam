@@ -78,6 +78,7 @@ simpleSelect =
      selectOffset @?= Nothing
      selectHaving @?= Nothing
      selectQuantifier @?= Nothing
+     selectIndexHints @?= Nothing
 
      Just (FromTable (TableNamed (TableName Nothing "employees")) (Just (tblName, Nothing))) <- pure selectFrom
 
@@ -583,6 +584,7 @@ orderBy =
                                               , ( ExpressionFieldName (QualifiedField "t0" "for_employee__created"), Just "res2" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "name"), Just "res3" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "started"), Just "res4" ) ]
+                                , selectIndexHints = Nothing
                                 , selectFrom = Just (FromTable (TableNamed (TableName Nothing "roles")) (Just ("t0", Nothing)))
                                 , selectWhere = Nothing
                                 , selectGrouping = Nothing
@@ -606,6 +608,7 @@ orderBy =
                                               , ( ExpressionFieldName (QualifiedField "t0" "for_employee__created"), Just "res2" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "name"), Just "res3" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "started"), Just "res4" ) ]
+                           , selectIndexHints = Nothing
                            , selectFrom = Just (FromTable (TableNamed (TableName Nothing "roles")) (Just ("t0", Nothing)))
                            , selectWhere = Nothing
                            , selectGrouping = Nothing
@@ -631,6 +634,7 @@ orderBy =
                                               , ( ExpressionFieldName (QualifiedField "t0" "for_employee__created"), Just "res2" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "name"), Just "res3" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "started"), Just "res4" ) ]
+                           , selectIndexHints = Nothing
                            , selectFrom = Just (FromTable (TableNamed (TableName Nothing "roles")) (Just ("t0", Nothing)))
                            , selectWhere = Nothing
                            , selectGrouping = Nothing
@@ -642,6 +646,7 @@ orderBy =
                                               , ( ExpressionFieldName (QualifiedField "t0" "res2"), Just "res2" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "res3"), Just "res3" )
                                               , ( ExpressionFieldName (QualifiedField "t0" "res4"), Just "res4" ) ]
+                                , selectIndexHints = Nothing
                                 , selectFrom = Just (FromTable (TableFromSubSelect (Select { selectTable = rolesSelect, selectLimit = Just 100
                                                                                            , selectOffset = Just 5, selectOrdering = [] })) (Just ("t0", Nothing)))
                                 , selectWhere = Nothing
@@ -678,6 +683,7 @@ orderBy =
                                                            , ( ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res6" )
                                                            , ( ExpressionFieldName (QualifiedField "t0" "created"), Just "res7" ) ]
                                              , selectFrom = Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing)))
+                                             , selectIndexHints = Nothing
                                              , selectWhere = Nothing
                                              , selectGrouping = Nothing
                                              , selectHaving = Nothing
@@ -733,6 +739,7 @@ orderBy =
                                                            , ( ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res5" )
                                                            , ( ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res6" )
                                                            , ( ExpressionFieldName (QualifiedField "t0" "created"), Just "res7" ) ]
+                                             , selectIndexHints = Nothing
                                              , selectFrom = Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing)))
                                              , selectWhere = Nothing
                                              , selectGrouping = Nothing
@@ -897,12 +904,12 @@ selectCombinators =
                              guard_ (isJust_ (_employeeLeaveDate e))
                              pure (as_ @Text $ val_ "leave", _employeeLeaveDate e)
          SqlSelect Select { selectTable = UnionTables False a b } <- pure (selectMock (union_ hireDates leaveDates))
-         a @?= SelectTable Nothing
+         a @?= SelectTable Nothing Nothing
                            (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res1") ])
                            (Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing))))
                            Nothing Nothing Nothing
-         b @?= SelectTable Nothing
+         b @?= SelectTable Nothing Nothing
                            (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res1") ])
                            (Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing))))
@@ -938,12 +945,12 @@ selectCombinators =
                 , selectOrdering = []  } <-
            pure subselect
 
-         hireDatesQuery @?= SelectTable Nothing
+         hireDatesQuery @?= SelectTable Nothing Nothing
                                         (ProjExprs [ ( ExpressionValue (Value ("hire" :: Text)), Just "res0" )
                                                    , ( ExpressionFieldName (QualifiedField "t0" "age"), Just "res1" )
                                                    , ( ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res2" ) ])
                                         (Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing)))) Nothing Nothing Nothing
-         leaveDatesQuery @?= SelectTable Nothing
+         leaveDatesQuery @?= SelectTable Nothing Nothing
                                          (ProjExprs [ ( ExpressionValue (Value ("leave" :: Text)), Just "res0" )
                                                     , ( ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
                                                     , ( ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res2") ])
@@ -1005,13 +1012,14 @@ selectCombinators =
                                 , selectQuantifier = Nothing }
                           , selectLimit = Nothing, selectOffset = Nothing
                           , selectOrdering = [] } <- pure (selectMock (filter_ (\(_, age, _) -> age <. 40) (union_ hireDates leaveDates)))
-         a @?= SelectTable Nothing
+         a @?= SelectTable Nothing Nothing
                            (ProjExprs [ (ExpressionValue (Value ("hire" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
                                       , (ExpressionFieldName (QualifiedField "t0" "hire_date"), Just "res2") ])
                            (Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing))))
                            Nothing Nothing Nothing
          b @?= SelectTable Nothing
+                           Nothing
                            (ProjExprs [ (ExpressionValue (Value ("leave" :: Text)), Just "res0")
                                       , (ExpressionFieldName (QualifiedField "t0" "age"), Just "res1")
                                       , (ExpressionFieldName (QualifiedField "t0" "leave_date"), Just "res2") ])
@@ -1118,6 +1126,7 @@ existsTest =
                          , selectTable = SelectTable
                                        { selectQuantifier = Nothing
                                        , selectProjection = ProjExprs [ (ExpressionValue (Value (1 :: Int)), Just "res0") ]
+                                       , selectIndexHints = Nothing
                                        , selectGrouping = Nothing
                                        , selectHaving = Nothing
                                        , selectWhere = Just joinExpr
@@ -1336,6 +1345,7 @@ gh70OrderByInFirstJoinCausesIncorrectProjection =
                        [ (ExpressionFieldName (QualifiedField "t1" "name"), Just "res0")
                        , (ExpressionFieldName (QualifiedField "t0" "res0"), Just "res1")
                        ]
+                     , selectIndexHints = Nothing
                      , selectGrouping = Nothing, selectHaving = Nothing
                      , selectWhere = Just firstNameCond
                      , selectFrom = Just (InnerJoin (FromTable
@@ -1352,6 +1362,7 @@ gh70OrderByInFirstJoinCausesIncorrectProjection =
                                                            , (ExpressionFieldName (QualifiedField "t0" "leave_date")   , Just "res6")
                                                            , (ExpressionFieldName (QualifiedField "t0" "created")      , Just "res7")
                                                            ]
+                                                         , selectIndexHints = Nothing
                                                          , selectWhere = Just (ExpressionCompOp ">=" Nothing
                                                                                (ExpressionFieldName (QualifiedField "t0" "salary"))
                                                                                (ExpressionValue (Value (100000 :: Double))))

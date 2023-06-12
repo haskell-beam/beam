@@ -378,8 +378,10 @@ instance IsSql92AggregationSetQuantifierSyntax SqlSyntaxBuilder where
   setQuantifierDistinct = SqlSyntaxBuilder (byteString "DISTINCT")
 
 instance IsSql92AggregationIndexHintsSyntax SqlSyntaxBuilder where
-  setIndexForce = SqlSyntaxBuilder (byteString "FORCE INDEX")
-  setIndexUse = SqlSyntaxBuilder (byteString "USE INDEX")
+  type Sql92AggregationIndexHintsSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  setIndexForce expr = SqlSyntaxBuilder (byteString "FORCE INDEX " <> buildSql expr)
+  setIndexUse expr = SqlSyntaxBuilder (byteString "USE INDEX " <> buildSql expr)
 
 instance IsSql92ProjectionSyntax SqlSyntaxBuilder where
   type Sql92ProjectionExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

@@ -229,10 +229,13 @@ instance IsSql92AggregationSetQuantifierSyntax SetQuantifier where
   setQuantifierAll = SetQuantifierAll
 
 data IndexHints
-  = IndexForce | IndexUse
+  = IndexForce Expression
+  | IndexUse Expression
   deriving (Show, Eq)
 
 instance IsSql92AggregationIndexHintsSyntax IndexHints where
+  type Sql92AggregationIndexHintsSyntax IndexHints = Expression
+
   setIndexForce = IndexForce
   setIndexUse = IndexUse
 

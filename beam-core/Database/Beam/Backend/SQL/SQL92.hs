@@ -333,17 +333,10 @@ class IsSql92AggregationSetQuantifierSyntax (Sql92AggregationSetQuantifierSyntax
 class IsSql92AggregationSetQuantifierSyntax q where
   setQuantifierDistinct, setQuantifierAll :: q
 
-class IsSql92AggregationIndexHintsSyntax (Sql92AggregationIndexHintsSyntax expr) =>
-  IsSql92IndexingExpressionSyntax expr where
-
-  type Sql92AggregationIndexHintsSyntax expr :: *
-
-  setIndexes :: expr
-  setForce, setUse
-    :: Maybe (Sql92AggregationIndexHintsSyntax expr) -> expr -> expr
-
-class IsSql92AggregationIndexHintsSyntax q where
-  setIndexForce, setIndexUse :: q
+class IsSql92AggregationIndexHintsSyntax ind where
+  type Sql92AggregationIndexHintsSyntax ind :: *
+  setIndexForce, setIndexUse
+    :: Sql92AggregationIndexHintsSyntax ind -> ind
 
 class IsSql92ExpressionSyntax (Sql92ProjectionExpressionSyntax proj) => IsSql92ProjectionSyntax proj where
   type Sql92ProjectionExpressionSyntax proj :: *
