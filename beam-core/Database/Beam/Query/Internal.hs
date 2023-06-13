@@ -83,7 +83,7 @@ data QF be (db :: (* -> *) -> *) s next where
            => (r -> WithExprContext [ BeamSqlBackendOrderingSyntax be ])
            -> QM be db (QNested s) r -> (r -> next) -> QF be db s next
 
-  QIndexHints  :: Projectible be r => T.Text -> QM be db s r -> (r -> next) -> QF be db s next
+  QIndexHints  :: T.Text ->  (next) -> QF be db s next
 
   QWindowOver :: ( ProjectibleWithPredicate WindowFrameContext be (WithExprContext (BeamSqlBackendWindowFrameSyntax' be)) window
                  , Projectible be r

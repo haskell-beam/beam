@@ -50,6 +50,7 @@ type SelectStmtFn be
 data QueryBuilder be
   = QueryBuilder
   { qbNextTblRef :: Int
+  , qbIndexHints :: Maybe T.Text
   , qbFrom  :: Maybe (BeamSqlBackendFromSyntax be)
   , qbWhere :: Maybe (BeamSqlBackendExpressionSyntax be) }
 
@@ -101,9 +102,9 @@ buildSelect :: forall be db a
             => TablePrefix -> SelectBuilder be db a -> BeamSqlBackendSelectSyntax be
 buildSelect _ (SelectBuilderTopLevel limit offset ordering (SelectBuilderSelectSyntax _ _ table) selectStmt' indexing) =
     (fromMaybe selectStmt selectStmt') table ordering limit offset
-buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ from where_)) selectStmt' indexing) =
+buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderQ proj (QueryBuilder _ ind from where_)) selectStmt' indexing) =
     (fromMaybe selectStmt selectStmt') (selectTableStmt Nothing indexing (projExprs (defaultProjection (Proxy @be) pfx proj)) from where_ Nothing Nothing) ordering limit offset
-buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ from where_) grouping having distinct) selectStmt' indexing) =
+buildSelect pfx (SelectBuilderTopLevel limit offset ordering (SelectBuilderGrouping proj (QueryBuilder _ ind from where_) grouping having distinct) selectStmt' indexing) =
     (fromMaybe selectStmt selectStmt') (selectTableStmt distinct indexing (projExprs (defaultProjection (Proxy @be) pfx proj)) from where_ grouping having) ordering limit offset
 buildSelect pfx x = buildSelect pfx (SelectBuilderTopLevel Nothing Nothing [] x Nothing Nothing)
 
@@ -111,13 +112,13 @@ selectBuilderToTableSource :: forall be db a
                             . ( BeamSqlBackend be, Projectible be a )
                            => TablePrefix -> SelectBuilder be db a -> BeamSqlBackendSelectTableSyntax be
 selectBuilderToTableSource _ (SelectBuilderSelectSyntax _ _ x) = x
-selectBuilderToTableSource pfx (SelectBuilderQ x (QueryBuilder _ from where_)) =
-  selectTableStmt Nothing Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
-selectBuilderToTableSource pfx (SelectBuilderGrouping x (QueryBuilder _ from where_) grouping having distinct) =
-  selectTableStmt distinct Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ grouping having
+selectBuilderToTableSource pfx (SelectBuilderQ x (QueryBuilder _ ind from where_)) =
+  selectTableStmt Nothing ind (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
+selectBuilderToTableSource pfx (SelectBuilderGrouping x (QueryBuilder _ ind from where_) grouping having distinct) =
+  selectTableStmt distinct ind (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ grouping having
 selectBuilderToTableSource pfx sb =
-    let (x, QueryBuilder _ from where_) = selectBuilderToQueryBuilder pfx sb
-    in selectTableStmt Nothing Nothing (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
+    let (x, QueryBuilder _ ind from where_) = selectBuilderToQueryBuilder pfx sb
+    in selectTableStmt Nothing ind (projExprs (defaultProjection (Proxy @be) pfx x)) from where_ Nothing Nothing
 
 selectBuilderToQueryBuilder :: forall be db a
                              . ( BeamSqlBackend be, Projectible be a)
@@ -126,10 +127,10 @@ selectBuilderToQueryBuilder pfx sb =
     let select = buildSelect pfx sb
         x' = reproject (Proxy @be) (fieldNameFunc (qualifiedField t0)) (sbProj sb)
         t0 = pfx <> "0"
-    in (x', QueryBuilder 1 (Just (fromTable (tableFromSubSelect select) (Just (t0, Nothing)))) Nothing)
+    in (x', QueryBuilder 1 Nothing (Just (fromTable (tableFromSubSelect select) (Just (t0, Nothing)))) Nothing)
 
 emptyQb :: QueryBuilder select
-emptyQb = QueryBuilder 0 Nothing Nothing
+emptyQb = QueryBuilder 0 Nothing Nothing Nothing
 
 sbProj :: SelectBuilder syntax db a -> a
 sbProj (SelectBuilderQ proj _) = proj
@@ -171,7 +172,7 @@ buildJoinTableSourceQuery
   -> x -> QueryBuilder be
   -> (x, QueryBuilder be)
 buildJoinTableSourceQuery tblPfx tblSource x qb =
-  let qb' = QueryBuilder (tblRef + 1) from' (qbWhere qb)
+  let qb' = QueryBuilder (tblRef + 1) (qbIndexHints qb) from' (qbWhere qb)
       !tblRef = qbNextTblRef qb
       from' = case qbFrom qb of
                 Nothing -> Just newSource
@@ -188,14 +189,14 @@ buildInnerJoinQuery
   -> (r-> Maybe (WithExprContext (BeamSqlBackendExpressionSyntax be)))
   -> QueryBuilder be -> (T.Text, r, QueryBuilder be)
 buildInnerJoinQuery tblPfx mkFrom mkTbl mkOn qb =
-  let qb' = QueryBuilder (tblRef + 1) from' where'
+  let qb' = QueryBuilder (tblRef + 1) ind from' where'
       tblRef = qbNextTblRef qb
       newTblNm = tblPfx <> fromString (show tblRef)
       newSource = mkFrom (nextTblPfx tblPfx) newTblNm
-      (from', where') =
+      (ind, from', where') =
         case qbFrom qb of
-          Nothing -> (Just newSource, andE' (qbWhere qb) (exprWithContext tblPfx <$> mkOn newTbl))
-          Just oldFrom -> (Just (innerJoin oldFrom newSource (exprWithContext tblPfx <$> mkOn newTbl)), qbWhere qb)
+          Nothing -> ((qbIndexHints qb), Just newSource, andE' (qbWhere qb) (exprWithContext tblPfx <$> mkOn newTbl))
+          Just oldFrom -> ((qbIndexHints qb), Just (innerJoin oldFrom newSource (exprWithContext tblPfx <$> mkOn newTbl)), qbWhere qb)
 
       newTbl = mkTbl newTblNm
   in (newTblNm, newTbl, qb')
@@ -358,14 +359,10 @@ buildSql92Query' arbitrarilyNestedCombinations tblPfx (Q q) =
              _ -> let (x', qb) = selectBuilderToQueryBuilder tblPfx sb
                   in buildJoinedQuery (next x') qb
 
-    buildQuery (Free (QIndexHints indexHints q' next)) =
-        let x = sbProj sb
-            sb = indexHintsSelectBuilder indexHints (buildQuery (fromF q'))
-        in case next x of
-             Pure x' -> setSelectBuilderProjection sb x'
-
-             _ -> let (x', qb) = selectBuilderToQueryBuilder tblPfx sb
-                  in buildJoinedQuery (next x') qb
+    buildQuery (Free (QIndexHints indexHints next)) =
+        let sb = indexHintsSelectBuilder indexHints (buildQuery next)
+            x = sbProj sb
+        in setSelectBuilderProjection sb x
 
     buildQuery (Free (QOffset offset q' next)) =
         let sb = offsetSelectBuilder offset (buildQuery (fromF q'))

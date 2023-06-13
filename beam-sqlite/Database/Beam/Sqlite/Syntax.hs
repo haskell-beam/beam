@@ -616,6 +616,7 @@ instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
     maybe mempty (<> emit " ") (fromSqliteAggregationSetQuantifier <$> setQuantifier) <>
     fromSqliteProjection proj <>
     maybe mempty (emit " FROM " <>) (fromSqliteFromSyntax <$> from) <>
+    maybe mempty (\e -> emit $ TE.encodeUtf8 e) indexHints <>
     maybe mempty (emit " WHERE " <>) (fromSqliteExpression <$> where_) <>
     maybe mempty (emit " GROUP BY " <>) (fromSqliteGrouping <$> grouping) <>
     maybe mempty (emit " HAVING " <>) (fromSqliteExpression <$> having)

@@ -470,6 +470,7 @@ instance IsSql92SelectTableSyntax PgSelectTableSyntax where
     maybe mempty (\setQuantifier' -> fromPgSelectSetQuantifier setQuantifier' <> emit " ") setQuantifier <>
     fromPgProjection proj <>
     (maybe mempty (emit " FROM " <> ) (coerce from)) <>
+    maybe mempty (\e -> emit $ TE.encodeUtf8 e) indexing <>
     (maybe mempty (emit " WHERE " <>) (coerce where_)) <>
     (maybe mempty (emit " GROUP BY " <>) (coerce grouping)) <>
     (maybe mempty (emit " HAVING " <>) (coerce having))

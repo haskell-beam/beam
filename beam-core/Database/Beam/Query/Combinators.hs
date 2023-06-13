@@ -65,7 +65,7 @@ module Database.Beam.Query.Combinators
     -- * Ordering primitives
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
 
-    , forceIndex_, useIndex_
+    , forceIndex_
     ) where
 
 import Database.Beam.Backend.Types
@@ -271,6 +271,11 @@ guard_' :: forall be db s
         => QExpr be s SqlBool -> Q be db s ()
 guard_' (QExpr guardE') = Q (liftF (QGuard guardE' ()))
 
+forceIndex_ :: forall be db s r
+         . (BeamSqlBackend be)
+        => Text -> Q be db s r -> Q be db s r
+forceIndex_ guardE' v = Q (liftF (QIndexHints guardE' ())) >> v
+
 -- | Synonym for @clause >>= \x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
 filter_ :: forall r be db s
          . BeamSqlBackend be
@@ -333,13 +338,7 @@ nub_ :: ( BeamSqlBackend be, Projectible be r )
      => Q be db s r -> Q be db s r
 nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
 
-forceIndex_ :: ( BeamSqlBackend be, Projectible be r )
-     => Text -> Q be db s r -> Q be db s r
-forceIndex_ str (Q sub) = Q $ liftF (QIndexHints ("FORCE INDEX (" <> str <> ")") sub id)
 
-useIndex_ :: ( BeamSqlBackend be, Projectible be r )
-     => Text -> Q be db s r -> Q be db s r
-useIndex_ str (Q sub) = Q $ liftF (QIndexHints ("USE INDEX (" <> str <> ")") sub id)
 
 -- | Limit the number of results returned by a query.
 limit_ :: forall s a be db
