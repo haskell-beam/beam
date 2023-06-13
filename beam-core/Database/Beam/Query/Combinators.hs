@@ -65,7 +65,7 @@ module Database.Beam.Query.Combinators
     -- * Ordering primitives
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
 
-    , forceIndex_
+    , forceIndex_, useIndex_
     ) where
 
 import Database.Beam.Backend.Types
@@ -335,11 +335,11 @@ nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
 
 forceIndex_ :: ( BeamSqlBackend be, Projectible be r )
      => Text -> Q be db s r -> Q be db s r
-forceIndex_ str (Q sub) = Q $ liftF (QIndexHints ("FORCE INDEX " <> str) sub id)
+forceIndex_ str (Q sub) = Q $ liftF (QIndexHints ("FORCE INDEX (" <> str <> ")") sub id)
 
 useIndex_ :: ( BeamSqlBackend be, Projectible be r )
      => Text -> Q be db s r -> Q be db s r
-useIndex_ str (Q sub) = Q $ liftF (QIndexHints ("USE INDEX " <> str) sub id)
+useIndex_ str (Q sub) = Q $ liftF (QIndexHints ("USE INDEX (" <> str <> ")") sub id)
 
 -- | Limit the number of results returned by a query.
 limit_ :: forall s a be db
