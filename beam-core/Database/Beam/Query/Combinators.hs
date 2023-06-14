@@ -65,6 +65,7 @@ module Database.Beam.Query.Combinators
     -- * Ordering primitives
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
 
+    -- * Index Hints
     , forceIndex_
     ) where
 
@@ -337,8 +338,6 @@ references_' fk tbl = fk ==?. pk tbl
 nub_ :: ( BeamSqlBackend be, Projectible be r )
      => Q be db s r -> Q be db s r
 nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
-
-
 
 -- | Limit the number of results returned by a query.
 limit_ :: forall s a be db
@@ -743,26 +742,6 @@ desc_ :: forall be s a
        . BeamSqlBackend be
       => QExpr be s a -> QOrd be s a
 desc_ (QExpr e) = QOrd (descOrdering <$> e)
-
--- indexHints_ :: forall s a be db
---         . ( Projectible be a
---           , ThreadRewritable (QNested s) a )
---         => BeamSqlBackendIndexHintsSyntax be -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
--- indexHints_ indexHints (Q q) =
---   Q (liftF (QIndexHints indexHints q (rewriteThread (Proxy @s))))
-
-
--- indexHintsForce_ :: forall s a be db
---         . ( Projectible be a
---           , ThreadRewritable (QNested s) a )
---         => Expression -> Q be db (QNested s) a -> Q be db s (WithRewrittenThread (QNested s) s a)
--- indexHintsForce_ indexHints (Q q) =
---   Q (liftF (QIndexHints (setIndexForce indexHints) q (rewriteThread (Proxy @s))))
-
--- asc_' :: forall be s a
---       . BeamSqlBackend be
---      => QExpr be s a -> QOrd be s a
--- asc_' (QExpr e) = QOrd (setIndexForce <$> e)
 
 -- * Subqueries
 

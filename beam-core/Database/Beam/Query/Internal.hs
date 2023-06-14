@@ -158,7 +158,6 @@ data QWindowFrameContext
 newtype QGenExpr context be s t = QExpr (TablePrefix -> BeamSqlBackendExpressionSyntax be)
 newtype QOrd be s t = QOrd (TablePrefix -> BeamSqlBackendOrderingSyntax be)
 
-
 type WithExprContext a = TablePrefix -> a
 
 -- | 'QExpr's represent expressions not containing aggregates.
