@@ -98,18 +98,20 @@ instance IsSql92GroupingSyntax SqlSyntaxBuilder where
 
 instance IsSql92SelectTableSyntax SqlSyntaxBuilder where
   type Sql92SelectTableSelectSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92SelectTableSetIndexHintsSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableProjectionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableFromSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableGroupingSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92SelectTableSetQuantifierSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  selectTableStmt setQuantifier proj from where_ grouping having =
+  selectTableStmt setQuantifier indexHints proj from where_ grouping having =
     SqlSyntaxBuilder $
     byteString "SELECT " <>
     maybe mempty (\setQuantifier' -> buildSql setQuantifier' <> byteString " ") setQuantifier <>
     buildSql proj <>
     maybe mempty ((byteString " FROM " <>) . buildSql) from <>
+    maybe mempty (\e -> byteString $ TE.encodeUtf8 e) indexHints <>
     maybe mempty (\w -> byteString " WHERE " <> buildSql w) where_ <>
     maybe mempty (\g -> byteString " GROUP BY " <> buildSql g) grouping <>
     maybe mempty (\e -> byteString " HAVING " <> buildSql e) having
@@ -374,6 +376,12 @@ instance IsSql92AggregationExpressionSyntax SqlSyntaxBuilder where
 instance IsSql92AggregationSetQuantifierSyntax SqlSyntaxBuilder where
   setQuantifierAll = SqlSyntaxBuilder (byteString "ALL")
   setQuantifierDistinct = SqlSyntaxBuilder (byteString "DISTINCT")
+
+instance IsSql92AggregationIndexHintsSyntax SqlSyntaxBuilder where
+  type Sql92AggregationIndexHintsSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  setIndexForce expr = SqlSyntaxBuilder (byteString "FORCE INDEX " <> buildSql expr)
+  setIndexUse expr = SqlSyntaxBuilder (byteString "USE INDEX " <> buildSql expr)
 
 instance IsSql92ProjectionSyntax SqlSyntaxBuilder where
   type Sql92ProjectionExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder

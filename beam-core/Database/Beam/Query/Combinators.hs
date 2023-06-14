@@ -64,6 +64,9 @@ module Database.Beam.Query.Combinators
 
     -- * Ordering primitives
     , orderBy_, asc_, desc_, nullsFirst_, nullsLast_
+
+    -- * Index Hints
+    , forceIndex_
     ) where
 
 import Database.Beam.Backend.Types
@@ -88,6 +91,7 @@ import Data.Semigroup
 import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
+import Data.Text (Text)
 
 -- | Introduce all entries of a table into the 'Q' monad
 all_ :: ( Database be db, BeamSqlBackend be )
@@ -267,6 +271,11 @@ guard_' :: forall be db s
          . BeamSqlBackend be
         => QExpr be s SqlBool -> Q be db s ()
 guard_' (QExpr guardE') = Q (liftF (QGuard guardE' ()))
+
+forceIndex_ :: forall be db s r
+         . (BeamSqlBackend be)
+        => Text -> Q be db s r -> Q be db s r
+forceIndex_ guardE' v = Q (liftF (QIndexHints guardE' ())) >> v
 
 -- | Synonym for @clause >>= \x -> guard_ (mkExpr x)>> pure x@. Use 'filter_'' for comparisons with 'SqlBool'
 filter_ :: forall r be db s

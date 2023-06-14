@@ -457,13 +457,14 @@ instance IsSql92SelectSyntax PgSelectSyntax where
 
 instance IsSql92SelectTableSyntax PgSelectTableSyntax where
   type Sql92SelectTableSelectSyntax PgSelectTableSyntax = PgSelectSyntax
+  type Sql92SelectTableSetIndexHintsSyntax PgSelectTableSyntax = PgExpressionSyntax
   type Sql92SelectTableExpressionSyntax PgSelectTableSyntax = PgExpressionSyntax
   type Sql92SelectTableProjectionSyntax PgSelectTableSyntax = PgProjectionSyntax
   type Sql92SelectTableFromSyntax PgSelectTableSyntax = PgFromSyntax
   type Sql92SelectTableGroupingSyntax PgSelectTableSyntax = PgGroupingSyntax
   type Sql92SelectTableSetQuantifierSyntax PgSelectTableSyntax = PgSelectSetQuantifierSyntax
 
-  selectTableStmt setQuantifier proj from where_ grouping having =
+  selectTableStmt setQuantifier indexing proj from where_ grouping having =
     PgSelectTableSyntax $
     emit "SELECT " <>
     maybe mempty (\setQuantifier' -> fromPgSelectSetQuantifier setQuantifier' <> emit " ") setQuantifier <>
@@ -671,6 +672,10 @@ pgMoneyType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.money) Nothing)
 mkNumericPrec :: Maybe (Word, Maybe Word) -> Maybe Int32
 mkNumericPrec Nothing = Nothing
 mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. (fromIntegral (fromMaybe 0 dec) .&. 0xFFFF)
+
+instance IsSql92AggregationIndexHintsSyntax PgExpressionSyntax where
+  setIndexForce = error "Not Implemented for postgress"
+  setIndexUse = error "Not Implemented for postgress"
 
 instance IsCustomSqlSyntax PgExpressionSyntax where
   newtype CustomSqlSyntax PgExpressionSyntax =
