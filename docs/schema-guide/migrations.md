@@ -41,40 +41,10 @@ checked type becomes `[TableExistsPredicate "table", TableHasColumn "table"
 !!! note "Note"
     The types are a bit more complicated than what they appear. In particular, a
     predicate can be of any type that satisfies the `DatabasePredicate` type
-    class. The predicates can be stored in a 
+    class. The predicates can be stored in a
     ([heterogenous](https://wiki.haskell.org/Heterogenous_collections#Existential_types))
     list because they are wrapped in the `SomeDatabasePredicate` GADT that holds
     the type class instance as well.
-
-
-## Usage modes
-
-`beam-migrate` can be used as a library or a command-line tool in *managed* or
-*unmanaged* mode.
-
-### The `beam-migrate` library
-
-The `beam-migrate` library provides syntax definitions for common SQL DDL tasks.
-It also provides types for expressing migrations as transformations of one or
-more schemas to another. `beam-migrate` offers a built-in way to apply these
-migrations to a production database, running only those migrations that are
-necessary. You can also directly interpret the `beam-migrate` DSL to hook your
-Haskell migrations into your own system.
-
-`beam-migrate` is described in more detail in the [`beam-migrate` migrations
-guide](library.md)
-
-### The `beam-migrate` tool
-
-There is an optional `beam-migrate` command line tool, available in the
-`beam-migrate-cli` package.
-
-The `beam-migrate` tool can generate a beam schema from a pre-existing database,
-manage migrations for several production databases, automatically generate
-migrations between two schemas, and much more. It is rather opinionated, and is
-described in more detail in the [`beam-migrate` CLI guide](tool.md)
-
-
 
 ### Automatic migration generation
 

@@ -3,8 +3,7 @@
 
 -- | Migrations support for SQLite databases
 module Database.Beam.Sqlite.Migrate
-  ( -- * @beam-migrate@ CLI support
-    migrationBackend, SqliteCommandSyntax
+  ( migrationBackend, SqliteCommandSyntax
 
     -- * @beam-migrate@ utility functions
   , migrateScript, writeMigrationScript
@@ -48,8 +47,7 @@ import           Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 
--- | Top-level 'Tool.BeamMigrationBackend' loaded dynamically by the
--- @beam-migrate@ CLI tool.
+-- | Top-level 'Tool.BeamMigrationBackend'
 migrationBackend :: Tool.BeamMigrationBackend Sqlite SqliteM
 migrationBackend = Tool.BeamMigrationBackend
                        "sqlite"

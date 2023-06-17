@@ -7,8 +7,6 @@
 --
 --   1. Ensure the command syntax for your backend satisfies 'Sql92SaneDdlCommandSyntax'.
 --   2. Create a value of type 'BeamMigrationBackend'
---   3. For compatibility with @beam-migrate-cli@, export this value in an
---      exposed module with the name 'migrationBackend'.
 --
 -- This may sound trivial, but it's a bit more involved. In particular, in order
 -- to complete step 2, you will have to define several instances for some of
@@ -24,8 +22,7 @@
 --
 -- Tools may be interested in the 'SomeBeamMigrationBackend' data type which
 -- provides a monomorphic type to wrap the polymorphic 'BeamMigrationBackend'
--- type. Currently, @beam-migrate-cli@ uses this type to get the underlying
--- 'BeamMigrationBackend' via the @hint@ package.
+-- type.
 --
 -- For an example migrate backend, see "Database.Beam.Sqlite.Migrate"
 module Database.Beam.Migrate.Backend

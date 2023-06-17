@@ -38,10 +38,7 @@ function, you can make that query polymorphic over a choice in backend
 by using the
 `IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax`
 class. You can freely mix and match backends at any time (well, within
-the realms of possibility in terms of Haskell polymorphism). For
-example, the `beam-migrate` CLI tool loads backends at run-time and
-issues queries against them, without knowing the specifics of any
-particular backend.
+the realms of possibility in terms of Haskell polymorphism).
 
 Finally, beam produces readable queries. Here is what opaleye produces on a left join:
 
