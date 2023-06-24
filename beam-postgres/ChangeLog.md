@@ -1,3 +1,15 @@
+# 0.5.3.0
+
+# Bug fixes
+
+ * Make sure lateral join names do not overlap
+ * Fix `bool_or`
+
+# Addded features
+
+ * Add `runSelectReturningFirst`
+ * `IN (SELECT ...)` syntax via `inQuery_`
+
 # 0.5.2.1
 
 ## Added features
