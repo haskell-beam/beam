@@ -1,3 +1,9 @@
+# 0.5.2.0
+
+# Addded features
+
+ * `IN (SELECT ...)` syntax via `inSelectE`
+
 # 0.5.1.2
 
 ## Added features

@@ -1,3 +1,13 @@
+# 0.5.2.0
+
+# Bug fixes
+
+ * Fix encoding for `UTCTime`
+
+# Addded features
+
+ * `IN (SELECT ...)` syntax via `inQuery_`
+
 # 0.5.1.2
 
 ## Added features
