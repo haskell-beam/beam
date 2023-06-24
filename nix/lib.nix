@@ -18,8 +18,12 @@ rec {
     inherit (haskell.packages) ghc90;
     inherit (haskell.packages) ghc92;
     ghc94 = haskell.packages.ghc94.extend (composeExtensionList [
+      # TODO: Move these to GHC 9.6.
       (self: _: {
         postgresql-simple = self.postgresql-simple_0_6_5;
+
+        # These are just to test upper bounds:
+        vector = self.vector_0_13_0_0;
       })
     ]);
     ghc96 = haskell.packages.ghc96.extend (composeExtensionList [
