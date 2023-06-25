@@ -20,6 +20,9 @@ rec {
     ghc94 = haskell.packages.ghc94.extend (composeExtensionList [
       (self: _: {
         postgresql-simple = self.postgresql-simple_0_6_5;
+
+        # These are just to test upper bounds:
+        free = self.free_5_2;
       })
     ]);
     ghc96 = haskell.packages.ghc96.extend (composeExtensionList [
