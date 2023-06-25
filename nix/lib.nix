@@ -23,6 +23,9 @@ rec {
 
         # These are just to test upper bounds:
         free = self.free_5_2;
+        # Currently doctests for vector 0.13.0.0 fail.
+        vector = haskell.lib.dontCheck self.vector_0_13_0_0;
+        vector-algorithms = self.vector-algorithms_0_9_0_1;
       })
     ]);
     ghc96 = haskell.packages.ghc96.extend (composeExtensionList [
