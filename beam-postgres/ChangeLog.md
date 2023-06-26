@@ -1,3 +1,9 @@
+# 0.5.3.1
+
+# Added features
+
+ * Loosen some version bounds
+
 # 0.5.3.0
 
 # Bug fixes
