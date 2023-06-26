@@ -1,3 +1,9 @@
+# 0.5.2.1
+
+# Added features
+
+ * Loosen some version bounds
+
 # 0.5.2.0
 
 # Addded features

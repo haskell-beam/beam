@@ -1,3 +1,10 @@
+# 0.10.1.0
+
+# Added features
+
+ * Allow embedding database types
+ * Loosen some version bounds
+
 # 0.10.0.0
 
 # Bug fixes
