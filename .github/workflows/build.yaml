@@ -8,9 +8,5 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: cachix/install-nix-action@v21
-    - uses: cachix/cachix-action@v12
-      with:
-        name: beam-ci
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - uses: DeterminateSystems/magic-nix-cache-action@v1
     - run: nix-build release.nix
