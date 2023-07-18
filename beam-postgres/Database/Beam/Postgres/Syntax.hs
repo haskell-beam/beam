@@ -440,7 +440,7 @@ instance IsSql92DeleteSyntax PgDeleteSyntax where
   type Sql92DeleteExpressionSyntax PgDeleteSyntax = PgExpressionSyntax
   type Sql92DeleteTableNameSyntax PgDeleteSyntax = PgTableNameSyntax
 
-  deleteStmt tbl alias where_ =
+  deleteStmt tbl alias where_ _=
     PgDeleteSyntax $
     emit "DELETE FROM " <> fromPgTableName tbl <>
     maybe mempty (\alias_ -> emit " AS " <> pgQuotedIdentifier alias_) alias <>
