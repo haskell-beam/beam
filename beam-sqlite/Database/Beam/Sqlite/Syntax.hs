@@ -900,11 +900,12 @@ instance IsSql92DeleteSyntax SqliteDeleteSyntax where
   type Sql92DeleteTableNameSyntax SqliteDeleteSyntax = SqliteTableNameSyntax
   type Sql92DeleteExpressionSyntax SqliteDeleteSyntax = SqliteExpressionSyntax
 
-  deleteStmt tbl Nothing where_ =
+  deleteStmt tbl Nothing where_ limit =
     SqliteDeleteSyntax $
     emit "DELETE FROM " <> fromSqliteTableName tbl <>
-    maybe mempty (\where_ -> emit " WHERE " <> fromSqliteExpression where_) where_
-  deleteStmt _ (Just _) _ =
+    maybe mempty (\where_ -> emit " WHERE " <> fromSqliteExpression where_) where_ <>
+    maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit
+  deleteStmt _ (Just _) _ _ =
       error "beam-sqlite: invariant failed: DELETE must not have a table alias"
 
 spaces, parens :: SqliteSyntax -> SqliteSyntax

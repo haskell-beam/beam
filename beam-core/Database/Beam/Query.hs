@@ -602,10 +602,11 @@ deleteImplementation :: forall bool be db table
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
+       -> Maybe Integer
        -> SqlDelete be table
-deleteImplementation (DatabaseEntity dt@(DatabaseTable {})) mkWhere =
+deleteImplementation (DatabaseEntity dt@(DatabaseTable {})) mkWhere limit =
   SqlDelete (dbTableSettings dt)
-            (deleteStmt (tableNameFromEntity dt) alias (Just (where_ "t")))
+            (deleteStmt (tableNameFromEntity dt) alias (Just (where_ "t")) limit)
   where
     supportsAlias = deleteSupportsAlias (Proxy @(BeamSqlBackendDeleteSyntax be))
 
@@ -622,6 +623,7 @@ delete :: forall be db table
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
+       -> Maybe Integer
        -> SqlDelete be table
 delete = deleteImplementation @Bool
 
@@ -631,6 +633,7 @@ delete' :: forall be db table
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s SqlBool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
+       -> Maybe Integer
        -> SqlDelete be table
 delete' = deleteImplementation @SqlBool
 

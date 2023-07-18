@@ -122,7 +122,8 @@ data Delete
   = Delete
   { deleteTable :: TableName
   , deleteAlias :: Maybe Text
-  , deleteWhere :: Maybe Expression }
+  , deleteWhere :: Maybe Expression
+  , deleteLimit :: Maybe Integer }
   deriving (Show, Eq)
 
 instance IsSql92DeleteSyntax Delete where

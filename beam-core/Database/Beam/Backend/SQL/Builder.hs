@@ -169,11 +169,12 @@ instance IsSql92DeleteSyntax SqlSyntaxBuilder where
   type Sql92DeleteExpressionSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92DeleteTableNameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
 
-  deleteStmt tblNm alias where_ =
+  deleteStmt tblNm alias where_ limit =
     SqlSyntaxBuilder $
     byteString "DELETE FROM " <> buildSql tblNm <>
     maybe mempty (\alias_ -> byteString " AS " <> quoteSql alias_) alias <>
-    maybe mempty (\where_ -> byteString " WHERE " <> buildSql where_) where_
+    maybe mempty (\where_ -> byteString " WHERE " <> buildSql where_) where_ <>
+    maybe mempty (fromString . (" LIMIT " <>) . show) limit
 
   deleteSupportsAlias _ = True
 

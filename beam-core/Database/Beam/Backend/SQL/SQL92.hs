@@ -190,6 +190,7 @@ class ( IsSql92TableNameSyntax (Sql92DeleteTableNameSyntax delete)
 
   deleteStmt :: Sql92DeleteTableNameSyntax delete -> Maybe Text
              -> Maybe (Sql92DeleteExpressionSyntax delete)
+             -> Maybe Integer {-^ LIMIT -}
              -> delete
 
   -- | Whether or not the @DELETE@ command supports aliases
