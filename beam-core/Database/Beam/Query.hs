@@ -90,7 +90,7 @@ module Database.Beam.Query
 
     -- ** @DELETE@
     , SqlDelete(..)
-    , delete, delete'
+    , delete, delete', deleteWLimit
     , runDelete ) where
 
 import Prelude hiding (lookup)
@@ -626,7 +626,7 @@ delete :: forall be db table
        -> SqlDelete be table
 delete = (deleteImplementation @Bool) Nothing
 
-deleteLimit :: forall be db table
+deleteWLimit :: forall be db table
         . BeamSqlBackend be
        => Maybe Int
        -> DatabaseEntity be db (TableEntity table)
@@ -634,7 +634,7 @@ deleteLimit :: forall be db table
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete be table
-deleteLimit = deleteImplementation @Bool
+deleteWLimit = deleteImplementation @Bool
 
 delete' :: forall be db table
         . BeamSqlBackend be
