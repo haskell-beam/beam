@@ -631,10 +631,10 @@ deleteWLimit :: forall be db table
        => Maybe Int
        -> DatabaseEntity be db (TableEntity table)
           -- ^ Table to delete from
-       -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
+       -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s SqlBool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
        -> SqlDelete be table
-deleteWLimit = deleteImplementation @Bool
+deleteWLimit = deleteImplementation @SqlBool
 
 delete' :: forall be db table
         . BeamSqlBackend be
