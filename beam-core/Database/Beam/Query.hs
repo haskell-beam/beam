@@ -598,13 +598,13 @@ data SqlDelete be (table :: (* -> *) -> *)
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause
 deleteImplementation :: forall bool be db table
         . BeamSqlBackend be
-       => DatabaseEntity be db (TableEntity table)
+       => Maybe Int
+       -> DatabaseEntity be db (TableEntity table)
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
-       -> Maybe Integer
        -> SqlDelete be table
-deleteImplementation (DatabaseEntity dt@(DatabaseTable {})) mkWhere limit =
+deleteImplementation limit (DatabaseEntity dt@(DatabaseTable {})) mkWhere =
   SqlDelete (dbTableSettings dt)
             (deleteStmt (tableNameFromEntity dt) alias (Just (where_ "t")) limit)
   where
@@ -623,9 +623,18 @@ delete :: forall be db table
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
-       -> Maybe Integer
        -> SqlDelete be table
-delete = deleteImplementation @Bool
+delete = (deleteImplementation @Bool) Nothing
+
+deleteLimit :: forall be db table
+        . BeamSqlBackend be
+       => Maybe Int
+       -> DatabaseEntity be db (TableEntity table)
+          -- ^ Table to delete from
+       -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s Bool)
+          -- ^ Build a @WHERE@ clause given a table containing expressions
+       -> SqlDelete be table
+deleteLimit = deleteImplementation @Bool
 
 delete' :: forall be db table
         . BeamSqlBackend be
@@ -633,9 +642,8 @@ delete' :: forall be db table
           -- ^ Table to delete from
        -> (forall s. (forall s'. table (QExpr be s')) -> QExpr be s SqlBool)
           -- ^ Build a @WHERE@ clause given a table containing expressions
-       -> Maybe Integer
        -> SqlDelete be table
-delete' = deleteImplementation @SqlBool
+delete' = (deleteImplementation @SqlBool) Nothing
 
 -- | Run a 'SqlDelete' in a 'MonadBeam'
 runDelete :: (BeamSqlBackend be, MonadBeam be m)
