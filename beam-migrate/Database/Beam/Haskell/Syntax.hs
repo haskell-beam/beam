@@ -954,7 +954,11 @@ inst = Hs.IRule () Nothing Nothing . Hs.IHCon () . Hs.UnQual () . Hs.Ident ()
 beamMigrateSqlBackend :: HsBackendConstraint
 beamMigrateSqlBackend =
   HsBackendConstraint $ \beTy ->
+#if MIN_VERSION_haskell_src_exts(1, 22, 0)
+  Hs.TypeA () (Hs.TyApp () (Hs.TyCon () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend"))) beTy)
+#else
   Hs.ClassA () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend")) [ beTy ]
+#endif
 
 
 
@@ -1033,5 +1037,7 @@ instance Hashable (Hs.CName ())
 instance Hashable (Hs.DerivStrategy ())
 instance Hashable (Hs.MaybePromotedName ())
 #endif
+#if !MIN_VERSION_hashable(1, 3, 4)
 instance Hashable a => Hashable (S.Set a) where
   hashWithSalt s a = hashWithSalt s (S.toList a)
+#endif
