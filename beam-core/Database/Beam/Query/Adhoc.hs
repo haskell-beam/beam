@@ -15,8 +15,10 @@ import Control.Monad.Free.Church
 
 import qualified Data.Text as T
 
+import GHC.Types (Type)
+
 class Adhoc structure where
-  type AdhocTable structure (f :: * -> *) :: *
+  type AdhocTable structure (f :: Type -> Type) :: Type
 
   mkAdhocField :: (forall a. T.Text -> f a) -> structure -> AdhocTable structure f
 

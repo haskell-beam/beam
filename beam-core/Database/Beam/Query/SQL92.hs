@@ -23,6 +23,8 @@ import           Data.Proxy (Proxy(Proxy))
 import           Data.String
 import qualified Data.Text as T
 
+import GHC.Types (Type)
+
 -- * Beam queries
 
 andE' :: IsSql92ExpressionSyntax expr =>
@@ -54,7 +56,7 @@ data QueryBuilder be
   , qbFrom  :: Maybe (BeamSqlBackendFromSyntax be)
   , qbWhere :: Maybe (BeamSqlBackendExpressionSyntax be) }
 
-data SelectBuilder be (db :: (* -> *) -> *) a where
+data SelectBuilder be (db :: (Type -> Type) -> Type) a where
   SelectBuilderQ :: ( BeamSqlBackend be
                     , Projectible be a )
                  => a -> QueryBuilder be -> SelectBuilder be db a

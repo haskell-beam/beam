@@ -34,7 +34,7 @@ class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
   -- | The type of the descriptor for this checked entity. Usually this wraps
   -- the corresponding 'DatabaseEntityDescriptor' from 'IsDatabaseEntity', along
   -- with some mechanism for generating 'DatabasePredicate's.
-  data CheckedDatabaseEntityDescriptor be entity :: *
+  data CheckedDatabaseEntityDescriptor be entity :: Type
 
   -- | Like 'DatabaseEntityDefaultRequirements' but for checked entities
   type CheckedDatabaseEntityDefaultRequirements be entity :: Constraint
@@ -55,7 +55,7 @@ class IsDatabaseEntity be entity => IsCheckedDatabaseEntity be entity where
                       => Text -> CheckedDatabaseEntityDescriptor be entity
 
 -- | Like 'DatabaseEntity' but for checked databases
-data CheckedDatabaseEntity be (db :: (* -> *) -> *) entityType where
+data CheckedDatabaseEntity be (db :: (Type -> Type) -> Type) entityType where
   CheckedDatabaseEntity :: IsCheckedDatabaseEntity be entityType
                         => CheckedDatabaseEntityDescriptor be entityType
                         -> [ SomeDatabasePredicate ]

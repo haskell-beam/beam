@@ -58,6 +58,8 @@ library
 
                       haskell-src-exts     >=1.18 && <1.24,
                       clock
+                      clock                ,
+                      ghc-prim
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,

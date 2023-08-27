@@ -122,6 +122,8 @@ import Data.Functor.Const (Const(..))
 import Data.Text (Text)
 import Data.Proxy
 
+import GHC.Types (Type)
+
 import Lens.Micro ((^.))
 
 -- * Query
@@ -204,7 +206,7 @@ dumpSqlSelect q =
 -- * INSERT
 
 -- | Represents a SQL @INSERT@ command that has not yet been run
-data SqlInsert be (table :: (* -> *) -> *)
+data SqlInsert be (table :: (Type -> Type) -> Type)
   = SqlInsert !(TableSettings table) !(BeamSqlBackendInsertSyntax be)
   | SqlInsertNoRows
 
@@ -243,7 +245,7 @@ runInsert (SqlInsert _ i) = runNoReturn (insertCmd i)
 
 -- | Represents a source of values that can be inserted into a table shaped like
 --   'tbl'.
-data SqlInsertValues be proj --(tbl :: (* -> *) -> *)
+data SqlInsertValues be proj --(tbl :: (Type -> Type) -> Type)
     = SqlInsertValues (BeamSqlBackendInsertValuesSyntax be)
     | SqlInsertValuesEmpty
 
@@ -289,7 +291,7 @@ insertFrom s = SqlInsertValues (insertFromSql (buildSqlQuery "t" s))
 -- * UPDATE
 
 -- | Represents a SQL @UPDATE@ statement for the given @table@.
-data SqlUpdate be (table :: (* -> *) -> *)
+data SqlUpdate be (table :: (Type -> Type) -> Type)
   = SqlUpdate !(TableSettings table) !(BeamSqlBackendUpdateSyntax be)
   | SqlIdentityUpdate -- An update with no assignments
 
@@ -592,7 +594,7 @@ runUpdate SqlIdentityUpdate = pure ()
 -- * DELETE
 
 -- | Represents a SQL @DELETE@ statement for the given @table@
-data SqlDelete be (table :: (* -> *) -> *)
+data SqlDelete be (table :: (Type -> Type) -> Type)
   = SqlDelete !(TableSettings table) !(BeamSqlBackendDeleteSyntax be)
 
 -- | Build a 'SqlDelete' from a table and a way to build a @WHERE@ clause

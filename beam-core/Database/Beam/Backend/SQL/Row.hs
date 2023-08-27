@@ -36,6 +36,7 @@ import           Data.Proxy
 #endif
 
 import           GHC.Generics
+import           GHC.Types (Type)
 import           GHC.TypeLits
 
 -- | The exact error encountered
@@ -106,7 +107,7 @@ class BeamBackend be => FromBackendRow be a where
   valuesNeeded :: Proxy be -> Proxy a -> Int
   valuesNeeded _ _ = 1
 
-class GFromBackendRow be (exposed :: * -> *) rep where
+class GFromBackendRow be (exposed :: Type -> Type) rep where
   gFromBackendRow :: Proxy exposed -> FromBackendRowM be (rep ())
   gValuesNeeded :: Proxy be -> Proxy exposed -> Proxy rep -> Int
 instance GFromBackendRow be e p => GFromBackendRow be (M1 t f e) (M1 t f p) where

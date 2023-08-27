@@ -19,6 +19,8 @@ import Data.Proxy (Proxy(Proxy))
 import           Data.Semigroup
 #endif
 
+import GHC.Types (Type)
+
 data Recursiveness be where
     Nonrecursive :: Recursiveness be
     Recursive    :: IsSql99RecursiveCommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be)
@@ -46,7 +48,7 @@ instance Semigroup (Recursiveness be) where
 -- 'reuse') even /before/ they're introduced.
 --
 -- See further documentation <https://haskell-beam.github.io/beam/user-guide/queries/common-table-expressions/ here>.
-newtype With be (db :: (* -> *) -> *) a
+newtype With be (db :: (Type -> Type) -> Type) a
     = With { runWith :: WriterT (Recursiveness be, [ BeamSql99BackendCTESyntax be ])
                                 (State Int) a }
     deriving (Monad, Applicative, Functor)
