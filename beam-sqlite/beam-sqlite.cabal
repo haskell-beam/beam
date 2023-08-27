@@ -16,6 +16,8 @@ extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
 bug-reports:          https://github.com/haskell-beam/beam/issues
 cabal-version:       1.18
+tested-with:
+  GHC==9.2.2, GHC==9.0.2
 
 library
   exposed-modules:    Database.Beam.Sqlite

@@ -29,6 +29,8 @@ category:            Database
 build-type:          Simple
 extra-source-files:  ChangeLog.md
 cabal-version:       1.18
+tested-with:
+  GHC==9.2.2, GHC==9.0.2
 
 library
   exposed-modules:     Database.Beam.Migrate
