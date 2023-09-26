@@ -295,7 +295,7 @@ $ sqlite3 shoppingcart2.db
 SQLite version 3.14.0 2016-07-26 15:17:14
 Enter ".help" for usage hints.
 sqlite> CREATE TABLE cart_users (email VARCHAR NOT NULL, first_name VARCHAR NOT NULL, last_name VARCHAR NOT NULL, password VARCHAR NOT NULL, PRIMARY KEY( email ));
-sqlite> CREATE TABLE addresses ( id INTEGER PRIMARY KEY, address1 VARCHAR NOT NULL, address2 VARCHAR, city VARCHAR NOT NULL, state VARCHAR NOT NULL, zip VARCHAR NOT NULL, for_user__email VARCHAR NOT NULL );
+sqlite> CREATE TABLE cart_user_addresses ( id INTEGER PRIMARY KEY, line1 VARCHAR NOT NULL, line2 VARCHAR, city VARCHAR NOT NULL, state VARCHAR NOT NULL, zip VARCHAR NOT NULL, for_user__email VARCHAR NOT NULL );
 ```
 
 Now, in GHCi, we can use `sqlite-simple` to get a handle to this database.
