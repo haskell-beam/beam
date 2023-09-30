@@ -32,7 +32,7 @@ import           Data.UUID (UUID)
 import qualified Data.UUID.V4 as UUID (nextRandom)
 import qualified Data.Yaml as Yaml
 
-import           Network.BSD
+import           Network.HostName (getHostName)
 
 import           Numeric (showHex, readHex)
 

@@ -34,8 +34,9 @@ import Data.Int
 import Data.Word
 
 import GHC.Generics
+import GHC.Types (Type)
 
-class BeamMigrateSqlBackend be => GMigratableTableSettings be (i :: * -> *) fieldCheck where
+class BeamMigrateSqlBackend be => GMigratableTableSettings be (i :: Type -> Type) fieldCheck where
   gDefaultTblSettingsChecks :: Proxy be -> Proxy i -> Bool -> fieldCheck ()
 
 instance (BeamMigrateSqlBackend be, GMigratableTableSettings be xId fieldCheckId) =>
@@ -82,7 +83,7 @@ instance ( Generic (embeddedTbl (Nullable (Const [FieldCheck])))
 
 -- * Nullability check
 
-type family NullableStatus (x :: *) :: Bool where
+type family NullableStatus (x :: Type) :: Bool where
   NullableStatus (Maybe x) = 'True
   NullableStatus x = 'False
 
