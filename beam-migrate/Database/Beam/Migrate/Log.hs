@@ -1,5 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
--- | Contains a schema for beam migration tools. Used by the CLI and
+-- | Contains a schema for beam migration tools. Used by
 -- the managed migrations support here.
 module Database.Beam.Migrate.Log where
 
