@@ -696,6 +696,7 @@ instance IsSql92ExtractFieldSyntax PgExtractFieldSyntax where
   minutesField = PgExtractFieldSyntax (emit "MINUTE")
   hourField    = PgExtractFieldSyntax (emit "HOUR")
   dayField     = PgExtractFieldSyntax (emit "DAY")
+  weekField    = PgExtractFieldSyntax (emit "WEEK")
   monthField   = PgExtractFieldSyntax (emit "MONTH")
   yearField    = PgExtractFieldSyntax (emit "YEAR")
 

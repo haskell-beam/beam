@@ -7,7 +7,7 @@ module Database.Beam.Query.Extract
 
       -- ** SQL92 fields
       hour_, minutes_, seconds_,
-      year_, month_, day_,
+      year_, month_, week_, day_,
 
       HasSqlTime, HasSqlDate
     ) where
@@ -53,9 +53,10 @@ instance HasSqlDate LocalTime
 instance HasSqlDate UTCTime
 instance HasSqlDate Day
 
-year_, month_, day_
+year_, month_, week_, day_
     :: ( BeamSqlBackend be, HasSqlDate tgt )
     => ExtractField be tgt Double
 year_  = ExtractField yearField
 month_ = ExtractField monthField
 day_   = ExtractField dayField
+week_  = ExtractField weekField
