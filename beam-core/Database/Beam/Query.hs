@@ -246,7 +246,7 @@ insert :: ( BeamSqlBackend be, ProjectibleWithPredicate AnyType () Text (table (
        -> SqlInsertValues be (table (QExpr be s))
           -- ^ Values to insert. See 'insertValues', 'insertExpressions', and 'insertFrom' for possibilities.
        -> SqlInsert be table
-insert tbl values = insertOnly tbl id values
+insert tbl = insertOnly tbl id
 
 -- | Run a 'SqlInsert' in a 'MonadBeam'
 runInsert :: (BeamSqlBackend be, MonadBeam be m)
@@ -497,7 +497,7 @@ updateTableRow' tbl row assignments =
   updateTable' tbl assignments (references_' (val_ (pk row)))
 
 set :: forall table be table'. Beamable table => table (QFieldAssignment be table')
-set = changeBeamRep (\_ -> Columnar' (QFieldAssignment (\_ -> Nothing))) (tblSkeleton :: TableSkeleton table)
+set = changeBeamRep (\_ -> Columnar' (QFieldAssignment (const Nothing))) (tblSkeleton :: TableSkeleton table)
 
 setFieldsTo :: forall table be table'
              . Table table => (forall s. table (QExpr be s)) -> table (QFieldAssignment be table')
@@ -527,11 +527,11 @@ setFieldsTo tbl =
 -- | Use with 'set' to set a field to an explicit new value that does
 -- not depend on any other value
 toNewValue :: (forall s. QExpr be s a) -> QFieldAssignment be table a
-toNewValue newVal = toUpdatedValue (\_ -> newVal)
+toNewValue newVal = toUpdatedValue (const newVal)
 
 -- | Use with 'set' to not modify the field
 toOldValue :: QFieldAssignment be table a
-toOldValue = toUpdatedValueMaybe (\_ -> Nothing)
+toOldValue = toUpdatedValueMaybe (const Nothing)
 
 -- | Use with 'set' to set a field to a new value that is calculated
 -- based on one or more fields from the existing row

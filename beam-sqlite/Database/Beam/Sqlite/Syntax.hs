@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing#-}
-{-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing -Wno-missing-methods #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -57,7 +56,6 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
-import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Hashable
 import           Data.Int
@@ -108,7 +106,7 @@ instance Semigroup SqliteSyntax where
   (<>) = mappend
 
 instance Monoid SqliteSyntax where
-  mempty = SqliteSyntax (\_ -> mempty) mempty
+  mempty = SqliteSyntax (const mempty) mempty
   mappend (SqliteSyntax ab av) (SqliteSyntax bb bv) =
     SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
 
@@ -132,7 +130,7 @@ instance Hashable SqliteData where
 -- | Convert the first argument of 'SQLiteSyntax' to a 'ByteString' 'Builder',
 -- where all the data has been replaced by @"?"@ placeholders.
 withPlaceholders :: ((SQLData -> Builder) -> Builder) -> Builder
-withPlaceholders build = build (\_ -> "?")
+withPlaceholders build = build (const "?")
 
 -- | Embed a 'ByteString' directly in the syntax
 emit :: ByteString -> SqliteSyntax
@@ -221,11 +219,21 @@ newtype SqliteComparisonQuantifierSyntax = SqliteComparisonQuantifierSyntax { fr
 newtype SqliteAggregationSetQuantifierSyntax = SqliteAggregationSetQuantifierSyntax { fromSqliteAggregationSetQuantifier :: SqliteSyntax }
 newtype SqliteProjectionSyntax = SqliteProjectionSyntax { fromSqliteProjection :: SqliteSyntax }
 newtype SqliteGroupingSyntax = SqliteGroupingSyntax { fromSqliteGrouping :: SqliteSyntax }
-newtype SqliteOrderingSyntax = SqliteOrderingSyntax { fromSqliteOrdering :: SqliteSyntax }
+data SqliteOrderingSyntax = SqliteOrderingSyntax { sqliteOrderingSyntax :: SqliteSyntax,
+  sqliteOrderingNullOrdering :: Maybe SqliteNullOrdering }
 -- | SQLite syntax for values that can be embedded in 'SqliteSyntax'
 newtype SqliteValueSyntax = SqliteValueSyntax { fromSqliteValue :: SqliteSyntax }
 newtype SqliteTableSourceSyntax = SqliteTableSourceSyntax { fromSqliteTableSource :: SqliteSyntax }
 newtype SqliteFieldNameSyntax = SqliteFieldNameSyntax { fromSqliteFieldNameSyntax :: SqliteSyntax }
+newtype SqliteCommonTableExpressionSyntax = SqliteCommonTableExpressionSyntax
+  { fromSqliteCommonTableExpression :: SqliteSyntax }
+
+fromSqliteOrdering :: SqliteOrderingSyntax -> SqliteSyntax
+fromSqliteOrdering (SqliteOrderingSyntax s Nothing) = s
+fromSqliteOrdering (SqliteOrderingSyntax s (Just SqliteNullOrderingNullsFirst)) = s <> emit " NULLS FIRST"
+fromSqliteOrdering (SqliteOrderingSyntax s (Just SqliteNullOrderingNullsLast)) = s <> emit " NULLS LAST"
+
+data SqliteNullOrdering = SqliteNullOrderingNullsFirst | SqliteNullOrderingNullsLast deriving (Show, Eq, Generic)
 
 -- | SQLite @VALUES@ clause in @INSERT@. Expressions need to be handled
 -- explicitly in order to deal with @DEFAULT@ values and @AUTO INCREMENT@
@@ -293,6 +301,10 @@ newtype SqliteAlterTableActionSyntax = SqliteAlterTableActionSyntax { fromSqlite
 newtype SqliteAlterColumnActionSyntax = SqliteAlterColumnActionSyntax { fromSqliteAlterColumnAction :: Maybe SqliteSyntax }
 newtype SqliteDropTableSyntax = SqliteDropTableSyntax { fromSqliteDropTable :: SqliteSyntax }
 newtype SqliteTableNameSyntax = SqliteTableNameSyntax { fromSqliteTableName :: SqliteSyntax }
+newtype SqliteWindowFrameSyntax = SqliteWindowFrameSyntax { fromSqliteWindowFrame :: SqliteSyntax }
+newtype SqliteWindowFrameBoundsSyntax = SqliteWindowFrameBoundsSyntax { fromSqliteWindowFrameBounds :: SqliteSyntax }
+newtype SqliteWindowFrameBoundSyntax = SqliteWindowFrameBoundSyntax
+  { fromSqliteWindowFrameBound :: ByteString -> SqliteSyntax }
 
 fromSqliteExpression :: SqliteExpressionSyntax -> SqliteSyntax
 fromSqliteExpression (SqliteExpressionSyntax s) = s
@@ -329,7 +341,7 @@ formatSqliteInsertOnConflict tblNm fields values onConflict = mconcat
       -- day support it, since there is really no reason it shouldn't.
       SqliteInsertExpressions [[]] -> emit "DEFAULT VALUES"
       SqliteInsertExpressions es ->
-        emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
+        emit "VALUES " <> commas (map (parens . commas . map fromSqliteExpression) es)
   , maybe mempty ((emit " " <>) . fromSqliteOnConflict) onConflict
   ]
 
@@ -414,7 +426,7 @@ instance IsSql92ColumnSchemaSyntax SqliteColumnSchemaSyntax where
        maybe mempty (\defVal -> emit " DEFAULT " <> parens (fromSqliteExpression defVal)) defVal <>
        foldMap (\constraint -> emit " " <> fromSqliteColumnConstraintDefinition constraint <> emit " ") constraints <>
        maybe mempty (\c -> emit " COLLATE " <> quotedIdentifier c) collation)
-      (if sqliteDataTypeSerial ty then True else False)
+      (sqliteDataTypeSerial ty)
 
 instance IsSql92ColumnConstraintDefinitionSyntax SqliteColumnConstraintDefinitionSyntax where
   type Sql92ColumnConstraintDefinitionConstraintSyntax SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintSyntax
@@ -557,6 +569,20 @@ instance IsSql99DataTypeSyntax SqliteDataTypeSyntax where
   arrayType _ _ = error "SQLite does not support arrayType"
   rowType _ = error "SQLite does not support rowType"
 
+instance IsSql99CommonTableExpressionSelectSyntax SqliteSelectSyntax where
+  type Sql99SelectCTESyntax SqliteSelectSyntax = SqliteCommonTableExpressionSyntax
+  withSyntax ctes (SqliteSelectSyntax select) = SqliteSelectSyntax $
+    emit "WITH " <> commas (map fromSqliteCommonTableExpression ctes) <> select
+
+instance IsSql99RecursiveCommonTableExpressionSelectSyntax SqliteSelectSyntax where
+  withRecursiveSyntax ctes (SqliteSelectSyntax select) = SqliteSelectSyntax $
+    emit "WITH RECURSIVE " <> commas (map fromSqliteCommonTableExpression ctes) <> select
+
+instance IsSql99CommonTableExpressionSyntax SqliteCommonTableExpressionSyntax where
+  type Sql99CTESelectSyntax SqliteCommonTableExpressionSyntax = SqliteSelectSyntax
+  cteSubquerySyntax tbl fields (SqliteSelectSyntax select) = SqliteCommonTableExpressionSyntax $
+    quotedIdentifier tbl <> parens (commas (map quotedIdentifier fields)) <> emit " AS " <> parens select
+
 instance IsSql2008BigIntDataTypeSyntax SqliteDataTypeSyntax where
   bigIntType = sqliteBigIntType
 
@@ -608,7 +634,7 @@ instance IsSql92SelectSyntax SqliteSelectSyntax where
     fromSqliteSelectTable tbl <>
     (case ordering of
        [] -> mempty
-       _ -> emit " ORDER BY " <> commas (coerce ordering)) <>
+       _ -> emit " ORDER BY " <> commas (map fromSqliteOrdering ordering)) <>
     case (limit, offset) of
       (Nothing, Nothing) -> mempty
       (Just limit, Nothing) -> emit " LIMIT " <> emit' limit
@@ -627,12 +653,12 @@ instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   selectTableStmt setQuantifier proj from where_ grouping having =
     SqliteSelectTableSyntax $
     emit "SELECT " <>
-    maybe mempty (<> emit " ") (fromSqliteAggregationSetQuantifier <$> setQuantifier) <>
+    maybe mempty ((<> emit " ") . fromSqliteAggregationSetQuantifier) setQuantifier <>
     fromSqliteProjection proj <>
-    maybe mempty (emit " FROM " <>) (fromSqliteFromSyntax <$> from) <>
-    maybe mempty (emit " WHERE " <>) (fromSqliteExpression <$> where_) <>
-    maybe mempty (emit " GROUP BY " <>) (fromSqliteGrouping <$> grouping) <>
-    maybe mempty (emit " HAVING " <>) (fromSqliteExpression <$> having)
+    maybe mempty ((emit " FROM " <>) . fromSqliteFromSyntax) from <>
+    maybe mempty ((emit " WHERE " <>) . fromSqliteExpression) where_ <>
+    maybe mempty ((emit " GROUP BY " <>) . fromSqliteGrouping) grouping <>
+    maybe mempty ((emit " HAVING " <>) . fromSqliteExpression) having
 
   unionTables all = tableOp (if all then "UNION ALL" else "UNION")
   intersectTables all = tableOp (if all then "INTERSECT ALL" else "INTERSECT")
@@ -650,11 +676,14 @@ instance IsSql92FromSyntax SqliteFromSyntax where
   fromTable tableSrc Nothing = SqliteFromSyntax (fromSqliteTableSource tableSrc)
   fromTable tableSrc (Just (nm, colNms)) =
     SqliteFromSyntax (fromSqliteTableSource tableSrc <> emit " AS " <> quotedIdentifier nm <>
-                      maybe mempty (\colNms' -> parens (commas (map quotedIdentifier colNms'))) colNms)
+                      maybe mempty (parens . commas . map quotedIdentifier) colNms)
 
   innerJoin = _join "INNER JOIN"
   leftJoin = _join "LEFT JOIN"
   rightJoin = _join "RIGHT JOIN"
+
+instance IsSql92FromOuterJoinSyntax SqliteFromSyntax where
+  outerJoin = _join "FULL OUTER JOIN"
 
 _join :: ByteString -> SqliteFromSyntax -> SqliteFromSyntax -> Maybe SqliteExpressionSyntax -> SqliteFromSyntax
 _join joinType a b Nothing =
@@ -688,7 +717,7 @@ instance IsSql92TableSourceSyntax SqliteTableSourceSyntax where
     SqliteTableSourceSyntax (parens (fromSqliteSelect s))
   tableFromValues vss = SqliteTableSourceSyntax . parens $
                         emit "VALUES " <>
-                        commas (map (\vs -> parens (commas (map fromSqliteExpression vs))) vss)
+                        commas (map (parens . commas . map fromSqliteExpression) vss)
 
 instance IsSql92GroupingSyntax SqliteGroupingSyntax where
   type Sql92GroupingExpressionSyntax SqliteGroupingSyntax = SqliteExpressionSyntax
@@ -700,8 +729,12 @@ instance IsSql92GroupingSyntax SqliteGroupingSyntax where
 instance IsSql92OrderingSyntax SqliteOrderingSyntax where
   type Sql92OrderingExpressionSyntax SqliteOrderingSyntax = SqliteExpressionSyntax
 
-  ascOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " ASC")
-  descOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " DESC")
+  ascOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " ASC") Nothing
+  descOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " DESC") Nothing
+
+instance IsSql2003OrderingElementaryOLAPOperationsSyntax SqliteOrderingSyntax where
+  nullsFirstOrdering o = o { sqliteOrderingNullOrdering = Just SqliteNullOrderingNullsFirst }
+  nullsLastOrdering o = o { sqliteOrderingNullOrdering = Just SqliteNullOrderingNullsLast }
 
 instance HasSqlValueSyntax SqliteValueSyntax Int8 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
@@ -750,9 +783,9 @@ instance IsCustomSqlSyntax SqliteExpressionSyntax where
   newtype CustomSqlSyntax SqliteExpressionSyntax =
     SqliteCustomExpressionSyntax { fromSqliteCustomExpression :: SqliteSyntax }
     deriving (Monoid, Semigroup)
-
   customExprSyntax = SqliteExpressionSyntax . fromSqliteCustomExpression
   renderSyntax = SqliteCustomExpressionSyntax . fromSqliteExpression
+
 instance IsString (CustomSqlSyntax SqliteExpressionSyntax) where
   fromString = SqliteCustomExpressionSyntax . emit . fromString
 
@@ -774,6 +807,8 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
 
   eqE = compOp "="; neqE = compOp "<>"; ltE = compOp "<"; gtE = compOp ">"
   leE = compOp "<="; geE = compOp ">="
+  eqMaybeE a b _ = binOp "IS NOT DISTINCT FROM" a b
+  neqMaybeE a b _ = binOp "IS DISTINCT FROM" a b
 
   negateE = unOp "-"; notE = unOp "NOT"
 
@@ -829,11 +864,55 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   inSelectE e sel =
       SqliteExpressionSyntax (parens (fromSqliteExpression e) <> emit " IN " <> parens (fromSqliteSelect sel))
 
+instance IsSql99ExpressionSyntax SqliteExpressionSyntax where
+  -- distinctE and similarToE are not implemented by SQLite, yet.
+  -- distinctE select = SqliteExpressionSyntax (emit "DISTINCT " <> parens (fromSqliteSelect select))
+  -- similarToE = binOp "SIMILAR TO"
+  instanceFieldE i nm = SqliteExpressionSyntax $ parens (fromSqliteExpression i) <> emit "." <> quotedIdentifier nm
+  refFieldE i nm = SqliteExpressionSyntax $ parens (fromSqliteExpression i) <> emit "->" <> quotedIdentifier nm
+
 instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
   concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
-  concatE (x:xs) =
-    SqliteExpressionSyntax $ parens $
+  concatE (x:xs) = SqliteExpressionSyntax $ parens $
     foldl (\a b -> a <> emit " || " <> parens (fromSqliteExpression b)) (fromSqliteExpression x) xs
+
+instance IsSql2003ExpressionSyntax SqliteExpressionSyntax where
+  type Sql2003ExpressionWindowFrameSyntax SqliteExpressionSyntax = SqliteWindowFrameSyntax
+  overE expr frame = SqliteExpressionSyntax $ fromSqliteExpression expr <> emit " " <> fromSqliteWindowFrame frame
+  rowNumberE = SqliteExpressionSyntax $ emit "ROW_NUMBER()"
+
+instance IsSql2003ExpressionElementaryOLAPOperationsSyntax SqliteExpressionSyntax where
+  rankAggE = SqliteExpressionSyntax $ emit "RANK()"
+  filterAggE agg filter = SqliteExpressionSyntax $
+    fromSqliteExpression agg <> emit " FILTER (WHERE " <> fromSqliteExpression filter <> emit ")"
+
+instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax SqliteExpressionSyntax where
+  denseRankAggE = SqliteExpressionSyntax $ emit "DENSE_RANK()"
+  percentRankAggE = SqliteExpressionSyntax $ emit "PERCENT_RANK()"
+  cumeDistAggE = SqliteExpressionSyntax $ emit "CUME_DIST()"
+
+instance IsSql2003WindowFrameSyntax SqliteWindowFrameSyntax where
+  type Sql2003WindowFrameExpressionSyntax SqliteWindowFrameSyntax = SqliteExpressionSyntax
+  type Sql2003WindowFrameOrderingSyntax SqliteWindowFrameSyntax = SqliteOrderingSyntax
+  type Sql2003WindowFrameBoundsSyntax SqliteWindowFrameSyntax = SqliteWindowFrameBoundsSyntax
+  frameSyntax partition_ ordering_ bounds_ = SqliteWindowFrameSyntax $
+    emit "OVER " <> parens (
+      maybe mempty (\p -> emit "PARTITION BY " <> commas (map fromSqliteExpression p)) partition_ <>
+      maybe mempty (\o -> emit " ORDER BY " <> commas (map fromSqliteOrdering o)) ordering_ <>
+      maybe mempty (\b -> emit " ROWS " <> fromSqliteWindowFrameBounds b) bounds_
+    )
+
+instance IsSql2003WindowFrameBoundsSyntax SqliteWindowFrameBoundsSyntax where
+  type Sql2003WindowFrameBoundsBoundSyntax SqliteWindowFrameBoundsSyntax = SqliteWindowFrameBoundSyntax
+  fromToBoundSyntax from Nothing = SqliteWindowFrameBoundsSyntax (fromSqliteWindowFrameBound from "PRECEDING")
+  fromToBoundSyntax from (Just to) = SqliteWindowFrameBoundsSyntax $
+    emit "BETWEEN " <> fromSqliteWindowFrameBound from "PRECEDING" <> emit " AND " <>
+    fromSqliteWindowFrameBound to "FOLLOWING"
+
+instance IsSql2003WindowFrameBoundSyntax SqliteWindowFrameBoundSyntax where
+  unboundedSyntax = SqliteWindowFrameBoundSyntax $ \where_ -> emit "UNBOUNDED " <> emit where_
+  nrowsBoundSyntax 0 = SqliteWindowFrameBoundSyntax $ \_ -> emit "CURRENT ROW"
+  nrowsBoundSyntax n = SqliteWindowFrameBoundSyntax $ \where_ -> emit (fromString (show n)) <> emit " " <> emit where_
 
 instance IsSql99FunctionExpressionSyntax SqliteExpressionSyntax where
   functionCallE fn args =
