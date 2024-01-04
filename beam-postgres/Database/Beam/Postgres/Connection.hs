@@ -154,12 +154,14 @@ runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
                           case pgErr of
                             Pg.ConversionFailed { Pg.errSQLType = sql
                                                 , Pg.errHaskellType = hs
-                                                , Pg.errMessage = msg } ->
-                              pure (ColumnTypeMismatch hs sql msg)
+                                                , Pg.errMessage = msg
+                                                , Pg.errSQLField = field } ->
+                              pure (ColumnTypeMismatch hs sql ("Conversion failed for field'" <> field <> "': " <> msg))
                             Pg.Incompatible { Pg.errSQLType = sql
                                             , Pg.errHaskellType = hs
-                                            , Pg.errMessage = msg } ->
-                              pure (ColumnTypeMismatch hs sql msg)
+                                            , Pg.errMessage = msg
+                                            , Pg.errSQLField = field } ->
+                              pure (ColumnTypeMismatch hs sql ("Incompatible field: '" <> field <> "': " <> msg))
                             Pg.UnexpectedNull {} ->
                               pure ColumnUnexpectedNull
              in pure (Left (BeamRowReadError (Just (fromIntegral curCol)) err))
