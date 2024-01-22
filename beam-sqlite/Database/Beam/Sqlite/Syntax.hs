@@ -773,6 +773,8 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
 
   eqE = compOp "="; neqE = compOp "<>"; ltE = compOp "<"; gtE = compOp ">"
   leE = compOp "<="; geE = compOp ">="
+  eqMaybeE a b _ = binOp "IS NOT DISTINCT FROM" a b
+  neqMaybeE a b _ = binOp "IS DISTINCT FROM" a b
 
   negateE = unOp "-"; notE = unOp "NOT"
 
