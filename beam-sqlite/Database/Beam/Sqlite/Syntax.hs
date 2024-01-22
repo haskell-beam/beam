@@ -56,7 +56,6 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
-import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Hashable
 import           Data.Int
@@ -220,11 +219,19 @@ newtype SqliteComparisonQuantifierSyntax = SqliteComparisonQuantifierSyntax { fr
 newtype SqliteAggregationSetQuantifierSyntax = SqliteAggregationSetQuantifierSyntax { fromSqliteAggregationSetQuantifier :: SqliteSyntax }
 newtype SqliteProjectionSyntax = SqliteProjectionSyntax { fromSqliteProjection :: SqliteSyntax }
 newtype SqliteGroupingSyntax = SqliteGroupingSyntax { fromSqliteGrouping :: SqliteSyntax }
-newtype SqliteOrderingSyntax = SqliteOrderingSyntax { fromSqliteOrdering :: SqliteSyntax }
+data SqliteOrderingSyntax = SqliteOrderingSyntax { sqliteOrderingSyntax :: SqliteSyntax,
+  sqliteOrderingNullOrdering :: Maybe SqliteNullOrdering }
 -- | SQLite syntax for values that can be embedded in 'SqliteSyntax'
 newtype SqliteValueSyntax = SqliteValueSyntax { fromSqliteValue :: SqliteSyntax }
 newtype SqliteTableSourceSyntax = SqliteTableSourceSyntax { fromSqliteTableSource :: SqliteSyntax }
 newtype SqliteFieldNameSyntax = SqliteFieldNameSyntax { fromSqliteFieldNameSyntax :: SqliteSyntax }
+
+fromSqliteOrdering :: SqliteOrderingSyntax -> SqliteSyntax
+fromSqliteOrdering (SqliteOrderingSyntax s Nothing) = s
+fromSqliteOrdering (SqliteOrderingSyntax s (Just SqliteNullOrderingNullsFirst)) = s <> emit " NULLS FIRST"
+fromSqliteOrdering (SqliteOrderingSyntax s (Just SqliteNullOrderingNullsLast)) = s <> emit " NULLS LAST"
+
+data SqliteNullOrdering = SqliteNullOrderingNullsFirst | SqliteNullOrderingNullsLast deriving (Show, Eq, Generic)
 
 -- | SQLite @VALUES@ clause in @INSERT@. Expressions need to be handled
 -- explicitly in order to deal with @DEFAULT@ values and @AUTO INCREMENT@
@@ -607,7 +614,7 @@ instance IsSql92SelectSyntax SqliteSelectSyntax where
     fromSqliteSelectTable tbl <>
     (case ordering of
        [] -> mempty
-       _ -> emit " ORDER BY " <> commas (coerce ordering)) <>
+       _ -> emit " ORDER BY " <> commas (map fromSqliteOrdering ordering)) <>
     case (limit, offset) of
       (Nothing, Nothing) -> mempty
       (Just limit, Nothing) -> emit " LIMIT " <> emit' limit
@@ -702,8 +709,12 @@ instance IsSql92GroupingSyntax SqliteGroupingSyntax where
 instance IsSql92OrderingSyntax SqliteOrderingSyntax where
   type Sql92OrderingExpressionSyntax SqliteOrderingSyntax = SqliteExpressionSyntax
 
-  ascOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " ASC")
-  descOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " DESC")
+  ascOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " ASC") Nothing
+  descOrdering e = SqliteOrderingSyntax (fromSqliteExpression e <> emit " DESC") Nothing
+
+instance IsSql2003OrderingElementaryOLAPOperationsSyntax SqliteOrderingSyntax where
+  nullsFirstOrdering o = o { sqliteOrderingNullOrdering = Just SqliteNullOrderingNullsFirst }
+  nullsLastOrdering o = o { sqliteOrderingNullOrdering = Just SqliteNullOrderingNullsLast }
 
 instance HasSqlValueSyntax SqliteValueSyntax Int8 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
@@ -752,9 +763,9 @@ instance IsCustomSqlSyntax SqliteExpressionSyntax where
   newtype CustomSqlSyntax SqliteExpressionSyntax =
     SqliteCustomExpressionSyntax { fromSqliteCustomExpression :: SqliteSyntax }
     deriving (Monoid, Semigroup)
-
   customExprSyntax = SqliteExpressionSyntax . fromSqliteCustomExpression
   renderSyntax = SqliteCustomExpressionSyntax . fromSqliteExpression
+
 instance IsString (CustomSqlSyntax SqliteExpressionSyntax) where
   fromString = SqliteCustomExpressionSyntax . emit . fromString
 
