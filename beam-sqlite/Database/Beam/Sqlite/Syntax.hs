@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing#-}
+{-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing -Wno-missing-methods #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -301,6 +301,10 @@ newtype SqliteAlterTableActionSyntax = SqliteAlterTableActionSyntax { fromSqlite
 newtype SqliteAlterColumnActionSyntax = SqliteAlterColumnActionSyntax { fromSqliteAlterColumnAction :: Maybe SqliteSyntax }
 newtype SqliteDropTableSyntax = SqliteDropTableSyntax { fromSqliteDropTable :: SqliteSyntax }
 newtype SqliteTableNameSyntax = SqliteTableNameSyntax { fromSqliteTableName :: SqliteSyntax }
+newtype SqliteWindowFrameSyntax = SqliteWindowFrameSyntax { fromSqliteWindowFrame :: SqliteSyntax }
+newtype SqliteWindowFrameBoundsSyntax = SqliteWindowFrameBoundsSyntax { fromSqliteWindowFrameBounds :: SqliteSyntax }
+newtype SqliteWindowFrameBoundSyntax = SqliteWindowFrameBoundSyntax
+  { fromSqliteWindowFrameBound :: ByteString -> SqliteSyntax }
 
 fromSqliteExpression :: SqliteExpressionSyntax -> SqliteSyntax
 fromSqliteExpression (SqliteExpressionSyntax s) = s
@@ -860,11 +864,55 @@ instance IsSql92ExpressionSyntax SqliteExpressionSyntax where
   inSelectE e sel =
       SqliteExpressionSyntax (parens (fromSqliteExpression e) <> emit " IN " <> parens (fromSqliteSelect sel))
 
+instance IsSql99ExpressionSyntax SqliteExpressionSyntax where
+  -- distinctE and similarToE are not implemented by SQLite, yet.
+  -- distinctE select = SqliteExpressionSyntax (emit "DISTINCT " <> parens (fromSqliteSelect select))
+  -- similarToE = binOp "SIMILAR TO"
+  instanceFieldE i nm = SqliteExpressionSyntax $ parens (fromSqliteExpression i) <> emit "." <> quotedIdentifier nm
+  refFieldE i nm = SqliteExpressionSyntax $ parens (fromSqliteExpression i) <> emit "->" <> quotedIdentifier nm
+
 instance IsSql99ConcatExpressionSyntax SqliteExpressionSyntax where
   concatE [] = valueE (sqlValueSyntax ("" :: T.Text))
-  concatE (x:xs) =
-    SqliteExpressionSyntax $ parens $
+  concatE (x:xs) = SqliteExpressionSyntax $ parens $
     foldl (\a b -> a <> emit " || " <> parens (fromSqliteExpression b)) (fromSqliteExpression x) xs
+
+instance IsSql2003ExpressionSyntax SqliteExpressionSyntax where
+  type Sql2003ExpressionWindowFrameSyntax SqliteExpressionSyntax = SqliteWindowFrameSyntax
+  overE expr frame = SqliteExpressionSyntax $ fromSqliteExpression expr <> emit " " <> fromSqliteWindowFrame frame
+  rowNumberE = SqliteExpressionSyntax $ emit "ROW_NUMBER()"
+
+instance IsSql2003ExpressionElementaryOLAPOperationsSyntax SqliteExpressionSyntax where
+  rankAggE = SqliteExpressionSyntax $ emit "RANK()"
+  filterAggE agg filter = SqliteExpressionSyntax $
+    fromSqliteExpression agg <> emit " FILTER (WHERE " <> fromSqliteExpression filter <> emit ")"
+
+instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax SqliteExpressionSyntax where
+  denseRankAggE = SqliteExpressionSyntax $ emit "DENSE_RANK()"
+  percentRankAggE = SqliteExpressionSyntax $ emit "PERCENT_RANK()"
+  cumeDistAggE = SqliteExpressionSyntax $ emit "CUME_DIST()"
+
+instance IsSql2003WindowFrameSyntax SqliteWindowFrameSyntax where
+  type Sql2003WindowFrameExpressionSyntax SqliteWindowFrameSyntax = SqliteExpressionSyntax
+  type Sql2003WindowFrameOrderingSyntax SqliteWindowFrameSyntax = SqliteOrderingSyntax
+  type Sql2003WindowFrameBoundsSyntax SqliteWindowFrameSyntax = SqliteWindowFrameBoundsSyntax
+  frameSyntax partition_ ordering_ bounds_ = SqliteWindowFrameSyntax $
+    emit "OVER " <> parens (
+      maybe mempty (\p -> emit "PARTITION BY " <> commas (map fromSqliteExpression p)) partition_ <>
+      maybe mempty (\o -> emit " ORDER BY " <> commas (map fromSqliteOrdering o)) ordering_ <>
+      maybe mempty (\b -> emit " ROWS " <> fromSqliteWindowFrameBounds b) bounds_
+    )
+
+instance IsSql2003WindowFrameBoundsSyntax SqliteWindowFrameBoundsSyntax where
+  type Sql2003WindowFrameBoundsBoundSyntax SqliteWindowFrameBoundsSyntax = SqliteWindowFrameBoundSyntax
+  fromToBoundSyntax from Nothing = SqliteWindowFrameBoundsSyntax (fromSqliteWindowFrameBound from "PRECEDING")
+  fromToBoundSyntax from (Just to) = SqliteWindowFrameBoundsSyntax $
+    emit "BETWEEN " <> fromSqliteWindowFrameBound from "PRECEDING" <> emit " AND " <>
+    fromSqliteWindowFrameBound to "FOLLOWING"
+
+instance IsSql2003WindowFrameBoundSyntax SqliteWindowFrameBoundSyntax where
+  unboundedSyntax = SqliteWindowFrameBoundSyntax $ \where_ -> emit "UNBOUNDED " <> emit where_
+  nrowsBoundSyntax 0 = SqliteWindowFrameBoundSyntax $ \_ -> emit "CURRENT ROW"
+  nrowsBoundSyntax n = SqliteWindowFrameBoundSyntax $ \where_ -> emit (fromString (show n)) <> emit " " <> emit where_
 
 instance IsSql99FunctionExpressionSyntax SqliteExpressionSyntax where
   functionCallE fn args =
