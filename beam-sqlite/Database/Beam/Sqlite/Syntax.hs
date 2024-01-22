@@ -225,6 +225,8 @@ data SqliteOrderingSyntax = SqliteOrderingSyntax { sqliteOrderingSyntax :: Sqlit
 newtype SqliteValueSyntax = SqliteValueSyntax { fromSqliteValue :: SqliteSyntax }
 newtype SqliteTableSourceSyntax = SqliteTableSourceSyntax { fromSqliteTableSource :: SqliteSyntax }
 newtype SqliteFieldNameSyntax = SqliteFieldNameSyntax { fromSqliteFieldNameSyntax :: SqliteSyntax }
+newtype SqliteCommonTableExpressionSyntax = SqliteCommonTableExpressionSyntax
+  { fromSqliteCommonTableExpression :: SqliteSyntax }
 
 fromSqliteOrdering :: SqliteOrderingSyntax -> SqliteSyntax
 fromSqliteOrdering (SqliteOrderingSyntax s Nothing) = s
@@ -562,6 +564,20 @@ instance IsSql99DataTypeSyntax SqliteDataTypeSyntax where
   booleanType = SqliteDataTypeSyntax (emit "BOOLEAN") booleanType booleanType False
   arrayType _ _ = error "SQLite does not support arrayType"
   rowType _ = error "SQLite does not support rowType"
+
+instance IsSql99CommonTableExpressionSelectSyntax SqliteSelectSyntax where
+  type Sql99SelectCTESyntax SqliteSelectSyntax = SqliteCommonTableExpressionSyntax
+  withSyntax ctes (SqliteSelectSyntax select) = SqliteSelectSyntax $
+    emit "WITH " <> commas (map fromSqliteCommonTableExpression ctes) <> select
+
+instance IsSql99RecursiveCommonTableExpressionSelectSyntax SqliteSelectSyntax where
+  withRecursiveSyntax ctes (SqliteSelectSyntax select) = SqliteSelectSyntax $
+    emit "WITH RECURSIVE " <> commas (map fromSqliteCommonTableExpression ctes) <> select
+
+instance IsSql99CommonTableExpressionSyntax SqliteCommonTableExpressionSyntax where
+  type Sql99CTESelectSyntax SqliteCommonTableExpressionSyntax = SqliteSelectSyntax
+  cteSubquerySyntax tbl fields (SqliteSelectSyntax select) = SqliteCommonTableExpressionSyntax $
+    quotedIdentifier tbl <> parens (commas (map quotedIdentifier fields)) <> emit " AS " <> parens select
 
 instance IsSql2008BigIntDataTypeSyntax SqliteDataTypeSyntax where
   bigIntType = sqliteBigIntType
