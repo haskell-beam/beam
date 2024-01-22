@@ -103,12 +103,11 @@ instance Sql92DisplaySyntax SqliteSyntax where
   displaySyntax = BL.unpack . sqliteRenderSyntaxScript
 
 instance Semigroup SqliteSyntax where
-  (<>) = mappend
+  (<>) (SqliteSyntax ab av) (SqliteSyntax bb bv) =
+    SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
 
 instance Monoid SqliteSyntax where
   mempty = SqliteSyntax (const mempty) mempty
-  mappend (SqliteSyntax ab av) (SqliteSyntax bb bv) =
-    SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
 
 instance Eq SqliteSyntax where
   SqliteSyntax ab av == SqliteSyntax bb bv =
@@ -1047,11 +1046,11 @@ instance HasSqlValueSyntax SqliteValueSyntax UTCTime where
 
 instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
-    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S%Q")) tm
+    where tmStr = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%Q" tm
 
 instance HasSqlValueSyntax SqliteValueSyntax Day where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
-    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat Nothing) tm
+    where tmStr = formatTime defaultTimeLocale "%Y-%m-%d" tm
 
 instance HasDataTypeCreatedCheck SqliteDataTypeSyntax where
   dataTypeHasBeenCreated _ _ = True
