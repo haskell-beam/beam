@@ -677,12 +677,9 @@ mkNumericPrec (Just (whole, dec)) = Just $ (fromIntegral whole `shiftL` 16) .|. 
 instance IsCustomSqlSyntax PgExpressionSyntax where
   newtype CustomSqlSyntax PgExpressionSyntax =
     PgCustomExpressionSyntax { fromPgCustomExpression :: PgSyntax }
-    deriving Monoid
+    deriving (Semigroup, Monoid)
   customExprSyntax = PgExpressionSyntax . fromPgCustomExpression
   renderSyntax = PgCustomExpressionSyntax . pgParens . fromPgExpression
-
-instance Semigroup (CustomSqlSyntax PgExpressionSyntax) where
-  (<>) = mappend
 
 instance IsString (CustomSqlSyntax PgExpressionSyntax) where
   fromString = PgCustomExpressionSyntax . emit . fromString
