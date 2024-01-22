@@ -655,6 +655,9 @@ instance IsSql92FromSyntax SqliteFromSyntax where
   leftJoin = _join "LEFT JOIN"
   rightJoin = _join "RIGHT JOIN"
 
+instance IsSql92FromOuterJoinSyntax SqliteFromSyntax where
+  outerJoin = _join "FULL OUTER JOIN"
+
 _join :: ByteString -> SqliteFromSyntax -> SqliteFromSyntax -> Maybe SqliteExpressionSyntax -> SqliteFromSyntax
 _join joinType a b Nothing =
   SqliteFromSyntax (fromSqliteFromSyntax a <> spaces (emit joinType) <> fromSqliteFromSyntax b)
