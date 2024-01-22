@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-name-shadowing#-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -108,7 +107,7 @@ instance Semigroup SqliteSyntax where
   (<>) = mappend
 
 instance Monoid SqliteSyntax where
-  mempty = SqliteSyntax (\_ -> mempty) mempty
+  mempty = SqliteSyntax (const mempty) mempty
   mappend (SqliteSyntax ab av) (SqliteSyntax bb bv) =
     SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
 
@@ -132,7 +131,7 @@ instance Hashable SqliteData where
 -- | Convert the first argument of 'SQLiteSyntax' to a 'ByteString' 'Builder',
 -- where all the data has been replaced by @"?"@ placeholders.
 withPlaceholders :: ((SQLData -> Builder) -> Builder) -> Builder
-withPlaceholders build = build (\_ -> "?")
+withPlaceholders build = build (const "?")
 
 -- | Embed a 'ByteString' directly in the syntax
 emit :: ByteString -> SqliteSyntax
@@ -329,7 +328,7 @@ formatSqliteInsertOnConflict tblNm fields values onConflict = mconcat
       -- day support it, since there is really no reason it shouldn't.
       SqliteInsertExpressions [[]] -> emit "DEFAULT VALUES"
       SqliteInsertExpressions es ->
-        emit "VALUES " <> commas (map (\row -> parens (commas (map fromSqliteExpression row)) ) es)
+        emit "VALUES " <> commas (map (parens . commas . map fromSqliteExpression) es)
   , maybe mempty ((emit " " <>) . fromSqliteOnConflict) onConflict
   ]
 
@@ -414,7 +413,7 @@ instance IsSql92ColumnSchemaSyntax SqliteColumnSchemaSyntax where
        maybe mempty (\defVal -> emit " DEFAULT " <> parens (fromSqliteExpression defVal)) defVal <>
        foldMap (\constraint -> emit " " <> fromSqliteColumnConstraintDefinition constraint <> emit " ") constraints <>
        maybe mempty (\c -> emit " COLLATE " <> quotedIdentifier c) collation)
-      (if sqliteDataTypeSerial ty then True else False)
+      (sqliteDataTypeSerial ty)
 
 instance IsSql92ColumnConstraintDefinitionSyntax SqliteColumnConstraintDefinitionSyntax where
   type Sql92ColumnConstraintDefinitionConstraintSyntax SqliteColumnConstraintDefinitionSyntax = SqliteColumnConstraintSyntax
@@ -627,12 +626,12 @@ instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   selectTableStmt setQuantifier proj from where_ grouping having =
     SqliteSelectTableSyntax $
     emit "SELECT " <>
-    maybe mempty (<> emit " ") (fromSqliteAggregationSetQuantifier <$> setQuantifier) <>
+    maybe mempty ((<> emit " ") . fromSqliteAggregationSetQuantifier) setQuantifier <>
     fromSqliteProjection proj <>
-    maybe mempty (emit " FROM " <>) (fromSqliteFromSyntax <$> from) <>
-    maybe mempty (emit " WHERE " <>) (fromSqliteExpression <$> where_) <>
-    maybe mempty (emit " GROUP BY " <>) (fromSqliteGrouping <$> grouping) <>
-    maybe mempty (emit " HAVING " <>) (fromSqliteExpression <$> having)
+    maybe mempty ((emit " FROM " <>) . fromSqliteFromSyntax) from <>
+    maybe mempty ((emit " WHERE " <>) . fromSqliteExpression) where_ <>
+    maybe mempty ((emit " GROUP BY " <>) . fromSqliteGrouping) grouping <>
+    maybe mempty ((emit " HAVING " <>) . fromSqliteExpression) having
 
   unionTables all = tableOp (if all then "UNION ALL" else "UNION")
   intersectTables all = tableOp (if all then "INTERSECT ALL" else "INTERSECT")
@@ -650,7 +649,7 @@ instance IsSql92FromSyntax SqliteFromSyntax where
   fromTable tableSrc Nothing = SqliteFromSyntax (fromSqliteTableSource tableSrc)
   fromTable tableSrc (Just (nm, colNms)) =
     SqliteFromSyntax (fromSqliteTableSource tableSrc <> emit " AS " <> quotedIdentifier nm <>
-                      maybe mempty (\colNms' -> parens (commas (map quotedIdentifier colNms'))) colNms)
+                      maybe mempty (parens . commas . map quotedIdentifier) colNms)
 
   innerJoin = _join "INNER JOIN"
   leftJoin = _join "LEFT JOIN"
@@ -688,7 +687,7 @@ instance IsSql92TableSourceSyntax SqliteTableSourceSyntax where
     SqliteTableSourceSyntax (parens (fromSqliteSelect s))
   tableFromValues vss = SqliteTableSourceSyntax . parens $
                         emit "VALUES " <>
-                        commas (map (\vs -> parens (commas (map fromSqliteExpression vs))) vss)
+                        commas (map (parens . commas . map fromSqliteExpression) vss)
 
 instance IsSql92GroupingSyntax SqliteGroupingSyntax where
   type Sql92GroupingExpressionSyntax SqliteGroupingSyntax = SqliteExpressionSyntax
