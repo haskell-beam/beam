@@ -56,7 +56,7 @@ library
   build-depends:       base                 >=4.9     && <5.0,
                        beam-core            >=0.10    && <0.11,
                        text                 >=1.2     && <2.1,
-                       aeson                >=0.11    && <2.2,
+                       aeson                >=0.11    && <2.3,
                        bytestring           >=0.10    && <0.12,
                        free                 >=4.12    && <5.3,
                        time                 >=1.6     && <1.13,

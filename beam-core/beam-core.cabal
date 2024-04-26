@@ -61,7 +61,7 @@ library
                        Database.Beam.Schema.Lenses
 
   build-depends:       base         >=4.11    && <5.0,
-                       aeson        >=0.11    && <2.2,
+                       aeson        >=0.11    && <2.3,
                        text         >=1.2.2.0 && <2.1,
                        bytestring   >=0.10    && <0.12,
                        mtl          >=2.2.1   && <2.4,
