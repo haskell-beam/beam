@@ -82,6 +82,7 @@ import qualified Control.Monad.Writer.Strict as Strict
 
 import Data.Tagged (Tagged)
 import Data.Text (Text)
+import GHC.Types (Type)
 
 -- * MonadBeam class
 
@@ -226,7 +227,7 @@ class ( -- Every SQL backend must be a beam backend
       , Eq (BeamSqlBackendExpressionSyntax be)
       ) => BeamSqlBackend be
 
-type family BeamSqlBackendSyntax be :: *
+type family BeamSqlBackendSyntax be :: Type
 
 -- | Fake backend that cannot deserialize anything, but is useful for testing
 data MockSqlBackend syntax

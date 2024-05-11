@@ -11,6 +11,7 @@ import Data.Tagged
 import Data.Text (Text)
 import Data.Time (LocalTime)
 import Data.Typeable
+import GHC.Types (Type)
 
 -- * Finally tagless style
 
@@ -89,10 +90,10 @@ class ( IsSql92SelectSyntax (Sql92SelectSyntax cmd)
       , IsSql92UpdateSyntax (Sql92UpdateSyntax cmd)
       , IsSql92DeleteSyntax (Sql92DeleteSyntax cmd) ) =>
   IsSql92Syntax cmd where
-  type Sql92SelectSyntax cmd :: *
-  type Sql92InsertSyntax cmd :: *
-  type Sql92UpdateSyntax cmd :: *
-  type Sql92DeleteSyntax cmd :: *
+  type Sql92SelectSyntax cmd :: Type
+  type Sql92InsertSyntax cmd :: Type
+  type Sql92UpdateSyntax cmd :: Type
+  type Sql92DeleteSyntax cmd :: Type
 
   selectCmd :: Sql92SelectSyntax cmd -> cmd
   insertCmd :: Sql92InsertSyntax cmd -> cmd
@@ -102,8 +103,8 @@ class ( IsSql92SelectSyntax (Sql92SelectSyntax cmd)
 class ( IsSql92SelectTableSyntax (Sql92SelectSelectTableSyntax select)
       , IsSql92OrderingSyntax (Sql92SelectOrderingSyntax select) ) =>
     IsSql92SelectSyntax select where
-    type Sql92SelectSelectTableSyntax select :: *
-    type Sql92SelectOrderingSyntax select :: *
+    type Sql92SelectSelectTableSyntax select :: Type
+    type Sql92SelectOrderingSyntax select :: Type
 
     selectStmt :: Sql92SelectSelectTableSyntax select
                -> [Sql92SelectOrderingSyntax select]
@@ -125,13 +126,13 @@ class ( IsSql92ExpressionSyntax (Sql92SelectTableExpressionSyntax select)
 
       , Eq (Sql92SelectTableExpressionSyntax select) ) =>
     IsSql92SelectTableSyntax select where
-  type Sql92SelectTableSelectSyntax select :: *
-  type Sql92SelectTableExpressionSyntax select :: *
-  type Sql92SelectTableProjectionSyntax select :: *
-  type Sql92SelectTableFromSyntax select :: *
-  type Sql92SelectTableGroupingSyntax select :: *
-  type Sql92SelectTableSetQuantifierSyntax select :: *
-  type Sql92SelectTableSetIndexHintsSyntax select :: *
+  type Sql92SelectTableSelectSyntax select :: Type
+  type Sql92SelectTableExpressionSyntax select :: Type
+  type Sql92SelectTableProjectionSyntax select :: Type
+  type Sql92SelectTableFromSyntax select :: Type
+  type Sql92SelectTableGroupingSyntax select :: Type
+  type Sql92SelectTableSetQuantifierSyntax select :: Type
+  type Sql92SelectTableSetIndexHintsSyntax select :: Type
 
   selectTableStmt :: Maybe (Sql92SelectTableSetQuantifierSyntax select)
                   -> Maybe (Text)
@@ -149,8 +150,8 @@ class ( IsSql92InsertValuesSyntax (Sql92InsertValuesSyntax insert)
       , IsSql92TableNameSyntax (Sql92InsertTableNameSyntax insert) ) =>
   IsSql92InsertSyntax insert where
 
-  type Sql92InsertValuesSyntax insert :: *
-  type Sql92InsertTableNameSyntax insert :: *
+  type Sql92InsertValuesSyntax insert :: Type
+  type Sql92InsertTableNameSyntax insert :: Type
 
   insertStmt :: Sql92InsertTableNameSyntax insert
              -> [ Text ]
@@ -160,8 +161,8 @@ class ( IsSql92InsertValuesSyntax (Sql92InsertValuesSyntax insert)
 
 class IsSql92ExpressionSyntax (Sql92InsertValuesExpressionSyntax insertValues) =>
   IsSql92InsertValuesSyntax insertValues where
-  type Sql92InsertValuesExpressionSyntax insertValues :: *
-  type Sql92InsertValuesSelectSyntax insertValues :: *
+  type Sql92InsertValuesExpressionSyntax insertValues :: Type
+  type Sql92InsertValuesSelectSyntax insertValues :: Type
 
   insertSqlExpressions :: [ [ Sql92InsertValuesExpressionSyntax insertValues ] ]
                        -> insertValues
@@ -173,9 +174,9 @@ class ( IsSql92ExpressionSyntax (Sql92UpdateExpressionSyntax update)
       , IsSql92TableNameSyntax (Sql92UpdateTableNameSyntax update) ) =>
       IsSql92UpdateSyntax update where
 
-  type Sql92UpdateTableNameSyntax update :: *
-  type Sql92UpdateFieldNameSyntax update :: *
-  type Sql92UpdateExpressionSyntax update :: *
+  type Sql92UpdateTableNameSyntax update :: Type
+  type Sql92UpdateFieldNameSyntax update :: Type
+  type Sql92UpdateExpressionSyntax update :: Type
 
   updateStmt :: Sql92UpdateTableNameSyntax update
              -> [(Sql92UpdateFieldNameSyntax update, Sql92UpdateExpressionSyntax update)]
@@ -185,8 +186,8 @@ class ( IsSql92ExpressionSyntax (Sql92UpdateExpressionSyntax update)
 class ( IsSql92TableNameSyntax (Sql92DeleteTableNameSyntax delete)
       , IsSql92ExpressionSyntax (Sql92DeleteExpressionSyntax delete) ) =>
   IsSql92DeleteSyntax delete where
-  type Sql92DeleteTableNameSyntax delete :: *
-  type Sql92DeleteExpressionSyntax delete :: *
+  type Sql92DeleteTableNameSyntax delete :: Type
+  type Sql92DeleteExpressionSyntax delete :: Type
 
   deleteStmt :: Sql92DeleteTableNameSyntax delete -> Maybe Text
              -> Maybe (Sql92DeleteExpressionSyntax delete)
@@ -241,12 +242,12 @@ class ( HasSqlValueSyntax (Sql92ExpressionValueSyntax expr) Int
       , IsSql92ExtractFieldSyntax (Sql92ExpressionExtractFieldSyntax expr)
       , Typeable expr ) =>
     IsSql92ExpressionSyntax expr where
-  type Sql92ExpressionQuantifierSyntax expr :: *
-  type Sql92ExpressionValueSyntax expr :: *
-  type Sql92ExpressionSelectSyntax expr :: *
-  type Sql92ExpressionFieldNameSyntax expr :: *
-  type Sql92ExpressionCastTargetSyntax expr :: *
-  type Sql92ExpressionExtractFieldSyntax expr :: *
+  type Sql92ExpressionQuantifierSyntax expr :: Type
+  type Sql92ExpressionValueSyntax expr :: Type
+  type Sql92ExpressionSelectSyntax expr :: Type
+  type Sql92ExpressionFieldNameSyntax expr :: Type
+  type Sql92ExpressionCastTargetSyntax expr :: Type
+  type Sql92ExpressionExtractFieldSyntax expr :: Type
 
   valueE :: Sql92ExpressionValueSyntax expr -> expr
 
@@ -325,7 +326,7 @@ instance HasSqlValueSyntax syntax x => HasSqlValueSyntax syntax (SqlSerial x) wh
 class IsSql92AggregationSetQuantifierSyntax (Sql92AggregationSetQuantifierSyntax expr) =>
   IsSql92AggregationExpressionSyntax expr where
 
-  type Sql92AggregationSetQuantifierSyntax expr :: *
+  type Sql92AggregationSetQuantifierSyntax expr :: Type
 
   countAllE :: expr
   countE, avgE, maxE, minE, sumE
@@ -335,18 +336,18 @@ class IsSql92AggregationSetQuantifierSyntax q where
   setQuantifierDistinct, setQuantifierAll :: q
 
 class IsSql92AggregationIndexHintsSyntax ind where
-  type Sql92AggregationIndexHintsSyntax ind :: *
+  type Sql92AggregationIndexHintsSyntax ind :: Type
   setIndexForce, setIndexUse
     :: Sql92AggregationIndexHintsSyntax ind -> ind
 
 class IsSql92ExpressionSyntax (Sql92ProjectionExpressionSyntax proj) => IsSql92ProjectionSyntax proj where
-  type Sql92ProjectionExpressionSyntax proj :: *
+  type Sql92ProjectionExpressionSyntax proj :: Type
 
   projExprs :: [ (Sql92ProjectionExpressionSyntax proj, Maybe Text) ]
             -> proj
 
 class IsSql92OrderingSyntax ord where
-  type Sql92OrderingExpressionSyntax ord :: *
+  type Sql92OrderingExpressionSyntax ord :: Type
   ascOrdering, descOrdering
     :: Sql92OrderingExpressionSyntax ord -> ord
 
@@ -358,9 +359,9 @@ class IsSql92TableNameSyntax tblName where
 class IsSql92TableNameSyntax (Sql92TableSourceTableNameSyntax tblSource) =>
   IsSql92TableSourceSyntax tblSource where
 
-  type Sql92TableSourceSelectSyntax tblSource :: *
-  type Sql92TableSourceExpressionSyntax tblSource :: *
-  type Sql92TableSourceTableNameSyntax tblSource :: *
+  type Sql92TableSourceSelectSyntax tblSource :: Type
+  type Sql92TableSourceExpressionSyntax tblSource :: Type
+  type Sql92TableSourceTableNameSyntax tblSource :: Type
 
   tableNamed :: Sql92TableSourceTableNameSyntax tblSource
              -> tblSource
@@ -368,15 +369,15 @@ class IsSql92TableNameSyntax (Sql92TableSourceTableNameSyntax tblSource) =>
   tableFromValues :: [ [ Sql92TableSourceExpressionSyntax tblSource ] ] -> tblSource
 
 class IsSql92GroupingSyntax grouping where
-  type Sql92GroupingExpressionSyntax grouping :: *
+  type Sql92GroupingExpressionSyntax grouping :: Type
 
   groupByExpressions :: [ Sql92GroupingExpressionSyntax grouping ] -> grouping
 
 class ( IsSql92TableSourceSyntax (Sql92FromTableSourceSyntax from)
       , IsSql92ExpressionSyntax (Sql92FromExpressionSyntax from) ) =>
     IsSql92FromSyntax from where
-  type Sql92FromTableSourceSyntax from :: *
-  type Sql92FromExpressionSyntax from :: *
+  type Sql92FromTableSourceSyntax from :: Type
+  type Sql92FromExpressionSyntax from :: Type
 
   fromTable :: Sql92FromTableSourceSyntax from
             -> Maybe (Text, Maybe [Text])

@@ -4,6 +4,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 
@@ -92,7 +93,7 @@ import           GHC.Generics
 -- value list is ignored.
 data SqliteSyntax = SqliteSyntax ((SQLData -> Builder) -> Builder) (DL.DList SQLData)
 newtype SqliteData = SqliteData SQLData -- newtype for Hashable
-  deriving Eq
+                   deriving newtype (Eq)
 
 instance Show SqliteSyntax where
   show (SqliteSyntax s d) =

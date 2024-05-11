@@ -39,6 +39,7 @@ import qualified Control.Monad.State.Strict as Strict
 import qualified Control.Monad.Writer.Strict as Strict
 
 --import GHC.Generics
+import GHC.Types (Type)
 
 -- | 'MonadBeam's that support returning the newly created rows of an @INSERT@ statement.
 --   Useful for discovering the real value of a defaulted value.
@@ -145,10 +146,10 @@ instance (MonadBeamDeleteReturning be m, Monoid w)
 
 class BeamSqlBackend be => BeamHasInsertOnConflict be where
   -- | Specifies the kind of constraint that must be violated for the action to occur
-  data SqlConflictTarget be (table :: (* -> *) -> *) :: *
+  data SqlConflictTarget be (table :: (Type -> Type) -> Type) :: Type
   -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
   -- that violates a constraint.
-  data SqlConflictAction be (table :: (* -> *) -> *) :: *
+  data SqlConflictAction be (table :: (Type -> Type) -> Type) :: Type
 
   insertOnConflict
     :: Beamable table
