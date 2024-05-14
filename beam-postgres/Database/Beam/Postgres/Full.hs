@@ -70,8 +70,6 @@ import qualified Data.Text as T
 import           Data.Semigroup
 #endif
 
-import           GHC.Types (Type)
-
 -- * @SELECT@
 
 -- | An explicit lock against some tables. You can create a value of this type using the 'locked_'
@@ -231,7 +229,7 @@ runPgInsertReturningList = \case
 
 -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
 -- that violates a constraint.
-newtype PgInsertOnConflict (tbl :: (Type -> Type) -> Type) =
+newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
     PgInsertOnConflict (tbl (QField QInternal) -> PgInsertOnConflictSyntax)
 
 -- | Postgres @LATERAL JOIN@ support
@@ -398,7 +396,7 @@ runPgDeleteReturningList (PgDeleteReturning syntax) = runReturningList $ PgComma
 -- * General @RETURNING@ support
 
 class PgReturning cmd where
-  type PgReturningType cmd :: Type -> Type
+  type PgReturningType cmd :: * -> *
 
   returning :: (Beamable tbl, Projectible Postgres a)
             => cmd Postgres tbl -> (tbl (QExpr Postgres PostgresInaccessible) -> a)

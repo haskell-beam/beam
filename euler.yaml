@@ -1,0 +1,50 @@
+name: beam
+projects:
+  beam-core:
+    location: beam-core
+    allowed-paths:
+    - beam-core.cabal
+    - Database
+    - LICENSE
+  beam-migrate:
+    location: beam-migrate
+    allowed-paths:
+    - beam-migrate.cabal
+    - Database
+    - tools
+    - LICENSE
+  beam-migrate-cli:
+    location: beam-migrate-cli
+    allowed-paths:
+    - beam-migrate-cli.cabal
+    - Database
+    - BeamMigrate.hs
+    - LICENSE
+  beam-postgres:
+    location: beam-postgres
+    allowed-paths:
+    - beam-postgres.cabal
+    - Database
+    - test
+    - LICENSE
+  beam-sqlite:
+    location: beam-sqlite
+    allowed-paths:
+    - beam-sqlite.cabal
+    - Database
+    - examples
+    - LICENSE
+
+default-project: beam-core
+dependencies:
+  euler-build:
+    branch: master
+    revision: 90f393f7f91e1bb9d7b3c0ece1aa919797d1987b
+overrides:
+  haskell-src-exts:
+    source: hackage
+    version: 1.21.1
+    sha256: 06b37iis7hfnc770gb3jn12dy3yngqcfdraynbvy3n7s0hlv2hcw
+    enable-profiling: true
+  haskell-src-meta:
+    enable-profiling: true

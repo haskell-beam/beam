@@ -58,12 +58,10 @@ import           Data.Semigroup
 import           Data.String
 import qualified Data.Text as T
 
-import GHC.Types (Type)
-
 -- | A type-class for expression syntaxes that can embed custom expressions.
 class (Monoid (CustomSqlSyntax syntax), Semigroup (CustomSqlSyntax syntax), IsString (CustomSqlSyntax syntax)) =>
   IsCustomSqlSyntax syntax where
-  data CustomSqlSyntax syntax :: Type
+  data CustomSqlSyntax syntax :: *
 
   -- | Given an arbitrary string-like expression, produce a 'syntax' that represents the
   --   'ByteString' as a SQL expression.

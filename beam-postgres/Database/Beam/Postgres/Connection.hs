@@ -293,13 +293,7 @@ data PgF next where
         FromBackendRow Postgres x =>
         (Maybe x -> next) -> PgF next
     PgLiftWithHandle :: (Pg.Connection -> IO a) -> (a -> next) -> PgF next
-
-instance Functor PgF where
-  fmap f = \case
-    PgLiftIO io n ->   PgLiftIO io $ f . n
-    PgRunReturning cmd consume n -> PgRunReturning cmd consume $ f . n
-    PgFetchNext n -> PgFetchNext $ f . n
-    PgLiftWithHandle withConn n -> PgLiftWithHandle withConn $ f . n
+deriving instance Functor PgF
 
 -- | 'MonadBeam' in which we can run Postgres commands. See the documentation
 -- for 'MonadBeam' on examples of how to use.

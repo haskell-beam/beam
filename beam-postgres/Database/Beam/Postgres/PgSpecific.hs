@@ -151,7 +151,6 @@ import qualified Database.PostgreSQL.Simple.ToField as Pg
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import qualified Database.PostgreSQL.Simple.Range as Pg
 
-import           GHC.Types (Type)
 import           GHC.TypeLits
 import           GHC.Exts hiding (toList)
 
@@ -291,10 +290,10 @@ arrayDims_ :: BeamSqlBackendIsString Postgres text
            -> QGenExpr context Postgres s text
 arrayDims_ (QExpr v) = QExpr (fmap (\(PgExpressionSyntax v') -> PgExpressionSyntax (emit "array_dims(" <> v' <> emit ")")) v)
 
-type family CountDims (v :: Type) :: Nat where
+type family CountDims (v :: *) :: Nat where
   CountDims (V.Vector a) = 1 + CountDims a
   CountDims a = 0
-type family WithinBounds (dim :: Nat) (v :: Type) :: Constraint where
+type family WithinBounds (dim :: Nat) (v :: *) :: Constraint where
   WithinBounds dim v =
     If ((dim <=? CountDims v) && (1 <=? dim))
        (() :: Constraint)
@@ -469,7 +468,7 @@ unbounded = PgRangeBound Exclusive Nothing
 --
 -- A reasonable example might be @Range PgInt8Range Int64@.
 -- This represents a range of Haskell @Int64@ values stored as a range of 'bigint' in Postgres.
-data PgRange (n :: Type) a
+data PgRange (n :: *) a
   = PgEmptyRange
   | PgRange (PgRangeBound a) (PgRangeBound a)
   deriving (Eq, Show, Generic)
@@ -772,7 +771,7 @@ instance Beamable (PgJSONElement a)
 -- section on
 -- <https://www.postgresql.org/docs/current/static/functions-json.html JSON>.
 --
-class IsPgJSON (json :: Type -> Type) where
+class IsPgJSON (json :: * -> *) where
   -- | The @json_each@ or @jsonb_each@ function. Values returned as @json@ or
   -- @jsonb@ respectively. Use 'pgUnnest' to join against the result
   pgJsonEach     :: QGenExpr ctxt Postgres s (json a)
@@ -1366,7 +1365,7 @@ pgRegexpSplitToTable (QExpr s) (QExpr re) =
 
 -- ** Set-valued functions
 
-data PgSetOf (tbl :: (Type -> Type) -> Type)
+data PgSetOf (tbl :: (* -> *) -> *)
 
 pgUnnest' :: forall tbl db s
            . Beamable tbl

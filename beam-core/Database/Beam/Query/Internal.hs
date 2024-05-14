@@ -34,7 +34,7 @@ type ProjectibleInBackend be a =
 
 type TablePrefix = T.Text
 
-data QF be (db :: (Type -> Type) -> Type) s next where
+data QF be (db :: (* -> *) -> *) s next where
   QDistinct :: Projectible be r
             => (r -> WithExprContext (BeamSqlBackendSetQuantifierSyntax be))
             -> QM be db s r -> (r -> next) -> QF be db s next
@@ -113,7 +113,7 @@ type QM be db s = F (QF be db s)
 -- | The type of queries over the database `db` returning results of type `a`.
 -- The `s` argument is a threading argument meant to restrict cross-usage of
 -- `QExpr`s. 'syntax' represents the SQL syntax that this query is building.
-newtype Q be (db :: (Type -> Type) -> Type) s a
+newtype Q be (db :: (* -> *) -> *) s a
   = Q { runQ :: QM be db s a }
     deriving (Monad, Applicative, Functor)
 
@@ -272,8 +272,8 @@ type family ValueContextSuggestion a :: ErrorMessage where
 type Projectible be = ProjectibleWithPredicate AnyType be (WithExprContext (BeamSqlBackendExpressionSyntax' be))
 type ProjectibleValue be = ProjectibleWithPredicate ValueContext be (WithExprContext (BeamSqlBackendExpressionSyntax' be))
 
-class ThreadRewritable (s :: Type) (a :: Type) | a -> s where
-  type WithRewrittenThread s (s' :: Type) a :: Type
+class ThreadRewritable (s :: *) (a :: *) | a -> s where
+  type WithRewrittenThread s (s' :: *) a :: *
 
   rewriteThread :: Proxy s' -> a -> WithRewrittenThread s s' a
 instance Beamable tbl => ThreadRewritable s (tbl (QGenExpr ctxt syntax s)) where
@@ -344,7 +344,7 @@ instance ( ThreadRewritable s a, ThreadRewritable s b, ThreadRewritable s c, Thr
     , rewriteThread s' e, rewriteThread s' f, rewriteThread s' g, rewriteThread s' h )
 
 class ContextRewritable a where
-  type WithRewrittenContext a ctxt :: Type
+  type WithRewrittenContext a ctxt :: *
 
   rewriteContext :: Proxy ctxt -> a -> WithRewrittenContext a ctxt
 instance Beamable tbl => ContextRewritable (tbl (QGenExpr old syntax s)) where
@@ -428,7 +428,7 @@ newtype BeamSqlBackendWindowFrameSyntax' be
   { fromBeamSqlBackendWindowFrameSyntax :: BeamSqlBackendWindowFrameSyntax be
   }
 
-class ProjectibleWithPredicate (contextPredicate :: Type -> Constraint) be res a | a -> be where
+class ProjectibleWithPredicate (contextPredicate :: * -> Constraint) be res a | a -> be where
   project' :: Monad m => Proxy contextPredicate -> Proxy (be, res)
            -> (forall context. contextPredicate context =>
                Proxy context -> Proxy be -> res -> m res)
