@@ -61,12 +61,12 @@ library
                        Database.Beam.Schema.Lenses
 
   build-depends:       base         >=4.11    && <5.0,
-                       aeson        >=0.11    && <2.2,
-                       text         >=1.2.2.0 && <2.1,
+                       aeson        >=0.11    && <2.3,
+                       text         >=1.2.2.0 && <2.2,
                        bytestring   >=0.10    && <0.12,
                        mtl          >=2.2.1   && <2.4,
                        microlens    >=0.4     && <0.5,
-                       ghc-prim     >=0.5     && <0.11,
+                       ghc-prim     >=0.5     && <0.12,
                        free         >=4.12    && <5.3,
                        dlist        >=0.7.1.2 && <1.1,
                        time         >=1.6     && <1.13,
@@ -75,7 +75,7 @@ library
                        containers   >=0.5     && <0.7,
                        scientific   >=0.3     && <0.4,
                        vector       >=0.11    && <0.14,
-                       vector-sized >=0.5     && <1.6,
+                       vector-sized >=0.5     && <1.7,
                        tagged       >=0.8     && <0.9
 
   Default-language:    Haskell2010
