@@ -40,7 +40,7 @@ library
                       postgresql-simple    >=0.5  && <0.8,
 
                       text                 >=1.0  && <2.2,
-                      bytestring           >=0.10 && <0.12,
+                      bytestring           >=0.10 && <0.13,
 
                       attoparsec           >=0.13 && <0.15,
                       hashable             >=1.1  && <1.5,

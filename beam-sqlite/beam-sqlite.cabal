@@ -30,7 +30,7 @@ library
 
                       sqlite-simple >=0.4  && <0.5,
                       text          >=1.0  && <2.2,
-                      bytestring    >=0.10 && <0.12,
+                      bytestring    >=0.10 && <0.13,
                       hashable      >=1.2  && <1.5,
                       time          >=1.6  && <1.13,
                       dlist         >=0.8  && <1.1,
