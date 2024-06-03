@@ -187,7 +187,9 @@ tableModification = runIdentity $
 -- > db = defaultDbSettings `withDbModification`
 -- >      dbModification {
 -- >        -- Change default name "table1" to "Table_1". Change the name of "table1Field1" to "first_name"
--- >        table1 = modifyTable (\_ -> "Table_1") (tableModification { table1Field1 = "first_name" }
+-- >        table1 = setEntityName "Table_1" <> modifyTableFields tableModification { 
+-- >            table1Field1 = "first_name" 
+-- >         }
 -- >      }
 withDbModification :: forall db be entity
                     . Database be db
