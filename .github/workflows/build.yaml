@@ -21,6 +21,6 @@ jobs:
       - name: Build
         run: cabal build all --enable-tests
       - name: Test
-        run: cabal test all
+        run: cabal test all --enable-tests
       - name: Build documentation
         run: cabal haddock all
