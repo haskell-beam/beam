@@ -17,7 +17,7 @@ jobs:
       - name: Debug
         run: |
           ls /usr/lib/postgresql
-          ls /usr/lib/postgresql/*
+          ls /usr/lib/postgresql/*/bin
           export PATH=$PATH:/usr/lib/postgresql/*/bin
           initdb --help
       - uses: actions/checkout@v4
