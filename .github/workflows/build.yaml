@@ -15,16 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Postgres
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: postgresql
       - uses: haskell-actions/setup@v2
         with:
           ghc-version: ${{ matrix.ghc }}
       - name: Build
         run: cabal build all --enable-tests
       - name: Test
-        run: cabal test all --enable-tests
+        run: |
+          export PATH=$PATH:/usr/lib/postgresql/*/bin
+          cabal test all --enable-tests
       - name: Build documentation
         run: cabal haddock all
