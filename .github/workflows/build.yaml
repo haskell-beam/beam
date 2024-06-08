@@ -19,7 +19,7 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
       - name: Build
-        run: cabal build all
+        run: cabal build all --enable-tests
       - name: Test
         run: cabal test all
       - name: Build documentation
