@@ -20,6 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: "9.6"
       - name: Build
         run: cabal build all
       - name: Test
