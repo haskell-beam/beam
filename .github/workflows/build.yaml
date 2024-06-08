@@ -13,3 +13,16 @@ jobs:
         name: beam-ci
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - run: nix-build release.nix
+
+  cabal:
+    name: Cabal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+      - name: Build
+        run: cabal build all
+      - name: Test
+        run: cabal test all
+      - name: Build documentation
+        run: cabal haddock all
