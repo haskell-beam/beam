@@ -14,6 +14,11 @@ jobs:
     name: GHC ${{ matrix.ghc }}
     runs-on: ubuntu-latest
     steps:
+      - name: Debug
+        run: |
+          ls /usr/lib/postgresql
+          export PATH=$PATH:/usr/lib/postgresql/*/bin
+          initdb --help
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
         with:
