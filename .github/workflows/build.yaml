@@ -4,13 +4,20 @@ on:
   push:
 jobs:
   cabal:
-    name: Cabal
+    strategy:
+      matrix:
+        ghc:
+          - "8.8"
+          - "8.10"
+          - "9.0"
+          - "9.2"
+    name: GHC ${{ matrix.ghc }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
         with:
-          ghc-version: "9.6"
+          ghc-version: ${{ matrix.ghc }}
       - name: Build
         run: cabal build all
       - name: Test
