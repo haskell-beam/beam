@@ -15,6 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Postgres
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: postgresql
       - uses: haskell-actions/setup@v2
         with:
           ghc-version: ${{ matrix.ghc }}
