@@ -19,7 +19,7 @@ jobs:
           ls /usr/lib/postgresql
           ls /usr/lib/postgresql/*/bin
           export PATH=$PATH:/usr/lib/postgresql/*/bin
-          initdb --help
+          /usr/lib/postgresql/*/bin/initdb --help
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
         with:
