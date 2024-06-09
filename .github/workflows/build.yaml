@@ -1,7 +1,10 @@
-name: "Build"
+name: CI
 on:
   pull_request:
   push:
+  schedule:
+    - cron: '0 0 * * 0'
+
 jobs:
   cabal:
     strategy:
@@ -15,14 +18,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: haskell-actions/setup@v2
+        id: setup-haskell-cabal
         with:
           ghc-version: ${{ matrix.ghc }}
+
+      - name: Configure
+        run: |
+          cabal configure --enable-tests --enable-benchmarks --enable-documentation --test-show-details=direct --write-ghc-environment-files=always
+
+      - name: Freeze
+        run: |
+          cabal freeze
+
+      - uses: actions/cache@v2
+        name: Cache
+        with:
+          path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+          key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
+
+      - name: Build dependencies
+        run: |
+          cabal build all --only-dependencies
+
       - name: Build
-        run: cabal build all --enable-tests
+        run: |
+          cabal build all --enable-tests
+
       - name: Test
         run: |
           export PATH=$PATH:/usr/lib/postgresql/$(ls /usr/lib/postgresql | head -n 1)/bin
           cabal test all --enable-tests
+
       - name: Build documentation
-        run: cabal haddock all
+        run: |
+          cabal haddock all
