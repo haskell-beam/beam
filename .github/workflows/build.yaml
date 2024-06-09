@@ -21,6 +21,8 @@ jobs:
           export PATH=$PATH:/usr/lib/postgresql/*/bin
           echo explicit
           /usr/lib/postgresql/*/bin/initdb --help
+          echo with path
+          PATH=$PATH:/usr/lib/postgresql/*/bin initdb --help
           echo by path: $PATH
           initdb --help
       - uses: actions/checkout@v4
