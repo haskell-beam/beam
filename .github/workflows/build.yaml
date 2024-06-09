@@ -14,18 +14,6 @@ jobs:
     name: GHC ${{ matrix.ghc }}
     runs-on: ubuntu-latest
     steps:
-      - name: Debug
-        run: |
-          ls /usr/lib/postgresql
-          ls /usr/lib/postgresql/*/bin
-          export PATH=$PATH:/usr/lib/postgresql/$(ls /usr/lib/postgresql | head -n 1)/bin
-          echo path: $PATH
-          # echo explicit
-          # /usr/lib/postgresql/*/bin/initdb --help
-          # echo with path
-          # PATH=$PATH:/usr/lib/postgresql/*/bin initdb --help
-          # echo by path: $PATH
-          initdb --help
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
         with:
@@ -34,7 +22,7 @@ jobs:
         run: cabal build all --enable-tests
       - name: Test
         run: |
-          export PATH=$PATH:/usr/lib/postgresql/*/bin
+          export PATH=$PATH:/usr/lib/postgresql/$(ls /usr/lib/postgresql | head -n 1)/bin
           cabal test all --enable-tests
       - name: Build documentation
         run: cabal haddock all
