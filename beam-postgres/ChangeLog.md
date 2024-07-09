@@ -4,6 +4,10 @@
 
  * Better error messages on column type mismatches (#696).
 
+## Documentation
+ 
+ * Make `runBeamPostgres` and `runBeamPostgresDebug` easier to find (#663).
+
 # 0.5.3.1
 
 ## Added features

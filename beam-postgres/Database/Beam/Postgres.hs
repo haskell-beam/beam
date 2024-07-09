@@ -21,6 +21,9 @@ module Database.Beam.Postgres
   (  -- * Beam Postgres backend
     Postgres(..), Pg, liftIOWithHandle
 
+    -- ** Executing actions against the backend
+  , runBeamPostgres, runBeamPostgresDebug
+
     -- ** Postgres syntax
   , PgCommandSyntax, PgSyntax
   , PgSelectSyntax, PgInsertSyntax
@@ -40,8 +43,6 @@ module Database.Beam.Postgres
   , smallserial, serial, bigserial
 
   , module Database.Beam.Postgres.PgSpecific
-
-  , runBeamPostgres, runBeamPostgresDebug
 
     -- ** Postgres extension support
   , PgExtensionEntity, IsPgExtension(..)

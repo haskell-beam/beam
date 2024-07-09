@@ -309,6 +309,8 @@ data FetchMode
 -- @beam-postgres@ also provides functions that let you run queries without
 -- 'MonadBeam'. These functions may be more efficient and offer a conduit
 -- API. See "Database.Beam.Postgres.Conduit" for more information.
+--
+-- You can execute 'Pg' actions using 'runBeamPostgres' or 'runBeamPostgresDebug'.
 newtype Pg a = Pg { runPg :: F PgF a }
     deriving (Monad, Applicative, Functor, MonadFree PgF)
 
