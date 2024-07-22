@@ -185,7 +185,7 @@ instance FieldReturnType 'True 'False Sqlite resTy a =>
   field' _ _ nm ty _ collation constraints SqliteHasDefault =
     field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
 
-instance BeamSqlBackendHasSerial Sqlite where
+instance (Integral n) => BeamSqlBackendHasSerial n Sqlite where
   genericSerial nm = Beam.field nm (DataType sqliteSerialType) SqliteHasDefault
 
 -- | 'MonadBeam' instance inside which SQLite queries are run. See the

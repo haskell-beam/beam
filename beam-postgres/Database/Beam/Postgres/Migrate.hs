@@ -452,5 +452,5 @@ instance Db.FieldReturnType 'True 'False Postgres resTy a =>
   field' _ _ nm ty _ collation constraints PgHasDefault =
     Db.field' (Proxy @'True) (Proxy @'False) nm ty Nothing collation constraints
 
-instance BeamSqlBackendHasSerial Postgres where
+instance (Integral n) => BeamSqlBackendHasSerial n Postgres where
   genericSerial nm = Db.field nm serial PgHasDefault
