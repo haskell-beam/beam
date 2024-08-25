@@ -49,6 +49,7 @@ import Control.Monad.Identity
 import Control.Monad.Writer.Strict
 import Control.Monad.State
 
+import Data.Kind (Type)
 import Data.Text (Text)
 import Data.Typeable
 import qualified Data.Kind as Kind (Constraint)
@@ -332,7 +333,7 @@ instance ( BeamMigrateSqlBackend be, HasDataTypeCreatedCheck (BeamMigrateSqlBack
     where checks = [ FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableHasColumn tbl field'' ty :: TableHasColumn be)) ] ++
                    map (\cns -> FieldCheck (\tbl field'' -> SomeDatabasePredicate (TableColumnHasConstraint tbl field'' cns :: TableColumnHasConstraint be))) constraints
 
-type family IsNotNull (x :: *) :: Kind.Constraint where
+type family IsNotNull (x :: Type) :: Kind.Constraint where
   IsNotNull (Maybe x) = TypeError ('Text "You used Database.Beam.Migrate.notNull on a column with type" ':$$:
                                    'ShowType (Maybe x) ':$$:
                                    'Text "Either remove 'notNull' from your migration or 'Maybe' from your table")

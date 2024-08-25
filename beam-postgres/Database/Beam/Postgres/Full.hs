@@ -4,6 +4,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeOperators #-}
 
 -- | Module providing (almost) full support for Postgres query and data
 -- manipulation statements. These functions shadow the functions in
@@ -64,6 +65,7 @@ import           Database.Beam.Postgres.Syntax
 
 import           Control.Monad.Free.Church
 
+import           Data.Kind (Type)
 import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 #if !MIN_VERSION_base(4, 11, 0)
@@ -229,7 +231,7 @@ runPgInsertReturningList = \case
 
 -- | What to do when an @INSERT@ statement inserts a row into the table @tbl@
 -- that violates a constraint.
-newtype PgInsertOnConflict (tbl :: (* -> *) -> *) =
+newtype PgInsertOnConflict (tbl :: (Type -> Type) -> Type) =
     PgInsertOnConflict (tbl (QField QInternal) -> PgInsertOnConflictSyntax)
 
 -- | Postgres @LATERAL JOIN@ support
@@ -397,7 +399,7 @@ runPgDeleteReturningList (PgDeleteReturning syntax) = runReturningList $ PgComma
 -- * General @RETURNING@ support
 
 class PgReturning cmd where
-  type PgReturningType cmd :: * -> *
+  type PgReturningType cmd :: Type -> Type
 
   returning :: (Beamable tbl, Projectible Postgres a)
             => cmd Postgres tbl -> (tbl (QExpr Postgres PostgresInaccessible) -> a)
