@@ -113,13 +113,12 @@ newtype HaskellPredicateConverter
   = HaskellPredicateConverter (SomeDatabasePredicate -> Maybe SomeDatabasePredicate)
 
 instance Semigroup HaskellPredicateConverter where
-  (<>) = mappend
+  (HaskellPredicateConverter a) <> (HaskellPredicateConverter b) =
+    HaskellPredicateConverter $ \r -> a r <|> b r
 
 -- | 'HaskellPredicateConverter's can be combined monoidally.
 instance Monoid HaskellPredicateConverter where
   mempty = HaskellPredicateConverter $ \_ -> Nothing
-  mappend (HaskellPredicateConverter a) (HaskellPredicateConverter b) =
-    HaskellPredicateConverter $ \r -> a r <|> b r
 
 -- | Converters for the 'TableExistsPredicate', 'TableHasPrimaryKey', and
 -- 'TableHasColumn' (when supplied with a function to convert a backend data

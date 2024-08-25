@@ -123,14 +123,13 @@ data SqlConstraintAttributesBuilder
   deriving (Show, Eq)
 
 instance Semigroup SqlConstraintAttributesBuilder where
-  (<>) = mappend
-
-instance Monoid SqlConstraintAttributesBuilder where
-  mempty = SqlConstraintAttributesBuilder Nothing Nothing
-  mappend a b =
+  a <> b =
     SqlConstraintAttributesBuilder
       (_sqlConstraintAttributeTiming b <|> _sqlConstraintAttributeTiming a)
       (_sqlConstraintAttributeDeferrable b <|> _sqlConstraintAttributeDeferrable a)
+
+instance Monoid SqlConstraintAttributesBuilder where
+  mempty = SqlConstraintAttributesBuilder Nothing Nothing
 
 -- | Convert a 'SqlConstraintAttributesBuilder' to its @SQL92@ representation in
 -- the returned 'ByteString' 'Builder'.

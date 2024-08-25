@@ -194,7 +194,14 @@ data PotentialAction be
   }
 
 instance Semigroup (PotentialAction be) where
-  (<>) = mappend
+  a <> b =
+      PotentialAction (actionPreConditions a <> actionPreConditions b)
+                      (actionPostConditions a <> actionPostConditions b)
+                      (actionCommands a <> actionCommands b)
+                      (if T.null (actionEnglish a) then actionEnglish b
+                        else if T.null (actionEnglish b) then actionEnglish a
+                            else actionEnglish a <> "; " <> actionEnglish b)
+                      (actionScore a + actionScore b)
 
 -- | 'PotentialAction's can represent edges or paths. Monadically combining two
 -- 'PotentialAction's results in the path between the source of the first and
@@ -202,14 +209,6 @@ instance Semigroup (PotentialAction be) where
 -- nothing (i.e., the edge going back to the same database state)
 instance Monoid (PotentialAction be) where
   mempty = PotentialAction mempty mempty mempty  "" 0
-  mappend a b =
-    PotentialAction (actionPreConditions a <> actionPreConditions b)
-                    (actionPostConditions a <> actionPostConditions b)
-                    (actionCommands a <> actionCommands b)
-                    (if T.null (actionEnglish a) then actionEnglish b
-                      else if T.null (actionEnglish b) then actionEnglish a
-                           else actionEnglish a <> "; " <> actionEnglish b)
-                    (actionScore a + actionScore b)
 
 -- | See 'ActionProvider'
 type ActionProviderFn be =
@@ -254,11 +253,7 @@ newtype ActionProvider be
   = ActionProvider { getPotentialActions :: ActionProviderFn be }
 
 instance Semigroup (ActionProvider be) where
-  (<>) = mappend
-
-instance Monoid (ActionProvider be) where
-  mempty = ActionProvider (\_ _ -> [])
-  mappend (ActionProvider a) (ActionProvider b) =
+  (<>) (ActionProvider a) (ActionProvider b) =
     ActionProvider $ \pre post ->
     let aRes = a pre post
         bRes = b pre post
@@ -266,6 +261,9 @@ instance Monoid (ActionProvider be) where
     in withStrategy (rparWith (parList rseq)) aRes `seq`
        withStrategy (rparWith (parList rseq)) bRes `seq`
        aRes ++ bRes
+
+instance Monoid (ActionProvider be) where
+  mempty = ActionProvider (\_ _ -> [])
 
 createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
 createTableWeight = 500

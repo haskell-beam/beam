@@ -54,13 +54,12 @@ data HsImport = HsImportAll | HsImportSome (S.Set (Hs.ImportSpec ()))
   deriving (Show, Eq, Generic)
 instance Hashable HsImport
 instance Semigroup HsImport where
-  (<>) = mappend
+  HsImportAll <> _ = HsImportAll
+  _ <> HsImportAll = HsImportAll
+  (HsImportSome a) <> (HsImportSome b) =
+    HsImportSome (a <> b)
 instance Monoid HsImport where
   mempty = HsImportSome mempty
-  mappend HsImportAll _ = HsImportAll
-  mappend _ HsImportAll = HsImportAll
-  mappend (HsImportSome a) (HsImportSome b) =
-    HsImportSome (a <> b)
 
 importSome :: T.Text -> [ Hs.ImportSpec () ] -> HsImports
 importSome modNm names = HsImports (M.singleton (Hs.ModuleName () (T.unpack modNm))
@@ -77,11 +76,10 @@ newtype HsImports = HsImports (M.Map (Hs.ModuleName ()) HsImport)
 instance Hashable HsImports where
   hashWithSalt s (HsImports a) = hashWithSalt s (M.assocs a)
 instance Semigroup HsImports where
-  (<>) = mappend
+  (HsImports a) <> (HsImports b) =
+      HsImports (M.unionWith mappend a b)
 instance Monoid HsImports where
   mempty = HsImports mempty
-  mappend (HsImports a) (HsImports b) =
-    HsImports (M.unionWith mappend a b)
 
 data HsDataType
   = HsDataType
@@ -140,11 +138,10 @@ data HsAction
   }
 
 instance Semigroup HsAction where
-  (<>) = mappend
+  (<>) (HsAction ma ea) (HsAction mb eb) =
+    HsAction (ma <> mb) (ea <> eb)
 instance Monoid HsAction where
   mempty = HsAction [] []
-  mappend (HsAction ma ea) (HsAction mb eb) =
-    HsAction (ma <> mb) (ea <> eb)
 
 newtype HsBackendConstraint = HsBackendConstraint { buildHsBackendConstraint :: Hs.Type () -> Hs.Asst () }
 
@@ -154,18 +151,17 @@ data HsBeamBackend f
   | HsBeamBackendNone
 
 instance Semigroup (HsBeamBackend f) where
-  (<>) = mappend
+  (<>) (HsBeamBackendSingle aTy aExp) (HsBeamBackendSingle bTy _)
+      | aTy == bTy = HsBeamBackendSingle aTy aExp
+      | otherwise = HsBeamBackendNone
+  (<>) a@HsBeamBackendSingle {} _ = a
+  (<>) _ b@HsBeamBackendSingle {} = b
+  (<>) HsBeamBackendNone _ = HsBeamBackendNone
+  (<>) _ HsBeamBackendNone = HsBeamBackendNone
+  (<>) (HsBeamBackendConstrained a) (HsBeamBackendConstrained b) =
+    HsBeamBackendConstrained (a <> b)
 instance Monoid (HsBeamBackend f) where
   mempty = HsBeamBackendConstrained []
-  mappend (HsBeamBackendSingle aTy aExp) (HsBeamBackendSingle bTy _)
-    | aTy == bTy = HsBeamBackendSingle aTy aExp
-    | otherwise = HsBeamBackendNone
-  mappend a@HsBeamBackendSingle {} _ = a
-  mappend _ b@HsBeamBackendSingle {} = b
-  mappend HsBeamBackendNone _ = HsBeamBackendNone
-  mappend _ HsBeamBackendNone = HsBeamBackendNone
-  mappend (HsBeamBackendConstrained a) (HsBeamBackendConstrained b) =
-    HsBeamBackendConstrained (a <> b)
 
 data HsEntity
     = HsEntity
@@ -189,12 +185,11 @@ data HsTableConstraintDecls
     }
 
 instance Semigroup HsTableConstraintDecls where
-  (<>) = mappend
+  (<>) (HsTableConstraintDecls ai ad) (HsTableConstraintDecls bi bd) =
+    HsTableConstraintDecls (ai <> bi) (ad <> bd)
 
 instance Monoid HsTableConstraintDecls where
   mempty = HsTableConstraintDecls [] []
-  mappend (HsTableConstraintDecls ai ad) (HsTableConstraintDecls bi bd) =
-    HsTableConstraintDecls (ai <> bi) (ad <> bd)
 
 data HsModule
   = HsModule
@@ -415,10 +410,9 @@ data HsNone = HsNone deriving (Show, Eq, Ord, Generic)
 instance Hashable HsNone
 
 instance Semigroup HsNone where
-  (<>) = mappend
+  (<>) _ _ = HsNone
 instance Monoid HsNone where
   mempty = HsNone
-  mappend _ _ = HsNone
 
 data HsMigrateBackend = HsMigrateBackend
 

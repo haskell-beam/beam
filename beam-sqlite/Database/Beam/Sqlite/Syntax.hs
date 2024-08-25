@@ -105,12 +105,11 @@ instance Sql92DisplaySyntax SqliteSyntax where
   displaySyntax = BL.unpack . sqliteRenderSyntaxScript
 
 instance Semigroup SqliteSyntax where
-  (<>) = mappend
+  (<>) (SqliteSyntax ab av) (SqliteSyntax bb bv) =
+    SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
 
 instance Monoid SqliteSyntax where
   mempty = SqliteSyntax (\_ -> mempty) mempty
-  mappend (SqliteSyntax ab av) (SqliteSyntax bb bv) =
-    SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
 
 instance Eq SqliteSyntax where
   SqliteSyntax ab av == SqliteSyntax bb bv =

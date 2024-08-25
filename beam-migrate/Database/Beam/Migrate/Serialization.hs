@@ -246,21 +246,19 @@ newtype BeamDeserializers be
   }
 
 instance Semigroup (BeamDeserializer be) where
-  (<>) = mappend
-
-instance Monoid (BeamDeserializer be) where
-  mempty = BeamDeserializer (const (const mzero))
-  mappend (BeamDeserializer a) (BeamDeserializer b) =
+  (BeamDeserializer a) <> (BeamDeserializer b) =
     BeamDeserializer $ \d o ->
     a d o <|> b d o
 
+instance Monoid (BeamDeserializer be) where
+  mempty = BeamDeserializer (const (const mzero))
+
 instance Semigroup (BeamDeserializers be) where
-  (<>) = mappend
+  (BeamDeserializers a) <> (BeamDeserializers b) =
+    BeamDeserializers (D.unionWithKey (const mappend) a b)
 
 instance Monoid (BeamDeserializers be) where
   mempty = BeamDeserializers mempty
-  mappend (BeamDeserializers a) (BeamDeserializers b) =
-    BeamDeserializers (D.unionWithKey (const mappend) a b)
 
 -- | Helper function to deserialize data from a 'Maybe' 'Value'.
 --

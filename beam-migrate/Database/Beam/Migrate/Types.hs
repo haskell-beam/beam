@@ -98,13 +98,13 @@ data MigrationDataLoss
   deriving Show
 
 instance Semigroup MigrationDataLoss where
-    (<>) = mappend
+    MigrationLosesData <> _ = MigrationLosesData
+    _ <> MigrationLosesData = MigrationLosesData
+    MigrationKeepsData <> MigrationKeepsData = MigrationKeepsData
 
 instance Monoid MigrationDataLoss where
     mempty = MigrationKeepsData
-    mappend MigrationLosesData _ = MigrationLosesData
-    mappend _ MigrationLosesData = MigrationLosesData
-    mappend MigrationKeepsData MigrationKeepsData = MigrationKeepsData
+
 
 -- | A migration command along with metadata on whether the command can lose data
 data MigrationCommand be
