@@ -68,6 +68,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import           Data.Time
+import qualified Data.Time.Format.ISO8601 as Time
 import           Data.Word
 #if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
@@ -966,12 +967,10 @@ instance HasSqlValueSyntax SqliteValueSyntax UTCTime where
   sqlValueSyntax tm = SqliteValueSyntax (emitValue (toField tm))
 
 instance HasSqlValueSyntax SqliteValueSyntax LocalTime where
-  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
-    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S%Q")) tm
+  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString (Time.formatShow Time.iso8601Format tm))))
 
 instance HasSqlValueSyntax SqliteValueSyntax Day where
-  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString tmStr)))
-    where tmStr = formatTime defaultTimeLocale (iso8601DateFormat Nothing) tm
+  sqlValueSyntax tm = SqliteValueSyntax (emitValue (SQLText (fromString (Time.formatShow Time.iso8601Format tm))))
 
 instance HasDataTypeCreatedCheck SqliteDataTypeSyntax where
   dataTypeHasBeenCreated _ _ = True

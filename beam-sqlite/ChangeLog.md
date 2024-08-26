@@ -1,3 +1,9 @@
+# 0.5.3.1
+
+# Added features
+
+ * Replaced use of deprecated functions.
+
 # 0.5.3.0
 
 # Added features
