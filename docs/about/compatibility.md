@@ -145,7 +145,7 @@ planned.
 | **E171 SQLSTATE support**                                       | N/A      |                                                                                                                                            |
 | **E182 Host language binding**                                  | N/A      |                                                                                                                                            |
 | **F031 Basic schema manipulation**                              |          |                                                                                                                                            |
-| F031-01 CREATE TABLE for persistent base tables                 | FULL     | Use `createTable_` in `beam-migrate`                                                                                                       |
+| F031-01 CREATE TABLE for persistent base tables                 | FULL     | Use `createTable` or `createTableWithSchema` in `beam-migrate`                                                                             |
 | F031-02 CREATE VIEW statement                                   | TODO     |                                                                                                                                            |
 | F031-03 GRANT statement                                         | TODO     |                                                                                                                                            |
 | F031-04 ALTER TABLE statement: ADD COLUMN clause                | TODO     |                                                                                                                                            |

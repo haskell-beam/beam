@@ -8,7 +8,7 @@ module Database.Beam.Migrate.SQL.Tables
   ( -- * Table manipulation
 
     -- ** Creation and deletion
-    createTable, dropTable
+    createTable, createTableWithSchema, dropTable
   , preserve
 
     -- ** @ALTER TABLE@
@@ -65,16 +65,32 @@ import Lens.Micro ((^.))
 --   The first argument is the name of the table.
 --
 --   The second argument is a table containing a 'FieldSchema' for each field.
---   See documentation on the 'Field' command for more information.c
+--   See documentation on the 'Field' command for more information.
+--
+--   To create a table in a specific schema, see `createTableWithSchema`
 createTable :: ( Beamable table, Table table
                , BeamMigrateSqlBackend be )
             => Text -> TableSchema be table
             -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
-createTable newTblName tblSettings =
+createTable = createTableWithSchema Nothing
+
+-- | Add a @CREATE TABLE@ statement to this migration, with an explicit schema
+--
+--   The first argument is the name of the schema, while the second argument is the name of the table.
+--
+--   The second argument is a table containing a 'FieldSchema' for each field.
+--   See documentation on the 'Field' command for more information.c
+createTableWithSchema :: ( Beamable table, Table table
+                         , BeamMigrateSqlBackend be )
+                      => Maybe Text -- ^ Schema name, if any
+                      -> Text       -- ^ Table name 
+                      -> TableSchema be table
+                      -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
+createTableWithSchema maybeSchemaName newTblName tblSettings =
   do let pkFields = allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings)
          tblConstraints = if null pkFields then [] else [ primaryKeyConstraintSyntax pkFields ]
          createTableCommand =
-           createTableSyntax Nothing (tableName Nothing newTblName)
+           createTableSyntax Nothing (tableName maybeSchemaName newTblName)
                              (allBeamValues (\(Columnar' (TableFieldSchema name (FieldSchema schema) _)) -> (name, schema)) tblSettings)
                              tblConstraints
          command = createTableCmd createTableCommand
