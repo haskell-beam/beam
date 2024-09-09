@@ -90,7 +90,7 @@ test-suite beam-postgres-tests
     tasty-hunit,
     tasty,
     text,
-    tmp-postgres,
+    testcontainers,
     uuid,
     vector
   default-language: Haskell2010
