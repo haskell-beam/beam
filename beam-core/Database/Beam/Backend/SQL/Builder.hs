@@ -405,6 +405,9 @@ instance IsSql92TableSourceSyntax SqlSyntaxBuilder where
                     buildSepBy (byteString ", ") (map buildSql vs) <>
                     byteString ")") vss)
 
+instance IsSql92SchemaNameSyntax SqlSyntaxBuilder where
+  schemaName = SqlSyntaxBuilder . quoteSql
+
 instance IsSql92TableNameSyntax SqlSyntaxBuilder where
   tableName Nothing t  = SqlSyntaxBuilder $ quoteSql t
   tableName (Just s) t = SqlSyntaxBuilder $ quoteSql s <> byteString "." <> quoteSql t

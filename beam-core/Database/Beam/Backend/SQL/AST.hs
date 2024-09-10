@@ -464,6 +464,12 @@ instance IsSql92GroupingSyntax Grouping where
 
   groupByExpressions = Grouping
 
+data SchemaName = SchemaName Text
+  deriving (Show, Eq, Ord)
+
+instance IsSql92SchemaNameSyntax SchemaName where
+  schemaName = SchemaName
+
 data TableName = TableName (Maybe Text) Text
   deriving (Show, Eq, Ord)
 

@@ -22,6 +22,7 @@ tests postgresConn =
       , charWidthVerification postgresConn "CHAR" char
       , charNoWidthVerification postgresConn "CHAR" char
       , extensionVerification postgresConn
+      , createTableWithSchemaWorks postgresConn
       ]
 
 data CharT f
@@ -96,3 +97,22 @@ extensionVerification pgConn =
           case resAfter of
             VerificationSucceeded -> return ()
             VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
+
+
+-- | Verifies that 'createTableWithSchema' correctly creates a table
+-- with a schema.
+createTableWithSchemaWorks :: IO ByteString -> TestTree
+createTableWithSchemaWorks pgConn =
+    testCase ("createTableWithSchema works correctly") $ do
+      withTestPostgres "create_table_with_schema" pgConn $ \conn -> do
+        res <- runBeamPostgres conn $ do
+          db <- executeMigration runNoReturn $ do
+                  createDatabaseSchema "internal_schema"
+                  (CharDb <$> createTableWithSchema (Just "internal_schema") "char_test"
+                                    (CharT (field "key" (varchar Nothing) notNull)))
+
+          verifySchema migrationBackend db
+
+        case res of
+          VerificationSucceeded -> return ()
+          VerificationFailed failures -> fail ("Verification failed: " ++ show failures)

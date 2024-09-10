@@ -60,17 +60,28 @@ type Sql92DdlCommandConstraintAttributesSyntax syntax =
 type Sql92DdlCommandAlterTableActionSyntax syntax =
   Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax syntax)
 
-class ( IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
+class ( IsSql92CreateSchemaSyntax (Sql92DdlCommandCreateSchemaSyntax syntax)
+      , IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
       , IsSql92DropTableSyntax (Sql92DdlCommandDropTableSyntax syntax)
       , IsSql92AlterTableSyntax (Sql92DdlCommandAlterTableSyntax syntax)) =>
   IsSql92DdlCommandSyntax syntax where
+  type Sql92DdlCommandCreateSchemaSyntax syntax :: Type
   type Sql92DdlCommandCreateTableSyntax syntax :: Type
   type Sql92DdlCommandAlterTableSyntax syntax :: Type
   type Sql92DdlCommandDropTableSyntax syntax :: Type
 
-  createTableCmd :: Sql92DdlCommandCreateTableSyntax syntax -> syntax
-  dropTableCmd   :: Sql92DdlCommandDropTableSyntax syntax -> syntax
-  alterTableCmd  :: Sql92DdlCommandAlterTableSyntax syntax -> syntax
+  createSchemaCmd :: Sql92DdlCommandCreateSchemaSyntax syntax -> syntax
+  createTableCmd  :: Sql92DdlCommandCreateTableSyntax syntax -> syntax
+  dropTableCmd    :: Sql92DdlCommandDropTableSyntax syntax -> syntax
+  alterTableCmd   :: Sql92DdlCommandAlterTableSyntax syntax -> syntax
+
+class IsSql92SchemaNameSyntax (Sql92CreateSchemaSchemaNameSyntax syntax) => 
+    IsSql92CreateSchemaSyntax syntax where
+  
+  type Sql92CreateSchemaSchemaNameSyntax syntax :: Type
+
+  createSchemaSyntax :: Sql92CreateSchemaSchemaNameSyntax syntax
+                     -> syntax
 
 class ( IsSql92TableConstraintSyntax (Sql92CreateTableTableConstraintSyntax syntax)
       , IsSql92ColumnSchemaSyntax (Sql92CreateTableColumnSchemaSyntax syntax)

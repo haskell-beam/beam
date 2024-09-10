@@ -77,6 +77,7 @@ module Database.Beam.Migrate.Actions
   , ensuringNot_
   , justOne_
 
+  , createSchemaActionProvider
   , createTableActionProvider
   , dropTableActionProvider
   , addColumnProvider
@@ -265,7 +266,8 @@ instance Semigroup (ActionProvider be) where
 instance Monoid (ActionProvider be) where
   mempty = ActionProvider (\_ _ -> [])
 
-createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
+createSchemaWeight, createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
+createSchemaWeight = 1000
 createTableWeight = 500
 dropTableWeight = 100
 addColumnWeight = 1
@@ -282,6 +284,30 @@ ensuringNot_ _  = empty
 justOne_ :: [ a ] -> [ a ]
 justOne_ [x] = [x]
 justOne_ _ = []
+
+
+-- IsSql92CreateTableSyntax
+
+-- | Action provider for SQL92 @CREATE SCHEMA@ actions.
+createSchemaActionProvider :: forall be
+                           . ( Typeable be, BeamMigrateOnlySqlBackend be )
+                           => ActionProvider be
+createSchemaActionProvider =
+  ActionProvider provider
+  where
+    provider :: ActionProviderFn be
+    provider findPreConditions findPostConditions =
+      do schemaP@(SchemaExistsPredicate postSchemaName) <- findPostConditions
+         -- Make sure there's no corresponding predicate in the precondition
+         ensuringNot_ $
+           do SchemaExistsPredicate preSchemaName <- findPreConditions
+              guard (preSchemaName == postSchemaName)
+
+         let postConditions = [ p schemaP ]
+             cmd = createSchemaCmd (createSchemaSyntax (schemaName postSchemaName))
+         pure (PotentialAction mempty (HS.fromList postConditions)
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
+                               ("Create the schema " <> postSchemaName) createSchemaWeight)
 
 -- | Action provider for SQL92 @CREATE TABLE@ actions.
 createTableActionProvider :: forall be
@@ -469,6 +495,7 @@ dropColumnNullProvider = ActionProvider provider
 --
 -- In particular, this provides edges consisting of the following statements:
 --
+--  * CREATE SCHEMA
 --  * CREATE TABLE
 --  * DROP TABLE
 --  * ALTER TABLE ... ADD COLUMN ...
@@ -479,14 +506,17 @@ defaultActionProvider :: ( Typeable be
                       => ActionProvider be
 defaultActionProvider =
   mconcat
-  [ createTableActionProvider
+  [ createSchemaActionProvider
+
+  , createTableActionProvider
   , dropTableActionProvider
 
   , addColumnProvider
   , dropColumnProvider
 
   , addColumnNullProvider
-  , dropColumnNullProvider ]
+  , dropColumnNullProvider 
+  ]
 
 -- | Represents current state of a database graph search.
 --

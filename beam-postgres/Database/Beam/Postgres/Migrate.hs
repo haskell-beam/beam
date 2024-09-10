@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -76,6 +78,8 @@ import           Data.Semigroup
 import           Data.Monoid (Endo(..))
 #endif
 import           Data.Word (Word64)
+
+import           GHC.Generics ( Generic )
 
 -- | Top-level migration backend for use by @beam-migrate@ tools
 migrationBackend :: Tool.BeamMigrationBackend Postgres Pg
@@ -321,27 +325,37 @@ pgUnknownDataType oid@(Pg.Oid oid') pgMod =
   PgDataTypeSyntax (PgDataTypeDescrOid oid pgMod) (emit "{- UNKNOWN -}")
                    (pgDataTypeJSON (object [ "oid" .= (fromIntegral oid' :: Word), "mod" .= pgMod ]))
 
--- * Create constraints from a connection
 
+newtype SchemaName = MkSchemaName T.Text
+  deriving (Generic, Pg.FromRow)
+
+-- * Create constraints from a connection
 getDbConstraints :: Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
-getDbConstraints = getDbConstraintsForSchemas Nothing
+getDbConstraints conn = do 
+  schemata <- Pg.query_ conn "SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT LIKE '%pg_%' AND schema_name <> 'information_schema' AND schema_name <> 'public';"
+  case schemata of
+    [] -> getDbConstraintsForSchemas Nothing conn
+    schemata' -> 
+        (++) <$> getDbConstraintsForSchemas (Just ((\(MkSchemaName nm) -> T.unpack nm) <$> schemata')) conn
+             <*> getDbConstraintsForSchemas Nothing conn
 
 getDbConstraintsForSchemas :: Maybe [String] -> Pg.Connection -> IO [ Db.SomeDatabasePredicate ]
 getDbConstraintsForSchemas subschemas conn =
-  do tbls <- case subschemas of
-        Nothing -> Pg.query_ conn "SELECT cl.oid, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname = any (current_schemas(false)) and relkind='r'"
-        Just ss -> Pg.query  conn "SELECT cl.oid, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname IN ? and relkind='r'" (Pg.Only (Pg.In ss))
-     let tblsExist = map (\(_, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate (Db.QualifiedName Nothing tbl))) tbls
-
+  do (tbls :: [(Pg.Oid, Maybe T.Text, T.Text)]) <- case subschemas of
+        Nothing -> Pg.query_ conn "SELECT cl.oid, NULL, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname = any (current_schemas(false)) and relkind='r'"
+        Just ss -> Pg.query  conn "SELECT cl.oid, nspname, relname FROM pg_catalog.pg_class \"cl\" join pg_catalog.pg_namespace \"ns\" on (ns.oid = relnamespace) where nspname IN ? and relkind='r'" (Pg.Only (Pg.In ss))
+     let tblsExist = map (\(_, mschema, tbl) -> Db.SomeDatabasePredicate (Db.TableExistsPredicate (Db.QualifiedName mschema tbl))) tbls
+         schemaChecks = fromMaybe [] $ (fmap (Db.SomeDatabasePredicate . Db.SchemaExistsPredicate . T.pack)) <$> subschemas
      enumerationData <-
        Pg.query_ conn
          (fromString (unlines
                       [ "SELECT t.typname, t.oid, array_agg(e.enumlabel ORDER BY e.enumsortorder)"
                       , "FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid"
-                      , "GROUP BY t.typname, t.oid" ]))
+                      , "GROUP BY t.typname, t.oid" 
+                      ])) 
 
      columnChecks <-
-       fmap mconcat . forM tbls $ \(oid, tbl) ->
+       fmap mconcat . forM tbls $ \(oid, mschema, tbl) ->
        do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, pg_catalog.format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute att WHERE att.attrelid=? AND att.attnum>0 AND att.attisdropped='f'"
                        (Pg.Only (oid :: Pg.Oid))
           let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: ByteString) ->
@@ -351,24 +365,26 @@ getDbConstraintsForSchemas subschemas conn =
                                                      pgDataTypeFromAtt typ typId typmod' <|>
                                                      pgEnumerationTypeFromAtt enumerationData typ typId typmod'
 
-                                    in Db.SomeDatabasePredicate (Db.TableHasColumn (Db.QualifiedName Nothing tbl) nm pgDataType :: Db.TableHasColumn Postgres)) columns
+                                    in Db.SomeDatabasePredicate (Db.TableHasColumn (Db.QualifiedName mschema tbl) nm pgDataType :: Db.TableHasColumn Postgres)) columns
               notNullChecks = concatMap (\(nm, _, _, isNotNull, _) ->
                                            if isNotNull then
-                                            [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint (Db.QualifiedName Nothing tbl) nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
+                                            [Db.SomeDatabasePredicate (Db.TableColumnHasConstraint (Db.QualifiedName mschema tbl) nm (Db.constraintDefinitionSyntax Nothing Db.notNullConstraintSyntax Nothing)
                                               :: Db.TableColumnHasConstraint Postgres)]
                                            else [] ) columns
 
-          pure (columnChecks ++ notNullChecks)
+          pure (columnChecks ++ notNullChecks ++ schemaChecks)
 
      primaryKeys <-
-       map (\(relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey (Db.QualifiedName Nothing relnm) (V.toList cols))) <$>
-       Pg.query_ conn (fromString (unlines [ "SELECT c.relname, array_agg(a.attname ORDER BY k.n ASC)"
+       map (\(schema, relnm, cols) -> Db.SomeDatabasePredicate (Db.TableHasPrimaryKey (Db.QualifiedName schema relnm) (V.toList cols))) <$>
+                                            -- We nullify the 'public' schema, which is the implicit default in Postgres
+       Pg.query_ conn (fromString (unlines [ "SELECT NULLIF(ns.nspname, 'public'), c.relname, array_agg(a.attname ORDER BY k.n ASC)"
                                            , "FROM pg_index i"
                                            , "CROSS JOIN unnest(i.indkey) WITH ORDINALITY k(attid, n)"
                                            , "JOIN pg_attribute a ON a.attnum=k.attid AND a.attrelid=i.indrelid"
                                            , "JOIN pg_class c ON c.oid=i.indrelid"
                                            , "JOIN pg_namespace ns ON ns.oid=c.relnamespace"
-                                           , "WHERE ns.nspname = any (current_schemas(false)) AND c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
+                                           -- Recall that schema of the form 'pg_' are Postgres internal tables that should not be taken into account
+                                           , "WHERE nspname NOT LIKE '%pg_%' AND c.relkind='r' AND i.indisprimary GROUP BY nspname, relname, i.indrelid" ]))
 
      let enumerations =
            map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData

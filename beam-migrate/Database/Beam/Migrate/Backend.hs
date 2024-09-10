@@ -120,7 +120,7 @@ instance Semigroup HaskellPredicateConverter where
 instance Monoid HaskellPredicateConverter where
   mempty = HaskellPredicateConverter $ \_ -> Nothing
 
--- | Converters for the 'TableExistsPredicate', 'TableHasPrimaryKey', and
+-- | Converters for the 'SchemaExistsPredicate', 'TableExistsPredicate', 'TableHasPrimaryKey', and
 -- 'TableHasColumn' (when supplied with a function to convert a backend data
 -- type to a haskell one).
 sql92HsPredicateConverters :: forall fromBe
@@ -128,6 +128,7 @@ sql92HsPredicateConverters :: forall fromBe
                             => (BeamMigrateSqlBackendDataTypeSyntax fromBe -> Maybe HsDataType)
                             -> HaskellPredicateConverter
 sql92HsPredicateConverters convType =
+  trivialHsConverter @SchemaExistsPredicate <>
   trivialHsConverter @TableExistsPredicate <>
   trivialHsConverter @TableHasPrimaryKey   <>
   hasColumnConverter @fromBe convType

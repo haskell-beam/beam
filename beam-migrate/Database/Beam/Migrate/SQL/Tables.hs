@@ -8,7 +8,9 @@ module Database.Beam.Migrate.SQL.Tables
   ( -- * Table manipulation
 
     -- ** Creation and deletion
-    createTable, createTableWithSchema, dropTable
+    createTable, createTableWithSchema 
+  , createDatabaseSchema
+  , dropTable
   , preserve
 
     -- ** @ALTER TABLE@
@@ -67,19 +69,33 @@ import Lens.Micro ((^.))
 --   The second argument is a table containing a 'FieldSchema' for each field.
 --   See documentation on the 'Field' command for more information.
 --
---   To create a table in a specific schema, see `createTableWithSchema`
+--   To create a table in a specific schema, see 'createTableWithSchema'.
 createTable :: ( Beamable table, Table table
                , BeamMigrateSqlBackend be )
             => Text -> TableSchema be table
             -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
 createTable = createTableWithSchema Nothing
 
+-- * Schema manipulation
+
+-- | Add a @CREATE SCHEMA@ statement to this migration
+--
+--   To create a table in a specific schema, see 'createTableWithSchema'.
+createDatabaseSchema :: BeamMigrateSqlBackend be
+                     => Text
+                     -> Migration be ()
+createDatabaseSchema nm 
+  = upDown (createSchemaCmd (createSchemaSyntax (schemaName nm))) Nothing
+
 -- | Add a @CREATE TABLE@ statement to this migration, with an explicit schema
 --
 --   The first argument is the name of the schema, while the second argument is the name of the table.
 --
 --   The second argument is a table containing a 'FieldSchema' for each field.
---   See documentation on the 'Field' command for more information.c
+--   See documentation on the 'Field' command for more information.
+--
+--   Note that the database schema is expected to exist; see 'createDatabaseSchema' to create
+--   a database schema.
 createTableWithSchema :: ( Beamable table, Table table
                          , BeamMigrateSqlBackend be )
                       => Maybe Text -- ^ Schema name, if any
@@ -98,7 +114,7 @@ createTableWithSchema maybeSchemaName newTblName tblSettings =
          tbl' = changeBeamRep (\(Columnar' (TableFieldSchema name _ _)) -> Columnar' (TableField (pure name) name)) tblSettings
 
          fieldChecks = changeBeamRep (\(Columnar' (TableFieldSchema _ _ cs)) -> Columnar' (Const cs)) tblSettings
-
+        
          tblChecks = [ TableCheck (\tblName _ -> Just (SomeDatabasePredicate (TableExistsPredicate tblName))) ] ++
                      primaryKeyCheck
 
@@ -106,9 +122,22 @@ createTableWithSchema maybeSchemaName newTblName tblSettings =
            case allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings) of
              [] -> []
              cols -> [ TableCheck (\tblName _ -> Just (SomeDatabasePredicate (TableHasPrimaryKey tblName cols))) ]
+         
+         -- If a schema has been defined explicitly, then it should be part of checks
+         schemaCheck = 
+            case maybeSchemaName of
+              Nothing -> []
+              Just sn -> [ SomeDatabasePredicate (SchemaExistsPredicate sn) ] 
 
      upDown command Nothing
-     pure (CheckedDatabaseEntity (CheckedDatabaseTable (DatabaseTable Nothing newTblName newTblName tbl') tblChecks fieldChecks) [])
+     pure (CheckedDatabaseEntity 
+            (CheckedDatabaseTable 
+              (DatabaseTable maybeSchemaName newTblName newTblName tbl') 
+              tblChecks 
+              fieldChecks
+            ) 
+            schemaCheck
+          )
 
 -- | Add a @DROP TABLE@ statement to this migration.
 dropTable :: BeamMigrateSqlBackend be
