@@ -1,12 +1,18 @@
+# 0.5.3.0
+
+## Added features
+
+* Added support for creating database schemas and associated tables with `createDatabaseSchema` and `createTableWithSchema` (#716).
+
 # 0.5.2.1
 
-# Added features
+## Added features
 
  * Loosen some version bounds
 
 # 0.5.2.0
 
-# Addded features
+## Addded features
 
  * `IN (SELECT ...)` syntax via `inSelectE`
 

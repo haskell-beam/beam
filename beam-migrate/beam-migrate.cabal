@@ -1,5 +1,5 @@
 name:                beam-migrate
-version:             0.5.2.1
+version:             0.5.3.0
 synopsis:            SQL DDL support and migrations support library for Beam
 description:         This package provides type classes to allow backends to implement
                      SQL DDL support for beam. This allows you to use beam syntax to
