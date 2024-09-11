@@ -9,7 +9,7 @@ module Database.Beam.Migrate.SQL.Tables
 
     -- ** Creation and deletion
     createTable, createTableWithSchema 
-  , createDatabaseSchema
+  , createDatabaseSchema, dropDatabaseSchema
   , dropTable
   , preserve
 
@@ -81,11 +81,23 @@ createTable = createTableWithSchema Nothing
 -- | Add a @CREATE SCHEMA@ statement to this migration
 --
 --   To create a table in a specific schema, see 'createTableWithSchema'.
+--   To drop a schema, see 'dropDatabaseSchema'.
 createDatabaseSchema :: BeamMigrateSqlBackend be
                      => Text
                      -> Migration be ()
 createDatabaseSchema nm 
   = upDown (createSchemaCmd (createSchemaSyntax (schemaName nm))) Nothing
+
+-- | Add a @DROP SCHEMA@ statement to this migration.
+--
+--   Depending on the backend, this may fail if the schema is not empty. 
+--
+--   To create a schema, see 'createDatabaseSchema'.
+dropDatabaseSchema :: BeamMigrateSqlBackend be
+                   => Text
+                   -> Migration be ()
+dropDatabaseSchema nm 
+  = upDown (dropSchemaCmd (dropSchemaSyntax (schemaName nm))) Nothing
 
 -- | Add a @CREATE TABLE@ statement to this migration, with an explicit schema
 --

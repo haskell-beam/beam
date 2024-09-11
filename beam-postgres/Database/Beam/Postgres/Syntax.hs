@@ -337,6 +337,7 @@ instance Hashable PgDataTypeDescr where
     hashWithSalt salt (1 :: Int, t)
 
 newtype PgCreateSchemaSyntax = PgCreateSchemaSyntax { fromPgCreateSchema :: PgSyntax }
+newtype PgDropSchemaSyntax = PgDropSchemaSyntax { fromPgDropSchema :: PgSyntax }
 
 newtype PgCreateTableSyntax = PgCreateTableSyntax { fromPgCreateTable :: PgSyntax }
 data PgTableOptionsSyntax = PgTableOptionsSyntax PgSyntax PgSyntax
@@ -415,11 +416,13 @@ instance IsSql92Syntax PgCommandSyntax where
 
 instance IsSql92DdlCommandSyntax PgCommandSyntax where
   type Sql92DdlCommandCreateSchemaSyntax PgCommandSyntax = PgCreateSchemaSyntax
+  type Sql92DdlCommandDropSchemaSyntax PgCommandSyntax = PgDropSchemaSyntax
   type Sql92DdlCommandCreateTableSyntax PgCommandSyntax = PgCreateTableSyntax
   type Sql92DdlCommandDropTableSyntax PgCommandSyntax = PgDropTableSyntax
   type Sql92DdlCommandAlterTableSyntax PgCommandSyntax = PgAlterTableSyntax
 
   createSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
+  dropSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
   createTableCmd = PgCommandSyntax PgCommandTypeDdl . coerce
   dropTableCmd   = PgCommandSyntax PgCommandTypeDdl . coerce
   alterTableCmd  = PgCommandSyntax PgCommandTypeDdl . coerce
@@ -1052,8 +1055,14 @@ instance IsSql92AlterColumnActionSyntax PgAlterColumnActionSyntax where
 instance IsSql92SchemaNameSyntax PgSchemaNameSyntax => IsSql92CreateSchemaSyntax PgCreateSchemaSyntax where
   type Sql92CreateSchemaSchemaNameSyntax PgCreateSchemaSyntax = PgSchemaNameSyntax
 
-  createSchemaSyntax schemaName =     PgCreateSchemaSyntax $
+  createSchemaSyntax schemaName = PgCreateSchemaSyntax $
     emit "CREATE SCHEMA " <> fromPgSchemaName schemaName
+
+instance IsSql92SchemaNameSyntax PgSchemaNameSyntax => IsSql92DropSchemaSyntax PgDropSchemaSyntax where
+  type Sql92DropSchemaSchemaNameSyntax PgDropSchemaSyntax = PgSchemaNameSyntax
+
+  dropSchemaSyntax schemaName = PgDropSchemaSyntax $
+    emit "DROP SCHEMA " <> fromPgSchemaName schemaName
 
 instance IsSql92CreateTableSyntax PgCreateTableSyntax where
   type Sql92CreateTableTableNameSyntax PgCreateTableSyntax = PgTableNameSyntax

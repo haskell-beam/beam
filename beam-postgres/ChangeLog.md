@@ -3,7 +3,7 @@
 ## Added features
 
  * Better error messages on column type mismatches (#696).
- * Added support for creating database schemas and associated tables with `createDatabaseSchema` and `createTableWithSchema` (#716).
+ * Added support for creating and dropping database schemas and associated tables with `createDatabaseSchema`, `dropDatabaseSchema`, and `createTableWithSchema` (#716).
 
 ## Documentation
  

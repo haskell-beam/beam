@@ -2,7 +2,7 @@
 
 ## Added features
 
-* Added support for creating database schemas and associated tables with `createDatabaseSchema` and `createTableWithSchema` (#716).
+* Added support for creating database schemas and associated tables with `createDatabaseSchema` and `createTableWithSchema`, as well as dropping schemas with `dropDatabaseSchema` (#716).
 
 # 0.5.2.1
 

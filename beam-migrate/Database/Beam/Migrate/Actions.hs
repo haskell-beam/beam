@@ -266,8 +266,9 @@ instance Semigroup (ActionProvider be) where
 instance Monoid (ActionProvider be) where
   mempty = ActionProvider (\_ _ -> [])
 
-createSchemaWeight, createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
+createSchemaWeight, dropSchemaWeight, createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
 createSchemaWeight = 1000
+dropSchemaWeight = 100
 createTableWeight = 500
 dropTableWeight = 100
 addColumnWeight = 1
@@ -308,6 +309,32 @@ createSchemaActionProvider =
          pure (PotentialAction mempty (HS.fromList postConditions)
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Create the schema " <> postSchemaName) createSchemaWeight)
+
+-- | Action provider for SQL92 @DROP SCHEMA@ actions
+dropSchemaActionProvider :: forall be
+                         . BeamMigrateOnlySqlBackend be
+                         => ActionProvider be
+dropSchemaActionProvider =
+ ActionProvider provider
+ where
+   -- Look for tables that exist as a precondition but not a post condition
+   provider :: ActionProviderFn be
+   provider findPreConditions findPostConditions =
+     do schemaP@(SchemaExistsPredicate preSchemaNm) <- findPreConditions
+        ensuringNot_ $
+          do SchemaExistsPredicate postSchemaNm <- findPostConditions
+             guard (preSchemaNm == postSchemaNm)
+
+        relatedPreds <-
+          pure $ do p'@(SomeDatabasePredicate pred') <- findPreConditions
+                    guard (pred' `predicateCascadesDropOn` schemaP)
+                    pure p'
+
+        -- Now, collect all preconditions that may be related to the dropped table
+        let cmd = dropSchemaCmd (dropSchemaSyntax (schemaName preSchemaNm))
+        pure (PotentialAction (HS.fromList (SomeDatabasePredicate schemaP:relatedPreds)) mempty
+                              (Seq.singleton (MigrationCommand cmd MigrationLosesData))
+                              ("Drop schema " <> preSchemaNm) dropSchemaWeight)
 
 -- | Action provider for SQL92 @CREATE TABLE@ actions.
 createTableActionProvider :: forall be
@@ -507,6 +534,7 @@ defaultActionProvider :: ( Typeable be
 defaultActionProvider =
   mconcat
   [ createSchemaActionProvider
+  , dropSchemaActionProvider
 
   , createTableActionProvider
   , dropTableActionProvider

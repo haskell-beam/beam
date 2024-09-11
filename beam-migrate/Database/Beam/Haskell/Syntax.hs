@@ -440,11 +440,13 @@ hsTableTypeName = hsMkTableName toUpper
 
 instance IsSql92DdlCommandSyntax HsAction where
   type Sql92DdlCommandCreateSchemaSyntax HsAction = HsAction
+  type Sql92DdlCommandDropSchemaSyntax HsAction = HsAction
   type Sql92DdlCommandCreateTableSyntax HsAction = HsAction
   type Sql92DdlCommandAlterTableSyntax HsAction = HsAction
   type Sql92DdlCommandDropTableSyntax HsAction = HsAction
 
   createSchemaCmd = id
+  dropSchemaCmd = id
   createTableCmd = id
   dropTableCmd = id
   alterTableCmd = id
@@ -480,7 +482,15 @@ instance IsSql92CreateSchemaSyntax HsAction where
   type Sql92CreateSchemaSchemaNameSyntax HsAction = SchemaName
   createSchemaSyntax (SchemaName nm) = HsAction [ (Nothing, createSchema) ] []
     where
-      createSchema = hsApp (hsVar "createSchema") [ hsVar nm ]
+      createSchema = hsApp (hsVar "createDatabaseSchema") [ hsVar nm ]
+
+
+instance IsSql92DropSchemaSyntax HsAction where
+  type Sql92DropSchemaSchemaNameSyntax HsAction = SchemaName
+  dropSchemaSyntax (SchemaName nm) = HsAction [ (Nothing, dropSchema) ] []
+    where
+      dropSchema = hsApp (hsVar "dropDatabaseSchema") [ hsVar nm ]
+
 
 instance IsSql92CreateTableSyntax HsAction where
   type Sql92CreateTableTableNameSyntax HsAction = TableName

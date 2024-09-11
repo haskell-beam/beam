@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module Database.Beam.Postgres.Test.Migrate where
 
 import Database.Beam
@@ -23,6 +24,7 @@ tests postgresConn =
       , charNoWidthVerification postgresConn "CHAR" char
       , extensionVerification postgresConn
       , createTableWithSchemaWorks postgresConn
+      , dropSchemaWorks postgresConn
       ]
 
 data CharT f
@@ -116,3 +118,22 @@ createTableWithSchemaWorks pgConn =
         case res of
           VerificationSucceeded -> return ()
           VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
+
+
+-- | Verifies that creating a schema and dropping it works
+dropSchemaWorks :: IO ByteString -> TestTree
+dropSchemaWorks pgConn =
+    testCase ("dropDatabaseSchema works correctly") $ do
+      withTestPostgres "drop_schema" pgConn $ \conn -> do
+        runBeamPostgres conn $ do
+          db <- executeMigration runNoReturn $ do
+                  createDatabaseSchema "internal_schema"
+                  createDatabaseSchema "will_be_dropped"
+                  db <- (CharDb <$> createTableWithSchema (Just "internal_schema") "char_test"
+                                    (CharT (field "key" (varchar Nothing) notNull)))
+                  dropDatabaseSchema "will_be_dropped"
+                  pure db
+
+          verifySchema migrationBackend db >>= \case
+            VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
+            VerificationSucceeded -> pure ()
