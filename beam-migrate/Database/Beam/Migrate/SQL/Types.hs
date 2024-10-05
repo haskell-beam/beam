@@ -6,7 +6,9 @@ module Database.Beam.Migrate.SQL.Types
   , FieldSchema(..)
 
   , BeamMigrateOnlySqlBackend
+  , BeamMigrateOnlySqlSchemaBackend
   , BeamMigrateSqlBackend
+  , BeamMigrateSchemaSqlBackend
   , BeamMigrateSql99Backend
   , BeamSqlBackendConstraintSyntax
   , BeamSqlBackendColumnConstraintDefinitionSyntax
@@ -53,9 +55,20 @@ class ( Typeable (BeamSqlBackendSyntax be)
       , Typeable be
       ) => BeamMigrateOnlySqlBackend be
 
+type BeamMigrateOnlySqlSchemaBackend be
+  = ( BeamMigrateOnlySqlBackend be
+    , IsSql92DdlSchemaCommandSyntax (BeamSqlBackendSyntax be)
+    , Sql92SaneDdlSchemaCommandSyntaxMigrateOnly (BeamSqlBackendSyntax be)
+    )
+
 type BeamMigrateSqlBackend be =
     ( BeamMigrateOnlySqlBackend be
     , Sql92SaneDdlCommandSyntax (BeamSqlBackendSyntax be)
+    , BeamSqlBackend be )
+
+type BeamMigrateSchemaSqlBackend be =
+    ( BeamMigrateOnlySqlSchemaBackend be
+    , Sql92SaneDdlSchemaCommandSyntax (BeamSqlBackendSyntax be)
     , BeamSqlBackend be )
 
 type BeamMigrateSql99Backend be =

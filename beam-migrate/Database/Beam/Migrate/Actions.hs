@@ -84,6 +84,7 @@ module Database.Beam.Migrate.Actions
   , addColumnNullProvider
   , dropColumnNullProvider
   , defaultActionProvider
+  , defaultSchemaActionProvider
 
   -- * Solver
   , Solver(..), FinalSolution(..)
@@ -291,7 +292,7 @@ justOne_ _ = []
 
 -- | Action provider for SQL92 @CREATE SCHEMA@ actions.
 createSchemaActionProvider :: forall be
-                           . ( Typeable be, BeamMigrateOnlySqlBackend be )
+                           . ( Typeable be, BeamMigrateOnlySqlSchemaBackend be )
                            => ActionProvider be
 createSchemaActionProvider =
   ActionProvider provider
@@ -312,7 +313,7 @@ createSchemaActionProvider =
 
 -- | Action provider for SQL92 @DROP SCHEMA@ actions
 dropSchemaActionProvider :: forall be
-                         . BeamMigrateOnlySqlBackend be
+                         . BeamMigrateOnlySqlSchemaBackend be
                          => ActionProvider be
 dropSchemaActionProvider =
  ActionProvider provider
@@ -522,21 +523,19 @@ dropColumnNullProvider = ActionProvider provider
 --
 -- In particular, this provides edges consisting of the following statements:
 --
---  * CREATE SCHEMA
 --  * CREATE TABLE
 --  * DROP TABLE
 --  * ALTER TABLE ... ADD COLUMN ...
 --  * ALTER TABLE ... DROP COLUMN ...
 --  * ALTER TABLE ... ALTER COLUMN ... SET [NOT] NULL
+--
+-- For default schema actions, see 'defaultSchemaActionProvider'.
 defaultActionProvider :: ( Typeable be
                          , BeamMigrateOnlySqlBackend be )
                       => ActionProvider be
 defaultActionProvider =
   mconcat
-  [ createSchemaActionProvider
-  , dropSchemaActionProvider
-
-  , createTableActionProvider
+  [ createTableActionProvider
   , dropTableActionProvider
 
   , addColumnProvider
@@ -545,6 +544,18 @@ defaultActionProvider =
   , addColumnNullProvider
   , dropColumnNullProvider 
   ]
+
+-- | Default action providers for any syntax which supports schemas.
+--
+-- In particular, this provides edges consisting of the following statements:
+--
+--  * CREATE SCHEMA
+--  * DROP SCHEMA
+defaultSchemaActionProvider :: ( Typeable be
+                               , BeamMigrateOnlySqlSchemaBackend be )
+                            => ActionProvider be
+defaultSchemaActionProvider 
+  = createSchemaActionProvider <> dropSchemaActionProvider
 
 -- | Represents current state of a database graph search.
 --

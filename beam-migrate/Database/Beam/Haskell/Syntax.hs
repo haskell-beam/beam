@@ -438,15 +438,18 @@ hsTableVarName, hsTableTypeName :: TableName -> String
 hsTableVarName = hsMkTableName toLower
 hsTableTypeName = hsMkTableName toUpper
 
-instance IsSql92DdlCommandSyntax HsAction where
+instance IsSql92DdlSchemaCommandSyntax HsAction where
   type Sql92DdlCommandCreateSchemaSyntax HsAction = HsAction
   type Sql92DdlCommandDropSchemaSyntax HsAction = HsAction
+
+  createSchemaCmd = id
+  dropSchemaCmd = id
+
+instance IsSql92DdlCommandSyntax HsAction where
   type Sql92DdlCommandCreateTableSyntax HsAction = HsAction
   type Sql92DdlCommandAlterTableSyntax HsAction = HsAction
   type Sql92DdlCommandDropTableSyntax HsAction = HsAction
 
-  createSchemaCmd = id
-  dropSchemaCmd = id
   createTableCmd = id
   dropTableCmd = id
   alterTableCmd = id

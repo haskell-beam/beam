@@ -31,7 +31,7 @@ module Database.Beam.Postgres.Migrate
   ) where
 
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate.Actions (defaultActionProvider)
+import           Database.Beam.Migrate.Actions (defaultActionProvider, defaultSchemaActionProvider)
 import qualified Database.Beam.Migrate.Backend as Tool
 import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL as Db
@@ -99,8 +99,12 @@ migrationBackend = Tool.BeamMigrationBackend
                          postgresDataTypeDeserializers <>
                          Db.beamCheckDeserializers)
                         (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand) "postgres.sql"
-                        pgPredConverter (defaultActionProvider <> pgExtensionActionProvider <>
-                                         pgCustomEnumActionProvider)
+                        pgPredConverter (mconcat [ defaultActionProvider
+                                                 , defaultSchemaActionProvider
+                                                 , pgExtensionActionProvider
+                                                 , pgCustomEnumActionProvider
+                                                 ]
+                                        )
                         (\options action ->
                             bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
                               left show <$> withPgDebug (\_ -> pure ()) conn action)

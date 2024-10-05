@@ -28,14 +28,17 @@ data SqlSyntaxBuilderCreateTableOptions
         SqlSyntaxBuilder
     deriving Eq
 
-instance IsSql92DdlCommandSyntax SqlSyntaxBuilder where
+instance IsSql92DdlSchemaCommandSyntax SqlSyntaxBuilder where
   type Sql92DdlCommandCreateSchemaSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92DdlCommandDropSchemaSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  createSchemaCmd = id
+  dropSchemaCmd = id
+
+instance IsSql92DdlCommandSyntax SqlSyntaxBuilder where
   type Sql92DdlCommandCreateTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92DdlCommandDropTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92DdlCommandAlterTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
-  createSchemaCmd = id
-  dropSchemaCmd = id
   createTableCmd = id
   alterTableCmd = id
   dropTableCmd = id

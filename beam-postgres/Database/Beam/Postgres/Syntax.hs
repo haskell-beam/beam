@@ -414,15 +414,18 @@ instance IsSql92Syntax PgCommandSyntax where
   deleteCmd = PgCommandSyntax PgCommandTypeDataUpdate . coerce
   updateCmd = PgCommandSyntax PgCommandTypeDataUpdate . coerce
 
-instance IsSql92DdlCommandSyntax PgCommandSyntax where
+instance IsSql92DdlSchemaCommandSyntax PgCommandSyntax where
   type Sql92DdlCommandCreateSchemaSyntax PgCommandSyntax = PgCreateSchemaSyntax
   type Sql92DdlCommandDropSchemaSyntax PgCommandSyntax = PgDropSchemaSyntax
+
+  createSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
+  dropSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
+
+instance IsSql92DdlCommandSyntax PgCommandSyntax where
   type Sql92DdlCommandCreateTableSyntax PgCommandSyntax = PgCreateTableSyntax
   type Sql92DdlCommandDropTableSyntax PgCommandSyntax = PgDropTableSyntax
   type Sql92DdlCommandAlterTableSyntax PgCommandSyntax = PgAlterTableSyntax
 
-  createSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
-  dropSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
   createTableCmd = PgCommandSyntax PgCommandTypeDdl . coerce
   dropTableCmd   = PgCommandSyntax PgCommandTypeDdl . coerce
   alterTableCmd  = PgCommandSyntax PgCommandTypeDdl . coerce

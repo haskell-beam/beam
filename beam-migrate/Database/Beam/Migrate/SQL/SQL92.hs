@@ -30,6 +30,15 @@ type Sql92SaneDdlCommandSyntax cmd =
   , Sql92ColumnSchemaExpressionSyntax (Sql92DdlCommandColumnSchemaSyntax cmd) ~
       Sql92ExpressionSyntax cmd )
 
+-- | Syntax equalities that any reasonable DDL syntax with schema support would follow,
+-- including equalities between beam-migrate and beam-core types.
+type Sql92SaneDdlSchemaCommandSyntax cmd =
+  ( Sql92SaneDdlSchemaCommandSyntaxMigrateOnly cmd
+  , Sql92ExpressionCastTargetSyntax (Sql92ExpressionSyntax cmd) ~
+      Sql92DdlCommandDataTypeSyntax cmd
+  , Sql92ColumnSchemaExpressionSyntax (Sql92DdlCommandColumnSchemaSyntax cmd) ~
+      Sql92ExpressionSyntax cmd )
+
 -- | Syntax equalities for any reasonable DDL syntax, only including
 -- types defined here.
 type Sql92SaneDdlCommandSyntaxMigrateOnly cmd =
@@ -40,6 +49,13 @@ type Sql92SaneDdlCommandSyntaxMigrateOnly cmd =
   , Sql92AlterTableColumnSchemaSyntax
       (Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax cmd)) ~
       Sql92CreateTableColumnSchemaSyntax (Sql92DdlCommandCreateTableSyntax cmd)
+  )
+
+-- | Syntax equalities for any reasonable DDL syntax, only including
+-- types defined here.
+type Sql92SaneDdlSchemaCommandSyntaxMigrateOnly cmd =
+  ( Sql92SaneDdlCommandSyntaxMigrateOnly cmd
+  , IsSql92DdlSchemaCommandSyntax cmd
   )
 
 type Sql92DdlCommandDataTypeSyntax syntax =
@@ -60,20 +76,25 @@ type Sql92DdlCommandConstraintAttributesSyntax syntax =
 type Sql92DdlCommandAlterTableActionSyntax syntax =
   Sql92AlterTableAlterTableActionSyntax (Sql92DdlCommandAlterTableSyntax syntax)
 
+-- Creation/deletion of schemas isn't supported by all backends (e.g. sqlite)
+-- and therefore is considered separately from other DDL commands such as CREATE TABLE
 class ( IsSql92CreateSchemaSyntax (Sql92DdlCommandCreateSchemaSyntax syntax)
-      , IsSql92DropSchemaSyntax (Sql92DdlCommandDropSchemaSyntax syntax)
-      , IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
+      , IsSql92DropSchemaSyntax (Sql92DdlCommandDropSchemaSyntax syntax)) =>
+  IsSql92DdlSchemaCommandSyntax syntax where
+  type Sql92DdlCommandCreateSchemaSyntax syntax :: Type
+  type Sql92DdlCommandDropSchemaSyntax syntax :: Type
+
+  createSchemaCmd :: Sql92DdlCommandCreateSchemaSyntax syntax -> syntax
+  dropSchemaCmd   :: Sql92DdlCommandDropSchemaSyntax syntax -> syntax
+
+class ( IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
       , IsSql92DropTableSyntax (Sql92DdlCommandDropTableSyntax syntax)
       , IsSql92AlterTableSyntax (Sql92DdlCommandAlterTableSyntax syntax)) =>
   IsSql92DdlCommandSyntax syntax where
-  type Sql92DdlCommandCreateSchemaSyntax syntax :: Type
-  type Sql92DdlCommandDropSchemaSyntax syntax :: Type
   type Sql92DdlCommandCreateTableSyntax syntax :: Type
   type Sql92DdlCommandAlterTableSyntax syntax :: Type
   type Sql92DdlCommandDropTableSyntax syntax :: Type
 
-  createSchemaCmd :: Sql92DdlCommandCreateSchemaSyntax syntax -> syntax
-  dropSchemaCmd   :: Sql92DdlCommandDropSchemaSyntax syntax -> syntax
   createTableCmd  :: Sql92DdlCommandCreateTableSyntax syntax -> syntax
   dropTableCmd    :: Sql92DdlCommandDropTableSyntax syntax -> syntax
   alterTableCmd   :: Sql92DdlCommandAlterTableSyntax syntax -> syntax

@@ -82,7 +82,7 @@ createTable = createTableWithSchema Nothing
 --
 --   To create a table in a specific schema, see 'createTableWithSchema'.
 --   To drop a schema, see 'dropDatabaseSchema'.
-createDatabaseSchema :: BeamMigrateSqlBackend be
+createDatabaseSchema :: BeamMigrateSchemaSqlBackend be
                      => Text
                      -> Migration be ()
 createDatabaseSchema nm 
@@ -93,7 +93,7 @@ createDatabaseSchema nm
 --   Depending on the backend, this may fail if the schema is not empty. 
 --
 --   To create a schema, see 'createDatabaseSchema'.
-dropDatabaseSchema :: BeamMigrateSqlBackend be
+dropDatabaseSchema :: BeamMigrateSchemaSqlBackend be
                    => Text
                    -> Migration be ()
 dropDatabaseSchema nm 
