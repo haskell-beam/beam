@@ -102,6 +102,8 @@ class BeamBackend be => FromBackendRow be a where
   valuesNeeded :: Proxy be -> Proxy a -> Int
   valuesNeeded _ _ = 1
 
+deriving instance FromBackendRow be a => FromBackendRow be (Identity a)
+
 class GFromBackendRow be (exposed :: Type -> Type) rep where
   gFromBackendRow :: Proxy exposed -> FromBackendRowM be (rep ())
   gValuesNeeded :: Proxy be -> Proxy exposed -> Proxy rep -> Int
@@ -115,6 +117,9 @@ instance (GFromBackendRow be aExp a, GFromBackendRow be bExp b) => GFromBackendR
   gFromBackendRow _ = (:*:) <$> gFromBackendRow (Proxy @aExp) <*> gFromBackendRow (Proxy @bExp)
   gValuesNeeded be _ _ = gValuesNeeded be (Proxy @aExp) (Proxy @a) + gValuesNeeded be (Proxy @bExp) (Proxy @b)
 instance FromBackendRow be x => GFromBackendRow be (K1 R (Exposed x)) (K1 R x) where
+  gFromBackendRow _ = K1 <$> fromBackendRow
+  gValuesNeeded be _ _ = valuesNeeded be (Proxy @x)
+instance FromBackendRow be x => GFromBackendRow be (K1 R (Exposed x))  (K1 R (Identity x)) where
   gFromBackendRow _ = K1 <$> fromBackendRow
   gValuesNeeded be _ _ = valuesNeeded be (Proxy @x)
 instance FromBackendRow be (t Identity) => GFromBackendRow be (K1 R (t Exposed)) (K1 R (t Identity)) where
