@@ -109,8 +109,8 @@ createTableWithSchemaWorks pgConn =
       withTestPostgres "create_table_with_schema" pgConn $ \conn -> do
         res <- runBeamPostgres conn $ do
           db <- executeMigration runNoReturn $ do
-                  createDatabaseSchema "internal_schema"
-                  (CharDb <$> createTableWithSchema (Just "internal_schema") "char_test"
+                  internalSchema <- createDatabaseSchema "internal_schema"
+                  (CharDb <$> createTableWithSchema (Just internalSchema) "char_test"
                                     (CharT (field "key" (varchar Nothing) notNull)))
 
           verifySchema migrationBackend db
@@ -127,11 +127,11 @@ dropSchemaWorks pgConn =
       withTestPostgres "drop_schema" pgConn $ \conn -> do
         runBeamPostgres conn $ do
           db <- executeMigration runNoReturn $ do
-                  createDatabaseSchema "internal_schema"
-                  createDatabaseSchema "will_be_dropped"
-                  db <- (CharDb <$> createTableWithSchema (Just "internal_schema") "char_test"
+                  internalSchema <- createDatabaseSchema "internal_schema"
+                  willBeDroppedSchema <- createDatabaseSchema "will_be_dropped"
+                  db <- (CharDb <$> createTableWithSchema (Just internalSchema) "char_test"
                                     (CharT (field "key" (varchar Nothing) notNull)))
-                  dropDatabaseSchema "will_be_dropped"
+                  dropDatabaseSchema willBeDroppedSchema
                   pure db
 
           verifySchema migrationBackend db >>= \case

@@ -9,7 +9,6 @@ module Database.Beam.Migrate.SQL.Tables
 
     -- ** Creation and deletion
     createTable, createTableWithSchema 
-  , createDatabaseSchema, dropDatabaseSchema
   , dropTable
   , preserve
 
@@ -20,6 +19,9 @@ module Database.Beam.Migrate.SQL.Tables
 
   , renameTableTo, renameColumnTo
   , addColumn, dropColumn
+
+    -- * Schema manipulation
+  , createDatabaseSchema, dropDatabaseSchema, existingDatabaseSchema
 
     -- * Field specification
   , DefaultValue, Constraint(..), NotNullConstraint
@@ -51,7 +53,9 @@ import Control.Monad.Identity
 import Control.Monad.Writer.Strict
 import Control.Monad.State
 
+import Data.Coerce (coerce)
 import Data.Kind (Type)
+import Data.String (IsString)
 import Data.Text (Text)
 import Data.Typeable
 import qualified Data.Kind as Kind (Constraint)
@@ -78,26 +82,38 @@ createTable = createTableWithSchema Nothing
 
 -- * Schema manipulation
 
+-- | Represents a database schema. To create one, see 'createDatabaseSchema'.
+newtype DatabaseSchema 
+  = MkDatabaseSchema Text
+  deriving (Eq, Show, IsString)
+
 -- | Add a @CREATE SCHEMA@ statement to this migration
 --
 --   To create a table in a specific schema, see 'createTableWithSchema'.
 --   To drop a schema, see 'dropDatabaseSchema'.
+--   To materialize an existing schema for use in a migration, see 'existingDatabaseSchema'.
 createDatabaseSchema :: BeamMigrateSchemaSqlBackend be
                      => Text
-                     -> Migration be ()
-createDatabaseSchema nm 
-  = upDown (createSchemaCmd (createSchemaSyntax (schemaName nm))) Nothing
+                     -> Migration be DatabaseSchema
+createDatabaseSchema nm = do
+  upDown (createSchemaCmd (createSchemaSyntax (schemaName nm))) Nothing
+  pure $ MkDatabaseSchema nm
 
 -- | Add a @DROP SCHEMA@ statement to this migration.
 --
 --   Depending on the backend, this may fail if the schema is not empty. 
 --
 --   To create a schema, see 'createDatabaseSchema'.
+--   To materialize a 'DatabaseSchema', see 'existingDatabaseSchema
 dropDatabaseSchema :: BeamMigrateSchemaSqlBackend be
-                   => Text
+                   => DatabaseSchema
                    -> Migration be ()
-dropDatabaseSchema nm 
+dropDatabaseSchema (MkDatabaseSchema nm) 
   = upDown (dropSchemaCmd (dropSchemaSyntax (schemaName nm))) Nothing
+
+-- | Materialize a schema for use during a migration (for example, to drop it).
+existingDatabaseSchema :: Text -> Migration be DatabaseSchema
+existingDatabaseSchema = pure . MkDatabaseSchema
 
 -- | Add a @CREATE TABLE@ statement to this migration, with an explicit schema
 --
@@ -110,7 +126,7 @@ dropDatabaseSchema nm
 --   a database schema.
 createTableWithSchema :: ( Beamable table, Table table
                          , BeamMigrateSqlBackend be )
-                      => Maybe Text -- ^ Schema name, if any
+                      => Maybe DatabaseSchema -- ^ Schema name, if any
                       -> Text       -- ^ Table name 
                       -> TableSchema be table
                       -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
@@ -118,7 +134,7 @@ createTableWithSchema maybeSchemaName newTblName tblSettings =
   do let pkFields = allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings)
          tblConstraints = if null pkFields then [] else [ primaryKeyConstraintSyntax pkFields ]
          createTableCommand =
-           createTableSyntax Nothing (tableName maybeSchemaName newTblName)
+           createTableSyntax Nothing (tableName (coerce <$> maybeSchemaName) newTblName)
                              (allBeamValues (\(Columnar' (TableFieldSchema name (FieldSchema schema) _)) -> (name, schema)) tblSettings)
                              tblConstraints
          command = createTableCmd createTableCommand
@@ -139,12 +155,12 @@ createTableWithSchema maybeSchemaName newTblName tblSettings =
          schemaCheck = 
             case maybeSchemaName of
               Nothing -> []
-              Just sn -> [ SomeDatabasePredicate (SchemaExistsPredicate sn) ] 
+              Just (MkDatabaseSchema sn) -> [ SomeDatabasePredicate (SchemaExistsPredicate sn) ] 
 
      upDown command Nothing
      pure (CheckedDatabaseEntity 
             (CheckedDatabaseTable 
-              (DatabaseTable maybeSchemaName newTblName newTblName tbl') 
+              (DatabaseTable (coerce <$> maybeSchemaName) newTblName newTblName tbl') 
               tblChecks 
               fieldChecks
             ) 
