@@ -21,7 +21,7 @@ module Database.Beam.Migrate.SQL.Tables
   , addColumn, dropColumn
 
     -- * Schema manipulation
-  , createDatabaseSchema, dropDatabaseSchema, existingDatabaseSchema
+  , DatabaseSchema(..), createDatabaseSchema, dropDatabaseSchema, existingDatabaseSchema
 
     -- * Field specification
   , DefaultValue, Constraint(..), NotNullConstraint
@@ -82,9 +82,10 @@ createTable = createTableWithSchema Nothing
 
 -- * Schema manipulation
 
--- | Represents a database schema. To create one, see 'createDatabaseSchema'.
+-- | Represents a database schema. To create one, see 'createDatabaseSchema'; 
+--   to materialize one, see 'existingDatabaseSchema'.
 newtype DatabaseSchema 
-  = MkDatabaseSchema Text
+  = DatabaseSchema Text
   deriving (Eq, Show, IsString)
 
 -- | Add a @CREATE SCHEMA@ statement to this migration
@@ -97,7 +98,7 @@ createDatabaseSchema :: BeamMigrateSchemaSqlBackend be
                      -> Migration be DatabaseSchema
 createDatabaseSchema nm = do
   upDown (createSchemaCmd (createSchemaSyntax (schemaName nm))) Nothing
-  pure $ MkDatabaseSchema nm
+  pure $ DatabaseSchema nm
 
 -- | Add a @DROP SCHEMA@ statement to this migration.
 --
@@ -108,7 +109,7 @@ createDatabaseSchema nm = do
 dropDatabaseSchema :: BeamMigrateSchemaSqlBackend be
                    => DatabaseSchema
                    -> Migration be ()
-dropDatabaseSchema (MkDatabaseSchema nm) 
+dropDatabaseSchema (DatabaseSchema nm) 
   = upDown (dropSchemaCmd (dropSchemaSyntax (schemaName nm))) Nothing
 
 -- | Materialize a schema for use during a migration.
@@ -124,7 +125,7 @@ dropDatabaseSchema (MkDatabaseSchema nm)
 --                <*> 'createTableWithSchema' (Just schema) "my_table"
 -- @
 existingDatabaseSchema :: Text -> Migration be DatabaseSchema
-existingDatabaseSchema = pure . MkDatabaseSchema
+existingDatabaseSchema = pure . DatabaseSchema
 
 -- | Add a @CREATE TABLE@ statement to this migration, with an explicit schema
 --
@@ -166,7 +167,7 @@ createTableWithSchema maybeSchemaName newTblName tblSettings =
          schemaCheck = 
             case maybeSchemaName of
               Nothing -> []
-              Just (MkDatabaseSchema sn) -> [ SomeDatabasePredicate (SchemaExistsPredicate sn) ] 
+              Just (DatabaseSchema sn) -> [ SomeDatabasePredicate (SchemaExistsPredicate sn) ] 
 
      upDown command Nothing
      pure (CheckedDatabaseEntity 
