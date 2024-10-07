@@ -343,6 +343,10 @@ class IsSql92OrderingSyntax ord where
   ascOrdering, descOrdering
     :: Sql92OrderingExpressionSyntax ord -> ord
 
+class IsSql92SchemaNameSyntax schemaName where
+  schemaName :: Text {-^ Schema name -}
+             -> schemaName
+
 class IsSql92TableNameSyntax tblName where
   tableName :: Maybe Text {-^ Schema -}
             -> Text {-^ Table name -}

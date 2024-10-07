@@ -251,6 +251,7 @@ newtype PgExpressionSyntax = PgExpressionSyntax { fromPgExpression :: PgSyntax }
 newtype PgAggregationSetQuantifierSyntax = PgAggregationSetQuantifierSyntax { fromPgAggregationSetQuantifier :: PgSyntax }
 newtype PgSelectSetQuantifierSyntax = PgSelectSetQuantifierSyntax { fromPgSelectSetQuantifier :: PgSyntax }
 newtype PgFromSyntax = PgFromSyntax { fromPgFrom :: PgSyntax }
+newtype PgSchemaNameSyntax = PgSchemaNameSyntax { fromPgSchemaName :: PgSyntax }
 newtype PgTableNameSyntax = PgTableNameSyntax { fromPgTableName :: PgSyntax }
 newtype PgComparisonQuantifierSyntax = PgComparisonQuantifierSyntax { fromPgComparisonQuantifier :: PgSyntax }
 newtype PgExtractFieldSyntax = PgExtractFieldSyntax { fromPgExtractField :: PgSyntax }
@@ -335,6 +336,9 @@ instance Hashable PgDataTypeDescr where
   hashWithSalt salt (PgDataTypeDescrDomain t) =
     hashWithSalt salt (1 :: Int, t)
 
+newtype PgCreateSchemaSyntax = PgCreateSchemaSyntax { fromPgCreateSchema :: PgSyntax }
+newtype PgDropSchemaSyntax = PgDropSchemaSyntax { fromPgDropSchema :: PgSyntax }
+
 newtype PgCreateTableSyntax = PgCreateTableSyntax { fromPgCreateTable :: PgSyntax }
 data PgTableOptionsSyntax = PgTableOptionsSyntax PgSyntax PgSyntax
 newtype PgColumnSchemaSyntax = PgColumnSchemaSyntax { fromPgColumnSchema :: PgSyntax } deriving (Show, Eq)
@@ -410,6 +414,13 @@ instance IsSql92Syntax PgCommandSyntax where
   deleteCmd = PgCommandSyntax PgCommandTypeDataUpdate . coerce
   updateCmd = PgCommandSyntax PgCommandTypeDataUpdate . coerce
 
+instance IsSql92DdlSchemaCommandSyntax PgCommandSyntax where
+  type Sql92DdlCommandCreateSchemaSyntax PgCommandSyntax = PgCreateSchemaSyntax
+  type Sql92DdlCommandDropSchemaSyntax PgCommandSyntax = PgDropSchemaSyntax
+
+  createSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
+  dropSchemaCmd = PgCommandSyntax PgCommandTypeDdl . coerce
+
 instance IsSql92DdlCommandSyntax PgCommandSyntax where
   type Sql92DdlCommandCreateTableSyntax PgCommandSyntax = PgCreateTableSyntax
   type Sql92DdlCommandDropTableSyntax PgCommandSyntax = PgDropTableSyntax
@@ -418,6 +429,9 @@ instance IsSql92DdlCommandSyntax PgCommandSyntax where
   createTableCmd = PgCommandSyntax PgCommandTypeDdl . coerce
   dropTableCmd   = PgCommandSyntax PgCommandTypeDdl . coerce
   alterTableCmd  = PgCommandSyntax PgCommandTypeDdl . coerce
+
+instance IsSql92SchemaNameSyntax PgSchemaNameSyntax where
+  schemaName s = PgSchemaNameSyntax (pgQuotedIdentifier s)
 
 instance IsSql92TableNameSyntax PgTableNameSyntax where
   tableName Nothing t = PgTableNameSyntax (pgQuotedIdentifier t)
@@ -1040,6 +1054,18 @@ instance IsSql92AlterTableActionSyntax PgAlterTableActionSyntax where
 instance IsSql92AlterColumnActionSyntax PgAlterColumnActionSyntax where
   setNullSyntax = PgAlterColumnActionSyntax (emit "DROP NOT NULL")
   setNotNullSyntax = PgAlterColumnActionSyntax (emit "SET NOT NULL")
+
+instance IsSql92SchemaNameSyntax PgSchemaNameSyntax => IsSql92CreateSchemaSyntax PgCreateSchemaSyntax where
+  type Sql92CreateSchemaSchemaNameSyntax PgCreateSchemaSyntax = PgSchemaNameSyntax
+
+  createSchemaSyntax schemaName = PgCreateSchemaSyntax $
+    emit "CREATE SCHEMA " <> fromPgSchemaName schemaName
+
+instance IsSql92SchemaNameSyntax PgSchemaNameSyntax => IsSql92DropSchemaSyntax PgDropSchemaSyntax where
+  type Sql92DropSchemaSchemaNameSyntax PgDropSchemaSyntax = PgSchemaNameSyntax
+
+  dropSchemaSyntax schemaName = PgDropSchemaSyntax $
+    emit "DROP SCHEMA " <> fromPgSchemaName schemaName
 
 instance IsSql92CreateTableSyntax PgCreateTableSyntax where
   type Sql92CreateTableTableNameSyntax PgCreateTableSyntax = PgTableNameSyntax

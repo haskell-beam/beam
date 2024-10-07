@@ -431,9 +431,19 @@ hsMkTableName toNameCase (TableName sch nm) =
         [] -> error "Empty schema name"
         x:xs -> toNameCase x:xs ++ "_" ++ T.unpack nm
 
+hsSchemaName :: SchemaName -> String
+hsSchemaName (SchemaName nm) = T.unpack nm
+
 hsTableVarName, hsTableTypeName :: TableName -> String
 hsTableVarName = hsMkTableName toLower
 hsTableTypeName = hsMkTableName toUpper
+
+instance IsSql92DdlSchemaCommandSyntax HsAction where
+  type Sql92DdlCommandCreateSchemaSyntax HsAction = HsAction
+  type Sql92DdlCommandDropSchemaSyntax HsAction = HsAction
+
+  createSchemaCmd = id
+  dropSchemaCmd = id
 
 instance IsSql92DdlCommandSyntax HsAction where
   type Sql92DdlCommandCreateTableSyntax HsAction = HsAction
@@ -470,6 +480,20 @@ instance IsSql92DropTableSyntax HsAction where
   dropTableSyntax nm = HsAction [ (Nothing, dropTable) ] []
     where
       dropTable = hsApp (hsVar "dropTable") [ hsVar (fromString (hsTableVarName nm)) ]
+
+instance IsSql92CreateSchemaSyntax HsAction where
+  type Sql92CreateSchemaSchemaNameSyntax HsAction = SchemaName
+  createSchemaSyntax (SchemaName nm) = HsAction [ (Nothing, createSchema) ] []
+    where
+      createSchema = hsApp (hsVar "createDatabaseSchema") [ hsVar nm ]
+
+
+instance IsSql92DropSchemaSyntax HsAction where
+  type Sql92DropSchemaSchemaNameSyntax HsAction = SchemaName
+  dropSchemaSyntax (SchemaName nm) = HsAction [ (Nothing, dropSchema) ] []
+    where
+      dropSchema = hsApp (hsVar "dropDatabaseSchema") [ hsVar nm ]
+
 
 instance IsSql92CreateTableSyntax HsAction where
   type Sql92CreateTableTableNameSyntax HsAction = TableName

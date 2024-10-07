@@ -1,17 +1,23 @@
+# 0.10.2.0
+
+## Added features
+
+ * Added support for creating database schemas and associated tables with `createDatabaseSchema` and `createTableWithSchema` (#716).
+
 # 0.10.1.0
 
-# Added features
+## Added features
 
  * Allow embedding database types
  * Loosen some version bounds
 
 # 0.10.0.0
 
-# Bug fixes
+## Bug fixes
 
  * Make sure lateral join names do not overlap
 
-# Addded features
+## Addded features
 
  * Add `runSelectReturningFirst`
  * `IN (SELECT ...)` syntax via `inQuery_`

@@ -77,12 +77,14 @@ module Database.Beam.Migrate.Actions
   , ensuringNot_
   , justOne_
 
+  , createSchemaActionProvider
   , createTableActionProvider
   , dropTableActionProvider
   , addColumnProvider
   , addColumnNullProvider
   , dropColumnNullProvider
   , defaultActionProvider
+  , defaultSchemaActionProvider
 
   -- * Solver
   , Solver(..), FinalSolution(..)
@@ -265,7 +267,9 @@ instance Semigroup (ActionProvider be) where
 instance Monoid (ActionProvider be) where
   mempty = ActionProvider (\_ _ -> [])
 
-createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
+createSchemaWeight, dropSchemaWeight, createTableWeight, dropTableWeight, addColumnWeight, dropColumnWeight :: Int
+createSchemaWeight = 1000
+dropSchemaWeight = 100
 createTableWeight = 500
 dropTableWeight = 100
 addColumnWeight = 1
@@ -282,6 +286,56 @@ ensuringNot_ _  = empty
 justOne_ :: [ a ] -> [ a ]
 justOne_ [x] = [x]
 justOne_ _ = []
+
+
+-- IsSql92CreateTableSyntax
+
+-- | Action provider for SQL92 @CREATE SCHEMA@ actions.
+createSchemaActionProvider :: forall be
+                           . ( Typeable be, BeamMigrateOnlySqlSchemaBackend be )
+                           => ActionProvider be
+createSchemaActionProvider =
+  ActionProvider provider
+  where
+    provider :: ActionProviderFn be
+    provider findPreConditions findPostConditions =
+      do schemaP@(SchemaExistsPredicate postSchemaName) <- findPostConditions
+         -- Make sure there's no corresponding predicate in the precondition
+         ensuringNot_ $
+           do SchemaExistsPredicate preSchemaName <- findPreConditions
+              guard (preSchemaName == postSchemaName)
+
+         let postConditions = [ p schemaP ]
+             cmd = createSchemaCmd (createSchemaSyntax (schemaName postSchemaName))
+         pure (PotentialAction mempty (HS.fromList postConditions)
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
+                               ("Create the schema " <> postSchemaName) createSchemaWeight)
+
+-- | Action provider for SQL92 @DROP SCHEMA@ actions
+dropSchemaActionProvider :: forall be
+                         . BeamMigrateOnlySqlSchemaBackend be
+                         => ActionProvider be
+dropSchemaActionProvider =
+ ActionProvider provider
+ where
+   -- Look for tables that exist as a precondition but not a post condition
+   provider :: ActionProviderFn be
+   provider findPreConditions findPostConditions =
+     do schemaP@(SchemaExistsPredicate preSchemaNm) <- findPreConditions
+        ensuringNot_ $
+          do SchemaExistsPredicate postSchemaNm <- findPostConditions
+             guard (preSchemaNm == postSchemaNm)
+
+        relatedPreds <-
+          pure $ do p'@(SomeDatabasePredicate pred') <- findPreConditions
+                    guard (pred' `predicateCascadesDropOn` schemaP)
+                    pure p'
+
+        -- Now, collect all preconditions that may be related to the dropped table
+        let cmd = dropSchemaCmd (dropSchemaSyntax (schemaName preSchemaNm))
+        pure (PotentialAction (HS.fromList (SomeDatabasePredicate schemaP:relatedPreds)) mempty
+                              (Seq.singleton (MigrationCommand cmd MigrationLosesData))
+                              ("Drop schema " <> preSchemaNm) dropSchemaWeight)
 
 -- | Action provider for SQL92 @CREATE TABLE@ actions.
 createTableActionProvider :: forall be
@@ -474,6 +528,8 @@ dropColumnNullProvider = ActionProvider provider
 --  * ALTER TABLE ... ADD COLUMN ...
 --  * ALTER TABLE ... DROP COLUMN ...
 --  * ALTER TABLE ... ALTER COLUMN ... SET [NOT] NULL
+--
+-- For default schema actions, see 'defaultSchemaActionProvider'.
 defaultActionProvider :: ( Typeable be
                          , BeamMigrateOnlySqlBackend be )
                       => ActionProvider be
@@ -486,7 +542,20 @@ defaultActionProvider =
   , dropColumnProvider
 
   , addColumnNullProvider
-  , dropColumnNullProvider ]
+  , dropColumnNullProvider 
+  ]
+
+-- | Default action providers for any syntax which supports schemas.
+--
+-- In particular, this provides edges consisting of the following statements:
+--
+--  * CREATE SCHEMA
+--  * DROP SCHEMA
+defaultSchemaActionProvider :: ( Typeable be
+                               , BeamMigrateOnlySqlSchemaBackend be )
+                            => ActionProvider be
+defaultSchemaActionProvider 
+  = createSchemaActionProvider <> dropSchemaActionProvider
 
 -- | Represents current state of a database graph search.
 --

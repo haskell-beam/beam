@@ -28,6 +28,13 @@ data SqlSyntaxBuilderCreateTableOptions
         SqlSyntaxBuilder
     deriving Eq
 
+instance IsSql92DdlSchemaCommandSyntax SqlSyntaxBuilder where
+  type Sql92DdlCommandCreateSchemaSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  type Sql92DdlCommandDropSchemaSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+
+  createSchemaCmd = id
+  dropSchemaCmd = id
+
 instance IsSql92DdlCommandSyntax SqlSyntaxBuilder where
   type Sql92DdlCommandCreateTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
   type Sql92DdlCommandDropTableSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
@@ -76,6 +83,18 @@ instance IsSql92AlterTableActionSyntax SqlSyntaxBuilder where
 instance IsSql92AlterColumnActionSyntax SqlSyntaxBuilder where
   setNotNullSyntax = SqlSyntaxBuilder (byteString "SET NOT NULL")
   setNullSyntax = SqlSyntaxBuilder (byteString "DROP NOT NULL")
+
+instance IsSql92CreateSchemaSyntax SqlSyntaxBuilder where
+  type Sql92CreateSchemaSchemaNameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  createSchemaSyntax schName = 
+      SqlSyntaxBuilder $
+        byteString "CREATE SCHEMA " <> buildSql schName
+
+instance IsSql92DropSchemaSyntax SqlSyntaxBuilder where
+  type Sql92DropSchemaSchemaNameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
+  dropSchemaSyntax schName = 
+      SqlSyntaxBuilder $
+        byteString "DROP SCHEMA " <> buildSql schName
 
 instance IsSql92CreateTableSyntax SqlSyntaxBuilder where
   type Sql92CreateTableTableNameSyntax SqlSyntaxBuilder = SqlSyntaxBuilder
