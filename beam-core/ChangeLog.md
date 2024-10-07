@@ -2,7 +2,8 @@
 
 ## Added features
 
- * Added support for creating database schemas and associated tables with `createDatabaseSchema` and `createTableWithSchema` (#716).
+ * Added support for creating database schemas and associated tables with `createDatabaseSchema`, `createTableWithSchema`, and `existingDatabaseSchema` (#716).
+ * Added `FromBackendRow` instance for `Identity` (#717).
 
 # 0.10.1.0
 
