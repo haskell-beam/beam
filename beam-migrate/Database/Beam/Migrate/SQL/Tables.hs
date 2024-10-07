@@ -111,7 +111,18 @@ dropDatabaseSchema :: BeamMigrateSchemaSqlBackend be
 dropDatabaseSchema (MkDatabaseSchema nm) 
   = upDown (dropSchemaCmd (dropSchemaSyntax (schemaName nm))) Nothing
 
--- | Materialize a schema for use during a migration (for example, to drop it).
+-- | Materialize a schema for use during a migration.
+--
+--   Example usage, where @NewDB@ has one more table than @OldDB@ in the @my_schema@ schema:
+--
+-- @
+-- migrationStep :: 'CheckedDatabaseSettings' be OldDB
+--               -> 'Migration' be ('CheckedDatabaseSettings' be NewDB)
+-- migrationStep (OldDB oldtable)= do
+--   schema <- 'existingDatabaseSchema' "my_schema"
+--   pure $ NewDb <$> pure oldtable
+--                <*> 'createTableWithSchema' (Just schema) "my_table"
+-- @
 existingDatabaseSchema :: Text -> Migration be DatabaseSchema
 existingDatabaseSchema = pure . MkDatabaseSchema
 
