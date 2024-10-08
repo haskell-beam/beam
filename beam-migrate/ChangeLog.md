@@ -1,3 +1,9 @@
+# 0.5.3.1
+
+## Bug fixes
+
+* Removed the `IsString` instance for `DatabaseSchema`, which allowed for the use of database schemas that did not exist.
+
 # 0.5.3.0
 
 ## Added features

@@ -21,7 +21,7 @@ module Database.Beam.Migrate.SQL.Tables
   , addColumn, dropColumn
 
     -- * Schema manipulation
-  , DatabaseSchema(..), createDatabaseSchema, dropDatabaseSchema, existingDatabaseSchema
+  , DatabaseSchema(databaseSchemaName), createDatabaseSchema, dropDatabaseSchema, existingDatabaseSchema
 
     -- * Field specification
   , DefaultValue, Constraint(..), NotNullConstraint
@@ -55,7 +55,6 @@ import Control.Monad.State
 
 import Data.Coerce (coerce)
 import Data.Kind (Type)
-import Data.String (IsString)
 import Data.Text (Text)
 import Data.Typeable
 import qualified Data.Kind as Kind (Constraint)
@@ -85,8 +84,8 @@ createTable = createTableWithSchema Nothing
 -- | Represents a database schema. To create one, see 'createDatabaseSchema'; 
 --   to materialize one, see 'existingDatabaseSchema'.
 newtype DatabaseSchema 
-  = DatabaseSchema Text
-  deriving (Eq, Show, IsString)
+  = DatabaseSchema{databaseSchemaName :: Text}
+  deriving (Eq, Show)
 
 -- | Add a @CREATE SCHEMA@ statement to this migration
 --
