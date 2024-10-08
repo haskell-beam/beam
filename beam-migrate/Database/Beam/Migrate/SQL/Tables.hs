@@ -120,8 +120,8 @@ dropDatabaseSchema (DatabaseSchema nm)
 --               -> 'Migration' be ('CheckedDatabaseSettings' be NewDB)
 -- migrationStep (OldDB oldtable)= do
 --   schema <- 'existingDatabaseSchema' "my_schema"
---   pure $ NewDb <$> pure oldtable
---                <*> 'createTableWithSchema' (Just schema) "my_table"
+--   pure $ NewDB \<$\> pure oldtable
+--                \<*\> 'createTableWithSchema' (Just schema) "my_table"
 -- @
 existingDatabaseSchema :: Text -> Migration be DatabaseSchema
 existingDatabaseSchema = pure . DatabaseSchema
