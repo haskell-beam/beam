@@ -224,7 +224,7 @@ buildSql92Query' arbitrarilyNestedCombinations baseTblPfx (Q q) =
                -> Free (QF be db s) x
                -> SelectBuilder be db x
     buildQuery _ (Pure x) = SelectBuilderQ x emptyQb
-    buildQuery tblPfx (Free (QGuard _ next)) = buildQuery tblPfx next
+    buildQuery tblPfx f@(Free (QGuard _ _)) = buildJoinedQuery tblPfx f emptyQb
     buildQuery tblPfx f@(Free QAll {}) = buildJoinedQuery tblPfx f emptyQb
     buildQuery tblPfx f@(Free QArbitraryJoin {}) = buildJoinedQuery tblPfx f emptyQb
     buildQuery tblPfx f@(Free QTwoWayJoin {}) = buildJoinedQuery tblPfx f emptyQb
