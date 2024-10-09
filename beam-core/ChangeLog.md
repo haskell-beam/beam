@@ -1,3 +1,9 @@
+# 0.10.3.0
+
+## Bug fixes
+
+ * Fixed an issue where a WHERE clause would be dropped in the absence of a FROM (#695).
+
 # 0.10.2.0
 
 ## Added features
