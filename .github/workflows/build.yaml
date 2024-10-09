@@ -1,15 +1,58 @@
-name: "Build"
+name: Continuous Integration
+
 on:
-  pull_request:
   push:
+    paths-ignore:
+      - 'docs/*/**'
+  pull_request:
+
 jobs:
-  tests:
+  continuous-integration:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc-version:
+          - "8.10.7"
+          - "9.0.2"
+          - "9.2.8"
+          - "9.4.8"
+          - "9.6.6"
+          - "9.8.2"
+          - "9.10.1"
+
     steps:
-    - uses: actions/checkout@v2
-    - uses: cachix/install-nix-action@v21
-    - uses: cachix/cachix-action@v12
+    - uses: actions/checkout@v4
+
+    - name: Install cabal/ghc
+      uses: haskell-actions/setup@v2
+      id: setup-haskell
       with:
-        name: beam-ci
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: nix-build release.nix
+        ghc-version: ${{ matrix.ghc-version }}
+        cabal-version: '3.12.1.0'
+    
+    - name: Generate freeze file
+      run: |
+        cabal update
+        cabal configure --disable-optimization --enable-tests
+        cabal freeze
+    
+    - name: Cache cabal work
+      uses: actions/cache@v4
+      with:
+        path: |
+          dist-newstyle
+          ${{ steps.setup-haskell.outputs.cabal-store }}
+        key: ${{ runner.os }}-${{ hashFiles('cabal.project.freeze', 'cabal.project.local') }}-cabal-install
+    
+    - name: Build dependencies
+      run: |
+        cabal build all --only-dependencies
+    
+    - name: Build beam packages
+      run: |
+        cabal build all
+        
+    - name: Run tests
+      run: |
+        cabal test all
