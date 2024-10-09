@@ -60,12 +60,12 @@ module Database.Beam.Schema.Tables
     , defaultFieldName
 
     -- * Exported so we can override defaults
-    -- For 'Beamable'
+    -- ** For 'Beamable'
     , GZipTables(..)
     , GTableSkeleton(..)
-    -- For 'Database'
+    -- ** For 'Database'
     , GZipDatabase(..)
-    -- for 'defaultDbSettings'
+    -- ** For 'defaultDbSettings'
     , GAutoDbSettings(..)
     , GDefaultTableFieldSettings(..)
     , ChooseSubTableStrategy
