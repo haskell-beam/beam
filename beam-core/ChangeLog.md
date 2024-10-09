@@ -1,5 +1,9 @@
 # 0.10.3.0
 
+## Added features
+
+* Export generic classes (#585).
+
 ## Bug fixes
 
  * Fixed an issue where a WHERE clause would be dropped in the absence of a FROM (#695).
