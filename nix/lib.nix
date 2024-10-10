@@ -5,8 +5,6 @@ rec {
     "beam-core"
     "beam-migrate"
     "beam-sqlite"
-  ] ++ lib.optionals (builtins.compareVersions ghc.ghc.version "9.6" < 0) [
-    # postgres-options doesn't yet support 9.6+
     "beam-postgres"
   ];
   ghcVersions = {
@@ -17,6 +15,21 @@ rec {
     ghc94 = haskell.packages.ghc94.extend (composeExtensionList [
       (self: _: {
         postgresql-simple = self.postgresql-simple_0_6_5;
+      })
+    ]);
+    ghc96 = haskell.packages.ghc96.extend (composeExtensionList [
+      (applyToPackages haskell.lib.doJailbreak [
+        "pqueue"
+      ])
+      (pinHackageDirectVersions {
+        postgres-options = {
+          pkg = "postgres-options";
+          ver = "0.2.1.0";
+          sha256 = "sha256-t8hyahARMP9d0AVWQ2aXSH4DRtG3pHm6VHo8uLMRcEc=";
+        };
+      })
+      (self: _: {
+        postgresql-simple = self.postgresql-simple_0_6_5;
 
         # These are just to test upper bounds:
         free = self.free_5_2;
@@ -24,11 +37,6 @@ rec {
         vector = haskell.lib.dontCheck self.vector_0_13_0_0;
         vector-algorithms = self.vector-algorithms_0_9_0_1;
       })
-    ]);
-    ghc96 = haskell.packages.ghc96.extend (composeExtensionList [
-      (applyToPackages haskell.lib.doJailbreak [
-        "pqueue"
-      ])
     ]);
   };
 
