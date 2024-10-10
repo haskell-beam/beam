@@ -36,6 +36,11 @@ jobs:
         cabal update
         cabal configure --disable-optimization --enable-tests
         cabal freeze
+
+        # Exclude the timestamp of Hackage index update from our cache key, to
+        # avoid invalidating cache too often.
+        # This idea comes from github.com/jaspervdj/hakyll
+        sed '/^index-state: /d' cabal.project.freeze > dependencies-versions
     
     - name: Cache cabal work
       uses: actions/cache@v4
@@ -43,7 +48,7 @@ jobs:
         path: |
           dist-newstyle
           ${{ steps.setup-haskell.outputs.cabal-store }}
-        key: ${{ runner.os }}-${{ hashFiles('cabal.project.freeze', 'cabal.project.local') }}-cabal-install
+        key: ${{ runner.os }}-${{ hashFiles('dependencies-versions', 'cabal.project.local') }}-cabal-install
     
     - name: Build dependencies
       run: |
