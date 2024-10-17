@@ -21,7 +21,8 @@ tests :: IO ByteString -> TestTree
 tests postgresConn =
     testGroup "Data-type unit tests"
     [ jsonNulTest postgresConn
-    , errorOnSchemaMismatch postgresConn ]
+    , errorOnSchemaMismatch postgresConn
+    , errorOnLiteralDoubles postgresConn ]
 
 data JsonT f
     = JsonT
@@ -136,3 +137,20 @@ errorOnSchemaMismatch pgConn =
 
       assertBool "runInsertReturningList succeeded" didFail
       didFail @?= True
+
+-- | Regression test for <https://github.com/haskell-beam/beam/issues/700>
+errorOnLiteralDoubles :: IO ByteString -> TestTree
+errorOnLiteralDoubles pgConn =
+    testCase "Literal `Double`s are correctly specified as SQL `DOUBLE` (#700)" $ 
+    withTestPostgres "db_failures" pgConn $ \conn -> do
+      results <- runBeamPostgres conn $ 
+        runSelectReturningList $ 
+          select $ 
+            query
+      
+      results @?= [(99 :: Int32, 1.0 :: Double)]
+    
+    where
+      -- We need to provide a db for type-checking, but it will not be used
+      query :: Q Postgres RealDb s (QExpr Postgres s Int32, QExpr Postgres s Double)
+      query = pure (val_ 99, val_ 1.0)

@@ -100,7 +100,7 @@ import           Control.Monad.Free.Church
 import           Data.Aeson (Value, object, (.=))
 import           Data.Bits
 import           Data.ByteString (ByteString)
-import           Data.ByteString.Builder (Builder, byteString, char8, toLazyByteString)
+import           Data.ByteString.Builder (Builder, doubleDec, floatDec, byteString, char8, toLazyByteString)
 import qualified Data.ByteString.Char8 as B
 import           Data.ByteString.Lazy.Char8 (toStrict)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -1202,8 +1202,6 @@ instance DatabasePredicate PgHasEnum where
              sqlValueSyntax = defaultPgValueSyntax
 
 DEFAULT_SQL_SYNTAX(Bool)
-DEFAULT_SQL_SYNTAX(Double)
-DEFAULT_SQL_SYNTAX(Float)
 DEFAULT_SQL_SYNTAX(Int8)
 DEFAULT_SQL_SYNTAX(Int16)
 DEFAULT_SQL_SYNTAX(Int32)
@@ -1230,6 +1228,21 @@ DEFAULT_SQL_SYNTAX(Pg.Date)
 DEFAULT_SQL_SYNTAX(Pg.LocalTimestamp)
 DEFAULT_SQL_SYNTAX(Pg.UTCTimestamp)
 DEFAULT_SQL_SYNTAX(Scientific)
+
+-- We have a 'manual' instance for Double and Float because the default value of a
+-- literal like "1.0" is NUMERIC, not DOUBLE. However, NUMERIC values are exact, 
+-- while DOUBLEs are inexact. This means that converting from SQL NUMERIC
+-- to Haskell Double is lossy.
+-- See #700
+instance HasSqlValueSyntax PgValueSyntax Float where
+  sqlValueSyntax v 
+    | isNaN v || isInfinite v = PgValueSyntax $ emit "'" <> emitBuilder (floatDec v) <> emit "'"
+    | otherwise               = PgValueSyntax $ emit "'" <> emitBuilder (floatDec v) <> emit "'::double precision"
+
+instance HasSqlValueSyntax PgValueSyntax Double where
+  sqlValueSyntax v 
+    | isNaN v || isInfinite v = PgValueSyntax $ emit "'" <> emitBuilder (doubleDec v) <> emit "'"
+    | otherwise               = PgValueSyntax $ emit "'" <> emitBuilder (doubleDec v) <> emit "'::double precision"
 
 instance HasSqlValueSyntax PgValueSyntax (CI T.Text) where
   sqlValueSyntax = sqlValueSyntax . CI.original
