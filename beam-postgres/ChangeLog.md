@@ -1,3 +1,9 @@
+# 0.5.4.1
+
+## Bug fixes
+
+ * Fixed an issue where inexact numeric literals (e.g. Haskell type `Double`) were implicitly converted to Postgres `NUMERIC`, triggering a runtime conversion error (#700).
+
 # 0.5.4.0
 
 ## Added features
