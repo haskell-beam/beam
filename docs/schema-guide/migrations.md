@@ -6,13 +6,8 @@ The migrations framework is meant to be a robust and modular way of
 managing schema changes. It is an optional part of beam provided in
 the `beam-migrate` package.
 
-Install the migrations framework by running.
-
-```
-$ cabal install beam-migrate
-# or
-$ stack install beam-migrate
-```
+Add the `beam-migrate` dependency to get started:
+https://hackage.haskell.org/package/beam-migrate
 
 ## Basic concepts
 
