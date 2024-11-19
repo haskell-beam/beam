@@ -6,8 +6,3 @@ packages:
 
 -- For testing
 allow-newer: aeson-optics:base
-
-source-repository-package
-  type:     git
-  location: https://github.com/testcontainers/testcontainers-hs
-  tag:      7775add7ff62d3f97e42d546152e909e38316081
