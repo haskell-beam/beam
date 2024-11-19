@@ -274,3 +274,57 @@ runInsert $
       )
 ```
 
+### Inner CTEs
+
+Standard SQL only allows CTEs (`WITH` expressions) at the top-level SELECT. However, PostgreSQL
+allows them anywhere, including in subqueries for joins.
+
+For example, the following is valid Postgres, but not valid standard SQL.
+
+```sql
+SELECT a.column1, b.column2
+FROM (WITH RECURSIVE ... SELECT ...) a
+INNER JOIN b
+```
+
+`beam-core` enforces this by forcing `selectWith` to only return a `SqlSelect`, which represents a
+top-level SQL `SELECT` statement that can be executed against a backend. However, if we want to
+allow `WITH` expressions to appear within joins, then we will need a function similar to
+`selectWith` but returning a `Q` value, which is a re-usable query. `beam-postgres` provides this
+function for PostgreSQL, named `pgSelectWith`. For `beam-postgres`, `select (pgSelectWith x)` is
+equivalent to `selectWith x`. But, with the new type, we can reuse CTEs (including recursive ones)
+within other queries.
+
+As an example using our Chinook schema, suppose we had an error with all orders in the month of
+September 2024, and needed to send out employees to customer homes to correct the issue. We want to
+find, for each order, an employee who lives in the same city as the customer, but we only want the
+highest ranking employee for each customer.
+
+First, we order the employees by org structure so that managers appear first, followed by direct reports. We use a recursive query for this, and then join it against the orders.
+
+!beam-query
+```haskell
+!example chinook only:Postgres
+aggregate_ (\(cust, emp) -> (group_ cust, Pg.pgArrayAgg (employeeId emp)))
+     $ do inv <- filter_ (\i -> invoiceDate i >=. val_ (read "2024-09-01 00:00:00.000000")  &&. invoiceDate i <=. val_ (read "2024-10-01 00:00:00.000000")) $ all_ (invoice chinookDb)
+          cust <- lookup_ (customer chinookDb) (invoiceCustomer inv)
+          -- Lookup all employees and their levels
+          (employee, _, _) <-
+            Pg.pgSelectWith $ do
+              let topLevelEmployees =
+                    fmap (\e -> (e, val_ (via @Int32 0))) $
+                    filter_ (\e -> isNull_ (employeeReportsTo e)) $ all_ (employee chinookDb)
+              rec employeeOrgChart <-
+                    selecting (topLevelEmployees `unionAll_`
+                               do { (manager, managerLevel) <- reuse employeeOrgChart
+                                  ; report <- filter_ (\e -> employeeReportsTo e ==. manager) $ all_ (employee chinookDb)
+                                  ; pure (report, managerLevel + val_ 1) })
+              pure $ filter_ (\(employee, level, minLevel) -> level ==. minLevel)
+                   $ withWindow_ (\(employee, level) -> frame_ (partitionBy_ (addressCity (employeeAddress employee))) noOrder_ noBounds_)
+                                 (\(employee, level) cityFrame ->
+                                   (employee, level, coalesce_ [min_ level `over_` cityFrame] (val_ 0)))
+                                 (reuse employeeOrgChart)
+          -- Limit the search only to employees that live in the same city
+          guard_ (addressCity (employeeAddress employee) ==. addressCity (customerAddress cust))
+          pure (cust, employee)
+```
