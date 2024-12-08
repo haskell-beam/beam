@@ -2,25 +2,61 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Pagila.Schema.V0001 where
+-- TODO explicit module exports
+--   ( FilmT(..), ActorT(..), AddressT, CityT, CountryT, CategoryT, CustomerT
+--   , FilmCategoryT, LanguageT, StoreT, StaffT, PagilaDb, ActorId
+--   , PrimaryKey(..)
+--   , actor, address, city, country, category, customer
+--   , film, filmCategory, language, store, staff
+--   , lastUpdateField
+--   )
+-- where
 
 import Database.Beam
+    ( Generic,
+      Columnar,
+      Identity,
+      Beamable,
+      Table(..),
+      TableEntity,
+      Database,
+      SqlValable(val_),
+      timestamp,
+      varchar,
+      maybeType,
+      smallint,
+      boolean,
+      numeric,
+      char,
+      binaryLargeObject )
 import Database.Beam.Postgres
-import Database.Beam.Postgres (PgSyntax(..))
-import Database.Beam.Postgres.Migrate
-import Database.Beam.Migrate.Types hiding (migrateScript)
-import Database.Beam.Migrate.SQL.Tables
-import Database.Beam.Migrate.SQL.Types
+    ( Postgres,
+      now_,
+      serial,
+      smallserial,
+      text,
+      bytea )
+import Database.Beam.Migrate.Types
+    ( CheckedDatabaseEntity, Migration )
+import Database.Beam.Migrate.SQL
+    ( TableFieldSchema,
+      field,
+      defaultTo_,
+      notNull,
+      createTable,
+      unique )
 import Database.Beam.Backend.SQL.Types (SqlSerial)
-import qualified Database.PostgreSQL.Simple as Pg
 
-import qualified Control.Exception as E
-
+import Data.Int (Int32)
 import Data.Text (Text)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as BL
 import Data.Time.LocalTime (LocalTime)
 import Data.Scientific (Scientific)
 
@@ -100,7 +136,7 @@ type Actor = ActorT Identity
 deriving instance Show Actor; deriving instance Eq Actor
 
 instance Table ActorT where
-  data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int23))
+  data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int32))
                              deriving Generic
   primaryKey = ActorId . actorId
 type ActorId = PrimaryKey ActorT Identity
@@ -177,7 +213,7 @@ data StaffT f
   , staffStore     :: PrimaryKey StoreT f
   , staffActive    :: Columnar f Bool
   , staffUsername  :: Columnar f Text
-  , staffPassword  :: Columnar f ByteString
+  , staffPassword  :: Columnar f Text  -- TODO use ByteString
   , staffLastUpdate :: Columnar f LocalTime
   , staffPicture   :: Columnar f (Maybe ByteString)
   } deriving Generic
@@ -208,14 +244,16 @@ data FilmT f
   , filmLastUpdate     :: Columnar f LocalTime
   } deriving Generic
 type Film = FilmT Identity
-deriving instance Eq Film; deriving instance Show Film
+deriving instance Eq Film
+deriving instance Show Film
 
 instance Table FilmT where
   data PrimaryKey FilmT f = FilmId (Columnar f (SqlSerial Int32))
                             deriving Generic
   primaryKey = FilmId . filmId
 type FilmId = PrimaryKey FilmT Identity
-deriving instance Eq FilmId; deriving instance Show FilmId
+deriving instance Eq FilmId
+deriving instance Show FilmId
 
 -- Film category
 
@@ -296,12 +334,15 @@ instance Beamable FilmCategoryT
 instance Beamable (PrimaryKey LanguageT)
 instance Beamable LanguageT
 
-lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
+createDateField :: TableFieldSchema Postgres LocalTime
+createDateField = field "create_date" timestamp (defaultTo_ now_) notNull
+
+lastUpdateField :: TableFieldSchema Postgres LocalTime
 lastUpdateField = field "last_update" timestamp (defaultTo_ now_) notNull
 
-migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+migration :: () -> Migration Postgres (PagilaDb (CheckedDatabaseEntity Postgres db0))
 migration () = do
---  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
+  -- year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "actor"
                  (ActorT (field "actor_id" serial)
                          (field "first_name" (varchar (Just 45)) notNull)
@@ -336,8 +377,9 @@ migration () = do
                             (field "email" (varchar (Just 50)))
                             (AddressId (field "address_id" serial notNull))
                             (field "activebool" boolean (defaultTo_ (val_ True)) notNull)
-                            (field "create_date" date (defaultTo_ now_) notNull)
-                            lastUpdateField)
+                            createDateField
+                            lastUpdateField
+                 )
            <*> createTable "film"
                  (FilmT     (field "film_id" smallserial)
                             (field "title" (varchar (Just 255)) notNull)
