@@ -43,6 +43,14 @@ test-suite pagila-test
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          pagilatest.hs
-    build-depends:
-        base,
-        pagila
+    build-depends:    base,
+                      beam-core,
+                      beam-migrate,
+                      beam-postgres,
+                      pagila,
+                      conduit,
+                      time,
+                      bytestring,
+                      text,
+                      postgresql-simple
+

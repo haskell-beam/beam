@@ -2,7 +2,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Main where
 
 import Pagila.Schema
@@ -13,7 +17,7 @@ import Database.Beam.Postgres (PgSyntax(..))
 import Database.Beam.Postgres.Migrate
 import Database.Beam.Migrate.Types hiding (migrateScript)
 import Database.Beam.Migrate.SQL.Tables
-import Database.Beam.Migrate.SQL.Types
+import Database.Beam.Migrate.SQL
 
 import qualified Database.PostgreSQL.Simple as Pg
 
@@ -27,7 +31,9 @@ import Data.Time.LocalTime (LocalTime)
 import Data.Conduit ((=$=), runConduit)
 import qualified Data.Conduit.List as CL (mapM_)
 
-testQuery conn q = runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
+-- TODO
+-- runSelect deprecated?
+-- testQuery conn q = runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
 
 main :: IO ()
 main = pure ()
