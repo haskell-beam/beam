@@ -2,25 +2,55 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Pagila.Schema.V0001 where
 
 import Database.Beam
+    ( Generic,
+      Columnar,
+      Identity,
+      Beamable,
+      Table(..),
+      TableEntity,
+      Database,
+      SqlValable(val_),
+      timestamp,
+      varchar,
+      maybeType,
+      smallint,
+      boolean,
+      date,
+      numeric,
+      char,
+      binaryLargeObject )
 import Database.Beam.Postgres
-import Database.Beam.Postgres (PgSyntax(..))
-import Database.Beam.Postgres.Migrate
-import Database.Beam.Migrate.Types hiding (migrateScript)
-import Database.Beam.Migrate.SQL.Tables
-import Database.Beam.Migrate.SQL.Types
+    ( Postgres,
+      PgCommandSyntax,
+      now_,
+      serial,
+      smallserial,
+      text,
+      bytea )
+import Database.Beam.Postgres.Syntax (PgColumnSchemaSyntax)
+import Database.Beam.Migrate.Types
+    ( CheckedDatabaseSettings, Migration )
+import Database.Beam.Migrate.SQL
+    ( TableFieldSchema,
+      field,
+      defaultTo_,
+      notNull,
+      createTable,
+      unique )
 import Database.Beam.Backend.SQL.Types (SqlSerial)
-import qualified Database.PostgreSQL.Simple as Pg
 
-import qualified Control.Exception as E
-
+import Data.Int (Int32)
 import Data.Text (Text)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as BL
 import Data.Time.LocalTime (LocalTime)
 import Data.Scientific (Scientific)
 
@@ -100,7 +130,7 @@ type Actor = ActorT Identity
 deriving instance Show Actor; deriving instance Eq Actor
 
 instance Table ActorT where
-  data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int23))
+  data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int32))
                              deriving Generic
   primaryKey = ActorId . actorId
 type ActorId = PrimaryKey ActorT Identity

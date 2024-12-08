@@ -1,23 +1,25 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module Pagila.Test where
 
-import Control.Arrow
+import Control.Arrow ()
 
-import Data.Int
-import Data.Proxy
+import Data.Int ( Int32 )
 import Data.Text(Text)
 
 import Database.Beam
-import Database.Beam.Backend.Types
-import Database.Beam.Migrate.Types ( CheckedDatabaseSettings, MigrationSteps, unCheckDatabase
-                                   , evaluateDatabase, migrationStep)
+    ( Generic, Beamable, Columnar, Database, Table(..), TableEntity )
+import Database.Beam.Postgres
+import Database.Beam.Backend.Types ()
 import Database.Beam.Migrate.Generics
 import Database.Beam.Migrate.SQL.SQL92
-import Database.Beam.Postgres (Postgres, PgCommandSyntax)
-import Database.Beam.Postgres.Migrate
 import Database.Beam.Migrate.Types hiding (migrateScript)
-import Database.Beam.Migrate.SQL.Tables
-import Database.Beam.Migrate.SQL.Types
 
 data SimpleTbl f
   = SimpleTbl
@@ -35,7 +37,7 @@ data MyDb f =
   MyDb { mydbSimpleTbl :: f (TableEntity SimpleTbl) } deriving Generic
 instance Database be MyDb
 
-myDbMigratable :: forall syntax be
+myDbMigratable :: forall syntax 
                 . IsSql92DdlCommandSyntax syntax
-               => CheckedDatabaseSettings be MyDb
-myDbMigratable = defaultMigratableDbSettings @syntax
+               => CheckedDatabaseSettings Postgres MyDb
+myDbMigratable = defaultMigratableDbSettings @Postgres @MyDb

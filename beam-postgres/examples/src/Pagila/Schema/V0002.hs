@@ -2,7 +2,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Pagila.Schema.V0002
   ( module V0001'
@@ -16,16 +20,21 @@ import qualified Pagila.Schema.V0001 as V0001
 import qualified Pagila.Schema.V0001 as V0001' hiding (PagilaDb, migration)
 
 import Database.Beam
-import Database.Beam.Postgres
-import Database.Beam.Postgres (PgSyntax(..))
-import Database.Beam.Postgres.Migrate
-import Database.Beam.Migrate.Types hiding (migrateScript)
+    ( Generic,
+      Columnar,
+      Identity,
+      Beamable,
+      Table(..),
+      TableEntity,
+      Database,
+      smallint )
+import Database.Beam.Postgres ( Postgres, PgCommandSyntax )
+import Database.Beam.Migrate.Types
+    ( CheckedDatabaseSettings, Migration )
 import Database.Beam.Migrate.SQL.Tables
-import Database.Beam.Migrate.SQL.Types
+    ( field, notNull, createTable, preserve )
 
 import qualified Database.PostgreSQL.Simple as Pg
-
-import qualified Control.Exception as E
 
 import Data.Text (Text)
 import Data.ByteString (ByteString)
