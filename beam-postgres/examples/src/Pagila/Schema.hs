@@ -13,9 +13,9 @@ import Control.Arrow ( (>>>) )
 import Database.Beam (DatabaseSettings)
 import Database.Beam.Migrate.Types ( CheckedDatabaseSettings, MigrationSteps, unCheckDatabase
                                    , evaluateDatabase, migrationStep)
-import Database.Beam.Postgres (Postgres, PgCommandSyntax)
+import Database.Beam.Postgres (Postgres)
 
--- migration :: MigrationSteps PgCommandSyntax () (CheckedDatabaseSettings Postgres Pagila.Schema.V0002.PagilaDb)
+migration :: MigrationSteps Postgres () (CheckedDatabaseSettings Postgres Pagila.Schema.V0002.PagilaDb)
 migration = migrationStep "Initial commit" V0001.migration >>>
             migrationStep "Add film actor, inventory, rental table" V0002.migration
 

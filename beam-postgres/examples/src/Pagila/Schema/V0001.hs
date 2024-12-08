@@ -24,21 +24,18 @@ import Database.Beam
       maybeType,
       smallint,
       boolean,
-      date,
       numeric,
       char,
       binaryLargeObject )
 import Database.Beam.Postgres
     ( Postgres,
-      PgCommandSyntax,
       now_,
       serial,
       smallserial,
       text,
       bytea )
-import Database.Beam.Postgres.Syntax (PgColumnSchemaSyntax)
 import Database.Beam.Migrate.Types
-    ( CheckedDatabaseSettings, Migration )
+    ( CheckedDatabaseEntity, Migration )
 import Database.Beam.Migrate.SQL
     ( TableFieldSchema,
       field,
@@ -332,7 +329,7 @@ createDateField = field "create_date" timestamp (defaultTo_ now_) notNull
 lastUpdateField :: TableFieldSchema Postgres LocalTime
 lastUpdateField = field "last_update" timestamp (defaultTo_ now_) notNull
 
--- migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+migration :: () -> Migration Postgres (PagilaDb (CheckedDatabaseEntity Postgres db0))
 migration () = do
 --  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "actor"

@@ -28,19 +28,13 @@ import Database.Beam
       TableEntity,
       Database,
       smallint )
-import Database.Beam.Postgres ( Postgres, PgCommandSyntax )
+import Database.Beam.Postgres ( Postgres )
 import Database.Beam.Migrate.Types
     ( CheckedDatabaseSettings, Migration )
 import Database.Beam.Migrate.SQL.Tables
     ( field, notNull, createTable, preserve )
 
-import qualified Database.PostgreSQL.Simple as Pg
-
-import Data.Text (Text)
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as BL
 import Data.Time.LocalTime (LocalTime)
-import Data.Scientific (Scientific)
 
 -- film actor
 
@@ -82,8 +76,8 @@ data PagilaDb f
   } deriving Generic
 instance Database Postgres PagilaDb
 
--- migration :: CheckedDatabaseSettings Postgres V0001.PagilaDb
---           -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+migration :: CheckedDatabaseSettings Postgres V0001.PagilaDb
+          -> Migration Postgres (CheckedDatabaseSettings Postgres PagilaDb)
 migration oldDb =
   PagilaDb
     <$> preserve (V0001.actor oldDb)

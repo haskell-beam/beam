@@ -32,11 +32,10 @@ import Database.Beam
 import Database.Beam.Postgres
     ( smallserial,
       now_,
-      PgCommandSyntax,
       Postgres,
       ResultError(ConversionFailed) )
 import Database.Beam.Postgres.Syntax
-    ( pgTextType, PgColumnSchemaSyntax, PgDataTypeSyntax )
+    ( pgTextType )
 import Database.Beam.Migrate
     ( createTable,
       defaultTo_,
@@ -132,7 +131,7 @@ instance Beamable AddressT
 lastUpdateField :: TableFieldSchema Postgres LocalTime
 lastUpdateField = field "last_update" timestamp  (defaultTo_ now_) notNull
 
--- migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+migration :: () -> Migration Postgres (CheckedDatabaseSettings Postgres PagilaDb)
 migration () = do
 --  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "address"
