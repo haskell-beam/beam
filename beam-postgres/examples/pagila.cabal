@@ -19,7 +19,7 @@ library
                       Pagila.Schema.V0001,
                       Pagila.Schema.V0002,
                       Pagila.Schema.CustomMigrateExample,
-                      Pagila.Test
+                      Pagila.CompileTimeTest
     -- other-modules:
     -- other-extensions:
     build-depends:    base,

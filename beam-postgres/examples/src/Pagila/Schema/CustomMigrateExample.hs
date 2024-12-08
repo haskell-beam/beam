@@ -127,13 +127,12 @@ instance Database Postgres PagilaDb
 instance Beamable (PrimaryKey AddressT)
 instance Beamable AddressT
 
--- lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
 lastUpdateField :: TableFieldSchema Postgres LocalTime
 lastUpdateField = field "last_update" timestamp  (defaultTo_ now_) notNull
 
 migration :: () -> Migration Postgres (CheckedDatabaseSettings Postgres PagilaDb)
 migration () = do
---  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
+  -- year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "address"
                  (AddressT
                     (field "address_id" smallserial)

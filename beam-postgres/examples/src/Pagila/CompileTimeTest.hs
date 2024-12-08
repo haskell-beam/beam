@@ -6,21 +6,20 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Pagila.Test where
-
-import Control.Arrow ()
+module Pagila.CompileTimeTest where
 
 import Data.Int ( Int32 )
 import Data.Text(Text)
 
 import Database.Beam
     ( Generic, Beamable, Columnar, Database, Table(..), TableEntity )
-import Database.Beam.Postgres
-import Database.Beam.Backend.Types ()
+import Database.Beam.Postgres ( Postgres )
 import Database.Beam.Migrate.Generics
-import Database.Beam.Migrate.SQL.SQL92
-import Database.Beam.Migrate.Types hiding (migrateScript)
+    ( defaultMigratableDbSettings )
+import Database.Beam.Migrate.SQL.SQL92 ( IsSql92DdlCommandSyntax )
+import Database.Beam.Migrate.Types ( CheckedDatabaseSettings )
 
+-- compile-time test
 data SimpleTbl f
   = SimpleTbl
   { simpletblField1 :: Columnar f Int32

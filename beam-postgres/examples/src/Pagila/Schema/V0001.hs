@@ -9,6 +9,15 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module Pagila.Schema.V0001 where
+-- TODO explicit module exports
+--   ( FilmT(..), ActorT(..), AddressT, CityT, CountryT, CategoryT, CustomerT
+--   , FilmCategoryT, LanguageT, StoreT, StaffT, PagilaDb, ActorId
+--   , PrimaryKey(..)
+--   , actor, address, city, country, category, customer
+--   , film, filmCategory, language, store, staff
+--   , lastUpdateField
+--   )
+-- where
 
 import Database.Beam
     ( Generic,
@@ -235,14 +244,16 @@ data FilmT f
   , filmLastUpdate     :: Columnar f LocalTime
   } deriving Generic
 type Film = FilmT Identity
-deriving instance Eq Film; deriving instance Show Film
+deriving instance Eq Film
+deriving instance Show Film
 
 instance Table FilmT where
   data PrimaryKey FilmT f = FilmId (Columnar f (SqlSerial Int32))
                             deriving Generic
   primaryKey = FilmId . filmId
 type FilmId = PrimaryKey FilmT Identity
-deriving instance Eq FilmId; deriving instance Show FilmId
+deriving instance Eq FilmId
+deriving instance Show FilmId
 
 -- Film category
 
@@ -331,7 +342,7 @@ lastUpdateField = field "last_update" timestamp (defaultTo_ now_) notNull
 
 migration :: () -> Migration Postgres (PagilaDb (CheckedDatabaseEntity Postgres db0))
 migration () = do
---  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
+  -- year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "actor"
                  (ActorT (field "actor_id" serial)
                          (field "first_name" (varchar (Just 45)) notNull)

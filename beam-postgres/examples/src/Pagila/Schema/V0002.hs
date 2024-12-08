@@ -12,7 +12,6 @@ module Pagila.Schema.V0002
   ( module V0001'
   , FilmActorT(..), FilmActor
   , PrimaryKey(..), FilmActorId
-
   , migration, PagilaDb
   ) where
 
