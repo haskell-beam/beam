@@ -87,7 +87,7 @@ instance (BeamSqlBackend be, FromBackendRow be T.Text) => FromBackendRow be Ship
 -- In this case, we want to store it as the postgres type ``text``
 -- Look into the module Database.Beam.Postgres.Syntax for a list of other
 -- postgres types that your custom type can take
-shippingCarrierType :: DataType PgDataTypeSyntax ShippingCarrier
+shippingCarrierType :: DataType Postgres a
 shippingCarrierType = DataType pgTextType
 
 
@@ -128,10 +128,11 @@ instance Database Postgres PagilaDb
 instance Beamable (PrimaryKey AddressT)
 instance Beamable AddressT
 
-lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
-lastUpdateField = field "last_update" timestamp (defaultTo_ now_) notNull
+-- lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
+lastUpdateField :: TableFieldSchema Postgres LocalTime
+lastUpdateField = field "last_update" timestamp  (defaultTo_ now_) notNull
 
-migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+-- migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
 migration () = do
 --  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "address"

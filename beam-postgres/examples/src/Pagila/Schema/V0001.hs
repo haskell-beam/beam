@@ -207,7 +207,7 @@ data StaffT f
   , staffStore     :: PrimaryKey StoreT f
   , staffActive    :: Columnar f Bool
   , staffUsername  :: Columnar f Text
-  , staffPassword  :: Columnar f ByteString
+  , staffPassword  :: Columnar f Text  -- TODO use ByteString
   , staffLastUpdate :: Columnar f LocalTime
   , staffPicture   :: Columnar f (Maybe ByteString)
   } deriving Generic
@@ -326,10 +326,13 @@ instance Beamable FilmCategoryT
 instance Beamable (PrimaryKey LanguageT)
 instance Beamable LanguageT
 
-lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
+createDateField :: TableFieldSchema Postgres LocalTime
+createDateField = field "create_date" timestamp (defaultTo_ now_) notNull
+
+lastUpdateField :: TableFieldSchema Postgres LocalTime
 lastUpdateField = field "last_update" timestamp (defaultTo_ now_) notNull
 
-migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+-- migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
 migration () = do
 --  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "actor"
@@ -366,8 +369,9 @@ migration () = do
                             (field "email" (varchar (Just 50)))
                             (AddressId (field "address_id" serial notNull))
                             (field "activebool" boolean (defaultTo_ (val_ True)) notNull)
-                            (field "create_date" date (defaultTo_ now_) notNull)
-                            lastUpdateField)
+                            createDateField
+                            lastUpdateField
+                 )
            <*> createTable "film"
                  (FilmT     (field "film_id" smallserial)
                             (field "title" (varchar (Just 255)) notNull)

@@ -82,8 +82,8 @@ data PagilaDb f
   } deriving Generic
 instance Database Postgres PagilaDb
 
-migration :: CheckedDatabaseSettings Postgres V0001.PagilaDb
-          -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+-- migration :: CheckedDatabaseSettings Postgres V0001.PagilaDb
+--           -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
 migration oldDb =
   PagilaDb
     <$> preserve (V0001.actor oldDb)
