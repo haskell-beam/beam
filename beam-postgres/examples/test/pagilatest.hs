@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
 module Main where
@@ -30,10 +31,10 @@ import Data.Time.LocalTime (LocalTime)
 
 import Data.Conduit ((=$=), runConduit)
 import qualified Data.Conduit.List as CL (mapM_)
+import Database.Beam.Postgres.Conduit (streamingRunSelect)
 
 -- TODO
--- runSelect deprecated?
--- testQuery conn q = runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
+-- testQuery conn q = runConduit (streamingRunSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
 
 main :: IO ()
 main = pure ()
