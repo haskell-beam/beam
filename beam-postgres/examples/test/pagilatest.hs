@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
 module Main where
@@ -28,12 +29,20 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import Data.Time.LocalTime (LocalTime)
 
-import Data.Conduit ((=$=), runConduit)
+import Data.Conduit ((.|), runConduitRes)
 import qualified Data.Conduit.List as CL (mapM_)
+import Database.Beam.Postgres.Conduit (streamingRunSelect)
 
--- TODO
--- runSelect deprecated?
--- testQuery conn q = runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
+testQuery :: ( FromBackendRow Postgres (QExprToIdentity res)
+             , Projectible Postgres res, Show (QExprToIdentity res)
+             ) => Connection
+               -> Q Postgres db QBaseScope res
+               -> IO ()
+testQuery conn q
+  = runConduitRes (
+         streamingRunSelect conn (select q)
+      .| CL.mapM_ (liftIO . putStrLn . show)
+   )
 
 main :: IO ()
 main = pure ()
