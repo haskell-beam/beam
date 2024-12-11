@@ -2,7 +2,12 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Main where
 
 import Pagila.Schema
@@ -13,7 +18,7 @@ import Database.Beam.Postgres (PgSyntax(..))
 import Database.Beam.Postgres.Migrate
 import Database.Beam.Migrate.Types hiding (migrateScript)
 import Database.Beam.Migrate.SQL.Tables
-import Database.Beam.Migrate.SQL.Types
+import Database.Beam.Migrate.SQL
 
 import qualified Database.PostgreSQL.Simple as Pg
 
@@ -24,10 +29,20 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import Data.Time.LocalTime (LocalTime)
 
-import Data.Conduit ((=$=), runConduit)
+import Data.Conduit ((.|), runConduitRes)
 import qualified Data.Conduit.List as CL (mapM_)
+import Database.Beam.Postgres.Conduit (streamingRunSelect)
 
-testQuery conn q = runConduit (runSelect conn (select q) =$= CL.mapM_ (putStrLn . show))
+testQuery :: ( FromBackendRow Postgres (QExprToIdentity res)
+             , Projectible Postgres res, Show (QExprToIdentity res)
+             ) => Connection
+               -> Q Postgres db QBaseScope res
+               -> IO ()
+testQuery conn q
+  = runConduitRes (
+         streamingRunSelect conn (select q)
+      .| CL.mapM_ (liftIO . putStrLn . show)
+   )
 
 main :: IO ()
 main = pure ()

@@ -2,6 +2,7 @@ packages:
   beam-core
   beam-migrate
   beam-postgres
+  beam-postgres/examples
   beam-sqlite
 
 -- For testing
