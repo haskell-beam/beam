@@ -43,7 +43,7 @@ library
                       bytestring           >=0.10 && <0.13,
 
                       attoparsec           >=0.13 && <0.15,
-                      hashable             >=1.1  && <1.5,
+                      hashable             >=1.1  && <1.6,
                       lifted-base          >=0.2  && <0.3,
                       free                 >=4.12 && <5.3,
                       time                 >=1.6  && <1.13,
