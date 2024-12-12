@@ -3,7 +3,12 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 -- | This module contains a minimal example of how to use
 -- a custom data type (``ShippingCarrier`` in this example) in migration
@@ -11,26 +16,53 @@
 -- this is just a stripped down version of Pagila.Schema.V0001
 module Pagila.Schema.CustomMigrateExample where
 
-import           Database.Beam
-import           Database.Beam.Postgres
-import           Database.Beam.Migrate
-import           Database.Beam.Postgres.Migrate
-import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate.SQL.Types (TableFieldSchema(..), DataType(..))
-import           Database.Beam.Backend.SQL.Types (SqlSerial)
+import Database.Beam
+    ( Generic,
+      maybeType,
+      timestamp,
+      varchar,
+      FromBackendRow(fromBackendRow),
+      DataType(..),
+      Beamable,
+      Columnar,
+      Database,
+      Table(..),
+      TableEntity,
+      Identity )
+import Database.Beam.Postgres
+    ( smallserial,
+      now_,
+      Postgres,
+      ResultError(ConversionFailed) )
+import Database.Beam.Postgres.Syntax
+    ( pgTextType )
+import Database.Beam.Migrate
+    ( createTable,
+      defaultTo_,
+      field,
+      notNull,
+      TableFieldSchema,
+      Migration,
+      CheckedDatabaseSettings )
+import Database.Beam.Backend.SQL
+    ( HasSqlValueSyntax(..),
+      BeamSqlBackend,
+      SqlSerial,
+      autoSqlValueSyntax )
+import Database.Beam.Migrate.SQL ()
 
-import           Data.Int
+import Data.Int ( Int32 )
 import qualified Data.Text as T
 import           Data.Time.LocalTime (LocalTime)
-import           Database.PostgreSQL.Simple.FromField
-import           Text.Read
+import Database.PostgreSQL.Simple.FromField
+    ( returnError, FromField(..) )
+import Text.Read ( readMaybe )
 
 data ShippingCarrier = USPS | FedEx | UPS | DHL
   deriving (Show, Read, Eq, Ord, Enum)
 
 instance HasSqlValueSyntax be String => HasSqlValueSyntax be ShippingCarrier where
   sqlValueSyntax = autoSqlValueSyntax
-instance (IsSql92ColumnSchemaSyntax be) => HasDefaultSqlDataTypeConstraints be ShippingCarrier
 
 instance FromField ShippingCarrier where
   fromField f bs = do
@@ -40,7 +72,7 @@ instance FromField ShippingCarrier where
       Just x -> pure x
 
 -- | An explicit definition of ``fromBackendRow`` is required for each custom type
-instance (BeamBackend be, FromBackendRow be T.Text) => FromBackendRow be ShippingCarrier where
+instance (BeamSqlBackend be, FromBackendRow be T.Text) => FromBackendRow be ShippingCarrier where
   fromBackendRow = do
     val <- fromBackendRow
     case val :: T.Text of
@@ -54,7 +86,7 @@ instance (BeamBackend be, FromBackendRow be T.Text) => FromBackendRow be Shippin
 -- In this case, we want to store it as the postgres type ``text``
 -- Look into the module Database.Beam.Postgres.Syntax for a list of other
 -- postgres types that your custom type can take
-shippingCarrierType :: DataType PgDataTypeSyntax ShippingCarrier
+shippingCarrierType :: DataType Postgres a
 shippingCarrierType = DataType pgTextType
 
 
@@ -88,19 +120,19 @@ data PagilaDb f
   {
     address    :: f (TableEntity AddressT)
   } deriving Generic
-instance Database PagilaDb
+instance Database Postgres PagilaDb
 
 -- Beamable instances
 
 instance Beamable (PrimaryKey AddressT)
 instance Beamable AddressT
 
-lastUpdateField :: TableFieldSchema PgColumnSchemaSyntax LocalTime
-lastUpdateField = field "last_update" timestamp (defaultTo_ now_) notNull
+lastUpdateField :: TableFieldSchema Postgres LocalTime
+lastUpdateField = field "last_update" timestamp  (defaultTo_ now_) notNull
 
-migration :: () -> Migration PgCommandSyntax (CheckedDatabaseSettings Postgres PagilaDb)
+migration :: () -> Migration Postgres (CheckedDatabaseSettings Postgres PagilaDb)
 migration () = do
---  year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
+  -- year_ <- createDomain "year" integer (check (\yr -> yr >=. 1901 &&. yr <=. 2155))
   PagilaDb <$> createTable "address"
                  (AddressT
                     (field "address_id" smallserial)
