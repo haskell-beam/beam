@@ -1,3 +1,13 @@
+# Unreleased
+
+## Updated dependencies
+
+* Updated the upper bound to include `hashable-1.5`. 
+
+## Bug fixes
+
+* The `Pagila` example in `beam-postgres` has been updated to compile using the most recent version of `beam` packages (#729).
+
 # 0.10.3.0
 
 ## Added features
