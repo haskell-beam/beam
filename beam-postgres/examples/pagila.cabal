@@ -29,6 +29,27 @@ library
     hs-source-dirs:   src
     
 
+executable pagila
+    import:           warnings
+    main-is:          Main.hs
+
+    -- Modules included in this executable, other than Main.
+    -- other-modules:
+
+    build-depends:    base,
+                      pagila,
+                      text,
+                      bytestring,
+                      beam-core,
+                      beam-postgres,
+                      beam-migrate
+
+    -- Directories containing source files.
+    hs-source-dirs:   app
+
+    -- Base language which the package is written in.
+    default-language: Haskell2010
+
 test-suite pagila-test
     import:           warnings
     -- other-modules:
