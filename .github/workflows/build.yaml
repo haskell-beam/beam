@@ -12,14 +12,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc-version:
-          - "8.10.7"
-          - "9.0.2"
-          - "9.2.8"
-          - "9.4.8"
-          - "9.6.6"
-          - "9.8.2"
-          - "9.10.1"
+        include:
+          - ghc-version: "8.10.7"
+            cabal-flags: ""
+          - ghc-version: "9.0.2"
+            cabal-flags: ""
+          - ghc-version: "9.2.8"
+            cabal-flags: ""
+          - ghc-version: "9.4.5"
+            cabal-flags: ""
+          - ghc-version: "9.6.4"
+            cabal-flags: ""
+          - ghc-version: "9.8.2"
+            cabal-flags: ""
+          - ghc-version: "9.10.1"
+            cabal-flags: ""
+          # Temporary cabal flags until all dependencies are updated
+          - ghc-version: "9.12.1"
+            cabal-flags: "--allow-newer=base --allow-newer=template-haskell --allow-newer=ghc-prim"
 
     steps:
     - uses: actions/checkout@v4
@@ -35,7 +45,7 @@ jobs:
       run: |
         cabal update
         cabal configure --disable-optimization --enable-tests
-        cabal freeze
+        cabal freeze ${{matrix.cabal-flags}}
 
         # Exclude the timestamp of Hackage index update from our cache key, to
         # avoid invalidating cache too often.
@@ -52,12 +62,12 @@ jobs:
     
     - name: Build dependencies
       run: |
-        cabal build all --only-dependencies
+        cabal build all --only-dependencies ${{matrix.cabal-flags}}
     
     - name: Build beam packages
       run: |
-        cabal build all
+        cabal build all ${{matrix.cabal-flags}}
         
     - name: Run tests
       run: |
-        cabal test all
+        cabal test all ${{matrix.cabal-flags}}
