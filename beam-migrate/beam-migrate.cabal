@@ -21,7 +21,7 @@ maintainer:          travis@athougies.net
 copyright:           Copyright (C) 2017-2018 Travis Athougies
 category:            Database
 build-type:          Simple
-extra-source-files:  ChangeLog.md
+extra-doc-files:     ChangeLog.md
 cabal-version:       1.18
 
 library
