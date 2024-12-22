@@ -1,4 +1,4 @@
-# Unreleased
+# 0.10.3.1
 
 ## Updated dependencies
 
@@ -7,6 +7,10 @@
 ## Bug fixes
 
 * The `Pagila` example in `beam-postgres` has been updated to compile using the most recent version of `beam` packages (#729).
+
+## Packaging
+
+* Remove the GHC flag `-O3`, which resulted in increased compilation time by default. This flag can still be activated using your build system of choice, as with every library.
 
 # 0.10.3.0
 
