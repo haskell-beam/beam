@@ -22,6 +22,7 @@ library
                       scientific,
                       bytestring,
                       text,
+                      exceptions,
                       postgresql-simple,
                       beam-core,
                       beam-postgres,
@@ -32,10 +33,6 @@ library
 executable pagila
     import:           warnings
     main-is:          Main.hs
-
-    -- Modules included in this executable, other than Main.
-    -- other-modules:
-
     build-depends:    base,
                       pagila,
                       text,
@@ -43,11 +40,22 @@ executable pagila
                       beam-core,
                       beam-postgres,
                       beam-migrate
-
-    -- Directories containing source files.
     hs-source-dirs:   app
+    default-language: Haskell2010
 
-    -- Base language which the package is written in.
+executable pagila-migration
+    import:           warnings
+    main-is:          RunMigration.hs
+    ghc-options:      -main-is RunMigration
+    build-depends:    base,
+                      pagila,
+                      text,
+                      bytestring,
+                      beam-core,
+                      beam-postgres,
+                      beam-migrate,
+                      postgresql-simple
+    hs-source-dirs:   app
     default-language: Haskell2010
 
 test-suite pagila-test
