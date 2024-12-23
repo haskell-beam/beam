@@ -10,9 +10,18 @@ connInfo = ConnectInfo "localhost" (read "5432") "postgres" "foo" "postgres"
 
 main :: IO ()
 main = do
-  putStrLn "Running migration..."
-  c <- connect connInfo
+  putStrLn "Pagila migration"
 
-  _ <- migrateDB c
+  putStrLn "**This will overwrite data in your Postgres instance**"
+  putStrLn "Type 'migrate' to proceed."
+  x <- getLine
 
-  close c
+  if x == "migrate" then do
+    putStrLn "Running migration..."
+    c <- connect connInfo
+
+    _ <- migrateDB c
+
+    close c
+  else do
+    putStrLn "Input was not 'migrate'; quitting"
