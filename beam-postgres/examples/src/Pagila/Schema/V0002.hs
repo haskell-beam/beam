@@ -18,6 +18,9 @@ module Pagila.Schema.V0002
 import qualified Pagila.Schema.V0001 as V0001
 import qualified Pagila.Schema.V0001 as V0001' hiding (PagilaDb, migration)
 
+import Data.Int (Int32)
+import Data.Text (Text)
+import Data.ByteString (ByteString)
 import Database.Beam
     ( Generic,
       Columnar,
@@ -26,12 +29,13 @@ import Database.Beam
       Table(..),
       TableEntity,
       Database,
-      smallint )
+      smallint,
+      val_ )
 import Database.Beam.Postgres ( Postgres )
 import Database.Beam.Migrate.Types
-    ( CheckedDatabaseSettings, Migration )
+    ( CheckedDatabaseSettings, CheckedDatabaseEntity, Migration )
 import Database.Beam.Migrate.SQL.Tables
-    ( field, notNull, createTable, preserve )
+    ( field, notNull, createTable, preserve, addColumn, alterTable, defaultTo_ )
 
 import Data.Time.LocalTime (LocalTime)
 
@@ -58,6 +62,32 @@ deriving instance Eq FilmActorId; deriving instance Show FilmActorId
 instance Beamable FilmActorT
 instance Beamable (PrimaryKey FilmActorT)
 
+instance Table NewStaffT where
+  data PrimaryKey NewStaffT f = NewStaffId (Columnar f Int32) deriving Generic
+  primaryKey = NewStaffId . staffId
+type NewStaffId = PrimaryKey NewStaffT Identity
+deriving instance Eq NewStaffId; deriving instance Show NewStaffId
+
+data NewStaffT f
+  = NewStaffT
+  { staffId        :: Columnar f Int32
+  , staffFirstName :: Columnar f Text
+  , staffLastName  :: Columnar f Text
+  , staffAddress   :: PrimaryKey V0001.AddressT f
+  , staffEmail     :: Columnar f Text
+  , staffStore     :: PrimaryKey V0001.StoreT f
+  , staffActive    :: Columnar f Bool
+  , staffUsername  :: Columnar f Text
+  , staffPassword  :: Columnar f Text  -- TODO use ByteString
+  , staffLastUpdate :: Columnar f LocalTime
+  , staffPicture   :: Columnar f (Maybe ByteString)
+  , staffSalary    :: Columnar f Int32  -- new Salary field
+  } deriving Generic
+type NewStaff = NewStaffT Identity
+deriving instance Eq NewStaff; deriving instance Show NewStaff
+instance Beamable (PrimaryKey NewStaffT)
+instance Beamable NewStaffT
+
 data PagilaDb f
   = PagilaDb
   { actor      :: f (TableEntity V0001.ActorT)
@@ -71,9 +101,29 @@ data PagilaDb f
   , filmActor  :: f (TableEntity FilmActorT)
   , language   :: f (TableEntity V0001.LanguageT)
   , store      :: f (TableEntity V0001.StoreT)
-  , staff      :: f (TableEntity V0001.StaffT)
+  , staff      :: f (TableEntity NewStaffT)
   } deriving Generic
 instance Database Postgres PagilaDb
+
+migrateToNewStaffWithSalary :: CheckedDatabaseSettings Postgres V0001.PagilaDb
+                            -> Migration Postgres (CheckedDatabaseEntity Postgres db (TableEntity NewStaffT))
+migrateToNewStaffWithSalary oldDb = alterTable (V0001.staff oldDb) $ \oldStaff -> do
+  staffSalary <- addColumn (field "salary" smallint notNull (defaultTo_ (val_ 100)))
+  pure $
+    NewStaffT
+      { staffId = V0001.staffId oldStaff,
+        staffFirstName = V0001.staffFirstName oldStaff,
+        staffLastName = V0001.staffLastName oldStaff,
+        staffAddress = V0001.staffAddress oldStaff,
+        staffEmail = V0001.staffEmail oldStaff,
+        staffStore = V0001.staffStore oldStaff,
+        staffActive = V0001.staffActive oldStaff,
+        staffUsername = V0001.staffUsername oldStaff,
+        staffPassword = V0001.staffPassword oldStaff,
+        staffLastUpdate = V0001.staffLastUpdate oldStaff,
+        staffPicture = V0001.staffPicture oldStaff,
+        staffSalary = staffSalary
+      }
 
 migration :: CheckedDatabaseSettings Postgres V0001.PagilaDb
           -> Migration Postgres (CheckedDatabaseSettings Postgres PagilaDb)
@@ -93,4 +143,4 @@ migration oldDb =
                                     V0001.lastUpdateField)
     <*> preserve (V0001.language oldDb)
     <*> preserve (V0001.store oldDb)
-    <*> preserve (V0001.staff oldDb)
+    <*> migrateToNewStaffWithSalary oldDb
