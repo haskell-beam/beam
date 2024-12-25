@@ -2,7 +2,7 @@
 
 There are two executables:
 
-### 1. `cabal run`
+### 1. `cabal run pagila-print`
 `cabal run` to see rendering of Postgres migration. This converts the Haskell to SQL statements and prints these to the console.
 
 ### 2. Destructive: apply migration to Postgres instance

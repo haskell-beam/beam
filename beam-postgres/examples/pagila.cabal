@@ -28,9 +28,8 @@ library
                       beam-postgres,
                       beam-migrate
     hs-source-dirs:   src
-    
 
-executable pagila
+executable pagila-print
     import:           warnings
     main-is:          Main.hs
     build-depends:    base,
