@@ -6,8 +6,8 @@
 module Database.Beam.Migrate.SQL.BeamExtensions where
 
 import Database.Beam.Backend.SQL
-import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.SQL.Tables
+import Database.Beam.Migrate.SQL.Types
 
 import Data.Text (Text)
 
@@ -29,6 +29,6 @@ import Data.Text (Text)
 --   'genericSerial' may appear and may fail at run-time if these conditions
 --   aren't met. Please refer to the backend of your choice for more
 --   information.
-class BeamMigrateSqlBackend be =>
-  BeamSqlBackendHasSerial be where
-  genericSerial :: FieldReturnType 'True 'False be (SqlSerial Int) a => Text -> a
+class (BeamMigrateSqlBackend be, Integral n) =>
+  BeamSqlBackendHasSerial n be where
+  genericSerial :: FieldReturnType 'True 'False be (SqlSerial n) a => Text -> a
