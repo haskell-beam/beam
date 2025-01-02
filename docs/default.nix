@@ -4,8 +4,6 @@
 with nixpkgs;
 
 let
-  beamLib = import ../nix/lib.nix { inherit nixpkgs; };
-  beamGhc = beamLib.makeBeamGhc ghc;
   docsEnv = poetry2nix.mkPoetryEnv {
     projectDir = ./.;
   };
@@ -51,7 +49,7 @@ stdenv.mkDerivation {
     []
     ./..;
   nativeBuildInputs = [
-    (beamGhc.ghc.withPackages beamLib.beamPackageList)
+    # (beamGhc.ghc.withPackages beamLib.beamPackageList)
     docsEnv
     poetry
     postgresql

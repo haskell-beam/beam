@@ -79,12 +79,15 @@ to run this against. See the documentation for examples.
 
 ## Building the documentation
 
-Beam uses `mkdocs` for its documentation generation. The included
-`build-docs.sh` script can take care of building the documentation and serving
-it locally. In order to use the tool though, make sure you have a python
-installation with the `mkdocs` module installed. You can do this by creating a
-virtualenv, and pip installing `mkdocs`, or in a Nix shell with
-`nix-shell docs`.
+Beam uses [`mkdocs`](https://www.mkdocs.org/) for its documentation generation.
+
+### Requirements
+* Python installation with [`mkdocs` module](https://pypi.org/project/mkdocs/)
+* Alternatively, open the Nix Flake shell via `nix develop`.
+
+Then run `build-docs.sh`.
+
+TODO: define Nix package for docs bundle.
 
 The documentation uses a custom Markdown preprocessor to automatically build
 examples against the canonical Chinook database. By default, beam will build
