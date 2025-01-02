@@ -1,6 +1,7 @@
 # Beam: a type-safe, non-TH Haskell relational database library and ORM
 
 [![Build status](https://github.com/haskell-beam/beam/workflows/Build/badge.svg)](https://github.com/haskell-beam/beam/workflows/Build/badge.svg)
+[![Build status](https://github.com/haskell-beam/beam/actions/workflows/nix-flake.yaml/badge.svg)](https://github.com/haskell-beam/beam/actions/workflows/nix-flake.yaml)
 
 If you use beam commercially, please consider a donation to make this project possible: https://liberapay.com/tathougies
 
