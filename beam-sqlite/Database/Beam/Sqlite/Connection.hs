@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -72,6 +71,7 @@ import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
+import           Data.Hashable (hash)
 import           Data.Int
 import           Data.Maybe (mapMaybe)
 import           Data.Proxy (Proxy(..))
@@ -82,20 +82,12 @@ import qualified Data.Text.Encoding as T (decodeUtf8)
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL (decodeUtf8)
 import           Data.Time ( LocalTime, UTCTime, Day
-                           , ZonedTime, utc, utcToLocalTime )
+                           , ZonedTime, utc, utcToLocalTime, getCurrentTime )
 import           Data.Typeable (cast)
 import           Data.Word
 import           GHC.TypeLits
 
 import           Network.URI
-
-#ifdef UNIX
-import           System.Posix.Process (getProcessID)
-#elif defined(WINDOWS)
-import           System.Win32.Process (getCurrentProcessId)
-#else
-#error Need either POSIX or Win32 API for MonadBeamInsertReturning
-#endif
 
 import           Text.Read (readMaybe)
 
@@ -388,34 +380,34 @@ runInsertReturningList SqlInsertNoRows = pure []
 runInsertReturningList (SqlInsert tblSettings insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $ do
-
-#ifdef UNIX
-       processId <- fromString . show <$> getProcessID
-#elif defined(WINDOWS)
-       processId <- fromString . show <$> getCurrentProcessId
-#else
-#error Need either POSIX or Win32 API for MonadBeamInsertReturning
-#endif
+       
+       -- We create a pseudo-random savepoint identification that can be referenced
+       -- throughout this operation. -- This used to be based on the process ID 
+       -- (e.g. `System.Posix.Process.getProcessID` for UNIX),
+       -- but using timestamps is more portable; see #738
+       --
+       -- Note that `hash` can return negative numbers, hence the use of `abs`.
+       savepointId <- fromString . show . abs . hash <$> getCurrentTime
 
        let tableNameTxt = T.decodeUtf8 (BL.toStrict (sqliteRenderSyntaxScript (fromSqliteTableName nm)))
 
            startSavepoint =
-             execute_ conn (Query ("SAVEPOINT insert_savepoint_" <> processId))
+             execute_ conn (Query ("SAVEPOINT insert_savepoint_" <> savepointId))
            rollbackToSavepoint =
-             execute_ conn (Query ("ROLLBACK TRANSACTION TO SAVEPOINT insert_savepoint_" <> processId))
+             execute_ conn (Query ("ROLLBACK TRANSACTION TO SAVEPOINT insert_savepoint_" <> savepointId))
            releaseSavepoint =
-             execute_ conn (Query ("RELEASE SAVEPOINT insert_savepoint_" <> processId))
+             execute_ conn (Query ("RELEASE SAVEPOINT insert_savepoint_" <> savepointId))
 
            createInsertedValuesTable =
-             execute_ conn (Query ("CREATE TEMPORARY TABLE inserted_values_" <> processId <> " AS SELECT * FROM " <> tableNameTxt <> " LIMIT 0"))
+             execute_ conn (Query ("CREATE TEMPORARY TABLE inserted_values_" <> savepointId <> " AS SELECT * FROM " <> tableNameTxt <> " LIMIT 0"))
            dropInsertedValuesTable =
-             execute_ conn (Query ("DROP TABLE inserted_values_" <> processId))
+             execute_ conn (Query ("DROP TABLE inserted_values_" <> savepointId))
 
            createInsertTrigger =
-             execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger_" <> processId <> " AFTER INSERT ON " <> tableNameTxt <> " BEGIN " <>
-                                   "INSERT INTO inserted_values_" <> processId <> " SELECT * FROM " <> tableNameTxt <> " WHERE ROWID=last_insert_rowid(); END" ))
+             execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger_" <> savepointId <> " AFTER INSERT ON " <> tableNameTxt <> " BEGIN " <>
+                                   "INSERT INTO inserted_values_" <> savepointId <> " SELECT * FROM " <> tableNameTxt <> " WHERE ROWID=last_insert_rowid(); END" ))
            dropInsertTrigger =
-             execute_ conn (Query ("DROP TRIGGER insert_trigger_" <> processId))
+             execute_ conn (Query ("DROP TRIGGER insert_trigger_" <> savepointId))
 
 
        mask $ \restore -> do
@@ -430,7 +422,7 @@ runInsertReturningList (SqlInsert tblSettings insertStmt_@(SqliteInsertSyntax nm
                               allBeamValues (\(Columnar' projField) -> quotedIdentifier (_fieldName projField)) $
                               tblSettings
 
-                fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT " <> columns <> " FROM inserted_values_" <> processId))
+                fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT " <> columns <> " FROM inserted_values_" <> savepointId))
            releaseSavepoint
            return x
 
