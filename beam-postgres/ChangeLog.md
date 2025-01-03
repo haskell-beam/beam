@@ -1,3 +1,9 @@
+# Unreleased
+
+## Bug fixes
+
+ * Fixed an issue where columns of type `Maybe (Vector a)` did not marshall correctly from the database. In particular, querying a `Nothing` would return `Just (Vector.fromList [])` instead (#692).
+
 # 0.5.4.1
 
 ## Bug fixes
