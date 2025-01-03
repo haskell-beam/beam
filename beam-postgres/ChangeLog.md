@@ -1,4 +1,4 @@
-# Unreleased
+# 0.5.4.2
 
 ## Bug fixes
 
