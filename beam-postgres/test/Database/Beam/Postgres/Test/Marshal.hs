@@ -166,28 +166,35 @@ marshalTest' cmp gen postgresConn =
     assertBool "Hedgehog test failed" passes
 
 
--- Ensure that `Maybe (Vector Text)` can be marshalled correctly (See issue 692).
+-- Ensure that both `Vector Text` and `Maybe (Vector Text)` can be 
+-- marshalled correctly (see issue 692).
 --
 -- At this time, the postgres migration backend can't create columns of arrays,
 -- and hence this test does not use `marshalTest`.
 marshalTest692 :: IO ByteString -> TestTree
 marshalTest692 postgresConn = 
-  testCase "Can marshal Maybe (Vector Text) (#692)" $ 
+  testCase "Can marshal Vector Text and Maybe (Vector Text) (#692)" $ 
   withTestPostgres ("db_marshal_maybe_vector_text_issue_692") postgresConn $ \conn -> do
-    liftIO $ execute_ conn $ "CREATE TABLE mytable (\nmyid SERIAL PRIMARY KEY, mycolumn text[]\n);"
+    liftIO $ execute_ conn $ "CREATE TABLE mytable (\nmyid SERIAL PRIMARY KEY, mycolumn text[], mynullablecolumn text[]\n);"
 
     passes <- Hedgehog.check . Hedgehog.property $ do
-      a <- Hedgehog.forAll (Gen.maybe (Vector.fromList <$> (Gen.list (Range.linear 0 10) textGen)))
+      nullable <- Hedgehog.forAll (Gen.maybe (Vector.fromList <$> (Gen.list (Range.linear 0 10) textGen)))
+      nonnull <- Hedgehog.forAll (Vector.fromList <$> (Gen.list (Range.linear 0 10) textGen))
 
-      [MkTbl692 rowId v] <-
-        liftIO . runBeamPostgres conn $
-        runInsertReturningList $ insert (_myTable myDB) $ insertExpressions [ MkTbl692 default_ (val_ a) ]
-      v === a
+      [MkTbl692 rowId v vnull] <-
+        liftIO . runBeamPostgres conn 
+          $ runInsertReturningList 
+            $ insert (_myTable myDB) 
+              $ insertExpressions [ MkTbl692 default_ (val_ nonnull) (val_ nullable) ]
 
-      Just (MkTbl692 _ v') <-
-          liftIO . runBeamPostgres conn $
-          runSelectReturningOne (lookup_ (_myTable myDB) (Tbl692Key rowId))
-      v' === a
+      v === nonnull
+      vnull === nullable
+
+      Just (MkTbl692 _ v' vnull') <-
+          liftIO . runBeamPostgres conn 
+            $ runSelectReturningOne (lookup_ (_myTable myDB) (Tbl692Key rowId))
+      v' === nonnull
+      vnull' === nullable
 
     assertBool "Hedgehog test failed" passes
   where
@@ -199,14 +206,17 @@ marshalTest692 postgresConn =
                 modifyTableFields
                   tableModification {
                     myid = fieldNamed "myid",
-                    mycolumn = fieldNamed "mycolumn"
+                    mycolumn = fieldNamed "mycolumn",
+                    mynullablecolumn = fieldNamed "mynullablecolumn"
                   }
             }
 
 data Tbl692 f
     = MkTbl692 
-    { myid     :: C f (SqlSerial Int32)
-    , mycolumn :: C f (Maybe (Vector.Vector T.Text)) }
+    { myid             :: C f (SqlSerial Int32)
+    , mycolumn         :: C f (Vector.Vector T.Text)
+    , mynullablecolumn :: C f (Maybe (Vector.Vector T.Text)) 
+    }
       deriving (Generic, Beamable)
 
 deriving instance Show (Tbl692 Identity)
