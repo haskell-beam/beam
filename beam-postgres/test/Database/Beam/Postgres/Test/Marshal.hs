@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Database.Beam.Postgres.Test.Marshal where
 
 import           Database.Beam
@@ -9,6 +10,7 @@ import           Database.Beam.Migrate.Simple (autoMigrate)
 import           Database.Beam.Postgres
 import           Database.Beam.Postgres.Migrate (migrationBackend)
 import           Database.Beam.Postgres.Test
+import           Database.PostgreSQL.Simple (execute_)
 
 import           Data.ByteString (ByteString)
 import           Data.Functor.Classes
@@ -17,6 +19,7 @@ import qualified Data.Text as T
 import           Data.Typeable
 import           Data.UUID (UUID, fromWords)
 import           Data.Word
+import qualified Data.Vector as Vector
 
 import qualified Hedgehog
 import           Hedgehog ((===))
@@ -27,6 +30,7 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 
 import           Unsafe.Coerce
+
 
 textGen :: Hedgehog.Gen T.Text
 textGen = Gen.text (Range.constant 0 1000) $ Gen.filter (/= '\NUL') Gen.unicode
@@ -86,6 +90,7 @@ tests postgresConn =
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word64))) postgresConn
     , marshalTest (Gen.maybe textGen) postgresConn
     , marshalTest (Gen.maybe uuidGen) postgresConn
+    , marshalTest692 postgresConn
 
     , marshalTest' (\a b -> Hedgehog.assert (liftEq ptCmp a b))  (Gen.maybe pointGen) postgresConn
     , marshalTest' (\a b -> Hedgehog.assert (liftEq boxCmp a b)) (Gen.maybe boxGen) postgresConn
@@ -160,3 +165,59 @@ marshalTest' cmp gen postgresConn =
 
     assertBool "Hedgehog test failed" passes
 
+
+-- Ensure that `Maybe (Vector Text)` can be marshalled correctly (See issue 692).
+--
+-- At this time, the postgres migration backend can't create columns of arrays,
+-- and hence this test does not use `marshalTest`.
+marshalTest692 :: IO ByteString -> TestTree
+marshalTest692 postgresConn = 
+  testCase "Can marshal Maybe (Vector Text) (#692)" $ 
+  withTestPostgres ("db_marshal_maybe_vector_text_issue_692") postgresConn $ \conn -> do
+    liftIO $ execute_ conn $ "CREATE TABLE mytable (\nmyid SERIAL PRIMARY KEY, mycolumn text[]\n);"
+
+    passes <- Hedgehog.check . Hedgehog.property $ do
+      a <- Hedgehog.forAll (Gen.maybe (Vector.fromList <$> (Gen.list (Range.linear 0 10) textGen)))
+
+      [MkTbl692 rowId v] <-
+        liftIO . runBeamPostgres conn $
+        runInsertReturningList $ insert (_myTable myDB) $ insertExpressions [ MkTbl692 default_ (val_ a) ]
+      v === a
+
+      Just (MkTbl692 _ v') <-
+          liftIO . runBeamPostgres conn $
+          runSelectReturningOne (lookup_ (_myTable myDB) (Tbl692Key rowId))
+      v' === a
+
+    assertBool "Hedgehog test failed" passes
+  where
+    myDB :: DatabaseSettings Postgres MyDB692
+    myDB = defaultDbSettings `withDbModification`
+            MkMyDB692 {
+              _myTable =
+                setEntityName "mytable" <>
+                modifyTableFields
+                  tableModification {
+                    myid = fieldNamed "myid",
+                    mycolumn = fieldNamed "mycolumn"
+                  }
+            }
+
+data Tbl692 f
+    = MkTbl692 
+    { myid     :: C f (SqlSerial Int32)
+    , mycolumn :: C f (Maybe (Vector.Vector T.Text)) }
+      deriving (Generic, Beamable)
+
+deriving instance Show (Tbl692 Identity)
+deriving instance Eq (Tbl692 Identity)
+
+instance Table Tbl692 where
+    data PrimaryKey Tbl692 f = Tbl692Key (C f (SqlSerial Int32))
+      deriving (Generic, Beamable)
+    primaryKey = Tbl692Key <$> myid
+data MyDB692 entity
+    = MkMyDB692
+    { _myTable :: entity (TableEntity Tbl692)
+    } deriving (Generic)
+instance Database Postgres MyDB692
