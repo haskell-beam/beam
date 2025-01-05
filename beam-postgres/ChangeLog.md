@@ -1,3 +1,9 @@
+# Unreleased
+
+## Bug fixes
+
+ * Added the ability to migrate Postgres' array types (#354).
+
 # 0.5.4.2
 
 ## Bug fixes
