@@ -51,6 +51,10 @@ boxGen = do PgPoint x1 y1 <- pointGen
             pure (PgBox (PgPoint (min x1 x2) (min y1 y2))
                         (PgPoint (max x1 x2) (max y1 y2)))
 
+arrayGen :: Hedgehog.Gen a -> Hedgehog.Gen (Vector.Vector a)
+arrayGen = fmap Vector.fromList 
+         . Gen.list (Range.linear 0 5) -- small arrays == quick tests
+
 boxCmp :: PgBox -> PgBox -> Bool
 boxCmp (PgBox a1 b1) (PgBox a2 b2) =
     (a1 `ptCmp` a2 && b1 `ptCmp` b2) ||
@@ -90,13 +94,27 @@ tests postgresConn =
     , marshalTest (Gen.maybe (Gen.integral (Range.constantBounded @Word64))) postgresConn
     , marshalTest (Gen.maybe textGen) postgresConn
     , marshalTest (Gen.maybe uuidGen) postgresConn
-    , marshalTest692 postgresConn
 
     , marshalTest' (\a b -> Hedgehog.assert (liftEq ptCmp a b))  (Gen.maybe pointGen) postgresConn
     , marshalTest' (\a b -> Hedgehog.assert (liftEq boxCmp a b)) (Gen.maybe boxGen) postgresConn
 
---    , marshalTest (Gen.double  (Range.exponentialFloat 0 1e40))  postgresConn
---    , marshalTest (Gen.integral (Range.constantBounded @Word))   postgresConn
+    -- Arrays
+    --
+    -- Testing lots of element types for arrays is important, because 
+    -- the mapping between array Oid and element Oid is not type 
+    -- safe, and hence error-prone.
+    , marshalTest (arrayGen textGen) postgresConn
+    , marshalTest (arrayGen (Gen.double (Range.exponentialFloat 0 1e40))) postgresConn
+    , marshalTest (arrayGen ((Gen.integral (Range.constantBounded @Int16)))) postgresConn
+    , marshalTest (arrayGen ((Gen.integral (Range.constantBounded @Int32)))) postgresConn
+    , marshalTest (arrayGen ((Gen.integral (Range.constantBounded @Int64)))) postgresConn
+    , marshalTest (Gen.maybe (arrayGen textGen)) postgresConn
+    , marshalTest (Gen.maybe (arrayGen (Gen.double (Range.exponentialFloat 0 1e40)))) postgresConn
+    , marshalTest (Gen.maybe (arrayGen ((Gen.integral (Range.constantBounded @Int16))))) postgresConn
+    , marshalTest (Gen.maybe (arrayGen ((Gen.integral (Range.constantBounded @Int32))))) postgresConn
+    , marshalTest (Gen.maybe (arrayGen ((Gen.integral (Range.constantBounded @Int64))))) postgresConn
+
+    , marshalTest (Gen.double  (Range.exponentialFloat 0 1e40))  postgresConn
 --    , marshalTest (Gen.integral (Range.constantBounded @Int))    postgresConn
 
 --    , marshalTest @Int8    postgresConn
@@ -164,70 +182,3 @@ marshalTest' cmp gen postgresConn =
       v' `cmp` a
 
     assertBool "Hedgehog test failed" passes
-
-
--- Ensure that both `Vector Text` and `Maybe (Vector Text)` can be 
--- marshalled correctly (see issue 692).
---
--- At this time, the postgres migration backend can't create columns of arrays,
--- and hence this test does not use `marshalTest`.
-marshalTest692 :: IO ByteString -> TestTree
-marshalTest692 postgresConn = 
-  testCase "Can marshal Vector Text and Maybe (Vector Text) (#692)" $ 
-  withTestPostgres ("db_marshal_maybe_vector_text_issue_692") postgresConn $ \conn -> do
-    liftIO $ execute_ conn $ "CREATE TABLE mytable (\nmyid SERIAL PRIMARY KEY, mycolumn text[], mynullablecolumn text[]\n);"
-
-    passes <- Hedgehog.check . Hedgehog.property $ do
-      nullable <- Hedgehog.forAll (Gen.maybe (Vector.fromList <$> (Gen.list (Range.linear 0 10) textGen)))
-      nonnull <- Hedgehog.forAll (Vector.fromList <$> (Gen.list (Range.linear 0 10) textGen))
-
-      [MkTbl692 rowId v vnull] <-
-        liftIO . runBeamPostgres conn 
-          $ runInsertReturningList 
-            $ insert (_myTable myDB) 
-              $ insertExpressions [ MkTbl692 default_ (val_ nonnull) (val_ nullable) ]
-
-      v === nonnull
-      vnull === nullable
-
-      Just (MkTbl692 _ v' vnull') <-
-          liftIO . runBeamPostgres conn 
-            $ runSelectReturningOne (lookup_ (_myTable myDB) (Tbl692Key rowId))
-      v' === nonnull
-      vnull' === nullable
-
-    assertBool "Hedgehog test failed" passes
-  where
-    myDB :: DatabaseSettings Postgres MyDB692
-    myDB = defaultDbSettings `withDbModification`
-            MkMyDB692 {
-              _myTable =
-                setEntityName "mytable" <>
-                modifyTableFields
-                  tableModification {
-                    myid = fieldNamed "myid",
-                    mycolumn = fieldNamed "mycolumn",
-                    mynullablecolumn = fieldNamed "mynullablecolumn"
-                  }
-            }
-
-data Tbl692 f
-    = MkTbl692 
-    { myid             :: C f (SqlSerial Int32)
-    , mycolumn         :: C f (Vector.Vector T.Text)
-    , mynullablecolumn :: C f (Maybe (Vector.Vector T.Text)) 
-    }
-      deriving (Generic, Beamable)
-
-deriving instance Show (Tbl692 Identity)
-deriving instance Eq (Tbl692 Identity)
-
-instance Table Tbl692 where
-    data PrimaryKey Tbl692 f = Tbl692Key (C f (SqlSerial Int32))
-      deriving (Generic, Beamable)
-    primaryKey = Tbl692Key <$> myid
-data MyDB692 entity
-    = MkMyDB692
-    { _myTable :: entity (TableEntity Tbl692)
-    } deriving (Generic)
-instance Database Postgres MyDB692

@@ -580,8 +580,8 @@ instance IsSql99DataTypeSyntax PgDataTypeSyntax where
   binaryLargeObjectType = pgByteaType { pgDataTypeSerialized = binaryLargeObjectType }
   booleanType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.bool) Nothing) (emit "BOOLEAN")
                                  booleanType
-  arrayType (PgDataTypeSyntax _ syntax serialized) sz =
-    PgDataTypeSyntax (error "TODO: array migrations")
+  arrayType (PgDataTypeSyntax descr syntax serialized) sz =
+    PgDataTypeSyntax (PgDataTypeDescrOid (fromMaybe (error "Unsupported array type") (arrayTypeDescr descr)) Nothing)
                      (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]")
                      (arrayType serialized sz)
   rowType = error "rowType"
@@ -647,11 +647,72 @@ pgLineType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.line) Nothing) (
 pgLineSegmentType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.lseg) Nothing) (emit "LSEG") (pgDataTypeJSON "lseg")
 pgBoxType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.box) Nothing) (emit "BOX") (pgDataTypeJSON "box")
 
+-- TODO: better mechanism to tell, at compile time, that some type
+-- cannot be placed in an array
 pgUnboundedArrayType :: PgDataTypeSyntax -> PgDataTypeSyntax
-pgUnboundedArrayType (PgDataTypeSyntax _ syntax serialized) =
-    PgDataTypeSyntax (error "Can't do array migrations yet")
+pgUnboundedArrayType (PgDataTypeSyntax descr syntax serialized) =
+    PgDataTypeSyntax (PgDataTypeDescrOid (fromMaybe (error "Unsupported array type") (arrayTypeDescr descr)) Nothing)
                      (syntax <> emit "[]")
                      (pgDataTypeJSON (object [ "unbounded-array" .= fromBeamSerializedDataType serialized ]))
+
+-- TODO: define CPP macro to make sure the left hand side (e.g. `Pg.recordOid`) 
+--       always matches right hand side (e.g. `Pg.array_recordOid)
+
+-- | Get the Oid of Pg arrays which contains elements of a certain type
+arrayTypeDescr :: PgDataTypeDescr -> Maybe Pg.Oid
+arrayTypeDescr (PgDataTypeDescrDomain _) = Nothing
+arrayTypeDescr (PgDataTypeDescrOid elemOid _)
+  | elemOid == Pg.recordOid    = Just $ Pg.array_recordOid
+  | elemOid == Pg.xmlOid    = Just $ Pg.array_xmlOid
+  | elemOid == Pg.jsonOid   = Just $ Pg.array_jsonOid
+  | elemOid == Pg.lineOid   = Just $ Pg.array_lineOid
+  | elemOid == Pg.cidrOid   = Just $ Pg.array_cidOid
+  | elemOid == Pg.circleOid = Just $ Pg.array_circleOid
+  | elemOid == Pg.moneyOid  = Just $ Pg.array_moneyOid
+  | elemOid == Pg.boolOid   = Just $ Pg.array_boolOid
+  | elemOid == Pg.byteaOid  = Just $ Pg.array_byteaOid
+  | elemOid == Pg.charOid   = Just $ Pg.array_charOid
+  | elemOid == Pg.nameOid   = Just $ Pg.array_nameOid
+  | elemOid == Pg.int2Oid   = Just $ Pg.array_int2Oid
+  | elemOid == Pg.int2vectorOid = Just $ Pg.array_int2vectorOid
+  | elemOid == Pg.int4Oid   = Just $ Pg.array_int4Oid
+  | elemOid == Pg.regprocOid = Just $ Pg.array_regprocOid
+  | elemOid == Pg.textOid   = Just $ Pg.array_textOid
+  | elemOid == Pg.tidOid   = Just $ Pg.array_tidOid
+  | elemOid == Pg.xidOid   = Just $ Pg.array_xidOid
+  | elemOid == Pg.cidOid   = Just $ Pg.array_cidOid
+  | elemOid == Pg.bpcharOid = Just $ Pg.array_bpcharOid
+  | elemOid == Pg.varcharOid = Just $ Pg.array_varcharOid
+  | elemOid == Pg.int8Oid = Just $ Pg.array_int8Oid
+  | elemOid == Pg.pointOid = Just $ Pg.array_pointOid
+  | elemOid == Pg.lsegOid = Just $ Pg.array_lsegOid
+  | elemOid == Pg.pathOid = Just $ Pg.array_pathOid
+  | elemOid == Pg.boxOid = Just $ Pg.array_boxOid
+  | elemOid == Pg.float4Oid = Just $ Pg.array_float4Oid
+  | elemOid == Pg.float8Oid = Just $ Pg.array_float8Oid
+  | elemOid == Pg.polygonOid = Just $ Pg.array_polygonOid
+  | elemOid == Pg.oidOid = Just $ Pg.array_oidOid
+  | elemOid == Pg.macaddrOid = Just $ Pg.array_macaddrOid
+  | elemOid == Pg.inetOid = Just $ Pg.array_inetOid
+  | elemOid == Pg.timestampOid = Just $ Pg.array_timestampOid
+  | elemOid == Pg.dateOid = Just $ Pg.array_dateOid
+  | elemOid == Pg.timeOid = Just $ Pg.array_timeOid
+  | elemOid == Pg.timestamptzOid = Just $ Pg.array_timestamptzOid
+  | elemOid == Pg.intervalOid = Just $ Pg.array_intervalOid
+  | elemOid == Pg.numericOid = Just $ Pg.array_numericOid
+  | elemOid == Pg.timetzOid = Just $ Pg.array_timetzOid
+  | elemOid == Pg.bitOid = Just $ Pg.array_bitOid
+  | elemOid == Pg.varbitOid = Just $ Pg.array_varbitOid
+  | elemOid == Pg.refcursorOid = Just $ Pg.array_refcursorOid
+  | elemOid == Pg.regprocedureOid = Just $ Pg.array_regprocedureOid
+  | elemOid == Pg.regoperOid = Just $ Pg.array_regoperOid
+  | elemOid == Pg.regoperatorOid = Just $ Pg.array_regoperatorOid
+  | elemOid == Pg.regclassOid = Just $ Pg.array_regclassOid
+  | elemOid == Pg.regtypeOid = Just $ Pg.array_regtypeOid
+  | elemOid == Pg.uuidOid = Just $ Pg.array_uuidOid
+  | elemOid == Pg.jsonbOid = Just $ Pg.array_jsonbOid
+  | otherwise = Nothing
+
 
 pgTsQueryTypeInfo :: Pg.TypeInfo
 pgTsQueryTypeInfo = Pg.Basic (Pg.Oid 3615) 'U' ',' "tsquery"
