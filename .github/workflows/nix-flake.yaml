@@ -1,0 +1,24 @@
+name: "Nix Flake"
+on:
+  pull_request:
+  push:
+jobs:
+  nix:
+    strategy:
+      fail-fast: true
+      matrix:
+        os:
+        - ubuntu-latest
+        - macos-latest
+    name: Nix on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: "Check `nix develop` shell"
+        run: nix develop --check
+      - name: "Check `nix develop` shell can run command"
+        run: nix develop --command "true"
+      - run: nix build
+      - run: nix flake check
