@@ -19,6 +19,6 @@ jobs:
       - name: "Check `nix develop` shell"
         run: nix develop --check
       - name: "Check `nix develop` shell can run command"
-        run: nix develop --command "echo"
+        run: nix develop --command "true"
       - run: nix build
       - run: nix flake check
