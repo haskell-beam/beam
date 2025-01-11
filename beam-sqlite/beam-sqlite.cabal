@@ -47,8 +47,13 @@ library
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
                       CPP, TypeApplications, FlexibleContexts, ConstraintKinds, DerivingStrategies
   ghc-options:        -Wall
+                      -Widentities
+                      -Wincomplete-uni-patterns
+                      -Wincomplete-record-updates
+  if impl(ghc >= 8.10)
+    ghc-options: -Wunused-packages
   if flag(werror)
-    ghc-options:       -Werror
+    ghc-options: -Werror
 
 test-suite beam-sqlite-tests
   type: exitcode-stdio-1.0

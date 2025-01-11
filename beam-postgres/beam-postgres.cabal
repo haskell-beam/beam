@@ -66,6 +66,11 @@ library
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
                       CPP, TypeApplications, FlexibleContexts
   ghc-options:        -Wall
+                      -Widentities
+                      -Wincomplete-uni-patterns
+                      -Wincomplete-record-updates
+  if impl(ghc >= 8.10)
+    ghc-options: -Wunused-packages
   if flag(werror)
     ghc-options: -Werror
 

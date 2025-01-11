@@ -69,7 +69,6 @@ library
                        microlens            >=0.4     && <0.5,
                        parallel             >=3.2     && <3.3,
                        deepseq              >=1.4     && <1.7,
-                       ghc-prim             >=0.5     && <0.14,
                        haskell-src-exts     >=1.18    && <1.24,
                        pretty               >=1.1     && <1.2,
                        dependent-map        >=0.2     && <0.5,
@@ -82,8 +81,13 @@ library
                        FlexibleInstances, TypeOperators, TypeApplications, MultiParamTypeClasses,
                        DataKinds, DeriveGeneric
   ghc-options:         -Wall
+                       -Widentities
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
   if flag(werror)
     ghc-options:       -Werror
+  if impl(ghc >= 8.10)
+    ghc-options: -Wunused-packages
 
 flag werror
   description: Enable -Werror during development

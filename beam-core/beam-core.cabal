@@ -84,8 +84,13 @@ library
                        DefaultSignatures, KindSignatures, MultiParamTypeClasses, DeriveGeneric, DeriveFunctor, DeriveDataTypeable,
                        TypeApplications, FunctionalDependencies, DataKinds, BangPatterns, InstanceSigs
   ghc-options:         -Wall
+                       -Widentities
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
   if impl(ghc >= 8.8)
     ghc-options: -Wcompat
+  if impl(ghc >= 8.10)
+    ghc-options: -Wunused-packages
   if flag(werror)
     ghc-options:       -Werror
   if impl(ghc >= 8.10)

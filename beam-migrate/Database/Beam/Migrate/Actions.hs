@@ -440,7 +440,7 @@ addColumnProvider =
          pure (PotentialAction mempty (HS.fromList ([SomeDatabasePredicate colP] ++ constraintsP))
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Add column " <> colNm <> " to " <> qnameAsText tblNm)
-                (addColumnWeight + fromIntegral (T.length (qnameAsText tblNm) + T.length colNm)))
+                (addColumnWeight + (T.length (qnameAsText tblNm) + T.length colNm)))
 
 -- | Action provider for SQL92 @ALTER TABLE ... DROP COLUMN ...@ actions
 dropColumnProvider :: forall be
@@ -469,7 +469,7 @@ dropColumnProvider = ActionProvider provider
          pure (PotentialAction (HS.fromList (SomeDatabasePredicate colP:relatedPreds)) mempty
                                (Seq.singleton (MigrationCommand cmd MigrationLosesData))
                                ("Drop column " <> colNm <> " from " <> qnameAsText tblNm)
-                (dropColumnWeight + fromIntegral (T.length (qnameAsText tblNm) + T.length colNm)))
+                (dropColumnWeight + (T.length (qnameAsText tblNm) + T.length colNm)))
 
 -- | Action provider for SQL92 @ALTER TABLE ... ALTER COLUMN ... SET NULL@
 addColumnNullProvider :: forall be

@@ -710,7 +710,7 @@ instance HasSqlValueSyntax SqliteValueSyntax Int16 where
 instance HasSqlValueSyntax SqliteValueSyntax Int32 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Int64 where
-  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
+  sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger i))
 instance HasSqlValueSyntax SqliteValueSyntax Word8 where
   sqlValueSyntax i = SqliteValueSyntax (emitValue (SQLInteger (fromIntegral i)))
 instance HasSqlValueSyntax SqliteValueSyntax Word16 where

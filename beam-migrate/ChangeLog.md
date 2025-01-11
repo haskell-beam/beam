@@ -1,3 +1,9 @@
+# Unreleased
+
+## Dependencies
+
+* Removed explicit dependency on `ghc-prim`, which was not used directly.
+
 # 0.5.3.1
 
 ## Bug fixes
@@ -18,7 +24,7 @@
 
 # 0.5.2.0
 
-## Addded features
+## Added features
 
  * `IN (SELECT ...)` syntax via `inSelectE`
 
