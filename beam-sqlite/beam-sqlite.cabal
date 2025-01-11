@@ -41,7 +41,15 @@ library
                       network-uri   >=2.6  && <2.7,
                       aeson         >=0.11 && <2.3,
                       attoparsec    >=0.13 && <0.15,
-                      transformers-base    >=0.4  && <0.5
+                      transformers-base    >=0.4  && <0.5,
+                      -- Dependency on direct-sqlite is not direct,
+                      -- but functionality in beam-sqlite depends on
+                      -- a minimum version of sqlite. At this time,
+                      -- we require at least sqlite-3.24.
+                      -- Note that because of this, we cannot use the 
+                      -- `Wunused-packages` warning.
+                      -- See #589
+                      direct-sqlite >=2.3.24
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
@@ -50,8 +58,6 @@ library
                       -Widentities
                       -Wincomplete-uni-patterns
                       -Wincomplete-record-updates
-  if impl(ghc >= 8.10)
-    ghc-options: -Wunused-packages
   if flag(werror)
     ghc-options: -Werror
 

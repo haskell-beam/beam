@@ -1,3 +1,9 @@
+# Unreleased
+
+## Dependencies
+
+* Ensure that beam-sqlite uses sqlite-3.24+, which is the minimum supported version (#589).
+
 # 0.5.4.0
 
 ## Added features
