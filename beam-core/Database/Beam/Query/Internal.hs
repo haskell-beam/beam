@@ -41,9 +41,14 @@ data QF be (db :: (Type -> Type) -> Type) s next where
 
   QAll :: Projectible be r
        => (TablePrefix -> T.Text -> BeamSqlBackendFromSyntax be)
+           -- ^ build the FROM syntax using the table prefix and the table name
        -> (T.Text -> r)
+          -- ^ Given a table name, get the various Qs for all the expressions in that table
        -> (r -> Maybe (WithExprContext (BeamSqlBackendExpressionSyntax be)))
-       -> ((T.Text, r) -> next) -> QF be db s next
+          -- ^ on clause, if any
+       -> ((T.Text, r) -> next)
+          -- ^ Generate the result from the table name and projectible result
+       -> QF be db s next
 
   QArbitraryJoin :: Projectible be r
                  => QM be db (QNested s) r
