@@ -1,3 +1,9 @@
+# Unreleased
+
+## Added features
+
+* Added a `Generic` instance to `SqlNull`, `SqlBitString`, and `SqlSerial` (#736).
+
 # 0.10.3.1
 
 ## Updated dependencies
