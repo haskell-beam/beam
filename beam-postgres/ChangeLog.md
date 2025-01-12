@@ -1,5 +1,9 @@
 # Unreleased
 
+## Added features
+
+ * Added `pgSelectWith`, a combinator like `selectWith` which allows to nest common table expressions in subqueries (#720).
+
 ## Bug fixes
 
  * Added the ability to migrate Postgres' array types (#354).
