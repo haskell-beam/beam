@@ -4,6 +4,7 @@ module Database.Beam.Postgres.Test.Select (tests) where
 
 import           Data.Aeson
 import           Data.ByteString (ByteString)
+import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Int
 import qualified Data.Vector as V
 import           Test.Tasty
@@ -82,7 +83,7 @@ testUuuidInValues getConn = testCase "UUID in values_ works" $
         pgCreateExtension @UuidOssp
       let ext = getPgExtension $ _uuidOssp $ unCheckDatabase db
       runSelectReturningList $ select $ do
-        v <- values_ [val_ nil]
+        v <- values_ (NonEmpty.singleton (val_ nil))
         return $ pgUuidGenerateV5 ext v ""
     assertEqual "result" [V5.generateNamed nil []] result
 
