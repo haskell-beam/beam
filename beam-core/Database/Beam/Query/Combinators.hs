@@ -80,6 +80,8 @@ import Control.Monad.Identity
 import Control.Monad.Free
 import Control.Applicative
 
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Maybe
 import Data.Proxy
 import Data.Time (LocalTime)
@@ -105,16 +107,22 @@ allFromView_ (DatabaseEntity vw) =
                     (tableFieldsToExpressions (dbViewSettings vw))
                     (\_ -> Nothing) snd)
 
--- | SQL @VALUES@ clause. Introduce the elements of the given list as
+-- | SQL @VALUES@ clause. Introduce the elements of the given non-empty list as
 -- rows in a joined table.
 values_ :: forall be db s a
          . ( Projectible be a
            , BeamSqlBackend be )
-        => [ a ] -> Q be db s a
+        => NonEmpty a
+        -> Q be db s a
 values_ rows =
-    Q $ liftF (QAll (\tblPfx -> fromTable (tableFromValues (map (\row -> project (Proxy @be) row tblPfx) rows)) . Just . (,Just fieldNames))
+    Q $ liftF (QAll (\tblPfx -> 
+                      fromTable 
+                        (tableFromValues (NonEmpty.toList (NonEmpty.map (\row -> project (Proxy @be) row tblPfx) rows))) 
+                        . Just 
+                        . (,Just fieldNames))
                     (\tblNm' -> fst $ mkFieldNames (qualifiedField tblNm'))
-                    (\_ -> Nothing) snd)
+                    (\_ -> Nothing) snd
+              )
     where
       fieldNames = snd $ mkFieldNames @be @a unqualifiedField
 
