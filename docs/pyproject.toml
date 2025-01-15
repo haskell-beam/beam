@@ -7,6 +7,6 @@ authors = []
 [tool.poetry.dependencies]
 python = "^3.8"
 mkdocs = "1.2.3" # later versions fail to build in poetry2nix derivation
-sqlparse = "^0.4.2"
+sqlparse = "^0.5.0"
 PyYAML = "^5.4.1"
 mkdocs-material = "5.0.2" # later versions cause infinite recursion in poetry2nix
