@@ -222,7 +222,7 @@ For example, to get all customers we know to be in New York, California, and Tex
 ```haskell
 !example chinook !on:Sqlite !on:MySQL
 do c <- all_ (customer chinookDb)
-   st <- values_ [ "NY", "CA", "TX" ]
+   st <- values_ ("NY" :| [ "CA", "TX" ]) -- (:|) is the constructor of NonEmpty
    guard_' (just_ st ==?. addressState (customerAddress c))
    pure c
 ```
