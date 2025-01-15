@@ -13,9 +13,6 @@ import           Database.Beam.Backend.SQL
 import           Database.Beam.Query.Internal
 import           Database.Beam.Sqlite.Connection
 import           Database.Beam.Sqlite.Syntax
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 -- | The SQLite @group_concat@ function.
 -- Joins the value in each row of the first argument, using the second

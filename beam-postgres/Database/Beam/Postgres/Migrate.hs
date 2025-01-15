@@ -72,11 +72,7 @@ import qualified Data.Text.Encoding as TE
 import           Data.Typeable
 import           Data.UUID.Types (UUID)
 import qualified Data.Vector as V
-#if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
-#else
-import           Data.Monoid (Endo(..))
-#endif
 import           Data.Word (Word64)
 
 import           GHC.Generics ( Generic )

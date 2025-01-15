@@ -48,9 +48,6 @@ import qualified Data.GADT.Compare as D
 import           Data.Text (Text, unpack)
 import           Data.Typeable (Typeable, (:~:)( Refl ), eqT, typeRep, typeOf)
 import qualified Data.Vector as V
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 -- * Serialization helpers
 

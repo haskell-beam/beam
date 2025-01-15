@@ -150,9 +150,6 @@ import qualified Data.Text as T
 import           Data.Time (LocalTime, NominalDiffTime)
 import           Data.Type.Bool
 import qualified Data.Vector as V
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.ToField as Pg

@@ -67,9 +67,6 @@ import           Data.String
 import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Typeable (cast)
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 import           Foreign.C.Types
 

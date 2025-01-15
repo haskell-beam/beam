@@ -112,9 +112,7 @@ import qualified Data.Sequence as Seq
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Typeable
-#if !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup
-#endif
 
 import           GHC.Generics
 

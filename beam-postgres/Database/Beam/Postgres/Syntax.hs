@@ -111,9 +111,6 @@ import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
 import qualified Data.Text as T

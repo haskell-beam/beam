@@ -30,9 +30,6 @@ import           Data.Maybe
 import qualified Data.Set as S
 import           Data.String
 import qualified Data.Text as T
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 import qualified Language.Haskell.Exts as Hs
 

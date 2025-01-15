@@ -13,9 +13,6 @@ import           Control.Applicative
 
 import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BCL
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 
 -- | Options for @CREATE TABLE@. Given as a separate ADT because the options may

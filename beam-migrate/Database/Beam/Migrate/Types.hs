@@ -55,9 +55,6 @@ import Control.Monad.Free.Church
 import Control.Arrow
 import Control.Category (Category)
 
-#if !MIN_VERSION_base(4, 11, 0)
-import Data.Semigroup
-#endif
 import Data.Text (Text)
 
 -- * Migration types

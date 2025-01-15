@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors#-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.Internal where
 
@@ -15,9 +14,6 @@ import qualified Data.Text as T
 import           Data.Typeable
 import           Data.Vector.Sized (Vector)
 import qualified Data.Vector.Sized as VS
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 import           Control.Monad.Free.Church
 import           Control.Monad.State

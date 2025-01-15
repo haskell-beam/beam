@@ -74,9 +74,6 @@ import           Control.Monad.Writer (runWriterT)
 import           Data.Kind (Type)
 import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
-#if !MIN_VERSION_base(4, 11, 0)
-import           Data.Semigroup
-#endif
 
 -- * @SELECT@
 
