@@ -564,7 +564,14 @@ instance ( Beamable table, BeamSqlBackend be
     in changeBeamRep (\(Columnar' (WithConstraint x :: WithConstraint (BeamSqlBackendCanSerialize be) (Maybe x))) ->
                          Columnar' (QExpr (pure (valueE (sqlValueSyntax x))))) fields
 
+-- | SQL @DEFAULT@ support.
+--
+-- Note that  `default_` has restrictions not currently represented in the Haskell type system.
+-- For example, using `default_` as the argument to a function like `coalesce_`
+-- will result in a runtime error, just like the SQL code @COALESCE (NULL, DEFAULT)@
+-- would raise a runtime error.
 default_ :: BeamSqlBackend be => QGenExpr ctxt be s a
+-- See #744 for issues with `default_`.
 default_ = QExpr (pure defaultE)
 
 -- * Window functions
