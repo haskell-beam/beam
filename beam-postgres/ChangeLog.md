@@ -7,6 +7,7 @@
 ## Bug fixes
 
  * Added the ability to migrate Postgres' array types (#354).
+ * Remove dependency on `haskell-src-exts`, which was not in use anymore.
 
 # 0.5.4.2
 
@@ -28,7 +29,7 @@
  * Added support for creating and dropping database schemas and associated tables with `createDatabaseSchema`, `dropDatabaseSchema`, and `createTableWithSchema` (#716).
 
 ## Documentation
- 
+
  * Make `runBeamPostgres` and `runBeamPostgresDebug` easier to find (#663).
 
 # 0.5.3.1

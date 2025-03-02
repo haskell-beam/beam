@@ -5,6 +5,10 @@
 * Added a `Generic` instance to `SqlNull`, `SqlBitString`, and `SqlSerial` (#736).
 * Added a note to `default_` to specify that it has more restrictions than its type may indicate (#744).
 
+## Updated dependencies
+
+* Updated the upper bound to include `containers-0.8`.
+
 # 0.10.3.1
 
 ## Updated dependencies

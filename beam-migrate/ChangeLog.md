@@ -3,6 +3,7 @@
 ## Dependencies
 
 * Removed explicit dependency on `ghc-prim`, which was not used directly.
+* Updated the upper bound to include `containers-0.8`.
 
 # 0.5.3.1
 
