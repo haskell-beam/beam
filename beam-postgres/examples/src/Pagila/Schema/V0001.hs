@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -7,6 +8,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 
 module Pagila.Schema.V0001 where
 -- TODO explicit module exports
@@ -59,6 +62,9 @@ import Data.Text (Text)
 import Data.ByteString (ByteString)
 import Data.Time.LocalTime (LocalTime)
 import Data.Scientific (Scientific)
+import Test.QuickCheck ( Arbitrary(arbitrary) )
+import Generic.Random ( genericArbitrary, uniform )
+import Test.QuickCheck.Instances ()
 
 -- Address table
 
@@ -73,9 +79,12 @@ data AddressT f
   , addressPhone      :: Columnar f Text
   , addressLastUpdate :: Columnar f LocalTime
   } deriving Generic
+
 type Address = AddressT Identity
 deriving instance Show Address
 deriving instance Eq Address
+instance Arbitrary Address where
+  arbitrary = genericArbitrary uniform
 
 instance Table AddressT where
   data PrimaryKey AddressT f = AddressId (Columnar f (SqlSerial Int32)) deriving Generic
@@ -83,6 +92,11 @@ instance Table AddressT where
 type AddressId = PrimaryKey AddressT Identity
 deriving instance Show AddressId
 deriving instance Eq AddressId
+
+instance Arbitrary (SqlSerial Int32) where
+  arbitrary = genericArbitrary uniform
+instance Arbitrary AddressId where
+  arbitrary = genericArbitrary uniform  -- should be fixed at 1
 
 -- City table
 
@@ -96,6 +110,8 @@ data CityT f
 type City = CityT Identity
 deriving instance Show City
 deriving instance Eq City
+instance Arbitrary City where
+  arbitrary = genericArbitrary uniform
 
 instance Table CityT where
   data PrimaryKey CityT f = CityId (Columnar f Int32) deriving Generic
@@ -103,6 +119,8 @@ instance Table CityT where
 type CityId = PrimaryKey CityT Identity
 deriving instance Show CityId
 deriving instance Eq CityId
+instance Arbitrary CityId where
+  arbitrary = genericArbitrary uniform  -- should be fixed at 1
 
 -- Country table
 
@@ -115,6 +133,8 @@ data CountryT f
 type Country = CountryT Identity
 deriving instance Show Country
 deriving instance Eq Country
+instance Arbitrary Country where
+  arbitrary = genericArbitrary uniform
 
 instance Table CountryT where
   data PrimaryKey CountryT f = CountryId (Columnar f Int32) deriving Generic
@@ -122,6 +142,8 @@ instance Table CountryT where
 type CountryId = PrimaryKey CountryT Identity
 deriving instance Show CountryId
 deriving instance Eq CountryId
+instance Arbitrary CountryId where
+  arbitrary = genericArbitrary uniform  -- should be fixed at 1
 
 -- Actor
 
@@ -134,6 +156,8 @@ data ActorT f
   } deriving Generic
 type Actor = ActorT Identity
 deriving instance Show Actor; deriving instance Eq Actor
+instance Arbitrary Actor where
+  arbitrary = genericArbitrary uniform
 
 instance Table ActorT where
   data PrimaryKey ActorT f = ActorId (Columnar f (SqlSerial Int32))
@@ -141,6 +165,8 @@ instance Table ActorT where
   primaryKey = ActorId . actorId
 type ActorId = PrimaryKey ActorT Identity
 deriving instance Show ActorId; deriving instance Eq ActorId
+instance Arbitrary ActorId where
+  arbitrary = genericArbitrary uniform
 
 -- Category
 
@@ -152,12 +178,16 @@ data CategoryT f
   } deriving Generic
 type Category = CategoryT Identity
 deriving instance Show Category; deriving instance Eq Category
+instance Arbitrary Category where
+  arbitrary = genericArbitrary uniform
 
 instance Table CategoryT where
   data PrimaryKey CategoryT f = CategoryId (Columnar f Int32) deriving Generic
   primaryKey = CategoryId . categoryId
 type CategoryId = PrimaryKey CategoryT Identity
 deriving instance Show CategoryId; deriving instance Eq CategoryId
+instance Arbitrary CategoryId where
+  arbitrary = genericArbitrary uniform
 
 -- Customer
 
@@ -175,6 +205,8 @@ data CustomerT f
   } deriving Generic
 type Customer = CustomerT Identity
 deriving instance Show Customer; deriving instance Eq Customer
+instance Arbitrary Customer where
+  arbitrary = genericArbitrary uniform
 
 instance Table CustomerT where
   data PrimaryKey CustomerT f = CustomerId (Columnar f (SqlSerial Int32))
@@ -182,6 +214,8 @@ instance Table CustomerT where
   primaryKey = CustomerId . customerId
 type CustomerId = PrimaryKey CustomerT Identity
 deriving instance Show CustomerId; deriving instance Eq CustomerId
+instance Arbitrary CustomerId where
+  arbitrary = genericArbitrary uniform
 
 -- Store
 
@@ -200,6 +234,8 @@ instance Table StoreT where
   primaryKey = StoreId . storeId
 type StoreId = PrimaryKey StoreT Identity
 deriving instance Show StoreId; deriving instance Eq StoreId
+instance Arbitrary StoreId where
+  arbitrary = genericArbitrary uniform
 
 -- Staff
 
@@ -219,12 +255,16 @@ data StaffT f
   } deriving Generic
 type Staff = StaffT Identity
 deriving instance Eq Staff; deriving instance Show Staff
+instance Arbitrary Staff where
+  arbitrary = genericArbitrary uniform
 
 instance Table StaffT where
   data PrimaryKey StaffT f = StaffId (Columnar f Int32) deriving Generic
   primaryKey = StaffId . staffId
 type StaffId = PrimaryKey StaffT Identity
 deriving instance Eq StaffId; deriving instance Show StaffId
+instance Arbitrary StaffId where
+  arbitrary = genericArbitrary uniform
 
 -- Film
 
@@ -246,6 +286,8 @@ data FilmT f
 type Film = FilmT Identity
 deriving instance Eq Film
 deriving instance Show Film
+instance Arbitrary Film where
+  arbitrary = genericArbitrary uniform
 
 instance Table FilmT where
   data PrimaryKey FilmT f = FilmId (Columnar f (SqlSerial Int32))
@@ -254,6 +296,8 @@ instance Table FilmT where
 type FilmId = PrimaryKey FilmT Identity
 deriving instance Eq FilmId
 deriving instance Show FilmId
+instance Arbitrary FilmId where
+  arbitrary = genericArbitrary uniform
 
 -- Film category
 
@@ -265,6 +309,8 @@ data FilmCategoryT f
   } deriving Generic
 type FilmCategory = FilmCategoryT Identity
 deriving instance Eq FilmCategory; deriving instance Show FilmCategory
+instance Arbitrary FilmCategory where
+  arbitrary = genericArbitrary uniform
 
 instance Table FilmCategoryT where
   data PrimaryKey FilmCategoryT f = FilmCategoryId (PrimaryKey CategoryT f) (PrimaryKey FilmT f)
@@ -272,6 +318,8 @@ instance Table FilmCategoryT where
   primaryKey = FilmCategoryId <$> filmCategoryCategory <*> filmCategoryFilm
 type FilmCategoryId = PrimaryKey FilmCategoryT Identity
 deriving instance Eq FilmCategoryId; deriving instance Show FilmCategoryId
+instance Arbitrary FilmCategoryId where
+  arbitrary = genericArbitrary uniform
 
 -- Language
 
@@ -283,6 +331,8 @@ data LanguageT f
   }  deriving Generic
 type Language = LanguageT Identity
 deriving instance Eq Language; deriving instance Show Language
+instance Arbitrary Language where
+  arbitrary = genericArbitrary uniform
 
 instance Table LanguageT where
   data PrimaryKey LanguageT f = LanguageId (Columnar f (SqlSerial Int32))
@@ -290,6 +340,8 @@ instance Table LanguageT where
   primaryKey = LanguageId . languageId
 type LanguageId = PrimaryKey LanguageT Identity
 deriving instance Eq LanguageId; deriving instance Show LanguageId
+instance Arbitrary LanguageId where
+  arbitrary = genericArbitrary uniform
 
 -- Pagila db
 
@@ -414,7 +466,7 @@ migration () = do
                          (field "email" (varchar (Just 50)))
                          (StoreId (field "store_id" smallint notNull))
                          (field "active" boolean (defaultTo_ (val_ True)) notNull)
-                         (field "username" (varchar (Just 16)) notNull)
+                         (field "username" (varchar (Just 64)) notNull)
                          (field "password" binaryLargeObject)
                          lastUpdateField
                          (field "picture" (maybeType bytea)))
