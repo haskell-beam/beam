@@ -13,6 +13,7 @@ import Control.Monad
 import Control.Exception
 
 import Data.IORef
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Int
 import Data.Text
