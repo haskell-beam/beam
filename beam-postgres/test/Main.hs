@@ -11,18 +11,20 @@ import qualified Database.Beam.Postgres.Test.Select as Select
 import qualified Database.Beam.Postgres.Test.Marshal as Marshal
 import qualified Database.Beam.Postgres.Test.DataTypes as DataType
 import qualified Database.Beam.Postgres.Test.Migrate as Migrate
+import qualified Database.Beam.Postgres.Test.Windowing as Windowing
 import Database.PostgreSQL.Simple ( ConnectInfo(..), defaultConnectInfo )
 import qualified Database.PostgreSQL.Simple as Postgres
 
 main :: IO ()
-main = defaultMain 
-     $ TC.withContainers setupTempPostgresDB 
-     $ \getConnStr -> 
+main = defaultMain
+     $ TC.withContainers setupTempPostgresDB
+     $ \getConnStr ->
         testGroup "beam-postgres tests"
           [ Marshal.tests getConnStr
           , Select.tests getConnStr
           , DataType.tests getConnStr
           , Migrate.tests getConnStr
+          , Windowing.tests getConnStr
           ]
 
 
@@ -39,10 +41,10 @@ setupTempPostgresDB = do
                        , ("POSTGRES_DB", db)
                        ]
         TC.& TC.setWaitingFor (TC.waitForLogLine TC.Stderr ("database system is ready to accept connections" `TL.isInfixOf`))
-    
-    pure $ Postgres.postgreSQLConnectionString 
+
+    pure $ Postgres.postgreSQLConnectionString
                    ( defaultConnectInfo { connectHost     = "localhost"
-                                        , connectUser     = unpack user 
+                                        , connectUser     = unpack user
                                         , connectPassword = unpack password
                                         , connectDatabase = unpack db
                                         , connectPort     = fromIntegral $ TC.containerPort timescaleContainer 5432
