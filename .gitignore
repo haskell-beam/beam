@@ -1,3 +1,4 @@
+\#*
 .beam-migrate
 cabal.sandbox.config
 .cabal-sandbox
@@ -8,7 +9,7 @@ dist-newstyle
 *.db
 *.db-journal
 .#*
-#*
+\#*
 graveyard
 *.o
 *.hi

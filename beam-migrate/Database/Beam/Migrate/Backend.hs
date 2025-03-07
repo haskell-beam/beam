@@ -26,7 +26,7 @@
 --
 -- For an example migrate backend, see "Database.Beam.Sqlite.Migrate"
 module Database.Beam.Migrate.Backend
-  ( BeamMigrationBackend(..)
+  ( BeamMigrationBackend(..), BeamMigrateConnection(..)
   , DdlError
 
   -- * Haskell predicate conversion
@@ -88,8 +88,15 @@ data BeamMigrationBackend be m where
     , backendFileExtension :: String
     , backendConvertToHaskell :: HaskellPredicateConverter
     , backendActionProvider :: ActionProvider be
-    , backendTransact :: forall a. String -> m a -> IO (Either DdlError a)
+    , backendRunSqlScript :: Text -> m ()
+    , backendWithTransaction :: forall a. m a -> m a
+    , backendConnect :: String -> IO (BeamMigrateConnection be m)
     } -> BeamMigrationBackend be m
+
+data BeamMigrateConnection be m where
+    BeamMigrateConnection
+        :: { backendRun :: forall a. m a -> IO (Either DdlError a)
+           , backendClose :: IO () } -> BeamMigrateConnection be m
 
 -- | Monomorphic wrapper for use with plugin loaders that cannot handle
 -- polymorphism

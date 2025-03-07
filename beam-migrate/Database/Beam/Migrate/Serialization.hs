@@ -25,7 +25,8 @@ module Database.Beam.Migrate.Serialization
        , BeamDeserializers(..)
 
        , beamDeserialize, beamDeserializeMaybe
-       , beamDeserializer, sql92Deserializers
+       , beamDeserializer, beamDeserializeJSON
+       , sql92Deserializers
        , sql99DataTypeDeserializers
        , sql2003BinaryAndVarBinaryDataTypeDeserializers
        , sql2008BigIntDataTypeDeserializers
@@ -215,6 +216,15 @@ beamSerializeJSON :: Text -> Value -> Value
 beamSerializeJSON backend v =
   object [ "be-specific" .= backend
          , "be-data" .= v ]
+
+-- | Corresponding deserializer for 'beamSerializeJSON'
+beamDeserializeJSON :: Text -> (Value -> Parser a) -> Value -> Parser a
+beamDeserializeJSON backend go =
+  withObject "backend-specific item" $ \v -> do
+    be <- v .: "be-specific"
+    guard (be == backend)
+    d <- v .: "be-data"
+    go d
 
 -- | Helper for serializing the precision and decimal count parameters to
 -- 'decimalType', etc.
