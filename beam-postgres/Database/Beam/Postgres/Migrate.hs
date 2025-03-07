@@ -55,7 +55,7 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 
 import           Control.Applicative ((<|>))
 import           Control.Arrow
-import           Control.Exception (bracket)
+import           Control.Exception.Lifted (mask, onException)
 import           Control.Monad
 
 import           Data.Aeson hiding (json)
@@ -80,30 +80,46 @@ import           GHC.Generics ( Generic )
 -- | Top-level migration backend for use by @beam-migrate@ tools
 migrationBackend :: Tool.BeamMigrationBackend Postgres Pg
 migrationBackend = Tool.BeamMigrationBackend
-                        "postgres"
-                        (unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"
-                                 , ""
-                                 , "For example, 'host=localhost port=5432 dbname=mydb connect_timeout=10' or 'dbname=mydb'"
-                                 , ""
-                                 , "Or use URIs, for which the general form is:"
-                                 , "  postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]"
-                                 , ""
-                                 , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ])
-                        (liftIOWithHandle getDbConstraints)
-                        (Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
-                         Db.sql2008BigIntDataTypeDeserializers <>
-                         postgresDataTypeDeserializers <>
-                         Db.beamCheckDeserializers)
-                        (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand) "postgres.sql"
-                        pgPredConverter (mconcat [ defaultActionProvider
-                                                 , defaultSchemaActionProvider
-                                                 , pgExtensionActionProvider
-                                                 , pgCustomEnumActionProvider
-                                                 ]
-                                        )
-                        (\options action ->
-                            bracket (Pg.connectPostgreSQL (fromString options)) Pg.close $ \conn ->
-                              left show <$> withPgDebug (\_ -> pure ()) conn action)
+                   { Tool.backendName = "postgres"
+                   , Tool.backendConnStringExplanation =
+                       unlines [ "For beam-postgres, this is a libpq connection string which can either be a list of key value pairs or a URI"
+                               , ""
+                               , "For example, 'host=localhost port=5432 dbname=mydb connect_timeout=10' or 'dbname=mydb'"
+                               , ""
+                               , "Or use URIs, for which the general form is:"
+                               , "  postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]"
+                               , ""
+                               , "See <https://www.postgresql.org/docs/9.5/static/libpq-connect.html#LIBPQ-CONNSTRING> for more information" ]
+                   , Tool.backendGetDbConstraints = liftIOWithHandle getDbConstraints
+                   , Tool.backendPredicateParsers =
+                       Db.sql92Deserializers <> Db.sql99DataTypeDeserializers <>
+                       Db.sql2008BigIntDataTypeDeserializers <>
+                       postgresDataTypeDeserializers <>
+                       Db.beamCheckDeserializers
+                   , Tool.backendRenderSyntax = (BCL.unpack . (<> ";") . pgRenderSyntaxScript . fromPgCommand)
+                   , Tool.backendFileExtension = "postgres.sql"
+                   , Tool.backendConvertToHaskell = pgPredConverter
+                   , Tool.backendActionProvider =
+                       mconcat [ defaultActionProvider
+                               , defaultSchemaActionProvider
+                               , pgExtensionActionProvider
+                               , pgCustomEnumActionProvider
+                               ]
+                   , Tool.backendRunSqlScript = \t -> liftIOWithHandle (\hdl -> void $ Pg.execute_ hdl (Pg.Query (TE.encodeUtf8 t)))
+                   , Tool.backendWithTransaction =
+                       \go -> mask $ \unmask -> do
+                                liftIOWithHandle Pg.begin
+                                x <- unmask go `onException` liftIOWithHandle Pg.rollback
+                                liftIOWithHandle Pg.commit
+                                pure x
+                   , Tool.backendConnect = \options -> do
+                        conn <- Pg.connectPostgreSQL (fromString options)
+                        pure Tool.BeamMigrateConnection
+                             { Tool.backendRun = \action ->
+                                 left show <$> withPgDebug (\_ -> pure ()) conn action
+                             , Tool.backendClose = Pg.close conn
+                             }
+                   }
 
 -- | 'BeamDeserializers' for postgres-specific types:
 --

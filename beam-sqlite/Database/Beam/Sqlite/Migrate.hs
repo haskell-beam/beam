@@ -30,7 +30,7 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Reader
 
-import           Database.SQLite.Simple (open, close, query_)
+import           Database.SQLite.Simple (open, close, query_, execute_, Query(..))
 
 import           Data.Aeson
 import           Data.Attoparsec.Text (asciiCI, skipSpace)
@@ -50,19 +50,32 @@ import qualified Data.Text.Encoding as TE
 -- | Top-level 'Tool.BeamMigrationBackend'
 migrationBackend :: Tool.BeamMigrationBackend Sqlite SqliteM
 migrationBackend = Tool.BeamMigrationBackend
-                       "sqlite"
-                       "For beam-sqlite, this is the path to a sqlite3 file"
-                       getDbConstraints
-                       (Db.sql92Deserializers <> sqliteDataTypeDeserializers <>
-                        Db.beamCheckDeserializers)
-                       (BL.unpack . (<> ";") . sqliteRenderSyntaxScript . fromSqliteCommand)
-                       "sqlite.sql"
-                       sqlitePredConverter Db.defaultActionProvider
-                       (\fp action ->
-                            bracket (open fp) close $ \conn ->
-                              catch (Right <$> runReaderT (runSqliteM action)
-                                                          (\_ -> pure (), conn))
-                                    (\e -> pure (Left (show (e :: SomeException)))))
+                   { Tool.backendName = "sqlite"
+                   , Tool.backendConnStringExplanation = "For beam-sqlite, this is the path to a sqlite3 file"
+                   , Tool.backendGetDbConstraints = getDbConstraints
+                   , Tool.backendPredicateParsers = Db.sql92Deserializers <> sqliteDataTypeDeserializers <>
+                                                    Db.beamCheckDeserializers
+                   , Tool.backendRenderSyntax = (BL.unpack . (<> ";") . sqliteRenderSyntaxScript . fromSqliteCommand)
+                   , Tool.backendFileExtension = "sqlite.sql"
+                   , Tool.backendConvertToHaskell = sqlitePredConverter
+                   , Tool.backendActionProvider = Db.defaultActionProvider
+                   , Tool.backendRunSqlScript = runSqlScript
+                   , Tool.backendWithTransaction =
+                       \(SqliteM go) ->
+                         SqliteM . ReaderT $ \ctx@(pt, conn) ->
+                           mask $ \unmask -> do
+                             let ex q = pt (show q) >> execute_ conn q
+                             ex "BEGIN TRANSACTION"
+                             unmask (runReaderT go ctx <* ex "COMMIT TRANSACTION") `catch`
+                               \(SomeException e) -> ex "ROLLBACK TRANSACTION" >> throwIO e
+                     , Tool.backendConnect = \fp -> do
+                       conn <- open fp
+                       pure Tool.BeamMigrateConnection
+                            { Tool.backendRun = \action ->
+                                catch (Right <$> runReaderT (runSqliteM action)
+                                                            (\_ -> pure (), conn))
+                                      (\e -> pure (Left (show (e :: SomeException))))
+                            , Tool.backendClose = close conn } }
 
 -- | 'Db.BeamDeserializers' or SQLite specific types. Specifically,
 -- 'sqliteBlob', 'sqliteText', and 'sqliteBigInt'. These are compatible with the
@@ -78,8 +91,13 @@ sqliteDataTypeDeserializers =
     "bigint" -> pure sqliteBigIntType
     Object o ->
        (fmap (\(_ :: Maybe Word) -> sqliteBlobType) (o .: "binary")) <|>
-       (fmap (\(_ :: Maybe Word) -> sqliteBlobType) (o .: "varbinary"))
+       (fmap (\(_ :: Maybe Word) -> sqliteBlobType) (o .: "varbinary")) <|>
+       Db.beamDeserializeJSON "sqlite" customDtParser v
     _ -> fail "Could not parse sqlite-specific data type"
+  where
+    customDtParser = withObject "custom data type" $ \v -> do
+                       txt <- v .: "custom"
+                       pure (parseSqliteDataType txt)
 
 -- | Render a series of 'Db.MigrationSteps' in the 'SqliteCommandSyntax' into a
 -- line-by-line list of lazy 'BL'ByteString's. The output is suitable for
@@ -121,15 +139,19 @@ sqliteTypeToHs :: SqliteDataTypeSyntax
                -> Maybe HsDataType
 sqliteTypeToHs = Just . sqliteDataTypeToHs
 
+customSqliteDataType :: T.Text -> SqliteDataTypeSyntax
+customSqliteDataType txt =
+    SqliteDataTypeSyntax (emit (TE.encodeUtf8 txt))
+                         (hsErrorType ("Unknown SQLite datatype '" ++ T.unpack txt ++ "'"))
+                         (Db.BeamSerializedDataType $
+                            Db.beamSerializeJSON "sqlite"
+                                  (object [ "custom" .= txt ]))
+                         False
+
 parseSqliteDataType :: T.Text -> SqliteDataTypeSyntax
 parseSqliteDataType txt =
   case A.parseOnly dtParser txt of
-    Left {} -> SqliteDataTypeSyntax (emit (TE.encodeUtf8 txt))
-                                    (hsErrorType ("Unknown SQLite datatype '" ++ T.unpack txt ++ "'"))
-                                    (Db.BeamSerializedDataType $
-                                     Db.beamSerializeJSON "sqlite"
-                                       (toJSON txt))
-                                    False
+    Left {} -> customSqliteDataType txt
     Right x -> x
   where
     dtParser = charP <|> varcharP <|>
@@ -225,6 +247,11 @@ parseSqliteDataType txt =
                          asciiCI "CHARACTER" *> ws *>
                          asciiCI "SET" *> ws *>
                          A.takeWhile (not . isSpace))
+
+runSqlScript :: T.Text -> SqliteM ()
+runSqlScript t =
+    SqliteM . ReaderT $ \(_, conn) ->
+      execute_ conn (Query t)
 
 -- TODO constraints and foreign keys
 
