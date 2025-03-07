@@ -55,7 +55,7 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 
 import           Control.Applicative ((<|>))
 import           Control.Arrow
-import           Control.Exception (bracket)
+import           Control.Exception.Lifted (mask, onException)
 import           Control.Monad
 
 import           Data.Aeson hiding (json)
@@ -106,9 +106,12 @@ migrationBackend = Tool.BeamMigrationBackend
                                , pgCustomEnumActionProvider
                                ]
                    , Tool.backendRunSqlScript = \t -> liftIOWithHandle (\hdl -> void $ Pg.execute_ hdl (Pg.Query (TE.encodeUtf8 t)))
-                   , Tool.backendStartTransaction  = liftIOWithHandle (void . Pg.begin)
-                   , Tool.backendCommitTransaction = liftIOWithHandle (void . Pg.commit)
-                   , Tool.backendAbortTransaction  = liftIOWithHandle (void . Pg.rollback)
+                   , Tool.backendWithTransaction =
+                       \go -> mask $ \unmask -> do
+                                liftIOWithHandle Pg.begin
+                                x <- unmask go `onException` liftIOWithHandle Pg.rollback
+                                liftIOWithHandle Pg.commit
+                                pure x
                    , Tool.backendConnect = \options -> do
                         conn <- Pg.connectPostgreSQL (fromString options)
                         pure Tool.BeamMigrateConnection
