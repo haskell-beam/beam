@@ -3,7 +3,7 @@
 
 -- | Migrations support for SQLite databases
 module Database.Beam.Sqlite.Migrate
-  ( migrationBackend, SqliteCommandSyntax
+  ( migrationBackend, mkCustomMigrationBackend, SqliteCommandSyntax
 
     -- * @beam-migrate@ utility functions
   , migrateScript, writeMigrationScript
@@ -49,33 +49,37 @@ import qualified Data.Text.Encoding as TE
 
 -- | Top-level 'Tool.BeamMigrationBackend'
 migrationBackend :: Tool.BeamMigrationBackend Sqlite SqliteM
-migrationBackend = Tool.BeamMigrationBackend
-                   { Tool.backendName = "sqlite"
-                   , Tool.backendConnStringExplanation = "For beam-sqlite, this is the path to a sqlite3 file"
-                   , Tool.backendGetDbConstraints = getDbConstraints
-                   , Tool.backendPredicateParsers = Db.sql92Deserializers <> sqliteDataTypeDeserializers <>
-                                                    Db.beamCheckDeserializers
-                   , Tool.backendRenderSyntax = (BL.unpack . (<> ";") . sqliteRenderSyntaxScript . fromSqliteCommand)
-                   , Tool.backendFileExtension = "sqlite.sql"
-                   , Tool.backendConvertToHaskell = sqlitePredConverter
-                   , Tool.backendActionProvider = Db.defaultActionProvider
-                   , Tool.backendRunSqlScript = runSqlScript
-                   , Tool.backendWithTransaction =
-                       \(SqliteM go) ->
-                         SqliteM . ReaderT $ \ctx@(pt, conn) ->
-                           mask $ \unmask -> do
-                             let ex q = pt (show q) >> execute_ conn q
-                             ex "BEGIN TRANSACTION"
-                             unmask (runReaderT go ctx <* ex "COMMIT TRANSACTION") `catch`
-                               \(SomeException e) -> ex "ROLLBACK TRANSACTION" >> throwIO e
-                     , Tool.backendConnect = \fp -> do
-                       conn <- open fp
-                       pure Tool.BeamMigrateConnection
-                            { Tool.backendRun = \action ->
-                                catch (Right <$> runReaderT (runSqliteM action)
-                                                            (\_ -> pure (), conn))
-                                      (\e -> pure (Left (show (e :: SomeException))))
-                            , Tool.backendClose = close conn } }
+migrationBackend = mkCustomMigrationBackend empty
+
+mkCustomMigrationBackend :: A.Parser SqliteDataTypeSyntax -> Tool.BeamMigrationBackend Sqlite SqliteM
+mkCustomMigrationBackend extraParser =
+    Tool.BeamMigrationBackend
+    { Tool.backendName = "sqlite"
+    , Tool.backendConnStringExplanation = "For beam-sqlite, this is the path to a sqlite3 file"
+    , Tool.backendGetDbConstraints = getDbConstraints extraParser
+    , Tool.backendPredicateParsers = Db.sql92Deserializers <> sqliteDataTypeDeserializers <>
+                                     Db.beamCheckDeserializers
+    , Tool.backendRenderSyntax = (BL.unpack . (<> ";") . sqliteRenderSyntaxScript . fromSqliteCommand)
+    , Tool.backendFileExtension = "sqlite.sql"
+    , Tool.backendConvertToHaskell = sqlitePredConverter
+    , Tool.backendActionProvider = Db.defaultActionProvider
+    , Tool.backendRunSqlScript = runSqlScript
+    , Tool.backendWithTransaction =
+        \(SqliteM go) ->
+          SqliteM . ReaderT $ \ctx@(pt, conn) ->
+            mask $ \unmask -> do
+              let ex q = pt (show q) >> execute_ conn q
+              ex "BEGIN TRANSACTION"
+              unmask (runReaderT go ctx <* ex "COMMIT TRANSACTION") `catch`
+                \(SomeException e) -> ex "ROLLBACK TRANSACTION" >> throwIO e
+      , Tool.backendConnect = \fp -> do
+        conn <- open fp
+        pure Tool.BeamMigrateConnection
+             { Tool.backendRun = \action ->
+                 catch (Right <$> runReaderT (runSqliteM action)
+                                             (\_ -> pure (), conn))
+                       (\e -> pure (Left (show (e :: SomeException))))
+             , Tool.backendClose = close conn } }
 
 -- | 'Db.BeamDeserializers' or SQLite specific types. Specifically,
 -- 'sqliteBlob', 'sqliteText', and 'sqliteBigInt'. These are compatible with the
@@ -97,7 +101,7 @@ sqliteDataTypeDeserializers =
   where
     customDtParser = withObject "custom data type" $ \v -> do
                        txt <- v .: "custom"
-                       pure (parseSqliteDataType txt)
+                       pure (parseSqliteDataType empty txt)
 
 -- | Render a series of 'Db.MigrationSteps' in the 'SqliteCommandSyntax' into a
 -- line-by-line list of lazy 'BL'ByteString's. The output is suitable for
@@ -141,15 +145,15 @@ sqliteTypeToHs = Just . sqliteDataTypeToHs
 
 customSqliteDataType :: T.Text -> SqliteDataTypeSyntax
 customSqliteDataType txt =
-    SqliteDataTypeSyntax (emit (TE.encodeUtf8 txt))
+    SqliteDataTypeSyntax (emit (TE.encodeUtf8 txt) <> emit "{- custom -}")
                          (hsErrorType ("Unknown SQLite datatype '" ++ T.unpack txt ++ "'"))
                          (Db.BeamSerializedDataType $
                             Db.beamSerializeJSON "sqlite"
                                   (object [ "custom" .= txt ]))
                          False
 
-parseSqliteDataType :: T.Text -> SqliteDataTypeSyntax
-parseSqliteDataType txt =
+parseSqliteDataType :: A.Parser SqliteDataTypeSyntax -> T.Text -> SqliteDataTypeSyntax
+parseSqliteDataType extraParser txt =
   case A.parseOnly dtParser txt of
     Left {} -> customSqliteDataType txt
     Right x -> x
@@ -161,7 +165,7 @@ parseSqliteDataType txt =
                smallIntP <|> bigIntP <|> floatP <|>
                doubleP <|> realP <|> dateP <|>
                timestampP <|> timeP <|> textP <|>
-               blobP <|> booleanP
+               blobP <|> booleanP <|> extraParser
 
     ws = A.many1 A.space
 
@@ -263,8 +267,8 @@ runSqlScript t =
 -- correctly parse any type generated by beam and most SQL compliant types, but
 -- it may falter on databases created or managed by tools that do not follow
 -- these standards.
-getDbConstraints :: SqliteM [Db.SomeDatabasePredicate]
-getDbConstraints =
+getDbConstraints :: A.Parser SqliteDataTypeSyntax -> SqliteM [Db.SomeDatabasePredicate]
+getDbConstraints extraParser =
   SqliteM . ReaderT $ \(_, conn) -> do
     tblNames <- query_ conn "SELECT name, sql from sqlite_master where type='table'"
     tblPreds <-
@@ -276,7 +280,7 @@ getDbConstraints =
         let columnPreds =
               foldMap
                 (\(_ ::Int, nm, typStr, notNull, _, _) ->
-                     let dtType = if isAutoincrement then sqliteSerialType else parseSqliteDataType typStr
+                     let dtType = if isAutoincrement then sqliteSerialType else parseSqliteDataType extraParser typStr
                          isAutoincrement = isJust (A.maybeResult (A.parse autoincrementParser sql))
 
                          autoincrementParser = do
