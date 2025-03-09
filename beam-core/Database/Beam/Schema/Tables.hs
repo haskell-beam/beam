@@ -311,7 +311,7 @@ class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) 
   type DatabaseEntityRegularRequirements be entityType :: Constraint
 
   dbEntityName :: Lens' (DatabaseEntityDescriptor be entityType) Text
-  dbEntitySchema :: Lens' (DatabaseEntityDescriptor be entityType) (Maybe Text)
+  dbEntitySchema :: Traversal' (DatabaseEntityDescriptor be entityType) (Maybe Text)
 
   dbEntityAuto :: DatabaseEntityDefaultRequirements be entityType =>
                   Text -> DatabaseEntityDescriptor be entityType
@@ -387,7 +387,7 @@ instance IsDatabaseEntity be (DomainTypeEntity ty) where
   type DatabaseEntityRegularRequirements be (DomainTypeEntity ty) = ()
 
   dbEntityName f (DatabaseDomainType s t) = DatabaseDomainType s <$> f t
-  dbEntitySchema f (DatabaseDomainType s t) = (\s' -> DatabaseDomainType s' t) <$> f s
+  dbEntitySchema f (DatabaseDomainType s t) = DatabaseDomainType <$> f s <*> pure t
   dbEntityAuto = DatabaseDomainType Nothing
 
 -- | Represents a meta-description of a particular entityType. Mostly, a wrapper
@@ -404,7 +404,7 @@ dbEntityDescriptor f (DatabaseEntity d) = DatabaseEntity <$> f d
 dbName :: IsDatabaseEntity be entityType => Lens' (DatabaseEntity be db entityType) Text
 dbName = dbEntityDescriptor . dbEntityName
 
-dbSchema :: IsDatabaseEntity be entityType => Lens' (DatabaseEntity be db entityType) (Maybe Text)
+dbSchema :: IsDatabaseEntity be entityType => Traversal' (DatabaseEntity be db entityType) (Maybe Text)
 dbSchema = dbEntityDescriptor . dbEntitySchema
 
 dbTableFields :: Lens' (DatabaseEntity be db (TableEntity table)) (TableSettings table)
