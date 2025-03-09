@@ -30,7 +30,8 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Reader
 
-import           Database.SQLite.Simple (open, close, query_, execute_, Query(..))
+import           Database.SQLite.Simple (open, close, query_, execute_, connectionHandle)
+import           Database.SQLite3 (exec)
 
 import           Data.Aeson
 import           Data.Attoparsec.Text (asciiCI, skipSpace)
@@ -251,7 +252,8 @@ parseSqliteDataType txt =
 runSqlScript :: T.Text -> SqliteM ()
 runSqlScript t =
     SqliteM . ReaderT $ \(_, conn) ->
-      execute_ conn (Query t)
+        let hdl = connectionHandle conn
+        in exec hdl t
 
 -- TODO constraints and foreign keys
 
