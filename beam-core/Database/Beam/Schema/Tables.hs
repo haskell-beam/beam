@@ -19,6 +19,7 @@ module Database.Beam.Schema.Tables
     , DatabaseEntityDescriptor(..)
     , DatabaseEntity(..), TableEntity, ViewEntity, DomainTypeEntity
     , dbEntityDescriptor
+    , dbName, dbSchema, dbTableFields
     , DatabaseModification, EntityModification(..)
     , FieldModification(..)
     , dbModification, tableModification, withDbModification
@@ -96,7 +97,6 @@ import           GHC.TypeLits
 import           GHC.Types
 
 import           Lens.Micro hiding (to)
-import qualified Lens.Micro as Lens
 
 -- | Allows introspection into database types.
 --
@@ -311,7 +311,7 @@ class RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor be entityType)) 
   type DatabaseEntityRegularRequirements be entityType :: Constraint
 
   dbEntityName :: Lens' (DatabaseEntityDescriptor be entityType) Text
-  dbEntitySchema :: Traversal' (DatabaseEntityDescriptor be entityType) (Maybe Text)
+  dbEntitySchema :: Lens' (DatabaseEntityDescriptor be entityType) (Maybe Text)
 
   dbEntityAuto :: DatabaseEntityDefaultRequirements be entityType =>
                   Text -> DatabaseEntityDescriptor be entityType
@@ -387,7 +387,7 @@ instance IsDatabaseEntity be (DomainTypeEntity ty) where
   type DatabaseEntityRegularRequirements be (DomainTypeEntity ty) = ()
 
   dbEntityName f (DatabaseDomainType s t) = DatabaseDomainType s <$> f t
-  dbEntitySchema f (DatabaseDomainType s t) = DatabaseDomainType <$> f s <*> pure t
+  dbEntitySchema f (DatabaseDomainType s t) = (\s' -> DatabaseDomainType s' t) <$> f s
   dbEntityAuto = DatabaseDomainType Nothing
 
 -- | Represents a meta-description of a particular entityType. Mostly, a wrapper
@@ -398,8 +398,21 @@ data DatabaseEntity be (db :: (Type -> Type) -> Type) entityType  where
       IsDatabaseEntity be entityType =>
       DatabaseEntityDescriptor be entityType ->  DatabaseEntity be db entityType
 
-dbEntityDescriptor :: SimpleGetter (DatabaseEntity be db entityType) (DatabaseEntityDescriptor be entityType)
-dbEntityDescriptor = Lens.to (\(DatabaseEntity e) -> e)
+dbEntityDescriptor :: Lens' (DatabaseEntity be db entityType) (DatabaseEntityDescriptor be entityType)
+dbEntityDescriptor f (DatabaseEntity d) = DatabaseEntity <$> f d
+
+dbName :: IsDatabaseEntity be entityType => Lens' (DatabaseEntity be db entityType) Text
+dbName = dbEntityDescriptor . dbEntityName
+
+dbSchema :: IsDatabaseEntity be entityType => Lens' (DatabaseEntity be db entityType) (Maybe Text)
+dbSchema = dbEntityDescriptor . dbEntitySchema
+
+dbTableFields :: Lens' (DatabaseEntity be db (TableEntity table)) (TableSettings table)
+dbTableFields = dbEntityDescriptor . (\f DatabaseTable { dbTableSchema = sch
+                                                       , dbTableOrigName = nm
+                                                       , dbTableCurrentName = curNm
+                                                       , dbTableSettings = s } ->
+                                      DatabaseTable sch nm curNm <$> f s)
 
 -- | When parameterized by this entity tag, a database type will hold
 --   meta-information on the Haskell mappings of database entities. Under the

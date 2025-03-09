@@ -63,6 +63,11 @@ data CheckedDatabaseEntity be (db :: (Type -> Type) -> Type) entityType where
                         -> [ SomeDatabasePredicate ]
                         -> CheckedDatabaseEntity be db entityType
 
+checkedDbDescriptor :: Lens' (CheckedDatabaseEntity be db entityType)
+                             (CheckedDatabaseEntityDescriptor be entityType)
+checkedDbDescriptor fn (CheckedDatabaseEntity f ps) =
+    (\f' -> CheckedDatabaseEntity f' ps) <$> fn f
+
 -- | The type of a checked database descriptor. Conceptually, this is just a
 -- 'DatabaseSettings' with a set of predicates. Use 'unCheckDatabase' to get the
 -- regular 'DatabaseSettings' object and 'collectChecks' to access the
@@ -77,6 +82,10 @@ renameCheckedEntity renamer =
 -- return value is suitable for use in any regular beam query or DML statement.
 unCheckDatabase :: forall be db. Database be db => CheckedDatabaseSettings be db -> DatabaseSettings be db
 unCheckDatabase db = runIdentity $ zipTables (Proxy @be) (\(CheckedDatabaseEntity x _) _ -> pure $ DatabaseEntity (unCheck x)) db db
+
+unCheckedDbLens :: forall be db. Database be db => Lens' (CheckedDatabaseSettings be db) (DatabaseSettings be db)
+unCheckedDbLens f db =
+    (\db' -> runIdentity (zipTables (Proxy @be) (\(CheckedDatabaseEntity d cks) d' -> pure (CheckedDatabaseEntity (d & unChecked .~ (d' ^. dbEntityDescriptor)) cks)) db db')) <$> f (unCheckDatabase db)
 
 -- | A @beam-migrate@ database schema is defined completely by the set of
 -- predicates that apply to it. This function allows you to access this
