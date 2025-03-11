@@ -765,21 +765,21 @@ instance BeamSqlBackend be =>
     just_ (QExpr e) = QExpr e
     nothing_ = QExpr (pure (valueE (sqlValueSyntax SqlNull)))
 
-instance {-# OVERLAPPING #-} ( Table t, BeamSqlBackend be ) =>
-    SqlJustable (PrimaryKey t (QExpr be s)) (PrimaryKey t (Nullable (QExpr be s))) where
-    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
-    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' nothing_) (primaryKey (tblSkeleton :: TableSkeleton t))
+--instance {-# OVERLAPPING #-} ( Beamable t, BeamSqlBackend be ) =>
+--    SqlJustable (PrimaryKey t (QExpr be s)) (PrimaryKey t (Nullable (QExpr be s))) where
+--    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
+--    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' nothing_) (primaryKey (tblSkeleton :: TableSkeleton t))
 
-instance {-# OVERLAPPING #-} ( Table t, BeamSqlBackend be ) =>
+instance {-# OVERLAPPING #-} ( Beamable t, BeamSqlBackend be ) =>
     SqlJustable (t (QExpr be s)) (t (Nullable (QExpr be s))) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (just_ q))
     nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' nothing_) (tblSkeleton :: TableSkeleton t)
 
-instance {-# OVERLAPPING #-} Table t => SqlJustable (PrimaryKey t Identity) (PrimaryKey t (Nullable Identity)) where
-    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (Just q))
-    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' Nothing) (primaryKey (tblSkeleton :: TableSkeleton t))
+--instance {-# OVERLAPPING #-} Beamable t => SqlJustable (PrimaryKey t Identity) (PrimaryKey t (Nullable Identity)) where
+--    just_ = changeBeamRep (\(Columnar' q) -> Columnar' (Just q))
+--    nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' Nothing) (primaryKey (tblSkeleton :: TableSkeleton t))
 
-instance {-# OVERLAPPING #-} Table t => SqlJustable (t Identity) (t (Nullable Identity)) where
+instance {-# OVERLAPPING #-} Beamable t => SqlJustable (t Identity) (t (Nullable Identity)) where
     just_ = changeBeamRep (\(Columnar' q) -> Columnar' (Just q))
     nothing_ = changeBeamRep (\(Columnar' _) -> Columnar' Nothing) (tblSkeleton :: TableSkeleton t)
 
