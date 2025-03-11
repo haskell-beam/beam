@@ -34,6 +34,7 @@ module Database.Beam.Migrate.Backend
   , sql92HsPredicateConverters
   , hasColumnConverter
   , trivialHsConverter, hsPredicateConverter
+  , withExtraPredicateParsers
 
   -- * For tooling authors
   , SomeBeamMigrationBackend(..), SomeCheckedDatabaseSettings(..) )
@@ -92,6 +93,9 @@ data BeamMigrationBackend be m where
     , backendWithTransaction :: forall a. m a -> m a
     , backendConnect :: String -> IO (BeamMigrateConnection be m)
     } -> BeamMigrationBackend be m
+
+withExtraPredicateParsers :: BeamMigrationBackend be m -> BeamDeserializers be -> BeamMigrationBackend be m
+withExtraPredicateParsers be ds = be { backendPredicateParsers = backendPredicateParsers be <> ds }
 
 data BeamMigrateConnection be m where
     BeamMigrateConnection
