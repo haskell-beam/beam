@@ -145,7 +145,7 @@ sqliteTypeToHs = Just . sqliteDataTypeToHs
 
 customSqliteDataType :: T.Text -> SqliteDataTypeSyntax
 customSqliteDataType txt =
-    SqliteDataTypeSyntax (emit (TE.encodeUtf8 txt) <> emit "{- custom -}")
+    SqliteDataTypeSyntax (emit (TE.encodeUtf8 txt) <> emit "/* unknown sqlite type */")
                          (hsErrorType ("Unknown SQLite datatype '" ++ T.unpack txt ++ "'"))
                          (Db.BeamSerializedDataType $
                             Db.beamSerializeJSON "sqlite"
