@@ -397,7 +397,7 @@ instance IsSql92TableSourceSyntax SqlSyntaxBuilder where
 
   tableNamed = id
   tableFromSubSelect query = SqlSyntaxBuilder (byteString "(" <> buildSql query <> byteString ")")
-  tableFromValues vss =
+  tableFromValues _ vss =
       SqlSyntaxBuilder $
       byteString "VALUES " <>
       buildSepBy (byteString ", ")

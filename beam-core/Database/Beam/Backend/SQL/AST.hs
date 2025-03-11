@@ -479,7 +479,7 @@ instance IsSql92TableNameSyntax TableName where
 data TableSource
   = TableNamed TableName
   | TableFromSubSelect Select
-  | TableFromValues [ [ Expression ] ]
+  | TableFromValues Int [ [ Expression ] ]
   deriving (Show, Eq)
 
 instance IsSql92TableSourceSyntax TableSource where

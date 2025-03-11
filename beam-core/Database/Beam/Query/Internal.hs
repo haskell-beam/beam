@@ -663,6 +663,20 @@ mkFieldNames mkField =
       tell [ fieldName' ]
       pure (\_ -> BeamSqlBackendExpressionSyntax' (fieldE (mkField fieldName')))
 
+mkDefaultFieldNames :: forall be res
+                     . ( BeamSqlBackend be, Projectible be res )
+                    => (T.Text -> BeamSqlBackendFieldNameSyntax be) -> (res, [T.Text])
+mkDefaultFieldNames mkField =
+    runWriter . flip evalStateT (beamSqlBackendDefaultColumnNames @be) . flip evalStateT 0 $
+    mkFieldsSkeleton @be @res $ \_ -> do
+      cols <- lift get
+      (x, xs) <- case cols of
+                   [] -> error "Not enough default column names"
+                   x:xs -> pure (x, xs)
+      tell [x]
+      lift (put xs)
+      pure (\_ -> BeamSqlBackendExpressionSyntax' (fieldE (mkField x)))
+
 tableNameFromEntity :: IsSql92TableNameSyntax name
                     => DatabaseEntityDescriptor be (TableEntity tbl)
                     -> name

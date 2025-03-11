@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Database.Beam.Backend.SQL
@@ -7,9 +8,11 @@ module Database.Beam.Backend.SQL
 
   , MonadBeam(..)
 
-  , BeamSqlBackend
+  , BeamSqlBackend(..)
   , BeamSqlBackendSyntax
   , MockSqlBackend
+
+  , beamSqlDefaultColumnNames
 
   , BeamSqlBackendIsString
 
@@ -80,6 +83,7 @@ import qualified Control.Monad.State.Strict as Strict
 import qualified Control.Monad.Writer.Strict as Strict
 
 import           Data.Kind (Type)
+import           Data.String (fromString)
 import           Data.Tagged (Tagged)
 import           Data.Text (Text)
 
@@ -230,7 +234,17 @@ class ( -- Every SQL backend must be a beam backend
 
         -- Needed for the Eq instance on QGenExpr
       , Eq (BeamSqlBackendExpressionSyntax be)
-      ) => BeamSqlBackend be
+
+      , KnownBool (BeamSqlBackendSupportsColumnAliases be)
+      ) => BeamSqlBackend be where
+  type BeamSqlBackendSupportsColumnAliases be :: Bool
+
+  beamSqlBackendDefaultColumnNames :: [Text]
+  beamSqlBackendDefaultColumnNames = beamSqlDefaultColumnNames
+
+-- | Infinite list of column names that we use for projections, by default
+beamSqlDefaultColumnNames :: [Text]
+beamSqlDefaultColumnNames = map (\n -> "res" <> fromString (show n)) [0..]
 
 type family BeamSqlBackendSyntax be :: Type
 
@@ -252,7 +266,8 @@ instance ( IsSql92Syntax syntax
 
            -- Needed for the Eq instance on QGenExpr
          , Eq (Sql92ExpressionSyntax syntax)
-         ) => BeamSqlBackend (MockSqlBackend syntax)
+         ) => BeamSqlBackend (MockSqlBackend syntax) where
+    type BeamSqlBackendSupportsColumnAliases (MockSqlBackend syntax) = True
 type instance BeamSqlBackendSyntax (MockSqlBackend syntax) = syntax
 
 -- | Type class for things which are text-like in this backend
