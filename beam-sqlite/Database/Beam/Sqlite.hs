@@ -8,6 +8,8 @@ module Database.Beam.Sqlite
   , SqliteSelectSyntax, SqliteInsertSyntax
   , SqliteUpdateSyntax, SqliteDeleteSyntax
 
+  , SqliteDataTypeSyntax(..), mkSqliteDataType
+
   , fromSqliteCommand, sqliteRenderSyntaxScript
 
   ,  module Database.Beam.Sqlite.SqliteSpecific

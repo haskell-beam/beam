@@ -33,6 +33,7 @@ module Database.Beam.Sqlite.Syntax
   , SqliteDataTypeSyntax(..)
   , sqliteTextType, sqliteBlobType
   , sqliteBigIntType, sqliteSerialType
+  , mkSqliteDataType
 
     -- * Building and consuming 'SqliteSyntax'
   , fromSqliteCommand, formatSqliteInsert, formatSqliteInsertOnConflict
@@ -51,8 +52,10 @@ import           Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck(..))
 import           Database.Beam.Migrate.SQL.Builder hiding (fromSqlConstraintAttributes)
 import           Database.Beam.Migrate.SQL.SQL92
 import           Database.Beam.Migrate.Serialization
+import qualified Database.Beam.Migrate.Serialization as Db
 import           Database.Beam.Query hiding (ExtractField(..))
 
+import           Data.Aeson (object, (.=))
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import           Data.ByteString.Builder
@@ -557,6 +560,12 @@ instance IsSql99DataTypeSyntax SqliteDataTypeSyntax where
 
 instance IsSql2008BigIntDataTypeSyntax SqliteDataTypeSyntax where
   bigIntType = sqliteBigIntType
+
+mkSqliteDataType :: String -> SqliteDataTypeSyntax
+mkSqliteDataType s = SqliteDataTypeSyntax (emit (fromString s)) (hsErrorType s)
+                       (Db.BeamSerializedDataType $
+                          Db.beamSerializeJSON "sqlite" (object [ "custom" .= s ]))
+                       False
 
 sqliteTextType, sqliteBlobType, sqliteBigIntType :: SqliteDataTypeSyntax
 sqliteTextType = SqliteDataTypeSyntax (emit "TEXT")
