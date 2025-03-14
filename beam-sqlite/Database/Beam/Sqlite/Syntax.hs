@@ -95,9 +95,16 @@ import           GHC.Generics
 -- example), the data builder attempts to properly format and escape the data.
 -- This returns syntax suitable for inclusion in scripts. In this case, the
 -- value list is ignored.
-data SqliteSyntax = SqliteSyntax ((SQLData -> Builder) -> Builder) (DL.DList SQLData)
+data SqliteSyntax = SqliteSyntax ((SQLData -> Builder) -> AnonTable -> (Builder, AnonTable)) (DL.DList SQLData)
 newtype SqliteData = SqliteData SQLData -- newtype for Hashable
   deriving Eq
+
+newtype AnonTable = AnonTable Int deriving (Show, Eq, Ord)
+nextTable :: AnonTable -> AnonTable
+nextTable (AnonTable x) = AnonTable (succ x)
+
+anonTableSyntax :: AnonTable -> Builder
+anonTableSyntax (AnonTable n) = "tbl_" <> fromString (show n)
 
 instance Show SqliteSyntax where
   show (SqliteSyntax s d) =
@@ -108,10 +115,14 @@ instance Sql92DisplaySyntax SqliteSyntax where
 
 instance Semigroup SqliteSyntax where
   (<>) (SqliteSyntax ab av) (SqliteSyntax bb bv) =
-    SqliteSyntax (\v -> ab v <> bb v) (av <> bv)
+    SqliteSyntax (\v tbl ->
+                      let (a, tbl') = ab v tbl
+                          (b, tbl'') = bb v tbl'
+                      in (a <> b, tbl''))
+                 (av <> bv)
 
 instance Monoid SqliteSyntax where
-  mempty = SqliteSyntax (\_ -> mempty) mempty
+  mempty = SqliteSyntax (\_ x -> (mempty, x)) mempty
 
 instance Eq SqliteSyntax where
   SqliteSyntax ab av == SqliteSyntax bb bv =
@@ -132,18 +143,21 @@ instance Hashable SqliteData where
 
 -- | Convert the first argument of 'SQLiteSyntax' to a 'ByteString' 'Builder',
 -- where all the data has been replaced by @"?"@ placeholders.
-withPlaceholders :: ((SQLData -> Builder) -> Builder) -> Builder
-withPlaceholders build = build (\_ -> "?")
+withPlaceholders :: ((SQLData -> Builder) -> AnonTable -> (Builder, AnonTable)) -> Builder
+withPlaceholders build = fst $ build (\_ -> "?") (AnonTable 0)
 
 -- | Embed a 'ByteString' directly in the syntax
 emit :: ByteString -> SqliteSyntax
-emit b = SqliteSyntax (\_ -> byteString b) mempty
+emit b = SqliteSyntax (\_ t -> (byteString b, t)) mempty
 
 emit' :: Show a => a -> SqliteSyntax
-emit' x = SqliteSyntax (\_ -> byteString (fromString (show x))) mempty
+emit' x = SqliteSyntax (\_ t -> (byteString (fromString (show x)), t)) mempty
+
+tableRef :: SqliteSyntax
+tableRef = SqliteSyntax (\_ n -> (anonTableSyntax n, nextTable n)) mempty
 
 quotedIdentifier :: T.Text -> SqliteSyntax
-quotedIdentifier txt = emit "\"" <> SqliteSyntax (\_ -> stringUtf8 (T.unpack (sqliteEscape txt))) mempty <> emit "\""
+quotedIdentifier txt = emit "\"" <> SqliteSyntax (\_ t -> (stringUtf8 (T.unpack (sqliteEscape txt)), t)) mempty <> emit "\""
 
 -- | A best effort attempt to implement the escaping rules of SQLite. This is
 -- never used to escape data sent to the database; only for emitting scripts or
@@ -155,14 +169,14 @@ sqliteEscape = T.concatMap (\c -> if c == '"' then "\"\"" else T.singleton c)
 --
 -- This causes a literal @?@ 3
 emitValue ::  SQLData -> SqliteSyntax
-emitValue v = SqliteSyntax ($ v) (DL.singleton v)
+emitValue v = SqliteSyntax (\emitValue t -> (emitValue v, t)) (DL.singleton v)
 
 -- | Render a 'SqliteSyntax' as a lazy 'BL.ByteString', for purposes of
 -- displaying to a user. Embedded 'SQLData' is directly embedded into the
 -- concrete syntax, with a best effort made to escape strings.
 sqliteRenderSyntaxScript :: SqliteSyntax -> BL.ByteString
 sqliteRenderSyntaxScript (SqliteSyntax s _) =
-    toLazyByteString . s $ \case
+    toLazyByteString . fst . flip s (AnonTable 0) $ \case
       SQLInteger i -> int64Dec i
       SQLFloat   d -> doubleDec d
       SQLText    t -> TE.encodeUtf8Builder (sqliteEscape t)
@@ -177,8 +191,8 @@ sqliteRenderSyntaxScript (SqliteSyntax s _) =
 -- columns. The 'fromSqliteCommand' function will take an 'SqliteCommandSyntax'
 -- and convert it into the correct 'SqliteSyntax'.
 data SqliteCommandSyntax
-  = SqliteCommandSyntax SqliteSyntax
-  | SqliteCommandInsert SqliteInsertSyntax
+  = SqliteCommandSyntax !SqliteSyntax
+  | SqliteCommandInsert !SqliteInsertSyntax
 
 -- | Convert a 'SqliteCommandSyntax' into a renderable 'SqliteSyntax'
 fromSqliteCommand :: SqliteCommandSyntax -> SqliteSyntax
@@ -209,7 +223,8 @@ newtype SqliteUpdateSyntax = SqliteUpdateSyntax { fromSqliteUpdate :: SqliteSynt
 -- | SQLite @DELETE@ syntax
 newtype SqliteDeleteSyntax = SqliteDeleteSyntax { fromSqliteDelete :: SqliteSyntax }
 
-newtype SqliteSelectTableSyntax = SqliteSelectTableSyntax { fromSqliteSelectTable :: SqliteSyntax }
+data SqliteSelectTableSyntax = SqliteSelectTableSyntax { sqliteSelectCTEs :: [SqliteCTE]
+                                                       , fromSqliteSelectTable :: SqliteSyntax }
 
 -- | Implements beam SQL expression syntaxes
 data SqliteExpressionSyntax
@@ -217,7 +232,7 @@ data SqliteExpressionSyntax
   | SqliteExpressionDefault
   deriving (Show, Eq, Generic)
 instance Hashable SqliteExpressionSyntax
-newtype SqliteFromSyntax = SqliteFromSyntax { fromSqliteFromSyntax :: SqliteSyntax }
+data SqliteFromSyntax = SqliteFromSyntax { sqliteFromCTEs :: [SqliteCTE], fromSqliteFromSyntax :: SqliteSyntax }
 newtype SqliteComparisonQuantifierSyntax = SqliteComparisonQuantifierSyntax { fromSqliteComparisonQuantifier :: SqliteSyntax }
 newtype SqliteAggregationSetQuantifierSyntax = SqliteAggregationSetQuantifierSyntax { fromSqliteAggregationSetQuantifier :: SqliteSyntax }
 newtype SqliteProjectionSyntax = SqliteProjectionSyntax { fromSqliteProjection :: SqliteSyntax }
@@ -225,8 +240,13 @@ newtype SqliteGroupingSyntax = SqliteGroupingSyntax { fromSqliteGrouping :: Sqli
 newtype SqliteOrderingSyntax = SqliteOrderingSyntax { fromSqliteOrdering :: SqliteSyntax }
 -- | SQLite syntax for values that can be embedded in 'SqliteSyntax'
 newtype SqliteValueSyntax = SqliteValueSyntax { fromSqliteValue :: SqliteSyntax }
-newtype SqliteTableSourceSyntax = SqliteTableSourceSyntax { fromSqliteTableSource :: SqliteSyntax }
+data SqliteTableSourceSyntax = SqliteTableSourceSyntax
+    { sqliteTableSourceCTEs :: [SqliteCTE]
+    , fromSqliteTableSource :: SqliteSyntax }
 newtype SqliteFieldNameSyntax = SqliteFieldNameSyntax { fromSqliteFieldNameSyntax :: SqliteSyntax }
+
+data SqliteCTE = SqliteCTE { sqliteCteColumnNames :: Maybe [T.Text]
+                           , sqliteCteSelect :: SqliteSelectSyntax }
 
 -- | SQLite @VALUES@ clause in @INSERT@. Expressions need to be handled
 -- explicitly in order to deal with @DEFAULT@ values and @AUTO INCREMENT@
@@ -612,6 +632,7 @@ instance IsSql92SelectSyntax SqliteSelectSyntax where
 
   selectStmt tbl ordering limit offset =
     SqliteSelectSyntax $
+    withClause <>
     fromSqliteSelectTable tbl <>
     (case ordering of
        [] -> mempty
@@ -622,6 +643,16 @@ instance IsSql92SelectSyntax SqliteSelectSyntax where
       (Nothing, Just offset) -> emit " LIMIT -1 OFFSET " <> emit' offset
       (Just limit, Just offset) -> emit " LIMIT " <> emit' limit <>
                                    emit " OFFSET " <> emit' offset
+    where
+      withClause = case sqliteSelectCTEs tbl of
+                     [] -> mempty
+                     _  -> emit "WITH " <> commas (zipWith buildCte [0..] (sqliteSelectCTEs tbl))
+      buildCte :: Int -> SqliteCTE -> SqliteSyntax
+      buildCte n (SqliteCTE mColNames cte) = emit "tbl_" <> emit' n <> colNames <> emit " AS " <> parens (fromSqliteSelect cte)
+         where
+           colNames = case mColNames of
+                        Nothing -> mempty
+                        Just nms -> parens (commas (map quotedIdentifier nms))
 
 instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   type Sql92SelectTableSelectSyntax SqliteSelectTableSyntax = SqliteSelectSyntax
@@ -632,7 +663,7 @@ instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
   type Sql92SelectTableSetQuantifierSyntax SqliteSelectTableSyntax = SqliteAggregationSetQuantifierSyntax
 
   selectTableStmt setQuantifier proj from where_ grouping having =
-    SqliteSelectTableSyntax $
+    SqliteSelectTableSyntax (fromMaybe [] (sqliteFromCTEs <$> from)) $
     emit "SELECT " <>
     maybe mempty (<> emit " ") (fromSqliteAggregationSetQuantifier <$> setQuantifier) <>
     fromSqliteProjection proj <>
@@ -647,17 +678,18 @@ instance IsSql92SelectTableSyntax SqliteSelectTableSyntax where
 
 tableOp :: ByteString -> SqliteSelectTableSyntax -> SqliteSelectTableSyntax -> SqliteSelectTableSyntax
 tableOp op a b =
-  SqliteSelectTableSyntax $
+  SqliteSelectTableSyntax (sqliteSelectCTEs a <> sqliteSelectCTEs b) $
   fromSqliteSelectTable a <> spaces (emit op) <> fromSqliteSelectTable b
 
 instance IsSql92FromSyntax SqliteFromSyntax where
   type Sql92FromExpressionSyntax SqliteFromSyntax = SqliteExpressionSyntax
   type Sql92FromTableSourceSyntax SqliteFromSyntax = SqliteTableSourceSyntax
 
-  fromTable tableSrc Nothing = SqliteFromSyntax (fromSqliteTableSource tableSrc)
-  fromTable tableSrc (Just (nm, colNms)) =
-    SqliteFromSyntax (fromSqliteTableSource tableSrc <> emit " AS " <> quotedIdentifier nm <>
-                      maybe mempty (\colNms' -> parens (commas (map quotedIdentifier colNms'))) colNms)
+  fromTable tableSrc Nothing = SqliteFromSyntax (sqliteTableSourceCTEs tableSrc) (fromSqliteTableSource tableSrc)
+  fromTable tableSrc (Just (nm, Nothing)) =
+        SqliteFromSyntax (sqliteTableSourceCTEs tableSrc)
+                         (fromSqliteTableSource tableSrc <> emit " AS " <> quotedIdentifier nm)
+  fromTable _ (Just (_, Just _)) = error "beam-sqlite cannot support table names with column aliases"
 
   innerJoin = _join "INNER JOIN"
   leftJoin = _join "LEFT JOIN"
@@ -665,9 +697,11 @@ instance IsSql92FromSyntax SqliteFromSyntax where
 
 _join :: ByteString -> SqliteFromSyntax -> SqliteFromSyntax -> Maybe SqliteExpressionSyntax -> SqliteFromSyntax
 _join joinType a b Nothing =
-  SqliteFromSyntax (fromSqliteFromSyntax a <> spaces (emit joinType) <> fromSqliteFromSyntax b)
+  SqliteFromSyntax (sqliteFromCTEs a <> sqliteFromCTEs b)
+                   (fromSqliteFromSyntax a <> spaces (emit joinType) <> fromSqliteFromSyntax b)
 _join joinType a b (Just on) =
-  SqliteFromSyntax (fromSqliteFromSyntax a <> spaces (emit joinType) <> fromSqliteFromSyntax b <> emit " ON " <> fromSqliteExpression on)
+  SqliteFromSyntax (sqliteFromCTEs a <> sqliteFromCTEs b)
+                   (fromSqliteFromSyntax a <> spaces (emit joinType) <> fromSqliteFromSyntax b <> emit " ON " <> fromSqliteExpression on)
 
 instance IsSql92ProjectionSyntax SqliteProjectionSyntax where
   type Sql92ProjectionExpressionSyntax SqliteProjectionSyntax = SqliteExpressionSyntax
@@ -690,12 +724,14 @@ instance IsSql92TableSourceSyntax SqliteTableSourceSyntax where
   type Sql92TableSourceSelectSyntax SqliteTableSourceSyntax = SqliteSelectSyntax
   type Sql92TableSourceExpressionSyntax SqliteTableSourceSyntax = SqliteExpressionSyntax
 
-  tableNamed = SqliteTableSourceSyntax . fromSqliteTableName
+  tableNamed = SqliteTableSourceSyntax [] . fromSqliteTableName
   tableFromSubSelect s =
-    SqliteTableSourceSyntax (parens (fromSqliteSelect s))
-  tableFromValues vss = SqliteTableSourceSyntax . parens $
-                        emit "VALUES " <>
-                        commas (map (\vs -> parens (commas (map fromSqliteExpression vs))) vss)
+    SqliteTableSourceSyntax [] (parens (fromSqliteSelect s))
+  tableFromValues colCount vss = SqliteTableSourceSyntax [SqliteCTE (Just (take colCount beamSqlDefaultColumnNames)) valuesTable] tableRef
+    where
+      valuesTable = SqliteSelectSyntax $
+                      emit "VALUES " <>
+                      commas (map (\vs -> parens (commas (map fromSqliteExpression vs))) vss)
 
 instance IsSql92GroupingSyntax SqliteGroupingSyntax where
   type Sql92GroupingExpressionSyntax SqliteGroupingSyntax = SqliteExpressionSyntax
