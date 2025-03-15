@@ -1,4 +1,4 @@
-**Note**: The code used in this guide is in `beam-postgres/examples/Pagila/Schema/CustomMigrateExample.hs`.
+**Note**: The code used in this guide is in the `pagila.cabal` package, located in `beam-postgres/examples/`. `cabal run pagila` to see a rendering of the example schema.
 
 ### Using Custom Types in migration ###
 In Beam [Tutorial 3](https://haskell-beam.github.io/beam/tutorials/tutorial3/) we looked at marshalling custom types.
