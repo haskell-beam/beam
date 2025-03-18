@@ -12,6 +12,7 @@ import qualified Database.Beam.Postgres.Test.DataTypes as DataType
 import qualified Database.Beam.Postgres.Test.Marshal as Marshal
 import qualified Database.Beam.Postgres.Test.Migrate as Migrate
 import qualified Database.Beam.Postgres.Test.Select as Select
+import qualified Database.Beam.Postgres.Test.Select.PgNubBy as Select.PgNubBy
 import qualified Database.Beam.Postgres.Test.TempTable as TempTable
 import qualified Database.Beam.Postgres.Test.Windowing as Windowing
 import Database.PostgreSQL.Simple ( ConnectInfo(..), defaultConnectInfo )
@@ -24,6 +25,7 @@ main = defaultMain
         testGroup "beam-postgres tests"
           [ Marshal.tests getConnStr
           , Select.tests getConnStr
+          , Select.PgNubBy.tests getConnStr
           , DataType.tests getConnStr
           , Migrate.tests getConnStr
           , TempTable.tests getConnStr
