@@ -216,8 +216,8 @@ We can use beam's `Columnar` mechanism to automatically derive lenses. The
 polymorphic Van Laarhoven lens.
 
 We can bring these lenses into scope globally via a global pattern match against
-`tableLenses`. For example, to get lenses for each column of the `AddressT` and
-`UserT` table.
+`tableLenses`. For example, we get lenses for each column of the `AddressT` and
+`UserT` table below.
 
 ```haskell
 -- Add the following to the top of the file, for GHC >8.2
