@@ -223,15 +223,18 @@ We can bring these lenses into scope globally via a global pattern match against
 -- Add the following to the top of the file, for GHC >8.2
 {-#  LANGUAGE ImpredicativeTypes #-}
 
-Address (LensFor addressId)    (LensFor addressLine1)
-        (LensFor addressLine2) (LensFor addressCity)
-        (LensFor addressState) (LensFor addressZip)
-        (UserId (LensFor addressForUserId)) =
-        tableLenses
+Address (LensFor addressId) _ _ _ _ _ _ = tableLenses
+Address _ (LensFor addressLine1) _ _ _ _ _ = tableLenses
+Address _ _ (LensFor addressLine2) _ _ _ _ = tableLenses
+Address _ _ _ (LensFor addressCity) _ _ _ = tableLenses
+Address _ _ _ _ (LensFor addressState) _ _ = tableLenses
+Address _ _ _ _ _ (LensFor addressZip) _ = tableLenses
+Address _ _ _ _ _ _ (UserId (LensFor addressForUserId)) = tableLenses
 
-User (LensFor userEmail)    (LensFor userFirstName)
-     (LensFor userLastName) (LensFor userPassword) =
-     tableLenses
+User (LensFor userEmail) _ _ _ = tableLenses
+User _ (LensFor userFirstName) _ _ = tableLenses
+User _ _ (LensFor userLastName) _ = tableLenses
+User _ _ _ (LensFor userPassword) = tableLenses
 ```
 
 !!! note "Note"
