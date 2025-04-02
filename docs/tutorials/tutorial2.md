@@ -240,7 +240,9 @@ User _ _ _ (LensFor userPassword) = tableLenses
 !!! note "Note"
     The `ImpredicativeTypes` language extension is necessary for newer
     GHC to allow the polymorphically typed lenses to be introduced at
-    the top-level. Older GHCs were more lenient.
+    the top-level. Older GHCs were more lenient. As for why we must
+    create a separate pattern match for each lens we would like to
+    generate, please refer to GitHub issues [#659](https://github.com/haskell-beam/beam/issues/659) and [#664](https://github.com/haskell-beam/beam/issues/664).
 
 As in tables, we can generate lenses for databases via the `dbLenses` function.
 
