@@ -216,28 +216,33 @@ We can use beam's `Columnar` mechanism to automatically derive lenses. The
 polymorphic Van Laarhoven lens.
 
 We can bring these lenses into scope globally via a global pattern match against
-`tableLenses`. For example, to get lenses for each column of the `AddressT` and
-`UserT` table.
+`tableLenses`. For example, we get lenses for each column of the `AddressT` and
+`UserT` table below.
 
 ```haskell
 -- Add the following to the top of the file, for GHC >8.2
 {-#  LANGUAGE ImpredicativeTypes #-}
 
-Address (LensFor addressId)    (LensFor addressLine1)
-        (LensFor addressLine2) (LensFor addressCity)
-        (LensFor addressState) (LensFor addressZip)
-        (UserId (LensFor addressForUserId)) =
-        tableLenses
+Address (LensFor addressId) _ _ _ _ _ _ = tableLenses
+Address _ (LensFor addressLine1) _ _ _ _ _ = tableLenses
+Address _ _ (LensFor addressLine2) _ _ _ _ = tableLenses
+Address _ _ _ (LensFor addressCity) _ _ _ = tableLenses
+Address _ _ _ _ (LensFor addressState) _ _ = tableLenses
+Address _ _ _ _ _ (LensFor addressZip) _ = tableLenses
+Address _ _ _ _ _ _ (UserId (LensFor addressForUserId)) = tableLenses
 
-User (LensFor userEmail)    (LensFor userFirstName)
-     (LensFor userLastName) (LensFor userPassword) =
-     tableLenses
+User (LensFor userEmail) _ _ _ = tableLenses
+User _ (LensFor userFirstName) _ _ = tableLenses
+User _ _ (LensFor userLastName) _ = tableLenses
+User _ _ _ (LensFor userPassword) = tableLenses
 ```
 
 !!! note "Note"
     The `ImpredicativeTypes` language extension is necessary for newer
     GHC to allow the polymorphically typed lenses to be introduced at
-    the top-level. Older GHCs were more lenient.
+    the top-level. Older GHCs were more lenient. As for why we must
+    create a separate pattern match for each lens we would like to
+    generate, please refer to GitHub issues [#659](https://github.com/haskell-beam/beam/issues/659) and [#664](https://github.com/haskell-beam/beam/issues/664).
 
 As in tables, we can generate lenses for databases via the `dbLenses` function.
 
