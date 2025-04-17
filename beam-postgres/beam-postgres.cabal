@@ -77,11 +77,12 @@ test-suite beam-postgres-tests
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
-  other-modules: Database.Beam.Postgres.Test,
-                 Database.Beam.Postgres.Test.Marshal,
-                 Database.Beam.Postgres.Test.Select,
-                 Database.Beam.Postgres.Test.DataTypes,
+  other-modules: Database.Beam.Postgres.Test
+                 Database.Beam.Postgres.Test.Marshal
+                 Database.Beam.Postgres.Test.Select
+                 Database.Beam.Postgres.Test.DataTypes
                  Database.Beam.Postgres.Test.Migrate
+                 Database.Beam.Postgres.Test.Windowing
   build-depends:
     aeson,
     base,
