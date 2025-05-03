@@ -167,7 +167,8 @@ instance FromField SqliteScientific where
                      "No conversion to Scientific for '" <> s <> "'"
           Just s'  -> pure s'
 
-instance BeamSqlBackend Sqlite
+instance BeamSqlBackend Sqlite where
+    type BeamSqlBackendSupportsColumnAliases Sqlite = 'False
 instance BeamMigrateOnlySqlBackend Sqlite
 type instance BeamSqlBackendSyntax Sqlite = SqliteCommandSyntax
 
@@ -380,9 +381,8 @@ runInsertReturningList SqlInsertNoRows = pure []
 runInsertReturningList (SqlInsert tblSettings insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
   do (logger, conn) <- SqliteM ask
      SqliteM . liftIO $ do
-       
        -- We create a pseudo-random savepoint identification that can be referenced
-       -- throughout this operation. -- This used to be based on the process ID 
+       -- throughout this operation. -- This used to be based on the process ID
        -- (e.g. `System.Posix.Process.getProcessID` for UNIX),
        -- but using timestamps is more portable; see #738
        --
