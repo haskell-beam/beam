@@ -159,11 +159,16 @@ selectWith :: forall be db res
            => With be db (Q be db QBaseScope res) -> SqlSelect be (QExprToIdentity res)
 selectWith (CTE.With mkQ) =
     let (q, (recursiveness, ctes)) = evalState (runWriterT mkQ) 0
-    in case recursiveness of
-         CTE.Nonrecursive -> SqlSelect (withSyntax ctes
-                                                   (buildSqlQuery "t" q))
-         CTE.Recursive    -> SqlSelect (withRecursiveSyntax ctes
+    in case (recursiveness, null ctes) of
+         (CTE.Nonrecursive, False) -> SqlSelect (withSyntax ctes
                                                             (buildSqlQuery "t" q))
+         (CTE.Recursive, False)    -> SqlSelect (withRecursiveSyntax ctes
+                                                                     (buildSqlQuery "t" q))
+         {- `WITH` clauses should not be used when no CTEs are created.
+
+         See: https://github.com/haskell-beam/beam/issues/760
+         -}
+         (_, True)                 -> SqlSelect (buildSqlQuery "t" q)
 
 -- | Convenience function to generate a 'SqlSelect' that looks up a table row
 --   given a primary key.

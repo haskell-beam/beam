@@ -298,9 +298,10 @@ pgSelectWith :: forall db s res
 pgSelectWith (CTE.With mkQ) =
     let (q, (recursiveness, ctes)) = evalState (runWriterT mkQ) 0
         fromSyntax tblPfx =
-            case recursiveness of
-              CTE.Nonrecursive -> withSyntax ctes (buildSqlQuery tblPfx q)
-              CTE.Recursive -> withRecursiveSyntax ctes (buildSqlQuery tblPfx q)
+            case (recursiveness, null ctes) of
+              (CTE.Nonrecursive, False) -> withSyntax ctes (buildSqlQuery tblPfx q)
+              (CTE.Recursive, False) -> withRecursiveSyntax ctes (buildSqlQuery tblPfx q)
+              (_, True) -> buildSqlQuery tblPfx q
     in Q (liftF (QAll (\tblPfx tName ->
                            let (_, names) = mkFieldNames @Postgres @res (qualifiedField tName)
                            in fromTable (PgTableSourceSyntax $
