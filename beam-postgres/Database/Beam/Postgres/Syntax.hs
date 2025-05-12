@@ -110,6 +110,7 @@ import           Data.Coerce
 import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Int
+import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Maybe
 import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
@@ -589,14 +590,14 @@ instance IsSql99CommonTableExpressionSelectSyntax PgSelectSyntax where
     withSyntax ctes (PgSelectSyntax select) =
         PgSelectSyntax $
         emit "WITH " <>
-        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
+        pgSepBy (emit ", ") (map fromPgCommonTableExpression $ NonEmpty.toList ctes) <>
         select
 
 instance IsSql99RecursiveCommonTableExpressionSelectSyntax PgSelectSyntax where
     withRecursiveSyntax ctes (PgSelectSyntax select) =
         PgSelectSyntax $
         emit "WITH RECURSIVE " <>
-        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
+        pgSepBy (emit ", ") (map fromPgCommonTableExpression $ NonEmpty.toList ctes) <>
         select
 
 instance IsSql99CommonTableExpressionSyntax PgCommonTableExpressionSyntax where
