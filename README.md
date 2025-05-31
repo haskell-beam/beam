@@ -120,3 +120,7 @@ to
       enabled_backends:
         - beam-sqlite
 ```
+
+## Pagila example
+
+See [Pagila example in `beam-postgres/examples`](beam-postgres/examples/).
