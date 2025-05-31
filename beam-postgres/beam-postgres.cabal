@@ -80,6 +80,7 @@ test-suite beam-postgres-tests
   other-modules: Database.Beam.Postgres.Test,
                  Database.Beam.Postgres.Test.Marshal,
                  Database.Beam.Postgres.Test.Select,
+                 Database.Beam.Postgres.Test.Select.PgNubBy,
                  Database.Beam.Postgres.Test.DataTypes,
                  Database.Beam.Postgres.Test.Migrate
   build-depends:
@@ -95,6 +96,7 @@ test-suite beam-postgres-tests
     tasty,
     text,
     testcontainers,
+    time,
     uuid,
     vector
   default-language: Haskell2010
