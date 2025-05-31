@@ -112,11 +112,17 @@ values_ :: forall be db s a
            , BeamSqlBackend be )
         => [ a ] -> Q be db s a
 values_ rows =
-    Q $ liftF (QAll (\tblPfx -> fromTable (tableFromValues (map (\row -> project (Proxy @be) row tblPfx) rows)) . Just . (,Just fieldNames))
-                    (\tblNm' -> fst $ mkFieldNames (qualifiedField tblNm'))
+    Q $ liftF (QAll (\tblPfx -> fromTable (tableFromValues colCount (map (\row -> project (Proxy @be) row tblPfx) rows)) . Just . (,colAliases))
+                    (\tblNm' -> if useAliases
+                                then fst $ mkFieldNames (qualifiedField tblNm')
+                                else fst $ mkDefaultFieldNames (qualifiedField tblNm'))
                     (\_ -> Nothing) snd)
     where
+      useAliases = knownBool @(BeamSqlBackendSupportsColumnAliases be)
+      colAliases | useAliases = Just fieldNames
+                 | otherwise  = Nothing
       fieldNames = snd $ mkFieldNames @be @a unqualifiedField
+      colCount = length fieldNames
 
 -- | Introduce all entries of a table into the 'Q' monad based on the
 --   given QExpr. The join condition is expected to return a
