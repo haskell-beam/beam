@@ -26,7 +26,7 @@ library
   build-depends:      base          >=4.11 && <5,
 
                       beam-core     >=0.10 && <0.11,
-                      beam-migrate  >=0.5  && <0.6,
+                      beam-migrate  >=0.5  && <0.5.3.2,
 
                       sqlite-simple >=0.4  && <0.5,
                       text          >=1.0  && <2.2,
