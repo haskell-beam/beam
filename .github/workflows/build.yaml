@@ -4,6 +4,7 @@ on:
   push:
     paths-ignore:
       - 'docs/*/**'
+    branches: [master]
   pull_request:
 
 jobs:
@@ -40,7 +41,7 @@ jobs:
       with:
         ghc-version: ${{ matrix.ghc-version }}
         cabal-version: '3.12.1.0'
-    
+
     - name: Generate freeze file
       run: |
         cabal update
@@ -51,7 +52,7 @@ jobs:
         # avoid invalidating cache too often.
         # This idea comes from github.com/jaspervdj/hakyll
         sed '/^index-state: /d' cabal.project.freeze > dependencies-versions
-    
+
     - name: Cache cabal work
       uses: actions/cache@v4
       with:
@@ -59,15 +60,47 @@ jobs:
           dist-newstyle
           ${{ steps.setup-haskell.outputs.cabal-store }}
         key: ${{ runner.os }}-${{ hashFiles('dependencies-versions', 'cabal.project.local') }}-cabal-install
-    
+
     - name: Build dependencies
       run: |
         cabal build all --only-dependencies ${{matrix.cabal-flags}}
-    
+
     - name: Build beam packages
       run: |
         cabal build all ${{matrix.cabal-flags}}
-        
+
     - name: Run tests
       run: |
         cabal test all ${{matrix.cabal-flags}}
+
+  release-artifacts:
+    # Only build release artifacts if `continuous-integration` is successful
+    needs: [continuous-integration]
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check packages for common mistakes
+      run: |
+          for pkg in $(find . -mindepth 1 -maxdepth 1 -type d  -name "beam-*")
+          do
+              cd $pkg
+              echo "Checking $pkg"
+              cabal check
+              cd $GITHUB_WORKSPACE
+          done
+
+    # Note that the ubuntu-24.04 image includes cabal
+    # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md#haskell-tools
+    - name: Build release artifacts
+      run : |
+        cabal sdist all
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: github.ref == 'refs/heads/master'
+      with:
+        name: ${{ runner.os }}-release-artifact
+        path: dist-newstyle/sdist/beam-*
+        retention-days: 7
