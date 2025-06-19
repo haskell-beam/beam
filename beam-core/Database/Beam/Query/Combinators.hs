@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.Combinators
     ( -- * Various SQL functions and constructs
@@ -330,6 +329,8 @@ nub_ :: ( BeamSqlBackend be, Projectible be r )
 nub_ (Q sub) = Q $ liftF (QDistinct (\_ _ -> setQuantifierDistinct) sub id)
 
 -- | Limit the number of results returned by a query.
+--
+-- See also `limitMaybe_` to conditionally apply a limit.
 limit_ :: forall s a be db
         . ( Projectible be a
           , ThreadRewritable (QNested s) a )
@@ -338,6 +339,8 @@ limit_ limit' (Q q) =
   Q (liftF (QLimit limit' q (rewriteThread (Proxy @s))))
 
 -- | Conditionally limit the number of results returned by a query.
+--
+-- @since 0.10.4.0
 limitMaybe_ :: forall s a be db
         . ( Projectible be a
           , ThreadRewritable (QNested s) a )
@@ -348,7 +351,9 @@ limitMaybe_ (Just limit') (Q q) =
 -- See discussion on https://github.com/haskell-beam/beam/pull/633.
 limitMaybe_ Nothing (Q q) = Q (unsafeCoerce q)
 
--- | Drop the first `offset'` results.
+-- | Drop the first `offset` results.
+--
+-- See also `offsetMaybe_` to conditionally apply an offset
 offset_ :: forall s a be db
          . ( Projectible be a
            , ThreadRewritable (QNested s) a )
@@ -356,7 +361,9 @@ offset_ :: forall s a be db
 offset_ offset' (Q q) =
   Q (liftF (QOffset offset' q (rewriteThread (Proxy @s))))
 
--- | Conditionally drop the first `offset'` results.
+-- | Conditionally drop the first `offset` results.
+--
+-- @since 0.10.4.0
 offsetMaybe_ :: forall s a be db
          . ( Projectible be a
            , ThreadRewritable (QNested s) a )
