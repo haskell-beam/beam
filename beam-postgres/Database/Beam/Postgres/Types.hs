@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -162,7 +163,8 @@ instance FromBackendRow Postgres (Pg.Binary BL.ByteString)
 instance (Pg.FromField a, Typeable a) => FromBackendRow Postgres (Pg.PGRange a)
 instance (Pg.FromField a, Pg.FromField b, Typeable a, Typeable b) => FromBackendRow Postgres (Either a b)
 
-instance BeamSqlBackend Postgres
+instance BeamSqlBackend Postgres where
+    type BeamSqlBackendSupportsColumnAliases Postgres = 'True
 instance BeamMigrateOnlySqlBackend Postgres
 type instance BeamSqlBackendSyntax Postgres = PgCommandSyntax
 

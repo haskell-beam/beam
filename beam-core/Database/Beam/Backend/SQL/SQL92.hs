@@ -362,7 +362,8 @@ class IsSql92TableNameSyntax (Sql92TableSourceTableNameSyntax tblSource) =>
   tableNamed :: Sql92TableSourceTableNameSyntax tblSource
              -> tblSource
   tableFromSubSelect :: Sql92TableSourceSelectSyntax tblSource -> tblSource
-  tableFromValues :: [ [ Sql92TableSourceExpressionSyntax tblSource ] ] -> tblSource
+  -- | First argument is the number of columns to return
+  tableFromValues :: Int -> [ [ Sql92TableSourceExpressionSyntax tblSource ] ] -> tblSource
 
 class IsSql92GroupingSyntax grouping where
   type Sql92GroupingExpressionSyntax grouping :: Type
