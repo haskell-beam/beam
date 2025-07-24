@@ -59,7 +59,7 @@ library
                        aeson                >=0.11    && <2.3,
                        bytestring           >=0.10    && <0.13,
                        free                 >=4.12    && <5.3,
-                       time                 >=1.6     && <1.13,
+                       time                 >=1.6     && <1.15,
                        mtl                  >=2.2     && <2.4,
                        scientific           >=0.3     && <0.4,
                        vector               >=0.11    && <0.14,
