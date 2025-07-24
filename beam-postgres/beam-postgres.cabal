@@ -46,7 +46,7 @@ library
                       hashable             >=1.1  && <1.6,
                       lifted-base          >=0.2  && <0.3,
                       free                 >=4.12 && <5.3,
-                      time                 >=1.6  && <1.13,
+                      time                 >=1.6  && <1.15,
                       monad-control        >=1.0  && <1.1,
                       mtl                  >=2.1  && <2.4,
                       conduit              >=1.2  && <1.4,
