@@ -16,6 +16,7 @@ module Database.Beam.Backend.SQL.SQL99
 import Database.Beam.Backend.SQL.SQL92
 
 import Data.Kind ( Type )
+import Data.List.NonEmpty ( NonEmpty )
 import Data.Text ( Text )
 
 class IsSql92SelectSyntax select =>
@@ -56,12 +57,12 @@ class IsSql92SelectSyntax syntax =>
   IsSql99CommonTableExpressionSelectSyntax syntax where
   type Sql99SelectCTESyntax syntax :: Type
 
-  withSyntax :: [ Sql99SelectCTESyntax syntax ] -> syntax -> syntax
+  withSyntax :: NonEmpty (Sql99SelectCTESyntax syntax) -> syntax -> syntax
 
 class IsSql99CommonTableExpressionSelectSyntax syntax
     => IsSql99RecursiveCommonTableExpressionSelectSyntax syntax where
 
-  withRecursiveSyntax :: [ Sql99SelectCTESyntax syntax ] -> syntax -> syntax
+  withRecursiveSyntax :: NonEmpty (Sql99SelectCTESyntax syntax) -> syntax -> syntax
 
 class IsSql99CommonTableExpressionSyntax syntax where
   type Sql99CTESelectSyntax syntax :: Type

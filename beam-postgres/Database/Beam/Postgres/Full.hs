@@ -72,6 +72,7 @@ import           Control.Monad.State.Strict (evalState)
 import           Control.Monad.Writer (runWriterT)
 
 import           Data.Kind (Type)
+import           Data.List.NonEmpty (nonEmpty)
 import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 
@@ -298,9 +299,10 @@ pgSelectWith :: forall db s res
 pgSelectWith (CTE.With mkQ) =
     let (q, (recursiveness, ctes)) = evalState (runWriterT mkQ) 0
         fromSyntax tblPfx =
-            case recursiveness of
-              CTE.Nonrecursive -> withSyntax ctes (buildSqlQuery tblPfx q)
-              CTE.Recursive -> withRecursiveSyntax ctes (buildSqlQuery tblPfx q)
+            case (recursiveness, nonEmpty ctes) of
+              (CTE.Nonrecursive, Just ctes') -> withSyntax ctes' (buildSqlQuery tblPfx q)
+              (CTE.Recursive, Just ctes') -> withRecursiveSyntax ctes' (buildSqlQuery tblPfx q)
+              (_, Nothing) -> buildSqlQuery tblPfx q
     in Q (liftF (QAll (\tblPfx tName ->
                            let (_, names) = mkFieldNames @Postgres @res (qualifiedField tName)
                            in fromTable (PgTableSourceSyntax $
