@@ -1,7 +1,8 @@
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Database.Beam.Backend.Types
   ( BeamBackend(..)
+  , KnownBool(..)
 
   , Exposed, Nullable
 
@@ -28,3 +29,11 @@ data Exposed x
 --
 -- See 'Columnar' for more information.
 data Nullable (c :: Type -> Type) x
+
+class KnownBool (x :: Bool) where
+    knownBool :: Bool
+
+instance KnownBool 'True where
+    knownBool = True
+instance KnownBool 'False where
+    knownBool = False
