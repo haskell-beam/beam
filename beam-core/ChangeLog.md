@@ -6,6 +6,10 @@
 * Added a note to `default_` to specify that it has more restrictions than its type may indicate (#744).
 * Added `limitMaybe_` and `offsetMaybe_` (#633).
 
+## Bug fixes
+
+* Fixed an issue where `lead1_`, `lag1_`, `lead_`, and `lag_` did not have the appropriate type, leading to runtime exceptions (#745).
+
 ## Updated dependencies
 
 * Updated the upper bound to include `containers-0.8`.
