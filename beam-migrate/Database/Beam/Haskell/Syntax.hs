@@ -642,6 +642,7 @@ instance IsSql92ExtractFieldSyntax HsExpr where
   hourField    = hsVar "hourField"
   yearField    = hsVar "yearField"
   monthField   = hsVar "monthField"
+  weekField     = hsVar "weekField"
   dayField     = hsVar "dayField"
 
 instance IsSql92ExpressionSyntax HsExpr where

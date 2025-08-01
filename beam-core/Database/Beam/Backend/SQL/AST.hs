@@ -156,6 +156,7 @@ data ExtractField
 
   | ExtractFieldDateTimeYear
   | ExtractFieldDateTimeMonth
+  | ExtractFieldDateTimeWeek
   | ExtractFieldDateTimeDay
   | ExtractFieldDateTimeHour
   | ExtractFieldDateTimeMinute
@@ -291,6 +292,7 @@ instance IsSql92ExtractFieldSyntax ExtractField where
   minutesField = ExtractFieldDateTimeMinute
   hourField = ExtractFieldDateTimeHour
   dayField = ExtractFieldDateTimeDay
+  weekField = ExtractFieldDateTimeWeek
   monthField = ExtractFieldDateTimeMonth
   yearField = ExtractFieldDateTimeYear
 
