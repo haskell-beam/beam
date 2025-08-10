@@ -530,35 +530,30 @@ arraySample_ (QExpr arr) (QExpr n) =
 -- | Postgres array_to_string(array, delimiter) function.
 -- Converts each element to text and joins with the delimiter. NULLs are omitted.
 arrayToString_
-  :: BeamSqlBackendIsString Postgres text
-  => QGenExpr ctxt Postgres s (V.Vector a)
+  :: QGenExpr ctxt Postgres s (V.Vector a)
   -> QGenExpr ctxt Postgres s text
   -> QGenExpr ctxt Postgres s text
 arrayToString_ (QExpr arr) (QExpr delim) =
-  QExpr (PgExpressionSyntax . mappend (emit "array_to_string") . pgParens . mconcat <$> sequenceA
-    [ fromPgExpression <$> arr
-    , pure (emit ", ")
-    , fromPgExpression <$> delim
-    ])
+  QExpr (PgExpressionSyntax <$> do
+    arrExpr <- fromPgExpression <$> arr
+    delimExpr <- fromPgExpression <$> delim
+    pure $ emit "array_to_string" <> pgParens (arrExpr <> emit ", " <> delimExpr))
 
 -- | Postgres array_to_string(array, delimiter, null_string) function.
 -- Converts each element to text and joins with the delimiter. NULLs are
 -- represented by the provided @null_string@.
 arrayToStringWithNull_
-  :: BeamSqlBackendIsString Postgres text
-  => QGenExpr ctxt Postgres s (V.Vector a)
+  :: QGenExpr ctxt Postgres s (V.Vector a)
   -> QGenExpr ctxt Postgres s text
   -> QGenExpr ctxt Postgres s text
   -> QGenExpr ctxt Postgres s text
 arrayToStringWithNull_ (QExpr arr) (QExpr delim) (QExpr nullStr) =
-  QExpr (PgExpressionSyntax . mappend (emit "array_to_string") . pgParens . mconcat <$> sequenceA
-    [ fromPgExpression <$> arr
-    , pure (emit ", ")
-    , fromPgExpression <$> delim
-    , pure (emit ", ")
-    , fromPgExpression <$> nullStr
-    ])
-
+  QExpr (PgExpressionSyntax <$> do
+    arrExpr <- fromPgExpression <$> arr
+    delimExpr <- fromPgExpression <$> delim
+    nullStrExpr <- fromPgExpression <$> nullStr
+    pure $ emit "array_to_string" <>
+      pgParens (mconcat [arrExpr, emit ", ", delimExpr, emit ", ", nullStrExpr]))
 -- ** Array expressions
 
 -- | An expression context that determines which types of expressions can be put

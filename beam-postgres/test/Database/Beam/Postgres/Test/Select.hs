@@ -100,18 +100,18 @@ testArraySample getConn = testFunction getConn "array_sample" $ \conn -> do
     _ -> assertFailure "unexpected result"
 
 testArrayToStringBasic :: IO ByteString -> TestTree
-testArrayToStringBasic getConn = testFunction getConn "array_to_string basic" $ \conn -> do
+testArrayToStringBasic getConn = testFunction getConn "array_to_string_basic" $ \conn -> do
   let arr = V.fromList [1::Int32,2,3]
   res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
-    pure $ arrayToString_ (val_ arr) (val_ ("," :: T.Text))
+    pure $ arrayToString_ (val_ arr) (val_ ",")
   assertEqual "join" ["1,2,3" :: T.Text] res
 
 testArrayToStringWithNull :: IO ByteString -> TestTree
-testArrayToStringWithNull getConn = testFunction getConn "array_to_string with null" $ \conn -> do
+testArrayToStringWithNull getConn = testFunction getConn "array_to_string_with_null" $ \conn -> do
   let arr :: V.Vector (Maybe T.Text)
       arr = V.fromList [Just "a", Nothing, Just "b"]
   res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
-    pure $ arrayToStringWithNull_ (val_ arr) (val_ ("-" :: T.Text)) (val_ ("*" :: T.Text))
+    pure $ arrayToStringWithNull_ (val_ arr) (val_ "-") (val_ "*")
   assertEqual "join with null" ["a-*-b" :: T.Text] res
 
 testArrayAppend :: IO ByteString -> TestTree
