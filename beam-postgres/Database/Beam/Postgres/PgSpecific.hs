@@ -424,6 +424,8 @@ QExpr a ++. QExpr b =
 --   concatenating an element with an array).
 -- - If the array is NULL, the result is NULL. If the element is NULL,
 --   a NULL element is appended.
+--
+-- @since 0.5.4.4
 arrayAppend_
   :: QGenExpr ctxt Postgres s (V.Vector a)
   -> QGenExpr ctxt Postgres s a
@@ -444,6 +446,8 @@ arrayAppend_ (QExpr arr) (QExpr el) =
 -- - The array must be empty or one-dimensional.
 -- - If the array is NULL, the result is NULL. If the element is NULL,
 --   a NULL element is prepended.
+--
+-- @since 0.5.4.4
 arrayPrepend_
   :: QGenExpr ctxt Postgres s a
   -> QGenExpr ctxt Postgres s (V.Vector a)
@@ -464,6 +468,8 @@ arrayPrepend_ (QExpr el) (QExpr arr) =
 -- - The array must be one-dimensional.
 -- - Returns NULL only if the array is NULL; if the value is not present,
 --   the original array is returned unchanged.
+--
+-- @since 0.5.4.4
 arrayRemove_
   :: QGenExpr ctxt Postgres s (V.Vector a)
   -> QGenExpr ctxt Postgres s a
@@ -489,6 +495,8 @@ arrayRemove_ (QExpr arr) (QExpr el) =
 -- select_ $ pure $ arrayReplace_ (val_ $ V.fromList [1::Int32,2,5,4]) (val_ 5) (val_ 3)
 -- -- => {1,2,3,4}
 -- @
+--
+-- @since 0.5.4.4
 arrayReplace_
   :: QGenExpr ctxt Postgres s (V.Vector a) -- ^ The array to operate on
   -> QGenExpr ctxt Postgres s a             -- ^ The value to be replaced
@@ -505,6 +513,8 @@ arrayReplace_ (QExpr arr) (QExpr fromVal) (QExpr toVal) =
 
 -- | Postgres array_shuffle(array) function.
 -- Randomly shuffles the first dimension.
+--
+-- @since 0.5.4.4
 arrayShuffle_
   :: QGenExpr ctxt Postgres s (V.Vector a)
   -> QGenExpr ctxt Postgres s (V.Vector a)
@@ -517,10 +527,12 @@ arrayShuffle_ (QExpr arr) =
 --
 -- Precondition: @n@ must not exceed the length of the first dimension.
 --   If n is negative, it will be treated as 0.
+--
+-- @since 0.5.4.4
 arraySample_
   :: Integral n
   => QGenExpr ctxt Postgres s (V.Vector a)  -- ^ The source array
-  -> QGenExpr ctxt Postgres s n              -- ^ Number of elements to sample (negative values treated as 0)
+  -> QGenExpr ctxt Postgres s n             -- ^ Number of elements to sample (negative values treated as 0)
   -> QGenExpr ctxt Postgres s (V.Vector a)
 arraySample_ (QExpr arr) (QExpr n) =
   QExpr (PgExpressionSyntax . mappend (emit "array_sample") . pgParens . mconcat <$> sequenceA
@@ -532,6 +544,8 @@ arraySample_ (QExpr arr) (QExpr n) =
 
 -- | Postgres array_to_string(array, delimiter) function.
 -- Converts each element to text and joins with the delimiter. NULLs are omitted.
+--
+-- @since 0.5.4.4
 arrayToString_
   :: QGenExpr ctxt Postgres s (V.Vector a)
   -> QGenExpr ctxt Postgres s Text
@@ -545,6 +559,8 @@ arrayToString_ (QExpr arr) (QExpr delim) =
 -- | Postgres array_to_string(array, delimiter, null_string) function.
 -- Converts each element to text and joins with the delimiter. NULLs are
 -- represented by the provided @null_string@.
+--
+-- @since 0.5.4.4
 arrayToStringWithNull_
   :: QGenExpr ctxt Postgres s (V.Vector a)
   -> QGenExpr ctxt Postgres s Text

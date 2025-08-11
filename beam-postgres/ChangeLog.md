@@ -1,4 +1,8 @@
-# Unreleased
+# 0.5.4.4
+
+## Added features
+
+* Added the array functions `arrayAppend_`, `arrayPrepend_`, `arrayRemove_`, `arrayReplace_`, `arrayShuffle_`, `arraySample_`, `arrayToString_`, and `arrayToStringWithNull_` (#770)
 
 ## Updated dependencies
 
