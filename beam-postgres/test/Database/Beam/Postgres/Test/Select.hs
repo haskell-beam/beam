@@ -5,6 +5,8 @@ module Database.Beam.Postgres.Test.Select (tests) where
 import           Data.Aeson
 import           Data.ByteString (ByteString)
 import           Data.Int
+import           Data.List (sort)
+import qualified Data.Text as T
 import qualified Data.Vector as V
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -23,6 +25,16 @@ tests :: IO ByteString -> TestTree
 tests getConn = testGroup "Selection Tests"
   [ testGroup "JSON"
       [ testPgArrayToJSON getConn
+      ]
+  , testGroup "ARRAY functions"
+      [ testArrayReplace getConn
+      , testArrayShuffle getConn
+      , testArraySample getConn
+      , testArrayToStringBasic getConn
+      , testArrayToStringWithNull getConn
+      , testArrayAppend getConn
+      , testArrayPrepend getConn
+      , testArrayRemove getConn
       ]
   , testGroup "UUID"
       [ testUuidFunction getConn "uuid_nil" $ \ext -> pgUuidNil ext
@@ -55,6 +67,73 @@ testPgArrayToJSON getConn = testFunction getConn "array_to_json" $ \conn -> do
     runBeamPostgres conn $ runSelectReturningList $ select $
       return $ pgArrayToJson $ val_ $ V.fromList values
   assertEqual "JSON list" [PgJSON $ toJSON values] actual
+
+testArrayReplace :: IO ByteString -> TestTree
+testArrayReplace getConn = testFunction getConn "array_replace" $ \conn -> do
+  let arr = V.fromList [1::Int32,2,5,4]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arrayReplace_ (val_ arr) (val_ (5::Int32)) (val_ (3::Int32))
+  assertEqual "array_replace" [V.fromList [1,2,3,4 :: Int32]] res
+
+testArrayShuffle :: IO ByteString -> TestTree
+testArrayShuffle getConn = testFunction getConn "array_shuffle" $ \conn -> do
+  let arr = V.fromList [1::Int32,2,3,4,5]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arrayShuffle_ (val_ arr)
+  -- shuffled result has same length and elements, order may change
+  case res of
+    [shuf] -> do
+      assertEqual "length" (V.length arr) (V.length shuf)
+      assertBool "is permutation"
+        (sort (V.toList arr) == sort (V.toList shuf))
+    _ -> assertFailure "unexpected result"
+
+testArraySample :: IO ByteString -> TestTree
+testArraySample getConn = testFunction getConn "array_sample" $ \conn -> do
+  let arr = V.fromList [1::Int32,2,3,4,5,6]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arraySample_ (val_ arr) (val_ (3::Int32))
+  case res of
+    [samp] -> do
+      assertEqual "length 3" 3 (V.length samp)
+      assertBool "subset" (V.all (`V.elem` arr) samp)
+    _ -> assertFailure "unexpected result"
+
+testArrayToStringBasic :: IO ByteString -> TestTree
+testArrayToStringBasic getConn = testFunction getConn "array_to_string_basic" $ \conn -> do
+  let arr = V.fromList [1::Int32,2,3]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arrayToString_ (val_ arr) (val_ ",")
+  assertEqual "join" ["1,2,3" :: T.Text] res
+
+testArrayToStringWithNull :: IO ByteString -> TestTree
+testArrayToStringWithNull getConn = testFunction getConn "array_to_string_with_null" $ \conn -> do
+  let arr :: V.Vector (Maybe T.Text)
+      arr = V.fromList [Just "a", Nothing, Just "b"]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arrayToStringWithNull_ (val_ arr) (val_ "-") (val_ "*")
+  assertEqual "join with null" ["a-*-b" :: T.Text] res
+
+testArrayAppend :: IO ByteString -> TestTree
+testArrayAppend getConn = testFunction getConn "array_append" $ \conn -> do
+  let arr = V.fromList [1::Int32,2]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arrayAppend_ (val_ arr) (val_ (3::Int32))
+  assertEqual "append" [V.fromList [1,2,3 :: Int32]] res
+
+testArrayPrepend :: IO ByteString -> TestTree
+testArrayPrepend getConn = testFunction getConn "array_prepend" $ \conn -> do
+  let arr = V.fromList [2::Int32,3]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arrayPrepend_ (val_ (1::Int32)) (val_ arr)
+  assertEqual "prepend" [V.fromList [1,2,3 :: Int32]] res
+
+testArrayRemove :: IO ByteString -> TestTree
+testArrayRemove getConn = testFunction getConn "array_remove" $ \conn -> do
+  let arr = V.fromList [1::Int32,2,3,2]
+  res <- runBeamPostgres conn $ runSelectReturningList $ select $ do
+    pure $ arrayRemove_ (val_ arr) (val_ (2::Int32))
+  assertEqual "remove" [V.fromList [1,3 :: Int32]] res
 
 data UuidSchema f = UuidSchema
   { _uuidOssp :: f (PgExtensionEntity UuidOssp)
