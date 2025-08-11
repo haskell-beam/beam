@@ -161,6 +161,7 @@ import qualified Database.PostgreSQL.Simple.Range as Pg
 
 import           GHC.TypeLits
 import           GHC.Exts hiding (toList)
+import           Data.Text (Text)
 
 -- ** Postgres-specific functions
 
@@ -489,9 +490,9 @@ arrayRemove_ (QExpr arr) (QExpr el) =
 -- -- => {1,2,3,4}
 -- @
 arrayReplace_
-  :: QGenExpr ctxt Postgres s (V.Vector a)
-  -> QGenExpr ctxt Postgres s a
-  -> QGenExpr ctxt Postgres s a
+  :: QGenExpr ctxt Postgres s (V.Vector a) -- ^ The array to operate on
+  -> QGenExpr ctxt Postgres s a             -- ^ The value to be replaced
+  -> QGenExpr ctxt Postgres s a             -- ^ The new value
   -> QGenExpr ctxt Postgres s (V.Vector a)
 arrayReplace_ (QExpr arr) (QExpr fromVal) (QExpr toVal) =
   QExpr (PgExpressionSyntax . mappend (emit "array_replace") . pgParens . mconcat <$> sequenceA
@@ -515,24 +516,26 @@ arrayShuffle_ (QExpr arr) =
 -- an "item" is a slice with a given first subscript.
 --
 -- Precondition: @n@ must not exceed the length of the first dimension.
+--   If n is negative, it will be treated as 0.
 arraySample_
   :: Integral n
-  => QGenExpr ctxt Postgres s (V.Vector a)
-  -> QGenExpr ctxt Postgres s n
+  => QGenExpr ctxt Postgres s (V.Vector a)  -- ^ The source array
+  -> QGenExpr ctxt Postgres s n              -- ^ Number of elements to sample (negative values treated as 0)
   -> QGenExpr ctxt Postgres s (V.Vector a)
 arraySample_ (QExpr arr) (QExpr n) =
   QExpr (PgExpressionSyntax . mappend (emit "array_sample") . pgParens . mconcat <$> sequenceA
     [ fromPgExpression <$> arr
-    , pure (emit ", ")
+    , pure (emit ", greatest(0, ")
     , fromPgExpression <$> n
+    , pure (emit ")")
     ])
 
 -- | Postgres array_to_string(array, delimiter) function.
 -- Converts each element to text and joins with the delimiter. NULLs are omitted.
 arrayToString_
   :: QGenExpr ctxt Postgres s (V.Vector a)
-  -> QGenExpr ctxt Postgres s text
-  -> QGenExpr ctxt Postgres s text
+  -> QGenExpr ctxt Postgres s Text
+  -> QGenExpr ctxt Postgres s Text
 arrayToString_ (QExpr arr) (QExpr delim) =
   QExpr (PgExpressionSyntax <$> do
     arrExpr <- fromPgExpression <$> arr
@@ -544,9 +547,9 @@ arrayToString_ (QExpr arr) (QExpr delim) =
 -- represented by the provided @null_string@.
 arrayToStringWithNull_
   :: QGenExpr ctxt Postgres s (V.Vector a)
-  -> QGenExpr ctxt Postgres s text
-  -> QGenExpr ctxt Postgres s text
-  -> QGenExpr ctxt Postgres s text
+  -> QGenExpr ctxt Postgres s Text
+  -> QGenExpr ctxt Postgres s Text
+  -> QGenExpr ctxt Postgres s Text
 arrayToStringWithNull_ (QExpr arr) (QExpr delim) (QExpr nullStr) =
   QExpr (PgExpressionSyntax <$> do
     arrExpr <- fromPgExpression <$> arr
