@@ -218,6 +218,8 @@ beamSerializeJSON backend v =
          , "be-data" .= v ]
 
 -- | Corresponding deserializer for 'beamSerializeJSON'
+--
+-- @since 0.5.3.2
 beamDeserializeJSON :: Text -> (Value -> Parser a) -> Value -> Parser a
 beamDeserializeJSON backend go =
   withObject "backend-specific item" $ \v -> do
