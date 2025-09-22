@@ -65,7 +65,7 @@ library
                        text         >=1.2.2.0 && <2.2,
                        bytestring   >=0.10    && <0.13,
                        mtl          >=2.2.1   && <2.4,
-                       microlens    >=0.4     && <0.5,
+                       microlens    >=0.4     && <0.6,
                        ghc-prim     >=0.5     && <0.14,
                        free         >=4.12    && <5.3,
                        dlist        >=0.7.1.2 && <1.1,
