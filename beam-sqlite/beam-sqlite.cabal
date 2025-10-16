@@ -72,6 +72,7 @@ test-suite beam-sqlite-tests
   other-modules:
     Database.Beam.Sqlite.Test
     Database.Beam.Sqlite.Test.Insert
+    Database.Beam.Sqlite.Test.InsertOnConflictReturning
     Database.Beam.Sqlite.Test.Migrate
     Database.Beam.Sqlite.Test.Select
   default-language: Haskell2010
