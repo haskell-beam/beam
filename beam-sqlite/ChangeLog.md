@@ -1,8 +1,17 @@
 # Unreleased
 
+## Added features
+
+* `runInsertReturningList` now uses SQLite's relatively new `RETURNING` clause.
+
+## Bux fixes
+
+* Fixed an issue where values inserted with conflicts did not return then when using `runInsertReturningList` (#774) 
+
 ## Updated dependencies
 
-* Updated the upper bound on `time` to include `time-1.14`
+* Updated the lower bound of `direct-sqlite` to `2.3.27`.
+* Updated the upper bound on `time` to include `time-1.14`.
 
 # 0.5.4.1
 
