@@ -61,7 +61,7 @@ testInsertReturningColumnOrder = testCase "runInsertReturningList with mismatchi
                         , TestTable 1 "sally" "apple" ((val_ 56 + val_ 109) `div_` 5) currentTimestamp_ (val_ oneUtcTime)
                         , TestTable 4 "blah" "blah" (-1) currentTimestamp_ (val_ now) ]
 
-    let dateJoined = ttDateJoined (head inserted)
+    let dateJoined : _ = ttDateJoined <$> inserted
 
         expected = [ TestTable 0 "jim" "smith" 19 dateJoined zeroUtcTime
                    , TestTable 1 "sally" "apple" 33 dateJoined oneUtcTime

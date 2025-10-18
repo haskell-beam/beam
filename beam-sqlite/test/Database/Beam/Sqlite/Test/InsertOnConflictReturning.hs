@@ -8,7 +8,6 @@ module Database.Beam.Sqlite.Test.InsertOnConflictReturning (tests) where
 
 import Data.Int (Int32)
 import Data.Text (Text)
-import Data.Time (Day (..), LocalTime, UTCTime (..), fromGregorian, getCurrentTime, secondsToDiffTime)
 import Database.Beam (
     Beamable,
     Columnar,

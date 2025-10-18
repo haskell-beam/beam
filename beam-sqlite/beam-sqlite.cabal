@@ -42,7 +42,9 @@ library
                       aeson         >=0.11 && <2.3,
                       attoparsec    >=0.13 && <0.15,
                       transformers-base    >=0.4  && <0.5,
-                      direct-sqlite >=2.3.24
+                      -- Minimum version of direct-sqlite that includes a version
+                      -- of SQLite that supports the RETURNING construct
+                      direct-sqlite >=2.3.27
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
