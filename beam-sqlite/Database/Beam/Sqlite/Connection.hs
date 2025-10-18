@@ -11,7 +11,6 @@ module Database.Beam.Sqlite.Connection
 
   , runBeamSqlite, runBeamSqliteDebug
 
-    -- * Emulated @INSERT RETURNING@ support
   , insertReturning, runInsertReturningList
   ) where
 
@@ -39,22 +38,21 @@ import           Database.Beam.Schema.Tables ( Beamable
                                              , DatabaseEntityDescriptor(..)
                                              , TableEntity
                                              , TableField(..)
-                                             , allBeamValues
                                              , changeBeamRep )
 import           Database.Beam.Sqlite.Syntax
 
 import           Database.SQLite.Simple ( Connection, ToRow(..), FromRow(..)
-                                        , Query(..), SQLData(..), field
-                                        , execute, execute_
+                                        , SQLData(..), field
+                                        , execute
                                         , withStatement, bind, nextRow
-                                        , query_, open, close )
+                                        , open, close )
 import           Database.SQLite.Simple.FromField ( FromField(..), ResultError(..)
                                                   , returnError, fieldData)
 import           Database.SQLite.Simple.Internal (RowParser(RP), unRP)
 import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
 
-import           Control.Exception (SomeException(..), bracket_, onException, mask)
+import           Control.Exception (SomeException(..))
 import           Control.Monad (forM_)
 import           Control.Monad.Base (MonadBase)
 import           Control.Monad.Fail (MonadFail(..))
@@ -71,20 +69,19 @@ import           Data.ByteString.Builder (toLazyByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
-import           Data.Hashable (hash)
 import           Data.Int
+import           Data.IORef (newIORef, atomicModifyIORef')
 import           Data.Maybe (mapMaybe)
 import           Data.Proxy (Proxy(..))
 import           Data.Scientific (Scientific)
 import           Data.String (fromString)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T (decodeUtf8)
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TL (decodeUtf8)
 import           Data.Time ( LocalTime, UTCTime, Day
-                           , ZonedTime, utc, utcToLocalTime, getCurrentTime )
+                           , ZonedTime, utc, utcToLocalTime )
 import           Data.Typeable (cast)
 import           Data.Word
+import           GHC.IORef (atomicModifyIORef'_)
 import           GHC.TypeLits
 
 import           Network.URI
@@ -335,11 +332,64 @@ instance MonadBeam Sqlite SqliteM where
                                 Nothing -> pure Nothing
                                 Just (BeamSqliteRow row) -> pure row
                runReaderT (runSqliteM (action nextRow')) (logger, conn)
-  runReturningMany SqliteCommandInsert {} _ =
-      fail . mconcat $
-      [ "runReturningMany{Sqlite}: sqlite does not support returning "
-      , "rows from an insert, use Database.Beam.Sqlite.insertReturning "
-      , "for emulation" ]
+  runReturningMany (SqliteCommandInsert (SqliteInsertSyntax tbl fields vs onConflict)) action
+    | SqliteInsertExpressions es <- vs, any (any (== SqliteExpressionDefault)) es =
+      -- SQLite's handling of default values differs from other DBMses because
+      -- it lacks support for DEFAULT. In order to insert a default value in a column,
+      -- the column's name should be omitted from the INSERT statement.
+      --
+      -- This is problematic if you insert multiple rows, some of which have defaults;
+      -- you must use multiple INSERT statements. This is what we do below.
+      --
+      -- However, to respect the 'runReturningMany' interface, be must accumulate the
+      -- results of all those inserts into an 'IORef [a]', and then feed the results
+      -- incrementally to 'action'.
+      SqliteM $ do
+        (logger, conn) <- ask
+        resultsRef <- liftIO (newIORef [])
+        forM_ es $ \row -> do
+          -- RETURNING is only supported by SQLite 3.35+, which requires direct-sqlite 2.3.27+
+          let returningClause = emit " RETURNING " <> commas (map quotedIdentifier fields)
+              (insertFields, insertRow) = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row
+              SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl insertFields (SqliteInsertExpressions [ insertRow ]) onConflict <> returningClause
+              cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
+
+          liftIO $ do
+            logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
+            withStatement conn (fromString cmdString) $ \stmt ->
+              do bind stmt (BeamSqliteParams (D.toList vals))
+                 unfoldM (nextRow stmt) >>= \new -> atomicModifyIORef'_ resultsRef (new ++)
+
+        -- We must reverse the list in the IORef because it has been constructed in reverse
+        -- order. We construct the list in reverse because it's faster to prepend to
+        -- a linked list
+        _ <- liftIO (atomicModifyIORef'_ resultsRef reverse)
+        let nextRow' = liftIO $ do
+              atomicModifyIORef' resultsRef $ \results -> case results of
+                (BeamSqliteRow h:rest) -> (rest, Just h)
+                [] -> ([], Nothing)
+        runSqliteM (action nextRow')
+    | otherwise =
+      SqliteM $ do
+        (logger, conn) <- ask
+        let returningClause = emit " RETURNING " <> commas (map quotedIdentifier fields)
+            SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl fields vs onConflict <> returningClause
+            cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
+        liftIO $ do
+          logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
+          withStatement conn (fromString cmdString) $ \stmt ->
+            do bind stmt (BeamSqliteParams (D.toList vals))
+               let nextRow' = liftIO (nextRow stmt) >>= \x ->
+                              case x of
+                                Nothing -> pure Nothing
+                                Just (BeamSqliteRow row) -> pure row
+               runReaderT (runSqliteM (action nextRow')) (logger, conn)
+
+
+unfoldM :: Monad m => m (Maybe a) -> m [a]
+unfoldM f = go []
+  where
+    go acc = f >>= maybe (pure acc) (\x -> go (x : acc))
 
 instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
   runInsertReturningList = runInsertReturningList
@@ -361,7 +411,7 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs onConflict)
       logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
       execute conn (fromString cmdString) (D.toList vals)
 
--- * emulated INSERT returning support
+-- * INSERT returning support
 
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
 -- into the given table. Use 'runInsertReturningList'
@@ -377,54 +427,7 @@ runInsertReturningList :: (Beamable table, FromBackendRow Sqlite (table Identity
                        => SqlInsert Sqlite table
                        -> SqliteM [ table Identity ]
 runInsertReturningList SqlInsertNoRows = pure []
-runInsertReturningList (SqlInsert tblSettings insertStmt_@(SqliteInsertSyntax nm _ _ _)) =
-  do (logger, conn) <- SqliteM ask
-     SqliteM . liftIO $ do
-       
-       -- We create a pseudo-random savepoint identification that can be referenced
-       -- throughout this operation. -- This used to be based on the process ID 
-       -- (e.g. `System.Posix.Process.getProcessID` for UNIX),
-       -- but using timestamps is more portable; see #738
-       --
-       -- Note that `hash` can return negative numbers, hence the use of `abs`.
-       savepointId <- fromString . show . abs . hash <$> getCurrentTime
-
-       let tableNameTxt = T.decodeUtf8 (BL.toStrict (sqliteRenderSyntaxScript (fromSqliteTableName nm)))
-
-           startSavepoint =
-             execute_ conn (Query ("SAVEPOINT insert_savepoint_" <> savepointId))
-           rollbackToSavepoint =
-             execute_ conn (Query ("ROLLBACK TRANSACTION TO SAVEPOINT insert_savepoint_" <> savepointId))
-           releaseSavepoint =
-             execute_ conn (Query ("RELEASE SAVEPOINT insert_savepoint_" <> savepointId))
-
-           createInsertedValuesTable =
-             execute_ conn (Query ("CREATE TEMPORARY TABLE inserted_values_" <> savepointId <> " AS SELECT * FROM " <> tableNameTxt <> " LIMIT 0"))
-           dropInsertedValuesTable =
-             execute_ conn (Query ("DROP TABLE inserted_values_" <> savepointId))
-
-           createInsertTrigger =
-             execute_ conn (Query ("CREATE TEMPORARY TRIGGER insert_trigger_" <> savepointId <> " AFTER INSERT ON " <> tableNameTxt <> " BEGIN " <>
-                                   "INSERT INTO inserted_values_" <> savepointId <> " SELECT * FROM " <> tableNameTxt <> " WHERE ROWID=last_insert_rowid(); END" ))
-           dropInsertTrigger =
-             execute_ conn (Query ("DROP TRIGGER insert_trigger_" <> savepointId))
-
-
-       mask $ \restore -> do
-         startSavepoint
-         flip onException rollbackToSavepoint . restore $ do
-           x <- bracket_ createInsertedValuesTable dropInsertedValuesTable $
-                bracket_ createInsertTrigger dropInsertTrigger $ do
-                runSqliteInsert logger conn insertStmt_
-
-                let columns = TL.toStrict $ TL.decodeUtf8 $
-                              sqliteRenderSyntaxScript $ commas $
-                              allBeamValues (\(Columnar' projField) -> quotedIdentifier (_fieldName projField)) $
-                              tblSettings
-
-                fmap (\(BeamSqliteRow r) -> r) <$> query_ conn (Query ("SELECT " <> columns <> " FROM inserted_values_" <> savepointId))
-           releaseSavepoint
-           return x
+runInsertReturningList (SqlInsert _ insertCommand) = runReturningList $ SqliteCommandInsert insertCommand
 
 instance Beam.BeamHasInsertOnConflict Sqlite where
   newtype SqlConflictTarget Sqlite table = SqliteConflictTarget
