@@ -2,6 +2,7 @@
 
 ## Updated dependencies
 
+* Updated the upper bound on `parallel` to include `parallel-3.3.0.0`
 * Updated the upper bound on `time` to include `time-1.14`
 
 # 0.5.3.2
