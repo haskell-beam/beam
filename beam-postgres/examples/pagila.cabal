@@ -22,12 +22,42 @@ library
                       scientific,
                       bytestring,
                       text,
+                      generic-random,
+                      QuickCheck,
+                      quickcheck-instances,
                       postgresql-simple,
                       beam-core,
                       beam-postgres,
                       beam-migrate
     hs-source-dirs:   src
-    
+
+executable pagila-print
+    import:           warnings
+    main-is:          Main.hs
+    build-depends:    base,
+                      pagila,
+                      text,
+                      bytestring,
+                      beam-core,
+                      beam-postgres,
+                      beam-migrate
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+executable pagila-migration
+    import:           warnings
+    main-is:          RunMigration.hs
+    ghc-options:      -main-is RunMigration
+    build-depends:    base,
+                      pagila,
+                      text,
+                      bytestring,
+                      beam-core,
+                      beam-postgres,
+                      beam-migrate,
+                      postgresql-simple
+    hs-source-dirs:   app
+    default-language: Haskell2010
 
 test-suite pagila-test
     import:           warnings

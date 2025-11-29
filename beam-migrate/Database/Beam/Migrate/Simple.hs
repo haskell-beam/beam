@@ -6,6 +6,7 @@ module Database.Beam.Migrate.Simple
   , simpleSchema
   , simpleMigration
   , runSimpleMigration
+  , backendMigrationStepsScript
   , backendMigrationScript
 
   , VerificationResult(..)
@@ -339,14 +340,24 @@ runSimpleMigration runner hdl =
   runner hdl . mapM_ runNoReturn
 
 -- | Given a function to convert a command to a 'String', produce a script that
+-- will execute the given migration steps. Usually, the function you provide
+-- eventually calls 'displaySyntax' to render the command.
+backendMigrationStepsScript :: BeamSqlBackend be
+                            => (BeamSqlBackendSyntax be -> String)
+                            -> MigrationSteps be () a
+                            -> String
+backendMigrationStepsScript render migSteps =
+  migrateScript ((++"\n") . T.unpack) ((++"\n") . render) migSteps
+
+-- | Given a function to convert a command to a 'String', produce a script that
 -- will execute the given migration. Usually, the function you provide
--- eventually calls 'displaySyntax' to rendere the command.
+-- eventually calls 'displaySyntax' to render the command.
 backendMigrationScript :: BeamSqlBackend be
                        => (BeamSqlBackendSyntax be -> String)
                        -> Migration be a
                        -> String
 backendMigrationScript render mig =
-  migrateScript ((++"\n") . T.unpack) ((++"\n") . render) (migrationStep "Migration Script" (\() -> mig))
+  backendMigrationStepsScript render (migrationStep "Migration Script" (\() -> mig))
 
 -- | Given a 'BeamMigrationBackend', get a string representing a Haskell module
 -- that would be a good starting point for further development.
