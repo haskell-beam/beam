@@ -32,7 +32,7 @@ module Database.Beam.Postgres.PgSpecific
 
   , (@>), (<@), (->#), (->$)
   , (->>#), (->>$), (#>), (#>>)
-  , (?), (?|), (?&)
+  , (?), (?|), (?&), (||.)
 
   , withoutKey, withoutIdx
   , withoutKeys
@@ -122,7 +122,7 @@ module Database.Beam.Postgres.PgSpecific
   )
 where
 
-import           Database.Beam hiding (char, double)
+import           Database.Beam hiding ((||.), char, double)
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Migrate ( HasDefaultSqlDataType(..) )
 import           Database.Beam.Postgres.Syntax
@@ -1140,6 +1140,13 @@ QExpr a ?| QExpr b =
   QExpr (pgBinOp "?|" <$> a <*> b)
 QExpr a ?& QExpr b =
   QExpr (pgBinOp "?&" <$> a <*> b)
+
+-- | Postgres @||@ operator. Concatenates two jsonb values into a new jsonb value.
+(||.) :: QGenExpr ctxt Postgres s (PgJSONB a)
+      -> QGenExpr ctxt Postgres s (PgJSONB a)
+      -> QGenExpr ctxt Postgres s (PgJSONB a)
+QExpr a ||. QExpr b =
+  QExpr (pgBinOp "||" <$> a <*> b)
 
 -- | Postgres @-@ operator on json objects. Returns the supplied json object
 -- with the supplied key deleted. See 'withoutIdx' for the corresponding
