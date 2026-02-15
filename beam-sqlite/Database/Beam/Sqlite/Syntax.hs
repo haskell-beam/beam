@@ -133,7 +133,7 @@ instance Hashable SqliteData where
 -- | Convert the first argument of 'SQLiteSyntax' to a 'ByteString' 'Builder',
 -- where all the data has been replaced by @"?"@ placeholders.
 withPlaceholders :: ((SQLData -> Builder) -> Builder) -> Builder
-withPlaceholders build = build (\_ -> "?")
+withPlaceholders build = build (const "?")
 
 -- | Embed a 'ByteString' directly in the syntax
 emit :: ByteString -> SqliteSyntax

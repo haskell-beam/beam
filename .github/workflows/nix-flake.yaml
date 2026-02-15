@@ -17,6 +17,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
+      # duckdb-ffi is marked as broken, and thus we cannot build
+      # beam-duckdb via nix at this time
+      - name: Disable beam-duckdb
+        run: |
+          sed -i '/beam-duckdb/d' ./cabal.project
       - name: "Check `nix develop` shell"
         run: nix develop --check
       - name: "Check `nix develop` shell can run command"
