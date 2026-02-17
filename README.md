@@ -1,16 +1,24 @@
-# Beam: a type-safe, non-TH Haskell relational database library and ORM
+# Beam: a type-safe Haskell relational database library
 
-[![Build status](https://github.com/haskell-beam/beam/workflows/Build/badge.svg)](https://github.com/haskell-beam/beam/workflows/Build/badge.svg)
-[![Build status](https://github.com/haskell-beam/beam/actions/workflows/nix-flake.yaml/badge.svg)](https://github.com/haskell-beam/beam/actions/workflows/nix-flake.yaml)
+[![Build](https://github.com/haskell-beam/beam/actions/workflows/build.yaml/badge.svg)](https://github.com/haskell-beam/beam/actions/workflows/build.yaml)
+[![Nix Flake](https://github.com/haskell-beam/beam/actions/workflows/nix-flake.yaml/badge.svg)](https://github.com/haskell-beam/beam/actions/workflows/nix-flake.yaml)
 
 If you use beam commercially, please consider a donation to make this project possible: https://liberapay.com/tathougies
 
-Beam is a Haskell interface to relational databases. Beam uses the Haskell type
-system to verify that queries are type-safe before sending them to the database
-server. Queries are written in a straightforward, natural monadic syntax.
-Combinators are provided for all standard SQL92 features, and a significant
-subset of SQL99, SQL2003, and SQL2008 features. For your convenience a thorough
-compatibility matrix is
+Beam is a Haskell interface to relational databases. In the design space of 
+database libraries, Beam has the following features:
+* Type-safe queries checked at compile-time;
+* Predictable query performance by closely matching SQL semantics;
+* Support for any relational database via pluggable backends. Backends support additional, 
+  database-specific capabilities;
+* Database entities, such as tables, are modeled using standard
+  Haskell code (in particular, Template Haskell is not needed);
+* Generated SQL queries are human-readable.
+
+Beam uses the Haskell type system to verify that queries are type-safe at compile time. 
+Queries are written in a straightforward, natural monadic syntax. Combinators are provided for all 
+standard SQL92 features, and a significant subset of SQL99, SQL2003, and SQL2008 
+features. For your convenience a thorough compatibility matrix is
 maintained [here](https://haskell-beam.github.io/beam/about/compatibility/).
 
 Beam is standards compliant but not naive. We recognize that different database
