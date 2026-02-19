@@ -11,6 +11,9 @@ maintainer:         laurent.decotret@outlook.com
 category:           Database
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
+extra-source-files: tests/data/gen_parquet.py
+                    tests/data/test1.parquet
+                    tests/data/test2.parquet
 
 common common
     default-language: GHC2021
@@ -25,8 +28,10 @@ common common
 library
     import:           common
     exposed-modules:  Database.Beam.DuckDB
-    other-modules:    Database.Beam.DuckDB.Syntax
+    other-modules:    Database.Beam.DuckDB.Backend
+                      Database.Beam.DuckDB.Syntax
                       Database.Beam.DuckDB.Syntax.Builder
+                      Database.Beam.DuckDB.Syntax.Extensions
     build-depends:    base >=4.11 && <5
                     , beam-core
                     , beam-migrate
@@ -44,7 +49,8 @@ library
 test-suite beam-duckdb-test
     import:           common
     default-language: Haskell2010
-    other-modules:    Database.Beam.DuckDB.Test.Query
+    other-modules:    Database.Beam.DuckDB.Test.Extensions
+                      Database.Beam.DuckDB.Test.Query
     type:             exitcode-stdio-1.0
     hs-source-dirs:   tests
     main-is:          Main.hs
@@ -57,3 +63,4 @@ test-suite beam-duckdb-test
                     , tasty-hedgehog
                     , tasty-hunit
                     , text
+                    , time

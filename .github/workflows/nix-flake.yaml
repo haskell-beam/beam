@@ -21,7 +21,8 @@ jobs:
       # beam-duckdb via nix at this time
       - name: Disable beam-duckdb
         run: |
-          sed -i '/beam-duckdb/d' ./cabal.project
+          # We must specify a backup extension on MacOS
+          sed -i.bak '/beam-duckdb/d' cabal.project && rm cabal.project.bak
       - name: "Check `nix develop` shell"
         run: nix develop --check
       - name: "Check `nix develop` shell can run command"

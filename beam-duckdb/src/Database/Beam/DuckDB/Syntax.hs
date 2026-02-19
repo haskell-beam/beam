@@ -6,19 +6,20 @@
 -- TODO: clean up unused top binds
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Database.Beam.DuckDB.Syntax
-  ( -- * Command
-    DuckDBCommandSyntax (..),
+module Database.Beam.DuckDB.Syntax (
+  -- * Command
+  DuckDBCommandSyntax (..),
 
-    -- * Concrete syntaxes
-    DuckDBSelectSyntax (..),
-    DuckDBExpressionSyntax (..),
-    DuckDBInsertSyntax (..),
-    DuckDBUpdateSyntax (..),
-    DuckDBDeleteSyntax (..),
-    DuckDBTableNameSyntax (..),
-    DuckDBOnConflictSyntax (..),
-  )
+  -- * Concrete syntaxes
+  DuckDBSelectSyntax (..),
+  DuckDBFromSyntax (..),
+  DuckDBExpressionSyntax (..),
+  DuckDBInsertSyntax (..),
+  DuckDBUpdateSyntax (..),
+  DuckDBDeleteSyntax (..),
+  DuckDBTableNameSyntax (..),
+  DuckDBOnConflictSyntax (..),
+)
 where
 
 import Data.Coerce (coerce)
@@ -27,31 +28,31 @@ import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Word (Word16, Word32, Word64, Word8)
-import Database.Beam.Backend
-  ( HasSqlValueSyntax (..),
-    IsSql92AggregationExpressionSyntax (..),
-    IsSql92AggregationSetQuantifierSyntax (..),
-    IsSql92DataTypeSyntax (..),
-    IsSql92DeleteSyntax (..),
-    IsSql92ExpressionSyntax (..),
-    IsSql92ExtractFieldSyntax (..),
-    IsSql92FieldNameSyntax (..),
-    IsSql92FromOuterJoinSyntax (..),
-    IsSql92FromSyntax (..),
-    IsSql92GroupingSyntax (..),
-    IsSql92InsertSyntax (..),
-    IsSql92InsertValuesSyntax (..),
-    IsSql92OrderingSyntax (..),
-    IsSql92ProjectionSyntax (..),
-    IsSql92QuantifierSyntax (..),
-    IsSql92SelectSyntax (..),
-    IsSql92SelectTableSyntax (..),
-    IsSql92Syntax (..),
-    IsSql92TableNameSyntax (..),
-    IsSql92TableSourceSyntax (..),
-    IsSql92UpdateSyntax (..),
-    SqlNull (..),
-  )
+import Database.Beam.Backend (
+  HasSqlValueSyntax (..),
+  IsSql92AggregationExpressionSyntax (..),
+  IsSql92AggregationSetQuantifierSyntax (..),
+  IsSql92DataTypeSyntax (..),
+  IsSql92DeleteSyntax (..),
+  IsSql92ExpressionSyntax (..),
+  IsSql92ExtractFieldSyntax (..),
+  IsSql92FieldNameSyntax (..),
+  IsSql92FromOuterJoinSyntax (..),
+  IsSql92FromSyntax (..),
+  IsSql92GroupingSyntax (..),
+  IsSql92InsertSyntax (..),
+  IsSql92InsertValuesSyntax (..),
+  IsSql92OrderingSyntax (..),
+  IsSql92ProjectionSyntax (..),
+  IsSql92QuantifierSyntax (..),
+  IsSql92SelectSyntax (..),
+  IsSql92SelectTableSyntax (..),
+  IsSql92Syntax (..),
+  IsSql92TableNameSyntax (..),
+  IsSql92TableSourceSyntax (..),
+  IsSql92UpdateSyntax (..),
+  SqlNull (..),
+ )
 import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, emit, emitIntegral, emitRealFloat, emitValue, parens, quotedIdentifier, spaces)
 import Database.Beam.Migrate.Serialization (BeamSerializedDataType)
 import Database.DuckDB.Simple (Null (Null), ToField)
@@ -78,8 +79,8 @@ newtype DuckDBSelectSyntax = DuckDBSelectSyntax {fromDuckDBSelect :: DuckDBSynta
 newtype DuckDBSelectTableSyntax = DuckDBSelectTableSyntax {fromDuckDBSelectTable :: DuckDBSyntax}
 
 data DuckDBOrderingSyntax = DuckDBOrderingSyntax
-  { duckDBOrdering :: DuckDBSyntax,
-    -- DuckDB re-uses the Postgres parser, and therefore
+  { duckDBOrdering :: DuckDBSyntax
+  , -- DuckDB re-uses the Postgres parser, and therefore
     -- has the same null ordering properties
     duckDBNullOrdering :: Maybe DuckDBNullOrdering
   }
@@ -104,8 +105,8 @@ newtype DuckDBFieldNameSyntax = DuckDBFieldNameSyntax {fromDuckDBFieldName :: Du
 newtype DuckDBComparisonQuantifierSyntax = DuckDBComparisonQuantifierSyntax {fromDuckDBComparisonQuantifier :: DuckDBSyntax}
 
 data DuckDBDataTypeSyntax = DuckDBDataTypeSyntax
-  { duckDBDataType :: DuckDBSyntax,
-    duckDBDataTypeSerialized :: BeamSerializedDataType
+  { duckDBDataType :: DuckDBSyntax
+  , duckDBDataTypeSerialized :: BeamSerializedDataType
   }
 
 newtype DuckDBExtractFieldSyntax = DuckDBExtractFieldSyntax {fromDuckDBExtractField :: DuckDBSyntax}
@@ -142,13 +143,13 @@ instance IsSql92SelectTableSyntax DuckDBSelectTableSyntax where
   selectTableStmt setQuantifier proj from where_ grouping having =
     DuckDBSelectTableSyntax $
       mconcat
-        [ emit "SELECT ",
-          maybe mempty ((<> emit " ") . fromDuckDBAggregationSetQuantifier) setQuantifier,
-          fromDuckDBProjection proj,
-          maybe mempty ((emit " FROM " <>) . fromDuckDBFrom) from,
-          maybe mempty ((emit " WHERE " <>) . fromDuckDBExpression) where_,
-          maybe mempty ((emit " GROUP BY " <>) . fromDuckDBGrouping) grouping,
-          maybe mempty ((emit " HAVING " <>) . fromDuckDBExpression) having
+        [ emit "SELECT "
+        , maybe mempty ((<> emit " ") . fromDuckDBAggregationSetQuantifier) setQuantifier
+        , fromDuckDBProjection proj
+        , maybe mempty ((emit " FROM " <>) . fromDuckDBFrom) from
+        , maybe mempty ((emit " WHERE " <>) . fromDuckDBExpression) where_
+        , maybe mempty ((emit " GROUP BY " <>) . fromDuckDBGrouping) grouping
+        , maybe mempty ((emit " HAVING " <>) . fromDuckDBExpression) having
         ]
 
   unionTables unionAll = tableOp (if unionAll then "UNION ALL" else "UNION")
@@ -508,12 +509,12 @@ instance IsSql92SelectSyntax DuckDBSelectSyntax where
   selectStmt tbl ordering limit offset =
     DuckDBSelectSyntax $
       mconcat
-        [ fromDuckDBSelectTable tbl,
-          case ordering of
+        [ fromDuckDBSelectTable tbl
+        , case ordering of
             [] -> mempty
-            ordering' -> emit " ORDER BY " <> commas (map duckDBOrdering ordering'),
-          maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit,
-          maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset
+            ordering' -> emit " ORDER BY " <> commas (map duckDBOrdering ordering')
+        , maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit
+        , maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset
         ]
 
 -- | DuckDB @ON CONFLICT@ syntax
