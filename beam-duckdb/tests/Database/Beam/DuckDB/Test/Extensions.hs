@@ -10,9 +10,9 @@
 module Database.Beam.DuckDB.Test.Extensions (tests) where
 
 import Data.Int (Int32)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text (Text)
 import Data.Time (Day)
-import Data.List.NonEmpty(NonEmpty((:|)))
 import Database.Beam
   ( Beamable,
     Columnar,
@@ -21,14 +21,33 @@ import Database.Beam
     Generic,
     Identity,
     Table (..),
+    aggregate_,
+    as_,
+    countAll_,
     dbModification,
     defaultDbSettings,
     runSelectReturningList,
+    runSelectReturningOne,
     select,
     tableModification,
     withDbModification,
   )
-import Database.Beam.DuckDB (DuckDB, ParquetFileEntity, allFromParquet_, modifyParquetFileFields, multipleParquetFiles, parquetFile, runBeamDuckDB, singleParquetFile)
+import Database.Beam.DuckDB
+  ( DuckDB,
+    IcebergTableEntity,
+    ParquetFileEntity,
+    allFromIceberg_,
+    allFromParquet_,
+    allowMovedPaths,
+    defaultIcebergTableOptions,
+    icebergTableWith,
+    modifyIcebergTableFields,
+    modifyParquetFileFields,
+    multipleParquetFiles,
+    parquetFile,
+    runBeamDuckDB,
+    singleParquetFile,
+  )
 import Database.DuckDB.Simple (Connection, withConnection)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
@@ -41,7 +60,10 @@ tests =
         "Parquet"
         [ testSelectFromParquet,
           testSelectFromMultipleParquetFiles
-        ]
+        ],
+      testGroup
+        "Apache Iceberg"
+        [testCountFromIceberg]
     ]
 
 testSelectFromParquet :: TestTree
@@ -63,6 +85,15 @@ testSelectFromMultipleParquetFiles = testCase "Selecting records from multiple P
           exam <- allFromParquet_ (_dbExamsMulti testDb)
           pure (_examName exam)
   results @?= ["alice", "bob", "carol", "dave", "erika", "francis", "genevieve", "hugo"]
+
+testCountFromIceberg :: TestTree
+testCountFromIceberg = testCase "Counting records from an Apache Iceberg table" $ do
+  results <- withTestDb $ \conn ->
+    runBeamDuckDB conn $
+      runSelectReturningOne $
+        select $
+          aggregate_ (\_ -> as_ @Int32 countAll_) (allFromIceberg_ (_dbLineItems testDb))
+  results @?= Just 51793 -- From DuckDB's documentation
 
 data ExamT f = Exam
   { _examId :: Columnar f Int32,
@@ -97,9 +128,51 @@ instance Table ExamT where
 
 instance Beamable (PrimaryKey ExamT)
 
+data LineItemT f = Lineitem
+  { _lineitemOrderkey :: Columnar f Int32,
+    _lineitemPartkey :: Columnar f Int32,
+    _lineitemSuppkey :: Columnar f Int32,
+    _lineitemLinenumber :: Columnar f Int32,
+    _lineitemQuantity :: Columnar f Double,
+    _lineitemExtendedprice :: Columnar f Double,
+    _lineitemDiscount :: Columnar f Double,
+    _lineitemTax :: Columnar f Double,
+    _lineitemReturnflag :: Columnar f Text,
+    _lineitemLinestatus :: Columnar f Text,
+    _lineitemShipdate :: Columnar f Day,
+    _lineitemCommitdate :: Columnar f Day,
+    _lineitemReceiptdate :: Columnar f Day,
+    _lineitemShipinstruct :: Columnar f Text,
+    _lineitemShipmode :: Columnar f Text,
+    _lineitemComment :: Columnar f Text
+  }
+  deriving (Generic)
+
+type Lineitem = LineItemT Identity
+
+deriving instance Show Lineitem
+
+deriving instance Eq Lineitem
+
+instance Beamable LineItemT
+
+instance Table LineItemT where
+  data PrimaryKey LineItemT f
+    = LineItemKey (Columnar f Int32) (Columnar f Int32)
+    deriving (Generic)
+  primaryKey li =
+    LineItemKey (_lineitemOrderkey li) (_lineitemLinenumber li)
+
+instance Beamable (PrimaryKey LineItemT)
+
+deriving instance Show (PrimaryKey LineItemT Identity)
+
+deriving instance Eq (PrimaryKey LineItemT Identity)
+
 data TestDB f = TestDB
   { _dbExams :: f (ParquetFileEntity ExamT),
-    _dbExamsMulti :: f (ParquetFileEntity ExamT) -- set up with multiple parquet files
+    _dbExamsMulti :: f (ParquetFileEntity ExamT), -- set up with multiple parquet files
+    _dbLineItems :: f (IcebergTableEntity LineItemT)
   }
   deriving (Generic, Database DuckDB)
 
@@ -127,6 +200,29 @@ testDb =
                   _examName = "name",
                   _examScore = "score",
                   _examDate = "exam_date"
+                },
+        _dbLineItems =
+          icebergTableWith
+            "tests/data/lineitem_iceberg"
+            (defaultIcebergTableOptions {allowMovedPaths = Just True})
+            <> modifyIcebergTableFields
+              tableModification
+                { _lineitemOrderkey = "l_orderkey",
+                  _lineitemPartkey = "l_partkey",
+                  _lineitemSuppkey = "l_suppkey",
+                  _lineitemLinenumber = "l_linenumber",
+                  _lineitemQuantity = "l_quantity",
+                  _lineitemExtendedprice = "l_extendedprice",
+                  _lineitemDiscount = "l_discount",
+                  _lineitemTax = "l_tax",
+                  _lineitemReturnflag = "l_returnflag",
+                  _lineitemLinestatus = "l_linestatus",
+                  _lineitemShipdate = "l_shipdate",
+                  _lineitemCommitdate = "l_commitdate",
+                  _lineitemReceiptdate = "l_receiptdate",
+                  _lineitemShipinstruct = "l_shipinstruct",
+                  _lineitemShipmode = "l_shipmode",
+                  _lineitemComment = "l_comment"
                 }
       }
 
