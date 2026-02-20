@@ -16,7 +16,7 @@ import Data.Functor (($>))
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Text (Text)
 import Data.Time (Day, LocalTime, TimeOfDay, UTCTime)
-import Data.UUID (UUID)
+import Data.UUID.Types (UUID)
 import Data.Word (Word16, Word32, Word64, Word8)
 import Database.Beam (HasQBuilder, HasSqlEqualityCheck, HasSqlInTable (..), HasSqlQuantifiedEqualityCheck)
 import Database.Beam.Backend (

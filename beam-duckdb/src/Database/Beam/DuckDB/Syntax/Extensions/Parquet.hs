@@ -120,6 +120,9 @@ instance (Beamable table) => IsDatabaseEntity DuckDB (ParquetFileEntity table) w
         parquetTableSettings = defTblFieldSettings
       }
 
+-- | Declare a Parquet file (or files) as the source of data for a database.
+-- Use 'modifyParquetFileFields' to specify column names, and finally query data
+-- using 'allFromParquet_'.
 parquetFile ::
   -- | File path or glob
   ParquetSource ->

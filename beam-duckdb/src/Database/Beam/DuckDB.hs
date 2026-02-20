@@ -6,16 +6,58 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Database.Beam.DuckDB (
-  DuckDB,
-  runBeamDuckDB,
-  runBeamDuckDBDebug,
-  module Database.Beam.DuckDB.Syntax.Extensions,
-)
+-- | DuckDB is a powerful in-process database specialized in analytical processing workloads.
+--
+-- The @beam-duckdb@ library is built atop of @duckdb-simple@, which is
+-- used for connection management, transaction support, serialization, and
+-- deserialization.
+--
+-- @beam-duckdb@ supports most beam features as well as many DuckDB-specific
+-- features, such as support for reading Parquet files and Apache Iceberg tables.
+module Database.Beam.DuckDB
+  ( -- * Executing DuckDB queries
+    runBeamDuckDB,
+    runBeamDuckDBDebug,
+
+    -- * Backend datatype
+    DuckDB,
+    DuckDBM,
+
+    -- * DuckDB-specific functionality
+
+    -- ** Parquet support
+
+    -- *** Specifying Parquet files as sources of data
+    parquetFile,
+    modifyParquetFileFields,
+    ParquetFileEntity,
+
+    -- *** Specifying the source of Parquet-encoded data
+    ParquetSource,
+    singleParquetFile,
+    multipleParquetFiles,
+
+    -- *** Querying data from a Parquet file
+    allFromParquet_,
+
+    -- ** Apache Iceberg tables support
+
+    -- *** Specifying Iceberg tables as part of the database
+    icebergTable,
+    icebergTableWith,
+    modifyIcebergTableFields,
+    IcebergTableEntity,
+
+    -- *** Iceberg table options
+    IcebergTableOptions (..),
+    defaultIcebergTableOptions,
+
+    -- *** Querying data from a Parquet file
+    allFromIceberg_,
+  )
 where
 
 import Control.Exception (SomeException (..))
@@ -32,41 +74,43 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as Text.Lazy
 import qualified Data.Text.Lazy.Builder as Builder
-import Database.Beam.Backend (
-  BeamRowReadError (..),
-  ColumnParseError (..),
-  FromBackendRow,
-  FromBackendRowF (..),
-  FromBackendRowM (..),
-  MonadBeam,
- )
+import Database.Beam.Backend
+  ( BeamRowReadError (..),
+    ColumnParseError (..),
+    FromBackendRow,
+    FromBackendRowF (..),
+    FromBackendRowM (..),
+    MonadBeam,
+  )
 import Database.Beam.Backend.SQL (FromBackendRow (..), MonadBeam (..))
 import Database.Beam.DuckDB.Backend (DuckDB)
+import Database.Beam.DuckDB.Syntax
+  ( DuckDBCommandSyntax (..),
+  )
+import Database.Beam.DuckDB.Syntax.Builder
+  ( DuckDBSyntax (..),
+    SomeField (..),
+    withPlaceholder,
+  )
 import Database.Beam.DuckDB.Syntax.Extensions
-import Database.Beam.DuckDB.Syntax (
-  DuckDBCommandSyntax (..),
- )
-import Database.Beam.DuckDB.Syntax.Builder (
-  DuckDBSyntax (..),
-  SomeField (..),
-  withPlaceholder,
- )
 import Database.DuckDB.Simple (Connection, FromRow, Query (Query), ResultError (..), RowParser, ToField (toField), ToRow (toRow), bind, execute, nextRow, withStatement)
 import Database.DuckDB.Simple.FromRow (FromRow (..), RowParser (..), field)
 import Database.DuckDB.Simple.Ok (Ok (..))
 
-{- | 'MonadBeam' instance inside which DuckDB queries are run. See the
-<https://haskell-beam.github.io/beam/ user guide> for more information
--}
+-- | 'MonadBeam' instance inside which DuckDB queries are run. See the
+-- <https://haskell-beam.github.io/beam/ user guide> for more information
 newtype DuckDBM a
   = DuckDBM
-  { runDuckDBM :: ReaderT (Text -> IO (), Connection) IO a
-  {- ^ Run an IO action with access to a DuckDB connection and a debug logging
-  function, called or each query submitted on the connection.
-  -}
+  { -- | Run an IO action with access to a DuckDB connection and a debug logging
+    --  function, called or each query submitted on the connection.
+    runDuckDBM :: ReaderT (Text -> IO (), Connection) IO a
   }
   deriving (Monad, Functor, Applicative, MonadIO, MonadFail)
 
+-- | Execute queries on a DuckDB 'Connection'.
+--
+-- To trace the exact SQL statements being generated,
+-- use 'runBeamDuckDBDebug' instead.
 runBeamDuckDB :: Connection -> DuckDBM a -> IO a
 runBeamDuckDB = runBeamDuckDBDebug (\_ -> pure ())
 
@@ -106,76 +150,76 @@ newtype BeamDuckDBRow a = BeamDuckDBRow a
 
 instance (FromBackendRow DuckDB a) => FromRow (BeamDuckDBRow a) where
   fromRow = BeamDuckDBRow <$> runF fromBackendRow' finish step
-   where
-    FromBackendRowM fromBackendRow' = fromBackendRow
+    where
+      FromBackendRowM fromBackendRow' = fromBackendRow
 
-    translateErrors :: Maybe Int -> SomeException -> Maybe SomeException
-    translateErrors col (SomeException e) =
-      case cast e of
-        Just
-          ( ConversionFailed
-              { errSQLType = typeString
-              , errHaskellType = hsString
-              , errMessage = msg
-              }
-            ) ->
-            Just
-              ( SomeException
-                  ( BeamRowReadError
-                      col
-                      ( ColumnTypeMismatch
-                          (Text.unpack hsString)
-                          (Text.unpack typeString)
-                          ("conversion failed: " ++ Text.unpack msg)
-                      )
-                  )
-              )
-        Just (UnexpectedNull{}) ->
-          Just (SomeException (BeamRowReadError col ColumnUnexpectedNull))
-        Just
-          ( Incompatible
-              { errSQLType = typeString
-              , errHaskellType = hsString
-              , errMessage = msg
-              }
-            ) ->
-            Just
-              ( SomeException
-                  ( BeamRowReadError
-                      col
-                      ( ColumnTypeMismatch
-                          (Text.unpack hsString)
-                          (Text.unpack typeString)
-                          ("incompatible: " ++ Text.unpack msg)
-                      )
-                  )
-              )
-        Nothing -> Nothing
+      translateErrors :: Maybe Int -> SomeException -> Maybe SomeException
+      translateErrors col (SomeException e) =
+        case cast e of
+          Just
+            ( ConversionFailed
+                { errSQLType = typeString,
+                  errHaskellType = hsString,
+                  errMessage = msg
+                }
+              ) ->
+              Just
+                ( SomeException
+                    ( BeamRowReadError
+                        col
+                        ( ColumnTypeMismatch
+                            (Text.unpack hsString)
+                            (Text.unpack typeString)
+                            ("conversion failed: " ++ Text.unpack msg)
+                        )
+                    )
+                )
+          Just (UnexpectedNull {}) ->
+            Just (SomeException (BeamRowReadError col ColumnUnexpectedNull))
+          Just
+            ( Incompatible
+                { errSQLType = typeString,
+                  errHaskellType = hsString,
+                  errMessage = msg
+                }
+              ) ->
+              Just
+                ( SomeException
+                    ( BeamRowReadError
+                        col
+                        ( ColumnTypeMismatch
+                            (Text.unpack hsString)
+                            (Text.unpack typeString)
+                            ("incompatible: " ++ Text.unpack msg)
+                        )
+                    )
+                )
+          Nothing -> Nothing
 
-    finish = pure
+      finish = pure
 
-    step :: forall a'. FromBackendRowF DuckDB (RowParser a') -> RowParser a'
-    step (ParseOneField next) =
-      RowParser $ ReaderT $ \ro -> StateT $ \st@(col, _) ->
-        case runStateT (runReaderT (runRowParser field) ro) st of
-          Ok (x, st') -> runStateT (runReaderT (runRowParser (next x)) ro) st'
-          Errors errs -> Errors (mapMaybe (translateErrors (Just col)) errs)
-    step (Alt (FromBackendRowM a) (FromBackendRowM b) next) = do
-      RowParser $ do
-        let RowParser a' = runF a finish step
-            RowParser b' = runF b finish step
+      step :: forall a'. FromBackendRowF DuckDB (RowParser a') -> RowParser a'
+      step (ParseOneField next) =
+        RowParser $ ReaderT $ \ro -> StateT $ \st@(col, _) ->
+          case runStateT (runReaderT (runRowParser field) ro) st of
+            Ok (x, st') -> runStateT (runReaderT (runRowParser (next x)) ro) st'
+            Errors errs -> Errors (mapMaybe (translateErrors (Just col)) errs)
+      step (Alt (FromBackendRowM a) (FromBackendRowM b) next) = do
+        RowParser $ do
+          let RowParser a' = runF a finish step
+              RowParser b' = runF b finish step
 
-        st <- lift get
-        ro <- ask
-        case runStateT (runReaderT a' ro) st of
-          Ok (ra, st') -> do
-            lift $ put st'
-            runRowParser (next ra)
-          Errors aErrs ->
-            case runStateT (runReaderT b' ro) st of
-              Ok (rb, st') -> do
-                lift $ put st'
-                runRowParser (next rb)
-              Errors bErrs ->
-                lift (lift (Errors (aErrs ++ bErrs)))
-    step (FailParseWith err) = RowParser (lift (lift (Errors [SomeException err])))
+          st <- lift get
+          ro <- ask
+          case runStateT (runReaderT a' ro) st of
+            Ok (ra, st') -> do
+              lift $ put st'
+              runRowParser (next ra)
+            Errors aErrs ->
+              case runStateT (runReaderT b' ro) st of
+                Ok (rb, st') -> do
+                  lift $ put st'
+                  runRowParser (next rb)
+                Errors bErrs ->
+                  lift (lift (Errors (aErrs ++ bErrs)))
+      step (FailParseWith err) = RowParser (lift (lift (Errors [SomeException err])))

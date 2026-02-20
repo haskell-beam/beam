@@ -116,6 +116,8 @@ instance (Beamable table) => IsDatabaseEntity DuckDB (IcebergTableEntity table) 
       }
 
 -- | Define an Apache Iceberg table with default table options.
+-- Use 'modifyIcebergTableFields' to specify column names, and finally query data
+-- using 'allFromIceberg_'.
 --
 -- See 'icebergTableWith' if you want to change the default options.
 icebergTable ::
@@ -125,6 +127,8 @@ icebergTable ::
 icebergTable path = icebergTableWith path defaultIcebergTableOptions
 
 -- | Define an Apache Iceberg table with options.
+-- Use 'modifyIcebergTableFields' to specify column names, and finally query data
+-- using 'allFromIceberg_'.
 --
 -- See 'icebergTable' if you want to use default options.
 icebergTableWith ::
