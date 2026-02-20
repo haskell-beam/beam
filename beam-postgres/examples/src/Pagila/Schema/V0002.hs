@@ -39,6 +39,10 @@ import Database.Beam.Migrate.SQL.Tables
 
 import Data.Time.LocalTime (LocalTime)
 
+import Test.QuickCheck
+import Generic.Random
+import Test.QuickCheck.Instances ()
+
 -- film actor
 
 data FilmActorT f
@@ -49,6 +53,8 @@ data FilmActorT f
   } deriving Generic
 type FilmActor = FilmActorT Identity
 deriving instance Eq FilmActor; deriving instance Show FilmActor
+instance Arbitrary FilmActor where
+  arbitrary = genericArbitrary uniform
 
 instance Table FilmActorT where
   data PrimaryKey FilmActorT f = FilmActorId (PrimaryKey V0001.ActorT f) (PrimaryKey V0001.FilmT f)
@@ -56,6 +62,8 @@ instance Table FilmActorT where
   primaryKey fa = FilmActorId (filmActorActor fa) (filmActorFilm fa)
 type FilmActorId = PrimaryKey FilmActorT Identity
 deriving instance Eq FilmActorId; deriving instance Show FilmActorId
+instance Arbitrary FilmActorId where
+  arbitrary = genericArbitrary uniform
 
 -- Pagila db
 
@@ -67,6 +75,8 @@ instance Table NewStaffT where
   primaryKey = NewStaffId . staffId
 type NewStaffId = PrimaryKey NewStaffT Identity
 deriving instance Eq NewStaffId; deriving instance Show NewStaffId
+instance Arbitrary NewStaffId where
+  arbitrary = genericArbitrary uniform
 
 data NewStaffT f
   = NewStaffT
@@ -85,6 +95,9 @@ data NewStaffT f
   } deriving Generic
 type NewStaff = NewStaffT Identity
 deriving instance Eq NewStaff; deriving instance Show NewStaff
+instance Arbitrary NewStaff where
+  arbitrary = genericArbitrary uniform
+
 instance Beamable (PrimaryKey NewStaffT)
 instance Beamable NewStaffT
 
