@@ -14,6 +14,7 @@ extra-doc-files:    CHANGELOG.md
 extra-source-files: tests/data/gen_parquet.py
                     tests/data/test1.parquet
                     tests/data/test2.parquet
+                    tests/data/flights.csv
                     tests/data/lineitem_iceberg/data/00000-411-0792dcfe-4e25-4ca3-8ada-175286069a47-00001.parquet
                     tests/data/lineitem_iceberg/data/00041-414-f3c73457-bbd6-4b92-9c15-17b241171b16-00001.parquet
                     tests/data/lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro
@@ -42,6 +43,7 @@ library
                       Database.Beam.DuckDB.Syntax
                       Database.Beam.DuckDB.Syntax.Builder
                       Database.Beam.DuckDB.Syntax.Extensions
+                      Database.Beam.DuckDB.Syntax.Extensions.CSV
                       Database.Beam.DuckDB.Syntax.Extensions.Iceberg
                       Database.Beam.DuckDB.Syntax.Extensions.Parquet
     build-depends:    base >=4.11 && <5

@@ -57,6 +57,26 @@ module Database.Beam.DuckDB
 
     -- *** Querying data from a Parquet file
     allFromIceberg_,
+
+    -- ** CSV support
+
+    -- *** Specifying CSV files as part of the database
+    csvFile,
+    csvFileWith,
+    modifyCSVFileFields,
+    CSVFileEntity,
+
+    -- *** CSV file options
+    CSVFileOptions (..),
+    defaultCSVFileOptions,
+
+    -- ** Specifying the source of CSV-encoded data
+    CSVSource,
+    singleCSVFile,
+    multipleCSVFiles,
+
+    -- ** Querying data from a CSV file
+    allFromCSV_,
   )
 where
 
