@@ -12,7 +12,7 @@ module Database.Beam.DuckDB.Test.Extensions (tests) where
 import Data.Int (Int32)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text (Text)
-import Data.Time (Day)
+import Data.Time (Day, fromGregorian)
 import Database.Beam
   ( Beamable,
     Columnar,
@@ -26,11 +26,15 @@ import Database.Beam
     countAll_,
     dbModification,
     defaultDbSettings,
+    guard_,
+    min_,
     runSelectReturningList,
     runSelectReturningOne,
     select,
     tableModification,
+    val_,
     withDbModification,
+    (==.),
   )
 import Database.Beam.DuckDB
   ( CSVFileEntity,
@@ -65,19 +69,25 @@ tests =
     "Extensions"
     [ testGroup
         "Parquet"
-        [ testSelectFromParquet,
-          testSelectFromMultipleParquetFiles
+        [ testCountFromParquet,
+          testQueryFromParquet,
+          testCountFromMultipleParquetFiles,
+          testQueryFromMultipleParquetFiles
         ],
       testGroup
         "Apache Iceberg"
-        [testCountFromIceberg],
+        [ testCountFromIceberg,
+          testParseDateFromIceberg
+        ],
       testGroup
         "CSV"
-        [testCountFromCSV]
+        [ testCountFromCSV,
+          testQueryFromCSV
+        ]
     ]
 
-testSelectFromParquet :: TestTree
-testSelectFromParquet = testCase "Selecting records from a Parquet file" $ do
+testCountFromParquet :: TestTree
+testCountFromParquet = testCase "Counting records from a Parquet file" $ do
   results <- withTestDb $ \conn ->
     runBeamDuckDB conn $
       runSelectReturningList $
@@ -86,8 +96,19 @@ testSelectFromParquet = testCase "Selecting records from a Parquet file" $ do
           pure (_examName exam)
   results @?= ["alice", "bob", "carol", "dave"]
 
-testSelectFromMultipleParquetFiles :: TestTree
-testSelectFromMultipleParquetFiles = testCase "Selecting records from multiple Parquet file" $ do
+testQueryFromParquet :: TestTree
+testQueryFromParquet = testCase "Query from a Parquet file" $ do
+  results <- withTestDb $ \conn ->
+    runBeamDuckDB conn $
+      runSelectReturningOne $
+        select $ do
+          exam <- allFromParquet_ (_dbExams testDb)
+          guard_ (_examId exam ==. 1)
+          pure (_examName exam)
+  results @?= Just "alice"
+
+testCountFromMultipleParquetFiles :: TestTree
+testCountFromMultipleParquetFiles = testCase "Counting records from multiple Parquet file" $ do
   results <- withTestDb $ \conn ->
     runBeamDuckDB conn $
       runSelectReturningList $
@@ -95,6 +116,17 @@ testSelectFromMultipleParquetFiles = testCase "Selecting records from multiple P
           exam <- allFromParquet_ (_dbExamsMulti testDb)
           pure (_examName exam)
   results @?= ["alice", "bob", "carol", "dave", "erika", "francis", "genevieve", "hugo"]
+
+testQueryFromMultipleParquetFiles :: TestTree
+testQueryFromMultipleParquetFiles = testCase "Query from multiple Parquet files" $ do
+  results <- withTestDb $ \conn ->
+    runBeamDuckDB conn $
+      runSelectReturningOne $
+        select $ do
+          exam <- allFromParquet_ (_dbExamsMulti testDb)
+          guard_ (_examId exam ==. 5)
+          pure (_examName exam)
+  results @?= Just "erika"
 
 testCountFromIceberg :: TestTree
 testCountFromIceberg = testCase "Counting records from an Apache Iceberg table" $ do
@@ -105,6 +137,16 @@ testCountFromIceberg = testCase "Counting records from an Apache Iceberg table" 
           aggregate_ (\_ -> as_ @Int32 countAll_) (allFromIceberg_ (_dbLineItems testDb))
   results @?= Just 51793 -- From DuckDB's documentation
 
+testParseDateFromIceberg :: TestTree
+testParseDateFromIceberg = testCase "Test parsing date columns from Apache Iceberg table" $ do
+  results <- withTestDb $ \conn ->
+    runBeamDuckDB conn $
+      runSelectReturningOne $
+        select $
+          aggregate_ (min_ . _lineitemShipdate) (allFromIceberg_ (_dbLineItems testDb))
+
+  results @?= Just (Just (fromGregorian 1992 01 04))
+
 testCountFromCSV :: TestTree
 testCountFromCSV = testCase "Counting records from a CSV file" $ do
   results <- withTestDb $ \conn ->
@@ -113,6 +155,25 @@ testCountFromCSV = testCase "Counting records from a CSV file" $ do
         select $
           aggregate_ (\_ -> as_ @Int32 countAll_) (allFromCSV_ (_dbFlights testDb))
   results @?= Just 3
+
+testQueryFromCSV :: TestTree
+testQueryFromCSV = testCase "Query from a CSV file" $ do
+  results <- withTestDb $ \conn ->
+    runBeamDuckDB conn $
+      runSelectReturningOne $
+        select $ do
+          flight <- allFromCSV_ (_dbFlights testDb)
+          guard_ (_flightDate flight ==. val_ (fromGregorian 1988 01 01))
+          pure flight
+  results
+    @?= Just
+      ( Flight
+          { _flightDate = fromGregorian 1988 01 01,
+            _flightUniqueCarrier = "AA",
+            _flightOriginCity = "New York, NY",
+            _flightDestCity = "Los Angeles, CA"
+          }
+      )
 
 data ExamT f = Exam
   { _examId :: Columnar f Int32,
