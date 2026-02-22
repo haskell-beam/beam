@@ -4,6 +4,10 @@ packages:
   beam-postgres
   beam-postgres/examples
   beam-sqlite
+  beam-duckdb
 
 -- Required to build testcontainers with ghc-9.10+
 allow-newer: aeson-optics:base
+           , base
+           , text
+           , template-haskell
