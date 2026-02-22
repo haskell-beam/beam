@@ -31,14 +31,9 @@ module Database.Beam.DuckDB
     -- ** Parquet support
 
     -- *** Specifying Parquet files as sources of data
-    parquetFile,
-    modifyParquetFileFields,
-    ParquetFileEntity,
-
-    -- *** Specifying the source of Parquet-encoded data
-    ParquetSource,
-    singleParquetFile,
-    multipleParquetFiles,
+    parquet,
+    modifyParquetFields,
+    ParquetEntity,
 
     -- *** Querying data from a Parquet file
     allFromParquet_,
@@ -61,19 +56,14 @@ module Database.Beam.DuckDB
     -- ** CSV support
 
     -- *** Specifying CSV files as part of the database
-    csvFile,
-    csvFileWith,
-    modifyCSVFileFields,
-    CSVFileEntity,
+    csv,
+    csvWith,
+    modifyCSVFields,
+    CSVEntity,
 
     -- *** CSV file options
-    CSVFileOptions (..),
-    defaultCSVFileOptions,
-
-    -- ** Specifying the source of CSV-encoded data
-    CSVSource,
-    singleCSVFile,
-    multipleCSVFiles,
+    CSVOptions (..),
+    defaultCSVOptions,
 
     -- ** Querying data from a CSV file
     allFromCSV_,

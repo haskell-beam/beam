@@ -37,27 +37,24 @@ import Database.Beam
     (==.),
   )
 import Database.Beam.DuckDB
-  ( CSVFileEntity,
-    CSVFileOptions (..),
+  ( CSVEntity,
+    CSVOptions (..),
     DuckDB,
     IcebergTableEntity,
-    ParquetFileEntity,
+    ParquetEntity,
     allFromCSV_,
     allFromIceberg_,
     allFromParquet_,
     allowMovedPaths,
-    csvFileWith,
-    defaultCSVFileOptions,
+    csvWith,
+    defaultCSVOptions,
     defaultIcebergTableOptions,
     icebergTableWith,
-    modifyCSVFileFields,
+    modifyCSVFields,
     modifyIcebergTableFields,
-    modifyParquetFileFields,
-    multipleParquetFiles,
-    parquetFile,
+    modifyParquetFields,
+    parquet,
     runBeamDuckDB,
-    singleCSVFile,
-    singleParquetFile,
   )
 import Database.DuckDB.Simple (Connection, withConnection)
 import Test.Tasty (TestTree, testGroup)
@@ -287,10 +284,10 @@ deriving instance Show (PrimaryKey FlightT Identity)
 deriving instance Eq (PrimaryKey FlightT Identity)
 
 data TestDB f = TestDB
-  { _dbExams :: f (ParquetFileEntity ExamT),
-    _dbExamsMulti :: f (ParquetFileEntity ExamT), -- set up with multiple parquet files
+  { _dbExams :: f (ParquetEntity ExamT),
+    _dbExamsMulti :: f (ParquetEntity ExamT), -- set up with multiple parquet files
     _dbLineItems :: f (IcebergTableEntity LineItemT),
-    _dbFlights :: f (CSVFileEntity FlightT)
+    _dbFlights :: f (CSVEntity FlightT)
   }
   deriving (Generic, Database DuckDB)
 
@@ -299,8 +296,8 @@ testDb =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _dbExams =
-          parquetFile (singleParquetFile "tests/data/test1.parquet")
-            <> modifyParquetFileFields
+          parquet ("tests/data/test1.parquet" :| [])
+            <> modifyParquetFields
               tableModification
                 { _examId = "id",
                   _examName = "name",
@@ -308,11 +305,9 @@ testDb =
                   _examDate = "exam_date"
                 },
         _dbExamsMulti =
-          parquetFile
-            ( multipleParquetFiles
-                ("tests/data/test1.parquet" :| ["tests/data/test2.parquet"])
-            )
-            <> modifyParquetFileFields
+          parquet
+            ("tests/data/test1.parquet" :| ["tests/data/test2.parquet"])
+            <> modifyParquetFields
               tableModification
                 { _examId = "id",
                   _examName = "name",
@@ -343,10 +338,10 @@ testDb =
                   _lineitemComment = "l_comment"
                 },
         _dbFlights =
-          csvFileWith
-            (singleCSVFile "tests/data/flights.csv")
-            (defaultCSVFileOptions {header = Just True, comment = Just '#', delim = Just "|", ignoreErrors = Just False})
-            <> modifyCSVFileFields
+          csvWith
+            ("tests/data/flights.csv" :| [])
+            (defaultCSVOptions {header = Just True, comment = Just '#', delim = Just "|", ignoreErrors = Just False})
+            <> modifyCSVFields
               tableModification
                 { _flightDate = "FlightDate",
                   _flightUniqueCarrier = "UniqueCarrier",

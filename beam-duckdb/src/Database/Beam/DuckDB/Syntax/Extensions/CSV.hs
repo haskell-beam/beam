@@ -8,19 +8,14 @@
 
 module Database.Beam.DuckDB.Syntax.Extensions.CSV
   ( -- ** Specifying CSV files as part of the database
-    csvFile,
-    csvFileWith,
-    modifyCSVFileFields,
-    CSVFileEntity,
+    csv,
+    csvWith,
+    modifyCSVFields,
+    CSVEntity,
 
     -- *** CSV file options
-    CSVFileOptions (..),
-    defaultCSVFileOptions,
-
-    -- ** Specifying the source of CSV-encoded data
-    CSVSource,
-    singleCSVFile,
-    multipleCSVFiles,
+    CSVOptions (..),
+    defaultCSVOptions,
 
     -- ** Querying data from a CSV file
     allFromCSV_,
@@ -29,7 +24,7 @@ where
 
 import Control.Monad.Free (liftF)
 import Data.Kind (Type)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Maybe (catMaybes)
 import Data.Monoid (Endo (..))
@@ -56,12 +51,12 @@ import GHC.Generics (Generic (Rep))
 
 -- | A phantom type tag for CSV file entities, analogous to 'TableEntity'
 -- and 'ViewEntity'.
-data CSVFileEntity (table :: (Type -> Type) -> Type)
+data CSVEntity (table :: (Type -> Type) -> Type)
 
 -- | Options affecting the handling of CSV files.
 --
--- See 'defaultCSVFileOptions' for default options.
-data CSVFileOptions = CSVFileOptions
+-- See 'defaultCSVOptions' for default options.
+data CSVOptions = CSVOptions
   { -- | Character used to initiate comments. Lines starting with a comment character
     -- (optionally preceded by space characters) are completely ignored; other
     -- lines containing a comment character are parsed only up to that point.
@@ -77,35 +72,16 @@ data CSVFileOptions = CSVFileOptions
   }
   deriving (Eq, Show)
 
-defaultCSVFileOptions :: CSVFileOptions
-defaultCSVFileOptions =
-  CSVFileOptions
+defaultCSVOptions :: CSVOptions
+defaultCSVOptions =
+  CSVOptions
     { comment = Nothing,
       delim = Nothing,
       header = Nothing,
       ignoreErrors = Nothing
     }
 
--- | All of the different ways CSV-encoded data can be read
--- by DuckDB.
---
--- Note that this type's constructors aren't exported; use functions such as `singleCSVFile`
--- or `multipleCSVFiles` to specify this
-data CSVSource
-  = SingleCSVFile FilePath
-  | MultipleCSVFiles (NonEmpty FilePath)
-
--- | CSV data stored in a single file. Alternatively,
--- the filepath can represent a glob pattern.
-singleCSVFile :: FilePath -> CSVSource
-singleCSVFile = SingleCSVFile
-
--- | Multiple CSV files. These files will be treated as a single source;
--- they must have the same schema.
-multipleCSVFiles :: NonEmpty FilePath -> CSVSource
-multipleCSVFiles = MultipleCSVFiles
-
-instance (Beamable tbl) => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor DuckDB (CSVFileEntity tbl))) where
+instance (Beamable tbl) => RenamableWithRule (FieldRenamer (DatabaseEntityDescriptor DuckDB (CSVEntity tbl))) where
   renamingFields renamer =
     FieldRenamer $ \tbl ->
       tbl
@@ -124,58 +100,58 @@ instance (Beamable tbl) => RenamableWithRule (FieldRenamer (DatabaseEntityDescri
               $ csvTableSettings tbl
         }
 
-instance (Beamable table) => IsDatabaseEntity DuckDB (CSVFileEntity table) where
-  data DatabaseEntityDescriptor DuckDB (CSVFileEntity table)
-    = ParquetFileEntityDescriptor
-    { csvSource :: !CSVSource,
+instance (Beamable table) => IsDatabaseEntity DuckDB (CSVEntity table) where
+  data DatabaseEntityDescriptor DuckDB (CSVEntity table)
+    = CSVEntityDescriptor
+    { csvSource :: !(NonEmpty FilePath),
       csvName :: !Text, -- Only exists so that renaming this entity works. However, it serves no purpose
-      csvFileOptions :: !CSVFileOptions,
+      csvFileOptions :: !CSVOptions,
       csvTableSettings :: !(TableSettings table)
     }
 
   type
-    DatabaseEntityDefaultRequirements DuckDB (CSVFileEntity table) =
+    DatabaseEntityDefaultRequirements DuckDB (CSVEntity table) =
       ( GDefaultTableFieldSettings (Rep (TableSettings table) ()),
         Generic (TableSettings table),
         Table table,
         Beamable table
       )
   type
-    DatabaseEntityRegularRequirements DuckDB (CSVFileEntity table) =
+    DatabaseEntityRegularRequirements DuckDB (CSVEntity table) =
       (Table table, Beamable table)
 
   -- This 'dbEntityName' is useless. Changing it with 'modifyEntityName' does effectively nothing.
   dbEntityName f vw = fmap (\t' -> vw {csvName = t'}) (f (csvName vw))
   dbEntitySchema f vw = fmap (const vw) (f Nothing) -- Schema doesn't apply to CSV files
   dbEntityAuto nm =
-    ParquetFileEntityDescriptor
-      { csvSource = singleCSVFile (Text.unpack nm),
+    CSVEntityDescriptor
+      { csvSource = NonEmpty.singleton (Text.unpack nm),
         csvName = nm,
-        csvFileOptions = defaultCSVFileOptions,
+        csvFileOptions = defaultCSVOptions,
         csvTableSettings = defTblFieldSettings
       }
 
--- | Declare a CSV file (or files) as the source of data for a database.
--- Use 'modifyCSVFileFields' to specify column names, and finally query data
+-- | Declare a CSV file(s) or glob(s) as the source of data for a database.
+-- Use 'modifyCSVFields' to specify column names, and finally query data
 -- using 'allFromCSV_'.
-csvFile ::
-  -- | File path or glob
-  CSVSource ->
-  EntityModification (DatabaseEntity DuckDB db) DuckDB (CSVFileEntity table)
-csvFile path = csvFileWith path defaultCSVFileOptions
+csv ::
+  -- | File path(s) or glob(s)
+  NonEmpty FilePath ->
+  EntityModification (DatabaseEntity DuckDB db) DuckDB (CSVEntity table)
+csv path = csvWith path defaultCSVOptions
 
 -- | Declare a CSV file (or files) as the source of data for a database.
--- Use 'modifyCSVFileFields' to specify column names, and finally query data
+-- Use 'modifyCSVFields' to specify column names, and finally query data
 -- using 'allFromCSV_'.
 --
--- See 'csvFile' if you want to use default options.
-csvFileWith ::
-  -- | File path
-  CSVSource ->
+-- See 'csv' if you want to use default options.
+csvWith ::
+  -- | File path(s) or glob(s)
+  NonEmpty FilePath ->
   -- | Iceberg table options.
-  CSVFileOptions ->
-  EntityModification (DatabaseEntity DuckDB db) DuckDB (CSVFileEntity table)
-csvFileWith path options = EntityModification $ Endo $ \(DatabaseEntity desc) ->
+  CSVOptions ->
+  EntityModification (DatabaseEntity DuckDB db) DuckDB (CSVEntity table)
+csvWith path options = EntityModification $ Endo $ \(DatabaseEntity desc) ->
   DatabaseEntity
     desc
       { csvSource = path,
@@ -184,7 +160,7 @@ csvFileWith path options = EntityModification $ Endo $ \(DatabaseEntity desc) ->
 
 allFromCSV_ ::
   (Beamable table) =>
-  DatabaseEntity DuckDB db (CSVFileEntity table) ->
+  DatabaseEntity DuckDB db (CSVEntity table) ->
   Q DuckDB db s (table (QExpr DuckDB s))
 allFromCSV_ (DatabaseEntity desc) =
   Q $
@@ -204,12 +180,12 @@ allFromCSV_ (DatabaseEntity desc) =
       )
   where
     quotePath path = mconcat [emitChar '\'', emit (Text.pack path), emitChar '\'']
-    arg (SingleCSVFile path) = quotePath path
-    arg (MultipleCSVFiles files) =
-      emitChar '[' <> sepBy (emit ", ") (NonEmpty.toList $ fmap quotePath files) <> emitChar ']'
+    arg (path :| []) = quotePath path
+    arg paths =
+      emitChar '[' <> sepBy (emit ", ") (NonEmpty.toList $ fmap quotePath paths) <> emitChar ']'
 
-    emitOptions options@(CSVFileOptions mComment mDelim mHeader mIgnoreErrors) =
-      if options == defaultCSVFileOptions
+    emitOptions options@(CSVOptions mComment mDelim mHeader mIgnoreErrors) =
+      if options == defaultCSVOptions
         then mempty
         else
           emit ", "
@@ -223,12 +199,12 @@ allFromCSV_ (DatabaseEntity desc) =
                   ]
               )
 
--- | Construct an 'EntityModification' to rename the fields of a 'CSVFileEntity'
-modifyCSVFileFields ::
+-- | Construct an 'EntityModification' to rename the fields of a 'CSVEntity'
+modifyCSVFields ::
   (Beamable tbl) =>
   tbl (FieldModification (TableField tbl)) ->
-  EntityModification (DatabaseEntity DuckDB db) be (CSVFileEntity tbl)
-modifyCSVFileFields modFields =
+  EntityModification (DatabaseEntity DuckDB db) be (CSVEntity tbl)
+modifyCSVFields modFields =
   EntityModification
     ( Endo
         ( \(DatabaseEntity tbl) ->

@@ -7,7 +7,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Beam.DuckDB.Syntax.Extensions.Iceberg
-  ( -- ** Specifying Parquet files as part of the database
+  ( -- ** Specifying Iceberg tables as part of the database
     icebergTable,
     icebergTableWith,
     modifyIcebergTableFields,
@@ -134,14 +134,14 @@ icebergTable path = icebergTableWith path defaultIcebergTableOptions
 icebergTableWith ::
   -- | File path
   FilePath ->
-  -- | Iceberg table options. 
+  -- | Iceberg table options.
   IcebergTableOptions ->
   EntityModification (DatabaseEntity DuckDB db) DuckDB (IcebergTableEntity table)
 icebergTableWith path options = EntityModification $ Endo $ \(DatabaseEntity desc) ->
   DatabaseEntity
     desc
-      { icebergSource = path
-      , icebergTableOptions = options
+      { icebergSource = path,
+        icebergTableOptions = options
       }
 
 allFromIceberg_ ::
@@ -170,14 +170,15 @@ allFromIceberg_ (DatabaseEntity desc) =
     emitOptions options@(IcebergTableOptions mAllowMovedPaths mVersion) =
       if options == defaultIcebergTableOptions
         then mempty
-        else emit ", " <>
-      sepBy
-        (emit ", ")
-        ( catMaybes
-            [ fmap (\x -> emit "allow_moved_paths=" <> emit' x) mAllowMovedPaths
-            , fmap (\x -> emit "version='" <> emit x <> emitChar '\'') mVersion
-            ]
-        )
+        else
+          emit ", "
+            <> sepBy
+              (emit ", ")
+              ( catMaybes
+                  [ fmap (\x -> emit "allow_moved_paths=" <> emit' x) mAllowMovedPaths,
+                    fmap (\x -> emit "version='" <> emit x <> emitChar '\'') mVersion
+                  ]
+              )
 
 -- | Construct an 'EntityModification' to rename the fields of a 'ParquetFileEntity'
 modifyIcebergTableFields ::
