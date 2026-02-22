@@ -82,11 +82,11 @@ jobs:
       if: ${{ matrix.duckdb }}
       run: |
         curl -L -o libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.4.1/libduckdb-linux-amd64.zip && \
-          unzip libduckdb.zip && \
-          sudo mv libduckdb.so /usr/lib/libduckdb.so && \
-          sudo mv duckdb.h /usr/include/ && \
-          sudo ldconfig && \
-          rm libduckdb.zip
+        unzip libduckdb.zip
+        sudo mv libduckdb.so /usr/lib/libduckdb.so
+        sudo mv duckdb.h /usr/include/
+        sudo ldconfig
+        rm libduckdb.zip
 
     - name: Build dependencies
       run: |

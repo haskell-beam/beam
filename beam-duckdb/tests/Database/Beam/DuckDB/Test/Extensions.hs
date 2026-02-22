@@ -37,22 +37,17 @@ import Database.Beam
     (==.),
   )
 import Database.Beam.DuckDB
-  ( CSVEntity,
-    CSVOptions (..),
+  ( CSVOptions (..),
+    DataSourceEntity,
     DuckDB,
-    IcebergTableEntity,
-    ParquetEntity,
-    allFromCSV_,
-    allFromIceberg_,
-    allFromParquet_,
+    allFromDataSource_,
     allowMovedPaths,
     csvWith,
+    dataSource,
     defaultCSVOptions,
     defaultIcebergTableOptions,
     icebergTableWith,
-    modifyCSVFields,
-    modifyIcebergTableFields,
-    modifyParquetFields,
+    modifyDataSourceFields,
     parquet,
     runBeamDuckDB,
   )
@@ -89,7 +84,7 @@ testCountFromParquet = testCase "Counting records from a Parquet file" $ do
     runBeamDuckDB conn $
       runSelectReturningList $
         select $ do
-          exam <- allFromParquet_ (_dbExams testDb)
+          exam <- allFromDataSource_ (_dbExams testDb)
           pure (_examName exam)
   results @?= ["alice", "bob", "carol", "dave"]
 
@@ -99,7 +94,7 @@ testQueryFromParquet = testCase "Query from a Parquet file" $ do
     runBeamDuckDB conn $
       runSelectReturningOne $
         select $ do
-          exam <- allFromParquet_ (_dbExams testDb)
+          exam <- allFromDataSource_ (_dbExams testDb)
           guard_ (_examId exam ==. 1)
           pure (_examName exam)
   results @?= Just "alice"
@@ -110,7 +105,7 @@ testCountFromMultipleParquetFiles = testCase "Counting records from multiple Par
     runBeamDuckDB conn $
       runSelectReturningList $
         select $ do
-          exam <- allFromParquet_ (_dbExamsMulti testDb)
+          exam <- allFromDataSource_ (_dbExamsMulti testDb)
           pure (_examName exam)
   results @?= ["alice", "bob", "carol", "dave", "erika", "francis", "genevieve", "hugo"]
 
@@ -120,7 +115,7 @@ testQueryFromMultipleParquetFiles = testCase "Query from multiple Parquet files"
     runBeamDuckDB conn $
       runSelectReturningOne $
         select $ do
-          exam <- allFromParquet_ (_dbExamsMulti testDb)
+          exam <- allFromDataSource_ (_dbExamsMulti testDb)
           guard_ (_examId exam ==. 5)
           pure (_examName exam)
   results @?= Just "erika"
@@ -131,7 +126,7 @@ testCountFromIceberg = testCase "Counting records from an Apache Iceberg table" 
     runBeamDuckDB conn $
       runSelectReturningOne $
         select $
-          aggregate_ (\_ -> as_ @Int32 countAll_) (allFromIceberg_ (_dbLineItems testDb))
+          aggregate_ (\_ -> as_ @Int32 countAll_) (allFromDataSource_ (_dbLineItems testDb))
   results @?= Just 51793 -- From DuckDB's documentation
 
 testParseDateFromIceberg :: TestTree
@@ -140,7 +135,7 @@ testParseDateFromIceberg = testCase "Test parsing date columns from Apache Icebe
     runBeamDuckDB conn $
       runSelectReturningOne $
         select $
-          aggregate_ (min_ . _lineitemShipdate) (allFromIceberg_ (_dbLineItems testDb))
+          aggregate_ (min_ . _lineitemShipdate) (allFromDataSource_ (_dbLineItems testDb))
 
   results @?= Just (Just (fromGregorian 1992 01 04))
 
@@ -150,7 +145,7 @@ testCountFromCSV = testCase "Counting records from a CSV file" $ do
     runBeamDuckDB conn $
       runSelectReturningOne $
         select $
-          aggregate_ (\_ -> as_ @Int32 countAll_) (allFromCSV_ (_dbFlights testDb))
+          aggregate_ (\_ -> as_ @Int32 countAll_) (allFromDataSource_ (_dbFlights testDb))
   results @?= Just 3
 
 testQueryFromCSV :: TestTree
@@ -159,7 +154,7 @@ testQueryFromCSV = testCase "Query from a CSV file" $ do
     runBeamDuckDB conn $
       runSelectReturningOne $
         select $ do
-          flight <- allFromCSV_ (_dbFlights testDb)
+          flight <- allFromDataSource_ (_dbFlights testDb)
           guard_ (_flightDate flight ==. val_ (fromGregorian 1988 01 01))
           pure flight
   results
@@ -284,10 +279,10 @@ deriving instance Show (PrimaryKey FlightT Identity)
 deriving instance Eq (PrimaryKey FlightT Identity)
 
 data TestDB f = TestDB
-  { _dbExams :: f (ParquetEntity ExamT),
-    _dbExamsMulti :: f (ParquetEntity ExamT), -- set up with multiple parquet files
-    _dbLineItems :: f (IcebergTableEntity LineItemT),
-    _dbFlights :: f (CSVEntity FlightT)
+  { _dbExams :: f (DataSourceEntity ExamT),
+    _dbExamsMulti :: f (DataSourceEntity ExamT), -- set up with multiple parquet files
+    _dbLineItems :: f (DataSourceEntity LineItemT),
+    _dbFlights :: f (DataSourceEntity FlightT)
   }
   deriving (Generic, Database DuckDB)
 
@@ -296,8 +291,9 @@ testDb =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _dbExams =
-          parquet ("tests/data/test1.parquet" :| [])
-            <> modifyParquetFields
+          dataSource
+            (parquet ("tests/data/test1.parquet" :| []))
+            <> modifyDataSourceFields
               tableModification
                 { _examId = "id",
                   _examName = "name",
@@ -305,9 +301,11 @@ testDb =
                   _examDate = "exam_date"
                 },
         _dbExamsMulti =
-          parquet
-            ("tests/data/test1.parquet" :| ["tests/data/test2.parquet"])
-            <> modifyParquetFields
+          dataSource
+            ( parquet
+                ("tests/data/test1.parquet" :| ["tests/data/test2.parquet"])
+            )
+            <> modifyDataSourceFields
               tableModification
                 { _examId = "id",
                   _examName = "name",
@@ -315,10 +313,12 @@ testDb =
                   _examDate = "exam_date"
                 },
         _dbLineItems =
-          icebergTableWith
-            "tests/data/lineitem_iceberg"
-            (defaultIcebergTableOptions {allowMovedPaths = Just True})
-            <> modifyIcebergTableFields
+          dataSource
+            ( icebergTableWith
+                "tests/data/lineitem_iceberg"
+                (defaultIcebergTableOptions {allowMovedPaths = Just True})
+            )
+            <> modifyDataSourceFields
               tableModification
                 { _lineitemOrderkey = "l_orderkey",
                   _lineitemPartkey = "l_partkey",
@@ -338,10 +338,18 @@ testDb =
                   _lineitemComment = "l_comment"
                 },
         _dbFlights =
-          csvWith
-            ("tests/data/flights.csv" :| [])
-            (defaultCSVOptions {header = Just True, comment = Just '#', delim = Just "|", ignoreErrors = Just False})
-            <> modifyCSVFields
+          dataSource
+            ( csvWith
+                ("tests/data/flights.csv" :| [])
+                ( defaultCSVOptions
+                    { header = Just True,
+                      comment = Just '#',
+                      delim = Just "|",
+                      ignoreErrors = Just False
+                    }
+                )
+            )
+            <> modifyDataSourceFields
               tableModification
                 { _flightDate = "FlightDate",
                   _flightUniqueCarrier = "UniqueCarrier",

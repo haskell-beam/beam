@@ -28,45 +28,26 @@ module Database.Beam.DuckDB
 
     -- * DuckDB-specific functionality
 
-    -- ** Parquet support
+    -- ** Data sources
+    DataSourceEntity,
+    dataSource,
+    modifyDataSourceFields,
+    allFromDataSource_,
 
-    -- *** Specifying Parquet files as sources of data
+    -- *** Parquet
     parquet,
-    modifyParquetFields,
-    ParquetEntity,
 
-    -- *** Querying data from a Parquet file
-    allFromParquet_,
-
-    -- ** Apache Iceberg tables support
-
-    -- *** Specifying Iceberg tables as part of the database
+    -- *** Apache Iceberg tables
     icebergTable,
     icebergTableWith,
-    modifyIcebergTableFields,
-    IcebergTableEntity,
-
-    -- *** Iceberg table options
     IcebergTableOptions (..),
     defaultIcebergTableOptions,
 
-    -- *** Querying data from a Parquet file
-    allFromIceberg_,
-
-    -- ** CSV support
-
-    -- *** Specifying CSV files as part of the database
+    -- *** CSV
     csv,
     csvWith,
-    modifyCSVFields,
-    CSVEntity,
-
-    -- *** CSV file options
     CSVOptions (..),
     defaultCSVOptions,
-
-    -- ** Querying data from a CSV file
-    allFromCSV_,
   )
 where
 
@@ -102,7 +83,7 @@ import Database.Beam.DuckDB.Syntax.Builder
     SomeField (..),
     withPlaceholder,
   )
-import Database.Beam.DuckDB.Syntax.Extensions
+import Database.Beam.DuckDB.Syntax.Extensions.DataSource
 import Database.DuckDB.Simple (Connection, FromRow, Query (Query), ResultError (..), RowParser, ToField (toField), ToRow (toRow), bind, execute, nextRow, withStatement)
 import Database.DuckDB.Simple.FromRow (FromRow (..), RowParser (..), field)
 import Database.DuckDB.Simple.Ok (Ok (..))

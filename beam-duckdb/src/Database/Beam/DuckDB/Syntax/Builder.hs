@@ -89,7 +89,7 @@ instance Show DuckDBSyntax where
     mconcat
       [ "DuckDBSyntax (",
         show (Builder.toLazyText (withPlaceholder s)),
-        ")",
+        ") ",
         show vs
       ]
 

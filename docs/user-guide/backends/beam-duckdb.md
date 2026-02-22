@@ -12,6 +12,14 @@ One of the key features of DuckDB is its support for popular data formats such a
 `beam-duckdb` adds support for declaring files as a source of data for your database, and thus allow you to
 query data from these files, as if they were regular database tables.
 
+`beam-duckdb` exports the `DataSourceEntity` type, which allows you to declare file or files as data sources
+for your database, in the same way a `ViewEntity` is used to declare a database view. Like `ViewEntity`, a
+`DataSourceEntity` only supports data selection; the type system will prevent you from inserting or updating
+a `DataSourceEntity`. Thanks compiler!
+
+While DuckDB supports *many* data sources, we currently support a subset of them, described below. Feel free to raise
+[an issue!](https://github.com/haskell-beam/beam/issues/new) if you'd like us to add support for another data source!
+
 <!-- Note that the duckdb-ffi package isn't available in Nix, and so
 the following examples are not runnable at this time.
 If you read this notice in the future, this might have changed!
@@ -20,8 +28,8 @@ If you read this notice in the future, this might have changed!
 
 Parquet is an open-source file format that is commonly used in data science.
 
-`beam-duckdb` exports the `ParquetEntity` type, which allows you to declare one or more Parquet files
-as a datasource, in the same way a `ViewEntity` is used to declare a database view.
+`beam-duckdb` exports `parquet` function, which allows you to declare one or more Parquet files
+as a datasource.
 
 Consider a Parquet file for which the following schema holds:
 
@@ -40,7 +48,7 @@ Then, we can declare the database as having one "table" sources from a Parquet f
 
 ```haskell
 data ExampleDB f = ExampleDB
-  { _exams :: f (ParquetEntity ExamT),
+  { _exams :: f (DataSourceEntity ExamT),
   }
   deriving (Generic, Database DuckDB)
 
@@ -49,8 +57,8 @@ exampleDb =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _exams =
-          parquet (NonEmpty.singleton "exams.parquet")
-            <> modifyParquetFields
+          dataSource (parquet (NonEmpty.singleton "exams.parquet"))
+            <> modifyDataSourceFields
               tableModification
                 { _examId = "id",
                   _examName = "name",
@@ -71,33 +79,26 @@ runSelectReturningOne
   $ select
     $ aggregate_
         (max_ . _examScore)
-        (allFromParquet_ (_exams exampleDb))
+        (allFromDataSource_ (_exams exampleDb))
 ```
 
 Note the one difference: instead of pulling all rows using `all_` (for a database table),
-or `allFromView_` (for a database view), we use `allFromParquet_`. That's the only difference!
+or `allFromView_` (for a database view), we use `allFromDataSource_`. That's the only difference!
 
 ## Apache Iceberg
 
 Apache Iceberg is an open-source format for *large* analytics tables.
 
-Assume that we have a large Iceberg table, with the same `ExamT` schema as our Parquet example above.
-We can use `IcebergTableEntity` as a replacement for `TableEntity` and instruct beam that we'll be
-querying from an Apache Iceberg table:
+Assume that we have a large Iceberg table, with the same `ExamT` schema as our Parquet example above. We simply swap
+out the use of `parquet` in the example above with `icebergTable`:
 
 ```haskell
-data ExampleDB f = ExampleDB
-  { _exams :: f (IcebergTableEntity ExamT),
-  }
-  deriving (Generic, Database DuckDB)
-
 exampleDb :: DatabaseSettings DuckDB ExampleDB
 exampleDb =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
-      { _exams =
-          icebergTable "s3://.../exams"
-            <> modifyIcebergTableFields
+      { _exams = dataSource (icebergTable "s3://.../exams")
+            <> modifyDataSourceFields
               tableModification
                 { _examId = "id",
                   _examName = "name",
@@ -107,20 +108,10 @@ exampleDb =
       }
 ```
 
-We can declare the location of our Iceberg table using `icebergTable`. In this case,
-the table data is stored in an Amazon S3 bucket (assuming that you have set up the appropriate
+In this case, the table data is stored in an Amazon S3 bucket (assuming that you have set up the appropriate
 authentication, which is not handled by `beam-duckdb`).
 
-Again, just like with Parquet, we can perform queries using all of beam's machinery, using
-`allFromIceberg_` instead of `all_`:
-
-```haskell
-runSelectReturningOne
-  $ select
-    $ aggregate_
-        (max_ . _examScore)
-        (allFromIceberg_ (_exams exampleDb))
-```
+All queries work just as before, provided you use `allFromDataSource_` as we did above.
 
 ## CSV
 
@@ -139,18 +130,9 @@ id|name|score|exam_date
 You can see the added wrinkle that the separator isn't a comma, but a pipe `|` instead. The CSV format is full of
 fun twists like that.
 
-We can use `CSVEntity` as a replacement for `TableEntity` and instruct beam that we'll be
-querying from CSV files:
-
-```haskell
-data ExampleDB f = ExampleDB
-  { _exams :: f (CSVEntity ExamT),
-  }
-  deriving (Generic, Database DuckDB)
-```
-
-Contrary to `parquet` and `icebergTable`, we'll need to tweak the default CSV options by changing
-the default delimiter and specifying that files have a header row, using `csvWith`:
+We could instruct beam that we'll be querying from CSV files using `csv`. However, contrary to `parquet` and
+`icebergTable`, we'll need to tweak the default CSV options by changing the default delimiter and specifying that
+files have a header row, using `csvWith`:
 
 ```haskell
 exampleDb :: DatabaseSettings DuckDB ExampleDB
@@ -158,10 +140,11 @@ exampleDb =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _exams =
-          csvWith
-            (defaultCSVOptions{delim = Just "|", header = Just True})
-            (NonEmpty.singleton "scores/*.csv")
-            <> modifyCSVFields
+          dataSource (
+            csvWith
+              (NonEmpty.singleton "scores/*.csv"))
+              (defaultCSVOptions{delim = Just "|", header = Just True}
+            ) <> modifyDataSourceFields
               tableModification
                 { _examId = "id",
                   _examName = "name",
@@ -172,12 +155,4 @@ exampleDb =
 ```
 
 Once more, just like with Parquet and Apache iceberg, we can perform queries using all of beam's machinery, using
-`allFromCSV_` instead of `all_`:
-
-```haskell
-runSelectReturningOne
-  $ select
-    $ aggregate_
-        (max_ . _examScore)
-        (allFromCSV_ (_exams exampleDb))
-```
+`allFromDataSource_` instead of `all_`.

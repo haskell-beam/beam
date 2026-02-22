@@ -42,10 +42,7 @@ library
     other-modules:    Database.Beam.DuckDB.Backend
                       Database.Beam.DuckDB.Syntax
                       Database.Beam.DuckDB.Syntax.Builder
-                      Database.Beam.DuckDB.Syntax.Extensions
-                      Database.Beam.DuckDB.Syntax.Extensions.CSV
-                      Database.Beam.DuckDB.Syntax.Extensions.Iceberg
-                      Database.Beam.DuckDB.Syntax.Extensions.Parquet
+                      Database.Beam.DuckDB.Syntax.Extensions.DataSource
     build-depends:    base >=4.11 && <5
                     , beam-core ^>=0.10
                     , beam-migrate ^>=0.5
