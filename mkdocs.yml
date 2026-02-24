@@ -37,6 +37,7 @@ nav:
   - Backends:
       - 'beam-postgres': 'user-guide/backends/beam-postgres.md'
       - 'beam-sqlite': 'user-guide/backends/beam-sqlite.md'
+      - 'beam-duckdb': 'user-guide/backends/beam-duckdb.md'
       - 'Writing a Custom Backend': 'user-guide/custom-backends.md'
   - About:
       - 'Compatibility Matrix': 'about/compatibility.md'

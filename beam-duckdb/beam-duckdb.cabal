@@ -1,0 +1,75 @@
+cabal-version:      3.0
+name:               beam-duckdb
+version:            0.1.0.0
+synopsis:           DuckDB backend for Beam
+description:        Beam driver for DuckDB, an analytics-focused open-source in-process database.
+license:            MIT
+license-file:       LICENSE
+author:             Laurent P. René de Cotret
+maintainer:         laurent.decotret@outlook.com
+copyright:          (c) Laurent P. René de Cotret
+category:           Database
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+extra-source-files: tests/data/gen_parquet.py
+                    tests/data/test1.parquet
+                    tests/data/test2.parquet
+                    tests/data/flights.csv
+                    tests/data/lineitem_iceberg/data/00000-411-0792dcfe-4e25-4ca3-8ada-175286069a47-00001.parquet
+                    tests/data/lineitem_iceberg/data/00041-414-f3c73457-bbd6-4b92-9c15-17b241171b16-00001.parquet
+                    tests/data/lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro
+                    tests/data/lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m1.avro
+                    tests/data/lineitem_iceberg/metadata/cf3d0be5-cf70-453d-ad8f-48fdc412e608-m0.avro
+                    tests/data/lineitem_iceberg/metadata/snap-3776207205136740581-1-cf3d0be5-cf70-453d-ad8f-48fdc412e608.avro
+                    tests/data/lineitem_iceberg/metadata/snap-7635660646343998149-1-10eaca8a-1e1c-421e-ad6d-b232e5ee23d3.avro
+                    tests/data/lineitem_iceberg/metadata/v1.metadata.json
+                    tests/data/lineitem_iceberg/metadata/v2.metadata.json
+                    tests/data/lineitem_iceberg/metadata/version-hint.text
+
+common common
+    default-language: Haskell2010
+    ghc-options: -Wall
+                 -Wcompat
+                 -Widentities
+                 -Wincomplete-uni-patterns
+                 -Wincomplete-record-updates
+                 -Wredundant-constraints
+                 -fhide-source-paths
+                 -Wpartial-fields
+library
+    import:           common
+    exposed-modules:  Database.Beam.DuckDB
+    other-modules:    Database.Beam.DuckDB.Backend
+                      Database.Beam.DuckDB.Syntax
+                      Database.Beam.DuckDB.Syntax.Builder
+                      Database.Beam.DuckDB.Syntax.Extensions.DataSource
+    build-depends:    base >=4.11 && <5
+                    , beam-core ^>=0.10
+                    , beam-migrate ^>=0.5
+                    , bytestring >=0.10 && <0.13
+                    , duckdb-simple ^>=0.1
+                    , dlist >=0.8 && <1.1
+                    , free >=4.12 && <5.3
+                    , text >=1.0 && <2.2
+                    , time >=1.6 && <1.16
+                    , transformers >=0.3 && <0.7
+                    , uuid-types ^>=1.0
+    hs-source-dirs:   src
+
+test-suite beam-duckdb-test
+    import:           common
+    other-modules:    Database.Beam.DuckDB.Test.Extensions
+                      Database.Beam.DuckDB.Test.Query
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   tests
+    main-is:          Main.hs
+    build-depends:    base >=4.11 && <5
+                    , beam-core
+                    , beam-duckdb
+                    , duckdb-simple
+                    , hedgehog
+                    , tasty
+                    , tasty-hedgehog
+                    , tasty-hunit
+                    , text
+                    , time

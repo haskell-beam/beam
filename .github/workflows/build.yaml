@@ -16,23 +16,32 @@ jobs:
         include:
           - ghc-version: "8.10.7"
             cabal-flags: ""
+            duckdb: false
           - ghc-version: "9.0.2"
             cabal-flags: ""
+            duckdb: false
           - ghc-version: "9.2.8"
             cabal-flags: ""
+            duckdb: false
           - ghc-version: "9.4.8"
             cabal-flags: ""
+            duckdb: false
           - ghc-version: "9.6.7"
             cabal-flags: ""
+            duckdb: true
           - ghc-version: "9.8.4"
             cabal-flags: ""
+            duckdb: true
           - ghc-version: "9.10.3"
             cabal-flags: ""
+            duckdb: true
           - ghc-version: "9.12.2"
             cabal-flags: ""
+            duckdb: true
           # Temporary cabal flags until all dependencies are updated
           - ghc-version: "9.14.1"
             cabal-flags: "--allow-newer=base --allow-newer=template-haskell --allow-newer=ghc-bignum"
+            duckdb: true
 
     steps:
     - uses: actions/checkout@v4
@@ -43,6 +52,12 @@ jobs:
       with:
         ghc-version: ${{ matrix.ghc-version }}
         cabal-version: '3.12.1.0'
+
+    # duckdb-simple is only supported for GHC 9.6+
+    - name: Disable beam-duckdb
+      if: ${{ !matrix.duckdb }}
+      run: |
+        sed -i '/beam-duckdb/d' ./cabal.project
 
     - name: Generate freeze file
       run: |
@@ -62,6 +77,16 @@ jobs:
           dist-newstyle
           ${{ steps.setup-haskell.outputs.cabal-store }}
         key: ${{ runner.os }}-${{ hashFiles('dependencies-versions', 'cabal.project.local') }}-cabal-install
+
+    - name: Install DuckDB artifact
+      if: ${{ matrix.duckdb }}
+      run: |
+        curl -L -o libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.4.1/libduckdb-linux-amd64.zip && \
+        unzip libduckdb.zip
+        sudo mv libduckdb.so /usr/lib/libduckdb.so
+        sudo mv duckdb.h /usr/include/
+        sudo ldconfig
+        rm libduckdb.zip
 
     - name: Build dependencies
       run: |
