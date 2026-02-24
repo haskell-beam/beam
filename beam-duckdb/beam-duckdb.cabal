@@ -10,20 +10,14 @@ maintainer:         laurent.decotret@outlook.com
 copyright:          (c) Laurent P. René de Cotret
 category:           Database
 build-type:         Simple
-extra-doc-files:    CHANGELOG.md
-extra-source-files: tests/data/gen_parquet.py
-                    tests/data/test1.parquet
-                    tests/data/test2.parquet
-                    tests/data/flights.csv
-                    tests/data/lineitem_iceberg/data/00000-411-0792dcfe-4e25-4ca3-8ada-175286069a47-00001.parquet
-                    tests/data/lineitem_iceberg/data/00041-414-f3c73457-bbd6-4b92-9c15-17b241171b16-00001.parquet
-                    tests/data/lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro
-                    tests/data/lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m1.avro
-                    tests/data/lineitem_iceberg/metadata/cf3d0be5-cf70-453d-ad8f-48fdc412e608-m0.avro
-                    tests/data/lineitem_iceberg/metadata/snap-3776207205136740581-1-cf3d0be5-cf70-453d-ad8f-48fdc412e608.avro
-                    tests/data/lineitem_iceberg/metadata/snap-7635660646343998149-1-10eaca8a-1e1c-421e-ad6d-b232e5ee23d3.avro
-                    tests/data/lineitem_iceberg/metadata/v1.metadata.json
-                    tests/data/lineitem_iceberg/metadata/v2.metadata.json
+extra-doc-files:    README.md
+                    CHANGELOG.md
+extra-source-files: tests/data/*.py
+                    tests/data/*.parquet
+                    tests/data/*.csv
+                    tests/data/lineitem_iceberg/data/*.parquet
+                    tests/data/lineitem_iceberg/metadata/*.avro
+                    tests/data/lineitem_iceberg/metadata/*.json
                     tests/data/lineitem_iceberg/metadata/version-hint.text
 
 common common
