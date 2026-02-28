@@ -1,6 +1,3 @@
-{-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-
 import Prelude hiding (lookup)
 
 import Database.Beam hiding (withDatabaseDebug)
@@ -15,6 +12,7 @@ import Text.Read
 import Data.Time
 
 import Lens.Micro
+import Lens.Micro.TH (makeLenses)
 
 import Data.Text (Text)
 import Data.Int
@@ -44,6 +42,8 @@ instance Table UserT where
     primaryKey = UserId . _userEmail
 instance Beamable (PrimaryKey UserT)
 
+makeLenses ''UserT
+
 data AddressT f = Address
                 { _addressId    :: C f Int32
                 , _addressLine1 :: C f Text
@@ -66,6 +66,8 @@ type AddressId = PrimaryKey AddressT Identity -- For convenience
 instance Beamable AddressT
 instance Beamable (PrimaryKey AddressT)
 
+makeLenses ''AddressT
+
 data ProductT f = Product
                 { _productId          :: C f Int32
                 , _productTitle       :: C f Text
@@ -84,23 +86,7 @@ instance Beamable ProductT
 instance Beamable (PrimaryKey ProductT)
 deriving instance Show (PrimaryKey AddressT Identity)
 
-data OrderT f = Order
-              { _orderId      :: Columnar f Int32
-              , _orderDate    :: Columnar f LocalTime
-              , _orderForUser :: PrimaryKey UserT f
-              , _orderShipToAddress :: PrimaryKey AddressT f
-              , _orderShippingInfo :: PrimaryKey ShippingInfoT (Nullable f) }
-                deriving Generic
-type Order = OrderT Identity
-deriving instance Show Order
-
-instance Table OrderT where
-    data PrimaryKey OrderT f = OrderId (Columnar f Int32)
-                               deriving Generic
-    primaryKey = OrderId . _orderId
-
-instance Beamable OrderT
-instance Beamable (PrimaryKey OrderT)
+makeLenses ''ProductT
 
 data ShippingCarrier = USPS | FedEx | UPS | DHL
                        deriving (Show, Read, Eq, Ord, Enum)
@@ -131,6 +117,26 @@ instance Beamable ShippingInfoT
 instance Beamable (PrimaryKey ShippingInfoT)
 deriving instance Show (PrimaryKey ShippingInfoT (Nullable Identity))
 
+data OrderT f = Order
+              { _orderId      :: Columnar f Int32
+              , _orderDate    :: Columnar f LocalTime
+              , _orderForUser :: PrimaryKey UserT f
+              , _orderShipToAddress :: PrimaryKey AddressT f
+              , _orderShippingInfo :: PrimaryKey ShippingInfoT (Nullable f) }
+                deriving Generic
+type Order = OrderT Identity
+deriving instance Show Order
+
+instance Table OrderT where
+    data PrimaryKey OrderT f = OrderId (Columnar f Int32)
+                               deriving Generic
+    primaryKey = OrderId . _orderId
+
+instance Beamable OrderT
+instance Beamable (PrimaryKey OrderT)
+
+makeLenses ''OrderT
+
 deriving instance Show (PrimaryKey OrderT Identity)
 deriving instance Show (PrimaryKey ProductT Identity)
 
@@ -150,6 +156,7 @@ instance Table LineItemT where
 instance Beamable LineItemT
 instance Beamable (PrimaryKey LineItemT)
 
+makeLenses ''LineItemT
 
 data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers         :: f (TableEntity UserT)
@@ -162,45 +169,35 @@ data ShoppingCartDb f = ShoppingCartDb
 
 instance Database be ShoppingCartDb
 
-ShoppingCartDb (TableLens shoppingCartUsers) (TableLens shoppingCartUserAddresses)
-               (TableLens shoppingCartProducts) (TableLens shoppingCartOrders)
-               (TableLens shoppingCartShippingInfos) (TableLens shoppingCartLineItems) = dbLenses
+makeLenses ''ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings `withDbModification`
                  dbModification {
                    _shoppingCartUserAddresses =
-                     modifyTable (\_ -> "addresses") $
-                     tableModification {
-                       _addressLine1 = fieldNamed "address1",
-                       _addressLine2 = fieldNamed "address2"
-                     },
-                   _shoppingCartProducts = modifyTable (\_ -> "products") tableModification,
-                   _shoppingCartOrders = modifyTable (\_ -> "orders") $
-                                         tableModification {
-                                           _orderShippingInfo = ShippingInfoId "shipping_info__id"
-                                         },
-                   _shoppingCartShippingInfos = modifyTable (\_ -> "shipping_info") $
-                                                tableModification {
-                                                  _shippingInfoId = "id",
-                                                  _shippingInfoCarrier = "carrier",
-                                                  _shippingInfoTrackingNumber = "tracking_number"
-                                                },
-                   _shoppingCartLineItems = modifyTable (\_ -> "line_items") tableModification
+                     setEntityName "addresses"
+                      <> modifyTableFields
+                          tableModification {
+                            _addressLine1 = fieldNamed "address1",
+                            _addressLine2 = fieldNamed "address2"
+                          },
+                   _shoppingCartProducts = setEntityName "products",
+                   _shoppingCartOrders =
+                      setEntityName "orders"
+                        <> modifyTableFields
+                            tableModification {
+                              _orderShippingInfo = ShippingInfoId "shipping_info__id"
+                            },
+                   _shoppingCartShippingInfos =
+                      setEntityName "shipping_info"
+                        <> modifyTableFields
+                            tableModification {
+                              _shippingInfoId = "id",
+                              _shippingInfoCarrier = "carrier",
+                              _shippingInfoTrackingNumber = "tracking_number"
+                            },
+                   _shoppingCartLineItems = setEntityName "line_items"
                  }
-
-Address (LensFor addressId)    (LensFor addressLine1)
-        (LensFor addressLine2) (LensFor addressCity)
-        (LensFor addressState) (LensFor addressZip)
-        (UserId (LensFor addressForUserId)) =
-        tableLenses
-
-User (LensFor userEmail)    (LensFor userFirstName)
-     (LensFor userLastName) (LensFor userPassword) =
-     tableLenses
-
-LineItem _ _ (LensFor lineItemQuantity) = tableLenses
-Product (LensFor productId) (LensFor productTitle) (LensFor productDescription) (LensFor productPrice) = tableLenses
 
 main :: IO ()
 main =

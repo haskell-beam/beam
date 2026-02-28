@@ -5,8 +5,8 @@ description = "MkDocs project for Beam"
 authors = []
 
 [tool.poetry.dependencies]
-python = "^3.8"
-mkdocs = "1.2.3" # later versions fail to build in poetry2nix derivation
+python = "^3.12"
+mkdocs = "1.6" # later versions fail to build in poetry2nix derivation
 sqlparse = "^0.5.4"
-PyYAML = "^5.4.1"
-mkdocs-material = "5.0.2" # later versions cause infinite recursion in poetry2nix
+PyYAML = "^6.0"
+mkdocs-material = "^9.5" # later versions cause infinite recursion in poetry2nix

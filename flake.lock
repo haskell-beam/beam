@@ -1,5 +1,18 @@
 {
   "nodes": {
+    "duckdb-ffi": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1000000000,
+        "narHash": "sha256-yzYN/zhcWa0318QWPLbP9YFrlKYEtj9tPl10mi4klcI=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/duckdb-ffi-1.4.1.5/duckdb-ffi-1.4.1.5.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/duckdb-ffi-1.4.1.5/duckdb-ffi-1.4.1.5.tar.gz"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
@@ -65,6 +78,7 @@
     },
     "root": {
       "inputs": {
+        "duckdb-ffi": "duckdb-ffi",
         "flake-parts": "flake-parts",
         "haskell-flake": "haskell-flake",
         "nixpkgs": "nixpkgs",

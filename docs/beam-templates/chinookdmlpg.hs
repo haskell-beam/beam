@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- ! BUILD_COMMAND: runhaskell --ghc-arg=-fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -i../../beam-sqlite/examples -fno-warn-partial-type-signatures
+-- ! BUILD_COMMAND: runhaskell  -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -i../../beam-sqlite/examples -fno-warn-partial-type-signatures
 -- ! BUILD_DIR: beam-postgres/examples/
 
 module Main where
@@ -14,12 +14,12 @@ import Database.Beam.Postgres hiding (insert, runInsert)
 import qualified Database.Beam.Postgres as Pg
 import Database.PostgreSQL.Simple
 
-import Control.Monad
 import Control.Exception
+import Control.Monad
 
 import Data.IORef
-import Data.Monoid
 import Data.Int
+import Data.Monoid
 
 import Chinook.Schema
 
@@ -33,20 +33,21 @@ exampleQuery putStrLn = do
 
 main :: IO ()
 main =
-  do chinook <- connectPostgreSQL "dbname=chinook"
+  do
+    chinook <- connectPostgreSQL "dbname=chinook"
 
-     stmts <- newIORef id
+    stmts <- newIORef id
 
-     let onStmt s = modifyIORef stmts (. (s:))
-         record a = withDatabaseDebug (onStmt . (++ ";")) chinook a
+    let onStmt s = modifyIORef stmts (. (s :))
+        record a = withDatabaseDebug (onStmt . (++ ";")) chinook a
 
-     handle (\BeamDone -> pure ()) $
-       withTransaction chinook $ do
-         record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
-         throwIO BeamDone
+    handle (\BeamDone -> pure ()) $
+      withTransaction chinook $ do
+        record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
+        throwIO BeamDone
 
-     mkStmtList <- readIORef stmts
-     let stmtList = mkStmtList []
+    mkStmtList <- readIORef stmts
+    let stmtList = mkStmtList []
 
-     forM_ stmtList $ \stmt -> do
-       putStrLn stmt
+    forM_ stmtList $ \stmt -> do
+      putStrLn stmt
