@@ -4,6 +4,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Database.Beam.Sqlite.Connection
   ( Sqlite(..), SqliteM(..)
@@ -11,7 +12,19 @@ module Database.Beam.Sqlite.Connection
 
   , runBeamSqlite, runBeamSqliteDebug
 
-  , insertReturning, runInsertReturningList
+    -- * Support for @RETURNING@ with additional projection
+
+    -- ** @INSERT ... RETURNING@
+  , SqliteInsertReturning
+  , insertReturning, insertOnConflictReturning, runInsertReturningList
+
+    -- ** @DELETE ... RETURNING@
+  , SqliteDeleteReturning
+  , deleteReturning, runDeleteReturningList
+
+    -- ** @UPDATE ... RETURNING@
+  , SqliteUpdateReturning
+  , updateReturning, runUpdateReturningList
   ) where
 
 import           Prelude hiding (fail)
@@ -25,11 +38,13 @@ import           Database.Beam.Migrate.SQL ( BeamMigrateOnlySqlBackend, FieldRet
 import qualified Database.Beam.Migrate.SQL as Beam
 import           Database.Beam.Migrate.SQL.BeamExtensions
 import           Database.Beam.Query ( SqlInsert(..), SqlInsertValues(..)
+                                     , SqlDelete(..)
                                      , HasQBuilder(..), HasSqlEqualityCheck
                                      , HasSqlQuantifiedEqualityCheck
                                      , DataType(..)
                                      , HasSqlInTable(..)
-                                     , insert, current_ )
+                                     , QExprToIdentity
+                                     , insert, current_, delete, SqlUpdate (..), update )
 import           Database.Beam.Query.Internal
 import           Database.Beam.Query.SQL92
 import           Database.Beam.Schema.Tables ( Beamable
@@ -71,6 +86,9 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.DList as D
 import           Data.Int
 import           Data.IORef (newIORef, atomicModifyIORef')
+import           Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
+import qualified Data.Map.Strict as Strict.Map
 import           Data.Maybe (mapMaybe)
 import           Data.Proxy (Proxy(..))
 import           Data.Scientific (Scientific)
@@ -80,6 +98,7 @@ import qualified Data.Text.Lazy as TL
 import           Data.Time ( LocalTime, UTCTime, Day
                            , ZonedTime, utc, utcToLocalTime )
 import           Data.Typeable (cast)
+import           Data.Void (Void)
 import           Data.Word
 import           GHC.IORef (atomicModifyIORef'_)
 import           GHC.TypeLits
@@ -332,26 +351,15 @@ instance MonadBeam Sqlite SqliteM where
                                 Nothing -> pure Nothing
                                 Just (BeamSqliteRow row) -> pure row
                runReaderT (runSqliteM (action nextRow')) (logger, conn)
-  runReturningMany (SqliteCommandInsert (SqliteInsertSyntax tbl fields vs onConflict)) action
-    | SqliteInsertExpressions es <- vs, any (any (== SqliteExpressionDefault)) es =
-      -- SQLite's handling of default values differs from other DBMses because
-      -- it lacks support for DEFAULT. In order to insert a default value in a column,
-      -- the column's name should be omitted from the INSERT statement.
-      --
-      -- This is problematic if you insert multiple rows, some of which have defaults;
-      -- you must use multiple INSERT statements. This is what we do below.
-      --
-      -- However, to respect the 'runReturningMany' interface, be must accumulate the
-      -- results of all those inserts into an 'IORef [a]', and then feed the results
-      -- incrementally to 'action'.
+  runReturningMany (SqliteCommandInsert (SqliteInsertSyntax tbl fields vs onConflict)) action =
+      -- The DEFAULT grouping happens at query construction time, so we just
+      -- handle the already-grouped statements here.
       SqliteM $ do
         (logger, conn) <- ask
         resultsRef <- liftIO (newIORef [])
-        forM_ es $ \row -> do
-          -- RETURNING is only supported by SQLite 3.35+, which requires direct-sqlite 2.3.27+
+        forM_ (sqliteGroupByDefaults fields vs) $ \(fields', vs') -> do
           let returningClause = emit " RETURNING " <> commas (map quotedIdentifier fields)
-              (insertFields, insertRow) = unzip $ filter ((/= SqliteExpressionDefault) . snd) $ zip fields row
-              SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl insertFields (SqliteInsertExpressions [ insertRow ]) onConflict <> returningClause
+              SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl fields' vs' onConflict <> returningClause
               cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
 
           liftIO $ do
@@ -369,21 +377,6 @@ instance MonadBeam Sqlite SqliteM where
                 (BeamSqliteRow h:rest) -> (rest, Just h)
                 [] -> ([], Nothing)
         runSqliteM (action nextRow')
-    | otherwise =
-      SqliteM $ do
-        (logger, conn) <- ask
-        let returningClause = emit " RETURNING " <> commas (map quotedIdentifier fields)
-            SqliteSyntax cmd vals = formatSqliteInsertOnConflict tbl fields vs onConflict <> returningClause
-            cmdString = BL.unpack (toLazyByteString (withPlaceholders cmd))
-        liftIO $ do
-          logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
-          withStatement conn (fromString cmdString) $ \stmt ->
-            do bind stmt (BeamSqliteParams (D.toList vals))
-               let nextRow' = liftIO (nextRow stmt) >>= \x ->
-                              case x of
-                                Nothing -> pure Nothing
-                                Just (BeamSqliteRow row) -> pure row
-               runReaderT (runSqliteM (action nextRow')) (logger, conn)
 
 
 unfoldM :: Monad m => m (Maybe a) -> m [a]
@@ -392,7 +385,88 @@ unfoldM f = go []
     go acc = f >>= maybe (pure acc) (\x -> go (x : acc))
 
 instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
-  runInsertReturningList = runInsertReturningList
+  runInsertReturningList SqlInsertNoRows = pure []
+  runInsertReturningList (SqlInsert _ insertCommand) = runReturningList $ SqliteCommandInsert insertCommand
+
+newtype SqliteInsertReturning a = SqliteInsertReturning [SqliteSyntax]
+newtype SqliteDeleteReturning a = SqliteDeleteReturning SqliteSyntax
+newtype SqliteUpdateReturning a = SqliteUpdateReturning (Maybe SqliteSyntax)
+
+-- | SQLite cannot deal with DEFAULT in insertion. Instead, it expects these
+-- fields to be omitted from the INSERT.
+--
+-- This means that, for any given INSERT query, the row value being inserted
+-- must have a fixed set of fields with DEFAULT value.
+--
+-- This function groups the inserted values by the set of DEFAULT fields, so
+-- that we can perform a separate INSERT for each set of DEFAULT fields.
+sqliteGroupByDefaults :: [T.Text] -> SqliteInsertValuesSyntax -> [([T.Text], SqliteInsertValuesSyntax)]
+sqliteGroupByDefaults flds (SqliteInsertExpressions es) =
+  let
+    partitionDefaultsFrom :: (IntSet, [SqliteExpressionSyntax]) -> Int -> [SqliteExpressionSyntax] -> (IntSet, [SqliteExpressionSyntax])
+    partitionDefaultsFrom (dflts, acc) _ [] = (dflts, reverse acc)
+    partitionDefaultsFrom (dflts, acc) i (x:xs)
+      | x == SqliteExpressionDefault
+      = partitionDefaultsFrom (IntSet.insert i dflts, acc) (i + 1) xs
+      | otherwise
+      = partitionDefaultsFrom (dflts, x : acc) (i + 1) xs
+
+    grouped :: [(IntSet, [[SqliteExpressionSyntax]])]
+    grouped =
+      Strict.Map.toDescList $
+      Strict.Map.fromListWith (++)
+        [ (dflts, [e'])
+        | e <- reverse es
+        , let (dflts, e') = partitionDefaultsFrom (IntSet.empty, []) 0 e
+        ]
+
+    mkSyntax :: IntSet -> [[SqliteExpressionSyntax]] -> ([T.Text], SqliteInsertValuesSyntax)
+    mkSyntax dflts xs =
+      ( [fld | (i, fld) <- zip [0..] flds
+              , not $ i `IntSet.member` dflts
+              ]
+      , SqliteInsertExpressions xs)
+  in
+    map (uncurry mkSyntax) grouped
+sqliteGroupByDefaults flds orig@(SqliteInsertFromSql {}) =
+  -- Preserve manually-written queries
+  [(flds, orig)]
+
+runDeleteReturningList
+  :: ( MonadBeam be m
+     , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
+     , FromBackendRow be a
+     )
+  => SqliteDeleteReturning a
+  -> m [a]
+runDeleteReturningList (SqliteDeleteReturning syntax) =
+  runReturningList $ SqliteCommandSyntax syntax
+
+-- | SQLite @DELETE ... RETURNING@ statement support. The last
+-- argument takes the deleted row and returns the values to be returned.
+--
+-- Use 'runDeleteReturningList' to get the results.
+deleteReturning :: forall a table be. Projectible Sqlite a
+                => DatabaseEntity Sqlite be (TableEntity table)
+                      -- ^ table to delete from
+                -> (forall s. table (QExpr Sqlite s) -> QExpr Sqlite s Bool)
+                      -- ^ predicate selecting rows to delete
+                -> (table (QExpr Sqlite Void) -> a)
+                      -- ^ projection describing what to return
+                -> SqliteDeleteReturning (QExprToIdentity a)
+deleteReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSettings }))
+                mkWhere
+                mkProjection =
+  SqliteDeleteReturning $
+    fromSqliteDelete sqliteDelete
+      <>
+    emit " RETURNING " <> commas (map fromSqliteExpression (project (Proxy @Sqlite) (mkProjection tblQ) "t"))
+  where
+
+    SqlDelete _ sqliteDelete = delete table mkWhere
+    tblQ = changeBeamRep getFieldName tblSettings
+    getFieldName (Columnar' fd) =
+      Columnar' $ QExpr $ pure $ fieldE (unqualifiedField (_fieldName fd))
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
 runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs onConflict)
@@ -411,23 +485,73 @@ runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs onConflict)
       logger (cmdString ++ ";\n-- With values: " ++ show (D.toList vals))
       execute conn (fromString cmdString) (D.toList vals)
 
--- * INSERT returning support
-
 -- | Build a 'SqliteInsertReturning' representing inserting the given values
--- into the given table. Use 'runInsertReturningList'
+-- into the given table and returning all inserted rows.
+--
+-- Use 'runInsertReturningList' to get the results.
 insertReturning :: Beamable table
                 => DatabaseEntity Sqlite db (TableEntity table)
+                      -- ^ table to insert into
                 -> SqlInsertValues Sqlite (table (QExpr Sqlite s))
-                -> SqlInsert Sqlite table
-insertReturning = insert
+                      -- ^ values/expressions to insert
+                -> SqliteInsertReturning (table Identity)
+insertReturning table vals =
+  SqliteInsertReturning $
+    case insert table vals of
+      SqlInsert _ (SqliteInsertSyntax tbl fields values onConflict) ->
+        [ formatSqliteInsertOnConflict tbl fields' values' onConflict <>
+          emit " RETURNING " <> commas (map quotedIdentifier fields)
+        | (fields', values') <- sqliteGroupByDefaults fields values
+        ]
+      SqlInsertNoRows -> []
+
+-- | SQLite @INSERT ... RETURNING@ statement support with conflict handling.
+-- The last argument takes the newly inserted row and returns the values to be
+-- returned.
+--
+-- Use 'runInsertReturningList' to get the results.
+insertOnConflictReturning
+  :: forall s a table db
+  .  (Beamable table, Projectible Sqlite a)
+  => DatabaseEntity Sqlite db (TableEntity table)
+      -- ^ table to insert into
+  -> SqlInsertValues Sqlite (table (QExpr Sqlite s))
+      -- ^ values/expressions to insert
+  -> Beam.SqlConflictTarget Sqlite table
+      -- ^ the target of the conflict (e.g. the row primary key)
+  -> Beam.SqlConflictAction Sqlite table
+      -- ^ what to do on conflict (e.g. nothing, override, etc)
+  -> (table (QExpr Sqlite Void) -> a)
+        -- ^ projection describing what to return
+  -> SqliteInsertReturning (QExprToIdentity a)
+insertOnConflictReturning
+  table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSettings }))
+  vals tgt action mkProjection =
+  SqliteInsertReturning $
+    case Beam.insertOnConflict table vals tgt action of
+      SqlInsert _ (SqliteInsertSyntax tbl fields values onConflict) ->
+        [ formatSqliteInsertOnConflict tbl fields' values' onConflict <>
+          emit " RETURNING " <> commas (map fromSqliteExpression (project (Proxy @Sqlite) (mkProjection tblQ) "t"))
+        | (fields', values') <- sqliteGroupByDefaults fields values
+        ]
+      SqlInsertNoRows -> []
+  where
+    tblQ = changeBeamRep getFieldName tblSettings
+    getFieldName (Columnar' fd) =
+      Columnar' $ QExpr $ pure $ fieldE (unqualifiedField (_fieldName fd))
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
 -- inserted row.
-runInsertReturningList :: (Beamable table, FromBackendRow Sqlite (table Identity))
-                       => SqlInsert Sqlite table
-                       -> SqliteM [ table Identity ]
-runInsertReturningList SqlInsertNoRows = pure []
-runInsertReturningList (SqlInsert _ insertCommand) = runReturningList $ SqliteCommandInsert insertCommand
+runInsertReturningList
+  :: ( MonadBeam be m
+     , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
+     , FromBackendRow be a
+     )
+  => SqliteInsertReturning a
+  -> m [a]
+runInsertReturningList (SqliteInsertReturning syntaxes) =
+  concat <$>
+    traverse (\syntax -> runReturningList $ SqliteCommandSyntax syntax) syntaxes
 
 instance Beam.BeamHasInsertOnConflict Sqlite where
   newtype SqlConflictTarget Sqlite table = SqliteConflictTarget
@@ -508,3 +632,45 @@ excluded
 excluded table = changeBeamRep excludedField table
   where excludedField (Columnar' (QField _ _ name)) =
           Columnar' $ QExpr $ const $ fieldE $ qualifiedField "excluded" name
+
+-- | Use in conjunction with 'updateReturning'.
+runUpdateReturningList
+  :: ( MonadBeam be m
+     , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
+     , FromBackendRow be a
+     )
+  => SqliteUpdateReturning a
+  -> m [a]
+runUpdateReturningList (SqliteUpdateReturning Nothing) = pure []
+runUpdateReturningList (SqliteUpdateReturning (Just syntax)) =
+  runReturningList $ SqliteCommandSyntax syntax
+
+-- | SQLite @UPDATE ... RETURNING@ statement support. The last
+-- argument takes the updated row and returns the values to be returned.
+--
+-- Use 'runUpdateReturningList' to get the results.
+updateReturning :: forall a table db. Projectible Sqlite a
+                => DatabaseEntity Sqlite db (TableEntity table)
+                      -- ^ table to update
+                -> (forall s. table (QField s) -> QAssignment Sqlite s)
+                      -- ^ assignment for the update
+                -> (forall s. table (QExpr Sqlite s) -> QExpr Sqlite s Bool)
+                      -- ^ predicate selecting rows to update
+                -> (table (QExpr Sqlite Void) -> a)
+                      -- ^ projection describing what to return
+                -> SqliteUpdateReturning (QExprToIdentity a)
+updateReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSettings }))
+                mkAssignments
+                mkWhere
+                mkProjection =
+  SqliteUpdateReturning $
+    case update table mkAssignments mkWhere of
+      SqlIdentityUpdate -> Nothing
+      SqlUpdate _ sqliteUpdate ->
+        Just $ fromSqliteUpdate sqliteUpdate
+          <> emit " RETURNING "
+          <> commas (map fromSqliteExpression (project (Proxy @Sqlite) (mkProjection tblQ) "t"))
+  where
+    tblQ = changeBeamRep getFieldName tblSettings
+    getFieldName (Columnar' fd) =
+      Columnar' $ QExpr $ pure $ fieldE (unqualifiedField (_fieldName fd))
