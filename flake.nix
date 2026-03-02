@@ -49,6 +49,7 @@
             hp.beam-migrate
             hp.beam-postgres
             hp.beam-sqlite
+            hp.beam-duckdb
             hp.microlens-th
           ]);
 
@@ -64,6 +65,9 @@
             settings = {
               testcontainers.check = false;
               beam-postgres.check = false;
+              beam-duckdb.check = false;
+              duckdb-simple.check = false;
+              duckdb-simple.jailbreak = true; # Version bounds are incompatible with GHC 9.10 it seems
               duckdb-ffi.broken = false;
               duckdb-ffi.check = false;
               duckdb-ffi.extraLibraries = [ pkgs.duckdb ];
@@ -95,6 +99,7 @@
               self'.packages.beam-postgres
               self'.packages.pagila
               self'.packages.beam-sqlite
+              self'.packages.beam-duckdb
             ];
           };
 
@@ -111,6 +116,7 @@
                 (builtins.elem strippedPath [
                   "beam-postgres"
                   "beam-sqlite"
+                  "beam-duckdb"
                 ])
                 (builtins.any (pkgs.lib.flip pkgs.lib.hasPrefix strippedPath) [
                   "build-docs.sh"
@@ -120,6 +126,8 @@
                   "beam-postgres/beam-docs.sh"
                   "beam-sqlite/examples"
                   "beam-sqlite/beam-docs.sh"
+                  "beam-duckdb/beam-docs.sh"
+                  "beam-duckdb/docs"
                 ])
               )
               []
@@ -132,9 +140,15 @@
               pkgs.sqlite
               pkgs.curl
               pkgs.pv
+              pkgs.duckdb
             ];
 
             buildPhase = ''
+              mkdir -p docs/.beam-query-cache/chinook-data
+              cp ${chinookPostgres} docs/.beam-query-cache/chinook-data/Chinook_PostgreSql.sql
+              cp ${chinookSqlite} docs/.beam-query-cache/chinook-data/Chinook_Sqlite.sql
+              cp beam-duckdb/docs/Chinook.sql docs/.beam-query-cache/chinook-data/Chinook_DuckDB.sql
+
               mkdir postgres
               export PGHOST=$(mktemp -d /tmp/pg.XXXXXX)
               initdb -D postgres
@@ -142,10 +156,7 @@
               pg_ctl -D postgres -o "-c listen_addresses=localhost" start
               trap "pg_ctl -D postgres stop -m immediate" EXIT
 
-              mkdir -p docs/.beam-query-cache/chinook-data
-              cp ${chinookPostgres} docs/.beam-query-cache/chinook-data/Chinook_PostgreSql.sql
-              cp ${chinookSqlite} docs/.beam-query-cache/chinook-data/Chinook_Sqlite.sql
-              CI=true BEAM_DOC_BACKEND="beam-postgres beam-sqlite" bash ./build-docs.sh builddocs
+              CI=true bash ./build-docs.sh builddocs
             '';
 
             installPhase = ''

@@ -63,6 +63,36 @@ backends:
       - intersect
       - except
 
+  beam-duckdb:
+    backend-name: DuckDB
+    backend-module: Database.Beam.DuckDB
+    backend-options: chinook.db
+    src:
+      file: ./beam-duckdb
+    haskell-names:
+      package: beam-duckdb
+      backend: DuckDB
+      monad: DuckDBM
+      select-syntax: DuckDBSelectSyntax
+      mnemonic: DuckDB
+      # We need the version which accepts a 'String' rather than
+      # 'Text', for compatibility with other backends
+      with-database-debug: runBeamDuckDBDebugString
+    extra-packages:
+      - duckdb-simple
+    extra-imports:
+      - Database.DuckDB.Simple
+    backend-extra: >-
+      docsWithTransaction = withTransaction
+    supports:
+      - utf8
+      # - t611
+      - outer-join
+      # - window
+      - intersect
+      - except
+      - cte
+
 #  beam-mysql:
 #    backend-name: MySQL
 #    backend-module: Database.Beam.MySQL
