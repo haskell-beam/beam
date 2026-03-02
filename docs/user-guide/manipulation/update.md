@@ -59,18 +59,21 @@ a boolean expression, and returns a `SqlUpdate`.
 For example, suppose Canada and the USA became one country and we needed to
 update all customer addresses to reflect that.
 
+<!-- It's not clear why the example below doesn't work with DuckDB. `duckdb-simple` returns
+"INVALID type in eager result".
+-->
 !beam-query
 ```haskell
-!example chinookdml
+!example chinookdml !on:DuckDB
 
 Just canadianCount <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int32 countAll_) $
+  aggregate_ (\_ -> as_ @Int64 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "Canada")) $
   all_ (customer chinookDb)
 Just usaCount <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int32 countAll_) $
+  aggregate_ (\_ -> as_ @Int64 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "USA")) $
   all_ (customer chinookDb)
 putStrLn ("Before, there were " ++ show canadianCount ++ " addresses in Canada and " ++ show usaCount ++ " in the USA.")
@@ -82,12 +85,12 @@ runUpdate $ update (customer chinookDb)
 
 Just canadianCount' <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int32 countAll_) $
+  aggregate_ (\_ -> as_ @Int64 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "Canada")) $
   all_ (customer chinookDb)
 Just usaCount' <-
   runSelectReturningOne $ select $
-  aggregate_ (\_ -> as_ @Int32 countAll_) $
+  aggregate_ (\_ -> as_ @Int64 countAll_) $
   filter_ (\c -> addressCountry (customerAddress c) ==. val_ (Just "USA")) $
   all_ (customer chinookDb)
 putStrLn ("Now, there are " ++ show canadianCount' ++ " addresses in Canada and " ++ show usaCount' ++ " in the USA.")

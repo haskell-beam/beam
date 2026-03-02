@@ -41,23 +41,31 @@ data ExamT f = Exam
     _examDate :: Columnar f Day
   }
 
--- Omitted various instances
+type Exam = ExamT Identity
+deriving instance Show Exam
+deriving instance Eq Exam
+
+instance Beamable ExamT
+instance Table ExamT where
+  data PrimaryKey ExamT f = ExamId (Columnar f Int32) deriving (Generic)
+  primaryKey = ExamId . _examId
+instance Beamable (PrimaryKey ExamT)
 ```
 
 Then, we can declare the database as having one "table" sources from a Parquet file:
 
 ```haskell
-data ExampleDB f = ExampleDB
-  { _exams :: f (DataSourceEntity ExamT),
+data SchoolDB f = SchoolDB
+  { _exams :: f (DataSourceEntity ExamT)
   }
   deriving (Generic, Database DuckDB)
 
-exampleDb :: DatabaseSettings DuckDB ExampleDB
-exampleDb =
+schoolDB :: DatabaseSettings DuckDB SchoolDB
+schoolDB =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _exams =
-          dataSource (parquet (NonEmpty.singleton "exams.parquet"))
+          dataSource (parquet (NonEmpty.singleton "data/exams.parquet"))
             <> modifyDataSourceFields
               tableModification
                 { _examId = "id",
@@ -74,12 +82,19 @@ multiple files with the same schema, or even one or more globs.
 Once this is done, you can query the "table" just like any other beam entity. For
 example, to fetch the maximum exam score:
 
+!beam-query
 ```haskell
-runSelectReturningOne
-  $ select
-    $ aggregate_
-        (max_ . _examScore)
-        (allFromDataSource_ (_exams exampleDb))
+!duckdb-parquet-out output only:DuckDB
+!duckdb-parquet-sql sql only:DuckDB
+Just bestScore <-
+  runBeamDuckDBDebug putStrLn conn
+    $ runSelectReturningOne
+      $ select
+        $ aggregate_
+            (max_ . _examScore)
+            (allFromDataSource_ (_exams schoolDB))
+
+print bestScore
 ```
 
 Note the one difference: instead of pulling all rows using `all_` (for a database table),
@@ -93,8 +108,8 @@ Assume that we have a large Iceberg table, with the same `ExamT` schema as our P
 out the use of `parquet` in the example above with `icebergTable`:
 
 ```haskell
-exampleDb :: DatabaseSettings DuckDB ExampleDB
-exampleDb =
+schoolDB :: DatabaseSettings DuckDB SchoolDB
+schoolDB =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _exams = dataSource (icebergTable "s3://.../exams")
@@ -135,8 +150,8 @@ We could instruct beam that we'll be querying from CSV files using `csv`. Howeve
 files have a header row, using `csvWith`:
 
 ```haskell
-exampleDb :: DatabaseSettings DuckDB ExampleDB
-exampleDb =
+schoolDB :: DatabaseSettings DuckDB SchoolDB
+schoolDB =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _exams =

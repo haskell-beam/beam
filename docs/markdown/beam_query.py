@@ -14,7 +14,7 @@ import sys
 
 
 def check_ci():
-    return os.environ.get("CI", "false") == "true" and "BEAM_DOC_BACKEND" in os.environ
+    return os.environ.get("CI", "false") == "true"
 
 
 def fetch_backend_src(backend_name, cache_dir, base_dir, src):
@@ -313,7 +313,9 @@ def run_example(template_path, cache_dir, example_lines):
     if build_command.startswith("runhaskell"):
         ghc_args = build_command[len("runhaskell"):]
         if needs_th:
-            compile_command = f"ghc --make -O0 -o {binary_file} {ghc_args} {source_file} && {binary_file}"
+            # We use `-v0` so that the output of scripts is not "polluted"
+            # by the compiler output
+            compile_command = f"ghc -v0 --make -O0 -o {binary_file} {ghc_args} {source_file} && {binary_file}"
         else:
             compile_command = f"runhaskell {ghc_args} {source_file}"
     else:
@@ -471,12 +473,7 @@ class BeamQueryExtension(Extension):
             conf = yaml.load(f, Loader=yaml.SafeLoader)
 
         backends = conf["backends"]
-        is_ci = check_ci()
-        enabled_backends = (
-            self.getConfig("enabled_backends")
-            if not is_ci
-            else os.environ["BEAM_DOC_BACKEND"].split()
-        )
+        enabled_backends = self.getConfig("enabled_backends")
         print("Enabled backends are", enabled_backends)
         if enabled_backends:
             backends = {k: v for k, v in backends.items() if k in enabled_backends}

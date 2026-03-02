@@ -53,8 +53,7 @@ markdown_extensions:
       enabled_backends:
         - beam-postgres
         - beam-sqlite
-        # - beam-mysql
-        # - beam-mssql
+        - beam-duckdb
   - docs.markdown.markdown_fenced_code_tabs
   - def_list
   - codehilite:
