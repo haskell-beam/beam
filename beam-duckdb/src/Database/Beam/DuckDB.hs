@@ -20,7 +20,9 @@
 module Database.Beam.DuckDB
   ( -- * Executing DuckDB queries
     runBeamDuckDB,
+    -- ** Executing DuckDB queries with debugging
     runBeamDuckDBDebug,
+    runBeamDuckDBDebugString,
 
     -- * Backend datatype
     DuckDB,
@@ -108,6 +110,12 @@ runBeamDuckDB = runBeamDuckDBDebug (\_ -> pure ())
 runBeamDuckDBDebug :: (Text -> IO ()) -> Connection -> DuckDBM a -> IO a
 runBeamDuckDBDebug debug conn action =
   runReaderT (runDuckDBM action) (debug, conn)
+
+-- | Like 'runBeamDuckDBDebug', but accepts a 'String' argument instead of 'Text'.
+--
+-- This is provided for compatibility with other backends
+runBeamDuckDBDebugString :: (String -> IO ()) -> Connection -> DuckDBM a -> IO a
+runBeamDuckDBDebugString debug = runBeamDuckDBDebug (debug . Text.unpack)
 
 newtype BeamDuckDBParams = BeamDuckDBParams [SomeField]
 

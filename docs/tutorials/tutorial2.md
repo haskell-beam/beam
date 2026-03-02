@@ -202,90 +202,16 @@ Easier queries with lenses
 In the previous part, we accessed table columns by using regular Haskell record
 syntax. Sometimes, we would like to use the more convenient lens syntax to
 access columns. Of course, all of beam's definitions are compatible with the
-`lens` library -- that is to say, `makeLenses` will work just fine. However,
-beam's motivation is, in part, the avoidance of Template Haskell, and it would
-hardly be worth it if you had to include a Template Haskell splice just to have
-lenses for the models you declared TH free.
-
-In reality, the `lens` library isn't required to construct valid lenses. Lenses
-are a plain old Haskell type.
-
-We can use beam's `Columnar` mechanism to automatically derive lenses. The
-`tableLenses` function produces a table value where each column is given a type
-`LensFor`, which is a `newtype` wrapper over a correctly constructed,
-polymorphic Van Laarhoven lens.
-
-We can bring these lenses into scope globally via a global pattern match against
-`tableLenses`. For example, we get lenses for each column of the `AddressT` and
-`UserT` table below.
+`lens` library -- that is to say, `makeLenses` will work just fine. Since this isn't
+an optics tutorial, we'll go ahead and use `microlens-th`'s `makeLenses`:
 
 ```haskell
--- Add the following to the top of the file, for GHC >8.2
-{-#  LANGUAGE ImpredicativeTypes #-}
+{-#  LANGUAGE TemplateHaskell #-}
 
-Address (LensFor addressId) _ _ _ _ _ _ = tableLenses
-Address _ (LensFor addressLine1) _ _ _ _ _ = tableLenses
-Address _ _ (LensFor addressLine2) _ _ _ _ = tableLenses
-Address _ _ _ (LensFor addressCity) _ _ _ = tableLenses
-Address _ _ _ _ (LensFor addressState) _ _ = tableLenses
-Address _ _ _ _ _ (LensFor addressZip) _ = tableLenses
-Address _ _ _ _ _ _ (UserId (LensFor addressForUserId)) = tableLenses
-
-User (LensFor userEmail) _ _ _ = tableLenses
-User _ (LensFor userFirstName) _ _ = tableLenses
-User _ _ (LensFor userLastName) _ = tableLenses
-User _ _ _ (LensFor userPassword) = tableLenses
+makeLenses ''AddressT
+makeLenses ''UserT
+makeLenses ''ShoppingCartDb
 ```
-
-!!! note "Note"
-    The `ImpredicativeTypes` language extension is necessary for newer
-    GHC to allow the polymorphically typed lenses to be introduced at
-    the top-level. Older GHCs were more lenient. As for why we must
-    create a separate pattern match for each lens we would like to
-    generate, please refer to GitHub issues [#659](https://github.com/haskell-beam/beam/issues/659) and [#664](https://github.com/haskell-beam/beam/issues/664).
-
-As in tables, we can generate lenses for databases via the `dbLenses` function.
-
-```haskell
-ShoppingCartDb (TableLens shoppingCartUsers)
-               (TableLens shoppingCartUserAddresses) =
-               dbLenses
-```
-
-We can ask GHCi for the type of a column lens.
-
-```
-Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple> :t addressId
-addressId
-  :: Functor f2 =>
-     (Columnar f1 Int32 -> f2 (Columnar f1 Int32))
-     -> AddressT f1 -> f2 (AddressT f1)
-```
-
-This lens is compatible with those of the `lens` library.
-
-And a table lens, for good measure
-
-```
-Prelude Database.Beam Database.Beam.Sqlite Data.Text Database.SQLite.Simple> :t shoppingCartUsers
-shoppingCartUsers
-  :: Functor f1 =>
-     (f2 (TableEntity UserT) -> f1 (f2 (TableEntity UserT)))
-     -> ShoppingCartDb f2 -> f1 (ShoppingCartDb f2)
-```
-
-!!! warning "Warning"
-    These lens generating functions are *awesome* but if you use them in a
-    compiled Haskell module (rather than GHC), GHC may give you odd compile
-    errors about ambiguous types. These occur due to what's known as the
-    monomorphism restriction. You can turn it off using the
-    `NoMonomorphismRestriction` extension.
-
-    The monomorphism restriction is part of the Haskell standard, but there has
-    been talk about removing it in future language versions. Basically, it
-    requires GHC to not automatically infer polymorphic types for global
-    definitions. In this case though, polymorphic global definitions is exactly
-    what we want.
 
 Working with relations
 ========
@@ -455,7 +381,7 @@ usersAndRelatedAddresses <-
     runSelectReturningList $ select $
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
        address <- all_ (shoppingCartDb ^. shoppingCartUserAddresses)
-       guard_ (address ^. addressForUserId ==. user ^. userEmail)
+       guard_ (address ^. (addressForUser . userId) ==. user ^. userEmail)
        pure (user, address)
 
 mapM_ print usersAndRelatedAddresses
@@ -559,7 +485,7 @@ update the corresponding record in the database.
 [james] <-
   runBeamSqliteDebug putStrLn conn $
     do runUpdate $
-         save (shoppingCartDb ^. shoppingCartUsers) (james { _userPassword = "52a516ca6df436828d9c0d26e31ef704" })
+         save (shoppingCartDb ^. shoppingCartUsers) (james & userPassword .~ "52a516ca6df436828d9c0d26e31ef704")
 
        runSelectReturningList $
          lookup_ (shoppingCartDb ^. shoppingCartUsers) (UserId "james@example.com")
@@ -625,8 +551,7 @@ Conclusion
 
 In this tutorial we created our first beam relationship. We saw how to use the
 modifications system to override the default names given to database entities.
-We saw how to use `tableLenses` to generate lenses that can be used with any
-lens library. We used the monadic query interface to write queries that used SQL
+We used the monadic query interface to write queries that used SQL
 joins, and we saw how beam makes it easy to automatically pull related tables
 into our queries. Finally we introduced the `runUpdate` and `runDelete`
 functions and demonstrated several ways to construct UPDATEs and DELETEs.

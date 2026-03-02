@@ -41,7 +41,15 @@ data ExamT f = Exam
     _examDate :: Columnar f Day
   }
 
--- Omitted various instances
+type Exam = ExamT Identity
+deriving instance Show Exam
+deriving instance Eq Exam
+
+instance Beamable ExamT
+instance Table ExamT where
+  data PrimaryKey ExamT f = ExamId (Columnar f Int32) deriving (Generic)
+  primaryKey = ExamId . _examId
+instance Beamable (PrimaryKey ExamT)
 ```
 
 Then, we can declare the database as having one "table" sources from a Parquet file:
@@ -57,7 +65,7 @@ exampleDb =
   defaultDbSettings
     `withDbModification` (dbModification @_ @DuckDB)
       { _exams =
-          dataSource (parquet (NonEmpty.singleton "exams.parquet"))
+          dataSource (parquet (NonEmpty.singleton "data/exams.parquet"))
             <> modifyDataSourceFields
               tableModification
                 { _examId = "id",
@@ -74,12 +82,16 @@ multiple files with the same schema, or even one or more globs.
 Once this is done, you can query the "table" just like any other beam entity. For
 example, to fetch the maximum exam score:
 
+!beam-query
 ```haskell
-runSelectReturningOne
-  $ select
-    $ aggregate_
-        (max_ . _examScore)
-        (allFromDataSource_ (_exams exampleDb))
+!duckdb-parquet-out output only:DuckDB
+!duckdb-parquet-sql sql only:DuckDB
+runSelect
+  $ runSelectReturningOne
+    $ select
+      $ aggregate_
+          (max_ . _examScore)
+          (allFromDataSource_ (_exams exampleDb))
 ```
 
 Note the one difference: instead of pulling all rows using `all_` (for a database table),

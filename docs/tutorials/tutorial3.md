@@ -117,13 +117,8 @@ instance Table LineItemT where
 Now we'll add all these tables to our database.
 
 ```haskell
--- Some convenience lenses
-
-LineItem _ _ (LensFor lineItemQuantity) = tableLenses
-Product (LensFor productId) _ _ _ = tableLenses
-Product _ (LensFor productTitle) _ _ = tableLenses
-Product _ _ (LensFor productDescription) _ = tableLenses
-Product _ _ _ (LensFor productPrice) = tableLenses
+makeLenses ''LineItemT
+makeLenses ''ProductT
 
 data ShoppingCartDb f = ShoppingCartDb
                       { _shoppingCartUsers         :: f (TableEntity UserT)
@@ -134,12 +129,7 @@ data ShoppingCartDb f = ShoppingCartDb
                       , _shoppingCartLineItems     :: f (TableEntity LineItemT) }
                         deriving (Generic, Database be)
 
-ShoppingCartDb (TableLens shoppingCartUsers) _ _ _ _ _ = dbLenses
-ShoppingCartDb _ (TableLens shoppingCartUserAddresses) _ _ _ _ = dbLenses
-ShoppingCartDb _ _ (TableLens shoppingCartProducts) _ _ _  = dbLenses
-ShoppingCartDb _ _ _ (TableLens shoppingCartOrders) _ _ = dbLenses
-ShoppingCartDb _ _ _ _ (TableLens shoppingCartShippingInfos) _  = dbLenses
-ShoppingCartDb _ _ _ _ _ (TableLens shoppingCartLineItems) = dbLenses
+makeLenses ''ShoppingCartDb
 
 shoppingCartDb :: DatabaseSettings be ShoppingCartDb
 shoppingCartDb = defaultDbSettings `withDbModification`
@@ -328,7 +318,8 @@ resulting rows have a timestamp set by the database.
       insertExpressions $
       [ Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_
       , Order default_ currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo)))
-      , Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_ ]
+      , Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_
+      ]
 
 print jamesOrder1
 print bettyOrder1

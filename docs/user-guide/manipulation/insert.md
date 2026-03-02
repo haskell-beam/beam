@@ -51,9 +51,10 @@ value, but this may cause synchronization issues for our application. To do
 this, beam allows us to specify arbitrary expressions as a source of values
 using the `insertExpressions` function.
 
+<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml
+!example chinookdml !on:DuckDB
 runInsert $ insert (invoice chinookDb) $
   insertExpressions [ Invoice (val_ 800) (CustomerId (val_ 1)) currentTimestamp_
                               (val_ (Address (Just "123 My Street") (Just "Buenos Noches") (Just "Rio") (Just "Mozambique") (Just "ABCDEF")))
@@ -99,9 +100,10 @@ you want to use the default value for.
 For example, the query below adds a new invoice asking the database to assign a
 new id.
 
+<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml !on:Sqlite
+!example chinookdml !on:Sqlite !on:DuckDB
 runInsert $ insert (invoice chinookDb) $
   insertExpressions [ Invoice default_ -- Ask the database to give us a default id
                               (val_ (CustomerId 1)) currentTimestamp_
@@ -126,9 +128,10 @@ you'll need to explicitly import
 `Database.Beam.Backend.SQL.BeamExtensions`. Below, we've imported this module
 qualified.
 
+<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml !on:MySQL
+!example chinookdml !on:DuckDB
 [newInvoice] <-
   BeamExtensions.runInsertReturningList $ insert (invoice chinookDb) $
   insertExpressions [ Invoice default_ -- Ask the database to give us a default id
@@ -165,9 +168,10 @@ as your data. If not, you'll get a compile time error.
 
 For example, to create the playlists as above
 
+<!-- DuckDB doesn't yet support the Sql99* featureset -->
 !beam-query
 ```haskell
-!example chinookdml
+!example chinookdml !on:DuckDB
 
 runInsert $ insert (playlist chinookDb) $
   insertFrom $ do
@@ -195,9 +199,10 @@ columns. For example, suppose we want to insert new invoices for every customer
 with today's date. We can use the `insertOnly` function to project which field's
 are being inserted.
 
+<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml
+!example chinookdml !on:DuckDB
 
 runInsert $
   insertOnly (invoice chinookDb)
@@ -290,9 +295,10 @@ runInsert $
 Sometimes you only want to perform an action if a certain constraint is violated. If the conflicting
 index or constraint is on a field you can specify which fields with the function `conflictingFields`.
 
+<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
 !beam-query
 ```haskell
-!example chinookdml !on:MySQL
+!example chinookdml !on:DuckDB
 --! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
@@ -310,9 +316,10 @@ You can also specify how to change the record should it not match. For example, 
 as an alternate when you insert an existing row, you can use the `oldValues` argument to get access
 to the old value.
 
+<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
 !beam-query
 ```haskell
-!example chinookdml !on:MySQL
+!example chinookdml !on:DuckDB
 --! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
@@ -326,9 +333,10 @@ runInsert $
 If you want to be even more particular and only do this transformation on rows corresponding to
 customers from one state, use `conflictingFieldsWhere`.
 
+<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
 !beam-query
 ```haskell
-!example chinookdml !on:MySQL
+!example chinookdml !on:DuckDB
 --! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_

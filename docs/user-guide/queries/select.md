@@ -220,7 +220,7 @@ For example, to get all customers we know to be in New York, California, and Tex
 
 !beam-query
 ```haskell
-!example chinook !on:Sqlite !on:MySQL
+!example chinook !on:Sqlite
 do c <- all_ (customer chinookDb)
    st <- values_ [ "NY", "CA", "TX" ]
    guard_' (just_ st ==?. addressState (customerAddress c))
