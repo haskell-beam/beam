@@ -18,6 +18,7 @@ tests = testGroup "Insertion tests"
   [ testInsertReturningColumnOrder
   , testInsertOnlyDefaults
   , expectFail testUpsertOnlyDefaults
+  , testInsertSomeDefaults
   ]
 
 data TestTableT f
@@ -67,7 +68,7 @@ testInsertReturningColumnOrder = testCase "runInsertReturningList with mismatchi
                    , TestTable 1 "sally" "apple" 33 dateJoined oneUtcTime
                    , TestTable 4 "blah" "blah" (-1) dateJoined now ]
 
-    assertEqual "insert values" inserted expected
+    assertEqual "insert values" expected inserted
 
 data WithDefaultsT f = WithDefaults
   { _id :: C f (SqlSerial Int32)
@@ -99,10 +100,11 @@ testInsertOnlyDefaults = testCase "insert only default values" $
         [ WithDefaults default_ default_
         , WithDefaults default_ $ val_ "other"
         ]
-    assertEqual "inserted values" inserted
+    assertEqual "inserted values"
       [ WithDefaults 1 "unknown"
       , WithDefaults 2 "other"
       ]
+      inserted
 
 testUpsertOnlyDefaults :: TestTree
 testUpsertOnlyDefaults = testCase "upsert only default values" $
@@ -117,7 +119,55 @@ testUpsertOnlyDefaults = testCase "upsert only default values" $
         )
         anyConflict
         onConflictDoNothing
-    assertEqual "inserted values" inserted
+    assertEqual "inserted values"
       [ WithDefaults 1 "unknown"
       , WithDefaults 2 "other"
       ]
+      inserted
+
+
+data MixTableT f
+  = MixTable
+  { mtId :: C f (SqlSerial Int32)
+  , mtField1 :: C f Int32
+  , mtField2 :: C f Int32
+  , mtField3 :: C f Int32
+  } deriving (Generic, Beamable)
+
+deriving instance Show (MixTableT Identity)
+deriving instance Eq (MixTableT Identity)
+
+instance Table MixTableT where
+  data PrimaryKey MixTableT f = MixTableKey (C f (SqlSerial Int32))
+    deriving (Generic, Beamable)
+  primaryKey (MixTable { mtId = i }) = MixTableKey i
+
+data MixTableDb entity
+  = MixTableDb
+  { dbMixTable :: entity (TableEntity MixTableT)
+  } deriving (Generic, Database Sqlite)
+
+mixDatabase :: DatabaseSettings be MixTableDb
+mixDatabase = defaultDbSettings
+
+-- | Test grouping logic for queries containing different DEFAULT column layouts.
+testInsertSomeDefaults :: TestTree
+testInsertSomeDefaults = testCase "insert mix of default values" $ do
+  withTestDb $ \conn -> do
+    execute_ conn "CREATE TABLE mix_table ( id INTEGER PRIMARY KEY AUTOINCREMENT, field1 INT DEFAULT 11, field2 INT DEFAULT 22, field3 INT DEFAULT 33)"
+    inserted <-
+      runBeamSqlite conn $ runInsertReturningList $
+      insert (dbMixTable mixDatabase) $
+      insertExpressions [ MixTable default_ default_ 1001     10001
+                        , MixTable 202      2        default_ default_
+                        , MixTable 303      3        default_ default_
+                        , MixTable default_ default_ 4004     40004
+                        ]
+
+    let expected = [ MixTable 1   11 1001 10001
+                   , MixTable 202 2  22   33
+                   , MixTable 303 3  22   33
+                   , MixTable 304 11 4004 40004
+                   ]
+
+    assertEqual "insert values" expected inserted

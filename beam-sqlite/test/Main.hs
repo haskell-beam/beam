@@ -6,6 +6,7 @@ import qualified Database.Beam.Sqlite.Test.Migrate as Migrate
 import qualified Database.Beam.Sqlite.Test.Insert as Insert
 import qualified Database.Beam.Sqlite.Test.InsertOnConflictReturning as InsertOnConflictReturning
 import qualified Database.Beam.Sqlite.Test.Select as Select
+import qualified Database.Beam.Sqlite.Test.Returning as Returning
 
 main :: IO ()
 main = defaultMain $ testGroup "beam-sqlite tests"
@@ -13,4 +14,5 @@ main = defaultMain $ testGroup "beam-sqlite tests"
       , Select.tests
       , Insert.tests
       , InsertOnConflictReturning.tests
+      , Returning.tests
       ]
