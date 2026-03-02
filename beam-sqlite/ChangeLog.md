@@ -1,3 +1,10 @@
+# 0.5.6.0
+
+## Performance optimizations
+
+* `insertReturning` / `deleteReturning` / `updateReturning` now generate optimal SQL queries, minimizing the number
+  of separate statements, by grouping similar statements in the presence of the `DEFAULT` keyword (#785).
+
 # 0.5.5.0
 
 ## Added features

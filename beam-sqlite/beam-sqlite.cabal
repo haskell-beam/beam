@@ -1,5 +1,5 @@
 name:                beam-sqlite
-version:             0.5.5.0
+version:             0.5.6.0
 synopsis:            Beam driver for SQLite
 description:         Beam driver for the <https://sqlite.org/ SQLite> embedded database.
                      See <https://haskell-beam.github.io/beam/user-guide/backends/beam-sqlite/ here>
@@ -14,7 +14,7 @@ category:            Database
 build-type:          Simple
 extra-source-files:  README.md
 extra-doc-files:     ChangeLog.md
-bug-reports:          https://github.com/haskell-beam/beam/issues
+bug-reports:         https://github.com/haskell-beam/beam/issues
 cabal-version:       1.18
 
 library
