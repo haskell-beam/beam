@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecursiveDo #-}
 
--- ! BUILD_OPTIONS: -fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -XStandaloneDeriving -XFlexibleInstances -XMultiParamTypeClasses -XDeriveGeneric -XFlexibleContexts -fno-warn-partial-type-signatures -i$$BEAM_SOURCE$$/beam-sqlite/examples/
+-- ! BUILD_OPTIONS:  -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -XStandaloneDeriving -XFlexibleInstances -XMultiParamTypeClasses -XDeriveGeneric -XFlexibleContexts -fno-warn-partial-type-signatures -i$$BEAM_SOURCE$$/beam-sqlite/examples/
 -- ! BUILD_DIR: beam-sqlite/examples/
 module Main where
 
@@ -17,7 +18,7 @@ import Data.IORef
 import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
 import Data.Int
-import Data.Text
+import Data.Text hiding (show)
 
 import Chinook.Schema
 

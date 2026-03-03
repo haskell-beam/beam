@@ -1,6 +1,4 @@
 
-
-
 <!doctype html>
 <html lang="en" class="no-js">
   <head>
@@ -10,8 +8,18 @@
       
       
       
-      <link rel="shortcut icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.2.3, mkdocs-material-5.0.2">
+      
+        <link rel="prev" href="../../tutorials/tutorial3/">
+      
+      
+        <link rel="next" href="../databases/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
     
     
       
@@ -20,26 +28,33 @@
     
     
 
-      <link rel="stylesheet" href="../../assets/stylesheets/main.07c9fbf5.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.618322db.min.css">
       
       
+
+
     
 <link rel="stylesheet" type="text/css" href="../../css/beam.css"/>
 
     
-    
-      
-        <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700%7CRoboto+Mono&display=fallback">
-        <style>body,input{font-family:"Roboto",-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono",SFMono-Regular,Consolas,Menlo,monospace}</style>
       
     
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
     
     
       <link rel="stylesheet" href="../../docs/theme/css/beam.css">
     
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
+
     
     
   </head>
@@ -47,6 +62,7 @@
   
     <body dir="ltr">
   
+    
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
@@ -62,69 +78,91 @@
       
     </div>
     
-      <header class="md-header" data-md-component="header">
-  <nav class="md-header-nav md-grid" aria-label="Header">
-    <a href="../.." title="Beam Documentation" class="md-header-nav__button md-logo" aria-label="Beam Documentation">
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Beam Documentation" class="md-header__button md-logo" aria-label="Beam Documentation" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,8A3,3 0 0,0 15,5A3,3 0 0,0 12,2A3,3 0 0,0 9,5A3,3 0 0,0 12,8M12,11.54C9.64,9.35 6.5,8 3,8V19C6.5,19 9.64,20.35 12,22.54C14.36,20.35 17.5,19 21,19V8C17.5,8 14.36,9.35 12,11.54Z" /></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    <label class="md-header-nav__button md-icon" for="__drawer">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" /></svg>
-    </label>
-    <div class="md-header-nav__title" data-md-component="header-title">
+    <label class="md-header__button md-icon" for="__drawer">
       
-        <div class="md-header-nav__ellipsis">
-          <span class="md-header-nav__topic md-ellipsis">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
             Beam Documentation
           </span>
-          <span class="md-header-nav__topic md-ellipsis">
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
             
               Models
             
           </span>
         </div>
-      
+      </div>
     </div>
     
-      <label class="md-header-nav__button md-icon" for="__search">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z" /></svg>
-      </label>
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
       
-<div class="md-search" data-md-component="search" role="dialog">
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
   <label class="md-search__overlay" for="__search"></label>
   <div class="md-search__inner" role="search">
     <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" data-md-state="active">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
       <label class="md-search__icon md-icon" for="__search">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z" /></svg>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
       </label>
-      <button type="reset" class="md-search__icon md-icon" aria-label="Clear" data-md-component="search-reset" tabindex="-1">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg>
-      </button>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
     </form>
     <div class="md-search__output">
-      <div class="md-search__scrollwrap" data-md-scrollfix>
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
         <div class="md-search-result" data-md-component="search-result">
           <div class="md-search-result__meta">
-            Type to start searching
+            Initializing search
           </div>
-          <ol class="md-search-result__list"></ol>
+          <ol class="md-search-result__list" role="presentation"></ol>
         </div>
       </div>
     </div>
   </div>
 </div>
+      
     
     
-      <div class="md-header-nav__source">
-        
-<a href="https://github.com/haskell-beam/beam/" title="Go to repository" class="md-source">
+      <div class="md-header__source">
+        <a href="https://github.com/haskell-beam/beam" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05L244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     haskell-beam/beam
@@ -133,39 +171,44 @@
       </div>
     
   </nav>
+  
 </header>
     
     <div class="md-container" data-md-component="container">
       
+      
         
-      
-      
+          
         
       
       <main class="md-main" data-md-component="main">
         <div class="md-main__inner md-grid">
           
             
-              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
-                    <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Beam Documentation" class="md-nav__button md-logo" aria-label="Beam Documentation">
+    <a href="../.." title="Beam Documentation" class="md-nav__button md-logo" aria-label="Beam Documentation" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,8A3,3 0 0,0 15,5A3,3 0 0,0 12,2A3,3 0 0,0 9,5A3,3 0 0,0 12,8M12,11.54C9.64,9.35 6.5,8 3,8V19C6.5,19 9.64,20.35 12,22.54C14.36,20.35 17.5,19 21,19V8C17.5,8 14.36,9.35 12,11.54Z" /></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
     Beam Documentation
   </label>
   
     <div class="md-nav__source">
-      
-<a href="https://github.com/haskell-beam/beam/" title="Go to repository" class="md-source">
+      <a href="https://github.com/haskell-beam/beam" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05L244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     haskell-beam/beam
@@ -177,188 +220,358 @@
     
       
       
-      
-
-
-  <li class="md-nav__item">
-    <a href="../.." title="Home" class="md-nav__link">
-      Home
-    </a>
-  </li>
-
-    
-      
-      
-      
-
-
-  <li class="md-nav__item">
-    <a href="../../about/faq/" title="Frequently Asked Questions" class="md-nav__link">
-      Frequently Asked Questions
-    </a>
-  </li>
-
-    
-      
-      
-      
-
-
-  <li class="md-nav__item md-nav__item--nested">
-    
-      <input class="md-nav__toggle md-toggle" data-md-toggle="nav-3" type="checkbox" id="nav-3">
-    
-    <label class="md-nav__link" for="nav-3">
-      Tutorial
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
-      </span>
-    </label>
-    <nav class="md-nav" aria-label="Tutorial" data-md-level="1">
-      <label class="md-nav__title" for="nav-3">
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-        </span>
-        Tutorial
-      </label>
-      <ul class="md-nav__list" data-md-scrollfix>
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../../tutorials/tutorial1/" title="Part 1" class="md-nav__link">
-      Part 1
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../../tutorials/tutorial2/" title="Part 2" class="md-nav__link">
-      Part 2
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../../tutorials/tutorial3/" title="Part 3" class="md-nav__link">
-      Part 3
-    </a>
-  </li>
-
-        
-      </ul>
-    </nav>
-  </li>
-
+  
+  
+  <span class="md-ellipsis">
     
-      
-      
-      
-
+  
+    Home
   
 
-
-  <li class="md-nav__item md-nav__item--active md-nav__item--nested">
     
-      <input class="md-nav__toggle md-toggle" data-md-toggle="nav-4" type="checkbox" id="nav-4" checked>
-    
-    <label class="md-nav__link" for="nav-4">
-      User Guide
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
-      </span>
-    </label>
-    <nav class="md-nav" aria-label="User Guide" data-md-level="1">
-      <label class="md-nav__title" for="nav-4">
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-        </span>
-        User Guide
-      </label>
-      <ul class="md-nav__list" data-md-scrollfix>
-        
-        
-          
-          
-          
-
+  </span>
+  
   
 
+      </a>
+    </li>
+  
 
-  <li class="md-nav__item md-nav__item--active">
-    
-    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-    
-    
-      <label class="md-nav__link md-nav__link--active" for="__toc">
-        Models
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3,9H17V7H3V9M3,13H17V11H3V13M3,17H17V15H3V17M19,17H21V15H19V17M19,7V9H21V7H19M19,13H21V11H19V13Z" /></svg>
-        </span>
-      </label>
-    
-    <a href="./" title="Models" class="md-nav__link md-nav__link--active">
-      Models
-    </a>
     
       
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frequently Asked Questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorial
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/tutorial1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/tutorial2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/tutorial3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
   
+  
     <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-      </span>
+      <span class="md-nav__icon md-icon"></span>
       Table of contents
     </label>
-    <ul class="md-nav__list" data-md-scrollfix>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
   <a href="#the-table-type-class" class="md-nav__link">
-    The Table type class
+    <span class="md-ellipsis">
+      
+        The Table type class
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#the-identity-trick" class="md-nav__link">
-    The Identity trick
+    <span class="md-ellipsis">
+      
+        The Identity trick
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#allowed-data-types" class="md-nav__link">
-    Allowed data types
+    <span class="md-ellipsis">
+      
+        Allowed data types
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#maybe-types" class="md-nav__link">
-    Maybe types
+    <span class="md-ellipsis">
+      
+        Maybe types
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#column-tags" class="md-nav__link">
-    Column tags
+    <span class="md-ellipsis">
+      
+        Column tags
+      
+    </span>
   </a>
   
     <nav class="md-nav" aria-label="Column tags">
@@ -366,7 +579,11 @@
         
           <li class="md-nav__item">
   <a href="#converting-between-tags" class="md-nav__link">
-    Converting between tags
+    <span class="md-ellipsis">
+      
+        Converting between tags
+      
+    </span>
   </a>
   
 </li>
@@ -378,14 +595,22 @@
       
         <li class="md-nav__item">
   <a href="#the-beamable-type-class" class="md-nav__link">
-    The Beamable type class
+    <span class="md-ellipsis">
+      
+        The Beamable type class
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#the-table-type-class_1" class="md-nav__link">
-    The Table type class
+    <span class="md-ellipsis">
+      
+        The Table type class
+      
+    </span>
   </a>
   
     <nav class="md-nav" aria-label="The Table type class">
@@ -393,7 +618,11 @@
         
           <li class="md-nav__item">
   <a href="#what-about-tables-without-primary-keys" class="md-nav__link">
-    What about tables without primary keys?
+    <span class="md-ellipsis">
+      
+        What about tables without primary keys?
+      
+    </span>
   </a>
   
 </li>
@@ -405,7 +634,11 @@
       
         <li class="md-nav__item">
   <a href="#foreign-references" class="md-nav__link">
-    Foreign references
+    <span class="md-ellipsis">
+      
+        Foreign references
+      
+    </span>
   </a>
   
     <nav class="md-nav" aria-label="Foreign references">
@@ -413,14 +646,22 @@
         
           <li class="md-nav__item">
   <a href="#nullable-foreign-references" class="md-nav__link">
-    Nullable foreign references
+    <span class="md-ellipsis">
+      
+        Nullable foreign references
+      
+    </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#more-complicated-relationships" class="md-nav__link">
-    More complicated relationships
+    <span class="md-ellipsis">
+      
+        More complicated relationships
+      
+    </span>
   </a>
   
 </li>
@@ -432,14 +673,22 @@
       
         <li class="md-nav__item">
   <a href="#embedding" class="md-nav__link">
-    Embedding
+    <span class="md-ellipsis">
+      
+        Embedding
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#defaults" class="md-nav__link">
-    Defaults
+    <span class="md-ellipsis">
+      
+        Defaults
+      
+    </span>
   </a>
   
 </li>
@@ -447,463 +696,961 @@
     </ul>
   
 </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../databases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
-  </li>
+  
+    Databases
+  
 
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../databases/" title="Databases" class="md-nav__link">
-      Databases
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../backends/" title="Backends" class="md-nav__link">
-      Backends
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../expressions/" title="Expressions" class="md-nav__link">
-      Expressions
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item md-nav__item--nested">
     
-      <input class="md-nav__toggle md-toggle" data-md-toggle="nav-4-5" type="checkbox" id="nav-4-5">
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
-    <label class="md-nav__link" for="nav-4-5">
-      Queries
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
-      </span>
-    </label>
-    <nav class="md-nav" aria-label="Queries" data-md-level="2">
-      <label class="md-nav__title" for="nav-4-5">
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-        </span>
-        Queries
-      </label>
-      <ul class="md-nav__list" data-md-scrollfix>
-        
-        
-          
-          
-          
+  
+    Backends
+  
 
-
-  <li class="md-nav__item">
-    <a href="../queries/basic/" title="Basic Queries" class="md-nav__link">
-      Basic Queries
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/select/" title="More complex SELECTs" class="md-nav__link">
-      More complex SELECTs
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/ordering/" title="Ordering" class="md-nav__link">
-      Ordering
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/relationships/" title="Relationships" class="md-nav__link">
-      Relationships
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/aggregates/" title="Aggregates" class="md-nav__link">
-      Aggregates
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/combining-queries/" title="Combining queries" class="md-nav__link">
-      Combining queries
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/window-functions/" title="Window functions" class="md-nav__link">
-      Window functions
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/advanced-features/" title="Advanced features" class="md-nav__link">
-      Advanced features
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../queries/common-table-expressions/" title="Common table expressions" class="md-nav__link">
-      Common table expressions
-    </a>
-  </li>
-
-        
-      </ul>
-    </nav>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../extensibility/" title="Custom queries" class="md-nav__link">
-      Custom queries
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item md-nav__item--nested">
     
-      <input class="md-nav__toggle md-toggle" data-md-toggle="nav-4-7" type="checkbox" id="nav-4-7">
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../expressions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
-    <label class="md-nav__link" for="nav-4-7">
-      Data Manipulation
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
-      </span>
-    </label>
-    <nav class="md-nav" aria-label="Data Manipulation" data-md-level="2">
-      <label class="md-nav__title" for="nav-4-7">
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-        </span>
-        Data Manipulation
-      </label>
-      <ul class="md-nav__list" data-md-scrollfix>
+  
+    Expressions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
         
         
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../manipulation/insert/" title="INSERT" class="md-nav__link">
-      INSERT
-    </a>
-  </li>
-
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          
-          
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Queries
+  
 
+    
+  </span>
+  
+  
 
-  <li class="md-nav__item">
-    <a href="../manipulation/update/" title="UPDATE" class="md-nav__link">
-      UPDATE
-    </a>
-  </li>
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Queries
+  
 
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic Queries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/select/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    More complex SELECTs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/ordering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ordering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/relationships/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relationships
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/aggregates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aggregates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/combining-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Combining queries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/window-functions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Window functions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/advanced-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../queries/common-table-expressions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common table expressions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extensibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom queries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          
-          
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Manipulation
+  
 
+    
+  </span>
+  
+  
 
-  <li class="md-nav__item">
-    <a href="../manipulation/delete/" title="DELETE" class="md-nav__link">
-      DELETE
-    </a>
-  </li>
-
+            <span class="md-nav__icon md-icon"></span>
+          </label>
         
-      </ul>
-    </nav>
-  </li>
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Data Manipulation
+  
 
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manipulation/insert/" class="md-nav__link">
         
-      </ul>
-    </nav>
-  </li>
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    INSERT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manipulation/update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UPDATE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manipulation/delete/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DELETE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
 
     
       
       
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
       
-
-
-  <li class="md-nav__item md-nav__item--nested">
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
     
-      <input class="md-nav__toggle md-toggle" data-md-toggle="nav-5" type="checkbox" id="nav-5">
-    
-    <label class="md-nav__link" for="nav-5">
-      Schema management
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
-      </span>
-    </label>
-    <nav class="md-nav" aria-label="Schema management" data-md-level="1">
-      <label class="md-nav__title" for="nav-5">
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-        </span>
-        Schema management
-      </label>
-      <ul class="md-nav__list" data-md-scrollfix>
-        
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../../schema-guide/migrations/" title="The Migrations Framework" class="md-nav__link">
-      The Migrations Framework
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../../schema-guide/tool/" title="The beam-migrate tool" class="md-nav__link">
-      The beam-migrate tool
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../../schema-guide/library/" title="The beam-migrate library" class="md-nav__link">
-      The beam-migrate library
-    </a>
-  </li>
-
-        
-      </ul>
-    </nav>
-  </li>
+  
+    Schema management
+  
 
     
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Schema management
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema-guide/migrations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Migrations Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
       
-      
-      
-
-
-  <li class="md-nav__item md-nav__item--nested">
-    
-      <input class="md-nav__toggle md-toggle" data-md-toggle="nav-6" type="checkbox" id="nav-6">
-    
-    <label class="md-nav__link" for="nav-6">
-      Backends
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
-      </span>
-    </label>
-    <nav class="md-nav" aria-label="Backends" data-md-level="1">
-      <label class="md-nav__title" for="nav-6">
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-        </span>
-        Backends
-      </label>
-      <ul class="md-nav__list" data-md-scrollfix>
-        
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../backends/beam-postgres/" title="beam-postgres" class="md-nav__link">
-      beam-postgres
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../backends/beam-sqlite/" title="beam-sqlite" class="md-nav__link">
-      beam-sqlite
-    </a>
-  </li>
-
-        
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../custom-backends/" title="Writing a Custom Backend" class="md-nav__link">
-      Writing a Custom Backend
-    </a>
-  </li>
-
-        
-      </ul>
-    </nav>
-  </li>
+    </li>
+  
 
     
       
       
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
       
-
-
-  <li class="md-nav__item md-nav__item--nested">
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
     
-      <input class="md-nav__toggle md-toggle" data-md-toggle="nav-7" type="checkbox" id="nav-7">
+  
+    Backends
+  
+
     
-    <label class="md-nav__link" for="nav-7">
-      About
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
-      </span>
-    </label>
-    <nav class="md-nav" aria-label="About" data-md-level="1">
-      <label class="md-nav__title" for="nav-7">
-        <span class="md-nav__icon md-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-        </span>
-        About
-      </label>
-      <ul class="md-nav__list" data-md-scrollfix>
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/beam-postgres/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    beam-postgres
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/beam-sqlite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    beam-sqlite
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/beam-duckdb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    beam-duckdb
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom-backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing a Custom Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
         
         
-          
-          
-          
-
-
-  <li class="md-nav__item">
-    <a href="../../about/compatibility/" title="Compatibility Matrix" class="md-nav__link">
-      Compatibility Matrix
-    </a>
-  </li>
-
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          
-          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
 
+    
+  </span>
+  
+  
 
-  <li class="md-nav__item">
-    <a href="../../about/license/" title="License" class="md-nav__link">
-      License
-    </a>
-  </li>
-
+            <span class="md-nav__icon md-icon"></span>
+          </label>
         
-          
-          
-          
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    About
+  
 
-
-  <li class="md-nav__item">
-    <a href="../../about/release-notes/" title="Release Notes" class="md-nav__link">
-      Release Notes
-    </a>
-  </li>
-
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/compatibility/" class="md-nav__link">
         
-      </ul>
-    </nav>
-  </li>
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/license/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
 
     
   </ul>
@@ -913,53 +1660,74 @@
               </div>
             
             
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
+
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
   
+  
     <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-      </span>
+      <span class="md-nav__icon md-icon"></span>
       Table of contents
     </label>
-    <ul class="md-nav__list" data-md-scrollfix>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
   <a href="#the-table-type-class" class="md-nav__link">
-    The Table type class
+    <span class="md-ellipsis">
+      
+        The Table type class
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#the-identity-trick" class="md-nav__link">
-    The Identity trick
+    <span class="md-ellipsis">
+      
+        The Identity trick
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#allowed-data-types" class="md-nav__link">
-    Allowed data types
+    <span class="md-ellipsis">
+      
+        Allowed data types
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#maybe-types" class="md-nav__link">
-    Maybe types
+    <span class="md-ellipsis">
+      
+        Maybe types
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#column-tags" class="md-nav__link">
-    Column tags
+    <span class="md-ellipsis">
+      
+        Column tags
+      
+    </span>
   </a>
   
     <nav class="md-nav" aria-label="Column tags">
@@ -967,7 +1735,11 @@
         
           <li class="md-nav__item">
   <a href="#converting-between-tags" class="md-nav__link">
-    Converting between tags
+    <span class="md-ellipsis">
+      
+        Converting between tags
+      
+    </span>
   </a>
   
 </li>
@@ -979,14 +1751,22 @@
       
         <li class="md-nav__item">
   <a href="#the-beamable-type-class" class="md-nav__link">
-    The Beamable type class
+    <span class="md-ellipsis">
+      
+        The Beamable type class
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#the-table-type-class_1" class="md-nav__link">
-    The Table type class
+    <span class="md-ellipsis">
+      
+        The Table type class
+      
+    </span>
   </a>
   
     <nav class="md-nav" aria-label="The Table type class">
@@ -994,7 +1774,11 @@
         
           <li class="md-nav__item">
   <a href="#what-about-tables-without-primary-keys" class="md-nav__link">
-    What about tables without primary keys?
+    <span class="md-ellipsis">
+      
+        What about tables without primary keys?
+      
+    </span>
   </a>
   
 </li>
@@ -1006,7 +1790,11 @@
       
         <li class="md-nav__item">
   <a href="#foreign-references" class="md-nav__link">
-    Foreign references
+    <span class="md-ellipsis">
+      
+        Foreign references
+      
+    </span>
   </a>
   
     <nav class="md-nav" aria-label="Foreign references">
@@ -1014,14 +1802,22 @@
         
           <li class="md-nav__item">
   <a href="#nullable-foreign-references" class="md-nav__link">
-    Nullable foreign references
+    <span class="md-ellipsis">
+      
+        Nullable foreign references
+      
+    </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#more-complicated-relationships" class="md-nav__link">
-    More complicated relationships
+    <span class="md-ellipsis">
+      
+        More complicated relationships
+      
+    </span>
   </a>
   
 </li>
@@ -1033,14 +1829,22 @@
       
         <li class="md-nav__item">
   <a href="#embedding" class="md-nav__link">
-    Embedding
+    <span class="md-ellipsis">
+      
+        Embedding
+      
+    </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#defaults" class="md-nav__link">
-    Defaults
+    <span class="md-ellipsis">
+      
+        Defaults
+      
+    </span>
   </a>
   
 </li>
@@ -1053,21 +1857,21 @@
               </div>
             
           
-          <div class="md-content">
-            <article class="md-content__inner md-typeset">
+          
+            <div class="md-content" data-md-component="content">
               
-                
-                  <a href="https://github.com/haskell-beam/beam/edit/master/docs/user-guide/models.md" title="Edit this page" class="md-content__button md-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" /></svg>
-                  </a>
-                
+              <article class="md-content__inner md-typeset">
                 
                   
-                
-                
-                  <h1>Models</h1>
-                
-                <p>A beam model is any single-constructor Haskell record type parameterized by a
+
+
+  
+  
+
+
+  <h1>Models</h1>
+
+<p>A beam model is any single-constructor Haskell record type parameterized by a
 type of kind <code>* -&gt; *</code>. The model must have an instance of <code>Generic</code>, <code>Beamable</code>,
 and <code>Table</code>. <code>Generic</code> can be derived using the <code>DeriveGeneric</code> extension of
 GHC. <code>Beamable</code> must be given an empty instance declaration (<code>instance Beamable
@@ -1089,15 +1893,15 @@ record constructor (although it can be).</p>
 type. It is sometimes easiest to use the <code>Applicative</code> instance for <code>r -&gt;</code> to
 write this function. For example, if <code>tblField1</code> and <code>tblField2</code> are part of the
 primary key, you can write</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">Tbl</span> <span class="kr">where</span>
-  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">Tbl</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span>
-  <span class="n">primaryKey</span> <span class="n">t</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="p">(</span><span class="n">tblField1</span> <span class="n">t</span><span class="p">)</span> <span class="p">(</span><span class="n">tblField2</span> <span class="n">t</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">instance</span><span class="w"> </span><span class="kt">Table</span><span class="w"> </span><span class="kt">Tbl</span><span class="w"> </span><span class="kr">where</span>
+<span class="w">  </span><span class="kr">data</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">Tbl</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">TblKey</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">..</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">..</span><span class="p">)</span>
+<span class="w">  </span><span class="n">primaryKey</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">TblKey</span><span class="w"> </span><span class="p">(</span><span class="n">tblField1</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">tblField2</span><span class="w"> </span><span class="n">t</span><span class="p">)</span>
 </code></pre></div>
 
 <p>more simply as</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">Tbl</span> <span class="kr">where</span>
-  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">Tbl</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="o">..</span><span class="p">)</span>
-  <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">TblKey</span> <span class="o">&lt;$&gt;</span> <span class="n">tblField1</span> <span class="o">&lt;*&gt;</span> <span class="n">tblField2</span>
+<div class="highlight"><pre><span></span><code><span class="kr">instance</span><span class="w"> </span><span class="kt">Table</span><span class="w"> </span><span class="kt">Tbl</span><span class="w"> </span><span class="kr">where</span>
+<span class="w">  </span><span class="kr">data</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">Tbl</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">TblKey</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">..</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">..</span><span class="p">)</span>
+<span class="w">  </span><span class="n">primaryKey</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">TblKey</span><span class="w"> </span><span class="o">&lt;$&gt;</span><span class="w"> </span><span class="n">tblField1</span><span class="w"> </span><span class="o">&lt;*&gt;</span><span class="w"> </span><span class="n">tblField2</span>
 </code></pre></div>
 
 <h2 id="the-identity-trick">The <code>Identity</code> trick</h2>
@@ -1114,14 +1918,14 @@ underlying Haskell type.</p>
 Identity</code>. Notice that deriving <code>Show</code>, <code>Eq</code>, and other standard Haskell type
 classes won't generally work for <code>ModelT</code>. However, you can use the standalone
 deriving mechanism to derive these instances for <code>Model</code>.</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">data</span> <span class="kt">ModelT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">Model</span> <span class="p">{</span> <span class="o">..</span> <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">ModelT</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Model</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">..</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
 
 <span class="c1">-- deriving instance Show (ModelT f) -- Won&#39;t work because GHC won&#39;t get the constraints right</span>
 
-<span class="kr">type</span> <span class="kt">Model</span> <span class="ow">=</span> <span class="kt">ModelT</span> <span class="kt">Identity</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Model</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">Model</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Ord</span> <span class="kt">Model</span>
+<span class="kr">type</span><span class="w"> </span><span class="kt">Model</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">ModelT</span><span class="w"> </span><span class="kt">Identity</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="kt">Model</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Eq</span><span class="w"> </span><span class="kt">Model</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Ord</span><span class="w"> </span><span class="kt">Model</span>
 </code></pre></div>
 
 <h2 id="allowed-data-types">Allowed data types</h2>
@@ -1130,12 +1934,12 @@ field can be used against a particular database when the data type is defined.
 Instead, type errors will occur when the table is being used as a query. For
 example, the following is allowed, even though many backends will not work with
 array data types.</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">import</span> <span class="k">qualified</span> <span class="nn">Data.Vector</span> <span class="k">as</span> <span class="n">V</span>
+<div class="highlight"><pre><span></span><code><span class="kr">import</span><span class="w"> </span><span class="k">qualified</span><span class="w"> </span><span class="nn">Data.Vector</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">V</span>
 
-<span class="kr">data</span> <span class="kt">ArrayTable</span> <span class="n">f</span>
-    <span class="ow">=</span> <span class="kt">ArrayTable</span>
-    <span class="p">{</span> <span class="n">arrayTablePoints</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">V</span><span class="o">.</span><span class="kt">Vector</span> <span class="kt">Int32</span><span class="p">)</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="kt">Generic</span>
+<span class="kr">data</span><span class="w"> </span><span class="kt">ArrayTable</span><span class="w"> </span><span class="n">f</span>
+<span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">ArrayTable</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">arrayTablePoints</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">V</span><span class="o">.</span><span class="kt">Vector</span><span class="w"> </span><span class="kt">Int32</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="kt">Generic</span>
 </code></pre></div>
 
 <p>You can construct values of type <code>ArrayTable Identity</code> and even write queries
@@ -1175,13 +1979,13 @@ parameterized over a tag <code>g</code>. Given a function <code>conv :: forall a
 <code>conv</code> is actually ambiguous. We need a way to carry the type of <code>f</code>, <code>g</code>, and
 <code>a</code> into the code. For this reason, <code>conv</code> must actually be written over the
 <code>Columnar'</code>(notice the tick) <code>newtype</code>. <code>Columnar'</code> is a newtype defined as such</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">newtype</span> <span class="kt">Columnar&#39;</span> <span class="n">f</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Columnar&#39;</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="n">a</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">newtype</span><span class="w"> </span><span class="kt">Columnar&#39;</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Columnar&#39;</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
 </code></pre></div>
 
 <p>Notice that, unlike <code>Columnar</code> (a non-injective type family), <code>Columnar'</code> is a
 full type. The type of <code>conv' :: forall a. Columnar' f a -&gt; Columnar' g a</code> is
 now unambiguous. You can easily use <code>conv</code> to implement <code>conv'</code>:</p>
-<div class="codehilite"><pre><span></span><code><span class="nf">conv&#39;</span> <span class="p">(</span><span class="kt">Columnar&#39;</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Columnar&#39;</span> <span class="p">(</span><span class="n">conv</span> <span class="n">a</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="nf">conv&#39;</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar&#39;</span><span class="w"> </span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Columnar&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">conv</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
 </code></pre></div>
 
 <h2 id="the-beamable-type-class">The <code>Beamable</code> type class</h2>
@@ -1196,20 +2000,20 @@ database must be members of the <code>Table</code> type class. The <code>Table</
 defines one associated type family <code>PrimaryKey</code> and a function <code>primaryKey</code> that
 takes a table over an arbitrary column tag and produces that table's
 <code>PrimaryKey</code>. For example, if you have a model</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">data</span> <span class="kt">PersonT</span> <span class="n">f</span>
-    <span class="ow">=</span> <span class="kt">Person</span>
-    <span class="p">{</span> <span class="n">personEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-    <span class="p">,</span> <span class="n">personFirstName</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-    <span class="p">,</span> <span class="n">personLastName</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-    <span class="p">,</span> <span class="n">personAge</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int32</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">PersonT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">Person</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">personEmail</span><span class="w">     </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">personFirstName</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">personLastName</span><span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">personAge</span><span class="w">       </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Int32</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
 </code></pre></div>
 
 <p>and you want the <code>personEmail</code> field to form the primary key, you would define a <code>Table</code> instance as such</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">PersonT</span> <span class="kr">where</span>
-  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="n">f</span>
-      <span class="ow">=</span> <span class="kt">PersonKey</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span><span class="p">)</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
-  <span class="n">primaryKey</span> <span class="n">person</span> <span class="ow">=</span> <span class="kt">PersonKey</span> <span class="o">&lt;$&gt;</span> <span class="n">personEmail</span>
+<div class="highlight"><pre><span></span><code><span class="kr">instance</span><span class="w"> </span><span class="kt">Table</span><span class="w"> </span><span class="kt">PersonT</span><span class="w"> </span><span class="kr">where</span>
+<span class="w">  </span><span class="kr">data</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">PersonT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">      </span><span class="ow">=</span><span class="w"> </span><span class="kt">PersonKey</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
+<span class="w">  </span><span class="n">primaryKey</span><span class="w"> </span><span class="n">person</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">PersonKey</span><span class="w"> </span><span class="o">&lt;$&gt;</span><span class="w"> </span><span class="n">personEmail</span>
 </code></pre></div>
 
 <div class="admonition tip">
@@ -1227,10 +2031,10 @@ may cause name clashes, all examples are given using <code>Columnar</code>.</p>
 </div>
 <p>Many also like defining type synonyms for their table and primary key types. For
 example, for the table <code>PersonT</code> above, a programmer may define.</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">type</span> <span class="kt">Person</span> <span class="ow">=</span> <span class="kt">PersonT</span> <span class="kt">Identity</span>
-<span class="kr">type</span> <span class="kt">PersonKey</span> <span class="ow">=</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="kt">Identity</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Person</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">Person</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">PersonKey</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">PersonKey</span>
+<div class="highlight"><pre><span></span><code><span class="kr">type</span><span class="w"> </span><span class="kt">Person</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">PersonT</span><span class="w"> </span><span class="kt">Identity</span>
+<span class="kr">type</span><span class="w"> </span><span class="kt">PersonKey</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">PersonT</span><span class="w"> </span><span class="kt">Identity</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="kt">Person</span><span class="p">;</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Eq</span><span class="w"> </span><span class="kt">Person</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="kt">PersonKey</span><span class="p">;</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Eq</span><span class="w"> </span><span class="kt">PersonKey</span>
 </code></pre></div>
 
 <p>By convention, beam table types are suffixed with <code>T</code> to distinguish their type
@@ -1242,16 +2046,16 @@ need to use beam with a schema that you have no control over. To declare a table
 without a primary key, simply instantiate the <code>Table</code> class and set <code>PrimaryKey
 tbl</code> to a type with no fields. Then just produce this type in <code>primaryKey</code>.</p>
 <p>For example</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">data</span> <span class="kt">BadT</span> <span class="n">f</span>
-  <span class="ow">=</span> <span class="kt">BadT</span>
-  <span class="p">{</span> <span class="n">badFirstName</span> <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">,</span> <span class="n">badLastName</span>  <span class="ow">::</span> <span class="kt">C</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
-<span class="kr">instance</span> <span class="kt">Beamable</span> <span class="kt">BadT</span>
-<span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">BadT</span> <span class="kr">where</span>
-  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">BadT</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">BadNoId</span>
-    <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
-  <span class="n">primaryKey</span> <span class="kr">_</span> <span class="ow">=</span> <span class="kt">BadNoId</span>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">BadT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">  </span><span class="ow">=</span><span class="w"> </span><span class="kt">BadT</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">badFirstName</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">C</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">badLastName</span><span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">C</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
+<span class="kr">instance</span><span class="w"> </span><span class="kt">Beamable</span><span class="w"> </span><span class="kt">BadT</span>
+<span class="kr">instance</span><span class="w"> </span><span class="kt">Table</span><span class="w"> </span><span class="kt">BadT</span><span class="w"> </span><span class="kr">where</span>
+<span class="w">  </span><span class="kr">data</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">BadT</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">BadNoId</span>
+<span class="w">    </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
+<span class="w">  </span><span class="n">primaryKey</span><span class="w"> </span><span class="kr">_</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">BadNoId</span>
 </code></pre></div>
 
 <h2 id="foreign-references">Foreign references</h2>
@@ -1259,23 +2063,23 @@ tbl</code> to a type with no fields. Then just produce this type in <code>primar
 embedding the <code>PrimaryKey</code> of the referred to table directly in the
 parent. For example, suppose we want to create a new model
 representing a post by a user.</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">data</span> <span class="kt">PostT</span> <span class="n">f</span>
-    <span class="ow">=</span> <span class="kt">Post</span>
-    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int32</span><span class="p">)</span>
-    <span class="p">,</span> <span class="n">postPostedAt</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">LocalTime</span>
-    <span class="p">,</span> <span class="n">postContent</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-    <span class="p">,</span> <span class="n">postPoster</span>   <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="n">f</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">PostT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">Post</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">postId</span><span class="w">       </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">SqlSerial</span><span class="w"> </span><span class="kt">Int32</span><span class="p">)</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">postPostedAt</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">LocalTime</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">postContent</span><span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">postPoster</span><span class="w">   </span><span class="ow">::</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">PersonT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
 
-<span class="kr">instance</span> <span class="kt">Table</span> <span class="kt">PostT</span> <span class="kr">where</span>
-  <span class="kr">data</span> <span class="kt">PrimaryKey</span> <span class="kt">PostT</span> <span class="n">f</span>
-      <span class="ow">=</span> <span class="kt">PostId</span> <span class="p">(</span><span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int32</span><span class="p">))</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
-  <span class="n">primaryKey</span> <span class="ow">=</span> <span class="kt">PostId</span> <span class="o">.</span> <span class="n">postId</span>
+<span class="kr">instance</span><span class="w"> </span><span class="kt">Table</span><span class="w"> </span><span class="kt">PostT</span><span class="w"> </span><span class="kr">where</span>
+<span class="w">  </span><span class="kr">data</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">PostT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">      </span><span class="ow">=</span><span class="w"> </span><span class="kt">PostId</span><span class="w"> </span><span class="p">(</span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">SqlSerial</span><span class="w"> </span><span class="kt">Int32</span><span class="p">))</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
+<span class="w">  </span><span class="n">primaryKey</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">PostId</span><span class="w"> </span><span class="o">.</span><span class="w"> </span><span class="n">postId</span>
 
-<span class="kr">type</span> <span class="kt">Post</span> <span class="ow">=</span> <span class="kt">PostT</span> <span class="kt">Identity</span>
-<span class="kr">type</span> <span class="kt">PostId</span> <span class="ow">=</span> <span class="kt">PrimaryKey</span> <span class="kt">PostT</span> <span class="kt">Identity</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">Post</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">Post</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="kt">PostId</span><span class="p">;</span> <span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Eq</span> <span class="kt">PostId</span>
+<span class="kr">type</span><span class="w"> </span><span class="kt">Post</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">PostT</span><span class="w"> </span><span class="kt">Identity</span>
+<span class="kr">type</span><span class="w"> </span><span class="kt">PostId</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">PostT</span><span class="w"> </span><span class="kt">Identity</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="kt">Post</span><span class="p">;</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Eq</span><span class="w"> </span><span class="kt">Post</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="kt">PostId</span><span class="p">;</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Eq</span><span class="w"> </span><span class="kt">PostId</span>
 </code></pre></div>
 
 <h3 id="nullable-foreign-references">Nullable foreign references</h3>
@@ -1284,13 +2088,13 @@ of <code>PrimaryKey PersonT Identity</code>. Sometimes, you may want to optional
 a foreign key. You can make a foreign key nullable by embedding the primary key
 and adding the <code>Nullable</code> column tag modifier.</p>
 <p>For example, to make the poster optional above.</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">data</span> <span class="kt">PostT</span> <span class="n">f</span>
-    <span class="ow">=</span> <span class="kt">Post</span>
-    <span class="p">{</span> <span class="n">postId</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">SqlSerial</span> <span class="kt">Int32</span><span class="p">)</span>
-    <span class="p">,</span> <span class="n">postPostedAt</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">LocalTime</span>
-    <span class="p">,</span> <span class="n">postContent</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-    <span class="p">,</span> <span class="n">postPoster</span>   <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">PersonT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
-    <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">PostT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">Post</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">postId</span><span class="w">       </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">SqlSerial</span><span class="w"> </span><span class="kt">Int32</span><span class="p">)</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">postPostedAt</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">LocalTime</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">postContent</span><span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">postPoster</span><span class="w">   </span><span class="ow">::</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">PersonT</span><span class="w"> </span><span class="p">(</span><span class="kt">Nullable</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
 </code></pre></div>
 
 <h3 id="more-complicated-relationships">More complicated relationships</h3>
@@ -1314,46 +2118,46 @@ models. For example, in
 the
 <a href="https://github.com/haskell-beam/beam/blob/master/beam-sqlite/examples/Chinook/Schema.hs">Chinook example schema</a>,
 we define the following structure for addresses.</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">data</span> <span class="kt">AddressMixin</span> <span class="n">f</span>
-  <span class="ow">=</span> <span class="kt">Address</span>
-  <span class="p">{</span> <span class="n">address</span>           <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">addressCity</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">addressState</span>      <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">addressCountry</span>    <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">addressPostalCode</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
-<span class="kr">type</span> <span class="kt">Address</span> <span class="ow">=</span> <span class="kt">AddressMixin</span> <span class="kt">Identity</span>
-<span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">Show</span> <span class="p">(</span><span class="kt">AddressMixin</span> <span class="kt">Identity</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">AddressMixin</span><span class="w"> </span><span class="n">f</span>
+<span class="w">  </span><span class="ow">=</span><span class="w"> </span><span class="kt">Address</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">address</span><span class="w">           </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">addressCity</span><span class="w">       </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">addressState</span><span class="w">      </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">addressCountry</span><span class="w">    </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">addressPostalCode</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
+<span class="kr">type</span><span class="w"> </span><span class="kt">Address</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">AddressMixin</span><span class="w"> </span><span class="kt">Identity</span>
+<span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="p">(</span><span class="kt">AddressMixin</span><span class="w"> </span><span class="kt">Identity</span><span class="p">)</span>
 </code></pre></div>
 
 <p>We can then use <code>AddressMixin</code> in our models.</p>
-<div class="codehilite"><pre><span></span><code><span class="kr">data</span> <span class="kt">EmployeeT</span> <span class="n">f</span>
-  <span class="ow">=</span> <span class="kt">Employee</span>
-  <span class="p">{</span> <span class="n">employeeId</span>        <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int32</span>
-  <span class="p">,</span> <span class="n">employeeLastName</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">,</span> <span class="n">employeeFirstName</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">,</span> <span class="n">employeeTitle</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">employeeReportsTo</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">EmployeeT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">employeeBirthDate</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">LocalTime</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">employeeHireDate</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">LocalTime</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">employeeAddress</span>   <span class="ow">::</span> <span class="kt">AddressMixin</span> <span class="n">f</span>
-  <span class="p">,</span> <span class="n">employeePhone</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">employeeFax</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">employeeEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">EmployeeT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">  </span><span class="ow">=</span><span class="w"> </span><span class="kt">Employee</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">employeeId</span><span class="w">        </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Int32</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeLastName</span><span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeFirstName</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeTitle</span><span class="w">     </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeReportsTo</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">EmployeeT</span><span class="w"> </span><span class="p">(</span><span class="kt">Nullable</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeBirthDate</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">LocalTime</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeHireDate</span><span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">LocalTime</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeAddress</span><span class="w">   </span><span class="ow">::</span><span class="w"> </span><span class="kt">AddressMixin</span><span class="w"> </span><span class="n">f</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeePhone</span><span class="w">     </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeFax</span><span class="w">       </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">employeeEmail</span><span class="w">     </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
 <span class="c1">-- ...</span>
-<span class="kr">data</span> <span class="kt">CustomerT</span> <span class="n">f</span>
-  <span class="ow">=</span> <span class="kt">Customer</span>
-  <span class="p">{</span> <span class="n">customerId</span>        <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Int32</span>
-  <span class="p">,</span> <span class="n">customerFirstName</span> <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">,</span> <span class="n">customerLastName</span>  <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">,</span> <span class="n">customerCompany</span>   <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">customerAddress</span>   <span class="ow">::</span> <span class="kt">AddressMixin</span> <span class="n">f</span>
-  <span class="p">,</span> <span class="n">customerPhone</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">customerFax</span>       <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">Text</span><span class="p">)</span>
-  <span class="p">,</span> <span class="n">customerEmail</span>     <span class="ow">::</span> <span class="kt">Columnar</span> <span class="n">f</span> <span class="kt">Text</span>
-  <span class="p">,</span> <span class="n">customerSupportRep</span> <span class="ow">::</span> <span class="kt">PrimaryKey</span> <span class="kt">EmployeeT</span> <span class="p">(</span><span class="kt">Nullable</span> <span class="n">f</span><span class="p">)</span>
-  <span class="p">}</span> <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Generic</span><span class="p">,</span> <span class="kt">Beamable</span><span class="p">)</span>
+<span class="kr">data</span><span class="w"> </span><span class="kt">CustomerT</span><span class="w"> </span><span class="n">f</span>
+<span class="w">  </span><span class="ow">=</span><span class="w"> </span><span class="kt">Customer</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">customerId</span><span class="w">        </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Int32</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerFirstName</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerLastName</span><span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerCompany</span><span class="w">   </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerAddress</span><span class="w">   </span><span class="ow">::</span><span class="w"> </span><span class="kt">AddressMixin</span><span class="w"> </span><span class="n">f</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerPhone</span><span class="w">     </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerFax</span><span class="w">       </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerEmail</span><span class="w">     </span><span class="ow">::</span><span class="w"> </span><span class="kt">Columnar</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">customerSupportRep</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">EmployeeT</span><span class="w"> </span><span class="p">(</span><span class="kt">Nullable</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
 </code></pre></div>
 
 <h2 id="defaults">Defaults</h2>
@@ -1376,34 +2180,34 @@ changes. A summary of these rules is given in the table below.</p>
 <table>
 <thead>
 <tr>
-<th align="left">Haskell field name</th>
-<th align="left">Beam defaulted column name</th>
+<th style="text-align: left;">Haskell field name</th>
+<th style="text-align: left;">Beam defaulted column name</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td align="left"><code>personFirstName</code></td>
-<td align="left"><code>first_name</code></td>
+<td style="text-align: left;"><code>personFirstName</code></td>
+<td style="text-align: left;"><code>first_name</code></td>
 </tr>
 <tr>
-<td align="left"><code>_personLastName</code></td>
-<td align="left"><code>last_name</code></td>
+<td style="text-align: left;"><code>_personLastName</code></td>
+<td style="text-align: left;"><code>last_name</code></td>
 </tr>
 <tr>
-<td align="left"><code>name</code></td>
-<td align="left"><code>name</code></td>
+<td style="text-align: left;"><code>name</code></td>
+<td style="text-align: left;"><code>name</code></td>
 </tr>
 <tr>
-<td align="left"><code>first_name</code></td>
-<td align="left"><code>first_name</code></td>
+<td style="text-align: left;"><code>first_name</code></td>
+<td style="text-align: left;"><code>first_name</code></td>
 </tr>
 <tr>
-<td align="left"><code>_first_name</code></td>
-<td align="left"><code>first_name</code></td>
+<td style="text-align: left;"><code>_first_name</code></td>
+<td style="text-align: left;"><code>first_name</code></td>
 </tr>
 <tr>
-<td align="left"><code>___</code> (three underscores)</td>
-<td align="left"><code>___</code> (no changes)</td>
+<td style="text-align: left;"><code>___</code> (three underscores)</td>
+<td style="text-align: left;"><code>___</code> (no changes)</td>
 </tr>
 </tbody>
 </table>
@@ -1413,85 +2217,60 @@ identifiers. Many DBMS's are case-sensitive for quoted
 identifiers. Thus, queries can sometimes fail if your tables use
 mixtures of lower- and upper-case to distinguish between fields.</p>
 <p>For information on modifying the defaults, see the <a href="../databases/">next section</a>.</p>
-                
-              
-              
-                
 
 
-              
-            </article>
-          </div>
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
+        
       </main>
       
-        
-<footer class="md-footer">
-  
-    <div class="md-footer-nav">
-      <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
-        
-          <a href="../../tutorials/tutorial3/" title="Part 3" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
-            <div class="md-footer-nav__button md-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
-            </div>
-            <div class="md-footer-nav__title">
-              <div class="md-ellipsis">
-                <span class="md-footer-nav__direction">
-                  Previous
-                </span>
-                Part 3
-              </div>
-            </div>
-          </a>
-        
-        
-          <a href="../databases/" title="Databases" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
-            <div class="md-footer-nav__title">
-              <div class="md-ellipsis">
-                <span class="md-footer-nav__direction">
-                  Next
-                </span>
-                Databases
-              </div>
-            </div>
-            <div class="md-footer-nav__button md-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4,11V13H16L10.5,18.5L11.92,19.92L19.84,12L11.92,4.08L10.5,5.5L16,11H4Z" /></svg>
-            </div>
-          </a>
-        
-      </nav>
-    </div>
+        <footer class="md-footer">
   
   <div class="md-footer-meta md-typeset">
     <div class="md-footer-meta__inner md-grid">
-      <div class="md-footer-copyright">
-        
-        Made with
-        <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
-          Material for MkDocs
-        </a>
-      </div>
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
       
     </div>
   </div>
 </footer>
       
     </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
     
 
-      <script src="../../assets/javascripts/vendor.36cbf620.min.js"></script>
-      <script src="../../assets/javascripts/bundle.00c583dd.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents"}</script>
-      
-      <script>
-        app = initialize({
-          base: "../..",
-          features: [],
-          search: Object.assign({
-            worker: "../../assets/javascripts/worker/search.7f7c8775.min.js"
-          }, typeof search !== "undefined" && search)
-        })
-      </script>
+      <script src="../../assets/javascripts/bundle.e71a0d61.min.js"></script>
       
     
 <script type="text/javascript" language="javascript"  src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
