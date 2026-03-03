@@ -183,7 +183,7 @@ in either Los Angeles or Manila:
 
 !beam-query
 ```haskell
-!example chinook !on:Sqlite !on:MySQL
+!example chinook !on:Sqlite !on:DuckDB
 filter_ (\c ->  unknownAs_ False (addressCity (customerAddress c) ==*. anyIn_ [ just_ "Los Angeles", just_ "Manila" ])) $
      all_ (customer chinookDb)
 ```
@@ -233,9 +233,10 @@ When a query is used in place of an expression it's called a *subquery*. A query
 
 For example, suppose we wish to offer a discount on all "short" tracks, where a track is considered short if its duration is less than the average track duration for all tracks. This is achieved using an update in which the predicate contains a subquery that calculates the average track duration.
 
+<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml
+!example chinookdml !on:DuckDB
 runUpdate $ update (track chinookDb)
   (\track' -> trackUnitPrice track' <-. current_ (trackUnitPrice track') / 2)
   (\track' ->

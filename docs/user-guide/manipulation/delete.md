@@ -22,7 +22,7 @@ For example, to delete any invoice with more than five invoice lines
 
 !beam-query
 ```haskell
-!example chinookdml !on:Postgres !on:MySQL
+!example chinookdml !on:Postgres
 runDelete $ delete (invoice chinookDb)
   (\i -> 5 <. subquery_ (aggregate_ (\_ -> as_ @Int32 countAll_) $
                          invoiceLines i))

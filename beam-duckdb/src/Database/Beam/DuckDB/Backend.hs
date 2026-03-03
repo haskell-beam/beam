@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -12,36 +13,37 @@ module Database.Beam.DuckDB.Backend (DuckDB) where
 
 import Data.ByteString (ByteString)
 import Data.Data (Proxy (Proxy))
-import Data.Functor (($>))
+import Data.Functor (($>), (<&>))
 import Data.Int (Int16, Int32, Int64, Int8)
+import Data.Scientific (Scientific, scientific)
 import Data.Text (Text)
 import Data.Time (Day, LocalTime, TimeOfDay, UTCTime)
 import Data.UUID.Types (UUID)
 import Data.Word (Word16, Word32, Word64, Word8)
 import Database.Beam (HasQBuilder, HasSqlEqualityCheck, HasSqlInTable (..), HasSqlQuantifiedEqualityCheck)
-import Database.Beam.Backend (
-    BeamBackend (..),
+import Database.Beam.Backend
+  ( BeamBackend (..),
     BeamSqlBackend,
     BeamSqlBackendIsString,
     BeamSqlBackendSyntax,
     FromBackendRow,
     SqlNull (..),
     parseOneField,
- )
+  )
 import Database.Beam.Backend.SQL (FromBackendRow (..))
-import Database.Beam.DuckDB.Syntax (
-    DuckDBCommandSyntax,
+import Database.Beam.DuckDB.Syntax
+  ( DuckDBCommandSyntax,
     DuckDBExpressionSyntax (..),
- )
-import Database.Beam.DuckDB.Syntax.Builder (
-    commas,
+  )
+import Database.Beam.DuckDB.Syntax.Builder
+  ( commas,
     emit,
     parens,
- )
+  )
 import Database.Beam.Query.SQL92 (buildSql92Query')
 import Database.Beam.Query.Types (HasQBuilder (..))
 import Database.DuckDB.Simple (Null)
-import Database.DuckDB.Simple.FromField (FromField)
+import Database.DuckDB.Simple.FromField (DecimalValue (..), FromField)
 
 data DuckDB
 
@@ -50,26 +52,26 @@ type instance BeamSqlBackendSyntax DuckDB = DuckDBCommandSyntax
 instance BeamSqlBackend DuckDB
 
 instance HasQBuilder DuckDB where
-    buildSqlQuery = buildSql92Query' True
+  buildSqlQuery = buildSql92Query' True
 
 instance HasSqlInTable DuckDB where
-    inRowValuesE Proxy e es =
-        DuckDBExpressionSyntax $
-            mconcat
-                [ parens $ fromDuckDBExpression e
-                , emit " IN "
-                , parens $ emit "VALUES " <> commas (map fromDuckDBExpression es)
-                ]
+  inRowValuesE Proxy e es =
+    DuckDBExpressionSyntax $
+      mconcat
+        [ parens $ fromDuckDBExpression e,
+          emit " IN ",
+          parens $ emit "VALUES " <> commas (map fromDuckDBExpression es)
+        ]
 
 instance BeamSqlBackendIsString DuckDB Text
 
 instance BeamSqlBackendIsString DuckDB String
 
 instance BeamBackend DuckDB where
-    type BackendFromField DuckDB = FromField
+  type BackendFromField DuckDB = FromField
 
 instance FromBackendRow DuckDB SqlNull where
-    fromBackendRow = parseOneField @DuckDB @Null $> SqlNull
+  fromBackendRow = parseOneField @DuckDB @Null $> SqlNull
 
 instance FromBackendRow DuckDB Bool
 
@@ -113,6 +115,17 @@ instance FromBackendRow DuckDB LocalTime
 
 instance FromBackendRow DuckDB UTCTime
 
+instance FromBackendRow DuckDB Scientific where
+  fromBackendRow =
+    parseOneField @DuckDB @DecimalValue
+      <&> decimalToScientific
+
+decimalToScientific :: DecimalValue -> Scientific
+decimalToScientific decimalValue =
+  scientific
+    decimalValue.decimalInteger
+    (negate (fromIntegral decimalValue.decimalScale))
+
 instance HasSqlEqualityCheck DuckDB Bool
 
 instance HasSqlEqualityCheck DuckDB Float
@@ -155,6 +168,8 @@ instance HasSqlEqualityCheck DuckDB LocalTime
 
 instance HasSqlEqualityCheck DuckDB UTCTime
 
+instance HasSqlEqualityCheck DuckDB Scientific
+
 instance HasSqlQuantifiedEqualityCheck DuckDB Bool
 
 instance HasSqlQuantifiedEqualityCheck DuckDB Float
@@ -196,3 +211,5 @@ instance HasSqlQuantifiedEqualityCheck DuckDB TimeOfDay
 instance HasSqlQuantifiedEqualityCheck DuckDB LocalTime
 
 instance HasSqlQuantifiedEqualityCheck DuckDB UTCTime
+
+instance HasSqlQuantifiedEqualityCheck DuckDB Scientific

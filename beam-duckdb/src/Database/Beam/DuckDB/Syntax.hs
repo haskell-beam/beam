@@ -399,14 +399,12 @@ instance IsSql92ExpressionSyntax DuckDBExpressionSyntax where
 
   isNotNullE = postFix "IS NOT NULL"
   isNullE = postFix "IS NULL"
-
-  -- SQLite doesn't handle tri-state booleans properly
-  isTrueE = postFix "IS 1"
-  isNotTrueE = postFix "IS NOT 1"
-  isFalseE = postFix "IS 0"
-  isNotFalseE = postFix "IS NOT 0"
-  isUnknownE = postFix "IS NULL"
-  isNotUnknownE = postFix "IS NOT NULL"
+  isTrueE = postFix "IS TRUE"
+  isFalseE = postFix "IS FALSE"
+  isNotTrueE = postFix "IS NOT TRUE"
+  isNotFalseE = postFix "IS NOT FALSE"
+  isUnknownE = postFix "IS UNKNOWN"
+  isNotUnknownE = postFix "IS NOT UNKNOWN"
 
   existsE select = DuckDBExpressionSyntax (emit "EXISTS " <> parens (fromDuckDBSelect select))
   uniqueE select = DuckDBExpressionSyntax (emit "UNIQUE " <> parens (fromDuckDBSelect select))

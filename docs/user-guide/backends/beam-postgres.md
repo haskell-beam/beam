@@ -305,26 +305,26 @@ First, we order the employees by org structure so that managers appear first, fo
 !beam-query
 ```haskell
 !example chinook only:Postgres
-aggregate_ (\(cust, emp) -> (group_ cust, Pg.pgArrayAgg (employeeId emp)))
-     $ do inv <- filter_ (\i -> invoiceDate i >=. val_ (read "2024-09-01 00:00:00.000000")  &&. invoiceDate i <=. val_ (read "2024-10-01 00:00:00.000000")) $ all_ (invoice chinookDb)
-          cust <- lookup_ (customer chinookDb) (invoiceCustomer inv)
-          -- Lookup all employees and their levels
-          (employee, _, _) <-
-            Pg.pgSelectWith $ do
-              let topLevelEmployees =
-                    fmap (\e -> (e, val_ (via @Int32 0))) $
-                    filter_ (\e -> isNull_ (employeeReportsTo e)) $ all_ (employee chinookDb)
-              rec employeeOrgChart <-
-                    selecting (topLevelEmployees `unionAll_`
-                               do { (manager, managerLevel) <- reuse employeeOrgChart
-                                  ; report <- filter_ (\e -> employeeReportsTo e ==. manager) $ all_ (employee chinookDb)
-                                  ; pure (report, managerLevel + val_ 1) })
-              pure $ filter_ (\(employee, level, minLevel) -> level ==. minLevel)
-                   $ withWindow_ (\(employee, level) -> frame_ (partitionBy_ (addressCity (employeeAddress employee))) noOrder_ noBounds_)
-                                 (\(employee, level) cityFrame ->
-                                   (employee, level, coalesce_ [min_ level `over_` cityFrame] (val_ 0)))
-                                 (reuse employeeOrgChart)
-          -- Limit the search only to employees that live in the same city
-          guard_ (addressCity (employeeAddress employee) ==. addressCity (customerAddress cust))
-          pure (cust, employee)
+aggregate_ (\(cust, emp) -> (group_ cust, Pg.pgArrayAgg (employeeId emp))) $ do
+  inv <- filter_ (\i -> invoiceDate i >=. val_ (read "2024-09-01 00:00:00.000000")  &&. invoiceDate i <=. val_ (read "2024-10-01 00:00:00.000000")) $ all_ (invoice chinookDb)
+  cust <- filter_ (\c -> pk c ==. invoiceCustomer inv) $ all_ (customer chinookDb)
+  -- Lookup all employees and their levels
+  (employee, _, _) <-
+    Pg.pgSelectWith $ do
+      let topLevelEmployees =
+            fmap (\e -> (e, as_ @Int32 (val_ 0))) $
+            filter_ (\e -> isNothing_ (employeeReportsTo e)) $ all_ (employee chinookDb)
+      rec employeeOrgChart <-
+            selecting (topLevelEmployees `unionAll_`
+                        do { (manager, managerLevel) <- reuse employeeOrgChart
+                          ; report <- filter_ (\e -> employeeReportsTo e ==. just_ (pk manager)) $ all_ (employee chinookDb)
+                          ; pure (report, managerLevel + val_ 1) })
+      pure $ filter_ (\(_, level, minLevel) -> level ==. minLevel)
+            $ withWindow_ (\(employee, _) -> frame_ (partitionBy_ (addressCity (employeeAddress employee))) noOrder_ noBounds_)
+                          (\(employee, level) cityFrame ->
+                            (employee, level, coalesce_ [min_ level `over_` cityFrame] (val_ 0)))
+                          (reuse employeeOrgChart)
+  -- Limit the search only to employees that live in the same city
+  guard_ (addressCity (employeeAddress employee) ==. addressCity (customerAddress cust))
+  pure (cust, employee)
 ```

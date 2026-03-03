@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
--- ! BUILD_COMMAND: runhaskell --ghc-arg=-fglasgow-exts -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -fno-warn-partial-type-signatures
+-- ! BUILD_COMMAND: runhaskell  -XTypeFamilies -XOverloadedStrings -XPartialTypeSignatures -XTypeApplications -fno-warn-partial-type-signatures
 -- ! BUILD_DIR: beam-sqlite/examples/
 module Main where
 
@@ -11,8 +11,8 @@ import Database.Beam.Backend.Types
 import Database.Beam.Sqlite
 import Database.SQLite.Simple
 
-import Control.Monad
 import Control.Exception
+import Control.Monad
 
 import Data.IORef
 import Data.Int
@@ -29,20 +29,21 @@ exampleQuery putStrLn = do
 
 main :: IO ()
 main =
-  do chinook <- open "chinook.db"
+  do
+    chinook <- open "chinook.db"
 
-     stmts <- newIORef id
+    stmts <- newIORef id
 
-     let onStmt s = modifyIORef stmts (. (s:))
-         record = withDatabaseDebug onStmt chinook
+    let onStmt s = modifyIORef stmts (. (s :))
+        record = withDatabaseDebug onStmt chinook
 
-     handle (\BeamDone -> pure ()) $
-       withTransaction chinook $ do
-         record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
-         throwIO BeamDone
+    handle (\BeamDone -> pure ()) $
+      withTransaction chinook $ do
+        record $ exampleQuery (liftIO . onStmt . ("-- Output: " ++))
+        throwIO BeamDone
 
-     mkStmtList <- readIORef stmts
-     let stmtList = mkStmtList []
+    mkStmtList <- readIORef stmts
+    let stmtList = mkStmtList []
 
-     forM_ stmtList $ \stmt -> do
-       putStrLn stmt
+    forM_ stmtList $ \stmt -> do
+      putStrLn stmt

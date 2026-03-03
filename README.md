@@ -53,50 +53,24 @@ For questions, feel free to join
 our [mailing list](https://groups.google.com/forum/#!forum/beam-discussion) or
 head over to `#haskell-beam` on freenode.
 
-## A word on testing
-
-`beam-core` has in-depth unit tests to test query generation over an idealized
-ANSI SQL-compliant backend. You may be concerned that there are no tests in
-either `beam-sqlite` or `beam-postgres`. Do not be alarmed. The documentation
-contains many, many examples of queries written over the sample Chinook
-database, the schema for which can be found at
-`beam-sqlite/examples/Chinook/Schema.hs`. The included `mkdocs` configuration
-and custom `beam_query` python Markdown extension automatically run every query
-in the documentation against a live database connection. Any errors in
-serializion/deserialization or invalid syntax are caught while building the
-documentation. Feel free to open pull-requests with additional examples/tests.
-
-Tests are written
-
-~~~markdown
-!beam-query
-```haskell
-!example <template-name> <requirements>
-do x <- all_ (customer chinookDb) -- chinookDb available under chinook and chinookdml examples
-   pure x
-```
-~~~
-
-The `!beam-query` declaration indicates this is markdown code block that
-contains beam query code. The `!example` declaration indicates that this example
-should be built against applicable backends and included in the code. The
-`template_name` is either `chinook` or `chinookdml` (depending on whether you
-have quest a query or a DML statement). For `chinook`, the included code should
-produce a `Q` query. For `chinookdml`, the included code should be a monadic
-action in a `MonadBeam`. The `requirements` can be used to select which backends
-to run this against. See the documentation for examples.
-
 ## Building the documentation
 
 Beam uses [`mkdocs`](https://www.mkdocs.org/) for its documentation generation.
 
 ### Requirements
-* Python installation with [`mkdocs` module](https://pypi.org/project/mkdocs/)
-* Alternatively, open the Nix Flake shell via `nix develop`.
 
-Then run `build-docs.sh`.
+The dependencies to build documentation are packaged via Nix. You can build the
+documentation using:
 
-TODO: define Nix package for docs bundle.
+```console
+nix build .#docs
+```
+
+or, if you want to see what's going on in great detail:
+
+```console
+nix build .#docs -L
+```
 
 The documentation uses a custom Markdown preprocessor to automatically build
 examples against the canonical Chinook database. By default, beam will build
@@ -128,3 +102,32 @@ to
       enabled_backends:
         - beam-sqlite
 ```
+
+### Checking queries in documentation
+The documentation contains many, many examples of queries written over the sample Chinook
+database, the schema for which can be found at
+`beam-sqlite/examples/Chinook/Schema.hs`. The included `mkdocs` configuration
+and custom `beam_query` python Markdown extension automatically run every query
+in the documentation against a live database connection. Any errors in
+serializion/deserialization or invalid syntax are caught while building the
+documentation. Feel free to open pull-requests with additional examples/tests.
+
+Tests are written
+
+~~~markdown
+!beam-query
+```haskell
+!example <template-name> <requirements>
+do x <- all_ (customer chinookDb) -- chinookDb available under chinook and chinookdml examples
+   pure x
+```
+~~~
+
+The `!beam-query` declaration indicates this is markdown code block that
+contains beam query code. The `!example` declaration indicates that this example
+should be built against applicable backends and included in the code. The
+`template_name` is either `chinook` or `chinookdml` (depending on whether you
+have quest a query or a DML statement). For `chinook`, the included code should
+produce a `Q` query. For `chinookdml`, the included code should be a monadic
+action in a `MonadBeam`. The `requirements` can be used to select which backends
+to run this against. See the documentation for examples.

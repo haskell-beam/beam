@@ -67,6 +67,10 @@ Available backends are:
   to [the beam-sqlite documentation](user-guide/backends/beam-sqlite.md) for
   more information on compatibility.
 
+* `beam-duckdb` -- A new backend for DuckDB.
+  See [the beam-duckdb documentation](user-guide/backends/beam-duckdb.md)
+  for more information.
+
 * `beam-mysql` -- A backend for MySQL or MariaDB. Maintained
   separately on [GitHub](https://github.com/tathougies/beam-mysql).
 
