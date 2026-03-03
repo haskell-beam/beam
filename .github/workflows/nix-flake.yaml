@@ -1,8 +1,14 @@
 name: "Nix Flake"
 on:
   pull_request:
+    paths-ignore:
+      - '.github/workflows/docs.yaml'
+      - 'docs/*/**'
   push:
     branches: [master]
+    paths-ignore:
+      - '.github/workflows/docs.yaml'
+      - 'docs/*/**'
 jobs:
   nix:
     strategy:

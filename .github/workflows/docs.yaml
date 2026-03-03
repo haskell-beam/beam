@@ -27,7 +27,9 @@ jobs:
 
       - name: Deploy to GitHub Pages
         if: github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v4
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./result
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gh-pages
+          folder: docs/build
+          clean: true
