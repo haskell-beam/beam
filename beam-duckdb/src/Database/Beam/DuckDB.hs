@@ -31,6 +31,7 @@ module Database.Beam.DuckDB
     -- * DuckDB-specific functionality
 
     -- ** Data sources
+    DataSource,
     DataSourceEntity,
     dataSource,
     modifyDataSourceFields,

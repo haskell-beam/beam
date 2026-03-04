@@ -3,14 +3,16 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Database.Beam.DuckDB.Test.Query (tests) where
 
 import Control.Monad (void)
 import Data.Int (Int32)
-import Data.List (nubBy, sort, sortOn)
+import Data.List (nub, nubBy, sort, sortOn)
 import Data.Text (Text)
 import Database.Beam
   ( Beamable,
@@ -24,20 +26,43 @@ import Database.Beam
     SqlValable (val_),
     Table (..),
     TableEntity,
+    aggregate_,
+    allInGroup_,
     all_,
+    anyOver_,
+    as_,
+    asc_,
+    cast_,
+    concat_,
     dbModification,
     defaultDbSettings,
+    everyOver_,
+    filter_,
+    fromMaybe_,
+    group_,
     guard_,
     insert,
     insertValues,
+    isTrue_,
     leftJoin_,
     modifyTableFields,
+    orderBy_,
+    references_,
     related_,
+    reuse,
     runInsert,
     runSelectReturningList,
     select,
+    selectWith,
+    selecting,
+    someOver_,
+    sqlBool_,
+    sum_,
     tableModification,
+    union_,
+    varchar,
     withDbModification,
+    (<.),
     (>=.),
   )
 import Database.Beam.DuckDB (DuckDB, runBeamDuckDB)
@@ -46,30 +71,50 @@ import Hedgehog (Gen, annotate, evalIO, forAll, property, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase, (@?=))
 import Test.Tasty.Hedgehog (testProperty)
 
 tests :: TestTree
 tests =
   testGroup
-    "Query"
+    "Queries"
     [ testGroup
-        "Selection"
-        [ testSelectAll,
-          testSelectWithFilter,
-          testSelectEquality
+        "SQL92 featureset"
+        [ testGroup
+            "Selection"
+            [ testSelectAll,
+              testSelectWithFilter,
+              testSelectEquality
+            ],
+          testGroup
+            "Projection"
+            [ testProjectSingleColumn,
+              testProjectMultipleColumns,
+              testProjectWithExpression
+            ],
+          testGroup
+            "Join"
+            [ testInnerJoin,
+              testMultiInnerJoin,
+              testMixingJoinsWithFilters,
+              testLeftJoin
+            ]
         ],
       testGroup
-        "Projection"
-        [ testProjectSingleColumn,
-          testProjectMultipleColumns,
-          testProjectWithExpression
-        ],
-      testGroup
-        "Join"
-        [ testInnerJoin,
-          testMultiInnerJoin,
-          testMixingJoinsWithFilters,
-          testLeftJoin
+        "SQL99 featureset"
+        [ testGroup "CONCAT" [testConcat],
+          testGroup
+            "CTE"
+            [ testCommonTableExpression,
+              testMultipleCommonTableExpressions,
+              testRecursiveCommonTableExpression
+            ],
+          testGroup
+            "SOME/ANY/EVERY"
+            [ testSomeOver,
+              testAnyOver,
+              testEveryOver
+            ]
         ]
     ]
 
@@ -242,6 +287,280 @@ testLeftJoin = testProperty "Left joins work as expected" $ property $ do
       nothingRows = filter (\(uid, _) -> uid `elem` map _userId usersWithoutOrders) results
   annotate "Users without orders should have Nothing quantity"
   mapM_ (\(_, mq) -> mq === Nothing) nothingRows
+
+-- TODO: this generates an invalid query
+-- testCountDistinct :: TestTree
+-- testCountDistinct = testCase "counts distinct users who placed orders" $ do
+--   let users = [User 1 "Alice" 30]
+--   withTestDb users [] [] $ \conn -> do
+--     result <-
+--       runBeamDuckDB conn $
+--         runSelectReturningList $
+--           select $ do
+--             order <- all_ (_dbOrders testDb)
+--             guard_ (distinct_ (pure $ _orderUserId order))
+--             pure order
+--     result @?= []
+
+testConcat :: TestTree
+testConcat = testCase "CONCAT two columns" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+  withTestDb users [] [] $ \conn -> do
+    rows <-
+      runBeamDuckDB conn $
+        runSelectReturningList $
+          select $
+            orderBy_ (asc_ . fst) $
+              do
+                user <- all_ (_dbUsers testDb)
+                pure
+                  ( _userId user,
+                    concat_
+                      [ _userName user,
+                        val_ " (age: ",
+                        cast_ (_userAge user) (varchar Nothing),
+                        val_ ")"
+                      ]
+                  )
+
+    map snd rows
+      @?= [ "Alice (age: 30)",
+            "Bob (age: 25)",
+            "Charlie (age: 35)"
+          ]
+
+testCommonTableExpression :: TestTree
+testCommonTableExpression = testCase "Non-recursive common table expression" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            selectWith $ do
+              userTotals <-
+                selecting
+                  $ aggregate_
+                    ( \o ->
+                        ( group_ (_orderUserId o),
+                          fromMaybe_ (val_ 0) $ sum_ (_orderQuantity o)
+                        )
+                    )
+                  $ all_ (_dbOrders testDb)
+
+              pure $ do
+                (uid, total) <- reuse userTotals
+                u <- filter_ (\u -> UserId (_userId u) ==. uid) $ all_ (_dbUsers testDb)
+                pure (_userName u, total)
+
+      rows @?= [("Alice", 3), ("Bob", 1)]
+
+testMultipleCommonTableExpressions :: TestTree
+testMultipleCommonTableExpressions = testCase "Multiple common table expressions" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn -> do
+    rows <-
+      runBeamDuckDB conn $
+        runSelectReturningList $
+          selectWith $ do
+            -- CTE 1: expensive products (price > 1000 cents)
+            expensiveProducts <-
+              selecting $
+                filter_ (\p -> _productPrice p >. val_ 1000) $
+                  all_ (_dbProducts testDb)
+
+            -- CTE 2: orders for expensive products
+            expensiveOrders <-
+              selecting $ do
+                p <- reuse expensiveProducts
+                filter_ (\o -> _orderProductId o `references_` p) $
+                  all_ (_dbOrders testDb)
+
+            -- Main query: distinct users who ordered expensive products
+            pure $ do
+              o <- reuse expensiveOrders
+              u <-
+                filter_ (\u -> _orderUserId o `references_` u) $
+                  all_ (_dbUsers testDb)
+              pure (_userName u)
+
+    -- Gadget costs 2999; Alice ordered it
+    nub rows @?= ["Alice"]
+
+testRecursiveCommonTableExpression :: TestTree
+testRecursiveCommonTableExpression = testCase "Recursive common table expression" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            selectWith $ do
+              rec cte <-
+                    selecting
+                      -- Base case: SELECT 1
+                      ( pure (as_ @Int32 (val_ 1))
+                          `union_`
+                          -- Recursive step: SELECT n + 1 FROM cte WHERE n < 5
+                          ( do
+                              n <- reuse cte
+                              guard_ (n <. val_ 5)
+                              pure (n + val_ 1)
+                          )
+                      )
+              pure (reuse cte)
+      sort rows @?= [1, 2, 3, 4, 5 :: Int32]
+
+testSomeOver :: TestTree
+testSomeOver = testCase "SOME" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              aggregate_
+                ( \o ->
+                    -- Expecting that at least one order per user has a quantity larger than 1
+                    -- This is only true of a single user, UserId 1
+                    ( group_ (_orderUserId o),
+                      isTrue_ $ someOver_ allInGroup_ (sqlBool_ (_orderQuantity o >. val_ 1))
+                    )
+                )
+                (all_ (_dbOrders testDb))
+      rows
+        @?= [ (UserId 1, True),
+              (UserId 2, False)
+            ]
+
+testAnyOver :: TestTree
+testAnyOver = testCase "ANY" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              aggregate_
+                ( \o ->
+                    -- Expecting that at least one order per user has a quantity larger than 1
+                    -- This is only true of a single user, UserId 1
+                    ( group_ (_orderUserId o),
+                      isTrue_ $ anyOver_ allInGroup_ (sqlBool_ (_orderQuantity o >. val_ 1))
+                    )
+                )
+                (all_ (_dbOrders testDb))
+      rows
+        @?= [ (UserId 1, True),
+              (UserId 2, False)
+            ]
+
+testEveryOver :: TestTree
+testEveryOver = testCase "EVERY" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              aggregate_
+                ( \o ->
+                    -- Expecting that all orders per user have a quantity larger than 1
+                    -- This is not true for any user
+                    ( group_ (_orderUserId o),
+                      isTrue_ $ everyOver_ allInGroup_ (sqlBool_ (_orderQuantity o >. val_ 1))
+                    )
+                )
+                (all_ (_dbOrders testDb))
+      rows
+        @?= [ (UserId 1, False),
+              (UserId 2, False)
+            ]
 
 data UserT f = User
   { _userId :: Columnar f Int32,

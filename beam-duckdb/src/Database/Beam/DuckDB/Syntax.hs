@@ -6,54 +6,63 @@
 -- TODO: clean up unused top binds
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Database.Beam.DuckDB.Syntax (
-  -- * Command
-  DuckDBCommandSyntax (..),
+module Database.Beam.DuckDB.Syntax
+  ( -- * Command
+    DuckDBCommandSyntax (..),
 
-  -- * Concrete syntaxes
-  DuckDBSelectSyntax (..),
-  DuckDBFromSyntax (..),
-  DuckDBExpressionSyntax (..),
-  DuckDBInsertSyntax (..),
-  DuckDBUpdateSyntax (..),
-  DuckDBDeleteSyntax (..),
-  DuckDBTableNameSyntax (..),
-  DuckDBOnConflictSyntax (..),
-)
+    -- * Concrete syntaxes
+    DuckDBSelectSyntax (..),
+    DuckDBFromSyntax (..),
+    DuckDBExpressionSyntax (..),
+    DuckDBInsertSyntax (..),
+    DuckDBUpdateSyntax (..),
+    DuckDBDeleteSyntax (..),
+    DuckDBTableNameSyntax (..),
+    DuckDBOnConflictSyntax (..),
+  )
 where
 
+import Data.Bifunctor (second)
 import Data.Coerce (coerce)
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Word (Word16, Word32, Word64, Word8)
-import Database.Beam.Backend (
-  HasSqlValueSyntax (..),
-  IsSql92AggregationExpressionSyntax (..),
-  IsSql92AggregationSetQuantifierSyntax (..),
-  IsSql92DataTypeSyntax (..),
-  IsSql92DeleteSyntax (..),
-  IsSql92ExpressionSyntax (..),
-  IsSql92ExtractFieldSyntax (..),
-  IsSql92FieldNameSyntax (..),
-  IsSql92FromOuterJoinSyntax (..),
-  IsSql92FromSyntax (..),
-  IsSql92GroupingSyntax (..),
-  IsSql92InsertSyntax (..),
-  IsSql92InsertValuesSyntax (..),
-  IsSql92OrderingSyntax (..),
-  IsSql92ProjectionSyntax (..),
-  IsSql92QuantifierSyntax (..),
-  IsSql92SelectSyntax (..),
-  IsSql92SelectTableSyntax (..),
-  IsSql92Syntax (..),
-  IsSql92TableNameSyntax (..),
-  IsSql92TableSourceSyntax (..),
-  IsSql92UpdateSyntax (..),
-  SqlNull (..),
- )
-import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, emit, emitIntegral, emitRealFloat, emitValue, parens, quotedIdentifier, spaces)
+import Database.Beam.Backend
+  ( HasSqlValueSyntax (..),
+    IsSql92AggregationExpressionSyntax (..),
+    IsSql92AggregationSetQuantifierSyntax (..),
+    IsSql92DataTypeSyntax (..),
+    IsSql92DeleteSyntax (..),
+    IsSql92ExpressionSyntax (..),
+    IsSql92ExtractFieldSyntax (..),
+    IsSql92FieldNameSyntax (..),
+    IsSql92FromOuterJoinSyntax (..),
+    IsSql92FromSyntax (..),
+    IsSql92GroupingSyntax (..),
+    IsSql92InsertSyntax (..),
+    IsSql92InsertValuesSyntax (..),
+    IsSql92OrderingSyntax (..),
+    IsSql92ProjectionSyntax (..),
+    IsSql92QuantifierSyntax (..),
+    IsSql92SelectSyntax (..),
+    IsSql92SelectTableSyntax (..),
+    IsSql92Syntax (..),
+    IsSql92TableNameSyntax (..),
+    IsSql92TableSourceSyntax (..),
+    IsSql92UpdateSyntax (..),
+    IsSql99AggregationExpressionSyntax (..),
+    IsSql99CommonTableExpressionSelectSyntax (..),
+    IsSql99CommonTableExpressionSyntax (..),
+    IsSql99ConcatExpressionSyntax (..),
+    IsSql99DataTypeSyntax (..),
+    IsSql99ExpressionSyntax (..),
+    IsSql99FunctionExpressionSyntax (..),
+    IsSql99RecursiveCommonTableExpressionSelectSyntax (..),
+    SqlNull (..),
+  )
+import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, emit, emitChar, emitIntegral, emitRealFloat, emitValue, parens, quotedIdentifier, sepBy, spaces)
 import Database.Beam.Migrate.Serialization (BeamSerializedDataType)
 import Database.DuckDB.Simple (Null (Null), ToField)
 
@@ -79,8 +88,8 @@ newtype DuckDBSelectSyntax = DuckDBSelectSyntax {fromDuckDBSelect :: DuckDBSynta
 newtype DuckDBSelectTableSyntax = DuckDBSelectTableSyntax {fromDuckDBSelectTable :: DuckDBSyntax}
 
 data DuckDBOrderingSyntax = DuckDBOrderingSyntax
-  { duckDBOrdering :: DuckDBSyntax
-  , -- DuckDB re-uses the Postgres parser, and therefore
+  { duckDBOrdering :: DuckDBSyntax,
+    -- DuckDB re-uses the Postgres parser, and therefore
     -- has the same null ordering properties
     duckDBNullOrdering :: Maybe DuckDBNullOrdering
   }
@@ -105,8 +114,8 @@ newtype DuckDBFieldNameSyntax = DuckDBFieldNameSyntax {fromDuckDBFieldName :: Du
 newtype DuckDBComparisonQuantifierSyntax = DuckDBComparisonQuantifierSyntax {fromDuckDBComparisonQuantifier :: DuckDBSyntax}
 
 data DuckDBDataTypeSyntax = DuckDBDataTypeSyntax
-  { duckDBDataType :: DuckDBSyntax
-  , duckDBDataTypeSerialized :: BeamSerializedDataType
+  { duckDBDataType :: DuckDBSyntax,
+    duckDBDataTypeSerialized :: BeamSerializedDataType
   }
 
 newtype DuckDBExtractFieldSyntax = DuckDBExtractFieldSyntax {fromDuckDBExtractField :: DuckDBSyntax}
@@ -116,6 +125,8 @@ newtype DuckDBGroupingSyntax = DuckDBGroupingSyntax {fromDuckDBGrouping :: DuckD
 newtype DuckDBSelectSetQuantifierSyntax = DuckDBSelectSetQuantifierSyntax {fromDuckDBSelectSetQuantifier :: DuckDBSyntax}
 
 newtype DuckDBAggregationSetQuantifierSyntax = DuckDBAggregationSetQuantifierSyntax {fromDuckDBAggregationSetQuantifier :: DuckDBSyntax}
+
+newtype DuckDBCommonTableExpressionSyntax = DuckDBCommonTableExpressionSyntax {fromDuckDBCommonTableExpressionSyntax :: DuckDBSyntax}
 
 instance IsSql92AggregationExpressionSyntax DuckDBExpressionSyntax where
   type Sql92AggregationSetQuantifierSyntax DuckDBExpressionSyntax = DuckDBAggregationSetQuantifierSyntax
@@ -143,13 +154,13 @@ instance IsSql92SelectTableSyntax DuckDBSelectTableSyntax where
   selectTableStmt setQuantifier proj from where_ grouping having =
     DuckDBSelectTableSyntax $
       mconcat
-        [ emit "SELECT "
-        , maybe mempty ((<> emit " ") . fromDuckDBAggregationSetQuantifier) setQuantifier
-        , fromDuckDBProjection proj
-        , maybe mempty ((emit " FROM " <>) . fromDuckDBFrom) from
-        , maybe mempty ((emit " WHERE " <>) . fromDuckDBExpression) where_
-        , maybe mempty ((emit " GROUP BY " <>) . fromDuckDBGrouping) grouping
-        , maybe mempty ((emit " HAVING " <>) . fromDuckDBExpression) having
+        [ emit "SELECT ",
+          maybe mempty ((<> emit " ") . fromDuckDBAggregationSetQuantifier) setQuantifier,
+          fromDuckDBProjection proj,
+          maybe mempty ((emit " FROM " <>) . fromDuckDBFrom) from,
+          maybe mempty ((emit " WHERE " <>) . fromDuckDBExpression) where_,
+          maybe mempty ((emit " GROUP BY " <>) . fromDuckDBGrouping) grouping,
+          maybe mempty ((emit " HAVING " <>) . fromDuckDBExpression) having
         ]
 
   unionTables unionAll = tableOp (if unionAll then "UNION ALL" else "UNION")
@@ -306,6 +317,24 @@ instance IsSql92DataTypeSyntax DuckDBDataTypeSyntax where
     DuckDBDataTypeSyntax
       (emit "TIMESTAMP" <> optPrec prec <> if withTz then emit " WITH TIME ZONE" else mempty)
       (timestampType prec withTz)
+
+instance IsSql99DataTypeSyntax DuckDBDataTypeSyntax where
+  characterLargeObjectType = DuckDBDataTypeSyntax {duckDBDataType = emit "TEXT", duckDBDataTypeSerialized = characterLargeObjectType}
+  binaryLargeObjectType = DuckDBDataTypeSyntax {duckDBDataType = emit "BYTEA", duckDBDataTypeSerialized = binaryLargeObjectType}
+  booleanType = DuckDBDataTypeSyntax (emit "BOOLEAN") booleanType
+  arrayType (DuckDBDataTypeSyntax syntax serialized) sz =
+    DuckDBDataTypeSyntax
+      (syntax <> emit "[" <> emit (fromString (show sz)) <> emit "]")
+      (arrayType serialized sz)
+  rowType fields =
+    DuckDBDataTypeSyntax
+      { duckDBDataType =
+          -- Note that DuckDB's support for ROW is effectively STRUCT, as far as I understand
+          emit "STRUCT("
+            <> sepBy (emit ", ") (map (\(fieldName, DuckDBDataTypeSyntax t _) -> emit fieldName <> emit " " <> t) fields)
+            <> emitChar ')',
+        duckDBDataTypeSerialized = rowType (map (second duckDBDataTypeSerialized) fields)
+      }
 
 optPrec :: Maybe Word -> DuckDBSyntax
 optPrec Nothing = mempty
@@ -507,12 +536,12 @@ instance IsSql92SelectSyntax DuckDBSelectSyntax where
   selectStmt tbl ordering limit offset =
     DuckDBSelectSyntax $
       mconcat
-        [ fromDuckDBSelectTable tbl
-        , case ordering of
+        [ fromDuckDBSelectTable tbl,
+          case ordering of
             [] -> mempty
-            ordering' -> emit " ORDER BY " <> commas (map duckDBOrdering ordering')
-        , maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit
-        , maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset
+            ordering' -> emit " ORDER BY " <> commas (map duckDBOrdering ordering'),
+          maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit,
+          maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset
         ]
 
 -- | DuckDB @ON CONFLICT@ syntax
@@ -585,3 +614,86 @@ instance IsSql92DeleteSyntax DuckDBDeleteSyntax where
         <> maybe mempty (\whereInner -> emit " WHERE " <> fromDuckDBExpression whereInner) where_
 
   deleteSupportsAlias _ = True
+
+instance IsSql99CommonTableExpressionSelectSyntax DuckDBSelectSyntax where
+  type Sql99SelectCTESyntax DuckDBSelectSyntax = DuckDBCommonTableExpressionSyntax
+
+  withSyntax ctes (DuckDBSelectSyntax select) =
+    DuckDBSelectSyntax $
+      emit "WITH "
+        <> sepBy (emit ", ") (map fromDuckDBCommonTableExpressionSyntax ctes)
+        <> select
+
+instance IsSql99RecursiveCommonTableExpressionSelectSyntax DuckDBSelectSyntax where
+  withRecursiveSyntax ctes (DuckDBSelectSyntax select) =
+    DuckDBSelectSyntax $
+      emit "WITH RECURSIVE "
+        <> sepBy (emit ", ") (map fromDuckDBCommonTableExpressionSyntax ctes)
+        <> select
+
+instance IsSql99CommonTableExpressionSyntax DuckDBCommonTableExpressionSyntax where
+  type Sql99CTESelectSyntax DuckDBCommonTableExpressionSyntax = DuckDBSelectSyntax
+
+  cteSubquerySyntax tbl fields (DuckDBSelectSyntax select) =
+    DuckDBCommonTableExpressionSyntax $
+      quotedIdentifier tbl
+        <> parens (sepBy (emit ",") (map quotedIdentifier fields))
+        <> emit " AS "
+        <> parens select
+
+instance IsSql99FunctionExpressionSyntax DuckDBExpressionSyntax where
+  functionCallE name args =
+    DuckDBExpressionSyntax $
+      fromDuckDBExpression name
+        <> parens (sepBy (emit ", ") (map fromDuckDBExpression args))
+  functionNameE nm = DuckDBExpressionSyntax (emit nm)
+
+instance IsSql99ExpressionSyntax DuckDBExpressionSyntax where
+  -- The implementation of 'distinctE' is the same as Postgres', but its
+  -- use via 'distinct_' creates SQL queries which are not necessarily supported
+  distinctE select = DuckDBExpressionSyntax (emit "DISTINCT (" <> fromDuckDBSelect select <> emit ")")
+
+  -- DuckDB doesn't support 'SIMILAR TO' exactly, but rather
+  -- provides the 'regexp_matches' function
+  similarToE left right =
+    DuckDBExpressionSyntax $
+      mconcat
+        [ emit "regexp_matches(",
+          coerce left,
+          emit ", ",
+          coerce right,
+          emitChar ')'
+        ]
+
+  instanceFieldE i nm =
+    DuckDBExpressionSyntax $
+      parens (fromDuckDBExpression i) <> emit "." <> quotedIdentifier nm
+
+  refFieldE i nm =
+    DuckDBExpressionSyntax $
+      parens (fromDuckDBExpression i) <> emit "->" <> quotedIdentifier nm
+
+instance IsSql99ConcatExpressionSyntax DuckDBExpressionSyntax where
+  concatE [] = valueE (sqlValueSyntax ("" :: Text))
+  concatE [x] = x
+  concatE es =
+    DuckDBExpressionSyntax $
+      emit "CONCAT"
+        <> parens
+          ( sepBy
+              (emit ", ")
+              -- DuckDB's type inference doesn't work reliably inside of CONCAT. I suspect
+              -- that this is only for ? parameters for binding.
+              -- However, to be extra safe, we cast every element inside the `CONCAT` call
+              -- to a VARCHAR
+              -- TODO: optimize this to only CAST when the expression is a binding parameter
+              (map (\e -> emit "CAST" <> parens (coerce e <> emit " AS VARCHAR")) es)
+          )
+
+instance IsSql99AggregationExpressionSyntax DuckDBExpressionSyntax where
+  everyE = aggFunc "BOOL_AND" -- DuckDB doesn't implement 'EVERY'
+
+  -- The following two functions are modeled the same way
+  -- as for the Postgres backend
+  someE = aggFunc "BOOL_OR"
+  anyE = aggFunc "BOOL_OR"
