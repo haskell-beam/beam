@@ -450,6 +450,9 @@ instance IsSql92ExpressionSyntax DuckDBExpressionSyntax where
   valueE = DuckDBExpressionSyntax . fromDuckDBValue
 
   rowE vs = DuckDBExpressionSyntax (parens (commas (map fromDuckDBExpression vs)))
+  quantifierListE vs =
+    DuckDBExpressionSyntax $
+    emit "(VALUES " <> sepBy (emit ", ") (fmap (parens . coerce) vs) <> emit ")"
   fieldE = DuckDBExpressionSyntax . fromDuckDBFieldName
 
   subqueryE = DuckDBExpressionSyntax . parens . fromDuckDBSelect

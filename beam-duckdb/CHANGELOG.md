@@ -6,6 +6,7 @@
   (both non-recursive and recursive).
 * Exposed the `DataSource` type, but without constructors. Use `parquet`, `csv`, or any of the other
   helper functions to construct a `DataSource`.
+* Fixed an issue where the SQL queries generated via `allIn_` and `anyIn_` were not supported by DuckDB.
 
 ## 0.1.1.0 -- 2026-03-04
 
