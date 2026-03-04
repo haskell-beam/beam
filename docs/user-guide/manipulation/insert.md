@@ -168,10 +168,9 @@ as your data. If not, you'll get a compile time error.
 
 For example, to create the playlists as above
 
-<!-- DuckDB doesn't yet support the Sql99* featureset -->
 !beam-query
 ```haskell
-!example chinookdml !on:DuckDB
+!example chinookdml
 
 runInsert $ insert (playlist chinookDb) $
   insertFrom $ do
