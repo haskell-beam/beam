@@ -31,6 +31,19 @@ import qualified Data.Text as Text
 import Data.Word (Word16, Word32, Word64, Word8)
 import Database.Beam.Backend
   ( HasSqlValueSyntax (..),
+    IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax (..),
+    IsSql2003EnhancedNumericFunctionsExpressionSyntax (..),
+    IsSql2003ExpressionAdvancedOLAPOperationsSyntax (..),
+    IsSql2003ExpressionElementaryOLAPOperationsSyntax (..),
+    IsSql2003ExpressionSyntax (..),
+    IsSql2003FirstValueAndLastValueExpressionSyntax (..),
+    IsSql2003LeadAndLagExpressionSyntax (..),
+    IsSql2003NthValueExpressionSyntax (..),
+    IsSql2003NtileExpressionSyntax (..),
+    IsSql2003OrderingElementaryOLAPOperationsSyntax (..),
+    IsSql2003WindowFrameBoundSyntax (..),
+    IsSql2003WindowFrameBoundsSyntax (..),
+    IsSql2003WindowFrameSyntax (..),
     IsSql92AggregationExpressionSyntax (..),
     IsSql92AggregationSetQuantifierSyntax (..),
     IsSql92DataTypeSyntax (..),
@@ -87,17 +100,7 @@ newtype DuckDBSelectSyntax = DuckDBSelectSyntax {fromDuckDBSelect :: DuckDBSynta
 
 newtype DuckDBSelectTableSyntax = DuckDBSelectTableSyntax {fromDuckDBSelectTable :: DuckDBSyntax}
 
-data DuckDBOrderingSyntax = DuckDBOrderingSyntax
-  { duckDBOrdering :: DuckDBSyntax,
-    -- DuckDB re-uses the Postgres parser, and therefore
-    -- has the same null ordering properties
-    duckDBNullOrdering :: Maybe DuckDBNullOrdering
-  }
-
-data DuckDBNullOrdering
-  = DuckDBNullOrderingNullsFirst
-  | DuckDBNullOrderingNullsLast
-  deriving (Show, Eq)
+newtype DuckDBOrderingSyntax = DuckDBOrderingSyntax {fromDuckDBOrdering :: DuckDBSyntax}
 
 newtype DuckDBExpressionSyntax = DuckDBExpressionSyntax {fromDuckDBExpression :: DuckDBSyntax} deriving (Eq)
 
@@ -127,6 +130,12 @@ newtype DuckDBSelectSetQuantifierSyntax = DuckDBSelectSetQuantifierSyntax {fromD
 newtype DuckDBAggregationSetQuantifierSyntax = DuckDBAggregationSetQuantifierSyntax {fromDuckDBAggregationSetQuantifier :: DuckDBSyntax}
 
 newtype DuckDBCommonTableExpressionSyntax = DuckDBCommonTableExpressionSyntax {fromDuckDBCommonTableExpressionSyntax :: DuckDBSyntax}
+
+newtype DuckDBWindowFrameSyntax = DuckDBWindowFrameSyntax {fromDuckDBWindowFrame :: DuckDBSyntax}
+
+newtype DuckDBWindowFrameBoundsSyntax = DuckDBWindowFrameBoundsSyntax {fromDuckDBWindowFrameBounds :: DuckDBSyntax}
+
+newtype DuckDBWindowFrameBoundSyntax = DuckDBWindowFrameBoundSyntax {fromDuckDBWindowFrameBound :: Text -> DuckDBSyntax}
 
 instance IsSql92AggregationExpressionSyntax DuckDBExpressionSyntax where
   type Sql92AggregationSetQuantifierSyntax DuckDBExpressionSyntax = DuckDBAggregationSetQuantifierSyntax
@@ -452,7 +461,7 @@ instance IsSql92ExpressionSyntax DuckDBExpressionSyntax where
   rowE vs = DuckDBExpressionSyntax (parens (commas (map fromDuckDBExpression vs)))
   quantifierListE vs =
     DuckDBExpressionSyntax $
-    emit "(VALUES " <> sepBy (emit ", ") (fmap (parens . coerce) vs) <> emit ")"
+      emit "(VALUES " <> sepBy (emit ", ") (fmap (parens . coerce) vs) <> emit ")"
   fieldE = DuckDBExpressionSyntax . fromDuckDBFieldName
 
   subqueryE = DuckDBExpressionSyntax . parens . fromDuckDBSelect
@@ -529,8 +538,12 @@ instance IsSql92ProjectionSyntax DuckDBProjectionSyntax where
 instance IsSql92OrderingSyntax DuckDBOrderingSyntax where
   type Sql92OrderingExpressionSyntax DuckDBOrderingSyntax = DuckDBExpressionSyntax
 
-  ascOrdering e = DuckDBOrderingSyntax (fromDuckDBExpression e <> emit " ASC") Nothing
-  descOrdering e = DuckDBOrderingSyntax (fromDuckDBExpression e <> emit " DESC") Nothing
+  ascOrdering e = DuckDBOrderingSyntax (fromDuckDBExpression e <> emit " ASC")
+  descOrdering e = DuckDBOrderingSyntax (fromDuckDBExpression e <> emit " DESC")
+
+instance IsSql2003OrderingElementaryOLAPOperationsSyntax DuckDBOrderingSyntax where
+  nullsFirstOrdering o = DuckDBOrderingSyntax $ coerce o <> emit " NULLS FIRST"
+  nullsLastOrdering o = DuckDBOrderingSyntax $ coerce o <> emit " NULLS LAST"
 
 instance IsSql92SelectSyntax DuckDBSelectSyntax where
   type Sql92SelectSelectTableSyntax DuckDBSelectSyntax = DuckDBSelectTableSyntax
@@ -542,7 +555,7 @@ instance IsSql92SelectSyntax DuckDBSelectSyntax where
         [ fromDuckDBSelectTable tbl,
           case ordering of
             [] -> mempty
-            ordering' -> emit " ORDER BY " <> commas (map duckDBOrdering ordering'),
+            ordering' -> emit " ORDER BY " <> commas (map coerce ordering'),
           maybe mempty (emit . fromString . (" LIMIT " <>) . show) limit,
           maybe mempty (emit . fromString . (" OFFSET " <>) . show) offset
         ]
@@ -700,3 +713,124 @@ instance IsSql99AggregationExpressionSyntax DuckDBExpressionSyntax where
   -- as for the Postgres backend
   someE = aggFunc "BOOL_OR"
   anyE = aggFunc "BOOL_OR"
+
+instance IsSql2003ExpressionSyntax DuckDBExpressionSyntax where
+  type
+    Sql2003ExpressionWindowFrameSyntax DuckDBExpressionSyntax =
+      DuckDBWindowFrameSyntax
+
+  overE expr frame =
+    DuckDBExpressionSyntax $
+      fromDuckDBExpression expr <> emit " " <> fromDuckDBWindowFrame frame
+  rowNumberE = DuckDBExpressionSyntax $ emit "ROW_NUMBER()"
+
+instance IsSql2003EnhancedNumericFunctionsExpressionSyntax DuckDBExpressionSyntax where
+  lnE x = DuckDBExpressionSyntax (emit "LN(" <> fromDuckDBExpression x <> emit ")")
+  expE x = DuckDBExpressionSyntax (emit "EXP(" <> fromDuckDBExpression x <> emit ")")
+  sqrtE x = DuckDBExpressionSyntax (emit "SQRT(" <> fromDuckDBExpression x <> emit ")")
+  ceilE x = DuckDBExpressionSyntax (emit "CEIL(" <> fromDuckDBExpression x <> emit ")")
+  floorE x = DuckDBExpressionSyntax (emit "FLOOR(" <> fromDuckDBExpression x <> emit ")")
+  powerE x y = DuckDBExpressionSyntax (emit "POWER(" <> fromDuckDBExpression x <> emit ", " <> fromDuckDBExpression y <> emit ")")
+
+instance IsSql2003ExpressionAdvancedOLAPOperationsSyntax DuckDBExpressionSyntax where
+  denseRankAggE = DuckDBExpressionSyntax $ emit "DENSE_RANK()"
+  percentRankAggE = DuckDBExpressionSyntax $ emit "PERCENT_RANK()"
+  cumeDistAggE = DuckDBExpressionSyntax $ emit "CUME_DIST()"
+
+instance IsSql2003ExpressionElementaryOLAPOperationsSyntax DuckDBExpressionSyntax where
+  rankAggE = DuckDBExpressionSyntax $ emit "RANK()"
+  filterAggE agg f =
+    DuckDBExpressionSyntax $
+      fromDuckDBExpression agg <> emit " FILTER (WHERE " <> fromDuckDBExpression f <> emit ")"
+
+binAggFunc ::
+  Text ->
+  Maybe DuckDBAggregationSetQuantifierSyntax ->
+  DuckDBExpressionSyntax ->
+  DuckDBExpressionSyntax ->
+  DuckDBExpressionSyntax
+binAggFunc fn q x y =
+  DuckDBExpressionSyntax $
+    emit fn
+      <> emitChar '('
+      <> maybe mempty (\inner -> fromDuckDBAggregationSetQuantifier inner <> emitChar ' ') q
+      <> fromDuckDBExpression x
+      <> emit ", "
+      <> fromDuckDBExpression y
+      <> emitChar ')'
+
+instance IsSql2003EnhancedNumericFunctionsAggregationExpressionSyntax DuckDBExpressionSyntax where
+  stddevPopE = aggFunc "STDDEV_POP"
+  stddevSampE = aggFunc "STDDEV_SAMP"
+  varPopE = aggFunc "VAR_POP"
+  varSampE = aggFunc "VAR_SAMP"
+
+  covarPopE = binAggFunc "COVAR_POP"
+  covarSampE = binAggFunc "COVAR_SAMP"
+  corrE = binAggFunc "CORR"
+  regrSlopeE = binAggFunc "REGR_SLOPE"
+  regrInterceptE = binAggFunc "REGR_INTERCEPT"
+  regrCountE = binAggFunc "REGR_COUNT"
+  regrRSquaredE = binAggFunc "REGR_R2"
+  regrAvgXE = binAggFunc "REGR_AVGX"
+  regrAvgYE = binAggFunc "REGR_AVGY"
+  regrSXXE = binAggFunc "REGR_SXX"
+  regrSYYE = binAggFunc "REGR_SYY"
+  regrSXYE = binAggFunc "REGR_SXY"
+
+instance IsSql2003NtileExpressionSyntax DuckDBExpressionSyntax where
+  ntileE x = DuckDBExpressionSyntax (emit "NTILE(" <> fromDuckDBExpression x <> emit ")")
+
+instance IsSql2003LeadAndLagExpressionSyntax DuckDBExpressionSyntax where
+  leadE x Nothing Nothing =
+    DuckDBExpressionSyntax (emit "LEAD(" <> fromDuckDBExpression x <> emit ")")
+  leadE x (Just n) Nothing =
+    DuckDBExpressionSyntax (emit "LEAD(" <> fromDuckDBExpression x <> emit ", " <> fromDuckDBExpression n <> emit ")")
+  leadE x (Just n) (Just def) =
+    DuckDBExpressionSyntax (emit "LEAD(" <> fromDuckDBExpression x <> emit ", " <> fromDuckDBExpression n <> emit ", " <> fromDuckDBExpression def <> emit ")")
+  leadE x Nothing (Just def) =
+    DuckDBExpressionSyntax (emit "LEAD(" <> fromDuckDBExpression x <> emit ", 1, " <> fromDuckDBExpression def <> emit ")")
+
+  lagE x Nothing Nothing =
+    DuckDBExpressionSyntax (emit "LAG(" <> fromDuckDBExpression x <> emit ")")
+  lagE x (Just n) Nothing =
+    DuckDBExpressionSyntax (emit "LAG(" <> fromDuckDBExpression x <> emit ", " <> fromDuckDBExpression n <> emit ")")
+  lagE x (Just n) (Just def) =
+    DuckDBExpressionSyntax (emit "LAG(" <> fromDuckDBExpression x <> emit ", " <> fromDuckDBExpression n <> emit ", " <> fromDuckDBExpression def <> emit ")")
+  lagE x Nothing (Just def) =
+    DuckDBExpressionSyntax (emit "LAG(" <> fromDuckDBExpression x <> emit ", 1, " <> fromDuckDBExpression def <> emit ")")
+
+instance IsSql2003FirstValueAndLastValueExpressionSyntax DuckDBExpressionSyntax where
+  firstValueE x = DuckDBExpressionSyntax (emit "FIRST_VALUE(" <> fromDuckDBExpression x <> emit ")")
+  lastValueE x = DuckDBExpressionSyntax (emit "LAST_VALUE(" <> fromDuckDBExpression x <> emit ")")
+
+instance IsSql2003NthValueExpressionSyntax DuckDBExpressionSyntax where
+  nthValueE x n = DuckDBExpressionSyntax (emit "NTH_VALUE(" <> fromDuckDBExpression x <> emit ", " <> fromDuckDBExpression n <> emit ")")
+
+instance IsSql2003WindowFrameSyntax DuckDBWindowFrameSyntax where
+  type Sql2003WindowFrameExpressionSyntax DuckDBWindowFrameSyntax = DuckDBExpressionSyntax
+  type Sql2003WindowFrameOrderingSyntax DuckDBWindowFrameSyntax = DuckDBOrderingSyntax
+  type Sql2003WindowFrameBoundsSyntax DuckDBWindowFrameSyntax = DuckDBWindowFrameBoundsSyntax
+
+  frameSyntax partition_ ordering_ bounds_ =
+    DuckDBWindowFrameSyntax $
+      emit "OVER "
+        <> parens
+          ( maybe mempty (\p -> emit "PARTITION BY " <> sepBy (emit ", ") (map fromDuckDBExpression p)) partition_
+              <> maybe mempty (\o -> emit " ORDER BY " <> sepBy (emit ", ") (map fromDuckDBOrdering o)) ordering_
+              <> maybe mempty (\b -> emit " ROWS " <> fromDuckDBWindowFrameBounds b) bounds_
+          )
+
+instance IsSql2003WindowFrameBoundsSyntax DuckDBWindowFrameBoundsSyntax where
+  type Sql2003WindowFrameBoundsBoundSyntax DuckDBWindowFrameBoundsSyntax = DuckDBWindowFrameBoundSyntax
+
+  fromToBoundSyntax from Nothing =
+    DuckDBWindowFrameBoundsSyntax (fromDuckDBWindowFrameBound from "PRECEDING")
+  fromToBoundSyntax from (Just to) =
+    DuckDBWindowFrameBoundsSyntax $
+      emit "BETWEEN " <> fromDuckDBWindowFrameBound from "PRECEDING" <> emit " AND " <> fromDuckDBWindowFrameBound to "FOLLOWING"
+
+instance IsSql2003WindowFrameBoundSyntax DuckDBWindowFrameBoundSyntax where
+  unboundedSyntax = DuckDBWindowFrameBoundSyntax $ \where_ -> emit "UNBOUNDED " <> emit where_
+  nrowsBoundSyntax 0 = DuckDBWindowFrameBoundSyntax $ \_ -> emit "CURRENT ROW"
+  nrowsBoundSyntax n = DuckDBWindowFrameBoundSyntax $ \where_ -> emit (fromString (show n)) <> emit " " <> emit where_

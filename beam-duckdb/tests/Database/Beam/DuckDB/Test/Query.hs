@@ -7,6 +7,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Database.Beam.DuckDB.Test.Query (tests) where
 
@@ -38,6 +39,7 @@ import Database.Beam
     defaultDbSettings,
     everyOver_,
     filter_,
+    frame_,
     fromMaybe_,
     group_,
     guard_,
@@ -46,10 +48,15 @@ import Database.Beam
     isTrue_,
     leftJoin_,
     modifyTableFields,
+    noBounds_,
+    noOrder_,
+    noPartition_,
     orderBy_,
+    over_,
     references_,
     related_,
     reuse,
+    rowNumber_,
     runInsert,
     runSelectReturningList,
     select,
@@ -62,10 +69,11 @@ import Database.Beam
     union_,
     varchar,
     withDbModification,
+    withWindow_,
     (<.),
     (>=.),
   )
-import Database.Beam.DuckDB (DuckDB, runBeamDuckDB)
+import Database.Beam.DuckDB (DuckDB, runBeamDuckDB, runBeamDuckDBDebugString)
 import Database.DuckDB.Simple (Connection, execute_, withConnection)
 import Hedgehog (Gen, annotate, evalIO, forAll, property, (===))
 import qualified Hedgehog.Gen as Gen
@@ -115,6 +123,12 @@ tests =
               testAnyOver,
               testEveryOver
             ]
+        ],
+      testGroup
+        "SQL2003 featureset"
+        [ testGroup
+            "Windowing"
+            [testRowNumberOverWholeResult]
         ]
     ]
 
@@ -560,6 +574,30 @@ testEveryOver = testCase "EVERY" $ do
       rows
         @?= [ (UserId 1, False),
               (UserId 2, False)
+            ]
+
+testRowNumberOverWholeResult :: TestTree
+testRowNumberOverWholeResult = testCase "ROW_NUMBERS() over entire result set" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+  withTestDb users [] [] $ \conn ->
+    do
+      rows <-
+        runBeamDuckDBDebugString putStrLn conn $
+          runSelectReturningList $
+            -- Returning the row index over all users
+            select $
+              withWindow_
+                (\_ -> frame_ noPartition_ noOrder_ noBounds_)
+                (\u w -> (_userName u, rowNumber_ `over_` w))
+                (all_ (_dbUsers testDb))
+      rows
+        @?= [ ("Alice", 1 :: Int32),
+              ("Bob", 2),
+              ("Charlie", 3)
             ]
 
 data UserT f = User
