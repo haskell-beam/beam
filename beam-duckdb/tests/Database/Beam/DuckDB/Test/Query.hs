@@ -33,12 +33,19 @@ import Database.Beam
     anyOver_,
     as_,
     asc_,
+    avgOver_,
+    bounds_,
     cast_,
     concat_,
+    countAll_,
     dbModification,
     defaultDbSettings,
+    desc_,
+    double,
     everyOver_,
+    filterWhere_,
     filter_,
+    firstValue_,
     frame_,
     fromMaybe_,
     group_,
@@ -46,13 +53,18 @@ import Database.Beam
     insert,
     insertValues,
     isTrue_,
+    lagWithDefault_,
+    lastValue_,
     leftJoin_,
     modifyTableFields,
     noBounds_,
     noOrder_,
     noPartition_,
+    nrows_,
     orderBy_,
+    orderPartitionBy_,
     over_,
+    partitionBy_,
     references_,
     related_,
     reuse,
@@ -64,8 +76,10 @@ import Database.Beam
     selecting,
     someOver_,
     sqlBool_,
+    sumOver_,
     sum_,
     tableModification,
+    unbounded_,
     union_,
     varchar,
     withDbModification,
@@ -73,7 +87,7 @@ import Database.Beam
     (<.),
     (>=.),
   )
-import Database.Beam.DuckDB (DuckDB, runBeamDuckDB, runBeamDuckDBDebugString)
+import Database.Beam.DuckDB (DuckDB, runBeamDuckDB)
 import Database.DuckDB.Simple (Connection, execute_, withConnection)
 import Hedgehog (Gen, annotate, evalIO, forAll, property, (===))
 import qualified Hedgehog.Gen as Gen
@@ -128,7 +142,23 @@ tests =
         "SQL2003 featureset"
         [ testGroup
             "Windowing"
-            [testRowNumberOverWholeResult]
+            [ testRowNumberOverWholeResult,
+              testRowNumberPartitionedByColumn,
+              testWindowingWithBounds
+            ],
+          testGroup
+            "LAG/LEAD"
+            [testLag, testLead],
+          testGroup
+            "FILTER"
+            [ testFilterWhereCountAll,
+              testFilterWithWindow
+            ],
+          testGroup
+            "FIRST_VALUE/LAST_VALUE"
+            [ testFirstValue,
+              testLastValue
+            ]
         ]
     ]
 
@@ -586,9 +616,8 @@ testRowNumberOverWholeResult = testCase "ROW_NUMBERS() over entire result set" $
   withTestDb users [] [] $ \conn ->
     do
       rows <-
-        runBeamDuckDBDebugString putStrLn conn $
+        runBeamDuckDB conn $
           runSelectReturningList $
-            -- Returning the row index over all users
             select $
               withWindow_
                 (\_ -> frame_ noPartition_ noOrder_ noBounds_)
@@ -599,6 +628,319 @@ testRowNumberOverWholeResult = testCase "ROW_NUMBERS() over entire result set" $
               ("Bob", 2),
               ("Charlie", 3)
             ]
+
+testRowNumberPartitionedByColumn :: TestTree
+testRowNumberPartitionedByColumn = testCase "ROW_NUMBERS() partitioned over column" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 3
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              orderBy_ (\(oid, _, _, _) -> asc_ oid) $
+                withWindow_
+                  ( \o ->
+                      frame_
+                        (partitionBy_ (_orderProductId o))
+                        (orderPartitionBy_ (desc_ (_orderQuantity o)))
+                        noBounds_
+                  )
+                  (\o w -> (_orderId o, _orderProductId o, _orderUserId o, as_ @Int32 (rowNumber_ `over_` w)))
+                  (all_ (_dbOrders testDb))
+      -- We expect two groups of rows.
+      -- One group of rows for product ID 1, one group of rows for product ID 2.
+      -- For each group, the data for orders is considered in descending number of quantity
+      --
+      -- the order of each group is not deterministic.
+      rows @?= [(1, ProductId 1, UserId 1, 1), (2, ProductId 1, UserId 2, 2), (3, ProductId 2, UserId 1, 1)]
+
+testWindowingWithBounds :: TestTree
+testWindowingWithBounds = testCase "3-row moving average" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25
+        ]
+
+      products =
+        [Product 1 "Widget" 999]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 10,
+          Order 2 (UserId 1) (ProductId 1) 5,
+          Order 3 (UserId 2) (ProductId 1) 8,
+          Order 4 (UserId 1) (ProductId 1) 3,
+          Order 5 (UserId 2) (ProductId 1) 7
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              withWindow_
+                ( \o ->
+                    frame_
+                      noPartition_
+                      (orderPartitionBy_ (asc_ (_orderId o)))
+                      (bounds_ (nrows_ 1) (Just (nrows_ 1)))
+                )
+                ( \o w ->
+                    ( _orderId o,
+                      avgOver_ allInGroup_ (cast_ (_orderQuantity o) double) `over_` w
+                    )
+                )
+                (all_ (_dbOrders testDb))
+      rows
+        @?= [ (1, Just 7.5),
+              (2, Just 7.666666666666667),
+              (3, Just 5.333333333333333),
+              (4, Just 6.0),
+              (5, Just 5.0)
+            ]
+
+testLag :: TestTree
+testLag = testCase "LAG" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 3
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              withWindow_
+                (\o -> frame_ noPartition_ (orderPartitionBy_ (asc_ (_orderId o))) noBounds_)
+                ( \o w ->
+                    lagWithDefault_ (_orderQuantity o) (val_ (1 :: Int32)) (val_ 0) `over_` w
+                )
+                (all_ (_dbOrders testDb))
+      -- First row has no predecessor → default 0
+      -- Second row lags to first row's qty (2)
+      -- Third row lags to second row's qty (1)
+      rows @?= [0, 2, 1]
+
+testLead :: TestTree
+testLead = testCase "LEAD" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 3
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              withWindow_
+                (\o -> frame_ noPartition_ (orderPartitionBy_ (asc_ (_orderId o))) noBounds_)
+                ( \o w ->
+                    lagWithDefault_ (_orderQuantity o) (val_ (1 :: Int32)) (val_ 0) `over_` w
+                )
+                (all_ (_dbOrders testDb))
+      -- First leads to second's qty (1)
+      -- Second leads to third's qty (1)
+      -- Third has no successor → default 0
+      rows @?= [0, 2, 1]
+
+testFilterWhereCountAll :: TestTree
+testFilterWhereCountAll = testCase "COUNT(*) FILTER (WHERE ... )" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 3
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn
+          $ runSelectReturningList
+          $ select
+          $ aggregate_
+            ( \o ->
+                ( group_ (_orderUserId o),
+                  as_ @Int32 $ countAll_,
+                  as_ @Int32 $ countAll_ `filterWhere_` (_orderQuantity o >. val_ 1)
+                )
+            )
+          $ all_ (_dbOrders testDb)
+      -- Alice (uid 1): 2 total orders, 2 with qty > 1
+      -- Bob (uid 2): 1 total order, 0 with qty > 1
+      rows @?= [(UserId 1, 2, 2), (UserId 2, 1, 0)]
+
+testFilterWithWindow :: TestTree
+testFilterWithWindow = testCase "FILTER with window function" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              withWindow_
+                (\o -> frame_ noPartition_ (orderPartitionBy_ (asc_ (_orderId o))) noBounds_)
+                ( \o w ->
+                    ( _orderId o,
+                      fromMaybe_
+                        (val_ 0)
+                        ( ( sumOver_ allInGroup_ (_orderQuantity o)
+                              `filterWhere_` (_orderQuantity o >. val_ 1)
+                          )
+                            `over_` w
+                        )
+                    )
+                )
+                (all_ (_dbOrders testDb))
+      -- Only order 1 (qty=2) passes the filter
+      -- Running filtered sum: 2, 2, 2
+      let sorted = sort rows
+      map snd sorted @?= [2, 2, 2]
+
+testFirstValue :: TestTree
+testFirstValue = testCase "FIRST_VALUE" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              orderBy_ (\(oid, _, _) -> desc_ oid) $
+                withWindow_
+                  ( \o ->
+                      frame_
+                        (partitionBy_ (_orderProductId o))
+                        (orderPartitionBy_ (asc_ (_orderQuantity o)))
+                        (bounds_ unbounded_ (Just unbounded_))
+                  )
+                  ( \o w ->
+                      ( _orderId o,
+                        _orderProductId o,
+                        firstValue_ (_orderQuantity o) `over_` w
+                      )
+                  )
+                  (all_ (_dbOrders testDb))
+      -- Widget (pid 1): quantities 1, 2 → first_value is 1 for both
+      -- Gadget (pid 2): quantity 1 → first_value is 1
+      rows @?= [(3, ProductId 2, 1), (2, ProductId 1, 1), (1, ProductId 1, 1)]
+
+testLastValue :: TestTree
+testLastValue = testCase "LAST_VALUE" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+
+      products =
+        [ Product 1 "Widget" 999,
+          Product 2 "Gadget" 2999
+        ]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 2,
+          Order 2 (UserId 2) (ProductId 1) 1,
+          Order 3 (UserId 1) (ProductId 2) 1
+        ]
+  withTestDb users products orders $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn $
+          runSelectReturningList $
+            select $
+              orderBy_ (\(oid, _, _) -> asc_ oid) $
+                withWindow_
+                  ( \o ->
+                      frame_
+                        (partitionBy_ (_orderProductId o))
+                        (orderPartitionBy_ (asc_ (_orderQuantity o)))
+                        -- Must use UNBOUNDED FOLLOWING to see the actual last value,
+                        -- otherwise the default frame ends at CURRENT ROW.
+                        (bounds_ unbounded_ (Just unbounded_))
+                  )
+                  ( \o w ->
+                      ( _orderId o,
+                        _orderProductId o,
+                        lastValue_ (_orderQuantity o) `over_` w
+                      )
+                  )
+                  (all_ (_dbOrders testDb))
+      -- Widget (pid 1): quantities 1, 2 → last_value is 2 for both
+      rows @?= [(1, ProductId 1, 2), (2, ProductId 1, 2), (3, ProductId 2, 1)]
 
 data UserT f = User
   { _userId :: Columnar f Int32,
