@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -25,9 +26,12 @@ where
 import Data.Bifunctor (second)
 import Data.Coerce (coerce)
 import Data.Int (Int16, Int32, Int64, Int8)
+import Data.Scientific (Scientific)
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as Lazy
+import Data.Time (Day, LocalTime, TimeOfDay, UTCTime)
 import Data.Word (Word16, Word32, Word64, Word8)
 import Database.Beam.Backend
   ( HasSqlValueSyntax (..),
@@ -75,9 +79,9 @@ import Database.Beam.Backend
     IsSql99RecursiveCommonTableExpressionSelectSyntax (..),
     SqlNull (..),
   )
-import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, emit, emitChar, emitIntegral, emitRealFloat, emitValue, parens, quotedIdentifier, sepBy, spaces)
+import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, emit, emitChar, emitIntegral, emitRealFloat, emitScientific, emitValue, parens, quotedIdentifier, sepBy, spaces)
 import Database.Beam.Migrate.Serialization (BeamSerializedDataType)
-import Database.DuckDB.Simple (Null (Null), ToField)
+import Database.DuckDB.Simple (Null (Null))
 
 newtype DuckDBCommandSyntax = DuckDBCommandSyntax {fromDuckDBSyntax :: DuckDBSyntax}
 
@@ -388,6 +392,9 @@ instance HasSqlValueSyntax DuckDBValueSyntax Float where
 instance HasSqlValueSyntax DuckDBValueSyntax Double where
   sqlValueSyntax f = DuckDBValueSyntax (emitRealFloat f)
 
+instance HasSqlValueSyntax DuckDBValueSyntax Scientific where
+  sqlValueSyntax f = DuckDBValueSyntax (emitScientific f)
+
 instance HasSqlValueSyntax DuckDBValueSyntax Bool where
   sqlValueSyntax = DuckDBValueSyntax . emitValue
 
@@ -400,7 +407,19 @@ instance HasSqlValueSyntax DuckDBValueSyntax String where
 instance HasSqlValueSyntax DuckDBValueSyntax Text where
   sqlValueSyntax = DuckDBValueSyntax . emitValue
 
-instance {-# OVERLAPPABLE #-} (ToField a, Eq a) => HasSqlValueSyntax DuckDBValueSyntax a where
+instance HasSqlValueSyntax DuckDBValueSyntax Lazy.Text where
+  sqlValueSyntax = sqlValueSyntax . Lazy.toStrict
+
+instance HasSqlValueSyntax DuckDBValueSyntax Day where
+  sqlValueSyntax = DuckDBValueSyntax . emitValue
+
+instance HasSqlValueSyntax DuckDBValueSyntax TimeOfDay where
+  sqlValueSyntax = DuckDBValueSyntax . emitValue
+
+instance HasSqlValueSyntax DuckDBValueSyntax LocalTime where
+  sqlValueSyntax = DuckDBValueSyntax . emitValue
+
+instance HasSqlValueSyntax DuckDBValueSyntax UTCTime where
   sqlValueSyntax = DuckDBValueSyntax . emitValue
 
 instance (HasSqlValueSyntax DuckDBValueSyntax x) => HasSqlValueSyntax DuckDBValueSyntax (Maybe x) where

@@ -29,29 +29,6 @@
           ...
         }:
         let
-          chinookPostgresRaw = pkgs.fetchurl {
-            url = "https://raw.githubusercontent.com/lerocha/chinook-database/e7e6d5f008e35d3f89d8b8a4f8d38e3bfa7e34bd/ChinookDatabase/DataSources/Chinook_PostgreSql.sql";
-            sha256 = "sha256-CVQAyq0WlAn7+0d72nsm9krVDLtMA1QcgHJhwdttNC4=";
-          };
-
-          chinookPostgres =
-            pkgs.runCommand "chinook-postgres"
-              {
-                nativeBuildInputs = if pkgs.stdenv.isDarwin then [ pkgs.libiconv ] else [ pkgs.glibc.bin ];
-              }
-              ''
-                iconv -f ISO-8859-2 -t UTF-8 ${chinookPostgresRaw} > $out
-              '';
-
-          chinookSqliteRaw = pkgs.fetchurl {
-            url = "https://raw.githubusercontent.com/lerocha/chinook-database/e7e6d5f008e35d3f89d8b8a4f8d38e3bfa7e34bd/ChinookDatabase/DataSources/Chinook_Sqlite.sql";
-            sha256 = "sha256-Zu+IP8fhmYwpgofjtMJLvL8jFRlKJ43mjLANivq6Q9s=";
-          };
-
-          chinookSqlite = pkgs.runCommand "chinook-sqlite" { } ''
-            tail -c +4 ${chinookSqliteRaw} > $out
-          '';
-
           pythonEnv = pkgs.python312.withPackages (ps: [
             ps.mkdocs
             ps.mkdocs-material
@@ -143,6 +120,7 @@
                     "mkdocs.yml"
                     "docs"
                     "docs/data"
+                    "docs/data/schemas"
                     "beam-postgres/examples"
                     "beam-postgres/beam-docs.sh"
                     "beam-sqlite/examples"
@@ -175,9 +153,9 @@
               cp docs/data/exams.parquet docs/.beam-query-cache/data/exams.parquet
 
               mkdir -p docs/.beam-query-cache/chinook-data
-              cp ${chinookPostgres} docs/.beam-query-cache/chinook-data/Chinook_PostgreSql.sql
-              cp ${chinookSqlite} docs/.beam-query-cache/chinook-data/Chinook_Sqlite.sql
-              cp beam-duckdb/docs/Chinook.sql docs/.beam-query-cache/chinook-data/Chinook_DuckDB.sql
+              cp docs/data/schemas/Chinook_PostgreSql.sql docs/.beam-query-cache/chinook-data/Chinook_PostgreSql.sql
+              cp docs/data/schemas/Chinook_Sqlite.sql docs/.beam-query-cache/chinook-data/Chinook_Sqlite.sql
+              cp docs/data/schemas/Chinook_DuckDB.sql docs/.beam-query-cache/chinook-data/Chinook_DuckDB.sql
 
               mkdir postgres
               export PGHOST=$(mktemp -d /tmp/pg.XXXXXX)

@@ -18,7 +18,7 @@ The underlying duckdb-ffi needs to link to libduckdb. By default the installatio
 * The duckdb files are in `/usr/lib/duckdb`
 * You're using duckdb 1.4.*
 
-For Linux you can install a blessed version of duckdb in the correct path by cloining the duckdb-hasekll repo and running `make install` in the [duckdb-ffi cbits folder](https://github.com/Tritlo/duckdb-haskell/tree/main/duckdb-ffi/cbits).
+For Linux you can install a blessed version of duckdb in the correct path by cloning the duckdb-haskell repo and running `make install` in the [duckdb-ffi cbits folder](https://github.com/Tritlo/duckdb-haskell/tree/main/duckdb-ffi/cbits).
 
 ## Example
 

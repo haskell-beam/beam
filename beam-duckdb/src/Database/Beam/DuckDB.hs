@@ -20,6 +20,7 @@
 module Database.Beam.DuckDB
   ( -- * Executing DuckDB queries
     runBeamDuckDB,
+
     -- ** Executing DuckDB queries with debugging
     runBeamDuckDBDebug,
     runBeamDuckDBDebugString,
@@ -175,7 +176,7 @@ instance (FromBackendRow DuckDB a) => FromRow (BeamDuckDBRow a) where
                     )
                 )
           Just (UnexpectedNull {}) ->
-            Just (SomeException (BeamRowReadError col ColumnUnexpectedNull))
+            Just (SomeException (BeamRowReadError {brreColumn = col, brreError = ColumnUnexpectedNull}))
           Just
             ( Incompatible
                 { errSQLType = typeString,

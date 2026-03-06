@@ -8,6 +8,7 @@ module Database.Beam.DuckDB.Syntax.Builder
     emit,
     emitIntegral,
     emitRealFloat,
+    emitScientific,
     emit',
     emitValue,
     spaces,
@@ -31,6 +32,8 @@ import qualified Data.Text.Lazy.Builder.RealFloat as Builder
 import Database.Beam.Backend (Sql92DisplaySyntax (..))
 import Database.DuckDB.Simple (ToField (toField))
 import Database.DuckDB.Simple.ToField (renderFieldBinding)
+import Data.Scientific (Scientific)
+import qualified Data.Text.Lazy.Builder.Scientific as Builder.Scientific
 
 data SomeField = forall a. (ToField a, Eq a) => SomeField a
 
@@ -56,6 +59,9 @@ emitIntegral i = DuckDBSyntax (const (Builder.decimal i)) mempty
 
 emitRealFloat :: (RealFloat f) => f -> DuckDBSyntax
 emitRealFloat f = DuckDBSyntax (const (Builder.realFloat f)) mempty
+
+emitScientific :: Scientific -> DuckDBSyntax
+emitScientific s = DuckDBSyntax (const (Builder.Scientific.scientificBuilder s)) mempty
 
 emit' :: (Show a) => a -> DuckDBSyntax
 emit' s = DuckDBSyntax (const (Builder.fromString (show s))) mempty
