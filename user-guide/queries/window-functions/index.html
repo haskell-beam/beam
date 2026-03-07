@@ -1623,6 +1623,10 @@ customer, use <code>withWindow_</code> as follows.</p>
             <a href="#tab-0-Postgres" aria-controls="tab-0-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
+        <li class="nav-item">
+            <a href="#tab-0-Duckdb" aria-controls="tab-0-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
+        </li>
+    
         </ul>
     
         <div class="tab-content">
@@ -1651,6 +1655,24 @@ customer, use <code>withWindow_</code> as follows.</p>
 
         </div>
     
+        <div role="tabpanel" class="tab-pane " id="tab-0-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res9&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
+
+<span class="c1">-- With values: []</span>
+</code></pre></div>
+
+        </div>
+    
         </div>
     
                 </div>
@@ -1668,6 +1690,10 @@ customer <em>and</em> the overall ranking,</p>
     
         <li class="nav-item">
             <a href="#tab-1-Postgres" aria-controls="tab-1-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-1-Duckdb" aria-controls="tab-1-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -1702,6 +1728,27 @@ customer <em>and</em> the overall ranking,</p>
 
         </div>
     
+        <div role="tabpanel" class="tab-pane " id="tab-1-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="n">RANK</span><span class="p">()</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">                    </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">ASC</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res9&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="n">RANK</span><span class="p">()</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span>
+<span class="w">                    </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">ASC</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res10&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
+
+<span class="c1">-- With values: []</span>
+</code></pre></div>
+
+        </div>
+    
         </div>
     
                 </div>
@@ -1727,6 +1774,10 @@ For example, to get the sum of the totals of the invoices, by rank.</p>
     
         <li class="nav-item">
             <a href="#tab-2-Postgres" aria-controls="tab-2-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-2-Duckdb" aria-controls="tab-2-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -1761,6 +1812,30 @@ For example, to get the sum of the totals of the invoices, by rank.</p>
 <span class="w">   </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
 <span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span>
 <span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span><span class="w"> </span><span class="k">ASC</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-2-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">SUM</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res8&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span>
+<span class="k">FROM</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="n">RANK</span><span class="p">()</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span>
+<span class="w">                       </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">ASC</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res9&quot;</span>
+<span class="w">   </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span>
+<span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span><span class="w"> </span><span class="k">ASC</span><span class="p">;</span>
+
+<span class="c1">-- With values: []</span>
 </code></pre></div>
 
         </div>
@@ -1865,6 +1940,10 @@ tracks. We can do this by windowing over the album ID.</p>
             <a href="#tab-4-Postgres" aria-controls="tab-4-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
+        <li class="nav-item">
+            <a href="#tab-4-Duckdb" aria-controls="tab-4-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
+        </li>
+    
         </ul>
     
         <div class="tab-content">
@@ -1890,6 +1969,20 @@ tracks. We can do this by windowing over the album ID.</p>
 <span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Track&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
 <span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">,</span>
 <span class="w">         </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-4-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">MAX</span><span class="p">(</span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">))</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Track&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">,</span>
+<span class="w">         </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span><span class="p">;</span>
+
+<span class="c1">-- With values: []</span>
 </code></pre></div>
 
         </div>
@@ -1920,6 +2013,10 @@ the window, we use <code>filter_'</code> and the nullable ordering operators.</p
     
         <li class="nav-item">
             <a href="#tab-5-Postgres" aria-controls="tab-5-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-5-Duckdb" aria-controls="tab-5-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -1959,6 +2056,26 @@ the window, we use <code>filter_'</code> and the nullable ordering operators.</p
 
         </div>
     
+        <div role="tabpanel" class="tab-pane " id="tab-5-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res3&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span>
+<span class="k">FROM</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="k">MAX</span><span class="p">(</span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">))</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span>
+<span class="w">   </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Track&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+<span class="w">   </span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;AlbumId&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;GenreId&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res3&quot;</span><span class="p">);</span>
+
+<span class="c1">-- With values: []</span>
+</code></pre></div>
+
+        </div>
+    
         </div>
     
                 </div>
@@ -1993,18 +2110,22 @@ calculation.</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-16-Haskell" aria-controls="tab-16-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-22-Haskell" aria-controls="tab-22-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-16-Postgres" aria-controls="tab-16-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-22-Postgres" aria-controls="tab-22-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-22-Duckdb" aria-controls="tab-22-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-16-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-22-Haskell">
             <div class="highlight"><pre><span></span><code><span class="nf">withWindow_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="n">i</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="n">frame_</span><span class="w"> </span><span class="n">noPartition_</span><span class="w"> </span><span class="n">noOrder_</span><span class="w"> </span><span class="n">noBounds_</span>
 <span class="w">                   </span><span class="p">,</span><span class="w"> </span><span class="n">frame_</span><span class="w"> </span><span class="p">(</span><span class="n">partitionBy_</span><span class="w"> </span><span class="p">(</span><span class="n">invoiceCustomer</span><span class="w"> </span><span class="n">i</span><span class="p">))</span><span class="w"> </span><span class="n">noOrder_</span><span class="w"> </span><span class="n">noBounds_</span>
 <span class="w">                   </span><span class="p">,</span><span class="w"> </span><span class="n">frame_</span><span class="w"> </span><span class="n">noPartition_</span><span class="w"> </span><span class="p">(</span><span class="n">orderPartitionBy_</span><span class="w"> </span><span class="p">(</span><span class="n">asc_</span><span class="w"> </span><span class="p">(</span><span class="n">invoiceTotal</span><span class="w"> </span><span class="n">i</span><span class="p">)))</span><span class="w"> </span><span class="n">noBounds_</span>
@@ -2020,7 +2141,7 @@ calculation.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-16-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-22-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
 <span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
 <span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
@@ -2037,6 +2158,29 @@ calculation.</p>
 <span class="w">       </span><span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
 <span class="w">                               </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">ASC</span><span class="w"> </span><span class="k">ROWS</span><span class="w"> </span><span class="k">BETWEEN</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="n">PRECEDING</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="n">FOLLOWING</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res12&quot;</span>
 <span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-22-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res9&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res10&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="n">RANK</span><span class="p">()</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">                    </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">ASC</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res11&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">                               </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">ASC</span><span class="w"> </span><span class="k">ROWS</span><span class="w"> </span><span class="k">BETWEEN</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="n">PRECEDING</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="n">FOLLOWING</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res12&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
+
+<span class="c1">-- With values: []</span>
 </code></pre></div>
 
         </div>

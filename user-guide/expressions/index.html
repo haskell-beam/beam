@@ -2480,7 +2480,7 @@ functions, which correspond to the <code>ANY</code> and <code>ALL</code> syntax 
 and <code>allOf_</code> take <code>Q</code> expressions (representing a query) and <code>anyIn_</code> and
 <code>allIn_</code> take lists of expressions.</p>
 <p>Quantified comparisons are always performed according to SQL semantics, meaning
-that they return values of type <code>SqlBOol</code>. This is because proper NULL handling
+that they return values of type <code>SqlBool</code>. This is because proper NULL handling
 with quantified comparisons cannot be expressed in a reasonable way. Use the
 functions described in <a href="#sql-like-comparisons">the section above</a>.</p>
 <p>For example, to get all invoice lines containing tracks longer than 3 minutes:</p>
@@ -2836,8 +2836,6 @@ digit of the quantity is 2:</p>
 <h2 id="subqueries">Subqueries</h2>
 <p>When a query is used in place of an expression it's called a <em>subquery</em>. A query has the type <code>Q</code> in beam, while a beam expression has the type <code>QGenExpr</code>. Therefore, when using subqueries in beam, a function is needed to convert a <code>Q</code> (query) into a <code>QGenExpr</code> (expression). This function is called <code>subquery_</code>. Using <code>subquery_</code>, a query can be used where an expression is expected.</p>
 <p>For example, suppose we wish to offer a discount on all "short" tracks, where a track is considered short if its duration is less than the average track duration for all tracks. This is achieved using an update in which the predicate contains a subquery that calculates the average track duration.</p>
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
-
 <p>
                 <div class="code-nav-container">
                     
@@ -2853,6 +2851,10 @@ digit of the quantity is 2:</p>
     
         <li class="nav-item">
             <a href="#tab-8-Sqlite" aria-controls="tab-8-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-8-Duckdb" aria-controls="tab-8-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -2888,6 +2890,18 @@ digit of the quantity is 2:</p>
 <span class="w">                           </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Track&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">));</span>
 
 <span class="c1">-- With values: [SQLText &quot;2.0&quot;];</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-8-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">UPDATE</span><span class="w"> </span><span class="ss">&quot;Track&quot;</span>
+<span class="k">SET</span><span class="w"> </span><span class="ss">&quot;UnitPrice&quot;</span><span class="o">=</span><span class="p">(</span><span class="ss">&quot;UnitPrice&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;Milliseconds&quot;</span><span class="p">)</span><span class="o">&lt;</span><span class="p">(</span>
+<span class="w">                          </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="k">AVG</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Milliseconds&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span>
+<span class="w">                           </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Track&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">));</span>
+
+<span class="c1">-- With values: [];</span>
 </code></pre></div>
 
         </div>

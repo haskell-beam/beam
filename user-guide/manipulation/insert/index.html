@@ -1892,8 +1892,6 @@ time using <code>getCurrentTime</code> and then use this to construct an explici
 value, but this may cause synchronization issues for our application. To do
 this, beam allows us to specify arbitrary expressions as a source of values
 using the <code>insertExpressions</code> function.</p>
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
-
 <p>
                 <div class="code-nav-container">
                     
@@ -1909,6 +1907,10 @@ using the <code>insertExpressions</code> function.</p>
     
         <li class="nav-item">
             <a href="#tab-1-Sqlite" aria-controls="tab-1-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-1-Duckdb" aria-controls="tab-1-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -1955,7 +1957,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">800</span><span class="p">);</span>
 
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-04 23:46:28.724148, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-07 13:10:33.273541, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -1987,7 +1989,39 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
 
 <span class="c1">-- With values: [SQLInteger 800];</span>
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-04 23:46:30, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-07 13:10:34, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-1-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="p">(</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;InvoiceDate&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingAddress&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingCity&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingState&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingCountry&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;Total&quot;</span><span class="p">)</span>
+<span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="mi">800</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="mi">1000</span><span class="p">.</span><span class="mi">0</span><span class="p">);</span>
+
+<span class="c1">-- With values: [&quot;123 My Street&quot;,&quot;Buenos Noches&quot;,&quot;Rio&quot;,&quot;Mozambique&quot;,&quot;ABCDEF&quot;];</span>
+
+<span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceDate&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingAddress&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCity&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingState&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingCountry&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Total&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res8&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="mi">800</span><span class="p">);</span>
+
+<span class="c1">-- With values: [];</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-07 00:00:00, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2121,8 +2155,6 @@ use <code>insertExpressions_</code> using the <code>default_</code> expression f
 you want to use the default value for.</p>
 <p>For example, the query below adds a new invoice asking the database to assign a
 new id.</p>
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
-
 <p>
                 <div class="code-nav-container">
                     
@@ -2134,6 +2166,10 @@ new id.</p>
     
         <li class="nav-item">
             <a href="#tab-3-Postgres" aria-controls="tab-3-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-3-Duckdb" aria-controls="tab-3-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -2165,6 +2201,23 @@ new id.</p>
 
         </div>
     
+        <div role="tabpanel" class="tab-pane " id="tab-3-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="p">(</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;InvoiceDate&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingAddress&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingCity&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingState&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingCountry&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;Total&quot;</span><span class="p">)</span>
+<span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="k">DEFAULT</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="mi">1000</span><span class="p">.</span><span class="mi">0</span><span class="p">);</span>
+
+<span class="c1">-- With values: [&quot;123 My Street&quot;,&quot;Buenos Noches&quot;,&quot;Rio&quot;,&quot;Mozambique&quot;,&quot;ABCDEF&quot;];</span>
+</code></pre></div>
+
+        </div>
+    
         </div>
     
                 </div>
@@ -2185,7 +2238,7 @@ provide an instance of <code>MonadBeamInsertReturning</code>. In order to use th
 you'll need to explicitly import
 <code>Database.Beam.Backend.SQL.BeamExtensions</code>. Below, we've imported this module
 qualified.</p>
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
+<!-- DuckDB doesn't yet support insert returning -->
 
 <p>
                 <div class="code-nav-container">
@@ -2241,7 +2294,7 @@ qualified.</p>
 <span class="w">                                                                                                                            </span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="p">,</span>
 <span class="w">                                                                                                                            </span><span class="ss">&quot;Total&quot;</span><span class="p">;</span>
 
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 501}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-04 23:46:37.073723, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 501}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-07 13:10:44.523923, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2266,7 +2319,7 @@ qualified.</p>
 <span class="w">                                                          </span><span class="ss">&quot;Total&quot;</span><span class="p">;</span>
 
 <span class="c1">-- With values: [SQLInteger 1,SQLText &quot;123 My Street&quot;,SQLText &quot;Buenos Noches&quot;,SQLText &quot;Rio&quot;,SQLText &quot;Mozambique&quot;,SQLText &quot;ABCDEF&quot;,SQLText &quot;1000.0&quot;];</span>
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-04 23:46:38, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-03-07 13:10:46, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2356,11 +2409,11 @@ as your data. If not, you'll get a compile time error.</p>
 <span class="k">LIMIT</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
 
 <span class="c1">-- Output: Inserted playlists</span>
-<span class="c1">-- Output:   - Playlist {playlistId = 1001, playlistName = Just &quot;Lu\237s&#39;s Playlist&quot;}</span>
+<span class="c1">-- Output:   - Playlist {playlistId = 1001, playlistName = Just &quot;Lu\65533s&#39;s Playlist&quot;}</span>
 <span class="c1">-- Output:   - Playlist {playlistId = 1002, playlistName = Just &quot;Leonie&#39;s Playlist&quot;}</span>
-<span class="c1">-- Output:   - Playlist {playlistId = 1003, playlistName = Just &quot;Fran\231ois&#39;s Playlist&quot;}</span>
-<span class="c1">-- Output:   - Playlist {playlistId = 1004, playlistName = Just &quot;Bj\345rn&#39;s Playlist&quot;}</span>
-<span class="c1">-- Output:   - Playlist {playlistId = 1005, playlistName = Just &quot;Franti\154ek&#39;s Playlist&quot;}</span>
+<span class="c1">-- Output:   - Playlist {playlistId = 1003, playlistName = Just &quot;Fran\65533ois&#39;s Playlist&quot;}</span>
+<span class="c1">-- Output:   - Playlist {playlistId = 1004, playlistName = Just &quot;Bj\65533rn&#39;s Playlist&quot;}</span>
+<span class="c1">-- Output:   - Playlist {playlistId = 1005, playlistName = Just &quot;Franti\65533ek&#39;s Playlist&quot;}</span>
 <span class="c1">-- Output:   - Playlist {playlistId = 1006, playlistName = Just &quot;Helena&#39;s Playlist&quot;}</span>
 <span class="c1">-- Output:   - Playlist {playlistId = 1007, playlistName = Just &quot;Astrid&#39;s Playlist&quot;}</span>
 <span class="c1">-- Output:   - Playlist {playlistId = 1008, playlistName = Just &quot;Daan&#39;s Playlist&quot;}</span>
@@ -2438,8 +2491,6 @@ SQL tool used in these cases is limiting the inserted data to specific
 columns. For example, suppose we want to insert new invoices for every customer
 with today's date. We can use the <code>insertOnly</code> function to project which field's
 are being inserted.</p>
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
-
 <p>
                 <div class="code-nav-container">
                     
@@ -2455,6 +2506,10 @@ are being inserted.</p>
     
         <li class="nav-item">
             <a href="#tab-6-Sqlite" aria-controls="tab-6-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-6-Duckdb" aria-controls="tab-6-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -2516,6 +2571,30 @@ are being inserted.</p>
 <span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
 
 <span class="c1">-- With values: [SQLText &quot;10.0&quot;];</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-6-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;InvoiceDate&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingAddress&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingCity&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingState&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingCountry&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="ss">&quot;Total&quot;</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="k">CURRENT_TIMESTAMP</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">                            </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Address&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">                            </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;City&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+<span class="w">                            </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;State&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+<span class="w">                            </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Country&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+<span class="w">                            </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;PostalCode&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+<span class="w">                            </span><span class="mi">10</span><span class="p">.</span><span class="mi">0</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
+
+<span class="c1">-- With values: [];</span>
 </code></pre></div>
 
         </div>
@@ -2849,22 +2928,22 @@ customers from one state, use <code>conflictingFieldsWhere</code>.</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-38-Haskell" aria-controls="tab-38-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-41-Haskell" aria-controls="tab-41-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-38-Postgres" aria-controls="tab-38-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-41-Postgres" aria-controls="tab-41-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-38-Sqlite" aria-controls="tab-38-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+            <a href="#tab-41-Sqlite" aria-controls="tab-41-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-38-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-41-Haskell">
             <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span><span class="w"> </span><span class="p">(</span><span class="kt">BeamHasInsertOnConflict</span><span class="p">(</span><span class="o">..</span><span class="p">))</span>
 <span class="kr">let</span>
 <span class="w">  </span><span class="n">newCustomer</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Customer</span><span class="w"> </span><span class="mi">42</span><span class="w"> </span><span class="s">&quot;John&quot;</span><span class="w"> </span><span class="s">&quot;Doe&quot;</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="p">(</span><span class="kt">Address</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="s">&quot;Street&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="s">&quot;City&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="s">&quot;State&quot;</span><span class="p">)</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="kt">Nothing</span><span class="p">)</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="s">&quot;john.doe@johndoe.com&quot;</span><span class="w"> </span><span class="n">nothing_</span>
@@ -2877,7 +2956,7 @@ customers from one state, use <code>conflictingFieldsWhere</code>.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-38-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-41-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;FirstName&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;LastName&quot;</span><span class="p">,</span>
@@ -2900,7 +2979,7 @@ customers from one state, use <code>conflictingFieldsWhere</code>.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-38-Sqlite">
+        <div role="tabpanel" class="tab-pane " id="tab-41-Sqlite">
             <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;FirstName&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;LastName&quot;</span><span class="p">,</span>
