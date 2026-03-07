@@ -1,12 +1,15 @@
 # Revision history for beam-duckdb
 
-## Unreleased
+## 0.2.0.0 -- Unreleased
 
 * Support for the SQL99 feature set, including support for regex matching via `similarTo_` and common table expressions
-  (both non-recursive and recursive).
+  (both non-recursive and recursive);
+* Support for the SQL2003 feature set, including OLAP functionality such as windowed aggregation and `FILTER`;
 * Exposed the `DataSource` type, but without constructors. Use `parquet`, `csv`, or any of the other
-  helper functions to construct a `DataSource`.
+  helper functions to construct a `DataSource`;
 * Fixed an issue where the SQL queries generated via `allIn_` and `anyIn_` were not supported by DuckDB.
+* Fixed an issue with `HasSqlValueSyntax DuckDB` instances overlapping. Users must now derive instances manually for
+  custom types. This is a breaking change.
 
 ## 0.1.1.0 -- 2026-03-04
 

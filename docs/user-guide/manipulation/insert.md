@@ -51,10 +51,9 @@ value, but this may cause synchronization issues for our application. To do
 this, beam allows us to specify arbitrary expressions as a source of values
 using the `insertExpressions` function.
 
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml !on:DuckDB
+!example chinookdml
 runInsert $ insert (invoice chinookDb) $
   insertExpressions [ Invoice (val_ 800) (CustomerId (val_ 1)) currentTimestamp_
                               (val_ (Address (Just "123 My Street") (Just "Buenos Noches") (Just "Rio") (Just "Mozambique") (Just "ABCDEF")))
@@ -100,10 +99,9 @@ you want to use the default value for.
 For example, the query below adds a new invoice asking the database to assign a
 new id.
 
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml !on:Sqlite !on:DuckDB
+!example chinookdml !on:Sqlite
 runInsert $ insert (invoice chinookDb) $
   insertExpressions [ Invoice default_ -- Ask the database to give us a default id
                               (val_ (CustomerId 1)) currentTimestamp_
@@ -128,7 +126,7 @@ you'll need to explicitly import
 `Database.Beam.Backend.SQL.BeamExtensions`. Below, we've imported this module
 qualified.
 
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
+<!-- DuckDB doesn't yet support insert returning -->
 !beam-query
 ```haskell
 !example chinookdml !on:DuckDB
@@ -198,10 +196,9 @@ columns. For example, suppose we want to insert new invoices for every customer
 with today's date. We can use the `insertOnly` function to project which field's
 are being inserted.
 
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml !on:DuckDB
+!example chinookdml
 
 runInsert $
   insertOnly (invoice chinookDb)

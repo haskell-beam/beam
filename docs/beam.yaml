@@ -86,9 +86,9 @@ backends:
       docsWithTransaction = withTransaction
     supports:
       - utf8
-      # - t611
+      - t611
       - outer-join
-      # - window
+      - window
       - intersect
       - except
       - cte

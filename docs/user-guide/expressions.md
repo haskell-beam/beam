@@ -160,7 +160,7 @@ and `allOf_` take `Q` expressions (representing a query) and `anyIn_` and
 
 
 Quantified comparisons are always performed according to SQL semantics, meaning
-that they return values of type `SqlBOol`. This is because proper NULL handling
+that they return values of type `SqlBool`. This is because proper NULL handling
 with quantified comparisons cannot be expressed in a reasonable way. Use the
 functions described in [the section above](#sql-like-comparisons).
 
@@ -233,10 +233,9 @@ When a query is used in place of an expression it's called a *subquery*. A query
 
 For example, suppose we wish to offer a discount on all "short" tracks, where a track is considered short if its duration is less than the average track duration for all tracks. This is achieved using an update in which the predicate contains a subquery that calculates the average track duration.
 
-<!-- DuckDB requires a ToField Scientific instance for the following example to compile -->
 !beam-query
 ```haskell
-!example chinookdml !on:DuckDB
+!example chinookdml
 runUpdate $ update (track chinookDb)
   (\track' -> trackUnitPrice track' <-. current_ (trackUnitPrice track') / 2)
   (\track' ->
