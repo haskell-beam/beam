@@ -100,7 +100,7 @@ print bestScore
 Note the one difference: instead of pulling all rows using `all_` (for a database table),
 or `allFromView_` (for a database view), we use `allFromDataSource_`. That's the only difference!
 
-## Apache Iceberg
+### Apache Iceberg
 
 Apache Iceberg is an open-source format for *large* analytics tables.
 
@@ -128,7 +128,7 @@ authentication, which is not handled by `beam-duckdb`).
 
 All queries work just as before, provided you use `allFromDataSource_` as we did above.
 
-## CSV
+### CSV
 
 Finally, DuckDB supports loading data from comma-separated-value (CSV) files.
 
