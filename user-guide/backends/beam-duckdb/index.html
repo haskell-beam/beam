@@ -1333,12 +1333,7 @@
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
+          <li class="md-nav__item">
   <a href="#apache-iceberg" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1348,8 +1343,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#csv" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1357,6 +1352,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1600,12 +1600,7 @@
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
+          <li class="md-nav__item">
   <a href="#apache-iceberg" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1615,8 +1610,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#csv" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1624,6 +1619,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1760,7 +1760,7 @@ example, to fetch the maximum exam score:</p>
     
         <div role="tabpanel" class="tab-pane " id="tab-0-Sql">
             <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="k">MAX</span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;score&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span>
-<span class="k">FROM</span><span class="w"> </span><span class="n">read_parquet</span><span class="p">(</span><span class="s1">&#39;/build/66mwag02g3r3kaws0c4dzc41bb9nhcpg-source/docs/.beam-query-cache/data/exams.parquet&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">read_parquet</span><span class="p">(</span><span class="s1">&#39;/build/p90w4f48p8sw788ak3fcwwsrb9rpjp07-source/docs/.beam-query-cache/data/exams.parquet&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
 
 <span class="c1">-- With values: []</span>
 </code></pre></div>
@@ -1773,7 +1773,7 @@ example, to fetch the maximum exam score:</p>
                     </p>
 <p>Note the one difference: instead of pulling all rows using <code>all_</code> (for a database table),
 or <code>allFromView_</code> (for a database view), we use <code>allFromDataSource_</code>. That's the only difference!</p>
-<h2 id="apache-iceberg">Apache Iceberg</h2>
+<h3 id="apache-iceberg">Apache Iceberg</h3>
 <p>Apache Iceberg is an open-source format for <em>large</em> analytics tables.</p>
 <p>Assume that we have a large Iceberg table, with the same <code>ExamT</code> schema as our Parquet example above. We simply swap
 out the use of <code>parquet</code> in the example above with <code>icebergTable</code>:</p>
@@ -1795,7 +1795,7 @@ out the use of <code>parquet</code> in the example above with <code>icebergTable
 <p>In this case, the table data is stored in an Amazon S3 bucket (assuming that you have set up the appropriate
 authentication, which is not handled by <code>beam-duckdb</code>).</p>
 <p>All queries work just as before, provided you use <code>allFromDataSource_</code> as we did above.</p>
-<h2 id="csv">CSV</h2>
+<h3 id="csv">CSV</h3>
 <p>Finally, DuckDB supports loading data from comma-separated-value (CSV) files.</p>
 <p>Assume that we have multiple CSV files, with the same <code>ExamT</code> schema as our examples above. Each file
 has a header line:</p>
