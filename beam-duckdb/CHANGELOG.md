@@ -1,6 +1,6 @@
 # Revision history for beam-duckdb
 
-## 0.2.0.0 -- Unreleased
+## 0.2.0.0 -- 2026-03-07
 
 * Support for the SQL99 feature set, including support for regex matching via `similarTo_` and common table expressions
   (both non-recursive and recursive);
