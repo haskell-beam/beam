@@ -9,6 +9,7 @@ author:             Laurent P. René de Cotret
 maintainer:         laurent.decotret@outlook.com
 copyright:          (c) Laurent P. René de Cotret
 category:           Database
+bug-reports:        https://github.com/haskell-beam/beam/issues
 build-type:         Simple
 extra-doc-files:    README.md
                     CHANGELOG.md
@@ -19,6 +20,11 @@ extra-source-files: tests/data/*.py
                     tests/data/lineitem_iceberg/metadata/*.avro
                     tests/data/lineitem_iceberg/metadata/*.json
                     tests/data/lineitem_iceberg/metadata/version-hint.text
+
+source-repository head
+  type: git
+  location: https://github.com/haskell-beam/beam.git
+  subdir: beam-duckdb
 
 common common
     default-language: Haskell2010
