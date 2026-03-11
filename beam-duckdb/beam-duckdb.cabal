@@ -47,7 +47,7 @@ library
                     , beam-core ^>=0.10
                     , beam-migrate ^>=0.5
                     , bytestring >=0.10 && <0.13
-                    , duckdb-simple ^>=0.1
+                    , duckdb-simple >=0.1.2 && <0.1.5
                     , dlist >=0.8 && <1.1
                     , free >=4.12 && <5.3
                     , scientific ^>=0.3
