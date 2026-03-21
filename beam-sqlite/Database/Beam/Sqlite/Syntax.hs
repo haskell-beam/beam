@@ -55,7 +55,7 @@ import           Database.Beam.Migrate.Serialization
 import qualified Database.Beam.Migrate.Serialization as Db
 import           Database.Beam.Query hiding (ExtractField(..))
 
-import           Data.Aeson (object, (.=))
+import           Data.Aeson (object, withObject, (.=), (.:))
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import           Data.ByteString.Builder
@@ -64,6 +64,7 @@ import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Hashable
 import           Data.Int
+import qualified Data.List.NonEmpty as NE (toList)
 import           Data.Maybe
 import           Data.Scientific
 import           Data.String
@@ -981,3 +982,32 @@ instance HasSqlValueSyntax SqliteValueSyntax Day where
 
 instance HasDataTypeCreatedCheck SqliteDataTypeSyntax where
   dataTypeHasBeenCreated _ _ = True
+
+instance IsSql92CreateDropIndexSyntax SqliteCommandSyntax where
+  newtype instance Sql92CreateIndexOptionsSyntax SqliteCommandSyntax =
+    SqliteIndexOptions { sqliteIndexUnique :: Bool }
+    deriving (Show, Eq, Hashable)
+
+  defaultIndexOptions = SqliteIndexOptions { sqliteIndexUnique = False }
+
+  createIndexCmd idxNm tblNm cols opts =
+    SqliteCommandSyntax $
+    emit (if sqliteIndexUnique opts then "CREATE UNIQUE INDEX " else "CREATE INDEX ") <>
+    quotedIdentifier idxNm <>
+    emit " ON " <> fromSqliteTableName tblNm <>
+    parens (commas (NE.toList $ fmap quotedIdentifier cols))
+
+  dropIndexCmd idxNm =
+    SqliteCommandSyntax (emit "DROP INDEX " <> quotedIdentifier idxNm)
+
+  serializeIndexOptions opts =
+    object ["unique" .= sqliteIndexUnique opts]
+
+  deserializeIndexOptions =
+    withObject "SqliteIndexOptions" $ \v ->
+      SqliteIndexOptions <$> v .: "unique"
+
+instance IsSql92UniqueIndexSyntax SqliteCommandSyntax where
+
+  setUniqueIndexOptions u opts = opts { sqliteIndexUnique = u }
+  indexIsUnique opts = sqliteIndexUnique opts

@@ -4,6 +4,8 @@ import Database.SQLite.Simple
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import qualified Data.List.NonEmpty as NE
+import Data.Int (Int32)
 import Database.Beam
 import Database.Beam.Sqlite
 import Database.Beam.Sqlite.Migrate
@@ -16,6 +18,8 @@ tests :: TestTree
 tests = testGroup "Migration tests"
   [ verifiesPrimaryKey
   , verifiesNoPrimaryKey
+  , verifiesIndex
+  , verifiesUniqueIndex
   ]
 
 newtype WithPkT f = WithPkT
@@ -72,3 +76,44 @@ testVerifySchema conn db =
     VerificationSucceeded -> return ()
     VerificationFailed failures ->
       fail $ "Verification failed: " ++ show failures
+
+-- Shared table type for index tests
+
+newtype IdxT f = IdxT
+  { _idx_value :: C f Int32
+  } deriving (Generic, Beamable)
+
+instance Table IdxT where
+  newtype PrimaryKey IdxT f = IdxPk (C f Int32)
+    deriving (Generic, Beamable)
+  primaryKey = IdxPk . _idx_value
+
+data IdxDb entity = IdxDb
+  { _idx_tbl :: entity (TableEntity IdxT)
+  } deriving (Generic, Database Sqlite)
+
+verifiesIndex :: TestTree
+verifiesIndex = testCase "verifySchema correctly detects a secondary index" $
+  withTestDb $ \conn -> do
+    execute_ conn "create table idx_tbl (idx_value int not null primary key)"
+    execute_ conn "create index idx_tbl_value on idx_tbl (idx_value)"
+    let db :: CheckedDatabaseSettings Sqlite IdxDb
+        db = defaultMigratableDbSettings `withDbModification`
+              (dbModification @_ @Sqlite)
+                { _idx_tbl =
+                    addTableIndex "idx_tbl_value" defaultIndexOptions
+                      (\t -> selectorColumnName _idx_value t NE.:| []) }
+    testVerifySchema conn db
+
+verifiesUniqueIndex :: TestTree
+verifiesUniqueIndex = testCase "verifySchema correctly detects a UNIQUE secondary index" $
+  withTestDb $ \conn -> do
+    execute_ conn "create table idx_tbl (idx_value int not null primary key)"
+    execute_ conn "create unique index idx_tbl_value_uniq on idx_tbl (idx_value)"
+    let db :: CheckedDatabaseSettings Sqlite IdxDb
+        db = defaultMigratableDbSettings `withDbModification`
+              (dbModification @_ @Sqlite)
+                { _idx_tbl =
+                    addTableIndex "idx_tbl_value_uniq" (setUniqueIndexOptions True defaultIndexOptions)
+                      (\t -> selectorColumnName _idx_value t NE.:| []) }
+    testVerifySchema conn db

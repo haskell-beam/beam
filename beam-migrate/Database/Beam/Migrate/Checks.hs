@@ -4,6 +4,7 @@
 -- | Defines common 'DatabasePredicate's that are shared among backends
 module Database.Beam.Migrate.Checks where
 
+import Database.Beam.Backend.SQL (BeamSqlBackendSyntax)
 import Database.Beam.Backend.SQL.SQL92
 import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.SQL.Types
@@ -13,6 +14,7 @@ import Database.Beam.Migrate.Types.Predicates
 import Data.Aeson ((.:), (.=), withObject, object)
 import Data.Aeson.Types (Parser, Value)
 import Data.Hashable (Hashable(..))
+import qualified Data.List.NonEmpty as NE (NonEmpty)
 import Data.Text (Text)
 import Data.Typeable (Typeable, cast)
 
@@ -111,6 +113,39 @@ instance ( Typeable be, BeamMigrateOnlySqlBackend be
     | Just (TableHasColumn tblNm' colNm' _ :: TableHasColumn be) <- cast p' = tblNm' == tblNm && colNm' == colNm
     | otherwise = False
 
+-- | Asserts that the given table has a secondary index with the given name
+-- covering the given columns (in order). Create these predicates with
+-- 'Database.Beam.Migrate.Types.CheckedEntities.addTableIndex'.
+data TableHasIndex be
+  = TableHasIndex
+  { hasIndex_table   :: QualifiedName                -- ^ table name
+  , hasIndex_name    :: Text                         -- ^ index name
+  , hasIndex_columns :: NE.NonEmpty Text             -- ^ ordered column names
+  , hasIndex_opts    :: BeamSqlBackendIndexSyntax be -- ^ index options (e.g. uniqueness)
+  } deriving Generic
+deriving instance Show (BeamSqlBackendIndexSyntax be) => Show (TableHasIndex be)
+deriving instance Eq (BeamSqlBackendIndexSyntax be) => Eq (TableHasIndex be)
+instance Hashable (BeamSqlBackendIndexSyntax be) => Hashable (TableHasIndex be)
+instance ( Typeable be
+         , IsSql92UniqueIndexSyntax (BeamSqlBackendSyntax be) ) =>
+         DatabasePredicate (TableHasIndex be) where
+  englishDescription (TableHasIndex { hasIndex_table = tbl, hasIndex_name = nm
+                                    , hasIndex_columns = cols, hasIndex_opts = opts }) =
+    (if indexIsUnique opts then "Unique index " else "Index ") <>
+    show nm <> " on table " <> show tbl <> " covering columns " <> show cols
+
+  predicateSpecificity _ = PredicateSpecificityAllBackends
+
+  serializePredicate (TableHasIndex { hasIndex_table = tbl, hasIndex_name = nm
+                                    , hasIndex_columns = cols, hasIndex_opts = opts }) =
+    object [ "has-index" .= object [ "table" .= tbl, "name" .= nm
+                                   , "columns" .= cols
+                                   , "options" .= serializeIndexOptions opts ] ]
+
+  predicateCascadesDropOn (TableHasIndex { hasIndex_table = tblNm }) p'
+    | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
+    | otherwise = False
+
 -- | Asserts that the given table has a primary key made of the given columns.
 -- The order of the columns is significant.
 data TableHasPrimaryKey
@@ -139,12 +174,14 @@ instance DatabasePredicate TableHasPrimaryKey where
 beamCheckDeserializers
   :: forall be
    . ( Typeable be, BeamMigrateOnlySqlBackend be
-     , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be) )
+     , HasDataTypeCreatedCheck (BeamMigrateSqlBackendDataTypeSyntax be)
+     , IsSql92UniqueIndexSyntax (BeamSqlBackendSyntax be) )
   => BeamDeserializers be
 beamCheckDeserializers = mconcat
   [ beamDeserializer (const deserializeSchemaExistsPredicate)
   , beamDeserializer (const deserializeTableExistsPredicate)
   , beamDeserializer (const deserializeTableHasPrimaryKeyPredicate)
+  , beamDeserializer (const deserializeTableHasIndexPredicate)
   , beamDeserializer deserializeTableHasColumnPredicate
   , beamDeserializer deserializeTableColumnHasConstraintPredicate
   ]
@@ -165,6 +202,17 @@ beamCheckDeserializers = mconcat
       v .: "has-primary-key" >>=
       (withObject "TableHasPrimaryKey" $ \v' ->
        SomeDatabasePredicate <$> (TableHasPrimaryKey <$> v' .: "table" <*> v' .: "columns"))
+
+    deserializeTableHasIndexPredicate :: Value -> Parser SomeDatabasePredicate
+    deserializeTableHasIndexPredicate =
+      withObject "TableHasIndex" $ \v ->
+      v .: "has-index" >>=
+      (withObject "TableHasIndex" $ \v' ->
+       SomeDatabasePredicate <$>
+       fmap (id @(TableHasIndex be))
+         (TableHasIndex <$> v' .: "table" <*> v' .: "name"
+                        <*> v' .: "columns"
+                        <*> (deserializeIndexOptions =<< v' .: "options")))
 
     deserializeTableHasColumnPredicate :: BeamDeserializers be'
                                        -> Value -> Parser SomeDatabasePredicate

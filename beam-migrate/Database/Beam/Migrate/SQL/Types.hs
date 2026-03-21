@@ -18,6 +18,7 @@ module Database.Beam.Migrate.SQL.Types
   , BeamSqlBackendMatchTypeSyntax
   , BeamSqlBackendReferentialActionSyntax
   , BeamSqlBackendConstraintAttributesSyntax
+  , BeamSqlBackendIndexSyntax
   ) where
 
 import Database.Beam.Migrate.Types.Predicates
@@ -91,3 +92,5 @@ type BeamSqlBackendReferentialActionSyntax be
   = Sql92DdlCommandReferentialActionSyntax (BeamSqlBackendSyntax be)
 type BeamSqlBackendConstraintAttributesSyntax be
   = Sql92DdlCommandConstraintAttributesSyntax (BeamSqlBackendSyntax be)
+type BeamSqlBackendIndexSyntax be
+  = Sql92CreateIndexOptionsSyntax (BeamSqlBackendSyntax be)

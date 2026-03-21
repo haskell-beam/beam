@@ -8,6 +8,8 @@ import Database.Beam.Backend.SQL
 import Database.Beam.Schema.Tables
 
 import Database.Beam.Migrate.Checks
+import Database.Beam.Migrate.SQL.SQL92
+import Database.Beam.Migrate.SQL.Types (BeamSqlBackendIndexSyntax)
 import Database.Beam.Migrate.Generics.Tables
 import Database.Beam.Migrate.Types.Predicates
 
@@ -16,6 +18,7 @@ import Control.Monad.Writer
 import Control.Monad.Identity
 
 import Data.Kind (Constraint, Type)
+import qualified Data.List.NonEmpty as NE (NonEmpty, nonEmpty)
 import Data.Maybe
 import Data.Monoid
 import Data.Proxy
@@ -218,6 +221,82 @@ modifyCheckedTable renamer modFields =
                                 (dt { dbTableCurrentName = renamer (dbTableCurrentName dt)
                                     , dbTableSettings = fields'})
                                 tblChecks fieldChecks') extraChecks
+
+-- | Lift a field accessor into a column-name reference, for use with
+-- 'addTableIndex'.
+--
+-- See also 'foreignKeyColumns'.
+selectorColumnName :: (tbl (TableField tbl) -> TableField tbl a)
+         -> tbl (TableField tbl)
+         -> Text
+selectorColumnName f = (^. fieldName) . f
+
+-- | Expand a foreign-key accessor into its constituent column-name references,
+-- for use with 'addTableIndex'.
+--
+-- Example:
+--
+-- @
+-- data UserT f = User
+--   { userId   :: C f Int32
+--   , userName :: C f Text
+--   }
+-- instance Table UserT where
+--   newtype PrimaryKey UserT f = UserId (C f Int32)
+--   primaryKey (User {userId = i}) = UserId i
+-- data OrderT f = Order
+--   { orderUser :: PrimaryKey UserT f
+--   , orderDate :: C f Day
+--   }
+-- @
+--
+-- @
+-- addTableIndex "idx_orders_user" indexOptions
+--   (\\t -> foreignKeyColumns orderUser t)
+-- @
+--
+-- Can be combined with 'selectorColumnName' for composite indices.
+foreignKeyColumns :: Beamable (PrimaryKey ref)
+                  => (tbl (TableField tbl) -> PrimaryKey ref (TableField tbl))
+                  -> tbl (TableField tbl)
+                  -> NE.NonEmpty Text
+foreignKeyColumns f t =
+  case NE.nonEmpty $ allBeamValues (\(Columnar' field) -> field ^. fieldName) pkey of
+    Nothing -> error $ "foreignKeyColumns: foreign key has no fields"
+    Just cols -> cols
+  where
+    pkey = f t
+
+-- | Automatically extracts all column names from a table's primary key
+primaryKeyColumns :: Table tbl => tbl (TableField tbl) -> NE.NonEmpty Text
+primaryKeyColumns tbl =
+  case NE.nonEmpty $ allBeamValues (\(Columnar' field) -> field ^. fieldName) (primaryKey tbl) of
+    Nothing -> error "primaryKeyColumns: primary key has no fields"
+    Just cols -> cols
+
+-- | Declare a secondary index on a checked table entity.
+--
+-- Example:
+--
+-- @
+-- addTableIndex "table_index" uniqueIndexOptions
+--   (\\t -> selectorColumnName tableField1 t NE.:| [selectorColumnName tableField2 t])
+-- @
+addTableIndex :: forall be tbl db
+              . ( Typeable be
+                , IsSql92UniqueIndexSyntax (BeamSqlBackendSyntax be) )
+              => Text                             -- ^ SQL index name
+              -> BeamSqlBackendIndexSyntax be     -- ^ index options (e.g. 'nonUniqueIndexOptions', 'uniqueIndexOptions')
+              -> (tbl (TableField tbl) -> NE.NonEmpty Text) -- ^ column names to index (use 'selectorColumnName')
+              -> EntityModification (CheckedDatabaseEntity be db) be (TableEntity tbl)
+addTableIndex idxNm opts getCols =
+  EntityModification $ Endo $
+  \(CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks fieldChecks) extraChecks) ->
+    let cols    = getCols (dbTableSettings dt)
+        idxCheck = TableCheck $ \ tblNm _flds ->
+          Just (SomeDatabasePredicate (TableHasIndex tblNm idxNm cols opts :: TableHasIndex be))
+    in CheckedDatabaseEntity (CheckedDatabaseTable dt (tblChecks ++ [idxCheck]) fieldChecks)
+                             extraChecks
 
 -- | Produce a table field modification that does nothing
 --

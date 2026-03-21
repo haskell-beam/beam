@@ -1,3 +1,12 @@
+# Unreleased
+
+## Added features
+
+* Add support for creating secondary indices, supporting both `CREATE INDEX` and
+  `CREATE UNIQUE INDEX`. `getDbConstraintsForSchemas` now discovers user-created
+  secondary indices via `pg_index` (excluding primary keys and
+  constraint-backing indices).
+
 # 0.5.4.4
 
 ## Added features
