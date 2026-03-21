@@ -1,3 +1,11 @@
+# Unreleased
+
+## Added features
+
+* Add support for creating secondary indices (`CREATE INDEX` and
+  `CREATE UNIQUE INDEX`), including discovering user-created secondary indices
+  via `PRAGMA index_list` / `PRAGMA index_info`.
+
 # 0.5.6.0
 
 ## Performance optimizations

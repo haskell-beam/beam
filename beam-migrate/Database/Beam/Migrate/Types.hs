@@ -24,6 +24,11 @@ module Database.Beam.Migrate.Types
 
   , modifyCheckedTable
   , checkedTableModification
+  , addTableIndex
+  , selectorColumnName
+  , foreignKeyColumns
+
+  , IsSql92CreateDropIndexSyntax(..)
 
     -- * Predicates
   , DatabasePredicate(..)
@@ -50,6 +55,7 @@ module Database.Beam.Migrate.Types
   , migrateScript, evaluateDatabase, stepNames ) where
 
 import Database.Beam.Backend.SQL
+import Database.Beam.Migrate.SQL.SQL92
 import Database.Beam.Migrate.Types.CheckedEntities
 import Database.Beam.Migrate.Types.Predicates
 import Control.Monad.Free.Church

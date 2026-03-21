@@ -46,6 +46,7 @@ module Database.Beam.Postgres.Syntax
 
     , PgAlterTableSyntax(..), PgAlterTableActionSyntax(..), PgAlterColumnActionSyntax(..)
 
+
     , PgWindowFrameSyntax(..), PgWindowFrameBoundsSyntax(..), PgWindowFrameBoundSyntax(..)
 
     , PgSelectLockingClauseSyntax(..)
@@ -97,7 +98,7 @@ import           Control.Monad (guard)
 import           Control.Monad.Free
 import           Control.Monad.Free.Church
 
-import           Data.Aeson (Value, object, (.=))
+import           Data.Aeson (Value, object, withObject, (.=), (.:))
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Builder (Builder, doubleDec, floatDec, byteString, char8, toLazyByteString)
@@ -110,6 +111,7 @@ import           Data.Coerce
 import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Int
+import qualified Data.List.NonEmpty as NE (toList)
 import           Data.Maybe
 import           Data.Scientific (Scientific)
 import           Data.String (IsString(..), fromString)
@@ -426,6 +428,34 @@ instance IsSql92DdlCommandSyntax PgCommandSyntax where
   createTableCmd = PgCommandSyntax PgCommandTypeDdl . coerce
   dropTableCmd   = PgCommandSyntax PgCommandTypeDdl . coerce
   alterTableCmd  = PgCommandSyntax PgCommandTypeDdl . coerce
+
+instance IsSql92CreateDropIndexSyntax PgCommandSyntax where
+  newtype instance Sql92CreateIndexOptionsSyntax PgCommandSyntax =
+    PgIndexOptions { pgIndexUnique :: Bool }
+    deriving (Show, Eq, Hashable)
+
+  defaultIndexOptions = PgIndexOptions { pgIndexUnique = False }
+
+  createIndexCmd idxNm tblNm cols opts =
+    PgCommandSyntax PgCommandTypeDdl $
+    emit (if pgIndexUnique opts then "CREATE UNIQUE INDEX " else "CREATE INDEX ") <>
+    pgQuotedIdentifier idxNm <>
+    emit " ON " <> fromPgTableName tblNm <>
+    pgParens (pgSepBy (emit ", ") (NE.toList $ fmap pgQuotedIdentifier cols))
+
+  dropIndexCmd idxNm =
+    PgCommandSyntax PgCommandTypeDdl (emit "DROP INDEX " <> pgQuotedIdentifier idxNm)
+
+  serializeIndexOptions opts =
+    object ["unique" .= pgIndexUnique opts]
+
+  deserializeIndexOptions =
+    withObject "PgIndexOptions" $ \v ->
+      PgIndexOptions <$> v .: "unique"
+
+instance IsSql92UniqueIndexSyntax PgCommandSyntax where
+  setUniqueIndexOptions u opts = opts { pgIndexUnique = u }
+  indexIsUnique opts = pgIndexUnique opts
 
 instance IsSql92SchemaNameSyntax PgSchemaNameSyntax where
   schemaName s = PgSchemaNameSyntax (pgQuotedIdentifier s)

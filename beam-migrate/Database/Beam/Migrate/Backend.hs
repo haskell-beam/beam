@@ -54,9 +54,6 @@ import           Database.Beam.Haskell.Syntax
 import           Control.Applicative
 import qualified Control.Monad.Fail as Fail
 
-#if ! MIN_VERSION_base(4,11,0)
-import           Data.Semigroup
-#endif
 import           Data.Text (Text)
 import           Data.Time
 

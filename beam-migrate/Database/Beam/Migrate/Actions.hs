@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -83,6 +84,8 @@ module Database.Beam.Migrate.Actions
   , addColumnProvider
   , addColumnNullProvider
   , dropColumnNullProvider
+  , createIndexActionProvider
+  , dropIndexActionProvider
   , defaultActionProvider
   , defaultSchemaActionProvider
 
@@ -112,7 +115,6 @@ import qualified Data.Sequence as Seq
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Typeable
-import           Data.Semigroup
 
 import           GHC.Generics
 
@@ -272,6 +274,10 @@ createTableWeight = 500
 dropTableWeight = 100
 addColumnWeight = 1
 dropColumnWeight = 1
+
+createIndexWeight, dropIndexWeight :: Int
+createIndexWeight = 200
+dropIndexWeight = 50
 
 -- | Proceeds only if no predicate matches the given pattern. See the
 -- implementation of 'dropTableActionProvider' for an example of usage.
@@ -516,6 +522,60 @@ dropColumnNullProvider = ActionProvider provider
          pure (PotentialAction (HS.fromList [SomeDatabasePredicate colP]) mempty
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
                                ("Drop not null constraint for " <> colNm <> " on " <> qnameAsText tblNm) 100)
+
+-- | Action provider for @CREATE INDEX@ actions.
+--
+-- Generates a @CREATE INDEX@ command whenever the destination schema contains
+-- a 'TableHasIndex' predicate that is not satisfied in the current state.
+createIndexActionProvider :: forall be
+                           . ( BeamMigrateOnlySqlBackend be
+                             , IsSql92UniqueIndexSyntax (BeamSqlBackendSyntax be) )
+                          => ActionProvider be
+createIndexActionProvider = ActionProvider provider
+  where
+    provider :: ActionProviderFn be
+    provider findPreConditions findPostConditions =
+      do (idxP@(TableHasIndex { hasIndex_table = postTblNm, hasIndex_name = idxNm
+                              , hasIndex_columns = idxCols, hasIndex_opts = idxOpts })
+            :: TableHasIndex be) <- findPostConditions
+         -- Ensure this index doesn't already exist
+         ensuringNot_ $
+           do (TableHasIndex { hasIndex_table = preTblNm, hasIndex_name = idxNm' }
+                :: TableHasIndex be) <- findPreConditions
+              guard (preTblNm == postTblNm && idxNm' == idxNm)
+         -- Ensure the target table already exists
+         TableExistsPredicate tblNm' <- findPreConditions
+         guard (tblNm' == postTblNm)
+
+         let cmd = createIndexCmd idxNm (qnameAsTableName postTblNm) idxCols idxOpts
+         pure (PotentialAction mempty (HS.singleton (p idxP))
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
+                               ("Create index " <> idxNm <> " on " <> qnameAsText postTblNm)
+                               createIndexWeight)
+
+-- | Action provider for @DROP INDEX@ actions.
+dropIndexActionProvider :: forall be
+                         . ( BeamMigrateOnlySqlBackend be
+                           , IsSql92UniqueIndexSyntax (BeamSqlBackendSyntax be) )
+                        => ActionProvider be
+dropIndexActionProvider = ActionProvider provider
+  where
+    provider :: ActionProviderFn be
+    provider findPreConditions findPostConditions =
+      do (idxP@(TableHasIndex { hasIndex_table = preTblNm, hasIndex_name = idxNm })
+            :: TableHasIndex be) <- findPreConditions
+         ensuringNot_ $
+           do (TableHasIndex { hasIndex_table = postTblNm, hasIndex_name = idxNm' }
+                :: TableHasIndex be) <- findPostConditions
+              guard (preTblNm == postTblNm && idxNm' == idxNm)
+
+         let cmd = dropIndexCmd idxNm
+         pure (PotentialAction (HS.singleton (p idxP)) mempty
+           -- Dropping a secondary index doesn't lose data, as the index
+           -- can be recalculated.
+                               (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
+                               ("Drop index " <> idxNm <> " on " <> qnameAsText preTblNm)
+                               dropIndexWeight)
 
 -- | Default action providers for any SQL92 compliant syntax.
 --
