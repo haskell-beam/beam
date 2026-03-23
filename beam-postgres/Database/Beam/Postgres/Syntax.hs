@@ -59,6 +59,8 @@ module Database.Beam.Postgres.Syntax
     , PgDataTypeDescr(..)
     , PgHasEnum(..)
 
+    , PgIndexOptions(..)
+
     , pgCreateExtensionSyntax, pgDropExtensionSyntax
     , pgCreateEnumSyntax, pgDropTypeSyntax
 
@@ -429,10 +431,11 @@ instance IsSql92DdlCommandSyntax PgCommandSyntax where
   dropTableCmd   = PgCommandSyntax PgCommandTypeDdl . coerce
   alterTableCmd  = PgCommandSyntax PgCommandTypeDdl . coerce
 
-instance IsSql92CreateDropIndexSyntax PgCommandSyntax where
-  newtype instance Sql92CreateIndexOptionsSyntax PgCommandSyntax =
-    PgIndexOptions { pgIndexUnique :: Bool }
+newtype PgIndexOptions = PgIndexOptions { pgIndexUnique :: Bool }
     deriving (Show, Eq, Hashable)
+
+instance IsSql92CreateDropIndexSyntax PgCommandSyntax where
+  type instance Sql92CreateIndexOptionsSyntax PgCommandSyntax = PgIndexOptions
 
   defaultIndexOptions = PgIndexOptions { pgIndexUnique = False }
 

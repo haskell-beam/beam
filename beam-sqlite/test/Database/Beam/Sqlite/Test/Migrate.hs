@@ -13,6 +13,7 @@ import Database.Beam.Migrate
 import Database.Beam.Migrate.Simple
 
 import Database.Beam.Sqlite.Test
+import Database.Beam.Sqlite.Syntax (SqliteIndexOptions)
 
 tests :: TestTree
 tests = testGroup "Migration tests"
@@ -101,7 +102,7 @@ verifiesIndex = testCase "verifySchema correctly detects a secondary index" $
         db = defaultMigratableDbSettings `withDbModification`
               (dbModification @_ @Sqlite)
                 { _idx_tbl =
-                    addTableIndex "idx_tbl_value" defaultIndexOptions
+                    addTableIndex "idx_tbl_value" (defaultIndexOptions @SqliteCommandSyntax)
                       (\t -> selectorColumnName _idx_value t NE.:| []) }
     testVerifySchema conn db
 
@@ -114,6 +115,9 @@ verifiesUniqueIndex = testCase "verifySchema correctly detects a UNIQUE secondar
         db = defaultMigratableDbSettings `withDbModification`
               (dbModification @_ @Sqlite)
                 { _idx_tbl =
-                    addTableIndex "idx_tbl_value_uniq" (setUniqueIndexOptions True defaultIndexOptions)
+                    let idxOpts = setUniqueIndexOptions @SqliteCommandSyntax True
+                                $ defaultIndexOptions @SqliteCommandSyntax
+                    in
+                    addTableIndex "idx_tbl_value_uniq" idxOpts
                       (\t -> selectorColumnName _idx_value t NE.:| []) }
     testVerifySchema conn db

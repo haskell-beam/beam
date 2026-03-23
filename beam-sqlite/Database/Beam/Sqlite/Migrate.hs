@@ -342,10 +342,11 @@ getDbConstraints extraParser =
                 case NE.nonEmpty cols of
                   Nothing -> []
                   Just colsNE ->
-                    [ Db.SomeDatabasePredicate
-                        (Db.TableHasIndex tblName idxNm colsNE
-                          (Db.setUniqueIndexOptions (isUniq /= (0 :: Int)) Db.defaultIndexOptions)
-                      :: Db.TableHasIndex Sqlite) ]
+                    let opts = Db.setUniqueIndexOptions @SqliteCommandSyntax (isUniq /= (0 :: Int))
+                             $ Db.defaultIndexOptions @SqliteCommandSyntax
+                    in
+                      [ Db.SomeDatabasePredicate
+                          (Db.TableHasIndex @Sqlite tblName idxNm colsNE opts) ]
 
         pure ( [ Db.SomeDatabasePredicate (Db.TableExistsPredicate tblName) ]
              ++ pkPred ++ columnPreds ++ idxPreds )

@@ -5,7 +5,7 @@
 * Added support for declaring secondary indices on tables. User API is the
   `addTableIndex` function, `selectorColumnName` and `foreignKeyColumns` helpers.
   Backend support goes through new `IsSql92CreateDropIndexSyntax` (which carries
-  a per-backend `Sql92CreateIndexOptionsSyntax` data family) and
+  a per-backend `Sql92CreateIndexOptionsSyntax` type family) and
   `IsSql92UniqueIndexSyntax` (for index uniqueness constraints).
 
 ## Updated dependencies

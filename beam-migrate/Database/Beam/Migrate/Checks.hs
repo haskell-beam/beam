@@ -131,7 +131,7 @@ instance ( Typeable be
          DatabasePredicate (TableHasIndex be) where
   englishDescription (TableHasIndex { hasIndex_table = tbl, hasIndex_name = nm
                                     , hasIndex_columns = cols, hasIndex_opts = opts }) =
-    (if indexIsUnique opts then "Unique index " else "Index ") <>
+    (if indexIsUnique @(BeamSqlBackendSyntax be) opts then "Unique index " else "Index ") <>
     show nm <> " on table " <> show tbl <> " covering columns " <> show cols
 
   predicateSpecificity _ = PredicateSpecificityAllBackends
@@ -140,7 +140,7 @@ instance ( Typeable be
                                     , hasIndex_columns = cols, hasIndex_opts = opts }) =
     object [ "has-index" .= object [ "table" .= tbl, "name" .= nm
                                    , "columns" .= cols
-                                   , "options" .= serializeIndexOptions opts ] ]
+                                   , "options" .= serializeIndexOptions @(BeamSqlBackendSyntax be) opts ] ]
 
   predicateCascadesDropOn (TableHasIndex { hasIndex_table = tblNm }) p'
     | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
@@ -212,7 +212,7 @@ beamCheckDeserializers = mconcat
        fmap (id @(TableHasIndex be))
          (TableHasIndex <$> v' .: "table" <*> v' .: "name"
                         <*> v' .: "columns"
-                        <*> (deserializeIndexOptions =<< v' .: "options")))
+                        <*> (deserializeIndexOptions @(BeamSqlBackendSyntax be) =<< v' .: "options")))
 
     deserializeTableHasColumnPredicate :: BeamDeserializers be'
                                        -> Value -> Parser SomeDatabasePredicate

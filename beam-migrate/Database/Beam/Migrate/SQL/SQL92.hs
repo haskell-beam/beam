@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 
@@ -249,7 +250,7 @@ class ( IsSql92DdlCommandSyntax syntax
       , Eq       (Sql92CreateIndexOptionsSyntax syntax)
       , Hashable (Sql92CreateIndexOptionsSyntax syntax)
       ) => IsSql92CreateDropIndexSyntax syntax where
-  data family Sql92CreateIndexOptionsSyntax syntax
+  type family Sql92CreateIndexOptionsSyntax syntax
 
   -- | Render a @CREATE INDEX@ command.
   createIndexCmd

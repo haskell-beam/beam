@@ -417,11 +417,12 @@ getDbConstraintsForSchemas subschemas conn =
          case NE.nonEmpty (V.toList cols) of
           Nothing -> Nothing
           Just colsNE ->
-            Just $
-              Db.SomeDatabasePredicate
-                (Db.TableHasIndex (Db.QualifiedName schema tblNm) idxNm colsNE
-                                  (Db.setUniqueIndexOptions isUniq Db.defaultIndexOptions)
-                 :: Db.TableHasIndex Postgres)) <$>
+            let opts = Db.setUniqueIndexOptions @(BeamSqlBackendSyntax Postgres) isUniq
+                     $ Db.defaultIndexOptions @(BeamSqlBackendSyntax Postgres)
+            in
+              Just $
+                Db.SomeDatabasePredicate @(Db.TableHasIndex Postgres)
+                  (Db.TableHasIndex (Db.QualifiedName schema tblNm) idxNm colsNE opts)) <$>
        Pg.query_ conn (fromString (unlines
          [ -- NULL out 'public' since it is the implicit default schema in Postgres
            "SELECT NULLIF(ns.nspname, 'public'), c.relname, i.relname, ix.indisunique,"

@@ -169,7 +169,7 @@ indexVerification pgConn =
         let db :: CheckedDatabaseSettings Postgres IdxDb
             db = defaultMigratableDbSettings `withDbModification`
                   (dbModification @_ @Postgres)
-                    { _idx_tbl = addTableIndex "idx_tbl_value" defaultIndexOptions
+                    { _idx_tbl = addTableIndex "idx_tbl_value" (defaultIndexOptions @PgCommandSyntax)
                                    (\t -> selectorColumnName _idx_value t NE.:| []) }
         runBeamPostgres conn (verifySchema migrationBackend db) >>= \case
           VerificationSucceeded -> return ()
@@ -182,10 +182,12 @@ uniqueIndexVerification pgConn =
       withTestPostgres "db_unique_index" pgConn $ \conn -> do
         Pg.execute_ conn "CREATE TABLE idx_tbl (idx_value integer NOT NULL PRIMARY KEY)"
         Pg.execute_ conn "CREATE UNIQUE INDEX idx_tbl_value_uniq ON idx_tbl (idx_value)"
-        let db :: CheckedDatabaseSettings Postgres IdxDb
+        let idxOpts = setUniqueIndexOptions @PgCommandSyntax True
+                    $ defaultIndexOptions @PgCommandSyntax
+            db :: CheckedDatabaseSettings Postgres IdxDb
             db = defaultMigratableDbSettings `withDbModification`
                   (dbModification @_ @Postgres)
-                    { _idx_tbl = addTableIndex "idx_tbl_value_uniq" (setUniqueIndexOptions True defaultIndexOptions)
+                    { _idx_tbl = addTableIndex "idx_tbl_value_uniq" idxOpts
                                    (\t -> selectorColumnName _idx_value t NE.:| []) }
         runBeamPostgres conn (verifySchema migrationBackend db) >>= \case
           VerificationSucceeded -> return ()

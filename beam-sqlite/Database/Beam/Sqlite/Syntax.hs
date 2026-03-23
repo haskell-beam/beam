@@ -26,6 +26,7 @@ module Database.Beam.Sqlite.Syntax
   , SqliteTableNameSyntax(..)
   , SqliteFieldNameSyntax(..)
   , SqliteAggregationSetQuantifierSyntax(..)
+  , SqliteIndexOptions(..)
 
   , fromSqliteExpression
 
@@ -983,10 +984,13 @@ instance HasSqlValueSyntax SqliteValueSyntax Day where
 instance HasDataTypeCreatedCheck SqliteDataTypeSyntax where
   dataTypeHasBeenCreated _ _ = True
 
-instance IsSql92CreateDropIndexSyntax SqliteCommandSyntax where
-  newtype instance Sql92CreateIndexOptionsSyntax SqliteCommandSyntax =
-    SqliteIndexOptions { sqliteIndexUnique :: Bool }
+newtype SqliteIndexOptions =
+  SqliteIndexOptions { sqliteIndexUnique :: Bool }
     deriving (Show, Eq, Hashable)
+
+instance IsSql92CreateDropIndexSyntax SqliteCommandSyntax where
+  type instance Sql92CreateIndexOptionsSyntax SqliteCommandSyntax =
+    SqliteIndexOptions
 
   defaultIndexOptions = SqliteIndexOptions { sqliteIndexUnique = False }
 
