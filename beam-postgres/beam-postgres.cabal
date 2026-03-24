@@ -1,5 +1,5 @@
 name:                 beam-postgres
-version:              0.5.4.4
+version:              0.5.5.0
 synopsis:             Connection layer between beam and postgres
 description:          Beam driver for <https://www.postgresql.org/ PostgreSQL>, an advanced open-source RDBMS
 homepage:             https://haskell-beam.github.io/beam/user-guide/backends/beam-postgres
@@ -34,7 +34,7 @@ library
 
   build-depends:      base                 >=4.11 && <5.0,
                       beam-core            >=0.10 && <0.11,
-                      beam-migrate         >=0.5  && <0.6,
+                      beam-migrate         >=0.5.4.0 && <0.6,
 
                       postgresql-libpq     >=0.8  && <0.12,
                       postgresql-simple    >=0.5  && <0.8,

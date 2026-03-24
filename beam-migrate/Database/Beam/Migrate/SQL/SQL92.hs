@@ -99,17 +99,17 @@ class ( IsSql92CreateTableSyntax (Sql92DdlCommandCreateTableSyntax syntax)
   dropTableCmd    :: Sql92DdlCommandDropTableSyntax syntax -> syntax
   alterTableCmd   :: Sql92DdlCommandAlterTableSyntax syntax -> syntax
 
-class IsSql92SchemaNameSyntax (Sql92CreateSchemaSchemaNameSyntax syntax) => 
+class IsSql92SchemaNameSyntax (Sql92CreateSchemaSchemaNameSyntax syntax) =>
     IsSql92CreateSchemaSyntax syntax where
-  
+
   type Sql92CreateSchemaSchemaNameSyntax syntax :: Type
 
   createSchemaSyntax :: Sql92CreateSchemaSchemaNameSyntax syntax
                      -> syntax
 
-class IsSql92SchemaNameSyntax (Sql92DropSchemaSchemaNameSyntax syntax) => 
+class IsSql92SchemaNameSyntax (Sql92DropSchemaSchemaNameSyntax syntax) =>
     IsSql92DropSchemaSyntax syntax where
-  
+
   type Sql92DropSchemaSchemaNameSyntax syntax :: Type
 
   dropSchemaSyntax :: Sql92DropSchemaSchemaNameSyntax syntax
@@ -245,6 +245,8 @@ class Sql92SerializableConstraintDefinitionSyntax constraint where
 --
 -- @CREATE INDEX@ is not part of SQL92 proper, but is a widely supported
 -- extension.
+--
+-- @since 0.5.4.0
 class ( IsSql92DdlCommandSyntax syntax
       , Show     (Sql92CreateIndexOptionsSyntax syntax)
       , Eq       (Sql92CreateIndexOptionsSyntax syntax)
@@ -282,6 +284,8 @@ class ( IsSql92DdlCommandSyntax syntax
 -- this class to expose uniqueness as a portable concept, while still allowing
 -- their 'Sql92CreateIndexOptionsSyntax' to carry additional backend-specific
 -- options (e.g. index type, partial-index predicates).
+--
+-- @since 0.5.4.0
 class IsSql92CreateDropIndexSyntax syntax => IsSql92UniqueIndexSyntax syntax where
 
   -- | Update index options by setting the uniqueness

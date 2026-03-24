@@ -1,4 +1,4 @@
-# Unreleased
+# 0.5.7.0
 
 ## Added features
 
@@ -21,7 +21,7 @@
 
 ## Bux fixes
 
-* Fixed an issue where values inserted with conflicts did not return then when using `runInsertReturningList` (#774) 
+* Fixed an issue where values inserted with conflicts did not return then when using `runInsertReturningList` (#774)
 
 ## Updated dependencies
 
