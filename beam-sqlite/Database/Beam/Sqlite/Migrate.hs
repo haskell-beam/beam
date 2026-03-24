@@ -41,6 +41,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char (isSpace)
 import           Data.Int (Int64)
 import           Data.List (sortBy)
+import qualified Data.List.NonEmpty as NE (nonEmpty)
 import           Data.Maybe (mapMaybe, isJust)
 import           Data.Monoid (Endo(..))
 import           Data.Ord (comparing)
@@ -64,6 +65,8 @@ mkCustomMigrationBackend extraParser =
     , Tool.backendFileExtension = "sqlite.sql"
     , Tool.backendConvertToHaskell = sqlitePredConverter
     , Tool.backendActionProvider = Db.defaultActionProvider
+                                <> Db.createIndexActionProvider
+                                <> Db.dropIndexActionProvider
     , Tool.backendRunSqlScript = runSqlScript
     , Tool.backendWithTransaction =
         \(SqliteM go) ->
@@ -320,8 +323,33 @@ getDbConstraints extraParser =
             pkPred = case pkColumns of
                        [] -> []
                        _  -> [ Db.SomeDatabasePredicate (Db.TableHasPrimaryKey tblName pkColumns) ]
+
+        -- Collect user-created secondary indices (origin = 'c') for this table.
+        -- SQLite's PRAGMA index_list returns (seq, name, unique, origin, partial).
+        -- PRAGMA index_info returns (seqno, cid, name) ordered by seqno.
+        idxRows <- query_ conn (fromString ("PRAGMA index_list('" <> T.unpack tblNameStr <> "')")
+                           ) :: IO [(Int, T.Text, Int, T.Text, Int)]
+        idxPreds <- fmap concat . forM idxRows $
+          \(_, idxNm, isUniq, origin, _) ->
+            if origin /= T.pack "c"
+            then pure []
+            else do
+              colRows <- query_ conn (fromString ("PRAGMA index_info('" <> T.unpack idxNm <> "')")
+                             ) :: IO [(Int, Int, T.Text)]
+              let cols = map (\(_, _, nm) -> nm) $
+                         sortBy (comparing (\(seqno, _, _) -> seqno)) colRows
+              pure $
+                case NE.nonEmpty cols of
+                  Nothing -> []
+                  Just colsNE ->
+                    let opts = Db.setUniqueIndexOptions @SqliteCommandSyntax (isUniq /= (0 :: Int))
+                             $ Db.defaultIndexOptions @SqliteCommandSyntax
+                    in
+                      [ Db.SomeDatabasePredicate
+                          (Db.TableHasIndex @Sqlite tblName idxNm colsNE opts) ]
+
         pure ( [ Db.SomeDatabasePredicate (Db.TableExistsPredicate tblName) ]
-             ++ pkPred ++ columnPreds )
+             ++ pkPred ++ columnPreds ++ idxPreds )
 
     pure tblPreds
 

@@ -10,7 +10,11 @@ import Database.Beam.Migrate
 import Database.Beam.Migrate.Simple
 
 import Data.ByteString (ByteString)
+import Data.Int (Int32)
+import qualified Data.List.NonEmpty as NE
 import Data.Text (Text)
+
+import qualified Database.PostgreSQL.Simple as Pg
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -25,6 +29,8 @@ tests postgresConn =
       , extensionVerification postgresConn
       , createTableWithSchemaWorks postgresConn
       , dropSchemaWorks postgresConn
+      , indexVerification postgresConn
+      , uniqueIndexVerification postgresConn
       ]
 
 data CharT f
@@ -137,3 +143,52 @@ dropSchemaWorks pgConn =
           verifySchema migrationBackend db >>= \case
             VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
             VerificationSucceeded -> pure ()
+
+-- Shared table type for index tests
+
+newtype IdxT f = IdxT
+  { _idx_value :: C f Int32
+  } deriving (Generic, Beamable)
+
+instance Table IdxT where
+  newtype PrimaryKey IdxT f = IdxPk (C f Int32)
+    deriving (Generic, Beamable)
+  primaryKey = IdxPk . _idx_value
+
+data IdxDb entity = IdxDb
+  { _idx_tbl :: entity (TableEntity IdxT)
+  } deriving (Generic, Database Postgres)
+
+-- | Verifies that 'verifySchema' correctly detects a secondary index
+indexVerification :: IO ByteString -> TestTree
+indexVerification pgConn =
+    testCase "verifySchema correctly detects a secondary index" $
+      withTestPostgres "db_index" pgConn $ \conn -> do
+        Pg.execute_ conn "CREATE TABLE idx_tbl (idx_value integer NOT NULL PRIMARY KEY)"
+        Pg.execute_ conn "CREATE INDEX idx_tbl_value ON idx_tbl (idx_value)"
+        let db :: CheckedDatabaseSettings Postgres IdxDb
+            db = defaultMigratableDbSettings `withDbModification`
+                  (dbModification @_ @Postgres)
+                    { _idx_tbl = addTableIndex "idx_tbl_value" (defaultIndexOptions @PgCommandSyntax)
+                                   (\t -> selectorColumnName _idx_value t NE.:| []) }
+        runBeamPostgres conn (verifySchema migrationBackend db) >>= \case
+          VerificationSucceeded -> return ()
+          VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
+
+-- | Verifies that 'verifySchema' correctly detects a UNIQUE secondary index
+uniqueIndexVerification :: IO ByteString -> TestTree
+uniqueIndexVerification pgConn =
+    testCase "verifySchema correctly detects a UNIQUE secondary index" $
+      withTestPostgres "db_unique_index" pgConn $ \conn -> do
+        Pg.execute_ conn "CREATE TABLE idx_tbl (idx_value integer NOT NULL PRIMARY KEY)"
+        Pg.execute_ conn "CREATE UNIQUE INDEX idx_tbl_value_uniq ON idx_tbl (idx_value)"
+        let idxOpts = setUniqueIndexOptions @PgCommandSyntax True
+                    $ defaultIndexOptions @PgCommandSyntax
+            db :: CheckedDatabaseSettings Postgres IdxDb
+            db = defaultMigratableDbSettings `withDbModification`
+                  (dbModification @_ @Postgres)
+                    { _idx_tbl = addTableIndex "idx_tbl_value_uniq" idxOpts
+                                   (\t -> selectorColumnName _idx_value t NE.:| []) }
+        runBeamPostgres conn (verifySchema migrationBackend db) >>= \case
+          VerificationSucceeded -> return ()
+          VerificationFailed failures -> fail ("Verification failed: " ++ show failures)

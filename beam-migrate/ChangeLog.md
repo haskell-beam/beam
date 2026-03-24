@@ -1,5 +1,13 @@
 # Unreleased
 
+## Added features
+
+* Added support for declaring secondary indices on tables. User API is the
+  `addTableIndex` function, `selectorColumnName` and `foreignKeyColumns` helpers.
+  Backend support goes through new `IsSql92CreateDropIndexSyntax` (which carries
+  a per-backend `Sql92CreateIndexOptionsSyntax` type family) and
+  `IsSql92UniqueIndexSyntax` (for index uniqueness constraints).
+
 ## Updated dependencies
 
 * Updated the upper bound on `parallel` to include `parallel-3.3.0.0`

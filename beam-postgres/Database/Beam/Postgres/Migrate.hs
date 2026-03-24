@@ -31,7 +31,8 @@ module Database.Beam.Postgres.Migrate
   ) where
 
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate.Actions (defaultActionProvider, defaultSchemaActionProvider)
+import           Database.Beam.Migrate.Actions (defaultActionProvider, defaultSchemaActionProvider,
+                                               createIndexActionProvider, dropIndexActionProvider)
 import qualified Database.Beam.Migrate.Backend as Tool
 import qualified Database.Beam.Migrate.Checks as Db
 import qualified Database.Beam.Migrate.SQL as Db
@@ -65,6 +66,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BCL
 import qualified Data.HashMap.Strict as HM
 import           Data.Int
+import qualified Data.List.NonEmpty as NE (nonEmpty)
 import           Data.Maybe
 import           Data.String
 import qualified Data.Text as T
@@ -102,6 +104,8 @@ migrationBackend = Tool.BeamMigrationBackend
                    , Tool.backendActionProvider =
                        mconcat [ defaultActionProvider
                                , defaultSchemaActionProvider
+                               , createIndexActionProvider
+                               , dropIndexActionProvider
                                , pgExtensionActionProvider
                                , pgCustomEnumActionProvider
                                ]
@@ -402,6 +406,50 @@ getDbConstraintsForSchemas subschemas conn =
                                            -- Recall that schema of the form 'pg_' are Postgres internal tables that should not be taken into account
                                            , "WHERE nspname NOT LIKE '%pg_%' AND c.relkind='r' AND i.indisprimary GROUP BY nspname, relname, i.indrelid" ]))
 
+     -- Collect user-created secondary indices.
+     --
+     -- Excludes:
+     --   - primary keys
+     --   - indices that back a constraint (i.e. those created implicitly by UNIQUE/EXCLUDE)
+     --   - expression indices e.g. CREATE INDEX ON users (LOWER(email))
+     secondaryIndices <-
+       mapMaybe (\(schema, tblNm, idxNm, isUniq, cols) ->
+         case NE.nonEmpty (V.toList cols) of
+          Nothing -> Nothing
+          Just colsNE ->
+            let opts = Db.setUniqueIndexOptions @(BeamSqlBackendSyntax Postgres) isUniq
+                     $ Db.defaultIndexOptions @(BeamSqlBackendSyntax Postgres)
+            in
+              Just $
+                Db.SomeDatabasePredicate @(Db.TableHasIndex Postgres)
+                  (Db.TableHasIndex (Db.QualifiedName schema tblNm) idxNm colsNE opts)) <$>
+       Pg.query_ conn (fromString (unlines
+         [ -- NULL out 'public' since it is the implicit default schema in Postgres
+           "SELECT NULLIF(ns.nspname, 'public'), c.relname, i.relname, ix.indisunique,"
+           -- re-aggregate column names in index-key order (see ORDINALITY below)
+         , "       array_agg(a.attname ORDER BY k.n ASC)"
+         , "FROM pg_index ix"
+         , "JOIN pg_class c ON c.oid = ix.indrelid"
+         , "JOIN pg_class i ON i.oid = ix.indexrelid"
+         , "JOIN pg_namespace ns ON ns.oid = c.relnamespace"
+           -- ORDINALITY allows retaining ordering of index columns
+         , "CROSS JOIN unnest(ix.indkey) WITH ORDINALITY k(attid, n)"
+         , "JOIN pg_attribute a ON a.attnum = k.attid AND a.attrelid = ix.indrelid"
+           -- only regular tables (not views, sequences, etc.)
+         , "WHERE c.relkind = 'r'"
+           -- exclude Postgres system schemas
+         , "  AND ns.nspname NOT LIKE 'pg_%'"
+         , "  AND ns.nspname != 'information_schema'"
+           -- exclude primary key indices
+         , "  AND NOT ix.indisprimary"
+           -- exclude indices created implicitly by a UNIQUE or EXCLUDE constraint
+         , "  AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = ix.indexrelid)"
+           -- exclude expression indices: a key column number of 0 means that
+           -- position is an expression (e.g. lower(col)) rather than a plain
+           -- column reference, which TableHasIndex cannot represent
+         , "  AND NOT EXISTS (SELECT 1 FROM unnest(ix.indkey) AS k(attnum) WHERE k.attnum = 0)"
+         , "GROUP BY ns.nspname, c.relname, i.relname, ix.indisunique" ]))
+
      let enumerations =
            map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData
 
@@ -409,7 +457,7 @@ getDbConstraintsForSchemas subschemas conn =
        map (\(Pg.Only extname) -> Db.SomeDatabasePredicate (PgHasExtension extname)) <$>
        Pg.query_ conn "SELECT extname from pg_extension"
 
-     pure (tblsExist ++ columnChecks ++ primaryKeys ++ enumerations ++ extensions)
+     pure (tblsExist ++ columnChecks ++ primaryKeys ++ secondaryIndices ++ enumerations ++ extensions)
 
 -- * Postgres-specific data types
 

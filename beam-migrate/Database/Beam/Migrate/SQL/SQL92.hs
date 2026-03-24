@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 
@@ -11,13 +12,12 @@ module Database.Beam.Migrate.SQL.SQL92 where
 import Database.Beam.Backend.SQL.SQL92
 
 import Data.Aeson (Value)
+import Data.Aeson.Types (Parser)
 import Data.Hashable
 import Data.Kind (Type)
+import qualified Data.List.NonEmpty as NE (NonEmpty)
 import Data.Text (Text)
 import Data.Typeable
-#if ! MIN_VERSION_base(4,11,0)
-import Data.Semigroup
-#endif
 
 -- * Convenience type synonyms
 
@@ -240,3 +240,54 @@ class Sql92SerializableDataTypeSyntax dataType where
 -- | 'IsSql92ColumnConstraintDefinitionSyntax'es that can be serialized to JSON
 class Sql92SerializableConstraintDefinitionSyntax constraint where
   serializeConstraint :: constraint -> Value
+
+-- | Syntax extension for @CREATE INDEX@ and @DROP INDEX@ DDL commands.
+--
+-- @CREATE INDEX@ is not part of SQL92 proper, but is a widely supported
+-- extension.
+class ( IsSql92DdlCommandSyntax syntax
+      , Show     (Sql92CreateIndexOptionsSyntax syntax)
+      , Eq       (Sql92CreateIndexOptionsSyntax syntax)
+      , Hashable (Sql92CreateIndexOptionsSyntax syntax)
+      ) => IsSql92CreateDropIndexSyntax syntax where
+  type family Sql92CreateIndexOptionsSyntax syntax
+
+  -- | Render a @CREATE INDEX@ command.
+  createIndexCmd
+    :: Text  -- ^ index name
+    -> Sql92CreateTableTableNameSyntax (Sql92DdlCommandCreateTableSyntax syntax)
+       -- ^ table name
+    -> NE.NonEmpty Text -- ^ ordered column names
+    -> Sql92CreateIndexOptionsSyntax syntax -- ^ index options
+    -> syntax
+
+  -- | Render a @DROP INDEX@ command.
+  dropIndexCmd
+    :: Text  -- ^ index name
+    -> syntax
+
+  -- | Default options for @CREATE INDEX@
+  defaultIndexOptions
+    :: Sql92CreateIndexOptionsSyntax syntax
+
+  -- | Serialize index options to a JSON 'Value', for predicate storage.
+  serializeIndexOptions :: Sql92CreateIndexOptionsSyntax syntax -> Value
+  -- | Deserialize index options from the JSON 'Value' produced by
+  -- 'serializeIndexOptions'.
+  deserializeIndexOptions :: Value -> Parser (Sql92CreateIndexOptionsSyntax syntax)
+
+-- | Class for index syntaxes that support the SQL @UNIQUE@ modifier.
+--
+-- Backends implementing 'IsSql92CreateDropIndexSyntax' should also implement
+-- this class to expose uniqueness as a portable concept, while still allowing
+-- their 'Sql92CreateIndexOptionsSyntax' to carry additional backend-specific
+-- options (e.g. index type, partial-index predicates).
+class IsSql92CreateDropIndexSyntax syntax => IsSql92UniqueIndexSyntax syntax where
+
+  -- | Update index options by setting the uniqueness
+  setUniqueIndexOptions :: Bool -- ^ unique?
+                        -> Sql92CreateIndexOptionsSyntax syntax
+                        -> Sql92CreateIndexOptionsSyntax syntax
+
+  -- | Query whether an index is unique, as specified in the index options.
+  indexIsUnique :: Sql92CreateIndexOptionsSyntax syntax -> Bool
