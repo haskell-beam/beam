@@ -31,6 +31,7 @@ tests = testGroup "SQL generation tests"
                   , leftJoinSingle
                   , aggregates
                   , orderBy
+                  , innerNub
 
                   , joinHaving
 
@@ -127,7 +128,7 @@ simpleWhereNoFrom :: TestTree
 simpleWhereNoFrom =
   testCase "WHERE clause not dropped if there is no FROM" $ do
     SqlSelect Select { selectTable = SelectTable { .. }, .. } <- pure $ selectMock simple
-    
+
     selectGrouping @?= Nothing
     selectOrdering @?= []
     selectLimit @?= Nothing
@@ -137,7 +138,7 @@ simpleWhereNoFrom =
     -- Important point: no FROM clause, yet WHERE clause should still be here
     selectFrom @?= Nothing
     selectWhere @?= (Just (ExpressionValue (Value False)))
-  
+
   where
     simple :: Q (MockSqlBackend Command) EmptyDb s (QExpr (MockSqlBackend Command) s Bool)
     simple = do
@@ -769,6 +770,61 @@ orderBy =
          selectFrom s @?= Just (InnerJoin (FromTable (TableNamed (TableName Nothing "roles")) (Just ("t0", Nothing)))
                                           (FromTable (TableFromSubSelect subselect) (Just ("t1", Nothing)))
                                           Nothing)
+
+
+-- | Ensure that a SQL DISTINCT in a subquery does not propagate up (see issue #746)
+innerNub :: TestTree
+innerNub =
+  testCase "DISTINCT clause on inner SELECT" $ do
+    stmt@(SqlSelect Select{selectTable = SelectTable{..}, ..}) <- pure $ selectMock query
+
+    selectGrouping @?= Nothing
+    selectOrdering @?= []
+    selectLimit @?= Nothing
+    selectOffset @?= Nothing
+    selectHaving @?= Nothing
+    selectQuantifier @?= Nothing -- quantifier should be in the subquery
+    selectFrom
+      @?= Just
+        ( FromTable
+            ( TableFromSubSelect
+                ( Select
+                    { selectTable =
+                        SelectTable
+                          { selectQuantifier = Just SetQuantifierDistinct
+                          , selectProjection = ProjExprs [(ExpressionFieldName (QualifiedField "t0" "first_name"), Just "res0")]
+                          , selectFrom = Just (FromTable (TableNamed (TableName Nothing "employees")) (Just ("t0", Nothing)))
+                          , selectWhere = Nothing
+                          , selectGrouping = Nothing
+                          , selectHaving = Nothing
+                          }
+                    , selectOrdering = []
+                    , selectLimit = Nothing
+                    , selectOffset = Nothing
+                    }
+                )
+            )
+            (Just ("t0", Nothing))
+        )
+    selectWhere
+      @?= Just
+        ( ExpressionCompOp
+            "=="
+            Nothing
+            (ExpressionFieldName (QualifiedField "t0" "res0"))
+            (ExpressionValue (Value @Text "Alice"))
+        )
+ where
+  query :: Q (MockSqlBackend Command) EmployeeDb s (QExpr (MockSqlBackend Command) s Text)
+  query = do
+    name <- subQuery
+    guard_ (name ==. val_ "Alice")
+    pure name
+
+  -- This sub query contains a DISTINCT clause via `nub_`
+  subQuery :: Q (MockSqlBackend Command) EmployeeDb s (QExpr (MockSqlBackend Command) s Text)
+  subQuery = nub_ $ _employeeFirstName <$> (all_ (_employees employeeDbSettings))
+
 
 -- | HAVING clause should not be floated out of a join
 
