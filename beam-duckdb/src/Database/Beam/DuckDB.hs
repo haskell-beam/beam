@@ -89,7 +89,8 @@ import Database.Beam.DuckDB.Syntax.Builder
   )
 import Database.Beam.DuckDB.Syntax.Extensions.DataSource
 import Database.DuckDB.Simple (Connection, FromRow, Query (Query), ResultError (..), RowParser, ToField (toField), ToRow (toRow), bind, execute, nextRow, withStatement)
-import Database.DuckDB.Simple.FromRow (FromRow (..), RowParser (..), field)
+import Database.DuckDB.Simple.FromRow (FromRow (..), field)
+import Database.DuckDB.Simple.Internal (RowParser (..))
 import Database.DuckDB.Simple.Ok (Ok (..))
 
 -- | 'MonadBeam' instance inside which DuckDB queries are run. See the
