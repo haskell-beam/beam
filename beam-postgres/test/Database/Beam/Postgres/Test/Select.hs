@@ -4,6 +4,7 @@ module Database.Beam.Postgres.Test.Select (tests) where
 
 import           Data.Aeson
 import           Data.ByteString (ByteString)
+import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Int
 import           Data.List (sort)
 import qualified Data.Text as T
@@ -161,7 +162,7 @@ testUuuidInValues getConn = testCase "UUID in values_ works" $
         pgCreateExtension @UuidOssp
       let ext = getPgExtension $ _uuidOssp $ unCheckDatabase db
       runSelectReturningList $ select $ do
-        v <- values_ [val_ nil]
+        v <- values_ (val_ nil :| [])
         return $ pgUuidGenerateV5 ext v ""
     assertEqual "result" [V5.generateNamed nil []] result
 
