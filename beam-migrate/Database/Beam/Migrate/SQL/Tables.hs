@@ -55,6 +55,7 @@ import Control.Monad.State
 
 import Data.Coerce (coerce)
 import Data.Kind (Type)
+import qualified Data.List.NonEmpty as NE
 import Data.Text (Text)
 import Data.Typeable
 import qualified Data.Kind as Kind (Constraint)
@@ -62,6 +63,7 @@ import qualified Data.Kind as Kind (Constraint)
 import GHC.TypeLits
 
 import Lens.Micro ((^.))
+
 
 -- * Table manipulation
 
@@ -143,7 +145,10 @@ createTableWithSchema :: ( Beamable table, Table table
                       -> Migration be (CheckedDatabaseEntity be db (TableEntity table))
 createTableWithSchema maybeSchemaName newTblName tblSettings =
   do let pkFields = allBeamValues (\(Columnar' (TableFieldSchema name _ _)) -> name) (primaryKey tblSettings)
-         tblConstraints = if null pkFields then [] else [ primaryKeyConstraintSyntax pkFields ]
+         tblConstraints =
+          case NE.nonEmpty pkFields of
+            Nothing  -> []
+            Just pks -> [ primaryKeyConstraintSyntax pks ]
          createTableCommand =
            createTableSyntax Nothing (tableName (coerce <$> maybeSchemaName) newTblName)
                              (allBeamValues (\(Columnar' (TableFieldSchema name (FieldSchema schema) _)) -> (name, schema)) tblSettings)

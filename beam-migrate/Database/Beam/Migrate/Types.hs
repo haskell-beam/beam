@@ -30,6 +30,9 @@ module Database.Beam.Migrate.Types
 
   , IsSql92CreateDropIndexSyntax(..)
 
+  , addTableForeignKey
+  , primaryKeyColumns
+
     -- * Predicates
   , DatabasePredicate(..)
   , SomeDatabasePredicate(..)

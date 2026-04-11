@@ -65,7 +65,7 @@ import           Data.Coerce
 import qualified Data.DList as DL
 import           Data.Hashable
 import           Data.Int
-import qualified Data.List.NonEmpty as NE (toList)
+import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import           Data.Maybe
 import           Data.Scientific
 import           Data.String
@@ -282,7 +282,7 @@ data SqliteColumnConstraintSyntax
 data SqliteTableConstraintSyntax
   = SqliteTableConstraintSyntax
   { fromSqliteTableConstraint :: SqliteSyntax
-  , sqliteTableConstraintPrimaryKey :: Maybe [ T.Text ] }
+  , sqliteTableConstraintPrimaryKey :: Maybe (NE.NonEmpty T.Text) }
 data SqliteMatchTypeSyntax
     = SqliteMatchTypeSyntax
     { fromSqliteMatchType :: SqliteSyntax
@@ -476,11 +476,29 @@ instance IsSql92ReferentialActionSyntax SqliteReferentialActionSyntax where
   referentialActionSetDefaultSyntax = SqliteReferentialActionSyntax (emit "SET DEFAULT") referentialActionSetDefaultSyntax
   referentialActionNoActionSyntax = SqliteReferentialActionSyntax (emit "NO ACTION") referentialActionNoActionSyntax
 
+sqliteForeignKeyAction :: ForeignKeyAction -> SqliteSyntax
+sqliteForeignKeyAction ForeignKeyActionCascade    = emit "CASCADE"
+sqliteForeignKeyAction ForeignKeyActionSetNull    = emit "SET NULL"
+sqliteForeignKeyAction ForeignKeyActionSetDefault = emit "SET DEFAULT"
+sqliteForeignKeyAction ForeignKeyActionRestrict   = emit "RESTRICT"
+sqliteForeignKeyAction ForeignKeyNoAction         = emit "NO ACTION"
+
 instance IsSql92TableConstraintSyntax SqliteTableConstraintSyntax where
   primaryKeyConstraintSyntax fields =
     SqliteTableConstraintSyntax
-      (emit "PRIMARY KEY" <> parens (commas (map quotedIdentifier fields)))
+      (emit "PRIMARY KEY" <> parens (commas (map quotedIdentifier $ NE.toList fields)))
       (Just fields)
+
+instance IsSql92ForeignKeyTableConstraintSyntax SqliteTableConstraintSyntax where
+  foreignKeyConstraintSyntax localCols refTbl refCols onUpdate onDelete =
+    SqliteTableConstraintSyntax syntax Nothing
+    where
+      syntax =
+        emit "FOREIGN KEY" <> parens (commas (map quotedIdentifier $ NE.toList localCols)) <>
+        emit " REFERENCES " <> quotedIdentifier refTbl <>
+        parens (commas (map quotedIdentifier $ NE.toList refCols)) <>
+        emit " ON UPDATE " <> sqliteForeignKeyAction onUpdate <>
+        emit " ON DELETE " <> sqliteForeignKeyAction onDelete
 
 instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
   type Sql92CreateTableColumnSchemaSyntax SqliteCreateTableSyntax = SqliteColumnSchemaSyntax
@@ -511,7 +529,7 @@ instance IsSql92CreateTableSyntax SqliteCreateTableSyntax where
          [field] ->
            case constraintPks of
              [] -> error "A column claims to have a primary key, but there is no key on this table"
-             [[fieldPk]]
+             [fieldPk NE.:| _]
                | field /= fieldPk -> error "Two columns claim to be a primary key on this table"
                | otherwise -> createTableNoPkConstraint
              _ -> error "There are multiple primary key constraints on this table"

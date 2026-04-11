@@ -40,9 +40,10 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char (isSpace)
 import           Data.Int (Int64)
-import           Data.List (sortBy)
+import           Data.List (sortBy, groupBy)
 import qualified Data.List.NonEmpty as NE (nonEmpty)
 import           Data.Maybe (mapMaybe, isJust)
+import           Data.Function (on)
 import           Data.Monoid (Endo(..))
 import           Data.Ord (comparing)
 import           Data.String (fromString)
@@ -64,7 +65,7 @@ mkCustomMigrationBackend extraParser =
     , Tool.backendRenderSyntax = (BL.unpack . (<> ";") . sqliteRenderSyntaxScript . fromSqliteCommand)
     , Tool.backendFileExtension = "sqlite.sql"
     , Tool.backendConvertToHaskell = sqlitePredConverter
-    , Tool.backendActionProvider = Db.defaultActionProvider
+    , Tool.backendActionProvider = Db.defaultActionProvider Db.ForeignKeySupported
                                 <> Db.createIndexActionProvider
                                 <> Db.dropIndexActionProvider
     , Tool.backendRunSqlScript = runSqlScript
@@ -262,8 +263,6 @@ runSqlScript t =
         let hdl = connectionHandle conn
         in exec hdl t
 
--- TODO constraints and foreign keys
-
 -- | Get a list of database predicates for the current database. This is beam's
 -- best guess at providing a schema for the current database. Note that SQLite
 -- type names are not standardized, and the so-called column "affinities" are
@@ -348,10 +347,43 @@ getDbConstraints extraParser =
                       [ Db.SomeDatabasePredicate
                           (Db.TableHasIndex @Sqlite tblName idxNm colsNE opts) ]
 
+        -- Collect foreign key constraints via PRAGMA foreign_key_list.
+        -- Each row: (id, seq, table, from, to, on_update, on_delete, match)
+        -- Rows sharing the same 'id' form a composite foreign key,
+        -- with 'seq' providing the ordering.
+        fkRows <- query_ conn (fromString ("PRAGMA foreign_key_list('" <> T.unpack tblNameStr <> "')")
+                          ) :: IO [(Int, Int, T.Text, T.Text, T.Text, T.Text, T.Text, T.Text)]
+        let fkPreds =
+              concatMap mkFkPred $
+              groupBy ((==) `on` (\(fkId, _, _, _, _, _, _, _) -> fkId)) $
+              sortBy (comparing (\(fkId, seqNo, _, _, _, _, _, _) -> (fkId, seqNo))) fkRows
+            mkFkPred [] = []
+            mkFkPred rows@((_, _, refTblStr, _, _, onUpdateStr, onDeleteStr, _):_) =
+              let localCols = map (\(_, _, _, from, _, _, _, _) -> from) rows
+                  refCols   = map (\(_, _, _, _, to,   _, _, _) -> to)   rows
+                  refTable  = QualifiedName Nothing refTblStr
+                  onUpdate  = parseForeignKeyAction onUpdateStr
+                  onDelete  = parseForeignKeyAction onDeleteStr
+              in case (NE.nonEmpty localCols, NE.nonEmpty refCols) of
+                   (Just lcNE, Just rcNE) ->
+                     [ Db.SomeDatabasePredicate
+                         (Db.TableHasForeignKey tblName lcNE refTable rcNE onUpdate onDelete) ]
+                   _ -> []
+
         pure ( [ Db.SomeDatabasePredicate (Db.TableExistsPredicate tblName) ]
-             ++ pkPred ++ columnPreds ++ idxPreds )
+             ++ pkPred ++ columnPreds ++ idxPreds ++ fkPreds )
 
     pure tblPreds
+
+parseForeignKeyAction :: T.Text -> Db.ForeignKeyAction
+parseForeignKeyAction t = case T.toUpper t of
+  "CASCADE"    -> Db.ForeignKeyActionCascade
+  "SET NULL"   -> Db.ForeignKeyActionSetNull
+  "SET DEFAULT"-> Db.ForeignKeyActionSetDefault
+  "RESTRICT"   -> Db.ForeignKeyActionRestrict
+  "NO ACTION"  -> Db.ForeignKeyNoAction
+  _            -> error $
+    "parseForeignKeyAction: unrecognised foreign key action: " ++ T.unpack t
 
 sqliteText :: Db.DataType Sqlite T.Text
 sqliteText = Db.DataType sqliteTextType

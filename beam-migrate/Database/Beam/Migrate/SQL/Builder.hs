@@ -14,6 +14,9 @@ import           Control.Applicative
 import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BCL
 
+import qualified Data.List.NonEmpty as NE
+
+
 
 -- | Options for @CREATE TABLE@. Given as a separate ADT because the options may
 -- go in different places syntactically.
@@ -124,7 +127,7 @@ instance IsSql92CreateTableSyntax SqlSyntaxBuilder where
 instance IsSql92TableConstraintSyntax SqlSyntaxBuilder where
   primaryKeyConstraintSyntax fs =
     SqlSyntaxBuilder $
-    byteString "PRIMARY KEY(" <> buildSepBy (byteString ", ") (map quoteSql fs) <> byteString ")"
+    byteString "PRIMARY KEY(" <> buildSepBy (byteString ", ") (map quoteSql $ NE.toList fs) <> byteString ")"
 
 -- | Some backends use this to represent their constraint attributes. Does not
 -- need to be used in practice.
