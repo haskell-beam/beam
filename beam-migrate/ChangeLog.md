@@ -1,3 +1,19 @@
+
+# Unreleased
+
+## Added features
+
+* Added support for foreign key constraints:
+
+  * New `ForeignKeyAction` datatype representing possible actions when updating
+    or deleting a row with referencing foreign keys.
+  * New `IsSql92ForeignKeyTableConstraintSyntax` typeclass with method
+    `foreignKeyConstraintSyntax` for constructing foreign key constraint syntax.
+  * `createTableActionProvider` now takes an additional `ForeignKeySupport`
+    argument: a witness of evidence for `IsSql92ForeignKeyTableConstraintSyntax`
+    for backends that support it.
+  * Introduce `addTableForeignKey` for declaring new foreign key constraints.
+
 # 0.5.4.0
 
 ## Added features

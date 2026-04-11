@@ -372,7 +372,7 @@ haskellSchema BeamMigrationBackend { backendGetDbConstraints = getCs
   constraints <- getCs
   let hsConstraints = [ hsConstraint | c <- constraints, Just hsConstraint <- [ conv2Hs c ] ]
 
-      solver = heuristicSolver (defaultActionProvider @HsMigrateBackend) [] hsConstraints
+      solver = heuristicSolver (defaultActionProvider @HsMigrateBackend ForeignKeyUnsupported) [] hsConstraints
 
   case finalSolution solver of
     Solved cmds   ->

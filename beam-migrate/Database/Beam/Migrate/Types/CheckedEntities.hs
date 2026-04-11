@@ -298,6 +298,43 @@ addTableIndex idxNm opts getCols =
     in CheckedDatabaseEntity (CheckedDatabaseTable dt (tblChecks ++ [idxCheck]) fieldChecks)
                              extraChecks
 
+-- | Declare a foreign key constraint on a checked table entity.
+--
+-- Example referencing the primary key of a @UserT@ table:
+--
+-- @
+-- addTableForeignKey (db ^. usersTable)
+--   (\\ t -> selectorColumnName _postAuthorId t NE.:| [])
+--   primaryKeyColumns
+--   ForeignKeyNoAction    -- ON UPDATE action
+--   ForeignKeyActionCascade -- ON DELETE action
+-- @
+addTableForeignKey
+  :: forall be db localTbl refTbl.
+     (Table localTbl, Table refTbl)
+  => CheckedDatabaseEntity be db (TableEntity refTbl)         -- ^ referenced table
+  -> (localTbl (TableField localTbl) -> NE.NonEmpty Text)     -- ^ local columns
+  -> (refTbl (TableField refTbl) -> NE.NonEmpty Text)         -- ^ referenced columns
+  -> ForeignKeyAction -- ^ ON UPDATE action
+  -> ForeignKeyAction -- ^ ON DELETE action
+  -> EntityModification (CheckedDatabaseEntity be db) be (TableEntity localTbl)
+addTableForeignKey refTableEntity getLocalFk getRefFk onUpdate onDelete =
+  EntityModification $ Endo $
+  \(CheckedDatabaseEntity (CheckedDatabaseTable dt tblChecks fieldChecks) extraChecks) ->
+    let
+        CheckedDatabaseEntity (CheckedDatabaseTable refDt _ _) _ = refTableEntity
+        refTableName = QualifiedName (dbTableSchema refDt) (dbTableCurrentName refDt)
+
+        localCols = getLocalFk (dbTableSettings dt)
+        refCols   = getRefFk (dbTableSettings refDt)
+
+        fkCheck = TableCheck $ \tblNm _flds ->
+          Just (SomeDatabasePredicate
+                  (TableHasForeignKey tblNm localCols refTableName refCols onUpdate onDelete))
+
+    in CheckedDatabaseEntity (CheckedDatabaseTable dt (tblChecks ++ [fkCheck]) fieldChecks)
+                             extraChecks
+
 -- | Produce a table field modification that does nothing
 --
 --   Most commonly supplied as the second argument to 'modifyCheckedTable' when

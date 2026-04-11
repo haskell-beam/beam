@@ -1,3 +1,10 @@
+# Unreleased
+
+## Added features
+
+* `getDbConstraintsForSchemas` now discovers foreign key constraints
+  via `pg_constraint`, including `ON DELETE` / `ON UPDATE` actions.
+
 # 0.5.5.0
 
 ## Added features

@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -78,6 +79,7 @@ module Database.Beam.Migrate.Actions
   , ensuringNot_
   , justOne_
 
+  , ForeignKeySupport(..)
   , createSchemaActionProvider
   , createTableActionProvider
   , dropTableActionProvider
@@ -107,6 +109,7 @@ import           Control.Monad
 import           Control.Parallel.Strategies
 
 import           Data.Foldable
+import qualified Data.List.NonEmpty as NE
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
@@ -279,6 +282,16 @@ createIndexWeight, dropIndexWeight :: Int
 createIndexWeight = 200
 dropIndexWeight = 50
 
+-- | Witness for whether a backend's table constraint syntax supports
+-- @FOREIGN KEY@ clauses in @CREATE TABLE@ statements.
+data ForeignKeySupport be where
+  -- | The backend supports @FOREIGN KEY@ constraints in @CREATE TABLE@.
+  ForeignKeySupported
+    :: IsSql92ForeignKeyTableConstraintSyntax (BeamSqlBackendTableConstraintSyntax be)
+    => ForeignKeySupport be
+  -- | The backend does not support @FOREIGN KEY@ constraints.
+  ForeignKeyUnsupported :: ForeignKeySupport be
+
 -- | Proceeds only if no predicate matches the given pattern. See the
 -- implementation of 'dropTableActionProvider' for an example of usage.
 ensuringNot_ :: Alternative m => [ a ] -> m ()
@@ -342,10 +355,13 @@ dropSchemaActionProvider =
                               ("Drop schema " <> preSchemaNm) dropSchemaWeight)
 
 -- | Action provider for SQL92 @CREATE TABLE@ actions.
-createTableActionProvider :: forall be
-                           . ( Typeable be, BeamMigrateOnlySqlBackend be )
-                          => ActionProvider be
-createTableActionProvider =
+createTableActionProvider
+  :: forall be
+   . ( Typeable be, BeamMigrateOnlySqlBackend be )
+  => ForeignKeySupport be
+       -- ^ a witness of whether the backend supports FOREIGN KEY constraints
+  -> ActionProvider be
+createTableActionProvider fkSupport =
   ActionProvider provider
   where
     provider :: ActionProviderFn be
@@ -377,9 +393,45 @@ createTableActionProvider =
            guard (tblNm == postTblNm)
            pure (primaryKeyP, primaryKey)
 
-         let postConditions = [ p tblP, p primaryKeyP ] ++ concat columnsP
+         let (fkPs, fkConstraints) = case fkSupport of
+               ForeignKeySupported ->
+                 unzip
+                   [ ( p fkP
+                     , foreignKeyConstraintSyntax localCols (qnameAsText refTbl) refCols onUpd onDel )
+                   | fkP@(TableHasForeignKey tblNm localCols refTbl refCols onUpd onDel)
+                       <- findPostConditions
+                   , tblNm == postTblNm
+                   ]
+               ForeignKeyUnsupported -> ([], [])
+
+         -- For each foreign key constraint, ensure the referenced table
+         -- already exists in the current state.
+         -- This enforces a topological ordering, so that the solver schedules
+         -- CREATE TABLE for all referenced tables first.
+         --
+         -- Note: this does not support cycles in the foreign key reference graph,
+         -- for which we would need ALTER TABLE ADD CONSTRAINT, which we don't
+         -- currently support.
+         case fkSupport of
+           ForeignKeyUnsupported -> pure ()
+           ForeignKeySupported -> do
+             let refTbls =
+                   [ refTbl
+                   | TableHasForeignKey tblNm _ refTbl _ _ _ <- findPostConditions
+                   , tblNm == postTblNm
+                   , refTbl /= postTblNm
+                   ]
+             for_ refTbls $ \refTbl -> do
+               TableExistsPredicate nm <- findPreConditions
+               guard (nm == refTbl)
+
+
+         let postConditions = [ p tblP, p primaryKeyP ] ++ concat columnsP ++ fkPs
              cmd = createTableCmd (createTableSyntax Nothing (qnameAsTableName postTblNm) colsSyntax tblConstraints)
-             tblConstraints = if null primaryKey then [] else [ primaryKeyConstraintSyntax primaryKey ]
+             tblConstraints = (case NE.nonEmpty primaryKey of
+                                Nothing   -> []
+                                Just pkey -> [primaryKeyConstraintSyntax pkey])
+                           ++ fkConstraints
              colsSyntax = map (\(colNm, type_, cs) -> (colNm, columnSchemaSyntax type_ Nothing cs Nothing)) columns
          pure (PotentialAction mempty (HS.fromList postConditions)
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
@@ -590,17 +642,18 @@ dropIndexActionProvider = ActionProvider provider
 -- For default schema actions, see 'defaultSchemaActionProvider'.
 defaultActionProvider :: ( Typeable be
                          , BeamMigrateOnlySqlBackend be )
-                      => ActionProvider be
-defaultActionProvider =
+                      => ForeignKeySupport be
+                      -> ActionProvider be
+defaultActionProvider fkSupport =
   mconcat
-  [ createTableActionProvider
+  [ createTableActionProvider fkSupport
   , dropTableActionProvider
 
   , addColumnProvider
   , dropColumnProvider
 
   , addColumnNullProvider
-  , dropColumnNullProvider 
+  , dropColumnNullProvider
   ]
 
 -- | Default action providers for any syntax which supports schemas.
