@@ -16,6 +16,9 @@
 * Fix an issue in which `beam-migrate` would fail to migrate a unique index
   to a non-unique index or vice-versa.
 
+* Fixed an issue in which the migration solver could end up taking an
+  exponentially long time to conclude that migration isn't possible.
+
 # 0.5.4.0
 
 ## Added features
