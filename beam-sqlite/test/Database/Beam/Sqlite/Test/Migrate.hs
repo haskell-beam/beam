@@ -21,6 +21,7 @@ tests = testGroup "Migration tests"
   , verifiesNoPrimaryKey
   , verifiesIndex
   , verifiesUniqueIndex
+  , migrateNonUniqueToUniqueIndex
   , verifiesForeignKey
   , verifiesForeignKeyActions
   , foreignKeyActionsWork
@@ -124,6 +125,31 @@ verifiesUniqueIndex = testCase "verifySchema correctly detects a UNIQUE secondar
                     addTableIndex "idx_tbl_value_uniq" idxOpts
                       (\t -> selectorColumnName _idx_value t NE.:| []) }
     testVerifySchema conn db
+
+-- | Check that we can change the uniqueness of an index in a migration
+migrateNonUniqueToUniqueIndex :: TestTree
+migrateNonUniqueToUniqueIndex =
+  testCase "autoMigrate can change a non-unique index to a unique index" $
+  withTestDb $ \conn -> do
+    let nonUnique :: CheckedDatabaseSettings Sqlite IdxDb
+        nonUnique =
+          defaultMigratableDbSettings `withDbModification`
+            (dbModification @_ @Sqlite)
+              { _idx_tbl =
+                  addTableIndex "idx_tbl_value"
+                    (defaultIndexOptions @SqliteCommandSyntax)
+                    (\t -> selectorColumnName _idx_value t NE.:| []) }
+        unique :: CheckedDatabaseSettings Sqlite IdxDb
+        unique =
+          defaultMigratableDbSettings `withDbModification`
+            (dbModification @_ @Sqlite)
+              { _idx_tbl =
+                  addTableIndex "idx_tbl_value"
+                    (setUniqueIndexOptions @SqliteCommandSyntax True $
+                     defaultIndexOptions @SqliteCommandSyntax)
+                    (\t -> selectorColumnName _idx_value t NE.:| []) }
+    runBeamSqlite conn $ autoMigrate migrationBackend nonUnique
+    runBeamSqlite conn $ autoMigrate migrationBackend unique
 
 -- Foreign key tests
 

@@ -597,10 +597,15 @@ dropIndexActionProvider = ActionProvider provider
     provider findPreConditions findPostConditions =
       do (idxP@(TableHasIndex { hasIndex_table = preTblNm, hasIndex_name = idxNm })
             :: TableHasIndex be) <- findPreConditions
+
+         -- Supress DROP INDEX if the exact same index is still required
+         -- in the goal (including options such as uniqueness).
+         --
+         -- Comparing only by name would wrongly prevent dropping a non-unique
+         -- index that must be replaced by a unique one (or vice-versa).
          ensuringNot_ $
-           do (TableHasIndex { hasIndex_table = postTblNm, hasIndex_name = idxNm' }
-                :: TableHasIndex be) <- findPostConditions
-              guard (preTblNm == postTblNm && idxNm' == idxNm)
+           do (postIdx :: TableHasIndex be) <- findPostConditions
+              guard (p postIdx == p idxP)
 
          let cmd = dropIndexCmd idxNm
          pure (PotentialAction (HS.singleton (p idxP)) mempty
