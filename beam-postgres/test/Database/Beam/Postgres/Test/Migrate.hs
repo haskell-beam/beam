@@ -31,6 +31,9 @@ tests postgresConn =
       , dropSchemaWorks postgresConn
       , indexVerification postgresConn
       , uniqueIndexVerification postgresConn
+      , foreignKeyVerification postgresConn
+      , foreignKeyOnDeleteCascadeVerification postgresConn
+      , foreignKeyActionsWork postgresConn
       ]
 
 data CharT f
@@ -189,6 +192,134 @@ uniqueIndexVerification pgConn =
                   (dbModification @_ @Postgres)
                     { _idx_tbl = addTableIndex "idx_tbl_value_uniq" idxOpts
                                    (\t -> selectorColumnName _idx_value t NE.:| []) }
+        runBeamPostgres conn (verifySchema migrationBackend db) >>= \case
+          VerificationSucceeded -> return ()
+          VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
+
+-- Foreign key test tables
+
+data FkParentT f = FkParentT
+  { _fk_parent_id :: C f Int32
+  } deriving (Generic, Beamable)
+
+instance Table FkParentT where
+  newtype PrimaryKey FkParentT f = FkParentPk (C f Int32)
+    deriving (Generic, Beamable)
+  primaryKey = FkParentPk . _fk_parent_id
+
+data FkChildT f = FkChildT
+  { _fk_child_id        :: C f Int32
+  , _fk_child_parent_id :: PrimaryKey FkParentT f
+  } deriving (Generic, Beamable)
+
+instance Table FkChildT where
+  newtype PrimaryKey FkChildT f = FkChildPk (C f Int32)
+    deriving (Generic, Beamable)
+  primaryKey = FkChildPk . _fk_child_id
+
+data FkDb entity = FkDb
+  { _fk_parent :: entity (TableEntity FkParentT)
+  , _fk_child  :: entity (TableEntity FkChildT)
+  } deriving (Generic, Database Postgres)
+
+-- | Verifies that 'verifySchema' correctly detects a plain foreign key
+foreignKeyVerification :: IO ByteString -> TestTree
+foreignKeyVerification pgConn =
+    testCase "verifySchema correctly detects a plain foreign key" $
+      withTestPostgres "db_fk" pgConn $ \conn -> do
+        Pg.execute_ conn "CREATE TABLE fk_parent (fk_parent_id integer NOT NULL PRIMARY KEY)"
+        Pg.execute_ conn "CREATE TABLE fk_child  (fk_child_id integer NOT NULL PRIMARY KEY, \
+                         \fk_child_parent_id integer NOT NULL, \
+                         \FOREIGN KEY (fk_child_parent_id) REFERENCES fk_parent (fk_parent_id))"
+        let db :: CheckedDatabaseSettings Postgres FkDb
+            db = defaultMigratableDbSettings `withDbModification`
+                  (dbModification @_ @Postgres)
+                    { _fk_child =
+                        addTableForeignKey (_fk_parent db)
+                          (foreignKeyColumns _fk_child_parent_id)
+                          primaryKeyColumns
+                          ForeignKeyNoAction
+                          ForeignKeyNoAction
+                        <> modifyCheckedTable id
+                             (FkChildT { _fk_child_id        = "fk_child_id"
+                                       , _fk_child_parent_id = FkParentPk "fk_child_parent_id" }) }
+        runBeamPostgres conn (verifySchema migrationBackend db) >>= \case
+          VerificationSucceeded -> return ()
+          VerificationFailed failures -> fail ("Verification failed: " ++ show failures)
+
+-- | Verifies that foreign key actions are enforced at runtime.
+foreignKeyActionsWork :: IO ByteString -> TestTree
+foreignKeyActionsWork pgConn =
+    testCase "cascading foreign key actions" $
+      withTestPostgres "db_fk_actions" pgConn $ \conn -> do
+        let db :: CheckedDatabaseSettings Postgres FkDb
+            db = defaultMigratableDbSettings `withDbModification`
+                  (dbModification @_ @Postgres)
+                    { _fk_child =
+                        addTableForeignKey (_fk_parent db)
+                          (foreignKeyColumns _fk_child_parent_id)
+                          primaryKeyColumns
+                          ForeignKeyActionCascade
+                          ForeignKeyActionCascade
+                    }
+            unc = unCheckDatabase db
+        runBeamPostgres conn $ autoMigrate migrationBackend db
+
+        -- Insert two parents and three children (two for parent 1, one for parent 2).
+        runBeamPostgres conn $ do
+          runInsert $ insert (_fk_parent unc) $ insertValues
+            [ FkParentT 1, FkParentT 2 ]
+          runInsert $ insert (_fk_child unc) $ insertValues
+            [ FkChildT 1 (FkParentPk 1), FkChildT 2 (FkParentPk 1), FkChildT 3 (FkParentPk 2) ]
+
+        -- ON UPDATE CASCADE: changing fk_parent_id 1 → 10 should cascade to child rows.
+        runBeamPostgres conn $
+          runUpdate $ update (_fk_parent unc)
+            (\p -> _fk_parent_id p <-. val_ 10)
+            (\p -> _fk_parent_id p ==. val_ 1)
+        childrenOf10 <- runBeamPostgres conn $ runSelectReturningList $ select $
+          filter_ (\c -> let FkParentPk pid = _fk_child_parent_id c in pid ==. val_ 10) $ all_ (_fk_child unc)
+        assertEqual "two children should now reference updated parent id 10"
+          2 (length childrenOf10)
+        childrenOf1 <- runBeamPostgres conn $ runSelectReturningList $ select $
+          filter_ (\c -> let FkParentPk pid = _fk_child_parent_id c in pid ==. val_ 1) $ all_ (_fk_child unc)
+        assertEqual "no children should still reference old parent id 1"
+          0 (length childrenOf1)
+
+        -- ON DELETE CASCADE: deleting parent 2 should remove its child row.
+        runBeamPostgres conn $
+          runDelete $ delete (_fk_parent unc) (\p -> _fk_parent_id p ==. val_ 2)
+        childrenOf2 <- runBeamPostgres conn $ runSelectReturningList $ select $
+          filter_ (\c -> let FkParentPk pid = _fk_child_parent_id c in pid ==. val_ 2) $ all_ (_fk_child unc)
+        assertEqual "child of deleted parent 2 should be removed"
+          0 (length childrenOf2)
+        allChildren <- runBeamPostgres conn $ runSelectReturningList $ select $
+          all_ (_fk_child unc)
+        assertEqual "only the two children of parent 10 should remain"
+          2 (length allChildren)
+
+-- | Verifies that 'verifySchema' correctly detects a foreign key with ON DELETE CASCADE
+foreignKeyOnDeleteCascadeVerification :: IO ByteString -> TestTree
+foreignKeyOnDeleteCascadeVerification pgConn =
+    testCase "verifySchema correctly detects a foreign key with ON DELETE CASCADE" $
+      withTestPostgres "db_fk_cascade" pgConn $ \conn -> do
+        Pg.execute_ conn "CREATE TABLE fk_parent (fk_parent_id integer NOT NULL PRIMARY KEY)"
+        Pg.execute_ conn "CREATE TABLE fk_child  (fk_child_id integer NOT NULL PRIMARY KEY, \
+                         \fk_child_parent_id integer NOT NULL, \
+                         \FOREIGN KEY (fk_child_parent_id) REFERENCES fk_parent (fk_parent_id) \
+                         \ON DELETE CASCADE)"
+        let db :: CheckedDatabaseSettings Postgres FkDb
+            db = defaultMigratableDbSettings `withDbModification`
+                  (dbModification @_ @Postgres)
+                    { _fk_child =
+                        addTableForeignKey (_fk_parent db)
+                          (foreignKeyColumns _fk_child_parent_id)
+                          primaryKeyColumns
+                          ForeignKeyNoAction
+                          ForeignKeyActionCascade
+                        <> modifyCheckedTable id
+                             (FkChildT { _fk_child_id        = "fk_child_id"
+                                       , _fk_child_parent_id = FkParentPk "fk_child_parent_id" }) }
         runBeamPostgres conn (verifySchema migrationBackend db) >>= \case
           VerificationSucceeded -> return ()
           VerificationFailed failures -> fail ("Verification failed: " ++ show failures)

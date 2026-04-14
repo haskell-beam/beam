@@ -1,3 +1,9 @@
+# Unreleased
+
+## Added features
+
+* `getDbConstraints` now discovers foreign key constraints via `PRAGMA foreign_key_list`, including `ON DELETE` / `ON UPDATE` actions.
+
 # 0.5.7.0
 
 ## Added features

@@ -17,7 +17,8 @@ import Data.Hashable
 import Data.Kind (Type)
 import qualified Data.List.NonEmpty as NE (NonEmpty)
 import Data.Text (Text)
-import Data.Typeable
+import Data.Typeable (Typeable)
+import GHC.Generics (Generic)
 
 -- * Convenience type synonyms
 
@@ -184,8 +185,35 @@ class ( IsSql92ColumnConstraintDefinitionSyntax (Sql92ColumnSchemaColumnConstrai
                      -> Maybe Text {-^ Default collation -}
                      -> columnSchema
 
+-- | Action to perform on referencing foreign keys when a row is modified.
+data ForeignKeyAction
+  = ForeignKeyActionCascade
+    -- ^ @CASCADE@: propagate the action to referencing foreign key columns.
+  | ForeignKeyActionSetNull
+    -- ^ @SET NULL@: set the referencing foreign key colums to @NULL@.
+  | ForeignKeyActionSetDefault
+    -- ^ @SET DEFAULT@: set the referencing foreign key columns to their default
+    -- values.
+  | ForeignKeyActionRestrict
+    -- ^ @RESTRICT@: prohibit modification of a row when foreign key references
+    -- to that row exist.
+  | ForeignKeyNoAction
+    -- ^ @NO ACTION@
+  deriving (Show, Eq, Ord, Generic)
+instance Hashable ForeignKeyAction
+
 class Typeable constraint => IsSql92TableConstraintSyntax constraint where
-  primaryKeyConstraintSyntax :: [ Text ] -> constraint
+  primaryKeyConstraintSyntax :: NE.NonEmpty Text -> constraint
+  -- | Emit a @FOREIGN KEY (cols) REFERENCES tbl (refCols)@ table constraint.
+  --
+  -- Use 'addTableForeignKey' to attach a foreign key to a schema definition.
+  foreignKeyConstraintSyntax
+    :: NE.NonEmpty Text  -- ^ local columns
+    -> Text              -- ^ referenced table name
+    -> NE.NonEmpty Text  -- ^ referenced columns
+    -> ForeignKeyAction  -- ^ ON UPDATE action
+    -> ForeignKeyAction  -- ^ ON DELETE action
+    -> constraint
 
 class Typeable match => IsSql92MatchTypeSyntax match where
   fullMatchSyntax :: match

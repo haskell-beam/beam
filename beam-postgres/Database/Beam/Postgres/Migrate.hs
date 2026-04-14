@@ -31,7 +31,8 @@ module Database.Beam.Postgres.Migrate
   ) where
 
 import           Database.Beam.Backend.SQL
-import           Database.Beam.Migrate.Actions (defaultActionProvider, defaultSchemaActionProvider,
+import           Database.Beam.Migrate.Actions (defaultActionProvider,
+                                               defaultSchemaActionProvider,
                                                createIndexActionProvider, dropIndexActionProvider)
 import qualified Database.Beam.Migrate.Backend as Tool
 import qualified Database.Beam.Migrate.Checks as Db
@@ -450,6 +451,53 @@ getDbConstraintsForSchemas subschemas conn =
          , "  AND NOT EXISTS (SELECT 1 FROM unnest(ix.indkey) AS k(attnum) WHERE k.attnum = 0)"
          , "GROUP BY ns.nspname, c.relname, i.relname, ix.indisunique" ]))
 
+     -- Collect foreign key constraints via pg_constraint.
+     let fkBaseQuery = unlines
+           [ -- NULL out 'public' since it is the implicit default schema in Postgres
+             "SELECT NULLIF(ns.nspname, 'public'),"
+           , "       c.relname,"
+             -- re-aggregate local and referenced column names in key order (see ORDINALITY below)
+           , "       array_agg(a.attname  ORDER BY k.n),"
+           , "       NULLIF(fns.nspname, 'public'),"
+           , "       fc.relname,"
+           , "       array_agg(fa.attname ORDER BY k.n),"
+           , "       con.confupdtype,"
+           , "       con.confdeltype"
+           , "FROM pg_constraint con"
+           , "JOIN pg_class c   ON c.oid   = con.conrelid"
+           , "JOIN pg_namespace ns  ON ns.oid  = c.relnamespace"
+           , "JOIN pg_class fc  ON fc.oid  = con.confrelid"
+           , "JOIN pg_namespace fns ON fns.oid = fc.relnamespace"
+             -- ORDINALITY retains column ordering for both local and referenced sides
+           , "CROSS JOIN unnest(con.conkey, con.confkey)"
+           , "          WITH ORDINALITY AS k(attnum, fattnum, n)"
+           , "JOIN pg_attribute a  ON a.attnum  = k.attnum  AND a.attrelid  = con.conrelid"
+           , "JOIN pg_attribute fa ON fa.attnum = k.fattnum AND fa.attrelid = con.confrelid"
+             -- retain only foreign key constraints
+           , "WHERE con.contype = 'f'" ]
+         mkFkPred (srcSchema, srcTbl, localCols, refSchema, refTbl, refCols, updCode, delCode) =
+           case (NE.nonEmpty (V.toList localCols), NE.nonEmpty (V.toList refCols)) of
+             (Just lcNE, Just rcNE) ->
+               Just $ Db.SomeDatabasePredicate
+                 (Db.TableHasForeignKey (Db.QualifiedName srcSchema srcTbl) lcNE
+                                        (Db.QualifiedName refSchema refTbl)  rcNE
+                                        (parsePgForeignKeyAction updCode)
+                                        (parsePgForeignKeyAction delCode))
+             _ -> Nothing
+     foreignKeyChecks <- mapMaybe mkFkPred <$>
+       case subschemas of
+         Nothing ->
+           Pg.query_ conn (fromString (fkBaseQuery <>
+             "  AND ns.nspname = any(current_schemas(false))\n" <>
+             "GROUP BY ns.nspname, c.relname, con.oid, fns.nspname, fc.relname,\n" <>
+             "         con.confupdtype, con.confdeltype"))
+         Just ss ->
+           Pg.query conn (fromString (fkBaseQuery <>
+             "  AND ns.nspname IN ?\n" <>
+             "GROUP BY ns.nspname, c.relname, con.oid, fns.nspname, fc.relname,\n" <>
+             "         con.confupdtype, con.confdeltype"))
+             (Pg.Only (Pg.In ss))
+
      let enumerations =
            map (\(enumNm, _, options) -> Db.SomeDatabasePredicate (PgHasEnum enumNm (V.toList options))) enumerationData
 
@@ -457,7 +505,25 @@ getDbConstraintsForSchemas subschemas conn =
        map (\(Pg.Only extname) -> Db.SomeDatabasePredicate (PgHasExtension extname)) <$>
        Pg.query_ conn "SELECT extname from pg_extension"
 
-     pure (tblsExist ++ columnChecks ++ primaryKeys ++ secondaryIndices ++ enumerations ++ extensions)
+     pure $
+       concat
+         [ tblsExist
+         , columnChecks
+         , primaryKeys
+         , secondaryIndices
+         , foreignKeyChecks
+         , enumerations
+         , extensions
+         ]
+
+parsePgForeignKeyAction :: Char -> Db.ForeignKeyAction
+parsePgForeignKeyAction 'c' = Db.ForeignKeyActionCascade
+parsePgForeignKeyAction 'n' = Db.ForeignKeyActionSetNull
+parsePgForeignKeyAction 'd' = Db.ForeignKeyActionSetDefault
+parsePgForeignKeyAction 'r' = Db.ForeignKeyActionRestrict
+parsePgForeignKeyAction 'a' = Db.ForeignKeyNoAction
+parsePgForeignKeyAction c   = error $
+  "parsePgForeignKeyAction: unrecognised foreign key action code: " ++ show c
 
 -- * Postgres-specific data types
 

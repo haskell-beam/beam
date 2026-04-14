@@ -1179,10 +1179,24 @@ instance IsSql92CreateTableSyntax PgCreateTableSyntax where
                 map fromPgTableConstraint constraints)
        <> emit ")" <> afterOptions
 
+pgForeignKeyAction :: ForeignKeyAction -> PgSyntax
+pgForeignKeyAction ForeignKeyActionCascade    = emit "CASCADE"
+pgForeignKeyAction ForeignKeyActionSetNull    = emit "SET NULL"
+pgForeignKeyAction ForeignKeyActionSetDefault = emit "SET DEFAULT"
+pgForeignKeyAction ForeignKeyActionRestrict   = emit "RESTRICT"
+pgForeignKeyAction ForeignKeyNoAction         = emit "NO ACTION"
+
 instance IsSql92TableConstraintSyntax PgTableConstraintSyntax where
   primaryKeyConstraintSyntax fieldNames =
     PgTableConstraintSyntax $
-    emit "PRIMARY KEY(" <> pgSepBy (emit ", ") (map pgQuotedIdentifier fieldNames) <> emit ")"
+    emit "PRIMARY KEY(" <> pgSepBy (emit ", ") (map pgQuotedIdentifier $ NE.toList fieldNames) <> emit ")"
+  foreignKeyConstraintSyntax localCols refTbl refCols onUpdate onDelete =
+    PgTableConstraintSyntax $
+    emit "FOREIGN KEY(" <> pgSepBy (emit ", ") (map pgQuotedIdentifier $ NE.toList localCols) <> emit ")" <>
+    emit " REFERENCES " <> pgQuotedIdentifier refTbl <>
+    emit "(" <> pgSepBy (emit ", ") (map pgQuotedIdentifier $ NE.toList refCols) <> emit ")" <>
+    emit " ON UPDATE " <> pgForeignKeyAction onUpdate <>
+    emit " ON DELETE " <> pgForeignKeyAction onDelete
 
 instance Hashable PgColumnSchemaSyntax where
   hashWithSalt salt = hashWithSalt salt . fromPgColumnSchema

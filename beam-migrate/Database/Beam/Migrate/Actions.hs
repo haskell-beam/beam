@@ -107,6 +107,7 @@ import           Control.Monad
 import           Control.Parallel.Strategies
 
 import           Data.Foldable
+import qualified Data.List.NonEmpty as NE
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
@@ -377,9 +378,41 @@ createTableActionProvider =
            guard (tblNm == postTblNm)
            pure (primaryKeyP, primaryKey)
 
-         let postConditions = [ p tblP, p primaryKeyP ] ++ concat columnsP
+         -- For each foreign key constraint, ensure the referenced table
+         -- already exists in the current state.
+         -- This enforces a topological ordering, so that the solver schedules
+         -- CREATE TABLE for all referenced tables first.
+         --
+         -- Note: this does not support cycles in the foreign key reference graph,
+         -- for which we would need ALTER TABLE ADD CONSTRAINT, which we don't
+         -- currently support.
+         (fkPs, fkConstraints) <- do
+           let fkData =
+                 unzip
+                   [ ( p fkP
+                     , foreignKeyConstraintSyntax localCols (qnameAsText refTbl) refCols onUpd onDel )
+                   | fkP@(TableHasForeignKey tblNm localCols refTbl refCols onUpd onDel)
+                       <- findPostConditions
+                   , tblNm == postTblNm
+                   ]
+               refTbls =
+                 [ refTbl
+                 | TableHasForeignKey tblNm _ refTbl _ _ _ <- findPostConditions
+                 , tblNm == postTblNm
+                 , refTbl /= postTblNm
+                 ]
+           for_ refTbls $ \refTbl -> do
+             TableExistsPredicate nm <- findPreConditions
+             guard (nm == refTbl)
+           pure fkData
+
+
+         let postConditions = [ p tblP, p primaryKeyP ] ++ concat columnsP ++ fkPs
              cmd = createTableCmd (createTableSyntax Nothing (qnameAsTableName postTblNm) colsSyntax tblConstraints)
-             tblConstraints = if null primaryKey then [] else [ primaryKeyConstraintSyntax primaryKey ]
+             tblConstraints = (case NE.nonEmpty primaryKey of
+                                Nothing   -> []
+                                Just pkey -> [primaryKeyConstraintSyntax pkey])
+                           ++ fkConstraints
              colsSyntax = map (\(colNm, type_, cs) -> (colNm, columnSchemaSyntax type_ Nothing cs Nothing)) columns
          pure (PotentialAction mempty (HS.fromList postConditions)
                                (Seq.singleton (MigrationCommand cmd MigrationKeepsData))
