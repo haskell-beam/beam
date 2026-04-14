@@ -14,6 +14,7 @@ import           Control.Applicative
 import           Data.ByteString.Builder (Builder, byteString, toLazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as BCL
 
+import qualified Data.List.NonEmpty as NE
 
 -- | Options for @CREATE TABLE@. Given as a separate ADT because the options may
 -- go in different places syntactically.
@@ -124,7 +125,20 @@ instance IsSql92CreateTableSyntax SqlSyntaxBuilder where
 instance IsSql92TableConstraintSyntax SqlSyntaxBuilder where
   primaryKeyConstraintSyntax fs =
     SqlSyntaxBuilder $
-    byteString "PRIMARY KEY(" <> buildSepBy (byteString ", ") (map quoteSql fs) <> byteString ")"
+    byteString "PRIMARY KEY(" <> buildSepBy (byteString ", ") (map quoteSql $ NE.toList fs) <> byteString ")"
+  foreignKeyConstraintSyntax localCols refTbl refCols onUpdate onDelete =
+    SqlSyntaxBuilder $
+    byteString "FOREIGN KEY(" <> buildSepBy (byteString ", ") (map quoteSql $ NE.toList localCols) <> byteString ")" <>
+    byteString " REFERENCES " <> quoteSql refTbl <>
+    byteString "(" <> buildSepBy (byteString ", ") (map quoteSql $ NE.toList refCols) <> byteString ")" <>
+    byteString " ON UPDATE " <> buildSql (sqlForeignKeyAction onUpdate) <>
+    byteString " ON DELETE " <> buildSql (sqlForeignKeyAction onDelete)
+    where
+      sqlForeignKeyAction ForeignKeyActionCascade    = SqlSyntaxBuilder (byteString "CASCADE")
+      sqlForeignKeyAction ForeignKeyActionSetNull    = SqlSyntaxBuilder (byteString "SET NULL")
+      sqlForeignKeyAction ForeignKeyActionSetDefault = SqlSyntaxBuilder (byteString "SET DEFAULT")
+      sqlForeignKeyAction ForeignKeyActionRestrict   = SqlSyntaxBuilder (byteString "RESTRICT")
+      sqlForeignKeyAction ForeignKeyNoAction         = SqlSyntaxBuilder (byteString "NO ACTION")
 
 -- | Some backends use this to represent their constraint attributes. Does not
 -- need to be used in practice.

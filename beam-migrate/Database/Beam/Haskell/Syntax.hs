@@ -25,6 +25,7 @@ import           Data.Char (toLower, toUpper)
 import           Data.Hashable
 import           Data.Int
 import           Data.List (find, nub)
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Set as S
@@ -584,6 +585,7 @@ instance IsSql92ColumnSchemaSyntax HsColumnSchema where
                             map hsConstraintDefinitionConstraint cs)
 
 instance IsSql92TableConstraintSyntax HsTableConstraint where
+  foreignKeyConstraintSyntax _ _ _ _ _ = HsTableConstraint $ \_ _ -> mempty
   primaryKeyConstraintSyntax fields =
     HsTableConstraint $ \tblNm tblFields ->
     let primaryKeyDataDecl = insDataDecl primaryKeyType [ primaryKeyConDecl ] (Just primaryKeyDeriving)
@@ -591,7 +593,7 @@ instance IsSql92TableConstraintSyntax HsTableConstraint where
         tableTypeNm = tblNm <> "T"
         tableTypeKeyNm = tblNm <> "Key"
 
-        (fieldRecordNames, fieldTys) = unzip (fromMaybe (error "fieldTys") (mapM (hsFieldLookup tblFields) fields))
+        (fieldRecordNames, fieldTys) = unzip (fromMaybe (error "fieldTys") (mapM (hsFieldLookup tblFields) $ NE.toList fields))
 
         primaryKeyType = tyApp (tyConNamed "PrimaryKey") [ tyConNamed (T.unpack tableTypeNm), tyVarNamed "f" ]
         primaryKeyConDecl  = Hs.QualConDecl () Nothing Nothing (Hs.ConDecl () (Hs.Ident () (T.unpack tableTypeKeyNm)) fieldTys)
