@@ -7,6 +7,7 @@ import Test.Tasty.HUnit
 import qualified Data.List.NonEmpty as NE
 import Data.Int (Int32)
 import Database.Beam
+import Database.Beam.Backend.SQL.BeamExtensions (SqlSerial(..))
 import Database.Beam.Sqlite
 import Database.Beam.Sqlite.Migrate
 import Database.Beam.Migrate
@@ -24,6 +25,7 @@ tests = testGroup "Migration tests"
   , verifiesForeignKey
   , verifiesForeignKeyActions
   , foreignKeyActionsWork
+  , idempotentMigration
   ]
 
 newtype WithPkT f = WithPkT
@@ -247,3 +249,35 @@ foreignKeyActionsWork =
       all_ (_fk_child unc)
     assertEqual "only the two children of parent 10 should remain"
       2 (length allChildren)
+
+--------------------------------------------------------------------------------
+-- Ensure migration is idempotent (no data loss due to internal tables)
+
+data SimpleT f = SimpleT
+  { _auto_incr_id :: C f (SqlSerial Int32)
+  } deriving (Generic, Beamable)
+
+instance Table SimpleT where
+  newtype PrimaryKey SimpleT f = AutoIncrPk (C f (SqlSerial Int32))
+    deriving (Generic, Beamable)
+  primaryKey = AutoIncrPk . _auto_incr_id
+
+data SimpleDb entity = SimpleDb
+  { _simple_tbl :: entity (TableEntity SimpleT)
+  } deriving (Generic, Database Sqlite)
+
+simpleCheckedDb :: CheckedDatabaseSettings Sqlite SimpleDb
+simpleCheckedDb = defaultMigratableDbSettings
+
+idempotentMigration :: TestTree
+idempotentMigration =
+  testCase "autoMigrate is idempotent" $
+  withTestDb $ \conn -> do
+    runBeamSqlite conn $ autoMigrate migrationBackend simpleCheckedDb
+    -- Insert a row so that sqlite_sequence is populated in sqlite_master.
+    execute_ conn "INSERT INTO simple_tbl DEFAULT VALUES"
+    -- Make sure we don't think a migration would lose data due to the
+    -- presence of the sqlite_sequence table.
+    runBeamSqlite conn $ autoMigrate migrationBackend simpleCheckedDb
+
+--------------------------------------------------------------------------------
