@@ -486,16 +486,14 @@ dropColumnProvider :: forall be
 dropColumnProvider = ActionProvider provider
   where
     provider :: ActionProviderFn be
-    provider findPreConditions _ =
+    provider findPreConditions findPostConditions =
       do colP@(TableHasColumn tblNm colNm _ :: TableHasColumn be)
            <- findPreConditions
 
---         TableExistsPredicate tblNm' <- trace ("COnsider drop " <> show tblNm <> " " <> show colNm)  findPreConditions
---         guard (any (\(TableExistsPredicate tblNm') -> tblNm' == tblNm) findPreConditions) --tblNm' == tblNm)
---         ensuringNot_ $ do
---           TableHasColumn tblNm' colNm' colType' :: TableHasColumn (Sql92DdlCommandColumnSchemaSyntax cmd) <-
---             findPostConditions
---           guard (tblNm' == tblNm && colNm == colNm' && colType == colType') -- This column exists as a different type
+         -- Don't drop a column that the goal still requires with the same type.
+         ensuringNot_ $ do
+           (colPost :: TableHasColumn be) <- findPostConditions
+           guard (p colPost == p colP)
 
          relatedPreds <- --pure []
            pure $ do p'@(SomeDatabasePredicate pred') <- findPreConditions
@@ -539,10 +537,15 @@ dropColumnNullProvider :: forall be
 dropColumnNullProvider = ActionProvider provider
   where
     provider :: ActionProviderFn be
-    provider findPreConditions _ =
+    provider findPreConditions findPostConditions =
       do colP@(TableColumnHasConstraint tblNm colNm _ :: TableColumnHasConstraint be)
            <- findPreConditions
 -- TODO         guard (c == notNullConstraintSyntax)
+
+         -- Don't drop a constraint that is still required in the goal.
+         ensuringNot_ $
+           do (sdp :: SomeDatabasePredicate) <- findPostConditions
+              guard (sdp == p colP)
 
          TableExistsPredicate tblNm' <- findPreConditions
          guard (tblNm == tblNm')
@@ -597,10 +600,15 @@ dropIndexActionProvider = ActionProvider provider
     provider findPreConditions findPostConditions =
       do (idxP@(TableHasIndex { hasIndex_table = preTblNm, hasIndex_name = idxNm })
             :: TableHasIndex be) <- findPreConditions
+
+         -- Supress DROP INDEX if the exact same index is still required
+         -- in the goal (including options such as uniqueness).
+         --
+         -- Comparing only by name would wrongly prevent dropping a non-unique
+         -- index that must be replaced by a unique one (or vice-versa).
          ensuringNot_ $
-           do (TableHasIndex { hasIndex_table = postTblNm, hasIndex_name = idxNm' }
-                :: TableHasIndex be) <- findPostConditions
-              guard (preTblNm == postTblNm && idxNm' == idxNm)
+           do (postIdx :: TableHasIndex be) <- findPostConditions
+              guard (p postIdx == p idxP)
 
          let cmd = dropIndexCmd idxNm
          pure (PotentialAction (HS.singleton (p idxP)) mempty

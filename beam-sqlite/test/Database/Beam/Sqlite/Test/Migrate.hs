@@ -1,5 +1,7 @@
 module Database.Beam.Sqlite.Test.Migrate (tests) where
 
+import Control.Exception (try, IOException)
+import Data.List (isInfixOf)
 import Database.SQLite.Simple
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -21,7 +23,9 @@ tests = testGroup "Migration tests"
   , verifiesNoPrimaryKey
   , verifiesIndex
   , verifiesUniqueIndex
+  , migrateNonUniqueToUniqueIndex
   , verifiesForeignKey
+  , addingForeignKeyFails
   , verifiesForeignKeyActions
   , foreignKeyActionsWork
   ]
@@ -125,6 +129,31 @@ verifiesUniqueIndex = testCase "verifySchema correctly detects a UNIQUE secondar
                       (\t -> selectorColumnName _idx_value t NE.:| []) }
     testVerifySchema conn db
 
+-- | Check that we can change the uniqueness of an index in a migration
+migrateNonUniqueToUniqueIndex :: TestTree
+migrateNonUniqueToUniqueIndex =
+  testCase "autoMigrate can change a non-unique index to a unique index" $
+  withTestDb $ \conn -> do
+    let nonUnique :: CheckedDatabaseSettings Sqlite IdxDb
+        nonUnique =
+          defaultMigratableDbSettings `withDbModification`
+            (dbModification @_ @Sqlite)
+              { _idx_tbl =
+                  addTableIndex "idx_tbl_value"
+                    (defaultIndexOptions @SqliteCommandSyntax)
+                    (\t -> selectorColumnName _idx_value t NE.:| []) }
+        unique :: CheckedDatabaseSettings Sqlite IdxDb
+        unique =
+          defaultMigratableDbSettings `withDbModification`
+            (dbModification @_ @Sqlite)
+              { _idx_tbl =
+                  addTableIndex "idx_tbl_value"
+                    (setUniqueIndexOptions @SqliteCommandSyntax True $
+                     defaultIndexOptions @SqliteCommandSyntax)
+                    (\t -> selectorColumnName _idx_value t NE.:| []) }
+    runBeamSqlite conn $ autoMigrate migrationBackend nonUnique
+    runBeamSqlite conn $ autoMigrate migrationBackend unique
+
 -- Foreign key tests
 
 data ParentT f = ParentT
@@ -171,6 +200,74 @@ verifiesForeignKey = testCase "verifySchema detects a plain foreign key" $
                          (ChildT { _child_id        = "child_id"
                                  , _child_parent_id = ParentPk "child_parent_id" }) }
     testVerifySchema conn db
+
+-- Schema used to test solver behaviour when a foreign key migration is impossible.
+-- Needs to be somewhat large to trigger the exponential blowup in search space.
+
+data WideParentT f = WideParentT
+  { _wp_id :: C f Int32
+  , _wp_a  :: C f Int32
+  , _wp_b  :: C f Int32
+  , _wp_c  :: C f Int32
+  , _wp_d  :: C f Int32
+  } deriving (Generic, Beamable)
+
+instance Table WideParentT where
+  newtype PrimaryKey WideParentT f = WideParentPk (C f Int32)
+    deriving (Generic, Beamable)
+  primaryKey = WideParentPk . _wp_id
+
+data WideChildT f = WideChildT
+  { _wc_id        :: C f Int32
+  , _wc_parent_id :: PrimaryKey WideParentT f
+  , _wc_a         :: C f Int32
+  , _wc_b         :: C f Int32
+  , _wc_c         :: C f Int32
+  , _wc_d         :: C f Int32
+  } deriving (Generic, Beamable)
+
+instance Table WideChildT where
+  newtype PrimaryKey WideChildT f = WideChildPk (C f Int32)
+    deriving (Generic, Beamable)
+  primaryKey = WideChildPk . _wc_id
+
+data WideFkDb entity = WideFkDb
+  { _wide_parent :: entity (TableEntity WideParentT)
+  , _wide_child  :: entity (TableEntity WideChildT)
+  } deriving (Generic, Database Sqlite)
+
+-- | Check that the solver doesn't grow an enormous search space trying to find
+-- a way to add a foreign key constraint (which SQLite cannot do to an existing
+-- table).
+addingForeignKeyFails :: TestTree
+addingForeignKeyFails =
+  testCase "autoMigrate fails promptly when asked to add a foreign key" $
+  withTestDb $ \conn -> do
+    let noFk :: CheckedDatabaseSettings Sqlite WideFkDb
+        noFk = defaultMigratableDbSettings
+        withFk :: CheckedDatabaseSettings Sqlite WideFkDb
+        withFk = noFk `withDbModification`
+                   (dbModification @_ @Sqlite)
+                     { _wide_child =
+                         addTableForeignKey (_wide_parent withFk)
+                           (foreignKeyColumns _wc_parent_id)
+                           primaryKeyColumns
+                           ForeignKeyNoAction
+                           ForeignKeyNoAction }
+    runBeamSqlite conn $ autoMigrate migrationBackend noFk
+    result <- try @IOException (runBeamSqlite conn $ autoMigrate migrationBackend withFk)
+    case result of
+      Left e
+        | "Could not determine migration" `isInfixOf` show e
+        -> return ()
+      Left e  -> assertFailure $ unlines
+        [ "unexpected exception from autoMigrate:"
+        , "  - " ++ show e
+        ]
+      Right _ -> assertFailure $ unlines
+        [ "expected autoMigrate to fail:"
+        , "  SQLite cannot add foreign key constraints to existing tables"
+        ]
 
 verifiesForeignKeyActions :: TestTree
 verifiesForeignKeyActions =
