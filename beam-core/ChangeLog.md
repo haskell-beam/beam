@@ -4,6 +4,13 @@
 
 * Updated the upper bound on `time` to include `time-1.14`
 
+## Query combinator API change
+
+* The `Database be db` context has been removed from the query combinators `all_`,
+  `allFromView_`, `join_`, `join'`, `related_`, `relatedBy_` and `relatedBy_'`.
+
+  This constraint was not used by any of these functions.
+
 # 0.10.4.0
 
 ## Added features
