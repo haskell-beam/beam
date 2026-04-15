@@ -25,6 +25,8 @@ library
                       Database.Beam.Postgres.PgCrypto
                       Database.Beam.Postgres.Extensions.UuidOssp
 
+                      Database.Beam.Postgres.TempTable
+
   other-modules:      Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.Debug
                       Database.Beam.Postgres.Extensions
@@ -81,7 +83,8 @@ test-suite beam-postgres-tests
                  Database.Beam.Postgres.Test.Marshal,
                  Database.Beam.Postgres.Test.Select,
                  Database.Beam.Postgres.Test.DataTypes,
-                 Database.Beam.Postgres.Test.Migrate
+                 Database.Beam.Postgres.Test.Migrate,
+                 Database.Beam.Postgres.Test.TempTable
   build-depends:
     aeson,
     base,

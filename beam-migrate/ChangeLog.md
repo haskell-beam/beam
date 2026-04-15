@@ -11,6 +11,13 @@
     `foreignKeyConstraintSyntax`, for constructing foreign key constraint syntax.
   * Introduce `addTableForeignKey` for declaring new foreign key constraints.
 
+* Added support for temporary tables:
+
+  * The `BeamHasTempTables` typeclass is used for backends to emit
+    `CREATE TEMPORARY TABLE` syntax.
+  * The `runCreateTempTable` command allows creating a temporary table.
+    The returned table entity can be used in queries like any other table.
+
 ## Bug fixes
 
 * Fix an issue in which `beam-migrate` would fail to migrate a unique index

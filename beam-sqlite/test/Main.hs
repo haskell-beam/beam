@@ -7,6 +7,7 @@ import qualified Database.Beam.Sqlite.Test.Insert as Insert
 import qualified Database.Beam.Sqlite.Test.InsertOnConflictReturning as InsertOnConflictReturning
 import qualified Database.Beam.Sqlite.Test.Select as Select
 import qualified Database.Beam.Sqlite.Test.Returning as Returning
+import qualified Database.Beam.Sqlite.Test.TempTable as TempTable
 
 main :: IO ()
 main = defaultMain $ testGroup "beam-sqlite tests"
@@ -15,4 +16,5 @@ main = defaultMain $ testGroup "beam-sqlite tests"
       , Insert.tests
       , InsertOnConflictReturning.tests
       , Returning.tests
+      , TempTable.tests
       ]
