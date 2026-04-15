@@ -274,7 +274,20 @@ runSqlScript t =
 getDbConstraints :: A.Parser SqliteDataTypeSyntax -> SqliteM [Db.SomeDatabasePredicate]
 getDbConstraints extraParser =
   SqliteM . ReaderT $ \(_, conn) -> do
-    tblNames <- query_ conn "SELECT name, sql from sqlite_master where type='table'"
+    -- Exclude SQLite-internal tables (sqlite_sequence, sqlite_stat1, etc.).
+    -- These are created automatically by SQLite (e.g. sqlite_sequence appears
+    -- whenever any table uses AUTOINCREMENT).
+    --
+    -- Failing to filter them out would mean we would try to drop them, which
+    -- would incorrectly look like data loss.
+    --
+    -- NB: (https://www.sqlite.org/lang_createtable.html)
+    --
+    --   Table names that begin with "sqlite_" are reserved for internal use.
+    --   It is an error to attempt to create a table with a name that starts with "sqlite_".
+    tblNames <-
+      query_ conn
+        "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'"
     tblPreds <-
       fmap mconcat . forM tblNames $ \(tblNameStr, sql) -> do
         let tblName = QualifiedName Nothing tblNameStr

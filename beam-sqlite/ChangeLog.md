@@ -4,6 +4,11 @@
 
 * `getDbConstraints` now discovers foreign key constraints via `PRAGMA foreign_key_list`, including `ON DELETE` / `ON UPDATE` actions.
 
+## Bug fixes
+
+* The SQLite migration framework no longer incorrectly concludes a migration
+  would lose data due to the presence of internal `sqlite_*` tables.
+
 # 0.5.7.0
 
 ## Added features
