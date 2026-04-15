@@ -74,3 +74,20 @@ test-suite beam-duckdb-test
                     , tasty-hunit
                     , text
                     , time
+
+benchmark beam-duckdb-bench
+    import:           common
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   bench
+    main-is:          Main.hs
+    other-modules:    BenchSchema
+    build-depends:    base
+                    , beam-core
+                    , beam-duckdb
+                    , deepseq
+                    , duckdb-simple
+                    , split
+                    , tasty
+                    , tasty-bench
+                    , text
+    ghc-options:      -O2 -rtsopts

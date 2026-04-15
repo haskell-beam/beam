@@ -1,0 +1,4 @@
+import: cabal.project
+profiling: True
+executable-profiling: True
+profiling-detail: all-functions

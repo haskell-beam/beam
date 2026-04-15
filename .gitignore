@@ -25,3 +25,8 @@ docs/ChinookData
 result
 result-*
 .direnv
+# Profiling output
+*.prof
+*.eventlog
+*.eventlog.html
+*.hp
