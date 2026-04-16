@@ -88,19 +88,18 @@ import Unsafe.Coerce (unsafeCoerce)
 import GHC.TypeLits (TypeError, ErrorMessage(Text))
 
 -- | Introduce all entries of a table into the 'Q' monad
-all_ :: ( Database be db, BeamSqlBackend be )
-       => DatabaseEntity be db (TableEntity table)
-       -> Q be db s (table (QExpr be s))
+all_ :: BeamSqlBackend be
+     => DatabaseEntity be db (TableEntity table)
+     -> Q be db s (table (QExpr be s))
 all_ (DatabaseEntity dt@(DatabaseTable {})) =
     Q $ liftF (QAll (\_ -> fromTable (tableNamed (tableName (dbTableSchema dt) (dbTableCurrentName dt))) . Just . (,Nothing))
                     (tableFieldsToExpressions (dbTableSettings dt))
                     (\_ -> Nothing) snd)
 
 -- | Introduce all entries of a view into the 'Q' monad
-allFromView_ :: ( Database be db, Beamable table
-                , BeamSqlBackend be )
-               => DatabaseEntity be db (ViewEntity table)
-               -> Q be db s (table (QExpr be s))
+allFromView_ :: ( Beamable table, BeamSqlBackend be )
+             => DatabaseEntity be db (ViewEntity table)
+             -> Q be db s (table (QExpr be s))
 allFromView_ (DatabaseEntity vw) =
     Q $ liftF (QAll (\_ -> fromTable (tableNamed (tableName (dbViewSchema vw) (dbViewCurrentName vw))) . Just . (,Nothing))
                     (tableFieldsToExpressions (dbViewSettings vw))
@@ -124,7 +123,7 @@ values_ rows =
 --   'Bool'. For a version that takes 'SqlBool' (a possibly @UNKNOWN@
 --   boolean, that maps more closely to the SQL standard), see
 --   'join_''.
-join_ :: ( Database be db, Table table, BeamSqlBackend be )
+join_ :: ( Table table, BeamSqlBackend be )
       => DatabaseEntity be db (TableEntity table)
       -> (table (QExpr be s) -> QExpr be s Bool)
       -> Q be db s (table (QExpr be s))
@@ -132,7 +131,7 @@ join_ tbl mkOn = join_' tbl (sqlBool_ . mkOn)
 
 -- | Like 'join_', but accepting an @ON@ condition that returns
 -- 'SqlBool'
-join_' :: ( Database be db, Table table, BeamSqlBackend be )
+join_' :: ( Table table, BeamSqlBackend be )
        => DatabaseEntity be db (TableEntity table)
        -> (table (QExpr be s) -> QExpr be s SqlBool)
        -> Q be db s (table (QExpr be s))
@@ -282,7 +281,7 @@ filter_' mkExpr clause = clause >>= \x -> guard_' (mkExpr x) >> pure x
 
 -- | Introduce all entries of the given table which are referenced by the given 'PrimaryKey'
 related_ :: forall be db rel s
-          . ( Database be db, Table rel, BeamSqlBackend be
+          . ( Table rel, BeamSqlBackend be
             , HasTableEquality be (PrimaryKey rel)
             )
          => DatabaseEntity be db (TableEntity rel)
@@ -293,7 +292,7 @@ related_ relTbl relKey =
 
 -- | Introduce all entries of the given table for which the expression (which can depend on the queried table returns true)
 relatedBy_ :: forall be db rel s
-            . ( Database be db, Table rel, BeamSqlBackend be )
+            . ( Table rel, BeamSqlBackend be )
            => DatabaseEntity be db (TableEntity rel)
            -> (rel (QExpr be s) -> QExpr be s Bool)
            -> Q be db s (rel (QExpr be s))
@@ -301,7 +300,7 @@ relatedBy_ = join_
 
 -- | Introduce all entries of the given table for which the expression (which can depend on the queried table returns true)
 relatedBy_' :: forall be db rel s
-             . ( Database be db, Table rel, BeamSqlBackend be )
+             . ( Table rel, BeamSqlBackend be )
             => DatabaseEntity be db (TableEntity rel)
             -> (rel (QExpr be s) -> QExpr be s SqlBool)
             -> Q be db s (rel (QExpr be s))

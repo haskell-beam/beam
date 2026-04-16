@@ -43,6 +43,7 @@ module Database.Beam.Postgres
   , smallserial, serial, bigserial
 
   , module Database.Beam.Postgres.PgSpecific
+  , module Database.Beam.Postgres.TempTable
 
     -- ** Postgres extension support
   , PgExtensionEntity, IsPgExtension(..)
@@ -83,5 +84,6 @@ import Database.Beam.Postgres.Extensions ( PgExtensionEntity, IsPgExtension(..)
                                          , pgCreateExtension, pgDropExtension
                                          , getPgExtension )
 import Database.Beam.Postgres.Debug
+import Database.Beam.Postgres.TempTable
 
 import qualified Database.PostgreSQL.Simple as Pg

@@ -2,6 +2,8 @@
 
 ## Added features
 
+* Support for temporary tables.
+
 * `getDbConstraints` now discovers foreign key constraints via `PRAGMA foreign_key_list`, including `ON DELETE` / `ON UPDATE` actions.
 
 ## Bug fixes

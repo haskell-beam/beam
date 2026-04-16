@@ -2,6 +2,8 @@
 
 ## Added features
 
+* Support for temporary tables.
+
 * `getDbConstraintsForSchemas` now discovers foreign key constraints
   via `pg_constraint`, including `ON DELETE` / `ON UPDATE` actions.
 

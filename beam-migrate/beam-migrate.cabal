@@ -45,6 +45,8 @@ library
 
                        Database.Beam.Migrate.Simple
 
+                       Database.Beam.Migrate.TempTable
+
                        Database.Beam.Haskell.Syntax
 
   other-modules:       Database.Beam.Migrate.Generics.Types
