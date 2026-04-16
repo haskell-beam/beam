@@ -1815,9 +1815,9 @@ resulting rows have a timestamp set by the database.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-0-Console">
-            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-16 16:47:53, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
-<span class="go">Order {_orderId = 2, _orderDate = 2026-04-16 16:47:53, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
-<span class="go">Order {_orderId = 3, _orderDate = 2026-04-16 16:47:53, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-16 21:11:55, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+<span class="go">Order {_orderId = 2, _orderDate = 2026-04-16 21:11:55, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
+<span class="go">Order {_orderId = 3, _orderDate = 2026-04-16 21:11:55, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
 </code></pre></div>
 
         </div>
@@ -1941,9 +1941,9 @@ orders.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-2-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2026-04-16 16:48:03, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
-<span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2026-04-16 16:48:03, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
-<span class="go">(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2026-04-16 16:48:03, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))</span>
+            <div class="highlight"><pre><span></span><code><span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2026-04-16 21:12:04, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
+<span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2026-04-16 21:12:04, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
+<span class="go">(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2026-04-16 21:12:04, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))</span>
 <span class="go">(User {_userEmail = &quot;sam@example.com&quot;, _userFirstName = &quot;Sam&quot;, _userLastName = &quot;Taylor&quot;, _userPassword = &quot;332532dcfaa1cbf61e2a266bd723612c&quot;},Nothing)</span>
 </code></pre></div>
 
@@ -2153,9 +2153,9 @@ order.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-5-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">(Order {_orderId = 1, _orderDate = 2026-04-16 16:48:22, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)</span>
-<span class="go">(Order {_orderId = 2, _orderDate = 2026-04-16 16:48:22, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)</span>
-<span class="go">(Order {_orderId = 3, _orderDate = 2026-04-16 16:48:22, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)</span>
+            <div class="highlight"><pre><span></span><code><span class="go">(Order {_orderId = 1, _orderDate = 2026-04-16 21:12:22, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)</span>
+<span class="go">(Order {_orderId = 2, _orderDate = 2026-04-16 21:12:22, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)</span>
+<span class="go">(Order {_orderId = 3, _orderDate = 2026-04-16 21:12:22, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)</span>
 </code></pre></div>
 
         </div>
@@ -2426,8 +2426,8 @@ nullable primary keys to optionally include information.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-8-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-16 16:48:41, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
-<span class="go">Order {_orderId = 3, _orderDate = 2026-04-16 16:48:41, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-16 21:12:41, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+<span class="go">Order {_orderId = 3, _orderDate = 2026-04-16 21:12:41, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
 </code></pre></div>
 
         </div>
