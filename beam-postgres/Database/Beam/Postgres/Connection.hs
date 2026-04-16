@@ -5,12 +5,12 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Database.Beam.Postgres.Connection
   ( Pg(..), PgF(..)
@@ -26,6 +26,9 @@ module Database.Beam.Postgres.Connection
   , postgresUriSyntax ) where
 
 import           Control.Exception (SomeException(..), throwIO)
+import           Data.IORef (newIORef, readIORef, writeIORef)
+import           Data.Vector (Vector)
+import qualified Data.Vector as V
 import           Control.Monad.Base (MonadBase(..))
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
@@ -118,29 +121,34 @@ pgRenderSyntax conn (PgSyntax mkQuery) =
 
 -- * Run row readers
 
-getFields :: Pg.Result -> IO [Pg.Field]
+getFields :: Pg.Result -> IO (Vector Pg.Field)
 getFields res = do
   Pg.Col colCount <- Pg.nfields res
-
-  let getField col =
-        Pg.Field res (Pg.Col col) <$> Pg.ftype res (Pg.Col col)
-
-  mapM getField [0..colCount - 1]
+  V.generateM (fromIntegral colCount) $ \i ->
+    let col = Pg.Col (fromIntegral i)
+    in Pg.Field res col <$> Pg.ftype res col
 
 runPgRowReader ::
-  Pg.Connection -> Pg.Row -> Pg.Result -> [Pg.Field] -> FromBackendRowM Postgres a -> IO (Either BeamRowReadError a)
+  Pg.Connection -> Pg.Row -> Pg.Result -> Vector Pg.Field -> FromBackendRowM Postgres a -> IO (Either BeamRowReadError a)
 runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
-  Pg.nfields res >>= \(Pg.Col colCount) ->
-  runF readRow finish step 0 colCount fields
+  -- 'colCount' and 'fields' are both invariant for the duration of one
+  -- 'runPgRowReader' call, so we capture them in the closure of 'step'
+  -- rather than threading them through the free-monad result type.
+  -- That makes the per-step closure smaller and avoids an O(n) 'length'
+  -- per row (Vector stores its length, so 'V.length' is O(1)).
+  runF readRow finish step 0
   where
+    !colCount = fromIntegral (V.length fields) :: CInt
 
-    step :: forall x. FromBackendRowF Postgres (CInt -> CInt -> [PgI.Field] -> IO (Either BeamRowReadError x))
-         -> CInt -> CInt -> [PgI.Field] -> IO (Either BeamRowReadError x)
-    step (ParseOneField _) curCol colCount [] = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
-    step (ParseOneField _) curCol colCount _
-      | curCol >= colCount = pure (Left (BeamRowReadError (Just (fromIntegral curCol)) (ColumnNotEnoughColumns (fromIntegral colCount))))
-    step (ParseOneField (next' :: next -> _)) curCol colCount (field:remainingFields) =
-      do fieldValue <- Pg.getvalue' res rowIdx (Pg.Col curCol)
+    step :: forall x. FromBackendRowF Postgres (CInt -> IO (Either BeamRowReadError x))
+         -> CInt -> IO (Either BeamRowReadError x)
+    step (ParseOneField _) curCol
+      | curCol >= colCount =
+          pure (Left (BeamRowReadError (Just (fromIntegral curCol))
+                                       (ColumnNotEnoughColumns (fromIntegral colCount))))
+    step (ParseOneField (next' :: next -> _)) curCol =
+      do let field = V.unsafeIndex fields (fromIntegral curCol)
+         fieldValue <- Pg.getvalue' res rowIdx (Pg.Col curCol)
          res' <- Pg.runConversion (Pg.fromField field fieldValue) conn
          case res' of
            Pg.Errors errs ->
@@ -162,26 +170,46 @@ runPgRowReader conn rowIdx res fields (FromBackendRowM readRow) =
                             Pg.UnexpectedNull {} ->
                               pure ColumnUnexpectedNull
              in pure (Left (BeamRowReadError (Just (fromIntegral curCol)) err))
-           Pg.Ok x -> next' x (curCol + 1) colCount remainingFields
+           Pg.Ok x -> next' x (curCol + 1)
 
-    step (Alt (FromBackendRowM a) (FromBackendRowM b) next) curCol colCount cols =
-      do aRes <- runF a (\x curCol' colCount' cols' -> pure (Right (next x curCol' colCount' cols'))) step curCol colCount cols
+    step (Alt (FromBackendRowM a) (FromBackendRowM b) next) curCol =
+      do aRes <- runF a (\x curCol' -> pure (Right (next x curCol'))) step curCol
          case aRes of
            Right next' -> next'
            Left aErr -> do
-             bRes <- runF b (\x curCol' colCount' cols' -> pure (Right (next x curCol' colCount' cols'))) step curCol colCount cols
+             bRes <- runF b (\x curCol' -> pure (Right (next x curCol'))) step curCol
              case bRes of
                Right next' -> next'
                Left {} -> pure (Left aErr)
 
-    step (FailParseWith err) _ _ _ =
+    step (FailParseWith err) _ =
       pure (Left err)
 
-    finish x _ _ _ = pure (Right x)
+    finish x _ = pure (Right x)
 
 withPgDebug :: (String -> IO ()) -> Pg.Connection -> Pg a -> IO (Either BeamRowReadError a)
-withPgDebug dbg conn (Pg action) =
-  let finish x = pure (Right x)
+withPgDebug dbg conn (Pg action) = do
+  -- One-entry cache for the cursor-batch path: 'Pg.Result' is constant
+  -- within a batch but changes between batches. Caching by 'Pg.Result'
+  -- equality (a 'ForeignPtr' comparison, ~free) avoids the redundant
+  -- 'getFields' / 'nfields' / 'ftype' calls within each batch.
+  --
+  -- Default batch size is 256 rows, set by 'postgresql-simple'
+  -- 'defaultFoldOptions' (FetchQuantity = Automatic, which resolves to
+  -- 256 in 'Database.PostgreSQL.Simple').
+  fieldsCache <- newIORef (Nothing :: Maybe (Vector Pg.Field))
+
+  let cachedGetFields :: Pg.Result -> IO (Vector Pg.Field)
+      cachedGetFields res = do
+        cached <- readIORef fieldsCache
+        case cached of
+          Just fs -> pure fs
+          _ -> do
+            fs <- getFields res
+            writeIORef fieldsCache (Just fs)
+            pure fs
+
+      finish x = pure (Right x)
       step (PgLiftIO io next) = io >>= next
       step (PgLiftWithHandle withConn next) = withConn dbg conn >>= next
       step (PgFetchNext next) = next Nothing
@@ -227,8 +255,14 @@ withPgDebug dbg conn (Pg action) =
            sts <- Pg.resultStatus res
            case sts of
              Pg.TuplesOk -> do
+               -- Hoist per-query metadata out of the per-row loop: the
+               -- same 'Pg.Result' is used for every row, so 'fields'
+               -- and 'rowCount' are loop-invariant.
+               fields <- cachedGetFields res
+               Pg.Row rowCount <- Pg.ntuples res
                let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
-               runF process (\x _ -> Pg.unsafeFreeResult res >> next x) (stepReturningList res) 0
+               runF process (\x _ -> Pg.unsafeFreeResult res >> next x)
+                            (stepReturningList fields rowCount res) 0
              _ -> Pg.throwResultError errMsg res sts
 
       stepReturningNone :: forall a. PgF (IO (Either BeamRowReadError a)) -> IO (Either BeamRowReadError a)
@@ -237,18 +271,18 @@ withPgDebug dbg conn (Pg action) =
       stepReturningNone (PgFetchNext next) = next Nothing
       stepReturningNone (PgRunReturning {}) = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal  "Nested queries not allowed")))
 
-      stepReturningList :: forall a. Pg.Result -> PgF (CInt -> IO (Either BeamRowReadError a)) -> CInt -> IO (Either BeamRowReadError a)
-      stepReturningList _   (PgLiftIO action' next) rowIdx = action' >>= \x -> next x rowIdx
-      stepReturningList res (PgFetchNext next) rowIdx =
-        do fields <- getFields res
-           Pg.Row rowCount <- Pg.ntuples res
-           if rowIdx >= rowCount
-             then next Nothing rowIdx
-             else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
-                    Left err -> pure (Left err)
-                    Right r -> next (Just r) (rowIdx + 1)
-      stepReturningList _   (PgRunReturning {}) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
-      stepReturningList _   (PgLiftWithHandle {}) _ = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
+      stepReturningList :: forall a. Vector Pg.Field -> CInt -> Pg.Result
+                        -> PgF (CInt -> IO (Either BeamRowReadError a))
+                        -> CInt -> IO (Either BeamRowReadError a)
+      stepReturningList _      _        _   (PgLiftIO action' next) rowIdx = action' >>= \x -> next x rowIdx
+      stepReturningList fields rowCount res (PgFetchNext next)      rowIdx =
+        if rowIdx >= rowCount
+          then next Nothing rowIdx
+          else runPgRowReader conn (Pg.Row rowIdx) res fields fromBackendRow >>= \case
+                 Left err -> pure (Left err)
+                 Right r  -> next (Just r) (rowIdx + 1)
+      stepReturningList _      _        _   (PgRunReturning {})     _      = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
+      stepReturningList _      _        _   (PgLiftWithHandle {})   _      = pure (Left (BeamRowReadError Nothing (ColumnErrorInternal "Nested queries not allowed")))
 
       finishProcess :: forall a. a -> Maybe PgI.Row -> IO (PgStream a)
       finishProcess x _ = pure (PgStreamDone (Right x))
@@ -260,12 +294,12 @@ withPgDebug dbg conn (Pg action) =
         case res of
           Nothing -> next Nothing Nothing
           Just (PgI.Row rowIdx res') ->
-            getFields res' >>= \fields ->
+            cachedGetFields res' >>= \fields ->
             runPgRowReader conn rowIdx res' fields fromBackendRow >>= \case
               Left err -> pure (PgStreamDone (Left err))
               Right r -> next (Just r) Nothing
       stepProcess (PgFetchNext next) (Just (PgI.Row rowIdx res)) =
-        getFields res >>= \fields ->
+        cachedGetFields res >>= \fields ->
         runPgRowReader conn rowIdx res fields fromBackendRow >>= \case
           Left err -> pure (PgStreamDone (Left err))
           Right r -> pure (PgStreamContinue (next (Just r)))
@@ -275,7 +309,8 @@ withPgDebug dbg conn (Pg action) =
       runConsumer :: forall a. PgStream a -> PgI.Row -> IO (PgStream a)
       runConsumer s@(PgStreamDone {}) _ = pure s
       runConsumer (PgStreamContinue next) row = next (Just row)
-  in runF action finish step
+
+  runF action finish step
 
 -- * Beam Monad class
 

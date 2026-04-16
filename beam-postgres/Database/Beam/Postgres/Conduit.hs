@@ -48,6 +48,7 @@ import qualified Database.PostgreSQL.Simple.Types as Pg (Query(..))
 import qualified Conduit as C
 import           Data.Int (Int64)
 import           Data.Maybe (fromMaybe)
+import qualified Data.Vector as V
 
 import qualified Control.Monad.Fail as Fail
 
@@ -217,7 +218,7 @@ streamResults (conn@Pg.Connection {connectionHandle}) conn' fields = do
       liftIO (Pg.resultStatus row) >>=
       \case
         Pg.SingleTuple ->
-          do fields' <- liftIO (maybe (getFields row) pure fields)
+          do fields' <- liftIO (maybe (getFields row) (pure . V.fromList) fields)
              parsedRow <- liftIO $ bracket
                (putMVar connectionHandle conn')
                (\_ -> takeMVar connectionHandle)
@@ -226,7 +227,7 @@ streamResults (conn@Pg.Connection {connectionHandle}) conn' fields = do
                Left err -> liftIO (bailEarly conn' row ("Could not read row: " <> show err))
                Right parsedRow' ->
                  do C.yield parsedRow'
-                    streamResults conn conn' (Just fields')
+                    streamResults conn conn' (Just (V.toList fields'))
         Pg.TuplesOk -> liftIO (finishQuery conn')
         Pg.EmptyQuery -> Fail.fail "No query"
         Pg.CommandOk -> pure ()
