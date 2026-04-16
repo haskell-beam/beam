@@ -2,26 +2,30 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
 
-{- | Shared schema used by the @beam-postgres@ row-reader benchmark.
-
-A synthetic IMDb-style names table is defined two ways: once as a
-@beam@ table ('ImdbNameT') and once as a flat record
-('StrictImdbName') whose 'FromRow' / 'ToRow' instances are written
-by hand. This lets us compare the cost of @beam-postgres@ row
-reading against the @postgresql-simple@ baseline on the same data.
--}
-module BenchSchema (
+module Database.Beam.Bench (
+  -- * Beam table
   ImdbNameT (..),
   ImdbName,
   ImdbDb (..),
   imdbDb,
+
+  -- * Flat record
   StrictImdbName (..),
+
+  -- * Configuration
+  defaultRowCount,
+  readRowCount,
   generateRow,
+
+  -- * SQL strings
+  createTableSql,
+  insertSql,
+  selectSql,
 ) where
 
 import Control.DeepSeq (NFData)
@@ -45,9 +49,7 @@ import Database.Beam (
   tableModification,
   withDbModification,
  )
-import Database.PostgreSQL.Simple.FromRow (FromRow (..), field)
-import Database.PostgreSQL.Simple.ToField (toField)
-import Database.PostgreSQL.Simple.ToRow (ToRow (..))
+import System.Environment (lookupEnv)
 
 data ImdbNameT f = ImdbName
   { _nconst :: !(Columnar f Text)
@@ -76,9 +78,6 @@ newtype ImdbDb f = ImdbDb
 
 instance Database be ImdbDb
 
-{- | Beam database settings. Field names are mapped to lowercase column
-names so the schema matches the one created by @setupSchema@.
--}
 imdbDb :: DatabaseSettings be ImdbDb
 imdbDb =
   defaultDbSettings
@@ -108,30 +107,6 @@ data StrictImdbName = StrictImdbName
 
 instance NFData StrictImdbName
 
-instance FromRow StrictImdbName where
-  fromRow =
-    StrictImdbName
-      <$> field
-      <*> field
-      <*> field
-      <*> field
-      <*> field
-      <*> field
-
-instance ToRow StrictImdbName where
-  toRow x =
-    [ toField (siNconst x)
-    , toField (siPrimaryName x)
-    , toField (siBirthYear x)
-    , toField (siDeathYear x)
-    , toField (siPrimaryProfession x)
-    , toField (siKnownForTitles x)
-    ]
-
--- ---------------------------------------------------------------------------
--- Synthetic data
--- ---------------------------------------------------------------------------
-
 {- | Deterministic row generator. Same input always yields the same
 row, so repeated benchmark invocations operate on identical data.
 -}
@@ -150,3 +125,47 @@ generateRow i =
     }
  where
   pad7 n = let s = show n in replicate (7 - length s) '0' <> s
+
+{- | Default number of synthetic rows when @BEAM_BENCH_ROWS@ is unset.
+  10,000 is a balance between signal and benchmark wall-time.
+-}
+defaultRowCount :: Int
+defaultRowCount = 10_000
+
+-- | Read 'BEAM_BENCH_ROWS' if set, otherwise return 'defaultRowCount'.
+readRowCount :: IO Int
+readRowCount = do
+  mbStr <- lookupEnv "BEAM_BENCH_ROWS"
+  pure $ case mbStr of
+    Just s | [(n, "")] <- reads s -> n
+    _ -> defaultRowCount
+
+createTableSql :: String
+createTableSql =
+  unwords
+    [ "CREATE TABLE imdb_names ("
+    , "  nconst              TEXT NOT NULL,"
+    , "  primary_name        TEXT,"
+    , "  birth_year          INTEGER,"
+    , "  death_year          INTEGER,"
+    , "  primary_profession  TEXT,"
+    , "  known_for_titles    TEXT"
+    , ")"
+    ]
+
+insertSql :: String
+insertSql =
+  unwords
+    [ "INSERT INTO imdb_names"
+    , "  (nconst, primary_name, birth_year, death_year,"
+    , "   primary_profession, known_for_titles)"
+    , "VALUES (?, ?, ?, ?, ?, ?)"
+    ]
+
+selectSql :: String
+selectSql =
+  unwords
+    [ "SELECT nconst, primary_name, birth_year, death_year,"
+    , "       primary_profession, known_for_titles"
+    , "FROM imdb_names"
+    ]

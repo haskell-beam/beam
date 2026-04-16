@@ -62,11 +62,12 @@ jobs:
       if: ${{ !matrix.duckdb }}
       run: |
         sed -i '/beam-duckdb/d' ./cabal.project
+        sed -i '/beam-backend-bench/d' ./cabal.project
 
     - name: Generate freeze file
       run: |
         cabal update
-        cabal configure --disable-optimization --enable-tests --enable-benchmarks
+        cabal configure --disable-optimization
         cabal freeze ${{matrix.cabal-flags}}
 
         # Exclude the timestamp of Hackage index update from our cache key, to
@@ -107,7 +108,7 @@ jobs:
     - name: Run benchmarks
       if: ${{ matrix.duckdb }}
       run: |
-        BEAM_BENCH_ROWS=100000 cabal -v0 bench beam-postgres && cabal -v0 bench beam-sqlite && cabal -v0 bench beam-duckdb
+        BEAM_BENCH_ROWS=100000 cabal -v0 bench beam-backend-bench:beam-postgres && cabal -v0 bench beam-backend-bench:beam-sqlite && cabal -v0 bench beam-backend-bench:beam-duckdb
 
   release-artifacts:
     # Only build release artifacts if `continuous-integration` is successful
@@ -117,9 +118,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # Note that we do not check `beam-backend-bench` because this package is
+    # not meant to be released.
     - name: Check packages for common mistakes
       run: |
-          for pkg in $(find . -mindepth 1 -maxdepth 1 -type d  -name "beam-*")
+          for pkg in $(find . -mindepth 1 -maxdepth 1 -type d -name "beam-*" -not -name "beam-backend-bench")
           do
               cd $pkg
               echo "Checking $pkg"
