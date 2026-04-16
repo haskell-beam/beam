@@ -66,7 +66,7 @@ jobs:
     - name: Generate freeze file
       run: |
         cabal update
-        cabal configure --disable-optimization --enable-tests
+        cabal configure --disable-optimization --enable-tests --enable-benchmarks
         cabal freeze ${{matrix.cabal-flags}}
 
         # Exclude the timestamp of Hackage index update from our cache key, to
@@ -103,6 +103,11 @@ jobs:
     - name: Run tests
       run: |
         cabal test all ${{matrix.cabal-flags}}
+
+    - name: Run benchmarks
+      if: ${{ matrix.duckdb }}
+      run: |
+        BEAM_BENCH_ROWS=100000 cabal -v0 bench beam-postgres && cabal -v0 bench beam-sqlite && cabal -v0 bench beam-duckdb
 
   release-artifacts:
     # Only build release artifacts if `continuous-integration` is successful
