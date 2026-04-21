@@ -53,6 +53,7 @@ import           Database.Beam.Schema.Tables ( Beamable
                                              , DatabaseEntityDescriptor(..)
                                              , TableEntity
                                              , TableField(..)
+                                             , TableSettings
                                              , changeBeamRep )
 import           Database.Beam.Sqlite.Syntax
 
@@ -388,6 +389,16 @@ instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
   runInsertReturningList SqlInsertNoRows = pure []
   runInsertReturningList (SqlInsert _ insertCommand) = runReturningList $ SqliteCommandInsert insertCommand
 
+instance Beam.MonadBeamUpdateReturning Sqlite SqliteM where
+  runUpdateReturningList :: forall table. (
+    Beamable table, Projectible Sqlite (table (QExpr Sqlite ())), FromBackendRow Sqlite (table Identity)
+    ) => SqlUpdate Sqlite table -> SqliteM [table Identity]
+  runUpdateReturningList SqlIdentityUpdate = pure []
+  runUpdateReturningList (SqlUpdate tblSettings sqliteUpdate) =
+    runReturningList $ SqliteCommandSyntax $
+      fromSqliteUpdate sqliteUpdate
+        <> returningClauseWithProjection tblSettings (id :: table (QExpr Sqlite ()) -> table (QExpr Sqlite ()))
+
 newtype SqliteInsertReturning a = SqliteInsertReturning [SqliteSyntax]
 newtype SqliteDeleteReturning a = SqliteDeleteReturning SqliteSyntax
 newtype SqliteUpdateReturning a = SqliteUpdateReturning (Maybe SqliteSyntax)
@@ -458,15 +469,9 @@ deleteReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSett
                 mkWhere
                 mkProjection =
   SqliteDeleteReturning $
-    fromSqliteDelete sqliteDelete
-      <>
-    emit " RETURNING " <> commas (map fromSqliteExpression (project (Proxy @Sqlite) (mkProjection tblQ) "t"))
+    fromSqliteDelete sqliteDelete <> returningClauseWithProjection tblSettings mkProjection
   where
-
     SqlDelete _ sqliteDelete = delete table (\t -> mkWhere t) -- eta-expand for compatibility with shallow subsumption
-    tblQ = changeBeamRep getFieldName tblSettings
-    getFieldName (Columnar' fd) =
-      Columnar' $ QExpr $ pure $ fieldE (unqualifiedField (_fieldName fd))
 
 runSqliteInsert :: (String -> IO ()) -> Connection -> SqliteInsertSyntax -> IO ()
 runSqliteInsert logger conn (SqliteInsertSyntax tbl fields vs onConflict)
@@ -667,10 +672,14 @@ updateReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSett
     case update table mkAssignments mkWhere of
       SqlIdentityUpdate -> Nothing
       SqlUpdate _ sqliteUpdate ->
-        Just $ fromSqliteUpdate sqliteUpdate
-          <> emit " RETURNING "
-          <> commas (map fromSqliteExpression (project (Proxy @Sqlite) (mkProjection tblQ) "t"))
+        Just $ fromSqliteUpdate sqliteUpdate <> returningClauseWithProjection tblSettings mkProjection
+
+-- | Build a SQLite @RETURNING@ clause from table settings and a projection.
+returningClauseWithProjection :: (Beamable table, Projectible Sqlite a) => TableSettings table -> (table (QExpr Sqlite s) -> a) -> SqliteSyntax
+returningClauseWithProjection tblSettings mkProjection =
+  emit " RETURNING " <> commas (map fromSqliteExpression (project (Proxy @Sqlite) (mkProjection (tableFieldExprs tblSettings)) "t"))
   where
-    tblQ = changeBeamRep getFieldName tblSettings
-    getFieldName (Columnar' fd) =
-      Columnar' $ QExpr $ pure $ fieldE (unqualifiedField (_fieldName fd))
+    -- | Build column expressions from table settings, for use in @RETURNING@ clauses.
+    tableFieldExprs :: Beamable table => TableSettings table -> table (QExpr Sqlite s)
+    tableFieldExprs = changeBeamRep (\(Columnar' fd) ->
+      Columnar' $ QExpr $ pure $ fieldE (unqualifiedField (_fieldName fd)))
