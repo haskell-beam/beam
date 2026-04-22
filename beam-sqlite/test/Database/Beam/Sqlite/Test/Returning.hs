@@ -15,7 +15,7 @@ import Test.Tasty.HUnit (testCase, (@?=))
 
 import Database.Beam
 import Database.Beam.Backend.SQL.BeamExtensions
-  (conflictingFields, onConflictUpdateSet, onConflictUpdateSetWhere)
+  (conflictingFields, onConflictUpdateSet, onConflictUpdateSetWhere, runUpdateReturningList)
 import Database.Beam.Migrate (defaultMigratableDbSettings)
 import Database.Beam.Migrate.Simple (CheckedDatabaseSettings, autoMigrate)
 import Database.Beam.Sqlite (Sqlite, runBeamSqlite, insertOnConflictReturning)
@@ -26,7 +26,7 @@ import Database.Beam.Sqlite
     , insertReturning
     , runDeleteReturningList
     , runInsertReturningList
-    , runUpdateReturningList
+    , runSqliteUpdateReturningList
     , updateReturning
     )
 
@@ -38,6 +38,7 @@ tests =
     testGroup
         "SQLite RETURNING statement tests"
         [ testInsertOnConflictReturning
+        , testSqliteUpdateReturning
         , testUpdateReturning
         , testDeleteReturning
         ]
@@ -124,7 +125,34 @@ testInsertOnConflictReturning = testCase "INSERT .. ON CONFLICT .. RETURNING" $
       , (3, "upserted_user3",  33)
       ]
 
--- | Test @UPDATE ... RETURNING@
+-- | Test @UPDATE ... RETURNING@ using the Sqlite-specific runSqliteUpdateReturningList
+testSqliteUpdateReturning :: TestTree
+testSqliteUpdateReturning = testCase "UPDATE .. RETURNING" $
+  withTestDb $ \conn -> do
+    updatedUsers <-
+      runBeamSqlite conn $ do
+        autoMigrate migrationBackend checkedDb
+
+        -- Seed data
+        runInsert $
+          insert (usersTable testDb) $
+            insertValues
+              [ User {userId = 1, userName = "user1", userInfo1 = "user1Info1", userInfo2 = 11 }
+              , User {userId = 2, userName = "user2", userInfo1 = "user2Info1", userInfo2 = 22 }
+              , User {userId = 3, userName = "user3", userInfo1 = "user3Info1", userInfo2 = 33 }
+              ]
+
+        -- Update user 2 and return projected columns from the updated row
+        runSqliteUpdateReturningList $
+          updateReturning
+            (usersTable testDb)
+            (\u -> userName u <-. val_ "updated_user2")
+            (\u -> userId u ==. val_ 2)
+            (\u -> (userId u, userName u, userInfo2 u))
+
+    updatedUsers @?= [(2, "updated_user2", 22)]
+
+-- | Test @UPDATE ... RETURNING@ using MonadBeamUpdateReturning's runUpdateReturningList
 testUpdateReturning :: TestTree
 testUpdateReturning = testCase "UPDATE .. RETURNING" $
   withTestDb $ \conn -> do
@@ -143,13 +171,13 @@ testUpdateReturning = testCase "UPDATE .. RETURNING" $
 
         -- Update user 2 and return projected columns from the updated row
         runUpdateReturningList $
-          updateReturning
+          update
             (usersTable testDb)
             (\u -> userName u <-. val_ "updated_user2")
             (\u -> userId u ==. val_ 2)
-            (\u -> (userId u, userName u, userInfo2 u))
 
-    updatedUsers @?= [(2, "updated_user2", 22)]
+
+    fmap (\u -> (userId u, userName u, userInfo2 u)) updatedUsers @?= [(2, "updated_user2", 22)]
 
 -- | Test @DELETE .. RETURNING@
 testDeleteReturning :: TestTree

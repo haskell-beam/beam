@@ -24,7 +24,7 @@ module Database.Beam.Sqlite.Connection
 
     -- ** @UPDATE ... RETURNING@
   , SqliteUpdateReturning
-  , updateReturning, runUpdateReturningList
+  , updateReturning, runSqliteUpdateReturningList
   ) where
 
 import           Prelude hiding (fail)
@@ -639,21 +639,21 @@ excluded table = changeBeamRep excludedField table
           Columnar' $ QExpr $ const $ fieldE $ qualifiedField "excluded" name
 
 -- | Use in conjunction with 'updateReturning'.
-runUpdateReturningList
+runSqliteUpdateReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
      , FromBackendRow be a
      )
   => SqliteUpdateReturning a
   -> m [a]
-runUpdateReturningList (SqliteUpdateReturning Nothing) = pure []
-runUpdateReturningList (SqliteUpdateReturning (Just syntax)) =
+runSqliteUpdateReturningList (SqliteUpdateReturning Nothing) = pure []
+runSqliteUpdateReturningList (SqliteUpdateReturning (Just syntax)) =
   runReturningList $ SqliteCommandSyntax syntax
 
 -- | SQLite @UPDATE ... RETURNING@ statement support. The last
 -- argument takes the updated row and returns the values to be returned.
 --
--- Use 'runUpdateReturningList' to get the results.
+-- Use 'runSqliteUpdateReturningList' to get the results.
 updateReturning :: forall a table db. Projectible Sqlite a
                 => DatabaseEntity Sqlite db (TableEntity table)
                       -- ^ table to update
