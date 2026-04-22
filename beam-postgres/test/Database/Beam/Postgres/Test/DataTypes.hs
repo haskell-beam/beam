@@ -121,7 +121,7 @@ errorOnSchemaMismatch pgConn =
             (RealDb <$> createTable "tbl1" (Tbl (field "key" int notNull)
                                                 (field "value" (varchar Nothing) notNull)))
 
-          runInsertReturningList $ insert (_realTbl realDb) $ insertValues [ Tbl 1 "hello", Tbl 2 "world", Tbl 3 "foo" ]
+          runInsertReturningList (insert (_realTbl realDb) $ insertValues [ Tbl 1 "hello", Tbl 2 "world", Tbl 3 "foo" ]) id
 
       vs @?= [ Tbl 1 "hello", Tbl 2 "world", Tbl 3 "foo" ]
 
@@ -132,7 +132,7 @@ errorOnSchemaMismatch pgConn =
 
       didFail <- handle (\(_ :: SomeException) -> pure True) $
         runBeamPostgres conn $ do
-          _ <- runInsertReturningList $ insert (_wrongTbl wrongDb) $ insertValues [ WrongTbl 4 23, WrongTbl 5 24, WrongTbl 6 24 ]
+          _ <- runInsertReturningList (insert (_wrongTbl wrongDb) $ insertValues [ WrongTbl 4 23, WrongTbl 5 24, WrongTbl 6 24 ]) id
           pure False
 
       assertBool "runInsertReturningList succeeded" didFail
