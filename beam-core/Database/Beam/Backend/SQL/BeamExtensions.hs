@@ -41,108 +41,123 @@ import           Data.Semigroup
 
 --import GHC.Generics
 
--- | 'MonadBeam's that support returning the newly created rows of an @INSERT@ statement.
+-- | 'MonadBeam's that support returning data from the newly created rows of an @INSERT@ statement.
 --   Useful for discovering the real value of a defaulted value.
+--
+--   The projection function determines which columns are returned. Pass 'id' to
+--   return the full row ('table Identity'), or supply a custom projection to
+--   return a subset of columns.
 class MonadBeam be m =>
   MonadBeamInsertReturning be m | m -> be where
   runInsertReturningList
     :: ( Beamable table
-       , Projectible be (table (QExpr be ()))
-       , FromBackendRow be (table Identity) )
+       , Projectible be a
+       , FromBackendRow be (QExprToIdentity a) )
     => SqlInsert be table
-    -> m [table Identity]
+    -> (table (QExpr be ()) -> a)
+    -> m [QExprToIdentity a]
 
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ExceptT e m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ContT r m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (ReaderT r m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (Lazy.StateT r m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance MonadBeamInsertReturning be m => MonadBeamInsertReturning be (Strict.StateT r m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance (MonadBeamInsertReturning be m, Monoid r)
     => MonadBeamInsertReturning be (Lazy.WriterT r m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance (MonadBeamInsertReturning be m, Monoid r)
     => MonadBeamInsertReturning be (Strict.WriterT r m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance (MonadBeamInsertReturning be m, Monoid w)
     => MonadBeamInsertReturning be (Lazy.RWST r w s m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 instance (MonadBeamInsertReturning be m, Monoid w)
     => MonadBeamInsertReturning be (Strict.RWST r w s m) where
-    runInsertReturningList = lift . runInsertReturningList
+    runInsertReturningList sql proj = lift $ runInsertReturningList sql proj
 
--- | 'MonadBeam's that support returning the updated rows of an @UPDATE@ statement.
+-- | 'MonadBeam's that support returning data from the updated rows of an @UPDATE@ statement.
 --   Useful for discovering the new values of the updated rows.
+--
+--   The projection function determines which columns are returned. Pass 'id' to
+--   return the full row ('table Identity'), or supply a custom projection to
+--   return a subset of columns.
 class MonadBeam be m =>
   MonadBeamUpdateReturning be m | m -> be where
   runUpdateReturningList
     :: ( Beamable table
-       , Projectible be (table (QExpr be ()))
-       , FromBackendRow be (table Identity) )
+       , Projectible be a
+       , FromBackendRow be (QExprToIdentity a) )
     => SqlUpdate be table
-    -> m [table Identity]
+    -> (table (QExpr be ()) -> a)
+    -> m [QExprToIdentity a]
 
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ExceptT e m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ContT r m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (ReaderT r m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (Lazy.StateT r m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance MonadBeamUpdateReturning be m => MonadBeamUpdateReturning be (Strict.StateT r m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance (MonadBeamUpdateReturning be m, Monoid r)
     => MonadBeamUpdateReturning be (Lazy.WriterT r m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance (MonadBeamUpdateReturning be m, Monoid r)
     => MonadBeamUpdateReturning be (Strict.WriterT r m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance (MonadBeamUpdateReturning be m, Monoid w)
     => MonadBeamUpdateReturning be (Lazy.RWST r w s m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 instance (MonadBeamUpdateReturning be m, Monoid w)
     => MonadBeamUpdateReturning be (Strict.RWST r w s m) where
-    runUpdateReturningList = lift . runUpdateReturningList
+    runUpdateReturningList sql proj = lift $ runUpdateReturningList sql proj
 
--- | 'MonadBeam's that suppert returning rows that will be deleted by the given
--- @DELETE@ statement. Useful for deallocating resources based on the value of
--- deleted rows.
+-- | 'MonadBeam's that support returning data from rows that will be deleted by
+-- the given @DELETE@ statement. Useful for deallocating resources based on the
+-- value of deleted rows.
+--
+--   The projection function determines which columns are returned. Pass 'id' to
+--   return the full row ('table Identity'), or supply a custom projection to
+--   return a subset of columns.
 class MonadBeam be m =>
   MonadBeamDeleteReturning be m | m -> be where
   runDeleteReturningList
     :: ( Beamable table
-       , Projectible be (table (QExpr be ()))
-       , FromBackendRow be (table Identity) )
+       , Projectible be a
+       , FromBackendRow be (QExprToIdentity a) )
     => SqlDelete be table
-    -> m [table Identity]
+    -> (table (QExpr be ()) -> a)
+    -> m [QExprToIdentity a]
 
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ExceptT e m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ContT r m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (ReaderT r m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (Lazy.StateT r m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance MonadBeamDeleteReturning be m => MonadBeamDeleteReturning be (Strict.StateT r m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance (MonadBeamDeleteReturning be m, Monoid r)
     => MonadBeamDeleteReturning be (Lazy.WriterT r m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance (MonadBeamDeleteReturning be m, Monoid r)
     => MonadBeamDeleteReturning be (Strict.WriterT r m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance (MonadBeamDeleteReturning be m, Monoid w)
     => MonadBeamDeleteReturning be (Lazy.RWST r w s m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 instance (MonadBeamDeleteReturning be m, Monoid w)
     => MonadBeamDeleteReturning be (Strict.RWST r w s m) where
-    runDeleteReturningList = lift . runDeleteReturningList
+    runDeleteReturningList sql proj = lift $ runDeleteReturningList sql proj
 
 class BeamSqlBackend be => BeamHasInsertOnConflict be where
   -- | Specifies the kind of constraint that must be violated for the action to occur
