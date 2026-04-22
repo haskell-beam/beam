@@ -16,11 +16,11 @@ module Database.Beam.Sqlite.Connection
 
     -- ** @INSERT ... RETURNING@
   , SqliteInsertReturning
-  , insertReturning, insertOnConflictReturning, runInsertReturningList
+  , insertReturning, insertOnConflictReturning, runSqliteInsertReturningList
 
     -- ** @DELETE ... RETURNING@
   , SqliteDeleteReturning
-  , deleteReturning, runDeleteReturningList
+  , deleteReturning, runSqliteDeleteReturningList
 
     -- ** @UPDATE ... RETURNING@
   , SqliteUpdateReturning
@@ -452,14 +452,14 @@ sqliteGroupByDefaults flds orig@(SqliteInsertFromSql {}) =
   -- Preserve manually-written queries
   [(flds, orig)]
 
-runDeleteReturningList
+runSqliteDeleteReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
      , FromBackendRow be a
      )
   => SqliteDeleteReturning a
   -> m [a]
-runDeleteReturningList (SqliteDeleteReturning syntax) =
+runSqliteDeleteReturningList (SqliteDeleteReturning syntax) =
   runReturningList $ SqliteCommandSyntax syntax
 
 -- | SQLite @DELETE ... RETURNING@ statement support. The last
@@ -556,14 +556,14 @@ insertOnConflictReturning
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
 -- inserted row.
-runInsertReturningList
+runSqliteInsertReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
      , FromBackendRow be a
      )
   => SqliteInsertReturning a
   -> m [a]
-runInsertReturningList (SqliteInsertReturning syntaxes) =
+runSqliteInsertReturningList (SqliteInsertReturning syntaxes) =
   concat <$>
     traverse (\syntax -> runReturningList $ SqliteCommandSyntax syntax) syntaxes
 

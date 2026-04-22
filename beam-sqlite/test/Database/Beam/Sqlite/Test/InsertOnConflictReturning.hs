@@ -112,8 +112,8 @@ testInsertOnConflictReturning = testCase "Check that conflicting values are retu
                         , User{userId = 2, userName = "different_user2"}
                         ]
 
-                runInsertReturningList $
-                    insertOnConflict
+                runInsertReturningList
+                    (insertOnConflict
                         (usersTable testDb)
                         (insertValues newUsers)
                         (conflictingFields userId)
@@ -126,7 +126,8 @@ testInsertOnConflictReturning = testCase "Check that conflicting values are retu
                                (User{userName = excl}) ->
                                     current_ fld /=. excl
                             )
-                        )
+                        ))
+                    userId
 
         -- Expecting that the conflicting user, User id 2, is also returned
-        userId <$> conflicts @?= [1, 2]
+        conflicts @?= [1, 2]

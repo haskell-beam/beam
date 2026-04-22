@@ -56,11 +56,12 @@ testInsertReturningColumnOrder = testCase "runInsertReturningList with mismatchi
   withTestDb $ \conn -> do
     execute_ conn "CREATE TABLE test_table ( date_joined TIMESTAMP NOT NULL, date_logged_in TIMESTAMP WITH TIME ZONE NOT NULL, first_name TEXT NOT NULL, id INT PRIMARY KEY, age INT NOT NULL, last_name TEXT NOT NULL )"
     inserted <-
-      runBeamSqlite conn $ runInsertReturningList $
-      insert (dbTestTable testDatabase) $
+      runBeamSqlite conn $ runInsertReturningList
+      (insert (dbTestTable testDatabase) $
       insertExpressions [ TestTable 0 (concat_ [ "j", "im" ]) "smith" 19 currentTimestamp_ (val_ zeroUtcTime)
                         , TestTable 1 "sally" "apple" ((val_ 56 + val_ 109) `div_` 5) currentTimestamp_ (val_ oneUtcTime)
-                        , TestTable 4 "blah" "blah" (-1) currentTimestamp_ (val_ now) ]
+                        , TestTable 4 "blah" "blah" (-1) currentTimestamp_ (val_ now) ])
+      id
 
     let dateJoined : _ = ttDateJoined <$> inserted
 
@@ -95,11 +96,12 @@ testInsertOnlyDefaults :: TestTree
 testInsertOnlyDefaults = testCase "insert only default values" $
   withTestDb $ \conn -> do
     execute_ conn "CREATE TABLE with_defaults (id INTEGER PRIMARY KEY, value TEXT NOT NULL DEFAULT \"unknown\")"
-    inserted <- runBeamSqlite conn $ runInsertReturningList $
-      insert (tblWithDefaults withDefaultsDb) $ insertExpressions
+    inserted <- runBeamSqlite conn $ runInsertReturningList
+      (insert (tblWithDefaults withDefaultsDb) $ insertExpressions
         [ WithDefaults default_ default_
         , WithDefaults default_ $ val_ "other"
-        ]
+        ])
+      id
     assertEqual "inserted values"
       [ WithDefaults 1 "unknown"
       , WithDefaults 2 "other"
@@ -110,8 +112,8 @@ testUpsertOnlyDefaults :: TestTree
 testUpsertOnlyDefaults = testCase "upsert only default values" $
   withTestDb $ \conn -> do
     execute_ conn "CREATE TABLE with_defaults (id INTEGER PRIMARY KEY, value TEXT NOT NULL DEFAULT \"unknown\")"
-    inserted <- runBeamSqlite conn $ runInsertReturningList $
-      insertOnConflict (tblWithDefaults withDefaultsDb)
+    inserted <- runBeamSqlite conn $ runInsertReturningList
+      (insertOnConflict (tblWithDefaults withDefaultsDb)
         ( insertExpressions
             [ WithDefaults default_ default_
             , WithDefaults default_ $ val_ "other"
@@ -119,6 +121,8 @@ testUpsertOnlyDefaults = testCase "upsert only default values" $
         )
         anyConflict
         onConflictDoNothing
+      )
+      id
     assertEqual "inserted values"
       [ WithDefaults 1 "unknown"
       , WithDefaults 2 "other"
@@ -156,13 +160,14 @@ testInsertSomeDefaults = testCase "insert mix of default values" $ do
   withTestDb $ \conn -> do
     execute_ conn "CREATE TABLE mix_table ( id INTEGER PRIMARY KEY AUTOINCREMENT, field1 INT DEFAULT 11, field2 INT DEFAULT 22, field3 INT DEFAULT 33)"
     inserted <-
-      runBeamSqlite conn $ runInsertReturningList $
-      insert (dbMixTable mixDatabase) $
+      runBeamSqlite conn $ runInsertReturningList
+      (insert (dbMixTable mixDatabase) $
       insertExpressions [ MixTable default_ default_ 1001     10001
                         , MixTable 202      2        default_ default_
                         , MixTable 303      3        default_ default_
                         , MixTable default_ default_ 4004     40004
-                        ]
+                        ])
+      id
 
     let expected = [ MixTable 1   11 1001 10001
                    , MixTable 202 2  22   33
