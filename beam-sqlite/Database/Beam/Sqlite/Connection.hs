@@ -389,6 +389,8 @@ instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
   runInsertReturningList SqlInsertNoRows = pure []
   runInsertReturningList (SqlInsert _ insertCommand) = runReturningList $ SqliteCommandInsert insertCommand
 
+-- |
+-- @since 0.6.0.0
 instance Beam.MonadBeamUpdateReturning Sqlite SqliteM where
   runUpdateReturningList :: forall table. (
     Beamable table, Projectible Sqlite (table (QExpr Sqlite ())), FromBackendRow Sqlite (table Identity)
@@ -639,6 +641,8 @@ excluded table = changeBeamRep excludedField table
           Columnar' $ QExpr $ const $ fieldE $ qualifiedField "excluded" name
 
 -- | Use in conjunction with 'updateReturning'.
+--
+-- @since 0.6.0.0
 runSqliteUpdateReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ SqliteCommandSyntax

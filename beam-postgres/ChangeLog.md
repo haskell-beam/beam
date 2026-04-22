@@ -1,4 +1,4 @@
-# Unreleased
+# 0.5.6.0
 
 ## Added features
 

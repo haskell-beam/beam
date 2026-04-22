@@ -1,6 +1,10 @@
-# Unreleased
+# 0.6.0.0
 
 ## Added features
+
+* `SqliteM` now supports `runUpdateReturningList` via a `MonadBeamUpdateReturning` instance. The type is almost identical,
+  but not quite, as the `runUpdateReturningList` function from previous releases. Instead, `runUpdateReturningList` has been
+  renamed `runSqliteUpdateReturningList`.
 
 * Support for temporary tables.
 
