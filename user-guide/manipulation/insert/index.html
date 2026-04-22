@@ -1957,7 +1957,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">800</span><span class="p">);</span>
 
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-16 21:14:08.390498, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-22 00:27:40.913766, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -1989,7 +1989,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
 
 <span class="c1">-- With values: [SQLInteger 800];</span>
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-16 21:14:09, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-22 00:27:42, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2021,7 +2021,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="mi">800</span><span class="p">);</span>
 
 <span class="c1">-- With values: [];</span>
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-16 00:00:00, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-22 00:00:00, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2294,7 +2294,7 @@ qualified.</p>
 <span class="w">                                                                                                                            </span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="p">,</span>
 <span class="w">                                                                                                                            </span><span class="ss">&quot;Total&quot;</span><span class="p">;</span>
 
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 501}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-16 21:14:18.799573, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 501}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-22 00:27:51.731104, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2319,7 +2319,7 @@ qualified.</p>
 <span class="w">                                                          </span><span class="ss">&quot;Total&quot;</span><span class="p">;</span>
 
 <span class="c1">-- With values: [SQLInteger 1,SQLText &quot;123 My Street&quot;,SQLText &quot;Buenos Noches&quot;,SQLText &quot;Rio&quot;,SQLText &quot;Mozambique&quot;,SQLText &quot;ABCDEF&quot;,SQLText &quot;1000.0&quot;];</span>
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-16 21:14:20, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-04-22 00:27:53, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
