@@ -197,16 +197,16 @@ withPgDebug dbg conn (Pg action) = do
   -- Default batch size is 256 rows, set by 'postgresql-simple'
   -- 'defaultFoldOptions' (FetchQuantity = Automatic, which resolves to
   -- 256 in 'Database.PostgreSQL.Simple').
-  fieldsCache <- newIORef (Nothing :: Maybe (Vector Pg.Field))
+  fieldsCache <- newIORef (Nothing :: Maybe (Pg.Result, Vector Pg.Field))
 
   let cachedGetFields :: Pg.Result -> IO (Vector Pg.Field)
       cachedGetFields res = do
         cached <- readIORef fieldsCache
         case cached of
-          Just fs -> pure fs
+          Just (cachedRes, fs) | cachedRes == res -> pure fs
           _ -> do
             fs <- getFields res
-            writeIORef fieldsCache (Just fs)
+            writeIORef fieldsCache (Just (res, fs))
             pure fs
 
       finish x = pure (Right x)
@@ -258,7 +258,10 @@ withPgDebug dbg conn (Pg action) = do
                -- Hoist per-query metadata out of the per-row loop: the
                -- same 'Pg.Result' is used for every row, so 'fields'
                -- and 'rowCount' are loop-invariant.
-               fields <- cachedGetFields res
+               -- Use getFields directly: unsafeFreeResult below lets libpq
+               -- reuse the pointer address, which would cause a false hit in
+               -- cachedGetFields on the next query.
+               fields <- getFields res
                Pg.Row rowCount <- Pg.ntuples res
                let Pg process = mkProcess (Pg (liftF (PgFetchNext id)))
                runF process (\x _ -> Pg.unsafeFreeResult res >> next x)
