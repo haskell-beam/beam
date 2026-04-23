@@ -10,3 +10,36 @@ see
 Due to SQLite's embedded nature, there are currently no plans to get rid of
 these. However, proposals and PRs to fix these corner cases are welcome, where
 appropriate.
+
+## Migration support
+
+`beam-sqlite` supports schema introspection and verification via
+`Database.Beam.Sqlite.Migrate`, including:
+
+- Tables, columns, and their types,
+- `NOT NULL` constraints,
+- Primary keys,
+- User-created secondary indices (via `PRAGMA index_list` / `PRAGMA index_info`),
+- Foreign key constraints (via `PRAGMA foreign_key_list`), including
+  `ON DELETE` / `ON UPDATE` actions.
+
+### Declaring foreign keys
+
+Use `addTableForeignKey` from `beam-migrate` to declare a foreign key on a
+checked table entity:
+
+```haskell
+let db = defaultMigratableDbSettings `withDbModification`
+          (dbModification @_ @Sqlite)
+            { _orders =
+                addTableForeignKey (_customers db)
+                  (\t -> selectorColumnName _order_customer_id t NE.:| [])
+                  primaryKeyColumns
+                  ForeignKeyNoAction      -- ON UPDATE NO ACTION (default)
+                  ForeignKeyActionCascade -- ON DELETE CASCADE
+            }
+```
+
+> **Note:** SQLite disables foreign key enforcement by default. Issue
+> `PRAGMA foreign_keys = ON` on each connection (or set it in your open hook)
+> to enable it at runtime.

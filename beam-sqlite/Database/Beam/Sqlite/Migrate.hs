@@ -40,9 +40,10 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char (isSpace)
 import           Data.Int (Int64)
-import           Data.List (sortBy)
+import           Data.List (sortBy, groupBy)
 import qualified Data.List.NonEmpty as NE (nonEmpty)
 import           Data.Maybe (mapMaybe, isJust)
+import           Data.Function (on)
 import           Data.Monoid (Endo(..))
 import           Data.Ord (comparing)
 import           Data.String (fromString)
@@ -262,8 +263,6 @@ runSqlScript t =
         let hdl = connectionHandle conn
         in exec hdl t
 
--- TODO constraints and foreign keys
-
 -- | Get a list of database predicates for the current database. This is beam's
 -- best guess at providing a schema for the current database. Note that SQLite
 -- type names are not standardized, and the so-called column "affinities" are
@@ -275,7 +274,20 @@ runSqlScript t =
 getDbConstraints :: A.Parser SqliteDataTypeSyntax -> SqliteM [Db.SomeDatabasePredicate]
 getDbConstraints extraParser =
   SqliteM . ReaderT $ \(_, conn) -> do
-    tblNames <- query_ conn "SELECT name, sql from sqlite_master where type='table'"
+    -- Exclude SQLite-internal tables (sqlite_sequence, sqlite_stat1, etc.).
+    -- These are created automatically by SQLite (e.g. sqlite_sequence appears
+    -- whenever any table uses AUTOINCREMENT).
+    --
+    -- Failing to filter them out would mean we would try to drop them, which
+    -- would incorrectly look like data loss.
+    --
+    -- NB: (https://www.sqlite.org/lang_createtable.html)
+    --
+    --   Table names that begin with "sqlite_" are reserved for internal use.
+    --   It is an error to attempt to create a table with a name that starts with "sqlite_".
+    tblNames <-
+      query_ conn
+        "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'"
     tblPreds <-
       fmap mconcat . forM tblNames $ \(tblNameStr, sql) -> do
         let tblName = QualifiedName Nothing tblNameStr
@@ -348,10 +360,43 @@ getDbConstraints extraParser =
                       [ Db.SomeDatabasePredicate
                           (Db.TableHasIndex @Sqlite tblName idxNm colsNE opts) ]
 
+        -- Collect foreign key constraints via PRAGMA foreign_key_list.
+        -- Each row: (id, seq, table, from, to, on_update, on_delete, match)
+        -- Rows sharing the same 'id' form a composite foreign key,
+        -- with 'seq' providing the ordering.
+        fkRows <- query_ conn (fromString ("PRAGMA foreign_key_list('" <> T.unpack tblNameStr <> "')")
+                          ) :: IO [(Int, Int, T.Text, T.Text, T.Text, T.Text, T.Text, T.Text)]
+        let fkPreds =
+              concatMap mkFkPred $
+              groupBy ((==) `on` (\(fkId, _, _, _, _, _, _, _) -> fkId)) $
+              sortBy (comparing (\(fkId, seqNo, _, _, _, _, _, _) -> (fkId, seqNo))) fkRows
+            mkFkPred [] = []
+            mkFkPred rows@((_, _, refTblStr, _, _, onUpdateStr, onDeleteStr, _):_) =
+              let localCols = map (\(_, _, _, from, _, _, _, _) -> from) rows
+                  refCols   = map (\(_, _, _, _, to,   _, _, _) -> to)   rows
+                  refTable  = QualifiedName Nothing refTblStr
+                  onUpdate  = parseForeignKeyAction onUpdateStr
+                  onDelete  = parseForeignKeyAction onDeleteStr
+              in case (NE.nonEmpty localCols, NE.nonEmpty refCols) of
+                   (Just lcNE, Just rcNE) ->
+                     [ Db.SomeDatabasePredicate
+                         (Db.TableHasForeignKey tblName lcNE refTable rcNE onUpdate onDelete) ]
+                   _ -> []
+
         pure ( [ Db.SomeDatabasePredicate (Db.TableExistsPredicate tblName) ]
-             ++ pkPred ++ columnPreds ++ idxPreds )
+             ++ pkPred ++ columnPreds ++ idxPreds ++ fkPreds )
 
     pure tblPreds
+
+parseForeignKeyAction :: T.Text -> Db.ForeignKeyAction
+parseForeignKeyAction t = case T.toUpper t of
+  "CASCADE"    -> Db.ForeignKeyActionCascade
+  "SET NULL"   -> Db.ForeignKeyActionSetNull
+  "SET DEFAULT"-> Db.ForeignKeyActionSetDefault
+  "RESTRICT"   -> Db.ForeignKeyActionRestrict
+  "NO ACTION"  -> Db.ForeignKeyNoAction
+  _            -> error $
+    "parseForeignKeyAction: unrecognised foreign key action: " ++ T.unpack t
 
 sqliteText :: Db.DataType Sqlite T.Text
 sqliteText = Db.DataType sqliteTextType

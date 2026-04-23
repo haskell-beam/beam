@@ -1,0 +1,81 @@
+cabal-version:      2.0
+name:               beam-backend-bench
+version:            0.1.0.0
+synopsis:           Beam backend row-reader benchmarks
+description:        Table schema, synthetic data, configuration, and SQL
+                    strings shared by the @beam-postgres@, @beam-sqlite@,
+                    and @beam-duckdb@ benchmark suites.
+
+                    Not intended for general use, and not expected to be released.
+license:            MIT
+author:             Laurent P. René de Cotret
+maintainer:         laurent.decotret@outlook.com
+category:           Database
+build-type:         Simple
+
+common common
+    default-language: Haskell2010
+    ghc-options: -Wall
+                 -Wcompat
+                 -Widentities
+                 -Wincomplete-uni-patterns
+                 -Wincomplete-record-updates
+                 -Wredundant-constraints
+                 -fhide-source-paths
+                 -Wpartial-fields
+                 -rtsopts
+
+library
+  hs-source-dirs:     src
+  exposed-modules:    Database.Beam.Bench
+  build-depends:      base        >=4.11 && <5
+                    , beam-core   >=0.10 && <0.11
+                    , deepseq     >=1.4  && <1.6
+                    , text        >=1.0  && <2.2
+  default-language:   Haskell2010
+  ghc-options:        -Wall
+
+benchmark beam-duckdb
+  import:           common
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   bench/beam-duckdb
+  main-is:          Main.hs
+  build-depends:    base
+                  , beam-backend-bench
+                  , beam-core
+                  , beam-duckdb
+                  , duckdb-simple
+                  , split
+                  , tasty
+                  , tasty-bench
+
+benchmark beam-postgres
+  import:         common
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: bench/beam-postgres
+  main-is:        Main.hs
+  build-depends:  base
+                , beam-backend-bench
+                , beam-core
+                , beam-postgres
+                , bytestring
+                , postgresql-simple
+                , split
+                , tasty
+                , tasty-bench
+                , testcontainers
+                , text
+
+benchmark beam-sqlite
+  import:         common
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: bench/beam-sqlite
+  main-is:        Main.hs
+  build-depends:  base
+                , beam-backend-bench
+                , beam-core
+                , beam-sqlite
+                , split
+                , sqlite-simple
+                , tasty
+                , tasty-bench

@@ -11,7 +11,8 @@ import Database.Beam.Migrate.SQL.Types
 import Database.Beam.Migrate.Serialization
 import Database.Beam.Migrate.Types.Predicates
 
-import Data.Aeson ((.:), (.=), withObject, object)
+import Data.Aeson ((.:), (.:?), (.=), withObject, object)
+import Data.Maybe (fromMaybe)
 import Data.Aeson.Types (Parser, Value)
 import Data.Hashable (Hashable(..))
 import qualified Data.List.NonEmpty as NE (NonEmpty)
@@ -168,6 +169,67 @@ instance DatabasePredicate TableHasPrimaryKey where
     | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
     | otherwise = False
 
+-- | Asserts that the given table has a foreign key referencing another table.
+-- Create these predicates with
+-- 'Database.Beam.Migrate.Types.CheckedEntities.addTableForeignKey'.
+data TableHasForeignKey
+  = TableHasForeignKey
+  { hasForeignKey_table      :: QualifiedName      -- ^ source table
+  , hasForeignKey_columns    :: NE.NonEmpty Text   -- ^ local columns (in order)
+  , hasForeignKey_refTable   :: QualifiedName      -- ^ referenced table
+  , hasForeignKey_refColumns :: NE.NonEmpty Text   -- ^ referenced columns (in order)
+  , hasForeignKey_onUpdate   :: ForeignKeyAction
+  , hasForeignKey_onDelete   :: ForeignKeyAction
+  } deriving (Show, Eq, Generic)
+instance Hashable TableHasForeignKey
+instance DatabasePredicate TableHasForeignKey where
+  englishDescription (TableHasForeignKey { hasForeignKey_table = tbl
+                                         , hasForeignKey_columns = cols
+                                         , hasForeignKey_refTable = refTbl
+                                         , hasForeignKey_refColumns = refCols
+                                         , hasForeignKey_onUpdate = onUpd
+                                         , hasForeignKey_onDelete = onDel }) =
+    "Table " <> show tbl <> " has foreign key on " <> show cols <>
+    " referencing " <> show refTbl <> " " <> show refCols <>
+    " ON UPDATE " <> show onUpd <>
+    " ON DELETE " <> show onDel
+
+  predicateSpecificity _ = PredicateSpecificityAllBackends
+
+  serializePredicate (TableHasForeignKey { hasForeignKey_table = tbl
+                                         , hasForeignKey_columns = cols
+                                         , hasForeignKey_refTable = refTbl
+                                         , hasForeignKey_refColumns = refCols
+                                         , hasForeignKey_onUpdate = onUpd
+                                         , hasForeignKey_onDelete = onDel }) =
+    object [ "has-foreign-key" .= object
+               [ "table"       .= tbl
+               , "columns"     .= cols
+               , "ref-table"   .= refTbl
+               , "ref-columns" .= refCols
+               , "on-update"   .= serializeForeignKeyAction onUpd
+               , "on-delete"   .= serializeForeignKeyAction onDel
+               ] ]
+
+  predicateCascadesDropOn (TableHasForeignKey { hasForeignKey_table = tblNm }) p'
+    | Just (TableExistsPredicate tblNm') <- cast p' = tblNm' == tblNm
+    | otherwise = False
+
+serializeForeignKeyAction :: ForeignKeyAction -> Text
+serializeForeignKeyAction ForeignKeyActionCascade    = "cascade"
+serializeForeignKeyAction ForeignKeyActionSetNull    = "set-null"
+serializeForeignKeyAction ForeignKeyActionSetDefault = "set-default"
+serializeForeignKeyAction ForeignKeyActionRestrict   = "restrict"
+serializeForeignKeyAction ForeignKeyNoAction         = "no-action"
+
+deserializeForeignKeyAction :: Text -> Maybe ForeignKeyAction
+deserializeForeignKeyAction "cascade"     = Just ForeignKeyActionCascade
+deserializeForeignKeyAction "set-null"    = Just ForeignKeyActionSetNull
+deserializeForeignKeyAction "set-default" = Just ForeignKeyActionSetDefault
+deserializeForeignKeyAction "restrict"    = Just ForeignKeyActionRestrict
+deserializeForeignKeyAction "no-action"   = Just ForeignKeyNoAction
+deserializeForeignKeyAction _             = Nothing
+
 -- * Deserialization
 
 -- | 'BeamDeserializers' for all the predicates defined in this module
@@ -182,6 +244,7 @@ beamCheckDeserializers = mconcat
   , beamDeserializer (const deserializeTableExistsPredicate)
   , beamDeserializer (const deserializeTableHasPrimaryKeyPredicate)
   , beamDeserializer (const deserializeTableHasIndexPredicate)
+  , beamDeserializer (const deserializeTableHasForeignKeyPredicate)
   , beamDeserializer deserializeTableHasColumnPredicate
   , beamDeserializer deserializeTableColumnHasConstraintPredicate
   ]
@@ -213,6 +276,20 @@ beamCheckDeserializers = mconcat
          (TableHasIndex <$> v' .: "table" <*> v' .: "name"
                         <*> v' .: "columns"
                         <*> (deserializeIndexOptions @(BeamSqlBackendSyntax be) =<< v' .: "options")))
+
+    deserializeTableHasForeignKeyPredicate :: Value -> Parser SomeDatabasePredicate
+    deserializeTableHasForeignKeyPredicate =
+      withObject "TableHasForeignKey" $ \v ->
+      v .: "has-foreign-key" >>=
+      (withObject "TableHasForeignKey" $ \v' ->
+       SomeDatabasePredicate <$>
+         (TableHasForeignKey
+           <$> v' .: "table"
+           <*> v' .: "columns"
+           <*> v' .: "ref-table"
+           <*> v' .: "ref-columns"
+           <*> (fromMaybe ForeignKeyNoAction . (>>= deserializeForeignKeyAction) <$> v' .:? "on-update")
+           <*> (fromMaybe ForeignKeyNoAction . (>>= deserializeForeignKeyAction) <$> v' .:? "on-delete")))
 
     deserializeTableHasColumnPredicate :: BeamDeserializers be'
                                        -> Value -> Parser SomeDatabasePredicate

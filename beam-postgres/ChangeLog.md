@@ -1,3 +1,18 @@
+# 0.5.6.0
+
+## Added features
+
+* Support for temporary tables.
+
+* `getDbConstraintsForSchemas` now discovers foreign key constraints
+  via `pg_constraint`, including `ON DELETE` / `ON UPDATE` actions.
+
+## Performance improvements
+
+* By minimizing redundant work in the hot loop, the performance of `beam-postgres`
+  when fetching data from a database has been improved by 30%. The performance
+  of `beam-postgres` is now within 10% of raw queries via `postgresql-simple` (#797).
+
 # 0.5.5.0
 
 ## Added features

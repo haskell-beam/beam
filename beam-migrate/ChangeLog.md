@@ -1,3 +1,30 @@
+# 0.5.5.0
+
+## Added features
+
+* Added support for foreign key constraints:
+
+  * New `ForeignKeyAction` datatype representing possible actions when updating
+    or deleting a row with referencing foreign keys.
+  * The `IsSql92TableConstraintSyntax` typeclass now has an additional method,
+    `foreignKeyConstraintSyntax`, for constructing foreign key constraint syntax.
+  * Introduce `addTableForeignKey` for declaring new foreign key constraints.
+
+* Added support for temporary tables:
+
+  * The `BeamHasTempTables` typeclass is used for backends to emit
+    `CREATE TEMPORARY TABLE` syntax.
+  * The `runCreateTempTable` command allows creating a temporary table.
+    The returned table entity can be used in queries like any other table.
+
+## Bug fixes
+
+* Fix an issue in which `beam-migrate` would fail to migrate a unique index
+  to a non-unique index or vice-versa.
+
+* Fixed an issue in which the migration solver could end up taking an
+  exponentially long time to conclude that migration isn't possible.
+
 # 0.5.4.0
 
 ## Added features

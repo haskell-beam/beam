@@ -5,19 +5,19 @@
 
 If you use beam commercially, please consider a donation to make this project possible: https://liberapay.com/tathougies
 
-Beam is a Haskell interface to relational databases. In the design space of 
+Beam is a Haskell interface to relational databases. In the design space of
 database libraries, Beam has the following features:
 * Type-safe queries checked at compile-time;
 * Predictable query performance by closely matching SQL semantics;
-* Support for any relational database via pluggable backends. Backends support additional, 
+* Support for any relational database via pluggable backends. Backends support additional,
   database-specific capabilities;
 * Database entities, such as tables, are modeled using standard
   Haskell code (in particular, Template Haskell is not needed);
 * Generated SQL queries are human-readable.
 
-Beam uses the Haskell type system to verify that queries are type-safe at compile time. 
-Queries are written in a straightforward, natural monadic syntax. Combinators are provided for all 
-standard SQL92 features, and a significant subset of SQL99, SQL2003, and SQL2008 
+Beam uses the Haskell type system to verify that queries are type-safe at compile time.
+Queries are written in a straightforward, natural monadic syntax. Combinators are provided for all
+standard SQL92 features, and a significant subset of SQL99, SQL2003, and SQL2008
 features. For your convenience a thorough compatibility matrix is
 maintained [here](https://haskell-beam.github.io/beam/about/compatibility/).
 
@@ -131,3 +131,25 @@ have quest a query or a DML statement). For `chinook`, the included code should
 produce a `Q` query. For `chinookdml`, the included code should be a monadic
 action in a `MonadBeam`. The `requirements` can be used to select which backends
 to run this against. See the documentation for examples.
+
+## Running benchmarks
+
+Benchmarks for the backends are collected under a single private package, `beam-backend-bench`.
+You can run backends individually like so:
+
+```
+cabal -v0 bench beam-backend-benck:beam-duckdb
+```
+
+or
+
+```
+cabal -v0 bench beam-backend-benck:beam-postgres
+```
+
+or
+
+```
+cabal -v0 bench beam-backend-benck:beam-sqlite
+```
+

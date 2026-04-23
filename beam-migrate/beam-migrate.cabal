@@ -1,5 +1,5 @@
 name:                beam-migrate
-version:             0.5.4.0
+version:             0.5.5.0
 synopsis:            SQL DDL support and migrations support library for Beam
 description:         This package provides type classes to allow backends to implement
                      SQL DDL support for beam. This allows you to use beam syntax to
@@ -45,6 +45,8 @@ library
 
                        Database.Beam.Migrate.Simple
 
+                       Database.Beam.Migrate.TempTable
+
                        Database.Beam.Haskell.Syntax
 
   other-modules:       Database.Beam.Migrate.Generics.Types
@@ -73,7 +75,7 @@ library
                        pretty               >=1.1     && <1.2,
                        dependent-map        >=0.2     && <0.5,
                        dependent-sum        >=0.4     && <0.8,
-                       pqueue               >=1.3     && <1.7,
+                       pqueue               >=1.3     && <1.8,
                        uuid-types           >=1.0     && <1.1
   default-language:    Haskell2010
   default-extensions:  KindSignatures, OverloadedStrings, TypeFamilies, FlexibleContexts,

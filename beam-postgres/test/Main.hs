@@ -12,6 +12,7 @@ import qualified Database.Beam.Postgres.Test.Marshal as Marshal
 import qualified Database.Beam.Postgres.Test.DataTypes as DataType
 import qualified Database.Beam.Postgres.Test.Migrate as Migrate
 import qualified Database.Beam.Postgres.Test.Windowing as Windowing
+import qualified Database.Beam.Postgres.Test.TempTable as TempTable
 import Database.PostgreSQL.Simple ( ConnectInfo(..), defaultConnectInfo )
 import qualified Database.PostgreSQL.Simple as Postgres
 
@@ -25,6 +26,7 @@ main = defaultMain
           , DataType.tests getConnStr
           , Migrate.tests getConnStr
           , Windowing.tests getConnStr
+          , TempTable.tests getConnStr
           ]
 
 
