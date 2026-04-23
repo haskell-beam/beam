@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Database.Beam.Postgres.Test.Select (tests) where
 
@@ -12,6 +13,7 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Data.UUID (UUID, nil)
 import qualified Data.UUID.V5 as V5
+import           Database.PostgreSQL.Simple (execute_)
 
 import           Database.Beam
 import           Database.Beam.Backend.SQL.SQL92
@@ -58,6 +60,7 @@ tests getConn = testGroup "Selection Tests"
   , testInSelect getConn
   , testReturningMany getConn
   , testPgUnnest getConn
+  , testFieldsCacheStale getConn
   ]
 
 testPgArrayToJSON :: IO ByteString -> TestTree
@@ -205,6 +208,53 @@ testReturningMany getConn = testCase "runReturningMany (batching via cursor) wor
     SqlSelect Postgres x -> (Pg (Maybe x) -> Pg a) -> Pg a
   runSelectReturningMany (SqlSelect s) =
     runReturningMany (selectCmd s)
+
+-- Tables for fieldsCache regression test (PR #797).
+-- AlphaT has a Text column; BetaT has an Int32 column.
+-- Querying both within a single runBeamPostgres call exposes the
+-- stale-cache bug: the second query gets field OID metadata from the
+-- first (text OID 25 instead of int4 OID 23), causing a type mismatch.
+
+data AlphaT f = Alpha { alphaName :: C f T.Text } deriving (Generic, Beamable)
+
+instance Table AlphaT where
+  data PrimaryKey AlphaT f = AlphaPk (C f T.Text) deriving (Generic, Beamable)
+  primaryKey = AlphaPk . alphaName
+
+data BetaT f = Beta { betaValue :: C f Int32 } deriving (Generic, Beamable)
+
+instance Table BetaT where
+  data PrimaryKey BetaT f = BetaPk (C f Int32) deriving (Generic, Beamable)
+  primaryKey = BetaPk . betaValue
+
+data FieldsCacheDb e = FieldsCacheDb
+  { dbAlpha :: e (TableEntity AlphaT)
+  , dbBeta  :: e (TableEntity BetaT)
+  } deriving (Generic, Database Postgres)
+
+fieldsCacheDb :: DatabaseSettings Postgres FieldsCacheDb
+fieldsCacheDb = defaultDbSettings
+
+-- | Regression test for the fieldsCache bug introduced in PR #797.
+-- withPgDebug keeps a per-invocation IORef (Maybe (Vector Field)).
+-- The cache hit arm (Just fs -> pure fs) never validates against the
+-- current Pg.Result, so the second SELECT in one runBeamPostgres call
+-- inherits stale OID metadata from the first, producing a type-mismatch
+-- error when the two queries return different column types.
+testFieldsCacheStale :: IO ByteString -> TestTree
+testFieldsCacheStale getConn =
+  testCase "fieldsCache is not reused across queries with different schemas" $
+  withTestPostgres "fields_cache_stale" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE alpha (name TEXT NOT NULL)"
+    execute_ conn "CREATE TABLE beta  (value INT4 NOT NULL)"
+    execute_ conn "INSERT INTO alpha VALUES ('hello')"
+    execute_ conn "INSERT INTO beta  VALUES (42)"
+    (names, values) <- runBeamPostgres conn $ do
+      ns <- runSelectReturningList $ select $ all_ (dbAlpha fieldsCacheDb)
+      vs <- runSelectReturningList $ select $ all_ (dbBeta  fieldsCacheDb)
+      pure (ns, vs)
+    assertEqual "alpha rows" ["hello" :: T.Text] (alphaName <$> names)
+    assertEqual "beta rows"  [42 :: Int32]       (betaValue <$> values)
 
 testFunction :: IO ByteString -> String -> (Connection -> Assertion) -> TestTree
 testFunction getConn name mkAssertion = testCase name $
