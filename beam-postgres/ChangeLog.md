@@ -1,3 +1,11 @@
+# 0.5.6.1
+
+## Bug fixes
+
+* Fixed a critical bug introduced by the performance improvements of 0.5.6.0, which would
+  result in unexpected type errors when executing database queries.
+  While the bug has been fixed, performance remains as good as the 0.5.6.0 release (#803)
+
 # 0.5.6.0
 
 ## Added features
