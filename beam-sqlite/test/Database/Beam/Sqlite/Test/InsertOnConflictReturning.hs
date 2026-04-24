@@ -8,6 +8,7 @@ module Database.Beam.Sqlite.Test.InsertOnConflictReturning (tests) where
 
 import Data.Int (Int32)
 import Data.Text (Text)
+import Database.Beam
 import Database.Beam (
     Beamable,
     Columnar,
@@ -31,26 +32,22 @@ import Database.Beam.Backend.SQL.BeamExtensions (
         insertOnConflict,
         onConflictUpdateSetWhere
     ),
-    MonadBeamInsertReturning (runInsertReturningList),
- )
-import Database.Beam.Sqlite (Sqlite, runBeamSqlite)
-import Database.Beam.Sqlite.Test (withTestDb)
-import Database.SQLite.Simple (execute_)
-import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (testCase, (@?=))
-
-import Database.Beam
-import Database.Beam.Backend.SQL.BeamExtensions (
     conflictingFields,
     insertOnConflict,
     onConflictUpdateSetWhere,
     runInsertReturningList,
+    runInsertReturningListWith,
  )
 import Database.Beam.Migrate (defaultMigratableDbSettings)
 import Database.Beam.Migrate.Simple (CheckedDatabaseSettings, autoMigrate)
+import Database.Beam.Sqlite (Sqlite, runBeamSqlite)
 import Database.Beam.Sqlite (Sqlite, runBeamSqliteDebug)
 import Database.Beam.Sqlite.Migrate (migrationBackend)
+import Database.Beam.Sqlite.Test (withTestDb)
+import Database.SQLite.Simple (execute_)
 import Database.SQLite.Simple (open)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase, (@?=))
 
 tests :: TestTree
 tests =
@@ -112,8 +109,8 @@ testInsertOnConflictReturning = testCase "Check that conflicting values are retu
                         , User{userId = 2, userName = "different_user2"}
                         ]
 
-                runInsertReturningList $
-                    insertOnConflict
+                runInsertReturningListWith
+                    (insertOnConflict
                         (usersTable testDb)
                         (insertValues newUsers)
                         (conflictingFields userId)
@@ -126,7 +123,8 @@ testInsertOnConflictReturning = testCase "Check that conflicting values are retu
                                (User{userName = excl}) ->
                                     current_ fld /=. excl
                             )
-                        )
+                        ))
+                    userId
 
         -- Expecting that the conflicting user, User id 2, is also returned
-        userId <$> conflicts @?= [1, 2]
+        conflicts @?= [1, 2]

@@ -47,13 +47,13 @@ ntile_ (QExpr a) = QExpr (ntileE <$> a)
 
 lead1_, lag1_
   :: (BeamSqlBackend be, BeamSqlT615Backend be)
-  => QExpr be s a -> QAgg be s a
+  => QExpr be s a -> QAgg be s (Maybe a)
 lead1_ (QExpr a) = QExpr (leadE <$> a <*> pure Nothing <*> pure Nothing)
 lag1_ (QExpr a) = QExpr (lagE <$> a <*> pure Nothing <*> pure Nothing)
 
 lead_, lag_
   :: (BeamSqlBackend be, BeamSqlT615Backend be, Integral n)
-  => QExpr be s a -> QExpr be s n -> QAgg be s a
+  => QExpr be s a -> QExpr be s n -> QAgg be s (Maybe a)
 lead_ (QExpr a) (QExpr n) = QExpr (leadE <$> a <*> (Just <$> n) <*> pure Nothing)
 lag_ (QExpr a) (QExpr n) = QExpr (lagE <$> a <*> (Just <$> n) <*> pure Nothing)
 

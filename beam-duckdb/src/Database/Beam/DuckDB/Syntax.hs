@@ -194,6 +194,7 @@ instance IsSql92ExtractFieldSyntax DuckDBExtractFieldSyntax where
   minutesField = DuckDBExtractFieldSyntax (emit "MINUTE")
   hourField = DuckDBExtractFieldSyntax (emit "HOUR")
   dayField = DuckDBExtractFieldSyntax (emit "DAY")
+  weekField = DuckDBExtractFieldSyntax (emit "WEEK")
   monthField = DuckDBExtractFieldSyntax (emit "MONTH")
   yearField = DuckDBExtractFieldSyntax (emit "YEAR")
 

@@ -1,3 +1,10 @@
+
+# 0.11.0.0
+
+* Make the input of `values_` a non-empty list.
+* Add 'week' to date extraction.
+* Add *with projection methods to MonadBeamInsertReturning/MonadBeamUpdateReturning/MonadBeamDeleteReturning
+
 # 0.10.5.0
 
 ## Updated dependencies
@@ -18,6 +25,10 @@
 * Added a `Generic` instance to `SqlNull`, `SqlBitString`, and `SqlSerial` (#736).
 * Added a note to `default_` to specify that it has more restrictions than its type may indicate (#744).
 * Added `limitMaybe_` and `offsetMaybe_` (#633).
+
+## Bug fixes
+
+* Fixed an issue where `lead1_`, `lag1_`, `lead_`, and `lag_` did not have the appropriate type, leading to runtime exceptions (#745).
 
 ## Updated dependencies
 

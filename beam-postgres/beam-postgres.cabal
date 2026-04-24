@@ -84,6 +84,7 @@ test-suite beam-postgres-tests
                  Database.Beam.Postgres.Test.Select,
                  Database.Beam.Postgres.Test.DataTypes,
                  Database.Beam.Postgres.Test.Migrate,
+                 Database.Beam.Postgres.Test.Windowing,
                  Database.Beam.Postgres.Test.TempTable
   build-depends:
     aeson,
