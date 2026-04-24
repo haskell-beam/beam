@@ -3,10 +3,10 @@
 module Database.Beam.Postgres.Test.DataTypes where
 
 import Database.Beam
+import Database.Beam.Backend.SQL.BeamExtensions
+import Database.Beam.Migrate
 import Database.Beam.Postgres
 import Database.Beam.Postgres.Test
-import Database.Beam.Migrate
-import Database.Beam.Backend.SQL.BeamExtensions
 
 import Control.Exception (SomeException(..), handle)
 
@@ -141,15 +141,15 @@ errorOnSchemaMismatch pgConn =
 -- | Regression test for <https://github.com/haskell-beam/beam/issues/700>
 errorOnLiteralDoubles :: IO ByteString -> TestTree
 errorOnLiteralDoubles pgConn =
-    testCase "Literal `Double`s are correctly specified as SQL `DOUBLE` (#700)" $ 
+    testCase "Literal `Double`s are correctly specified as SQL `DOUBLE` (#700)" $
     withTestPostgres "db_failures" pgConn $ \conn -> do
-      results <- runBeamPostgres conn $ 
-        runSelectReturningList $ 
-          select $ 
+      results <- runBeamPostgres conn $
+        runSelectReturningList $
+          select $
             query
-      
+
       results @?= [(99 :: Int32, 1.0 :: Double)]
-    
+
     where
       -- We need to provide a db for type-checking, but it will not be used
       query :: Q Postgres RealDb s (QExpr Postgres s Int32, QExpr Postgres s Double)

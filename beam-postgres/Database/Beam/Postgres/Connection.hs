@@ -26,13 +26,13 @@ module Database.Beam.Postgres.Connection
   , postgresUriSyntax ) where
 
 import           Control.Exception (SomeException(..), throwIO)
-import           Data.IORef (newIORef, readIORef, writeIORef)
-import           Data.Vector (Vector)
-import qualified Data.Vector as V
 import           Control.Monad.Base (MonadBase(..))
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Control (MonadBaseControl(..))
+import           Data.IORef (newIORef, readIORef, writeIORef)
+import           Data.Vector (Vector)
+import qualified Data.Vector as V
 
 import           Database.Beam hiding (runDelete, runUpdate, runInsert, insert)
 import           Database.Beam.Backend.SQL.BeamExtensions
@@ -408,12 +408,11 @@ instance MonadBeam Postgres Pg where
           in collectM id
 
 instance MonadBeamInsertReturning Postgres Pg where
-    runInsertReturningList i = do
-        let insertReturningCmd' = i `returning`
-              changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
-
-        -- Make savepoint
+    runInsertReturningListWith i mkProjection = do
+        let pgProj tbl = mkProjection (changeBeamRep
+              (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty) tbl)
+            insertReturningCmd' = i `returning` pgProj
         case insertReturningCmd' of
           PgInsertReturningEmpty ->
             pure []
@@ -421,11 +420,11 @@ instance MonadBeamInsertReturning Postgres Pg where
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning insertReturningCmd)
 
 instance MonadBeamUpdateReturning Postgres Pg where
-    runUpdateReturningList u = do
-        let updateReturningCmd' = u `returning`
-              changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
-
+    runUpdateReturningListWith u mkProjection = do
+        let pgProj tbl = mkProjection (changeBeamRep
+              (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty) tbl)
+            updateReturningCmd' = u `returning` pgProj
         case updateReturningCmd' of
           PgUpdateReturningEmpty ->
             pure []
@@ -433,9 +432,9 @@ instance MonadBeamUpdateReturning Postgres Pg where
             runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning updateReturningCmd)
 
 instance MonadBeamDeleteReturning Postgres Pg where
-    runDeleteReturningList d = do
-        let PgDeleteReturning deleteReturningCmd = d `returning`
-              changeBeamRep (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
-                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty)
-
+    runDeleteReturningListWith d mkProjection = do
+        let pgProj tbl = mkProjection (changeBeamRep
+              (\(Columnar' (QExpr s) :: Columnar' (QExpr Postgres PostgresInaccessible) ty) ->
+                Columnar' (QExpr s) :: Columnar' (QExpr Postgres ()) ty) tbl)
+            PgDeleteReturning deleteReturningCmd = d `returning` pgProj
         runReturningList (PgCommandSyntax PgCommandTypeDataUpdateReturning deleteReturningCmd)
