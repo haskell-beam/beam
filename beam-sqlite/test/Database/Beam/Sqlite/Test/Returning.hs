@@ -15,20 +15,20 @@ import Test.Tasty.HUnit (testCase, (@?=))
 
 import Database.Beam
 import Database.Beam.Backend.SQL.BeamExtensions
-  (conflictingFields, onConflictUpdateSet, onConflictUpdateSetWhere, runUpdateReturningList)
+  ( conflictingFields, onConflictUpdateSetWhere
+  , runInsertReturningListWith, runUpdateReturningListWith, runDeleteReturningListWith
+  )
 import Database.Beam.Migrate (defaultMigratableDbSettings)
 import Database.Beam.Migrate.Simple (CheckedDatabaseSettings, autoMigrate)
-import Database.Beam.Sqlite (Sqlite, runBeamSqlite, insertOnConflictReturning)
+import Database.Beam.Sqlite (
+  Sqlite, runBeamSqlite
+  , insertOnConflictReturning
+  , runSqliteInsertReturningList
+  , runSqliteUpdateReturningList
+  , runSqliteDeleteReturningList
+  )
+import qualified Database.Beam.Sqlite as Sqlite (deleteReturning, insertReturning, updateReturning)
 import Database.Beam.Sqlite.Migrate (migrationBackend)
-
-import Database.Beam.Sqlite
-    ( deleteReturning
-    , insertReturning
-    , runDeleteReturningList
-    , runInsertReturningList
-    , runSqliteUpdateReturningList
-    , updateReturning
-    )
 
 import Database.Beam.Sqlite.Test (withTestDb)
 
@@ -39,8 +39,11 @@ tests =
         "SQLite RETURNING statement tests"
         [ testInsertOnConflictReturning
         , testSqliteUpdateReturning
-        , testUpdateReturning
         , testDeleteReturning
+
+        , testClassInsertReturning
+        , testClassUpdateReturning
+        , testClassDeleteReturning
         ]
 
 -- | Database Schema Definition
@@ -104,7 +107,7 @@ testInsertOnConflictReturning = testCase "INSERT .. ON CONFLICT .. RETURNING" $
             ]
 
         -- Run 'INSERT .. ON CONFLICT (id) DO UPDATE SET .. WHERE .. RETURNING ..'
-        runInsertReturningList $
+        runSqliteInsertReturningList $
           insertOnConflictReturning
             (usersTable testDb)
             (insertValues newUsers)
@@ -144,40 +147,13 @@ testSqliteUpdateReturning = testCase "UPDATE .. RETURNING" $
 
         -- Update user 2 and return projected columns from the updated row
         runSqliteUpdateReturningList $
-          updateReturning
+          Sqlite.updateReturning
             (usersTable testDb)
             (\u -> userName u <-. val_ "updated_user2")
             (\u -> userId u ==. val_ 2)
             (\u -> (userId u, userName u, userInfo2 u))
 
     updatedUsers @?= [(2, "updated_user2", 22)]
-
--- | Test @UPDATE ... RETURNING@ using MonadBeamUpdateReturning's runUpdateReturningList
-testUpdateReturning :: TestTree
-testUpdateReturning = testCase "UPDATE .. RETURNING" $
-  withTestDb $ \conn -> do
-    updatedUsers <-
-      runBeamSqlite conn $ do
-        autoMigrate migrationBackend checkedDb
-
-        -- Seed data
-        runInsert $
-          insert (usersTable testDb) $
-            insertValues
-              [ User {userId = 1, userName = "user1", userInfo1 = "user1Info1", userInfo2 = 11 }
-              , User {userId = 2, userName = "user2", userInfo1 = "user2Info1", userInfo2 = 22 }
-              , User {userId = 3, userName = "user3", userInfo1 = "user3Info1", userInfo2 = 33 }
-              ]
-
-        -- Update user 2 and return projected columns from the updated row
-        runUpdateReturningList $
-          update
-            (usersTable testDb)
-            (\u -> userName u <-. val_ "updated_user2")
-            (\u -> userId u ==. val_ 2)
-
-
-    fmap (\u -> (userId u, userName u, userInfo2 u)) updatedUsers @?= [(2, "updated_user2", 22)]
 
 -- | Test @DELETE .. RETURNING@
 testDeleteReturning :: TestTree
@@ -197,10 +173,65 @@ testDeleteReturning = testCase "DELETE .. RETURNING" $
               ]
 
         -- Delete user 3 and return projected columns from the deleted row
-        runDeleteReturningList $
-          deleteReturning
+        runSqliteDeleteReturningList $
+          Sqlite.deleteReturning
             (usersTable testDb)
             (\u -> userId u ==. val_ 3)
             (\u -> (userName u, userInfo2 u))
 
     deletedUsers @?= [("user3", 33)]
+
+-- | Test class-level @INSERT .. RETURNING@ with custom projection
+testClassInsertReturning :: TestTree
+testClassInsertReturning = testCase "Class INSERT .. RETURNING" $
+  withTestDb $ \conn -> do
+    results <-
+      runBeamSqlite conn $ do
+        autoMigrate migrationBackend checkedDb
+        runInsertReturningListWith
+          (insert (usersTable testDb) $
+            insertValues
+              [ User {userId = 1, userName = "user1", userInfo1 = "info1", userInfo2 = 11 }
+              , User {userId = 2, userName = "user2", userInfo1 = "info2", userInfo2 = 22 }
+              ])
+          (\u -> (userId u, userName u))
+    results @?= [(1, "user1"), (2, "user2")]
+
+-- | Test class-level @UPDATE .. RETURNING@ with custom projection
+testClassUpdateReturning :: TestTree
+testClassUpdateReturning = testCase "Class UPDATE .. RETURNING" $
+  withTestDb $ \conn -> do
+    results <-
+      runBeamSqlite conn $ do
+        autoMigrate migrationBackend checkedDb
+        runInsert $
+          insert (usersTable testDb) $
+            insertValues
+              [ User {userId = 1, userName = "user1", userInfo1 = "info1", userInfo2 = 11 }
+              , User {userId = 2, userName = "user2", userInfo1 = "info2", userInfo2 = 22 }
+              ]
+        runUpdateReturningListWith
+          (update (usersTable testDb)
+            (\u -> userName u <-. val_ "updated")
+            (\u -> userId u ==. val_ 2))
+          (\u -> (userId u, userName u))
+    results @?= [(2, "updated")]
+
+-- | Test class-level @DELETE .. RETURNING@ with custom projection
+testClassDeleteReturning :: TestTree
+testClassDeleteReturning = testCase "Class DELETE .. RETURNING" $
+  withTestDb $ \conn -> do
+    results <-
+      runBeamSqlite conn $ do
+        autoMigrate migrationBackend checkedDb
+        runInsert $
+          insert (usersTable testDb) $
+            insertValues
+              [ User {userId = 1, userName = "user1", userInfo1 = "info1", userInfo2 = 11 }
+              , User {userId = 2, userName = "user2", userInfo1 = "info2", userInfo2 = 22 }
+              ]
+        runDeleteReturningListWith
+          (delete (usersTable testDb)
+            (\u -> userId u ==. val_ 2))
+          (\u -> (userName u, userInfo2 u))
+    results @?= [("user2", 22)]

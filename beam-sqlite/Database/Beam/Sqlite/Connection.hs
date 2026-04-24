@@ -16,11 +16,11 @@ module Database.Beam.Sqlite.Connection
 
     -- ** @INSERT ... RETURNING@
   , SqliteInsertReturning
-  , insertReturning, insertOnConflictReturning, runInsertReturningList
+  , insertReturning, insertOnConflictReturning, runSqliteInsertReturningList
 
     -- ** @DELETE ... RETURNING@
   , SqliteDeleteReturning
-  , deleteReturning, runDeleteReturningList
+  , deleteReturning, runSqliteDeleteReturningList
 
     -- ** @UPDATE ... RETURNING@
   , SqliteUpdateReturning
@@ -69,7 +69,7 @@ import           Database.SQLite.Simple.Ok (Ok(..))
 import           Database.SQLite.Simple.Types (Null)
 
 import           Control.Exception (SomeException(..))
-import           Control.Monad (forM_)
+import           Control.Monad (forM, forM_)
 import           Control.Monad.Base (MonadBase)
 import           Control.Monad.Fail (MonadFail(..))
 import           Control.Monad.Free.Church
@@ -386,20 +386,27 @@ unfoldM f = go []
     go acc = f >>= maybe (pure acc) (\x -> go (x : acc))
 
 instance Beam.MonadBeamInsertReturning Sqlite SqliteM where
-  runInsertReturningList SqlInsertNoRows = pure []
-  runInsertReturningList (SqlInsert _ insertCommand) = runReturningList $ SqliteCommandInsert insertCommand
+  runInsertReturningListWith SqlInsertNoRows _ = pure []
+  runInsertReturningListWith (SqlInsert tblSettings (SqliteInsertSyntax tbl fields values onConflict)) mkProjection =
+    fmap concat $ forM (sqliteGroupByDefaults fields values) $ \(fields', values') ->
+      runReturningList $ SqliteCommandSyntax $
+        formatSqliteInsertOnConflict tbl fields' values' onConflict
+        <> returningClauseWithProjection tblSettings mkProjection
 
 -- |
 -- @since 0.6.0.0
 instance Beam.MonadBeamUpdateReturning Sqlite SqliteM where
-  runUpdateReturningList :: forall table. (
-    Beamable table, Projectible Sqlite (table (QExpr Sqlite ())), FromBackendRow Sqlite (table Identity)
-    ) => SqlUpdate Sqlite table -> SqliteM [table Identity]
-  runUpdateReturningList SqlIdentityUpdate = pure []
-  runUpdateReturningList (SqlUpdate tblSettings sqliteUpdate) =
+  runUpdateReturningListWith SqlIdentityUpdate _ = pure []
+  runUpdateReturningListWith (SqlUpdate tblSettings sqliteUpdate) mkProjection =
     runReturningList $ SqliteCommandSyntax $
       fromSqliteUpdate sqliteUpdate
-        <> returningClauseWithProjection tblSettings (id :: table (QExpr Sqlite ()) -> table (QExpr Sqlite ()))
+        <> returningClauseWithProjection tblSettings mkProjection
+
+instance Beam.MonadBeamDeleteReturning Sqlite SqliteM where
+  runDeleteReturningListWith (SqlDelete tblSettings sqliteDelete) mkProjection =
+    runReturningList $ SqliteCommandSyntax $
+      fromSqliteDelete sqliteDelete
+        <> returningClauseWithProjection tblSettings mkProjection
 
 newtype SqliteInsertReturning a = SqliteInsertReturning [SqliteSyntax]
 newtype SqliteDeleteReturning a = SqliteDeleteReturning SqliteSyntax
@@ -445,14 +452,14 @@ sqliteGroupByDefaults flds orig@(SqliteInsertFromSql {}) =
   -- Preserve manually-written queries
   [(flds, orig)]
 
-runDeleteReturningList
+runSqliteDeleteReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
      , FromBackendRow be a
      )
   => SqliteDeleteReturning a
   -> m [a]
-runDeleteReturningList (SqliteDeleteReturning syntax) =
+runSqliteDeleteReturningList (SqliteDeleteReturning syntax) =
   runReturningList $ SqliteCommandSyntax syntax
 
 -- | SQLite @DELETE ... RETURNING@ statement support. The last
@@ -549,14 +556,14 @@ insertOnConflictReturning
 
 -- | Runs a 'SqliteInsertReturning' statement and returns a result for each
 -- inserted row.
-runInsertReturningList
+runSqliteInsertReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ SqliteCommandSyntax
      , FromBackendRow be a
      )
   => SqliteInsertReturning a
   -> m [a]
-runInsertReturningList (SqliteInsertReturning syntaxes) =
+runSqliteInsertReturningList (SqliteInsertReturning syntaxes) =
   concat <$>
     traverse (\syntax -> runReturningList $ SqliteCommandSyntax syntax) syntaxes
 
