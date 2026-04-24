@@ -52,7 +52,7 @@ boxGen = do PgPoint x1 y1 <- pointGen
                         (PgPoint (max x1 x2) (max y1 y2)))
 
 arrayGen :: Hedgehog.Gen a -> Hedgehog.Gen (Vector.Vector a)
-arrayGen = fmap Vector.fromList 
+arrayGen = fmap Vector.fromList
          . Gen.list (Range.linear 0 5) -- small arrays == quick tests
 
 boxCmp :: PgBox -> PgBox -> Bool
@@ -100,8 +100,8 @@ tests postgresConn =
 
     -- Arrays
     --
-    -- Testing lots of element types for arrays is important, because 
-    -- the mapping between array Oid and element Oid is not type 
+    -- Testing lots of element types for arrays is important, because
+    -- the mapping between array Oid and element Oid is not type
     -- safe, and hence error-prone.
     , marshalTest (arrayGen textGen) postgresConn
     , marshalTest (arrayGen (Gen.double (Range.exponentialFloat 0 1e40))) postgresConn

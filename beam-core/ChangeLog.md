@@ -1,3 +1,10 @@
+
+# 0.11.0.0
+
+* Make the input of `values_` a non-empty list.
+* Add 'week' to date extraction.
+* Add *with projection methods to MonadBeamInsertReturning/MonadBeamUpdateReturning/MonadBeamDeleteReturning
+
 # 0.10.5.0
 
 ## Updated dependencies
