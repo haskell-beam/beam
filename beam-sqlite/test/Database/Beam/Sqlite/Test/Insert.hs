@@ -5,7 +5,7 @@ import Data.Text (Text)
 import Data.Time (LocalTime, Day(..), UTCTime(..), fromGregorian, getCurrentTime, secondsToDiffTime)
 import Database.Beam
 import Database.Beam.Backend.SQL.BeamExtensions
-import Database.Beam.Sqlite hiding (runInsertReturningList)
+import Database.Beam.Sqlite
 import Database.SQLite.Simple (execute_)
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
