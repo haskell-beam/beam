@@ -1,3 +1,23 @@
+# 0.6.0.0
+
+## Interface changes
+
+* `BeamSqlBackendHasSerial` is now polymorphic over the column's underlying
+  integer type. The class gained a new parameter `n` and `genericSerial` now
+  has type `FieldReturnType 'True 'False be (SqlSerial n) a => Text -> a`,
+  matching the corresponding generalisation of `genericSerial` in
+  `beam-core` (#534). Existing instances must be updated to declare which
+  integer types they support (e.g. `Int16`, `Int32`, `Int64`).
+
+## Added features
+
+* Added a `weekField` definition to the `IsSql92ExtractFieldSyntax` instance
+  for `HsExpr`, in support of the new `week_` extract field in `beam-core`.
+
+## Updated dependencies
+
+* Bumped the lower bound on `beam-core` to `0.11`.
+
 # 0.5.5.0
 
 ## Added features

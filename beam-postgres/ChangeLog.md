@@ -1,3 +1,30 @@
+# 0.6.0.0
+
+## Interface changes
+
+* Removed `week_` from `Database.Beam.Postgres.PgSpecific`. The same
+  functionality is now available in `beam-core` as a backend-agnostic
+  `week_` extract field; import it from `Database.Beam.Query.Extract` (or
+  re-exported through `Database.Beam`) instead.
+* Replaced the single `BeamSqlBackendHasSerial Postgres` instance with three
+  width-specific instances `BeamSqlBackendHasSerial Int16/Int32/Int64
+  Postgres`, mapping respectively to `smallserial`, `serial`, and
+  `bigserial`. Existing code using `genericSerial` for a `SqlSerial Int32`
+  column continues to work; other widths are now also supported (#534).
+
+## Added features
+
+* Implemented the new `runInsertReturningListWith` /
+  `runUpdateReturningListWith` / `runDeleteReturningListWith` class methods
+  on the `Pg` monad. These let callers project a subset of columns from the
+  affected rows of an `INSERT` / `UPDATE` / `DELETE ... RETURNING` (#801).
+* Implemented `weekField` for `PgExtractFieldSyntax`, supporting the new
+  backend-agnostic `week_` extract field from `beam-core`.
+
+## Updated dependencies
+
+* Bumped the lower bound on `beam-core` to `0.11`.
+
 # 0.5.6.1
 
 ## Bug fixes

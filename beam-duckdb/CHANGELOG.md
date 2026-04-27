@@ -1,5 +1,13 @@
 # Revision history for beam-duckdb
 
+## 0.3.0.0 -- 2026-04-28
+
+* Added a `weekField` definition to the `IsSql92ExtractFieldSyntax` instance
+  for `DuckDBExtractFieldSyntax`, in support of the new backend-agnostic
+  `week_` extract field from `beam-core`.
+* Bumped the lower bound on `beam-core` to `0.11` and the lower bound on
+  `beam-migrate` to `0.6`.
+
 ## 0.2.0.0 -- 2026-03-07
 
 * Support for the SQL99 feature set, including support for regex matching via `similarTo_` and common table expressions
