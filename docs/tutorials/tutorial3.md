@@ -483,7 +483,25 @@ Some RDBMSs, like Postgres, given such a query will be unable to utilize availab
 to perform join operations - this translates to *extremely* poor perfomance for even moderately
 sized data.
 
+!!! warning "Nullable columns and `maybe_` on a left-joined table"
+    There is also a *correctness* gotcha here whenever the left-joined table
+    contains a schema-level nullable column. `maybe_` (and `isJust_`) on a
+    nullable table is implemented as "every column of the row is non-`NULL`",
+    so a real, matched row whose nullable column happens to be `NULL` is
+    treated as `Nothing`. In our schema `OrderT` has the nullable
+    `_orderShippingInfo` column, so for any of James's unshipped orders
+    `maybe_ (val_ False) ... order` evaluates to `False`, and the chained
+    `lineItem` and `product` left joins return no rows for him. The query
+    above will compute `Just 0` for James instead of `Just 27000`.
+
+    The next variant uses `leftJoin_'` and avoids `maybe_` over a nullable
+    table entirely, so it is both faster *and* correct in this case. As a
+    rule of thumb, when a left-joined table contains nullable columns,
+    prefer `leftJoin_'` with `==?.` (and other `SqlBool` operators) over
+    `leftJoin_` with `maybe_`.
+
 Luckily, Beam also provides an alternate way to phrase things that directly maps to SQL semantics
+(and avoids the gotcha above)
 
 !beam-query
 ```haskell
