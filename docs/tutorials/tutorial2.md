@@ -246,6 +246,18 @@ runBeamSqliteDebug putStrLn conn $ runInsert $
   insertValues [ james, betty, sam ]
 ```
 
+!!! tip "Tip"
+    The `let` bindings for `james`, `betty`, and `sam` above are reused at two
+    different types: as concrete rows (`UserT Identity`) inside
+    `insertValues`, and as expression-level values (here as `pk james`, of
+    type `PrimaryKey UserT (QExpr Sqlite s)`) inside `insertExpressions`.
+    For the same binding to be usable at both types, GHC must infer a
+    polymorphic type for it. Inside GHCi this happens by default, but in a
+    compiled module you may need to enable `NoMonomorphismRestriction` (or
+    give each binding an explicit polymorphic signature). Otherwise the
+    monomorphism restriction will pin `james` to whichever type it is first
+    used at, and the second use will fail to typecheck.
+
 Now that we have some `User` objects, we can create associated addresses. Notice
 that above, we used `insertValues` to insert concrete `User` rows. This worked
 because we could determine every field of `User` before insertion. `Address`es
