@@ -1690,6 +1690,19 @@ opening up a connection for us to use in the rest of the tutorial.</p>
 <span class="w">  </span><span class="n">insertValues</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="n">james</span><span class="p">,</span><span class="w"> </span><span class="n">betty</span><span class="p">,</span><span class="w"> </span><span class="n">sam</span><span class="w"> </span><span class="p">]</span>
 </code></pre></div>
 
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>The <code>let</code> bindings for <code>james</code>, <code>betty</code>, and <code>sam</code> above are reused at two
+different types: as concrete rows (<code>UserT Identity</code>) inside
+<code>insertValues</code>, and as expression-level values (here as <code>pk james</code>, of
+type <code>PrimaryKey UserT (QExpr Sqlite s)</code>) inside <code>insertExpressions</code>.
+For the same binding to be usable at both types, GHC must infer a
+polymorphic type for it. Inside GHCi this happens by default, but in a
+compiled module you may need to enable <code>NoMonomorphismRestriction</code> (or
+give each binding an explicit polymorphic signature). Otherwise the
+monomorphism restriction will pin <code>james</code> to whichever type it is first
+used at, and the second use will fail to typecheck.</p>
+</div>
 <p>Now that we have some <code>User</code> objects, we can create associated addresses. Notice
 that above, we used <code>insertValues</code> to insert concrete <code>User</code> rows. This worked
 because we could determine every field of <code>User</code> before insertion. <code>Address</code>es
