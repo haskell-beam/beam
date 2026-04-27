@@ -589,7 +589,7 @@ shippingInformationByUser <-
     do user <- all_ (shoppingCartDb ^. shoppingCartUsers)
 
        (userEmail, unshippedCount) <-
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 (count_ (_orderId order)))) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
@@ -598,7 +598,7 @@ shippingInformationByUser <-
        guard_ (userEmail `references_` user)
 
        (userEmail, shippedCount) <-
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 (count_ (_orderId order)))) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isJust_ (_orderShippingInfo order))
@@ -629,7 +629,7 @@ shippingInformationByUser <-
 
        (userEmail, unshippedCount) <-
          subselect_ $
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 (count_ (_orderId order)))) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isNothing_ (_orderShippingInfo order))
@@ -639,7 +639,7 @@ shippingInformationByUser <-
 
        (userEmail, shippedCount) <-
          subselect_ $
-         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 countAll_)) $
+         aggregate_ (\(userEmail, order) -> (group_ userEmail, as_ @Int32 (count_ (_orderId order)))) $
          do user  <- all_ (shoppingCartDb ^. shoppingCartUsers)
             order <- leftJoin_ (all_ (shoppingCartDb ^. shoppingCartOrders))
                                (\order -> _orderForUser order `references_` user &&. isJust_ (_orderShippingInfo order))
