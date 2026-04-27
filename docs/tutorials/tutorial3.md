@@ -171,11 +171,11 @@ execute_ conn "CREATE TABLE shipping_info ( id INTEGER PRIMARY KEY AUTOINCREMENT
 execute_ conn "CREATE TABLE line_items (item_in_order__id INTEGER NOT NULL, item_for_product__id INTEGER NOT NULL, item_quantity INTEGER NOT NULL)"
 ```
 
-Let's put some sample data into our database. Below, we will use the
-`beam-sqlite` functions `insertReturning` and `runInsertReturningList` to insert
-rows *and* retrieve the inserted rows from the database. This will let us see
-what values the auto-incremented `id` columns took on, which will allow us to
-create references to these inserted rows.
+Let's put some sample data into our database. Below, we will use
+`runInsertReturningList` to insert rows *and* retrieve the inserted rows from
+the database. This will let us see what values the auto-incremented `id`
+columns took on, which will allow us to create references to these inserted
+rows.
 
 ```haskell
 let users@[james, betty, sam] =
@@ -198,11 +198,11 @@ let users@[james, betty, sam] =
 
     [jamesAddress1, bettyAddress1, bettyAddress2] <-
       runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertExpressions addresses
+      insert (shoppingCartDb ^. shoppingCartUserAddresses) $ insertExpressions addresses
 
     [redBall, mathTextbook, introToHaskell, suitcase] <-
       runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertExpressions products
+      insert (shoppingCartDb ^. shoppingCartProducts) $ insertExpressions products
 
     pure ( jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase )
 ```
@@ -226,7 +226,7 @@ bettyShippingInfo <-
   runBeamSqliteDebug putStrLn conn $ do
     [bettyShippingInfo] <-
       runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
+      insert (shoppingCartDb ^. shoppingCartShippingInfos) $
       insertExpressions [ ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI") ]
     pure bettyShippingInfo
 ```
@@ -239,7 +239,7 @@ If you run this, you'll get an error from GHCi.
         arising from a use of ‘runInsertReturningList’
     • In a stmt of a 'do' block:
         [bettyShippingInfo] <- runInsertReturningList
-                                 $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+                                 $ insert (shoppingCartDb ^. shoppingCartShippingInfos)
                                      $ insertExpressions
                                          [ShippingInfo
                                             default_ (val_ USPS) (val_ "12345790ABCDEFGHI")]
@@ -288,7 +288,7 @@ bettyShippingInfo <-
   runBeamSqliteDebug putStrLn conn $ do
     [bettyShippingInfo] <-
       runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
+      insert (shoppingCartDb ^. shoppingCartShippingInfos) $
       insertExpressions [ ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI") ]
     pure bettyShippingInfo
 ```
@@ -314,7 +314,7 @@ resulting rows have a timestamp set by the database.
 [ jamesOrder1, bettyOrder1, jamesOrder2 ] <-
   runBeamSqliteDebug putStrLn conn $ do
     runInsertReturningList $
-      insertReturning (shoppingCartDb ^. shoppingCartOrders) $
+      insert (shoppingCartDb ^. shoppingCartOrders) $
       insertExpressions $
       [ Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_
       , Order default_ currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo)))

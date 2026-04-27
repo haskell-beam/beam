@@ -3,6 +3,7 @@ import Prelude hiding (lookup)
 import Database.Beam hiding (withDatabaseDebug)
 import qualified Database.Beam as Beam
 import Database.Beam.Backend.SQL
+import Database.Beam.Backend.SQL.BeamExtensions
 import Database.Beam.Backend.Types
 import Database.Beam.Sqlite hiding (runBeamSqliteDebug)
 import qualified Database.Beam.Sqlite as Sqlite
@@ -231,11 +232,11 @@ main =
 
          [jamesAddress1, bettyAddress1, bettyAddress2] <-
            runInsertReturningList $
-           insertReturning (shoppingCartDb ^. shoppingCartUserAddresses) $ insertExpressions addresses
+           insert (shoppingCartDb ^. shoppingCartUserAddresses) $ insertExpressions addresses
 
          [redBall, mathTextbook, introToHaskell, suitcase] <-
            runInsertReturningList $
-           insertReturning (shoppingCartDb ^. shoppingCartProducts) $ insertExpressions products
+           insert (shoppingCartDb ^. shoppingCartProducts) $ insertExpressions products
 
          pure ( jamesAddress1, bettyAddress1, bettyAddress2, redBall, mathTextbook, introToHaskell, suitcase )
 
@@ -243,7 +244,7 @@ main =
        runBeamSqlite conn $ do
          [bettyShippingInfo] <-
            runInsertReturningList $
-           insertReturning (shoppingCartDb ^. shoppingCartShippingInfos) $
+           insert (shoppingCartDb ^. shoppingCartShippingInfos) $
            insertExpressions [ ShippingInfo default_ (val_ USPS) (val_ "12345790ABCDEFGHI") ]
          pure bettyShippingInfo
 

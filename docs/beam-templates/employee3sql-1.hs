@@ -16,7 +16,7 @@ module Main where
      [ jamesOrder1, bettyOrder1, jamesOrder2 ] <-
        runBeamSqlite conn $ do
          runInsertReturningList $
-           insertReturning (shoppingCartDb ^. shoppingCartOrders) $
+           insert (shoppingCartDb ^. shoppingCartOrders) $
            insertExpressions $
            [ Order default_ currentTimestamp_ (val_ (pk james)) (val_ (pk jamesAddress1)) nothing_
            , Order default_ currentTimestamp_ (val_ (pk betty)) (val_ (pk bettyAddress1)) (just_ (val_ (pk bettyShippingInfo)))

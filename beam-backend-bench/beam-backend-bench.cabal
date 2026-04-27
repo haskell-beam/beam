@@ -1,4 +1,4 @@
-cabal-version:      2.0
+cabal-version:      3.0
 name:               beam-backend-bench
 version:            0.1.0.0
 synopsis:           Beam backend row-reader benchmarks
@@ -29,7 +29,7 @@ library
   hs-source-dirs:     src
   exposed-modules:    Database.Beam.Bench
   build-depends:      base        >=4.11 && <5
-                    , beam-core   >=0.10 && <0.11
+                    , beam-core   >=0.11 && <0.12
                     , deepseq     >=1.4  && <1.6
                     , text        >=1.0  && <2.2
   default-language:   Haskell2010

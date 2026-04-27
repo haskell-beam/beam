@@ -1,9 +1,16 @@
 
 # 0.11.0.0
 
-* Make the input of `values_` a non-empty list.
-* Add 'week' to date extraction.
-* Add *with projection methods to MonadBeamInsertReturning/MonadBeamUpdateReturning/MonadBeamDeleteReturning
+## New features
+
+* Add projection methods to `MonadBeamInsertReturning`/`MonadBeamUpdateReturning`/`MonadBeamDeleteReturning` (#801).
+* Made `genericSerial` be generic over `Integral` rathern than only `Int` (#534).
+* Added the `week_` combinator to extract the week of a timestamp (#599).
+
+## Bug fixes
+
+* Changed the type of `values_` to `NonEmpty` rather than a list, preventing runtime exceptions (#742).
+* Fixed an issue where `lead1_`, `lag1_`, `lead_`, and `lag_` did not have the appropriate type, leading to runtime exceptions (#745).
 
 # 0.10.5.0
 
@@ -26,9 +33,6 @@
 * Added a note to `default_` to specify that it has more restrictions than its type may indicate (#744).
 * Added `limitMaybe_` and `offsetMaybe_` (#633).
 
-## Bug fixes
-
-* Fixed an issue where `lead1_`, `lag1_`, `lead_`, and `lag_` did not have the appropriate type, leading to runtime exceptions (#745).
 
 ## Updated dependencies
 

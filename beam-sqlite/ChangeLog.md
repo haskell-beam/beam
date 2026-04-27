@@ -1,3 +1,36 @@
+# 0.7.0.0
+
+## Interface changes
+
+* The legacy module-level `runInsertReturningList` and `runDeleteReturningList`
+  functions exported from `Database.Beam.Sqlite` (which run a
+  `SqliteInsertReturning` / `SqliteDeleteReturning` value) have been renamed
+  to `runSqliteInsertReturningList` and `runSqliteDeleteReturningList` to
+  avoid clashing with the `MonadBeamInsertReturning` /
+  `MonadBeamDeleteReturning` class methods of the same name. This matches
+  the existing `runSqliteUpdateReturningList`.
+* `BeamSqlBackendHasSerial` for `Sqlite` is now polymorphic over the column
+  type via a new `IsSqliteSerialIntegerType` constraint, so `genericSerial`
+  can be used for any supported integer width rather than only `Int` (#534).
+
+## Added features
+
+* Added a `MonadBeamDeleteReturning Sqlite SqliteM` instance, allowing
+  `runDeleteReturningList` (and `runDeleteReturningListWith`) to be used
+  directly against `SqliteM` without going through the legacy
+  `SqliteDeleteReturning` builder.
+* Implemented the new `runInsertReturningListWith` /
+  `runUpdateReturningListWith` / `runDeleteReturningListWith` class methods
+  on `SqliteM`, allowing callers to project a subset of columns from the
+  affected rows of an `INSERT` / `UPDATE` / `DELETE ... RETURNING` (#801).
+* Implemented `weekField` for SQLite `EXTRACT`, mapped to
+  `strftime('%W', ...)`, in support of the new backend-agnostic `week_`
+  extract field from `beam-core`.
+
+## Updated dependencies
+
+* Bumped the lower bound on `beam-core` to `0.11`.
+
 # 0.6.0.0
 
 ## Added features
