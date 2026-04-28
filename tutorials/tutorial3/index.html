@@ -1642,11 +1642,11 @@ unwrapper <code>Reader</code> of <code>a</code>. The applicative actions are the
 <span class="nf">execute_</span><span class="w"> </span><span class="n">conn</span><span class="w"> </span><span class="s">&quot;CREATE TABLE line_items (item_in_order__id INTEGER NOT NULL, item_for_product__id INTEGER NOT NULL, item_quantity INTEGER NOT NULL)&quot;</span>
 </code></pre></div>
 
-<p>Let's put some sample data into our database. Below, we will use the
-<code>beam-sqlite</code> functions <code>insertReturning</code> and <code>runInsertReturningList</code> to insert
-rows <em>and</em> retrieve the inserted rows from the database. This will let us see
-what values the auto-incremented <code>id</code> columns took on, which will allow us to
-create references to these inserted rows.</p>
+<p>Let's put some sample data into our database. Below, we will use
+<code>runInsertReturningList</code> to insert rows <em>and</em> retrieve the inserted rows from
+the database. This will let us see what values the auto-incremented <code>id</code>
+columns took on, which will allow us to create references to these inserted
+rows.</p>
 <div class="highlight"><pre><span></span><code><span class="kr">let</span><span class="w"> </span><span class="n">users</span><span class="o">@</span><span class="p">[</span><span class="n">james</span><span class="p">,</span><span class="w"> </span><span class="n">betty</span><span class="p">,</span><span class="w"> </span><span class="n">sam</span><span class="p">]</span><span class="w"> </span><span class="ow">=</span>
 <span class="w">          </span><span class="p">[</span><span class="w"> </span><span class="kt">User</span><span class="w"> </span><span class="s">&quot;james@example.com&quot;</span><span class="w"> </span><span class="s">&quot;James&quot;</span><span class="w"> </span><span class="s">&quot;Smith&quot;</span><span class="w">  </span><span class="s">&quot;b4cc344d25a2efe540adbf2678e2304c&quot;</span><span class="w"> </span><span class="cm">{- james -}</span>
 <span class="w">          </span><span class="p">,</span><span class="w"> </span><span class="kt">User</span><span class="w"> </span><span class="s">&quot;betty@example.com&quot;</span><span class="w"> </span><span class="s">&quot;Betty&quot;</span><span class="w"> </span><span class="s">&quot;Jones&quot;</span><span class="w">  </span><span class="s">&quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;</span><span class="w"> </span><span class="cm">{- betty -}</span>
@@ -1667,11 +1667,11 @@ create references to these inserted rows.</p>
 
 <span class="w">    </span><span class="p">[</span><span class="n">jamesAddress1</span><span class="p">,</span><span class="w"> </span><span class="n">bettyAddress1</span><span class="p">,</span><span class="w"> </span><span class="n">bettyAddress2</span><span class="p">]</span><span class="w"> </span><span class="ow">&lt;-</span>
 <span class="w">      </span><span class="n">runInsertReturningList</span><span class="w"> </span><span class="o">$</span>
-<span class="w">      </span><span class="n">insertReturning</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartUserAddresses</span><span class="p">)</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">insertExpressions</span><span class="w"> </span><span class="n">addresses</span>
+<span class="w">      </span><span class="n">insert</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartUserAddresses</span><span class="p">)</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">insertExpressions</span><span class="w"> </span><span class="n">addresses</span>
 
 <span class="w">    </span><span class="p">[</span><span class="n">redBall</span><span class="p">,</span><span class="w"> </span><span class="n">mathTextbook</span><span class="p">,</span><span class="w"> </span><span class="n">introToHaskell</span><span class="p">,</span><span class="w"> </span><span class="n">suitcase</span><span class="p">]</span><span class="w"> </span><span class="ow">&lt;-</span>
 <span class="w">      </span><span class="n">runInsertReturningList</span><span class="w"> </span><span class="o">$</span>
-<span class="w">      </span><span class="n">insertReturning</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartProducts</span><span class="p">)</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">insertExpressions</span><span class="w"> </span><span class="n">products</span>
+<span class="w">      </span><span class="n">insert</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartProducts</span><span class="p">)</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">insertExpressions</span><span class="w"> </span><span class="n">products</span>
 
 <span class="w">    </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="n">jamesAddress1</span><span class="p">,</span><span class="w"> </span><span class="n">bettyAddress1</span><span class="p">,</span><span class="w"> </span><span class="n">bettyAddress2</span><span class="p">,</span><span class="w"> </span><span class="n">redBall</span><span class="p">,</span><span class="w"> </span><span class="n">mathTextbook</span><span class="p">,</span><span class="w"> </span><span class="n">introToHaskell</span><span class="p">,</span><span class="w"> </span><span class="n">suitcase</span><span class="w"> </span><span class="p">)</span>
 </code></pre></div>
@@ -1690,7 +1690,7 @@ contains the <code>ShippingCarrier</code> enumeration.</p>
 <span class="w">  </span><span class="n">runBeamSqliteDebug</span><span class="w"> </span><span class="n">putStrLn</span><span class="w"> </span><span class="n">conn</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
 <span class="w">    </span><span class="p">[</span><span class="n">bettyShippingInfo</span><span class="p">]</span><span class="w"> </span><span class="ow">&lt;-</span>
 <span class="w">      </span><span class="n">runInsertReturningList</span><span class="w"> </span><span class="o">$</span>
-<span class="w">      </span><span class="n">insertReturning</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartShippingInfos</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
+<span class="w">      </span><span class="n">insert</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartShippingInfos</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
 <span class="w">      </span><span class="n">insertExpressions</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="kt">ShippingInfo</span><span class="w"> </span><span class="n">default_</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="kt">USPS</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="s">&quot;12345790ABCDEFGHI&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">]</span>
 <span class="w">    </span><span class="n">pure</span><span class="w"> </span><span class="n">bettyShippingInfo</span>
 </code></pre></div>
@@ -1701,7 +1701,7 @@ contains the <code>ShippingCarrier</code> enumeration.</p>
         arising from a use of &amp;lsquo;runInsertReturningList&amp;rsquo;
     • In a stmt of a &#39;do&#39; block:
         [bettyShippingInfo] &lt;- runInsertReturningList
-                                 $ insertReturning (shoppingCartDb ^. shoppingCartShippingInfos)
+                                 $ insert (shoppingCartDb ^. shoppingCartShippingInfos)
                                      $ insertExpressions
                                          [ShippingInfo
                                             default_ (val_ USPS) (val_ &quot;12345790ABCDEFGHI&quot;)]
@@ -1741,7 +1741,7 @@ into a corresponding Haskell value.</p>
 <span class="w">  </span><span class="n">runBeamSqliteDebug</span><span class="w"> </span><span class="n">putStrLn</span><span class="w"> </span><span class="n">conn</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
 <span class="w">    </span><span class="p">[</span><span class="n">bettyShippingInfo</span><span class="p">]</span><span class="w"> </span><span class="ow">&lt;-</span>
 <span class="w">      </span><span class="n">runInsertReturningList</span><span class="w"> </span><span class="o">$</span>
-<span class="w">      </span><span class="n">insertReturning</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartShippingInfos</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
+<span class="w">      </span><span class="n">insert</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartShippingInfos</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
 <span class="w">      </span><span class="n">insertExpressions</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="kt">ShippingInfo</span><span class="w"> </span><span class="n">default_</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="kt">USPS</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="s">&quot;12345790ABCDEFGHI&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">]</span>
 <span class="w">    </span><span class="n">pure</span><span class="w"> </span><span class="n">bettyShippingInfo</span>
 </code></pre></div>
@@ -1782,7 +1782,7 @@ resulting rows have a timestamp set by the database.</p>
             <div class="highlight"><pre><span></span><code><span class="p">[</span><span class="w"> </span><span class="n">jamesOrder1</span><span class="p">,</span><span class="w"> </span><span class="n">bettyOrder1</span><span class="p">,</span><span class="w"> </span><span class="n">jamesOrder2</span><span class="w"> </span><span class="p">]</span><span class="w"> </span><span class="ow">&lt;-</span>
 <span class="w">  </span><span class="n">runBeamSqliteDebug</span><span class="w"> </span><span class="n">putStrLn</span><span class="w"> </span><span class="n">conn</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
 <span class="w">    </span><span class="n">runInsertReturningList</span><span class="w"> </span><span class="o">$</span>
-<span class="w">      </span><span class="n">insertReturning</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartOrders</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
+<span class="w">      </span><span class="n">insert</span><span class="w"> </span><span class="p">(</span><span class="n">shoppingCartDb</span><span class="w"> </span><span class="o">^.</span><span class="w"> </span><span class="n">shoppingCartOrders</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
 <span class="w">      </span><span class="n">insertExpressions</span><span class="w"> </span><span class="o">$</span>
 <span class="w">      </span><span class="p">[</span><span class="w"> </span><span class="kt">Order</span><span class="w"> </span><span class="n">default_</span><span class="w"> </span><span class="n">currentTimestamp_</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">pk</span><span class="w"> </span><span class="n">james</span><span class="p">))</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">pk</span><span class="w"> </span><span class="n">jamesAddress1</span><span class="p">))</span><span class="w"> </span><span class="n">nothing_</span>
 <span class="w">      </span><span class="p">,</span><span class="w"> </span><span class="kt">Order</span><span class="w"> </span><span class="n">default_</span><span class="w"> </span><span class="n">currentTimestamp_</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">pk</span><span class="w"> </span><span class="n">betty</span><span class="p">))</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">pk</span><span class="w"> </span><span class="n">bettyAddress1</span><span class="p">))</span><span class="w"> </span><span class="p">(</span><span class="n">just_</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">pk</span><span class="w"> </span><span class="n">bettyShippingInfo</span><span class="p">)))</span>
@@ -1815,9 +1815,9 @@ resulting rows have a timestamp set by the database.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-0-Console">
-            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-27 14:08:56, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
-<span class="go">Order {_orderId = 2, _orderDate = 2026-04-27 14:08:56, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
-<span class="go">Order {_orderId = 3, _orderDate = 2026-04-27 14:08:56, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-28 14:24:43, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+<span class="go">Order {_orderId = 2, _orderDate = 2026-04-28 14:24:43, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
+<span class="go">Order {_orderId = 3, _orderDate = 2026-04-28 14:24:43, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
 </code></pre></div>
 
         </div>
@@ -1941,9 +1941,9 @@ orders.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-2-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2026-04-27 14:09:05, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
-<span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2026-04-27 14:09:05, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
-<span class="go">(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2026-04-27 14:09:05, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))</span>
+            <div class="highlight"><pre><span></span><code><span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2026-04-28 14:24:51, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
+<span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2026-04-28 14:24:51, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
+<span class="go">(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2026-04-28 14:24:51, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))</span>
 <span class="go">(User {_userEmail = &quot;sam@example.com&quot;, _userFirstName = &quot;Sam&quot;, _userLastName = &quot;Taylor&quot;, _userPassword = &quot;332532dcfaa1cbf61e2a266bd723612c&quot;},Nothing)</span>
 </code></pre></div>
 
@@ -2153,9 +2153,9 @@ order.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-5-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">(Order {_orderId = 1, _orderDate = 2026-04-27 14:09:24, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)</span>
-<span class="go">(Order {_orderId = 2, _orderDate = 2026-04-27 14:09:24, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)</span>
-<span class="go">(Order {_orderId = 3, _orderDate = 2026-04-27 14:09:24, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)</span>
+            <div class="highlight"><pre><span></span><code><span class="go">(Order {_orderId = 1, _orderDate = 2026-04-28 14:25:07, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)</span>
+<span class="go">(Order {_orderId = 2, _orderDate = 2026-04-28 14:25:07, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)</span>
+<span class="go">(Order {_orderId = 3, _orderDate = 2026-04-28 14:25:07, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)</span>
 </code></pre></div>
 
         </div>
@@ -2444,8 +2444,8 @@ nullable primary keys to optionally include information.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-8-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-27 14:09:42, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
-<span class="go">Order {_orderId = 3, _orderDate = 2026-04-27 14:09:42, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-04-28 14:25:23, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+<span class="go">Order {_orderId = 3, _orderDate = 2026-04-28 14:25:23, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
 </code></pre></div>
 
         </div>
