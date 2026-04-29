@@ -79,10 +79,11 @@ import           Database.Beam.Backend.Types
 import           Control.Applicative (liftA2)
 import           Control.Arrow (first)
 import           Control.Monad.Identity
-import           Control.Monad.Writer hiding ((<>))
+import           Control.Monad.Writer (Writer, execWriter, tell)
 
 import           Data.Char (isUpper, toLower)
 import           Data.Foldable (fold)
+import           Data.Kind (Type, Constraint)
 import qualified Data.List.NonEmpty as NE
 import           Data.Monoid
 import           Data.Proxy
@@ -94,7 +95,6 @@ import           Data.Typeable
 import qualified GHC.Generics as Generic
 import           GHC.Generics hiding (R, C)
 import           GHC.TypeLits
-import           GHC.Types
 
 import           Lens.Micro hiding (to)
 

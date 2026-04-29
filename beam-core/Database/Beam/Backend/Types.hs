@@ -6,8 +6,8 @@ module Database.Beam.Backend.Types
   , Exposed, Nullable
 
   ) where
+import Data.Kind (Type, Constraint)
 
-import GHC.Types
 
 -- | Class for all Beam backends
 class BeamBackend be where
