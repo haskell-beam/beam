@@ -9,6 +9,7 @@ import           Database.Beam.Schema.Tables
 
 import qualified Data.DList as DList
 import           Data.Functor.Const
+import           Data.Kind (Type, Constraint)
 import           Data.String
 import qualified Data.Text as T
 import           Data.Typeable
@@ -20,7 +21,6 @@ import           Control.Monad.State
 import           Control.Monad.Writer
 
 import           GHC.TypeLits
-import           GHC.Types
 
 import           Unsafe.Coerce
 

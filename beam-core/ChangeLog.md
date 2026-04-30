@@ -1,3 +1,8 @@
+# Unreleased
+
+## Dependencies
+
+* Removed dependency on `ghc-prim`.
 
 # 0.11.0.0
 

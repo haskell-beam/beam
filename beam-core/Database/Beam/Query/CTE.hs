@@ -10,7 +10,7 @@ import Database.Beam.Query.Types
 
 import Control.Monad.Fix
 import Control.Monad.Free.Church
-import Control.Monad.Writer hiding ((<>))
+import Control.Monad.Writer (WriterT, tell)
 import Control.Monad.State.Strict
 
 import Data.Kind (Type)
