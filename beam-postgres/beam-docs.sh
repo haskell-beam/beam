@@ -53,6 +53,14 @@ pv chinook-data/Chinook_PostgreSql.sql | psql "$PGCONNSTR_TMP" --single-transact
 beam_doc_status "Patching invoice table to have auto-incrementing id"
 psql "$PGCONNSTR_TMP" -c  "CREATE SEQUENCE \"Invoice_InvoiceId_seq\" START WITH 500; ALTER TABLE \"Invoice\" ALTER \"InvoiceId\" SET DEFAULT NEXTVAL('\"Invoice_InvoiceId_seq\"')" -q
 
+beam_doc_status "Granting server-file COPY privileges to the connecting role"
+# Required so that 'COPY ... TO ''path''' / 'COPY ... FROM ''path''' examples in
+# the docs can be run. Only a superuser can grant these roles, so this assumes
+# the docs CI connects as a superuser. (Note: PUBLIC is not a valid recipient
+# for role-membership grants, only for privilege grants on objects, hence
+# CURRENT_USER.)
+psql "$PGCONNSTR_TMP" -c "GRANT pg_write_server_files, pg_read_server_files TO CURRENT_USER" -q
+
 beam_doc_status "Success, renaming $PGDB_TMP to $PGDB"
 run_template1 "ALTER DATABASE \"$PGDB_TMP\" RENAME TO \"$PGDB\""
 

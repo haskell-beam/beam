@@ -16,6 +16,11 @@ module Database.Beam.Backend.SQL.BeamExtensions
   , runDeleteReturningList
   , BeamHasInsertOnConflict(..)
 
+  -- * Support for copying to external files
+  , module Database.Beam.Backend.SQL.BeamExtensions.Copy.File
+  -- * Support for streaming copy
+  , module Database.Beam.Backend.SQL.BeamExtensions.Copy.Stream
+
   , SqlSerial(..)
   , onConflictUpdateInstead
   , onConflictUpdateAll
@@ -41,6 +46,8 @@ import           Data.Functor.Const
 import           Data.Kind (Type)
 import           Data.Proxy
 import           Data.Semigroup
+import           Database.Beam.Backend.SQL.BeamExtensions.Copy.File hiding (projection) -- internal function
+import           Database.Beam.Backend.SQL.BeamExtensions.Copy.Stream
 
 --import GHC.Generics
 

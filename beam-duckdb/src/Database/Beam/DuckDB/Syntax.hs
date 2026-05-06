@@ -4,7 +4,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO: clean up unused top binds
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Database.Beam.DuckDB.Syntax

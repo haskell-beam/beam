@@ -25,7 +25,8 @@ module Database.Beam.Postgres.Connection
 
   , postgresUriSyntax ) where
 
-import           Control.Exception (SomeException(..), throwIO)
+import           Control.Exception (SomeException(..), throwIO, onException, catch)
+import           Control.Monad (void)
 import           Control.Monad.Base (MonadBase(..))
 import           Control.Monad.Free.Church
 import           Control.Monad.IO.Class
@@ -41,6 +42,10 @@ import           Database.Beam.Backend.SQL.Row ( FromBackendRowF(..), FromBacken
 import           Database.Beam.Backend.URI
 import           Database.Beam.Schema.Tables
 
+import           Database.Beam.Postgres.Extensions.Copy.File
+                   ( PgCopyFromSyntax(..), PgCopyToSyntax(..) )
+import           Database.Beam.Postgres.Extensions.Copy.Stream
+                   ( PgCopyFromStreamSyntax(..), PgCopyToStreamSyntax(..) )
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Postgres.Full
 import           Database.Beam.Postgres.Types
@@ -48,6 +53,7 @@ import           Database.Beam.Postgres.Types
 import qualified Database.PostgreSQL.LibPQ as Pg hiding
   (Connection, escapeStringConn, escapeIdentifier, escapeByteaConn, exec)
 import qualified Database.PostgreSQL.Simple as Pg
+import qualified Database.PostgreSQL.Simple.Copy as PgCopy
 import qualified Database.PostgreSQL.Simple.FromField as Pg
 import qualified Database.PostgreSQL.Simple.Internal as Pg
   ( Field(..), RowParser(..)
@@ -406,6 +412,50 @@ instance MonadBeam Postgres Pg where
                   Nothing -> pure (acc [])
                   Just x -> collectM (acc . (x:))
           in collectM id
+
+instance MonadBeamCopyTo Postgres Pg where
+    runCopyTo SqlCopyToNoColumns = pure ()
+    runCopyTo (SqlCopyTo (PgCopyToSyntax syntax)) =
+        runNoReturn (PgCommandSyntax PgCommandTypeDataUpdate syntax)
+
+instance MonadBeamCopyFrom Postgres Pg where
+    runCopyFrom SqlCopyFromNoColumns = pure ()
+    runCopyFrom (SqlCopyFrom (PgCopyFromSyntax syntax)) =
+        runNoReturn (PgCommandSyntax PgCommandTypeDataUpdate syntax)
+
+instance MonadBeamCopyToStream Postgres Pg where
+    -- | `runCopyToStream` is exception-safe; if the output stream
+    -- produces an exception, the stream will be drained before the exception
+    -- is re-thrown
+    runCopyToStream SqlCopyToStreamNoColumns _ = pure ()
+    runCopyToStream (SqlCopyToStream (PgCopyToStreamSyntax syntax)) sink =
+        liftIOWithHandle $ \conn -> do
+          query <- pgRenderSyntax conn syntax
+          PgCopy.copy_ conn (Pg.Query query)
+          let loop onRow = do
+                PgCopy.getCopyData conn >>= \case
+                  PgCopy.CopyOutRow chunk -> onRow chunk >> loop onRow
+                  PgCopy.CopyOutDone _    -> pure ()
+              -- Like 'loop', but doesn't use the sink at all. This is used
+              -- to drain elements in the COPY stream before re-throwing an exception
+              drain = loop (const (pure ()))
+          loop sink `catch` (\(e::SomeException) -> drain >> throwIO e)
+
+
+instance MonadBeamCopyFromStream Postgres Pg where
+    -- | `runCopyFromStream` is exception-safe; if the input stream
+    -- produces an exception, the connection will be reset to a safe state,
+    -- aborting the COPY operation.
+    runCopyFromStream SqlCopyFromStreamNoColumns _ = pure ()
+    runCopyFromStream (SqlCopyFromStream (PgCopyFromStreamSyntax syntax)) producer =
+        liftIOWithHandle $ \conn -> do
+          query <- pgRenderSyntax conn syntax
+          let loop = 
+                producer >>= \case
+                  Just chunk -> PgCopy.putCopyData conn chunk >> loop
+                  Nothing    -> void $ PgCopy.putCopyEnd conn
+          PgCopy.copy_ conn (Pg.Query query)
+          loop `onException` PgCopy.putCopyError conn mempty
 
 instance MonadBeamInsertReturning Postgres Pg where
     runInsertReturningListWith i mkProjection = do

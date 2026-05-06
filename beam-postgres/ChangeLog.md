@@ -1,3 +1,23 @@
+# 0.6.1.0
+
+## Added features
+
+* Added file-mode `COPY ... TO 'file'` / `COPY ... FROM 'file'` support
+  via the new `MonadBeamCopyTo` / `MonadBeamCopyFrom` instances on `Pg`.
+  Smart constructors `copyToText` / `copyToCSV` (and `copyFromText` /
+  `copyFromCSV`, plus `*With` variants) build the per-format options
+  records. Note that this requires the `pg_write_server_files` /
+  `pg_read_server_files` role (or superuser) on the connecting role —
+  see `Database.Beam.Postgres.Extensions.Copy.File`.
+* Added streaming `COPY ... TO STDOUT` / `COPY ... FROM STDIN` support
+  via the new `MonadBeamCopyToStream` / `MonadBeamCopyFromStream`
+  instances on `Pg`. Smart constructors `copyToTextStream` /
+  `copyToCSVStream` / `copyFromTextStream` / `copyFromCSVStream` build
+  the per-format options. Streaming COPY does not require any special
+  role attribute and is the appropriate choice when the client and
+  server are on different hosts — see
+  `Database.Beam.Postgres.Extensions.Copy.Stream`.
+
 # 0.6.0.0
 
 ## Interface changes

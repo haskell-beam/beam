@@ -328,3 +328,143 @@ aggregate_ (\(cust, emp) -> (group_ cust, Pg.pgArrayAgg (employeeId emp))) $ do
   guard_ (addressCity (employeeAddress employee) ==. addressCity (customerAddress cust))
   pure (cust, employee)
 ```
+
+### COPY support
+
+`beam-postgres` provides instances of `MonadBeamCopyTo` and
+`MonadBeamCopyFrom` (from `Database.Beam.Backend.SQL.BeamExtensions`) for
+PostgreSQL's file-mode `COPY` statement. See
+[the cross-backend COPY page](../manipulation/copy.md) for the shared
+`copyTableTo` / `copySelectTo` / `copyTableFrom` API.
+
+#### Server-side files only
+
+PostgreSQL's `COPY ... TO 'path'` and `COPY ... FROM 'path'` operate on
+files **on the database server**, not on the client. As a result, the
+calling role needs the `pg_write_server_files` (for COPY TO) or
+`pg_read_server_files` (for COPY FROM) role attribute, or be a superuser.
+This is not a `beam-postgres` choice — it is a PostgreSQL security policy.
+
+PostgreSQL supports CSV and a text format by default. Each format has its
+own options record so the type system prevents mixing options across formats.
+Both records have a default value to override selected fields against.
+
+
+Here's an example of exporting to the text format:
+
+!beam-query
+```haskell
+!example chinookdml only:Postgres
+--! import Database.Beam.Backend.SQL.BeamExtensions
+runCopyTo $
+  copyTableTo
+    (playlist chinookDb)
+    id -- no projection: entire table
+    (Pg.copyToText "/tmp/beam-docs-playlists.txt")
+```
+
+For CSV, the same export can be done this way:
+
+!beam-query
+```haskell
+!example chinookdml only:Postgres
+--! import Database.Beam.Backend.SQL.BeamExtensions
+--! import Database.Beam.Postgres
+runCopyTo $
+  copyTableTo
+    (playlist chinookDb)
+    id
+    ( Pg.copyToCSVWith "/tmp/beam-docs-csv-options.csv"
+        Pg.defaultPgCSVCopyToOptions
+          { pgCsvCopyToDelimiter = Just '|'
+          , pgCsvCopyToHeader    = Just True
+          }
+    )
+```
+
+#### Streaming COPY
+
+`beam-postgres` also provides instances of `MonadBeamCopyToStream` and
+`MonadBeamCopyFromStream` for PostgreSQL's
+`COPY ... TO STDOUT` / `COPY ... FROM STDIN` statements. The data flows
+through the client connection rather than to/from a server-side file, so
+**no special role attribute is required** — this is the usual choice for
+application code.
+
+The shared statement-builder API(`copyTableToStream` / `copySelectToStream` / `copyTableFromStream`) is
+documented on [the cross-backend COPY page](../manipulation/copy.md#streaming-copy). The
+PostgreSQL-specific pieces are the smart constructors that build the
+options record:
+
+| Smart constructor                                | Wire format               |
+| ------------------------------------------------ | ------------------------- |
+| `copyToTextStream` / `copyToTextStreamWith`      | PostgreSQL `text` format  |
+| `copyToCSVStream`  / `copyToCSVStreamWith`       | `csv` format              |
+| `copyFromTextStream` / `copyFromTextStreamWith`    | `text` format             |
+| `copyFromCSVStream`  / `copyFromCSVStreamWith`     | `csv` format              |
+
+The format-specific option records (`PgTextCopyToOptions`,
+`PgCSVCopyToOptions`, …) are the same ones used by the file-mode API, so
+overriding e.g. the delimiter or the header flag works identically.
+
+The `*Stream` runners take an `IO`-typed callback that participates in the
+streaming protocol. For `runCopyToStream`, the callback is a
+`ByteString -> IO ()` *sink* invoked once per chunk emitted by the server.
+The example below prints every chunk without materializing the whole dataset:
+
+!beam-query
+```haskell
+!example chinookdml only:Postgres
+--! import Database.Beam.Backend.SQL.BeamExtensions
+--! import Database.Beam.Postgres
+--! import qualified Data.ByteString.Char8 as BS
+
+runCopyToStream
+  (copyTableToStream
+     (playlist chinookDb)
+      id
+      Pg.copyToCSVStream
+  )
+  BS.putStrLn -- print every chunk
+```
+
+For `runCopyFromStream`, the callback is an `IO (Maybe ByteString)`
+*source* that is pulled until it returns `Nothing`. The example below
+replays the bytes captured above back into the table — first deleting the
+existing rows so the re-import does not conflict on the primary key. As
+with the file-mode example, the doc runner rolls back the surrounding
+transaction so the chinook database stays unchanged:
+
+!beam-query
+```haskell
+!example chinookdml only:Postgres
+--! import Database.Beam.Backend.SQL.BeamExtensions
+--! import Database.Beam.Postgres
+--! import qualified Data.ByteString as BS
+--! import Data.IORef
+
+-- Capture rows via streaming COPY ... TO STDOUT.
+chunksRef <- liftIO $ newIORef []
+runCopyToStream
+  (copyTableToStream (playlist chinookDb) id Pg.copyToCSVStream)
+  (\chunk -> modifyIORef' chunksRef (chunk :))
+payload <- liftIO (BS.concat . Prelude.reverse <$> readIORef chunksRef)
+
+-- Clear the playlist table (and its dependents) so the re-import doesn't
+-- conflict on primary keys.
+runDelete $ delete (playlistTrack chinookDb) (\_ -> val_ True)
+runDelete $ delete (playlist chinookDb) (\_ -> val_ True)
+
+-- Replay the captured payload via streaming COPY ... FROM STDIN.
+sourceRef <- liftIO $ newIORef (Just payload)
+runCopyFromStream
+  (copyTableFromStream (playlist chinookDb) id Pg.copyFromCSVStream)
+  (do mchunk <- readIORef sourceRef
+      writeIORef sourceRef Nothing
+      pure mchunk)
+```
+
+The format options behave the same as in the file-mode case. Switching the
+above example to `Pg.copyToCSVStreamWith` / `Pg.copyFromCSVStreamWith` lets
+you override the CSV delimiter, the header flag, the quote character, and
+so on.
