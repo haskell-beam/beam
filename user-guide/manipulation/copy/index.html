@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../update/">
+        <link rel="prev" href="../delete/">
       
       
-        <link rel="next" href="../copy/">
+        <link rel="next" href="../../../schema-guide/migrations/">
       
       
         
@@ -23,7 +23,7 @@
     
     
       
-        <title>DELETE - Beam Documentation</title>
+        <title>COPY - Beam Documentation</title>
       
     
     
@@ -68,6 +68,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#building-a-copy-statement" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -100,7 +105,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              DELETE
+              COPY
             
           </span>
         </div>
@@ -1010,17 +1015,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../delete/" class="md-nav__link">
         
   
   
@@ -1036,7 +1034,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -1046,10 +1043,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../copy/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COPY
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1065,6 +1087,85 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#building-a-copy-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building a COPY statement
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Building a COPY statement">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#direct-table-copy-to-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct table copy to a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#copying-a-query-to-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copying a query to a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#importing-rows-from-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importing rows from a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming COPY
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1489,6 +1590,75 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#building-a-copy-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building a COPY statement
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Building a COPY statement">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#direct-table-copy-to-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct table copy to a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#copying-a-query-to-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copying a query to a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#importing-rows-from-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importing rows from a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming COPY
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1507,14 +1677,44 @@
   
 
 
-  <h1>DELETE</h1>
+  <h1>COPY</h1>
 
-<p>SQL <code>DELETE</code> expressions allow you to remove rows from a database.</p>
-<p>The <code>delete</code> function from <code>Database.Beam.Query</code> can be used to delete
-rows from a particular table. The function takes a table and a
-condition for the <code>WHERE</code> clause. The function returns a <code>SqlDelete</code>
-object that can be run in <code>MonadBeam</code> with <code>runDelete</code>.</p>
-<p>For example, to delete any customer, whose first name is Emilio.</p>
+<p>SQL <code>COPY</code> is a non-standard, but widely supported, statement for moving rows
+between a database table and some external resource.</p>
+<p>Beam exposes the <code>COPY</code> statement within <code>Database.Beam.Backend.SQL.BeamExtensions</code>:</p>
+<ul>
+<li><code>MonadBeamCopyTo be m</code> — backends that can execute <code>COPY ... TO 'file'</code>,
+  exporting rows to a server-side file.</li>
+<li><code>MonadBeamCopyFrom be m</code> — backends that can execute
+  <code>COPY ... FROM 'file'</code>, importing rows from a server-side file.</li>
+</ul>
+<p><code>beam-duckdb</code> and <code>beam-postgres</code> currently provide instances.</p>
+<h2 id="building-a-copy-statement">Building a COPY statement</h2>
+<p>In general, there are four ways to copy data OUT of the database (<code>COPY ... TO</code>):</p>
+<ul>
+<li><code>copyTableTo</code>: Copy an entire table, or a subset of its columns, to an external file;</li>
+<li><code>copySelectTo</code>: Copy the result of a <code>SELECT</code> query to an external file;</li>
+<li><code>copyTableToStream</code>: Stream an entire table, or a subset of its columns;</li>
+<li><code>copySelectToStream</code>: Stream the result of a <code>SELECT</code> query.</li>
+</ul>
+<p>To copy data INTO the database:</p>
+<ul>
+<li><code>copyTableFrom</code>: Copy data from an external file, to a table (or a subset of its columns).</li>
+<li><code>copyTableFromStream</code>: Copy data from an incoming stream, to a table (or a subset of its columns).</li>
+</ul>
+<p>The type signature of these functions may look gnarly. This is because input parameters are
+highly backend-dependent. For example, DuckDB can export data in/out of Parquet files, while
+Postgres generally cannot. Each backend supplies its own set of smart constructors and options records:</p>
+<ul>
+<li><strong>PostgreSQL</strong> — <code>text</code> and <code>csv</code> formats. See
+  <a href="../../backends/beam-postgres/#copy-support">the beam-postgres page</a> for
+  format options and the role-permission requirement.</li>
+<li><strong>DuckDB</strong> — <code>CSV</code>, <code>Parquet</code>, and <code>JSON</code> formats. See
+  <a href="../../backends/beam-duckdb/#copy-support">the beam-duckdb page</a> for format
+  coverage, compression, and partition-by support.</li>
+</ul>
+<h3 id="direct-table-copy-to-a-file">Direct table copy to a file</h3>
+<p>For example, exporting every Chinook playlist to a CSV in DuckDB:</p>
 <p>
                 <div class="code-nav-container">
                     
@@ -1522,14 +1722,6 @@ object that can be run in <code>MonadBeam</code> with <code>runDelete</code>.</p
             
         <li class="nav-item">
             <a href="#tab-0-Haskell" aria-controls="tab-0-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
-        </li>
-    
-        <li class="nav-item">
-            <a href="#tab-0-Postgres" aria-controls="tab-0-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
-        </li>
-    
-        <li class="nav-item">
-            <a href="#tab-0-Sqlite" aria-controls="tab-0-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
         </li>
     
         <li class="nav-item">
@@ -1541,97 +1733,18 @@ object that can be run in <code>MonadBeam</code> with <code>runDelete</code>.</p
         <div class="tab-content">
             
         <div role="tabpanel" class="tab-pane active" id="tab-0-Haskell">
-            <div class="highlight"><pre><span></span><code><span class="nf">runDelete</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">delete</span><span class="w"> </span><span class="p">(</span><span class="n">customer</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
-<span class="w">  </span><span class="p">(</span><span class="nf">\</span><span class="n">c</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">customerFirstName</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">==.</span><span class="w"> </span><span class="s">&quot;Emilio&quot;</span><span class="p">)</span>
-</code></pre></div>
-
-        </div>
-    
-        <div role="tabpanel" class="tab-pane " id="tab-0-Postgres">
-            <div class="highlight"><pre><span></span><code><span class="k">DELETE</span>
-<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
-<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;delete_target&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="s1">&#39;Emilio&#39;</span><span class="p">);</span>
-</code></pre></div>
-
-        </div>
-    
-        <div role="tabpanel" class="tab-pane " id="tab-0-Sqlite">
-            <div class="highlight"><pre><span></span><code><span class="k">DELETE</span>
-<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span>
-<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
-
-<span class="c1">-- With values: [SQLText &quot;Emilio&quot;];</span>
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+<span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
+<span class="w">  </span><span class="n">copyTableTo</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="c1">-- no projection: export entire table</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">DuckDB</span><span class="o">.</span><span class="n">copyToCSV</span><span class="w"> </span><span class="s">&quot;/tmp/beam-docs-playlists.csv&quot;</span><span class="p">)</span>
 </code></pre></div>
 
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-0-Duckdb">
-            <div class="highlight"><pre><span></span><code><span class="k">DELETE</span>
-<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
-<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;delete_target&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
-
-<span class="c1">-- With values: [&quot;Emilio&quot;];</span>
-</code></pre></div>
-
-        </div>
-    
-        </div>
-    
-                </div>
-                    </p>
-<p><code>DELETE</code> is fairly simple compared to the other manipulation commands,
-so that's really all there is to it. Expressions for the <code>WHERE</code>
-clause can be arbitrarily complex, assuming your backend supports it.</p>
-<p>For example, to delete any invoice with more than five invoice lines</p>
-<p>
-                <div class="code-nav-container">
-                    
-        <ul class="nav nav-tabs">
-            
-        <li class="nav-item">
-            <a href="#tab-1-Haskell" aria-controls="tab-1-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
-        </li>
-    
-        <li class="nav-item">
-            <a href="#tab-1-Sqlite" aria-controls="tab-1-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
-        </li>
-    
-        <li class="nav-item">
-            <a href="#tab-1-Duckdb" aria-controls="tab-1-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
-        </li>
-    
-        </ul>
-    
-        <div class="tab-content">
-            
-        <div role="tabpanel" class="tab-pane active" id="tab-1-Haskell">
-            <div class="highlight"><pre><span></span><code><span class="nf">runDelete</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">delete</span><span class="w"> </span><span class="p">(</span><span class="n">invoice</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
-<span class="w">  </span><span class="p">(</span><span class="nf">\</span><span class="n">i</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="mi">5</span><span class="w"> </span><span class="o">&lt;.</span><span class="w"> </span><span class="n">subquery_</span><span class="w"> </span><span class="p">(</span><span class="n">aggregate_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="kr">_</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">as_</span><span class="w"> </span><span class="o">@</span><span class="kt">Int32</span><span class="w"> </span><span class="n">countAll_</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
-<span class="w">                         </span><span class="n">invoiceLines</span><span class="w"> </span><span class="n">i</span><span class="p">))</span>
-</code></pre></div>
-
-        </div>
-    
-        <div role="tabpanel" class="tab-pane " id="tab-1-Sqlite">
-            <div class="highlight"><pre><span></span><code><span class="k">DELETE</span>
-<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span>
-<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="o">?</span><span class="p">)</span><span class="o">&lt;</span><span class="p">(</span>
-<span class="w">             </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span>
-<span class="w">              </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;InvoiceLine&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
-<span class="w">              </span><span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)));</span>
-
-<span class="c1">-- With values: [SQLInteger 5];</span>
-</code></pre></div>
-
-        </div>
-    
-        <div role="tabpanel" class="tab-pane " id="tab-1-Duckdb">
-            <div class="highlight"><pre><span></span><code><span class="k">DELETE</span>
-<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
-<span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="o">&lt;</span><span class="p">(</span>
-<span class="w">             </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span>
-<span class="w">              </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;InvoiceLine&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
-<span class="w">              </span><span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="ss">&quot;delete_target&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)));</span>
+            <div class="highlight"><pre><span></span><code><span class="k">COPY</span><span class="w"> </span><span class="n">Playlist</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span><span class="w"> </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-playlists.csv&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="n">CSV</span><span class="p">);</span>
 
 <span class="c1">-- With values: [];</span>
 </code></pre></div>
@@ -1642,12 +1755,185 @@ clause can be arbitrarily complex, assuming your backend supports it.</p>
     
                 </div>
                     </p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The example above was only given for SQLite because it violates a
-foreign key constraint in the underlying database, and other
-backends are more pedantic</p>
-</div>
+<p>The same example written for PostgreSQL is identical except for the backend
+qualifier:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-1-Haskell" aria-controls="tab-1-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-1-Postgres" aria-controls="tab-1-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-1-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+<span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
+<span class="w">  </span><span class="n">copyTableTo</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="c1">-- no projection: export entire table</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">Pg</span><span class="o">.</span><span class="n">copyToCSV</span><span class="w"> </span><span class="s">&quot;/tmp/beam-docs-playlists.csv&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-1-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">COPY</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-playlists.csv&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="n">csv</span><span class="p">);</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<h3 id="copying-a-query-to-a-file">Copying a query to a file</h3>
+<p>Here's an example of exporting the result of a query where playlists are filtered by name before
+exporting:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-2-Haskell" aria-controls="tab-2-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-2-Duckdb" aria-controls="tab-2-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-2-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+<span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
+<span class="w">  </span><span class="n">copySelectTo</span>
+<span class="w">    </span><span class="p">(</span><span class="w"> </span><span class="n">select</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">        </span><span class="n">p</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">        </span><span class="n">guard_</span><span class="w"> </span><span class="p">(</span><span class="n">playlistName</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">==.</span><span class="w"> </span><span class="n">just_</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="s">&quot;Music&quot;</span><span class="p">))</span>
+<span class="w">        </span><span class="n">pure</span><span class="w"> </span><span class="n">p</span>
+<span class="w">    </span><span class="p">)</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">DuckDB</span><span class="o">.</span><span class="n">copyToCSV</span><span class="w"> </span><span class="s">&quot;/tmp/beam-docs-music-playlist.csv&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-2-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">COPY</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;PlaylistId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Name&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span>
+<span class="w">   </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+<span class="w">   </span><span class="k">WHERE</span><span class="w"> </span><span class="k">CASE</span>
+<span class="w">             </span><span class="k">WHEN</span><span class="w"> </span><span class="p">((</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">AND</span><span class="w"> </span><span class="p">((</span><span class="o">?</span><span class="p">)</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="p">)</span><span class="w"> </span><span class="k">THEN</span><span class="w"> </span><span class="o">?</span>
+<span class="w">             </span><span class="k">WHEN</span><span class="w"> </span><span class="p">((</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">OR</span><span class="w"> </span><span class="p">((</span><span class="o">?</span><span class="p">)</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="p">)</span><span class="w"> </span><span class="k">THEN</span><span class="w"> </span><span class="o">?</span>
+<span class="w">             </span><span class="k">ELSE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">)</span>
+<span class="w">         </span><span class="k">END</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-music-playlist.csv&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="n">CSV</span><span class="p">);</span>
+
+<span class="c1">-- With values: [&quot;Music&quot;,True,&quot;Music&quot;,False,&quot;Music&quot;];</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<h3 id="importing-rows-from-a-file">Importing rows from a file</h3>
+<p>The example below first exports the playlists to a CSV and then re-imports
+the same file via <code>copyTableFrom</code>:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-3-Haskell" aria-controls="tab-3-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-3-Duckdb" aria-controls="tab-3-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-3-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+
+<span class="c1">-- Export rows to a CSV.</span>
+<span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
+<span class="w">  </span><span class="n">copyTableTo</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="n">id</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">DuckDB</span><span class="o">.</span><span class="n">copyToCSV</span><span class="w"> </span><span class="s">&quot;/tmp/beam-docs-playlists-roundtrip.csv&quot;</span><span class="p">)</span>
+
+<span class="c1">-- Clear the playlist table (and its dependents) so the re-import doesn&#39;t</span>
+<span class="c1">-- conflict on primary keys. The example runs inside a rolled-back</span>
+<span class="c1">-- transaction, so the chinook database stays unchanged.</span>
+<span class="nf">runDelete</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">delete</span><span class="w"> </span><span class="p">(</span><span class="n">playlistTrack</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="kr">_</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="kt">True</span><span class="p">)</span>
+<span class="nf">runDelete</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">delete</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="kr">_</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="kt">True</span><span class="p">)</span>
+
+<span class="c1">-- Re-import the rows we just wrote out.</span>
+<span class="nf">runCopyFrom</span><span class="w"> </span><span class="o">$</span>
+<span class="w">  </span><span class="n">copyTableFrom</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="n">id</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">DuckDB</span><span class="o">.</span><span class="n">copyFromCSV</span><span class="w"> </span><span class="s">&quot;/tmp/beam-docs-playlists-roundtrip.csv&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-3-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">COPY</span><span class="w"> </span><span class="n">Playlist</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span><span class="w"> </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-playlists-roundtrip.csv&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="n">CSV</span><span class="p">);</span>
+
+<span class="c1">-- With values: [];</span>
+
+<span class="k">DELETE</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;PlaylistTrack&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">-- With values: [True];</span>
+
+<span class="k">DELETE</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">-- With values: [True];</span>
+<span class="k">COPY</span><span class="w"> </span><span class="n">Playlist</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span><span class="w"> </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span>
+<span class="k">FROM</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-playlists-roundtrip.csv&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="n">CSV</span><span class="p">);</span>
+
+<span class="c1">-- With values: [];</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<h3 id="streaming-copy">Streaming COPY</h3>
+<p>The <code>COPY</code> runners discussed above all read from / write to a file on the
+<strong>database server</strong>. This makes sense for an in-process database like DuckDB, but
+not so much for a database server like PostgreSQL.</p>
+<p><code>beam-postgres</code> currently provides instances; see
+<a href="../../backends/beam-postgres/#streaming-copy">the beam-postgres page</a> for
+the Postgres-specific smart constructors and a worked example.
+<code>beam-duckdb</code> does not yet implement the streaming classes.</p>
 
 
 

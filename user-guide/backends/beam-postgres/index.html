@@ -1035,6 +1035,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manipulation/copy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COPY
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1369,6 +1397,45 @@
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#copy-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        COPY support
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="COPY support">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-side-files-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server-side files only
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming COPY
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -1765,6 +1832,45 @@
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#copy-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        COPY support
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="COPY support">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-side-files-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server-side files only
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming COPY
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -2611,18 +2717,18 @@ highest ranking employee for each customer.</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-31-Haskell" aria-controls="tab-31-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-14-Haskell" aria-controls="tab-14-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-31-Postgres" aria-controls="tab-31-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-14-Postgres" aria-controls="tab-14-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-31-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-14-Haskell">
             <div class="highlight"><pre><span></span><code><span class="nf">aggregate_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">cust</span><span class="p">,</span><span class="w"> </span><span class="n">emp</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="p">(</span><span class="n">group_</span><span class="w"> </span><span class="n">cust</span><span class="p">,</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgArrayAgg</span><span class="w"> </span><span class="p">(</span><span class="n">employeeId</span><span class="w"> </span><span class="n">emp</span><span class="p">)))</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
 <span class="w">  </span><span class="n">inv</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">filter_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="n">i</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">invoiceDate</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&gt;=.</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">read</span><span class="w"> </span><span class="s">&quot;2024-09-01 00:00:00.000000&quot;</span><span class="p">)</span><span class="w">  </span><span class="o">&amp;&amp;.</span><span class="w"> </span><span class="n">invoiceDate</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=.</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">read</span><span class="w"> </span><span class="s">&quot;2024-10-01 00:00:00.000000&quot;</span><span class="p">))</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">invoice</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
 <span class="w">  </span><span class="n">cust</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">filter_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="n">c</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">pk</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">==.</span><span class="w"> </span><span class="n">invoiceCustomer</span><span class="w"> </span><span class="n">inv</span><span class="p">)</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">customer</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
@@ -2649,7 +2755,7 @@ highest ranking employee for each customer.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-31-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-14-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t1&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
 <span class="w">       </span><span class="ss">&quot;t1&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
 <span class="w">       </span><span class="ss">&quot;t1&quot;</span><span class="p">.</span><span class="ss">&quot;LastName&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
@@ -2800,6 +2906,287 @@ highest ranking employee for each customer.</p>
     
                 </div>
                     </p>
+<h3 id="copy-support">COPY support</h3>
+<p><code>beam-postgres</code> provides instances of <code>MonadBeamCopyTo</code> and
+<code>MonadBeamCopyFrom</code> (from <code>Database.Beam.Backend.SQL.BeamExtensions</code>) for
+PostgreSQL's file-mode <code>COPY</code> statement. See
+<a href="../../manipulation/copy/">the cross-backend COPY page</a> for the shared
+<code>copyTableTo</code> / <code>copySelectTo</code> / <code>copyTableFrom</code> API.</p>
+<h4 id="server-side-files-only">Server-side files only</h4>
+<p>PostgreSQL's <code>COPY ... TO 'path'</code> and <code>COPY ... FROM 'path'</code> operate on
+files <strong>on the database server</strong>, not on the client. As a result, the
+calling role needs the <code>pg_write_server_files</code> (for COPY TO) or
+<code>pg_read_server_files</code> (for COPY FROM) role attribute, or be a superuser.
+This is not a <code>beam-postgres</code> choice — it is a PostgreSQL security policy.</p>
+<p>PostgreSQL supports CSV and a text format by default. Each format has its
+own options record so the type system prevents mixing options across formats.
+Both records have a default value to override selected fields against.</p>
+<p>Here's an example of exporting to the text format:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-15-Haskell" aria-controls="tab-15-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-15-Postgres" aria-controls="tab-15-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-15-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+<span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
+<span class="w">  </span><span class="n">copyTableTo</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="c1">-- no projection: entire table</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">Pg</span><span class="o">.</span><span class="n">copyToText</span><span class="w"> </span><span class="s">&quot;/tmp/beam-docs-playlists.txt&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-15-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">COPY</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-playlists.txt&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="nb">text</span><span class="p">);</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>For CSV, the same export can be done this way:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-16-Haskell" aria-controls="tab-16-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-16-Postgres" aria-controls="tab-16-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-16-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+<span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Postgres</span>
+<span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
+<span class="w">  </span><span class="n">copyTableTo</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="n">id</span>
+<span class="w">    </span><span class="p">(</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">copyToCSVWith</span><span class="w"> </span><span class="s">&quot;/tmp/beam-docs-csv-options.csv&quot;</span>
+<span class="w">        </span><span class="kt">Pg</span><span class="o">.</span><span class="n">defaultPgCSVCopyToOptions</span>
+<span class="w">          </span><span class="p">{</span><span class="w"> </span><span class="n">pgCsvCopyToDelimiter</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Just</span><span class="w"> </span><span class="sc">&#39;|&#39;</span>
+<span class="w">          </span><span class="p">,</span><span class="w"> </span><span class="n">pgCsvCopyToHeader</span><span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">Just</span><span class="w"> </span><span class="kt">True</span>
+<span class="w">          </span><span class="p">}</span>
+<span class="w">    </span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-16-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">COPY</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-csv-options.csv&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="n">csv</span><span class="p">,</span>
+<span class="w">                                                             </span><span class="k">DELIMITER</span><span class="w"> </span><span class="s1">&#39;|&#39;</span><span class="p">,</span>
+<span class="w">                                                                       </span><span class="n">HEADER</span><span class="w"> </span><span class="k">TRUE</span><span class="p">);</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<h4 id="streaming-copy">Streaming COPY</h4>
+<p><code>beam-postgres</code> also provides instances of <code>MonadBeamCopyToStream</code> and
+<code>MonadBeamCopyFromStream</code> for PostgreSQL's
+<code>COPY ... TO STDOUT</code> / <code>COPY ... FROM STDIN</code> statements. The data flows
+through the client connection rather than to/from a server-side file, so
+<strong>no special role attribute is required</strong> — this is the usual choice for
+application code.</p>
+<p>The shared statement-builder API(<code>copyTableToStream</code> / <code>copySelectToStream</code> / <code>copyTableFromStream</code>) is
+documented on <a href="../../manipulation/copy/#streaming-copy">the cross-backend COPY page</a>. The
+PostgreSQL-specific pieces are the smart constructors that build the
+options record:</p>
+<table>
+<thead>
+<tr>
+<th>Smart constructor</th>
+<th>Wire format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>copyToTextStream</code> / <code>copyToTextStreamWith</code></td>
+<td>PostgreSQL <code>text</code> format</td>
+</tr>
+<tr>
+<td><code>copyToCSVStream</code>  / <code>copyToCSVStreamWith</code></td>
+<td><code>csv</code> format</td>
+</tr>
+<tr>
+<td><code>copyFromTextStream</code> / <code>copyFromTextStreamWith</code></td>
+<td><code>text</code> format</td>
+</tr>
+<tr>
+<td><code>copyFromCSVStream</code>  / <code>copyFromCSVStreamWith</code></td>
+<td><code>csv</code> format</td>
+</tr>
+</tbody>
+</table>
+<p>The format-specific option records (<code>PgTextCopyToOptions</code>,
+<code>PgCSVCopyToOptions</code>, …) are the same ones used by the file-mode API, so
+overriding e.g. the delimiter or the header flag works identically.</p>
+<p>The <code>*Stream</code> runners take an <code>IO</code>-typed callback that participates in the
+streaming protocol. For <code>runCopyToStream</code>, the callback is a
+<code>ByteString -&gt; IO ()</code> <em>sink</em> invoked once per chunk emitted by the server.
+The example below prints every chunk without materializing the whole dataset:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-17-Haskell" aria-controls="tab-17-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-17-Postgres" aria-controls="tab-17-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-17-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+<span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Postgres</span>
+<span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="k">qualified</span><span class="w"> </span><span class="nn">Data.ByteString.Char8</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">BS</span>
+
+<span class="nf">runCopyToStream</span>
+<span class="w">  </span><span class="p">(</span><span class="n">copyTableToStream</span>
+<span class="w">     </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">      </span><span class="n">id</span>
+<span class="w">      </span><span class="kt">Pg</span><span class="o">.</span><span class="n">copyToCSVStream</span>
+<span class="w">  </span><span class="p">)</span>
+<span class="w">  </span><span class="kt">BS</span><span class="o">.</span><span class="n">putStrLn</span><span class="w"> </span><span class="c1">-- print every chunk</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-17-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="mi">1</span><span class="p">,</span>
+<span class="n">Music</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">      </span><span class="n">Movies</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">             </span><span class="n">TV</span><span class="w"> </span><span class="n">Shows</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">Audiobooks</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<span class="w">                                 </span><span class="mi">90</span><span class="err">�</span><span class="n">s</span><span class="w"> </span><span class="n">Music</span><span class="w"> </span><span class="mi">6</span><span class="p">,</span>
+<span class="w">                                            </span><span class="n">Audiobooks</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span>
+<span class="w">                                                       </span><span class="n">Movies</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">                                                              </span><span class="n">Music</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span>
+<span class="w">                                                                    </span><span class="n">Music</span><span class="w"> </span><span class="n">Videos</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span>
+<span class="w">                                                                                 </span><span class="n">TV</span><span class="w"> </span><span class="n">Shows</span><span class="w"> </span><span class="mi">11</span><span class="p">,</span>
+<span class="w">                                                                                          </span><span class="n">Brazilian</span><span class="w"> </span><span class="n">Music</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+<span class="w">                                                                                                          </span><span class="n">Classical</span><span class="w"> </span><span class="mi">13</span><span class="p">,</span>
+<span class="w">                                                                                                                    </span><span class="n">Classical</span><span class="w"> </span><span class="mi">101</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Deep</span><span class="w"> </span><span class="n">Cuts</span><span class="w"> </span><span class="mi">14</span><span class="p">,</span>
+<span class="w">                                                                                                                                              </span><span class="n">Classical</span><span class="w"> </span><span class="mi">101</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="k">Next</span><span class="w"> </span><span class="n">Steps</span><span class="w"> </span><span class="mi">15</span><span class="p">,</span>
+<span class="w">                                                                                                                                                                         </span><span class="n">Classical</span><span class="w"> </span><span class="mi">101</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">The</span><span class="w"> </span><span class="n">Basics</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span>
+<span class="w">                                                                                                                                                                                                    </span><span class="n">Grunge</span><span class="w"> </span><span class="mi">17</span><span class="p">,</span>
+<span class="w">                                                                                                                                                                                                           </span><span class="n">Heavy</span><span class="w"> </span><span class="n">Metal</span><span class="w"> </span><span class="n">Classic</span><span class="w"> </span><span class="mi">18</span><span class="p">,</span>
+<span class="w">                                                                                                                                                                                                                               </span><span class="k">On</span><span class="o">-</span><span class="n">The</span><span class="o">-</span><span class="k">Go</span><span class="w"> </span><span class="mi">1</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>For <code>runCopyFromStream</code>, the callback is an <code>IO (Maybe ByteString)</code>
+<em>source</em> that is pulled until it returns <code>Nothing</code>. The example below
+replays the bytes captured above back into the table — first deleting the
+existing rows so the re-import does not conflict on the primary key. As
+with the file-mode example, the doc runner rolls back the surrounding
+transaction so the chinook database stays unchanged:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-18-Haskell" aria-controls="tab-18-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-18-Postgres" aria-controls="tab-18-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-18-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
+<span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Postgres</span>
+<span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="k">qualified</span><span class="w"> </span><span class="nn">Data.ByteString</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">BS</span>
+<span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Data.IORef</span>
+
+<span class="c1">-- Capture rows via streaming COPY ... TO STDOUT.</span>
+<span class="nf">chunksRef</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">liftIO</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">newIORef</span><span class="w"> </span><span class="kt">[]</span>
+<span class="nf">runCopyToStream</span>
+<span class="w">  </span><span class="p">(</span><span class="n">copyTableToStream</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">copyToCSVStream</span><span class="p">)</span>
+<span class="w">  </span><span class="p">(</span><span class="nf">\</span><span class="n">chunk</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">modifyIORef&#39;</span><span class="w"> </span><span class="n">chunksRef</span><span class="w"> </span><span class="p">(</span><span class="n">chunk</span><span class="w"> </span><span class="kt">:</span><span class="p">))</span>
+<span class="nf">payload</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">liftIO</span><span class="w"> </span><span class="p">(</span><span class="kt">BS</span><span class="o">.</span><span class="n">concat</span><span class="w"> </span><span class="o">.</span><span class="w"> </span><span class="kt">Prelude</span><span class="o">.</span><span class="n">reverse</span><span class="w"> </span><span class="o">&lt;$&gt;</span><span class="w"> </span><span class="n">readIORef</span><span class="w"> </span><span class="n">chunksRef</span><span class="p">)</span>
+
+<span class="c1">-- Clear the playlist table (and its dependents) so the re-import doesn&#39;t</span>
+<span class="c1">-- conflict on primary keys.</span>
+<span class="nf">runDelete</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">delete</span><span class="w"> </span><span class="p">(</span><span class="n">playlistTrack</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="kr">_</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="kt">True</span><span class="p">)</span>
+<span class="nf">runDelete</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">delete</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="kr">_</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="kt">True</span><span class="p">)</span>
+
+<span class="c1">-- Replay the captured payload via streaming COPY ... FROM STDIN.</span>
+<span class="nf">sourceRef</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">liftIO</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">newIORef</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="n">payload</span><span class="p">)</span>
+<span class="nf">runCopyFromStream</span>
+<span class="w">  </span><span class="p">(</span><span class="n">copyTableFromStream</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">copyFromCSVStream</span><span class="p">)</span>
+<span class="w">  </span><span class="p">(</span><span class="kr">do</span><span class="w"> </span><span class="n">mchunk</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">readIORef</span><span class="w"> </span><span class="n">sourceRef</span>
+<span class="w">      </span><span class="n">writeIORef</span><span class="w"> </span><span class="n">sourceRef</span><span class="w"> </span><span class="kt">Nothing</span>
+<span class="w">      </span><span class="n">pure</span><span class="w"> </span><span class="n">mchunk</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-18-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">DELETE</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;PlaylistTrack&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="k">true</span><span class="p">;</span>
+
+
+<span class="k">DELETE</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="k">true</span><span class="p">;</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>The format options behave the same as in the file-mode case. Switching the
+above example to <code>Pg.copyToCSVStreamWith</code> / <code>Pg.copyFromCSVStreamWith</code> lets
+you override the CSV delimiter, the header flag, the quote character, and
+so on.</p>
 
 
 
