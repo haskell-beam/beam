@@ -31,6 +31,7 @@ import Database.Beam.Backend
     parseOneField,
   )
 import Database.Beam.Backend.SQL (FromBackendRow (..))
+import Database.Beam.Backend.SQL.BeamExtensions (BeamSqlBackendCopyFromSyntax, BeamSqlBackendCopyToSyntax)
 import Database.Beam.DuckDB.Syntax
   ( DuckDBCommandSyntax,
     DuckDBExpressionSyntax (..),
@@ -40,6 +41,7 @@ import Database.Beam.DuckDB.Syntax.Builder
     emit,
     parens,
   )
+import Database.Beam.DuckDB.Syntax.Extensions.Copy (DuckDBCopyFromSyntax, DuckDBCopyToSyntax)
 import Database.Beam.Query.SQL92 (buildSql92Query')
 import Database.Beam.Query.Types (HasQBuilder (..))
 import Database.DuckDB.Simple (Null)
@@ -50,6 +52,10 @@ data DuckDB
 type instance BeamSqlBackendSyntax DuckDB = DuckDBCommandSyntax
 
 instance BeamSqlBackend DuckDB
+
+type instance BeamSqlBackendCopyToSyntax DuckDB = DuckDBCopyToSyntax
+
+type instance BeamSqlBackendCopyFromSyntax DuckDB = DuckDBCopyFromSyntax
 
 instance HasQBuilder DuckDB where
   buildSqlQuery = buildSql92Query' True

@@ -22,7 +22,7 @@ module Database.Beam.Postgres.Syntax
     , emit, emitBuilder, escapeString
     , escapeBytea, escapeIdentifier
     , pgParens
-
+    , pgStringLit, pgCharLit, pgBoolLit
     , nextSyntaxStep
 
     , PgCommandSyntax(..), PgCommandType(..)
@@ -131,6 +131,8 @@ import qualified Database.PostgreSQL.Simple.TypeInfo.Static as Pg
 import qualified Database.PostgreSQL.Simple.Types as Pg (Oid(..), Binary(..), Null(..))
 import qualified Database.PostgreSQL.Simple.Time as Pg (Date, LocalTimestamp, UTCTimestamp)
 import qualified Database.PostgreSQL.Simple.HStore as Pg (HStoreList, HStoreMap, HStoreBuilder)
+import Data.Text (Text)
+import qualified Data.ByteString.Char8 as BS8
 
 data PostgresInaccessible
 
@@ -1389,6 +1391,27 @@ pgQuotedIdentifier t =
 
 pgParens :: PgSyntax -> PgSyntax
 pgParens a = emit "(" <> a <> emit ")"
+
+-- | Render a 'Text' as a single-quoted SQL string literal, with proper
+-- Postgres escaping. The surrounding quotes are added here; 'escapeString'
+-- only handles the escaping of the contents.
+--
+-- @since 0.6.1.0
+pgStringLit :: Text -> PgSyntax
+pgStringLit t = emit "'" <> escapeString (TE.encodeUtf8 t) <> emit "'"
+
+-- | Render a 'Char' as a single-quoted SQL string literal.
+--
+-- @since 0.6.1.0
+pgCharLit :: Char -> PgSyntax
+pgCharLit c = emit "'" <> escapeString (BS8.singleton c) <> emit "'"
+
+-- | Render a boolean as the literal @TRUE@ or @FALSE@.
+--
+-- @since 0.6.1.0
+pgBoolLit :: Bool -> PgSyntax
+pgBoolLit True = emit "TRUE"
+pgBoolLit False = emit "FALSE"
 
 pgTableOp :: ByteString -> PgSelectTableSyntax -> PgSelectTableSyntax
           -> PgSelectTableSyntax

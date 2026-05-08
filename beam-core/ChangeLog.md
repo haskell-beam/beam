@@ -1,4 +1,15 @@
-# Unreleased
+# 0.11.1.0
+
+## New features
+
+* Added a cross-backend abstraction for the `COPY` statement in
+  `Database.Beam.Backend.SQL.BeamExtensions`:
+  * file-mode `COPY ... TO 'file'` / `COPY ... FROM 'file'`. Defines
+    `MonadBeamCopyTo` / `MonadBeamCopyFrom`, and the user-facing
+    `copyTableTo` / `copySelectTo` / `copyTableFrom` builders.
+  * streaming `COPY ... TO STDOUT` / `COPY ... FROM STDIN`. Mirrors the file-mode
+    API: `MonadBeamCopyToStream` / `MonadBeamCopyFromStream`,
+     and the `copyTableToStream` / `copySelectToStream` / `copyTableFromStream` builders.
 
 ## Dependencies
 

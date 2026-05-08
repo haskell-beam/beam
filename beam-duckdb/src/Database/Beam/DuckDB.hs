@@ -52,6 +52,42 @@ module Database.Beam.DuckDB
     csvWith,
     CSVOptions (..),
     defaultCSVOptions,
+
+    -- ** COPY support
+    DuckDBCopyToOptions,
+    DuckDBCopyFromOptions,
+
+    -- *** CSV
+    copyToCSV,
+    copyToCSVWith,
+    DuckDBCSVCopyToOptions (..),
+    defaultDuckDBCSVCopyToOptions,
+    copyFromCSV,
+    copyFromCSVWith,
+    DuckDBCSVCopyFromOptions (..),
+    defaultDuckDBCSVCopyFromOptions,
+
+    -- *** Parquet
+    copyToParquet,
+    copyToParquetWith,
+    DuckDBParquetCopyToOptions (..),
+    ParquetCompression (..),
+    defaultDuckDBParquetCopyToOptions,
+    copyFromParquet,
+    copyFromParquetWith,
+    DuckDBParquetCopyFromOptions (..),
+    defaultDuckDBParquetCopyFromOptions,
+
+    -- *** JSON
+    copyToJSON,
+    copyToJSONWith,
+    DuckDBJSONCopyToOptions (..),
+    JSONCompression (..),
+    defaultDuckDBJSONCopyToOptions,
+    copyFromJSON,
+    copyFromJSONWith,
+    DuckDBJSONCopyFromOptions (..),
+    defaultDuckDBJSONCopyFromOptions,
   )
 where
 
@@ -62,6 +98,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State.Strict (StateT (..), get, put)
+import Data.Coerce (coerce)
 import qualified Data.DList as DL
 import Data.Data (cast)
 import Data.Maybe (mapMaybe)
@@ -78,14 +115,45 @@ import Database.Beam.Backend
     MonadBeam,
   )
 import Database.Beam.Backend.SQL (FromBackendRow (..), MonadBeam (..))
+import Database.Beam.Backend.SQL.BeamExtensions (MonadBeamCopyFrom (..), MonadBeamCopyTo (..), SqlCopyFrom (..), SqlCopyTo (..))
 import Database.Beam.DuckDB.Backend (DuckDB)
-import Database.Beam.DuckDB.Syntax
-  ( DuckDBCommandSyntax (..),
-  )
+import Database.Beam.DuckDB.Syntax (DuckDBCommandSyntax (..))
 import Database.Beam.DuckDB.Syntax.Builder
   ( DuckDBSyntax (..),
     SomeField (..),
     withPlaceholder,
+  )
+import Database.Beam.DuckDB.Syntax.Extensions.Copy
+  ( DuckDBCSVCopyFromOptions (..),
+    DuckDBCSVCopyToOptions (..),
+    DuckDBCopyFromOptions,
+    DuckDBCopyFromSyntax (..),
+    DuckDBCopyToOptions,
+    DuckDBCopyToSyntax (..),
+    DuckDBJSONCopyFromOptions (..),
+    DuckDBJSONCopyToOptions (..),
+    DuckDBParquetCopyFromOptions (..),
+    DuckDBParquetCopyToOptions (..),
+    JSONCompression (..),
+    ParquetCompression (..),
+    copyFromCSV,
+    copyFromCSVWith,
+    copyFromJSON,
+    copyFromJSONWith,
+    copyFromParquet,
+    copyFromParquetWith,
+    copyToCSV,
+    copyToCSVWith,
+    copyToJSON,
+    copyToJSONWith,
+    copyToParquet,
+    copyToParquetWith,
+    defaultDuckDBCSVCopyFromOptions,
+    defaultDuckDBCSVCopyToOptions,
+    defaultDuckDBJSONCopyFromOptions,
+    defaultDuckDBJSONCopyToOptions,
+    defaultDuckDBParquetCopyFromOptions,
+    defaultDuckDBParquetCopyToOptions,
   )
 import Database.Beam.DuckDB.Syntax.Extensions.DataSource
 import Database.DuckDB.Simple (Connection, FromRow, Query (Query), ResultError (..), RowParser, ToField (toField), ToRow (toRow), bind, execute, nextRow, withStatement)
@@ -146,6 +214,14 @@ instance MonadBeam DuckDB DuckDBM where
                     Nothing -> pure Nothing
                     Just (BeamDuckDBRow row) -> pure row
             runReaderT (runDuckDBM (action nextRow')) (logger, conn)
+
+instance MonadBeamCopyTo DuckDB DuckDBM where
+  runCopyTo SqlCopyToNoColumns = pure ()
+  runCopyTo (SqlCopyTo syntax) = runNoReturn (coerce syntax)
+
+instance MonadBeamCopyFrom DuckDB DuckDBM where
+  runCopyFrom SqlCopyFromNoColumns = pure ()
+  runCopyFrom (SqlCopyFrom syntax) = runNoReturn (coerce syntax)
 
 newtype BeamDuckDBRow a = BeamDuckDBRow a
 

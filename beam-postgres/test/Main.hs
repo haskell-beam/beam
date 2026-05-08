@@ -7,10 +7,11 @@ import qualified Data.Text.Lazy as TL
 import Test.Tasty
 import qualified TestContainers.Tasty as TC
 
-import qualified Database.Beam.Postgres.Test.Select as Select
-import qualified Database.Beam.Postgres.Test.Marshal as Marshal
+import qualified Database.Beam.Postgres.Test.Copy as Copy
 import qualified Database.Beam.Postgres.Test.DataTypes as DataType
+import qualified Database.Beam.Postgres.Test.Marshal as Marshal
 import qualified Database.Beam.Postgres.Test.Migrate as Migrate
+import qualified Database.Beam.Postgres.Test.Select as Select
 import qualified Database.Beam.Postgres.Test.TempTable as TempTable
 import qualified Database.Beam.Postgres.Test.Windowing as Windowing
 import Database.PostgreSQL.Simple ( ConnectInfo(..), defaultConnectInfo )
@@ -27,6 +28,7 @@ main = defaultMain
           , Migrate.tests getConnStr
           , TempTable.tests getConnStr
           , Windowing.tests getConnStr
+          , Copy.tests getConnStr
           ]
 
 

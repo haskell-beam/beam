@@ -18,8 +18,18 @@ module Database.Beam.Postgres.Types
 import           Database.Beam
 import           Database.Beam.Backend
 import           Database.Beam.Backend.Internal.Compat
+import           Database.Beam.Backend.SQL.BeamExtensions
+                   ( BeamSqlBackendCopyFromStreamSyntax
+                   , BeamSqlBackendCopyFromSyntax
+                   , BeamSqlBackendCopyToStreamSyntax
+                   , BeamSqlBackendCopyToSyntax
+                   )
 import           Database.Beam.Migrate.Generics
 import           Database.Beam.Migrate.SQL (BeamMigrateOnlySqlBackend)
+import           Database.Beam.Postgres.Extensions.Copy.File
+                   ( PgCopyFromSyntax, PgCopyToSyntax )
+import           Database.Beam.Postgres.Extensions.Copy.Stream
+                   ( PgCopyFromStreamSyntax, PgCopyToStreamSyntax )
 import           Database.Beam.Postgres.Syntax
 import           Database.Beam.Query.SQL92
 
@@ -165,6 +175,12 @@ instance (Pg.FromField a, Pg.FromField b, Typeable a, Typeable b) => FromBackend
 instance BeamSqlBackend Postgres
 instance BeamMigrateOnlySqlBackend Postgres
 type instance BeamSqlBackendSyntax Postgres = PgCommandSyntax
+
+type instance BeamSqlBackendCopyToSyntax Postgres = PgCopyToSyntax
+type instance BeamSqlBackendCopyFromSyntax Postgres = PgCopyFromSyntax
+
+type instance BeamSqlBackendCopyToStreamSyntax Postgres = PgCopyToStreamSyntax
+type instance BeamSqlBackendCopyFromStreamSyntax Postgres = PgCopyFromStreamSyntax
 
 instance BeamSqlBackendIsString Postgres String
 instance BeamSqlBackendIsString Postgres Text

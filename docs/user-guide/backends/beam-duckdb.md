@@ -20,10 +20,6 @@ a `DataSourceEntity`. Thanks compiler!
 While DuckDB supports *many* data sources, we currently support a subset of them, described below. Feel free to raise
 [an issue!](https://github.com/haskell-beam/beam/issues/new) if you'd like us to add support for another data source!
 
-<!-- Note that the duckdb-ffi package isn't available in Nix, and so
-the following examples are not runnable at this time.
-If you read this notice in the future, this might have changed!
--->
 ### Parquet
 
 Parquet is an open-source file format that is commonly used in data science.
@@ -171,3 +167,82 @@ schoolDB =
 
 Once more, just like with Parquet and Apache iceberg, we can perform queries using all of beam's machinery, using
 `allFromDataSource_` instead of `all_`.
+
+## COPY support
+
+`beam-duckdb` supports bulk-export and bulk-import of data through DuckDB's `COPY ... TO` and
+`COPY ... FROM` statements.
+
+See [the cross-backend COPY page](../manipulation/copy.md) for the shared
+`copyTableTo` / `copySelectTo` / `copyTableFrom` API. The DuckDB-specific
+pieces are the **smart constructors** that build a `DuckDBCopyToOptions` /
+`DuckDBCopyFromOptions` value: each constructor pins both the file format
+and (optionally) a record of format-specific options.
+
+DuckDB supports three file formats out of the box: **CSV**, **Parquet**, and
+**JSON**. Each file format has an associated set of options that is exposed by `beam-duckdb`.
+All smart constructors and option types are re-exported from `Database.Beam.DuckDB`.
+
+Here's an example of exporting to CSV:
+
+!beam-query
+```haskell
+!example chinookdml only:DuckDB
+--! import Database.Beam.Backend.SQL.BeamExtensions
+--! import Database.Beam.DuckDB
+runCopyTo $
+  copyTableTo
+    (playlist chinookDb)
+    id -- no projection: export entire table
+    ( DuckDB.copyToCSVWith "/tmp/beam-docs-csv-options.csv"
+        DuckDB.defaultDuckDBCSVCopyToOptions
+          { csvCopyToDelimiter = Just "|"
+          , csvCopyToHeader    = Just False
+          }
+    )
+```
+
+On the other hand, the same export to Parquet supports different options:
+
+!beam-query
+```haskell
+!example chinookdml only:DuckDB
+--! import Database.Beam.Backend.SQL.BeamExtensions
+--! import Database.Beam.DuckDB
+runCopyTo $
+  copyTableTo
+    (playlist chinookDb)
+    id -- no projection: export entire table
+    ( DuckDB.copyToParquetWith "/tmp/beam-docs-playlists.parquet"
+        DuckDB.defaultDuckDBParquetCopyToOptions
+          { parquetCopyToCompression = Just DuckDB.ParquetZstd
+          }
+    )
+```
+
+On the import side, here's an example of a simple round-trip through Parquet:
+
+!beam-query
+```haskell
+!example chinookdml only:DuckDB
+--! import Database.Beam.Backend.SQL.BeamExtensions
+
+-- Export → Parquet
+runCopyTo $
+  copyTableTo
+    (playlist chinookDb)
+    id
+    (DuckDB.copyToParquet "/tmp/beam-docs-roundtrip.parquet")
+
+-- Clear the table (and its dependents) so the re-import doesn't conflict
+-- on primary keys.
+runDelete $ delete (playlistTrack chinookDb) (\_ -> val_ True)
+runDelete $ delete (playlist chinookDb) (\_ -> val_ True)
+
+-- Re-import.
+runCopyFrom $
+  copyTableFrom
+    (playlist chinookDb)
+    id
+    (DuckDB.copyFromParquet "/tmp/beam-docs-roundtrip.parquet")
+```

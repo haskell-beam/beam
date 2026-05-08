@@ -32,6 +32,7 @@ nav:
         - 'INSERT': 'user-guide/manipulation/insert.md'
         - 'UPDATE': 'user-guide/manipulation/update.md'
         - 'DELETE': 'user-guide/manipulation/delete.md'
+        - 'COPY':   'user-guide/manipulation/copy.md'
   - Schema management:
       - 'The Migrations Framework': 'schema-guide/migrations.md'
   - Backends:

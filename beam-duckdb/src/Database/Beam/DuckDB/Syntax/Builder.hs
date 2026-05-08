@@ -5,11 +5,13 @@ module Database.Beam.DuckDB.Syntax.Builder
   ( DuckDBSyntax (..),
     SomeField (..),
     emitChar,
+    emitCharLit,
     emit,
     emitIntegral,
     emitRealFloat,
     emitScientific,
     emit',
+    emitTextLit,
     emitValue,
     spaces,
     parens,
@@ -22,6 +24,7 @@ where
 
 import Data.DList (DList)
 import qualified Data.DList as DL
+import Data.Scientific (Scientific)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as Text.Lazy
@@ -29,11 +32,10 @@ import Data.Text.Lazy.Builder (Builder)
 import qualified Data.Text.Lazy.Builder as Builder
 import qualified Data.Text.Lazy.Builder.Int as Builder
 import qualified Data.Text.Lazy.Builder.RealFloat as Builder
+import qualified Data.Text.Lazy.Builder.Scientific as Builder.Scientific
 import Database.Beam.Backend (Sql92DisplaySyntax (..))
 import Database.DuckDB.Simple (ToField (toField))
 import Database.DuckDB.Simple.ToField (renderFieldBinding)
-import Data.Scientific (Scientific)
-import qualified Data.Text.Lazy.Builder.Scientific as Builder.Scientific
 
 data SomeField = forall a. (ToField a, Eq a) => SomeField a
 
@@ -65,6 +67,22 @@ emitScientific s = DuckDBSyntax (const (Builder.Scientific.scientificBuilder s))
 
 emit' :: (Show a) => a -> DuckDBSyntax
 emit' s = DuckDBSyntax (const (Builder.fromString (show s))) mempty
+
+-- | Render a 'Text' as a single-quoted SQL string literal, e.g. @|@ -> @'|'@.
+-- DuckDB requires this for option values like @DELIMITER@, @NULLSTR@, etc.
+emitTextLit :: Text -> DuckDBSyntax
+emitTextLit t = emitChar '\'' <> emit t <> emitChar '\''
+
+-- | Render a 'Char' as a single-quoted SQL string literal, e.g. @"@ -> @'"'@.
+-- The apostrophe character is escaped per the SQL standard by doubling,
+-- so @\'@ renders as @''''@.
+--
+-- The emitter places no constraint on the input 'Char'; format-specific
+-- runtime constraints (e.g. DuckDB's CSV @QUOTE@ option requiring exactly
+-- 1 byte in UTF-8) are enforced by DuckDB at execute time, not here.
+emitCharLit :: Char -> DuckDBSyntax
+emitCharLit '\'' = emit "''''"
+emitCharLit c = emitChar '\'' <> emitChar c <> emitChar '\''
 
 -- | Emit a properly escaped value into the syntax
 emitValue :: (ToField a, Eq a) => a -> DuckDBSyntax

@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               beam-duckdb
-version:            0.3.0.0
+version:            0.3.1.0
 synopsis:           DuckDB backend for Beam
 description:        Beam driver for DuckDB, an analytics-focused open-source in-process database.
 license:            MIT
@@ -42,9 +42,10 @@ library
     other-modules:    Database.Beam.DuckDB.Backend
                       Database.Beam.DuckDB.Syntax
                       Database.Beam.DuckDB.Syntax.Builder
+                      Database.Beam.DuckDB.Syntax.Extensions.Copy
                       Database.Beam.DuckDB.Syntax.Extensions.DataSource
     build-depends:    base >=4.11 && <5
-                    , beam-core >=0.11 && <0.12
+                    , beam-core >=0.11.1 && <0.12
                     , beam-migrate ^>=0.6
                     , bytestring >=0.10 && <0.13
                     -- Version 0.1.5.0 contained a broken change (RowParser constructor not exposed)
@@ -62,6 +63,8 @@ library
 test-suite beam-duckdb-test
     import:           common
     other-modules:    Database.Beam.DuckDB.Test.Extensions
+                      Database.Beam.DuckDB.Test.Extensions.Copy
+                      Database.Beam.DuckDB.Test.Extensions.DataSource
                       Database.Beam.DuckDB.Test.Query
     type:             exitcode-stdio-1.0
     hs-source-dirs:   tests
@@ -74,5 +77,6 @@ test-suite beam-duckdb-test
                     , tasty
                     , tasty-hedgehog
                     , tasty-hunit
+                    , temporary
                     , text
                     , time
