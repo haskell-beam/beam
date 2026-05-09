@@ -1,6 +1,6 @@
 # Revision history for beam-duckdb
 
-## 0.3.1.0 -- 2026-05-07
+## 0.3.1.0 -- unreleased
 
 * Added file-mode `COPY ... TO 'file'` / `COPY ... FROM 'file'` support
   via the new `MonadBeamCopyTo` / `MonadBeamCopyFrom` instances on
@@ -8,6 +8,7 @@
   `copyToJSON` (and the symmetric `copyFrom*` plus `*With` variants)
   build the per-format options records. See
   `Database.Beam.DuckDB.Syntax.Extensions.Copy`.
+* Added instances for `MonadBeamInsertReturning` / `MonadBeamUpdateReturning` / `MonadBeamDeleteReturning`;
 
 ## 0.3.0.0 -- 2026-04-28
 
