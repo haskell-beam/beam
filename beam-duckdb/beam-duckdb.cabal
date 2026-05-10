@@ -40,8 +40,10 @@ library
     import:           common
     exposed-modules:  Database.Beam.DuckDB
     other-modules:    Database.Beam.DuckDB.Backend
+                      Database.Beam.DuckDB.Connection
                       Database.Beam.DuckDB.Syntax
                       Database.Beam.DuckDB.Syntax.Builder
+                      Database.Beam.DuckDB.Syntax.Extensions
                       Database.Beam.DuckDB.Syntax.Extensions.Copy
                       Database.Beam.DuckDB.Syntax.Extensions.DataSource
     build-depends:    base >=4.11 && <5
@@ -65,6 +67,7 @@ test-suite beam-duckdb-test
     other-modules:    Database.Beam.DuckDB.Test.Extensions
                       Database.Beam.DuckDB.Test.Extensions.Copy
                       Database.Beam.DuckDB.Test.Extensions.DataSource
+                      Database.Beam.DuckDB.Test.Extensions.Returning
                       Database.Beam.DuckDB.Test.Query
     type:             exitcode-stdio-1.0
     hs-source-dirs:   tests
