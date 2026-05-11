@@ -10,8 +10,6 @@ packages:
 tests: true
 benchmarks: true
 
--- Required to build testcontainers with ghc-9.10+
-allow-newer: aeson-optics:base
-           , base
-           , text
+-- Required to build with GHC 9.14
+allow-newer: base
            , template-haskell
