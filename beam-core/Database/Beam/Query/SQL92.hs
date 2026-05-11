@@ -322,7 +322,12 @@ buildSql92Query' arbitrarilyNestedCombinations baseTblPfx (Q q) =
              _ -> doJoined
 
     buildQuery tblPfx (Free (QWindowOver mkWindows mkProjection q' next)) =
-        let sb = buildQuery tblPfx (fromF q')
+        -- If the inner select carries DISTINCT, GROUP BY, or HAVING, those must
+        -- apply to the row set *before* the window function. Emitting them in
+        -- the same SELECT as the window projection inverts that order in SQL,
+        -- yielding wrong results (issue #746). Materialise the inner select as
+        -- a subquery in that case so the window evaluates over its output.
+        let sb = forceSubqueryIfGrouping (buildQuery tblPfx (fromF q'))
 
             x = sbProj sb
             windows = mkWindows x
@@ -336,6 +341,17 @@ buildSql92Query' arbitrarilyNestedCombinations baseTblPfx (Q q) =
              _       ->
                let (x', qb) = selectBuilderToQueryBuilder tblPfx (setSelectBuilderProjection sb projection)
                in buildJoinedQuery tblPfx (next x') qb
+      where
+        forceSubqueryIfGrouping :: Projectible be x' => SelectBuilder be db x' -> SelectBuilder be db x'
+        forceSubqueryIfGrouping sb0
+          | hasGroupingClause sb0 = uncurry SelectBuilderQ $ selectBuilderToQueryBuilder tblPfx sb0
+          | otherwise = sb0
+          where
+            hasGroupingClause :: SelectBuilder be db x' -> Bool
+            hasGroupingClause (SelectBuilderGrouping _ _ grouping having distinct) =
+                isJust grouping || isJust having || isJust distinct
+            hasGroupingClause (SelectBuilderTopLevel _ _ _ inner _) = hasGroupingClause inner
+            hasGroupingClause _ = False
 
     buildQuery tblPfx (Free (QLimit limit q' next)) =
         let sb = limitSelectBuilder limit (buildQuery tblPfx (fromF q'))

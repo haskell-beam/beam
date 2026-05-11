@@ -55,12 +55,14 @@ import Database.Beam
     isTrue_,
     lagWithDefault_,
     lastValue_,
+    lead1_,
     leftJoin_,
     modifyTableFields,
     noBounds_,
     noOrder_,
     noPartition_,
     nrows_,
+    nub_,
     orderBy_,
     orderPartitionBy_,
     over_,
@@ -148,7 +150,10 @@ tests =
             ],
           testGroup
             "LAG/LEAD"
-            [testLag, testLead],
+            [ testLag,
+              testLead,
+              testLeadOverNub
+            ],
           testGroup
             "FILTER"
             [ testFilterWhereCountAll,
@@ -779,6 +784,34 @@ testLead = testCase "LEAD" $ do
       -- Second leads to third's qty (1)
       -- Third has no successor → default 0
       rows @?= [0, 2, 1]
+
+-- Regression test for #746
+testLeadOverNub :: TestTree
+testLeadOverNub = testCase "LEAD over nub_ (issue #746)" $ do
+  let users = [User 1 "Alice" 30]
+      products = [Product 1 "Widget" 999]
+      orders =
+        [ Order 1 (UserId 1) (ProductId 1) 10,
+          Order 2 (UserId 1) (ProductId 1) 10,
+          Order 3 (UserId 1) (ProductId 1) 20,
+          Order 4 (UserId 1) (ProductId 1) 20,
+          Order 5 (UserId 1) (ProductId 1) 30,
+          Order 6 (UserId 1) (ProductId 1) 30
+        ]
+  withTestDb users products orders $ \conn -> do
+    rows <-
+      runBeamDuckDB conn $
+        runSelectReturningList $
+          select $
+            withWindow_
+              (\q -> frame_ noPartition_ (orderPartitionBy_ (asc_ q)) noBounds_)
+              (\q w -> (q, lead1_ q `over_` w))
+              (nub_ (_orderQuantity <$> all_ (_dbOrders testDb)))
+    rows
+      @?= [ (10 :: Int32, Just 20),
+            (20, Just 30),
+            (30, Nothing)
+          ]
 
 testFilterWhereCountAll :: TestTree
 testFilterWhereCountAll = testCase "COUNT(*) FILTER (WHERE ... )" $ do
