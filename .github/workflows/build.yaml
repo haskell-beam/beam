@@ -17,34 +17,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The 'cabal-flags' option is typically non-empty for new
+        # GHC releases, for which we may need `--allow-newer` flags
+        # while dependencies are updated.
         include:
           - ghc-version: "8.10.7"
-            cabal-flags: ""
             duckdb: false
           - ghc-version: "9.0.2"
-            cabal-flags: ""
             duckdb: false
           - ghc-version: "9.2.8"
-            cabal-flags: ""
             duckdb: false
           - ghc-version: "9.4.8"
-            cabal-flags: ""
             duckdb: false
           - ghc-version: "9.6.7"
-            cabal-flags: ""
             duckdb: true
           - ghc-version: "9.8.4"
-            cabal-flags: ""
             duckdb: true
           - ghc-version: "9.10.3"
-            cabal-flags: ""
             duckdb: true
           - ghc-version: "9.12.2"
-            cabal-flags: ""
             duckdb: true
-          # Temporary cabal flags until all dependencies are updated
           - ghc-version: "9.14.1"
-            cabal-flags: "--allow-newer=base --allow-newer=template-haskell --allow-newer=ghc-bignum"
             duckdb: true
 
     steps:
@@ -68,7 +61,7 @@ jobs:
       run: |
         cabal update
         cabal configure --disable-optimization
-        cabal freeze ${{matrix.cabal-flags}}
+        cabal freeze
 
         # Exclude the timestamp of Hackage index update from our cache key, to
         # avoid invalidating cache too often.
