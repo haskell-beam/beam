@@ -12,15 +12,19 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Database.Beam.DuckDB.Syntax.Extensions.InsertOnConflict
-  ( -- * Compile-time-blocked variant of 'conflictingFieldsWhere'
-
-    -- DuckDB does not support partial-index conflict targets, so calling
-    -- the class method 'Database.Beam.Backend.SQL.BeamExtensions.conflictingFieldsWhere'
-    -- against DuckDB results in a DuckDB binder error at execute time. The
-    -- 'conflictingFieldsWhere' exported here shadows the class method so
-    -- that any DuckDB user of @Database.Beam.DuckDB@ gets a /compile-time/
-    -- error instead — pointing them at 'onConflictUpdateSetWhere'.
+  ( BeamHasInsertOnConflict
+      ( SqlConflictTarget,
+        SqlConflictAction,
+        insertOnConflict,
+        anyConflict,
+        conflictingFields,
+        onConflictDoNothing,
+        onConflictUpdateSet,
+        onConflictUpdateSetWhere
+      ),
     conflictingFieldsWhere,
+    onConflictUpdateAll,
+    onConflictUpdateInstead,
     UnsupportedConflictingFieldsWhereOnDuckDB,
   )
 where
@@ -35,6 +39,8 @@ import Database.Beam.Backend.SQL
   )
 import Database.Beam.Backend.SQL.BeamExtensions
   ( BeamHasInsertOnConflict (SqlConflictAction, SqlConflictTarget),
+    onConflictUpdateAll,
+    onConflictUpdateInstead,
   )
 import qualified Database.Beam.Backend.SQL.BeamExtensions as Beam
 import Database.Beam.DuckDB.Backend (DuckDB)

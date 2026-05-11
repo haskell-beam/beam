@@ -50,19 +50,7 @@ module Database.Beam.DuckDB
     -- class method is /not/ re-exported here. The 'conflictingFieldsWhere'
     -- in scope is a compile-time-blocked shim that produces a 'TypeError'
     -- when used — pointing users at 'onConflictUpdateSetWhere' instead.
-    BeamHasInsertOnConflict
-      ( SqlConflictTarget,
-        SqlConflictAction,
-        insertOnConflict,
-        anyConflict,
-        conflictingFields,
-        onConflictDoNothing,
-        onConflictUpdateSet,
-        onConflictUpdateSetWhere
-      ),
-    conflictingFieldsWhere,
-    onConflictUpdateAll,
-    onConflictUpdateInstead,
+    module Database.Beam.DuckDB.Syntax.Extensions.InsertOnConflict,
 
     -- * DuckDB-specific functionality
 
@@ -127,21 +115,9 @@ module Database.Beam.DuckDB
 where
 
 import Database.Beam.Backend.SQL.BeamExtensions
-  ( BeamHasInsertOnConflict
-      ( SqlConflictAction,
-        SqlConflictTarget,
-        anyConflict,
-        conflictingFields,
-        insertOnConflict,
-        onConflictDoNothing,
-        onConflictUpdateSet,
-        onConflictUpdateSetWhere
-      ),
-    MonadBeamDeleteReturning (..),
+  ( MonadBeamDeleteReturning (..),
     MonadBeamInsertReturning (..),
     MonadBeamUpdateReturning (..),
-    onConflictUpdateAll,
-    onConflictUpdateInstead,
     runDeleteReturningList,
     runInsertReturningList,
     runUpdateReturningList,
@@ -186,5 +162,3 @@ import Database.Beam.DuckDB.Syntax.Extensions.Copy
   )
 import Database.Beam.DuckDB.Syntax.Extensions.DataSource
 import Database.Beam.DuckDB.Syntax.Extensions.InsertOnConflict
-  ( conflictingFieldsWhere,
-  )
