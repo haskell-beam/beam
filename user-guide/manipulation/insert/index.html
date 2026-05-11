@@ -1985,7 +1985,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Invoice&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">800</span><span class="p">);</span>
 
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-10 01:47:11.39429, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-11 01:50:54.55812, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2017,7 +2017,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
 
 <span class="c1">-- With values: [SQLInteger 800];</span>
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-10 01:47:12, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-11 01:50:56, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2049,7 +2049,7 @@ using the <code>insertExpressions</code> function.</p>
 <span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;InvoiceId&quot;</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="mi">800</span><span class="p">);</span>
 
 <span class="c1">-- With values: [];</span>
-<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-10 00:00:00, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: Inserted invoice: Invoice {invoiceId = SqlSerial {unSerial = 800}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-11 00:00:00, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2322,7 +2322,7 @@ qualified.</p>
 <span class="w">                                                                                                                            </span><span class="ss">&quot;BillingPostalCode&quot;</span><span class="p">,</span>
 <span class="w">                                                                                                                            </span><span class="ss">&quot;Total&quot;</span><span class="p">;</span>
 
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 501}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-10 01:47:22.150074, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 501}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-11 01:51:05.69992, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2347,7 +2347,7 @@ qualified.</p>
 <span class="w">                                                          </span><span class="ss">&quot;Total&quot;</span><span class="p">;</span>
 
 <span class="c1">-- With values: [SQLInteger 1,SQLText &quot;123 My Street&quot;,SQLText &quot;Buenos Noches&quot;,SQLText &quot;Rio&quot;,SQLText &quot;Mozambique&quot;,SQLText &quot;ABCDEF&quot;,SQLText &quot;1000.0&quot;];</span>
-<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-10 01:47:23, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
+<span class="c1">-- Output: We inserted a new invoice, and the result was Invoice {invoiceId = SqlSerial {unSerial = 413}, invoiceCustomer = CustomerId 1, invoiceDate = 2026-05-11 01:51:07, invoiceBillingAddress = Address {address = Just &quot;123 My Street&quot;, addressCity = Just &quot;Buenos Noches&quot;, addressState = Just &quot;Rio&quot;, addressCountry = Just &quot;Mozambique&quot;, addressPostalCode = Just &quot;ABCDEF&quot;}, invoiceTotal = 1000.0}</span>
 </code></pre></div>
 
         </div>
@@ -2747,8 +2747,6 @@ insert it if not, you can use the <code>insertOnConflict</code> function with th
 <h3 id="acting-only-on-certain-conflicts">Acting only on certain conflicts</h3>
 <p>Sometimes you only want to perform an action if a certain constraint is violated. If the conflicting
 index or constraint is on a field you can specify which fields with the function <code>conflictingFields</code>.</p>
-<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
-
 <p>
                 <div class="code-nav-container">
                     
@@ -2764,6 +2762,10 @@ index or constraint is on a field you can specify which fields with the function
     
         <li class="nav-item">
             <a href="#tab-8-Sqlite" aria-controls="tab-8-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-8-Duckdb" aria-controls="tab-8-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -2851,6 +2853,41 @@ index or constraint is on a field you can specify which fields with the function
 
         </div>
     
+        <div role="tabpanel" class="tab-pane " id="tab-8-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;FirstName&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;LastName&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Company&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Address&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;City&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;State&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Country&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;PostalCode&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Phone&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Fax&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Email&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;SupportRepId&quot;</span><span class="p">)</span>
+<span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">)</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">CONFLICT</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">DO</span>
+<span class="k">UPDATE</span>
+<span class="k">SET</span><span class="w"> </span><span class="ss">&quot;CustomerId&quot;</span><span class="o">=</span><span class="p">(</span><span class="mi">42</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;FirstName&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;LastName&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;Company&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;Address&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;City&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;State&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;Country&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;PostalCode&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;Phone&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;Fax&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;Email&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">),</span>
+<span class="w">    </span><span class="ss">&quot;SupportRepId&quot;</span><span class="o">=</span><span class="p">(</span><span class="o">?</span><span class="p">);</span>
+
+<span class="c1">-- With values: [&quot;John&quot;,&quot;Doe&quot;,NULL,&quot;Street&quot;,&quot;City&quot;,&quot;State&quot;,NULL,NULL,NULL,NULL,&quot;john.doe@johndoe.com&quot;,NULL,&quot;John&quot;,&quot;Doe&quot;,NULL,&quot;Street&quot;,&quot;City&quot;,&quot;State&quot;,NULL,NULL,NULL,NULL,&quot;john.doe@johndoe.com&quot;,NULL];</span>
+</code></pre></div>
+
+        </div>
+    
         </div>
     
                 </div>
@@ -2862,8 +2899,6 @@ index or constraint is on a field you can specify which fields with the function
 <p>You can also specify how to change the record should it not match. For example, to append the e-mail
 as an alternate when you insert an existing row, you can use the <code>oldValues</code> argument to get access
 to the old value.</p>
-<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
-
 <p>
                 <div class="code-nav-container">
                     
@@ -2879,6 +2914,10 @@ to the old value.</p>
     
         <li class="nav-item">
             <a href="#tab-9-Sqlite" aria-controls="tab-9-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-9-Duckdb" aria-controls="tab-9-Duckdb" role="tab" data-toggle="tab" data-lang="sql">Duckdb</a>
         </li>
     
         </ul>
@@ -2942,36 +2981,63 @@ to the old value.</p>
 
         </div>
     
+        <div role="tabpanel" class="tab-pane " id="tab-9-Duckdb">
+            <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;FirstName&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;LastName&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Company&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Address&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;City&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;State&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Country&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;PostalCode&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Phone&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Fax&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Email&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;SupportRepId&quot;</span><span class="p">)</span>
+<span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">,</span><span class="w"> </span><span class="o">?</span><span class="p">)</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">CONFLICT</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">DO</span>
+<span class="k">UPDATE</span>
+<span class="k">SET</span><span class="w"> </span><span class="ss">&quot;Email&quot;</span><span class="o">=</span><span class="p">(</span><span class="n">CONCAT</span><span class="p">(</span><span class="k">CAST</span><span class="p">(</span><span class="ss">&quot;excluded&quot;</span><span class="p">.</span><span class="ss">&quot;Email&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">),</span><span class="w"> </span><span class="k">CAST</span><span class="p">(</span><span class="o">?</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">),</span><span class="w"> </span><span class="k">CAST</span><span class="p">(</span><span class="o">?</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">)));</span>
+
+<span class="c1">-- With values: [&quot;John&quot;,&quot;Doe&quot;,NULL,&quot;Street&quot;,&quot;City&quot;,&quot;State&quot;,NULL,NULL,NULL,NULL,&quot;john.doe@johndoe.com&quot;,NULL,&quot;;&quot;,&quot;john.doe@johndoe.com&quot;];</span>
+</code></pre></div>
+
+        </div>
+    
         </div>
     
                 </div>
                     </p>
 <p>If you want to be even more particular and only do this transformation on rows corresponding to
 customers from one state, use <code>conflictingFieldsWhere</code>.</p>
-<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
-
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The DuckDB backend doesn't support <code>conflictingFieldsWhere</code>. If you try to import it from <code>Database.Beam.DuckDB</code>, you will get a type error.</p>
+<p>However, since it's a required method of the <code>BeamHasInsertOnConflict</code> class, it's technically possible to import <code>conflictingFieldsWhere</code> from <code>Database.Beam.Backend.SQL.BeamExtensions</code>. Using this
+version will result in a runtime error with the DuckDB backend.</p>
+</div>
 <p>
                 <div class="code-nav-container">
                     
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-41-Haskell" aria-controls="tab-41-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-43-Haskell" aria-controls="tab-43-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-41-Postgres" aria-controls="tab-41-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-43-Postgres" aria-controls="tab-43-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-41-Sqlite" aria-controls="tab-41-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
+            <a href="#tab-43-Sqlite" aria-controls="tab-43-Sqlite" role="tab" data-toggle="tab" data-lang="sql">Sqlite</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-41-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-43-Haskell">
             <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span><span class="w"> </span><span class="p">(</span><span class="kt">BeamHasInsertOnConflict</span><span class="p">(</span><span class="o">..</span><span class="p">))</span>
 <span class="kr">let</span>
 <span class="w">  </span><span class="n">newCustomer</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Customer</span><span class="w"> </span><span class="mi">42</span><span class="w"> </span><span class="s">&quot;John&quot;</span><span class="w"> </span><span class="s">&quot;Doe&quot;</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="p">(</span><span class="kt">Address</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="s">&quot;Street&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="s">&quot;City&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="s">&quot;State&quot;</span><span class="p">)</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="kt">Nothing</span><span class="p">)</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="kt">Nothing</span><span class="w"> </span><span class="s">&quot;john.doe@johndoe.com&quot;</span><span class="w"> </span><span class="n">nothing_</span>
@@ -2984,7 +3050,7 @@ customers from one state, use <code>conflictingFieldsWhere</code>.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-41-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-43-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;FirstName&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;LastName&quot;</span><span class="p">,</span>
@@ -3007,7 +3073,7 @@ customers from one state, use <code>conflictingFieldsWhere</code>.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-41-Sqlite">
+        <div role="tabpanel" class="tab-pane " id="tab-43-Sqlite">
             <div class="highlight"><pre><span></span><code><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Customer&quot;</span><span class="p">(</span><span class="ss">&quot;CustomerId&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;FirstName&quot;</span><span class="p">,</span>
 <span class="w">                       </span><span class="ss">&quot;LastName&quot;</span><span class="p">,</span>
