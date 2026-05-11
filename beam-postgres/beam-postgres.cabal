@@ -85,6 +85,7 @@ test-suite beam-postgres-tests
                  Database.Beam.Postgres.Test.Copy,
                  Database.Beam.Postgres.Test.Marshal,
                  Database.Beam.Postgres.Test.Select,
+                 Database.Beam.Postgres.Test.Select.PgNubBy,
                  Database.Beam.Postgres.Test.DataTypes,
                  Database.Beam.Postgres.Test.Migrate,
                  Database.Beam.Postgres.Test.TempTable,
@@ -102,6 +103,7 @@ test-suite beam-postgres-tests
     tasty,
     text,
     testcontainers,
+    time,
     uuid,
     vector
   default-language: Haskell2010
