@@ -9,6 +9,20 @@
   build the per-format options records. See
   `Database.Beam.DuckDB.Syntax.Extensions.Copy`.
 * Added instances for `MonadBeamInsertReturning` / `MonadBeamUpdateReturning` / `MonadBeamDeleteReturning`;
+* Added a `BeamHasInsertOnConflict DuckDB` instance, exposing
+  `insertOnConflict` (and the `anyConflict` / `conflictingFields` /
+  `onConflictDoNothing` / `onConflictUpdateSet` /
+  `onConflictUpdateSetWhere` / `onConflictUpdateAll` /
+  `onConflictUpdateInstead` combinators) for `INSERT ... ON CONFLICT`
+  on DuckDB. DuckDB does not support partial-index conflict targets
+  ([INSERT docs](https://duckdb.org/docs/stable/sql/statements/insert),
+  so `conflictingFieldsWhere` is *not* re-exported from
+  `Database.Beam.DuckDB`; the `conflictingFieldsWhere` in that module
+  is a shadowing shim that produces a compile-time `TypeError`
+  pointing users at `onConflictUpdateSetWhere`. Importing
+  `conflictingFieldsWhere` directly from
+  `Database.Beam.Backend.SQL.BeamExtensions` still type-checks but
+  raises an error at runtime.
 
 ## 0.3.0.0 -- 2026-04-28
 

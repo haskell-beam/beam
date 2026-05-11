@@ -19,6 +19,7 @@ module Database.Beam.DuckDB.Syntax
     DuckDBDeleteSyntax (..),
     DuckDBTableNameSyntax (..),
     DuckDBOnConflictSyntax (..),
+    DuckDBFieldNameSyntax (..),
   )
 where
 

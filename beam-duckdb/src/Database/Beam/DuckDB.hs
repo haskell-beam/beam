@@ -36,6 +36,34 @@ module Database.Beam.DuckDB
     MonadBeamDeleteReturning (..),
     runDeleteReturningList,
 
+    -- * @INSERT ... ON CONFLICT@ support
+
+    -- | The 'BeamHasInsertOnConflict' instance for DuckDB exposes
+    -- @INSERT ... ON CONFLICT@ via 'insertOnConflict', allowing rows that
+    -- violate a uniqueness constraint to be ignored
+    -- ('onConflictDoNothing') or replaced with new values
+    -- ('onConflictUpdateSet', 'onConflictUpdateAll',
+    -- 'onConflictUpdateInstead').
+    --
+    -- DuckDB does not support partial-index conflict targets, so the
+    -- 'Database.Beam.Backend.SQL.BeamExtensions.conflictingFieldsWhere'
+    -- class method is /not/ re-exported here. The 'conflictingFieldsWhere'
+    -- in scope is a compile-time-blocked shim that produces a 'TypeError'
+    -- when used — pointing users at 'onConflictUpdateSetWhere' instead.
+    BeamHasInsertOnConflict
+      ( SqlConflictTarget,
+        SqlConflictAction,
+        insertOnConflict,
+        anyConflict,
+        conflictingFields,
+        onConflictDoNothing,
+        onConflictUpdateSet,
+        onConflictUpdateSetWhere
+      ),
+    conflictingFieldsWhere,
+    onConflictUpdateAll,
+    onConflictUpdateInstead,
+
     -- * DuckDB-specific functionality
 
     -- ** Data sources
@@ -99,9 +127,21 @@ module Database.Beam.DuckDB
 where
 
 import Database.Beam.Backend.SQL.BeamExtensions
-  ( MonadBeamDeleteReturning (..),
+  ( BeamHasInsertOnConflict
+      ( SqlConflictAction,
+        SqlConflictTarget,
+        anyConflict,
+        conflictingFields,
+        insertOnConflict,
+        onConflictDoNothing,
+        onConflictUpdateSet,
+        onConflictUpdateSetWhere
+      ),
+    MonadBeamDeleteReturning (..),
     MonadBeamInsertReturning (..),
     MonadBeamUpdateReturning (..),
+    onConflictUpdateAll,
+    onConflictUpdateInstead,
     runDeleteReturningList,
     runInsertReturningList,
     runUpdateReturningList,
@@ -145,3 +185,6 @@ import Database.Beam.DuckDB.Syntax.Extensions.Copy
     defaultDuckDBParquetCopyToOptions,
   )
 import Database.Beam.DuckDB.Syntax.Extensions.DataSource
+import Database.Beam.DuckDB.Syntax.Extensions.InsertOnConflict
+  ( conflictingFieldsWhere,
+  )
