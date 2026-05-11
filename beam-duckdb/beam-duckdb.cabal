@@ -46,6 +46,7 @@ library
                       Database.Beam.DuckDB.Syntax.Extensions
                       Database.Beam.DuckDB.Syntax.Extensions.Copy
                       Database.Beam.DuckDB.Syntax.Extensions.DataSource
+                      Database.Beam.DuckDB.Syntax.Extensions.InsertOnConflict
     build-depends:    base >=4.11 && <5
                     , beam-core >=0.11.1 && <0.12
                     , beam-migrate ^>=0.6
@@ -67,6 +68,7 @@ test-suite beam-duckdb-test
     other-modules:    Database.Beam.DuckDB.Test.Extensions
                       Database.Beam.DuckDB.Test.Extensions.Copy
                       Database.Beam.DuckDB.Test.Extensions.DataSource
+                      Database.Beam.DuckDB.Test.Extensions.InsertOnConflict
                       Database.Beam.DuckDB.Test.Extensions.Returning
                       Database.Beam.DuckDB.Test.Query
     type:             exitcode-stdio-1.0

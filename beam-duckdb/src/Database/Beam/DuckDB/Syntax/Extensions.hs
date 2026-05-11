@@ -30,6 +30,7 @@ import Database.Beam.DuckDB.Syntax
     DuckDBUpdateSyntax (..),
   )
 import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, emit)
+import Database.Beam.DuckDB.Syntax.Extensions.InsertOnConflict ()
 import Database.Beam.Query (SqlDelete (..), SqlInsert (..), SqlUpdate (..))
 import Database.Beam.Query.Internal (Projectible, QExpr, QGenExpr (..), project)
 import Database.Beam.Schema.Tables (Columnar' (..), changeBeamRep, _fieldName)

@@ -276,7 +276,7 @@ insert it if not, you can use the `insertOnConflict` function with the `anyConfl
 
 !beam-query
 ```haskell
-!example chinookdml on:Sqlite on:Postgres
+!example chinookdml on:Sqlite on:Postgres on:DuckDB
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
 
@@ -291,10 +291,9 @@ runInsert $
 Sometimes you only want to perform an action if a certain constraint is violated. If the conflicting
 index or constraint is on a field you can specify which fields with the function `conflictingFields`.
 
-<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
 !beam-query
 ```haskell
-!example chinookdml !on:DuckDB
+!example chinookdml
 --! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
@@ -312,10 +311,9 @@ You can also specify how to change the record should it not match. For example, 
 as an alternate when you insert an existing row, you can use the `oldValues` argument to get access
 to the old value.
 
-<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
 !beam-query
 ```haskell
-!example chinookdml !on:DuckDB
+!example chinookdml
 --! import Database.Beam.Backend.SQL.BeamExtensions (BeamHasInsertOnConflict(..))
 let
   newCustomer = Customer 42 "John" "Doe" Nothing (Address (Just "Street") (Just "City") (Just "State") Nothing Nothing) Nothing Nothing "john.doe@johndoe.com" nothing_
@@ -329,7 +327,12 @@ runInsert $
 If you want to be even more particular and only do this transformation on rows corresponding to
 customers from one state, use `conflictingFieldsWhere`.
 
-<!-- The DuckDB backend doesn't yet support insertOnConflict  -->
+!!! warning "Warning"
+    The DuckDB backend doesn't support `conflictingFieldsWhere`. If you try to import it from `Database.Beam.DuckDB`, you will get a type error.
+
+    However, since it's a required method of the `BeamHasInsertOnConflict` class, it's technically possible to import `conflictingFieldsWhere` from `Database.Beam.Backend.SQL.BeamExtensions`. Using this
+    version will result in a runtime error with the DuckDB backend.
+
 !beam-query
 ```haskell
 !example chinookdml !on:DuckDB
