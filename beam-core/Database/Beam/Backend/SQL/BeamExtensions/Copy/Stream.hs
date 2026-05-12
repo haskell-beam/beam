@@ -110,7 +110,7 @@ type family BeamSqlBackendCopyFromStreamSyntax be :: Type
 
 -- | A built streaming-mode @COPY ... TO@ statement, ready to be executed by
 -- 'runCopyToStream'.
-data SqlCopyToStream be (table :: (Type -> Type) -> Type) proj
+data SqlCopyToStream be a
   = SqlCopyToStream !(BeamSqlBackendCopyToStreamSyntax be)
   | -- | A projection covering zero columns. 'runCopyToStream' should treat
     --    this as a no-op (it must still call the sink zero times) rather
@@ -119,7 +119,7 @@ data SqlCopyToStream be (table :: (Type -> Type) -> Type) proj
 
 -- | A built streaming-mode @COPY ... FROM@ statement, ready to be executed
 -- by 'runCopyFromStream'.
-data SqlCopyFromStream be (table :: (Type -> Type) -> Type) proj
+data SqlCopyFromStream be a
   = SqlCopyFromStream !(BeamSqlBackendCopyFromStreamSyntax be)
   | -- | A projection covering zero columns. 'runCopyFromStream' should
     --    treat this as a no-op (it should not pull from the source) rather
@@ -142,7 +142,7 @@ copyTableToStream ::
   (table (QField s) -> proj) ->
   -- | Backend-specific options.
   SqlCopyToStreamParams (BeamSqlBackendCopyToStreamSyntax be) ->
-  SqlCopyToStream be table proj
+  SqlCopyToStream be proj
 copyTableToStream (DatabaseEntity dt@(DatabaseTable {})) mkProj options =
   case nonEmpty (projection dt mkProj) of
     Nothing -> SqlCopyToStreamNoColumns
@@ -163,7 +163,7 @@ copySelectToStream ::
   ) =>
   SqlSelect be a ->
   SqlCopyToStreamParams (BeamSqlBackendCopyToStreamSyntax be) ->
-  SqlCopyToStream be table proj
+  SqlCopyToStream be a
 copySelectToStream (SqlSelect selectSyntax) options =
   let source = copySelectToSyntax selectSyntax
    in SqlCopyToStream (copyToStreamStmt source options)
@@ -183,7 +183,7 @@ copyTableFromStream ::
   -- To copy the stream into the entire table, use 'id'.
   (table (QField s) -> proj) ->
   SqlCopyFromStreamParams (BeamSqlBackendCopyFromStreamSyntax be) ->
-  SqlCopyFromStream be table proj
+  SqlCopyFromStream be proj
 copyTableFromStream (DatabaseEntity dt@(DatabaseTable {})) mkProj options =
   case nonEmpty (projection dt mkProj) of
     Nothing -> SqlCopyFromStreamNoColumns
@@ -207,7 +207,7 @@ class (MonadBeam be m) => MonadBeamCopyToStream be m | m -> be where
   -- is invoked from 'IO' once per chunk emitted by the server, in order;
   -- 'runCopyToStream' returns once the server signals end of stream.
   runCopyToStream ::
-    SqlCopyToStream be table proj ->
+    SqlCopyToStream be a ->
     -- | Sink. Called once for each chunk of bytes the server emits.
     (ByteString -> IO ()) ->
     m ()
@@ -256,7 +256,7 @@ class (MonadBeam be m) => MonadBeamCopyFromStream be m | m -> be where
   -- chunk is forwarded to the server in order. 'runCopyFromStream' returns
   -- once the server has acknowledged the end of stream.
   runCopyFromStream ::
-    SqlCopyFromStream be table proj ->
+    SqlCopyFromStream be a ->
     -- | Source. Called repeatedly. 'Nothing' signals end of data.
     IO (Maybe ByteString) ->
     m ()

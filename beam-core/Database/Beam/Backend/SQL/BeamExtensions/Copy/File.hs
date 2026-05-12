@@ -142,7 +142,7 @@ type family BeamSqlBackendCopyFromSyntax be :: Type
 -- 'runCopyTo'. Construct via 'copyTableTo' or 'copySelectTo'; the @table@
 -- and @proj@ phantom parameters track which table the statement applies to
 -- and which columns it projects.
-data SqlCopyTo be (table :: (Type -> Type) -> Type) proj
+data SqlCopyTo be a
   = SqlCopyTo !(BeamSqlBackendCopyToSyntax be)
   | -- | A projection covering zero columns. 'runCopyTo' should treat this as a
     --    no-op rather than emit an empty @COPY tbl () TO ...@ statement.
@@ -150,7 +150,7 @@ data SqlCopyTo be (table :: (Type -> Type) -> Type) proj
 
 -- | A built file-mode @COPY ... FROM@ statement, ready to be executed by
 -- 'runCopyFrom'. Construct via 'copyTableFrom'.
-data SqlCopyFrom be (table :: (Type -> Type) -> Type) proj
+data SqlCopyFrom be a
   = SqlCopyFrom !(BeamSqlBackendCopyFromSyntax be)
   | -- | A projection covering zero columns. 'runCopyFrom' should treat this as
     --    a no-op rather than emit an empty @COPY tbl () FROM ...@ statement.
@@ -171,7 +171,7 @@ copyTableTo ::
   (table (QField s) -> proj) ->
   -- | Backend-specific options. The output is also determined by this value
   SqlCopyToParams (BeamSqlBackendCopyToSyntax be) ->
-  SqlCopyTo be table proj
+  SqlCopyTo be proj
 copyTableTo (DatabaseEntity dt@(DatabaseTable {})) mkProj options =
   case nonEmpty (projection dt mkProj) of
     Nothing -> SqlCopyToNoColumns
@@ -195,7 +195,7 @@ copySelectTo ::
   SqlSelect be a ->
   -- | Backend-specific options. The format is pinned by this value
   SqlCopyToParams (BeamSqlBackendCopyToSyntax be) ->
-  SqlCopyTo be table proj
+  SqlCopyTo be a
 copySelectTo (SqlSelect selectSyntax) options =
   let source = copySelectToSyntax selectSyntax
    in SqlCopyTo (copyToStmt source options)
@@ -213,7 +213,7 @@ copyTableFrom ::
   (table (QField s) -> proj) ->
   -- | Backend-specific options. The format is pinned by this value
   SqlCopyFromParams (BeamSqlBackendCopyFromSyntax be) ->
-  SqlCopyFrom be table proj
+  SqlCopyFrom be proj
 copyTableFrom (DatabaseEntity dt@(DatabaseTable {})) mkProj options =
   case nonEmpty (projection dt mkProj) of
     Nothing -> SqlCopyFromNoColumns
@@ -254,7 +254,7 @@ projection dt mkProj =
 -- @since 0.11.1.0
 class (MonadBeam be m) => MonadBeamCopyTo be m | m -> be where
   -- | Execute a built @COPY ... TO@ file statement.
-  runCopyTo :: SqlCopyTo be table proj -> m ()
+  runCopyTo :: SqlCopyTo be res -> m ()
 
 instance (MonadBeamCopyTo be m) => MonadBeamCopyTo be (ExceptT e m) where
   runCopyTo = lift . runCopyTo
@@ -290,7 +290,7 @@ instance (MonadBeamCopyTo be m, Monoid w) => MonadBeamCopyTo be (Strict.RWST r w
 -- @since 0.11.1.0
 class (MonadBeam be m) => MonadBeamCopyFrom be m | m -> be where
   -- | Execute a built @COPY ... FROM@ file statement.
-  runCopyFrom :: SqlCopyFrom be table proj -> m ()
+  runCopyFrom :: SqlCopyFrom be proj -> m ()
 
 instance (MonadBeamCopyFrom be m) => MonadBeamCopyFrom be (ExceptT e m) where
   runCopyFrom = lift . runCopyFrom
