@@ -1,6 +1,6 @@
 # Revision history for beam-duckdb
 
-## 0.3.1.0 -- unreleased
+## 0.3.1.0 -- 2026-05-13
 
 * Added support for `beam-migrate`: the new `Database.Beam.DuckDB.Migrate`
   module exposes a `migrationBackend :: BeamMigrationBackend DuckDB DuckDBM`
