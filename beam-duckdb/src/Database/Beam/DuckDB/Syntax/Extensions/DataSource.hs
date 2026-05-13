@@ -96,7 +96,7 @@ csv = flip csvWith defaultCSVOptions
 -- | Declare a CSV file (or files) as the source of data for a database.
 --
 -- See 'csv' if you want to use default options.
--- 
+--
 -- Note: Be careful to sanitize any user input that is then used as
 -- a data source.
 csvWith ::
@@ -138,7 +138,7 @@ defaultCSVOptions =
 -- | Define an Apache Iceberg table with default table options.
 --
 -- See 'icebergTableWith' if you want to change the default options.
--- 
+--
 -- Note: Be careful to sanitize any user input that is then used as
 -- a data source.
 icebergTable ::
@@ -150,7 +150,7 @@ icebergTable = flip icebergTableWith defaultIcebergTableOptions
 -- | Define an Apache Iceberg table with options.
 --
 -- See 'icebergTable' if you want to use default options.
--- 
+--
 -- Note: Be careful to sanitize any user input that is then used as
 -- a data source.
 icebergTableWith ::
@@ -176,7 +176,7 @@ defaultIcebergTableOptions :: IcebergTableOptions
 defaultIcebergTableOptions = IcebergTableOptions Nothing Nothing
 
 -- | Declare a Parquet file(s) or glob(s) as the source of data for a database.
--- 
+--
 -- Note: Be careful to sanitize any user input that is then used as
 -- a data source.
 parquet ::

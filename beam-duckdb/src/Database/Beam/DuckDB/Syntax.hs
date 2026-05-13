@@ -1,6 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -20,12 +21,34 @@ module Database.Beam.DuckDB.Syntax
     DuckDBTableNameSyntax (..),
     DuckDBOnConflictSyntax (..),
     DuckDBFieldNameSyntax (..),
+
+    -- * DDL syntaxes
+    DuckDBDataTypeSyntax (..),
+    DuckDBCreateTableSyntax (..),
+    DuckDBDropTableSyntax (..),
+    DuckDBAlterTableSyntax (..),
+    DuckDBAlterTableActionSyntax (..),
+    DuckDBAlterColumnActionSyntax (..),
+    DuckDBCreateSchemaSyntax (..),
+    DuckDBDropSchemaSyntax (..),
+    DuckDBSchemaNameSyntax (..),
+    DuckDBColumnSchemaSyntax (..),
+    DuckDBColumnConstraintDefinitionSyntax (..),
+    DuckDBColumnConstraintSyntax (..),
+    DuckDBTableConstraintSyntax (..),
+    DuckDBMatchTypeSyntax (..),
+    DuckDBReferentialActionSyntax (..),
+    DuckDBTableOptionsSyntax (..),
+    DuckDBIndexOptions (..),
   )
 where
 
+import Data.Aeson (object, withObject, (.:), (.=))
 import Data.Bifunctor (second)
 import Data.Coerce (coerce)
+import Data.Hashable (Hashable (..))
 import Data.Int (Int16, Int32, Int64, Int8)
+import qualified Data.List.NonEmpty as NE
 import Data.Scientific (Scientific)
 import Data.String (fromString)
 import Data.Text (Text)
@@ -63,6 +86,7 @@ import Database.Beam.Backend
     IsSql92OrderingSyntax (..),
     IsSql92ProjectionSyntax (..),
     IsSql92QuantifierSyntax (..),
+    IsSql92SchemaNameSyntax (..),
     IsSql92SelectSyntax (..),
     IsSql92SelectTableSyntax (..),
     IsSql92Syntax (..),
@@ -79,8 +103,46 @@ import Database.Beam.Backend
     IsSql99RecursiveCommonTableExpressionSelectSyntax (..),
     SqlNull (..),
   )
-import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, emit, emitChar, emitIntegral, emitRealFloat, emitScientific, emitValue, parens, quotedIdentifier, sepBy, spaces)
-import Database.Beam.Migrate.Serialization (BeamSerializedDataType)
+import Database.Beam.Backend.SQL
+  ( IsSql2003BinaryAndVarBinaryDataTypeSyntax (..),
+    IsSql2008BigIntDataTypeSyntax (..),
+    Sql92DisplaySyntax (..),
+  )
+import Database.Beam.DuckDB.Syntax.Builder (DuckDBSyntax, commas, duckDBRenderSyntaxScript, emit, emitChar, emitIntegral, emitRealFloat, emitScientific, emitValue, parens, quotedIdentifier, sepBy, spaces)
+import Database.Beam.Migrate.Checks (HasDataTypeCreatedCheck (..))
+import Database.Beam.Migrate.SQL
+  ( IsSql92AlterColumnActionSyntax (..),
+    IsSql92AlterTableActionSyntax (..),
+    IsSql92AlterTableSyntax (..),
+    IsSql92ColumnConstraintDefinitionSyntax (..),
+    IsSql92ColumnConstraintSyntax (..),
+    IsSql92ColumnSchemaSyntax (..),
+    IsSql92CreateDropIndexSyntax (..),
+    IsSql92CreateSchemaSyntax (..),
+    IsSql92CreateTableSyntax (..),
+    IsSql92DdlCommandSyntax (..),
+    IsSql92DdlSchemaCommandSyntax (..),
+    IsSql92DropSchemaSyntax (..),
+    IsSql92DropTableSyntax (..),
+    IsSql92MatchTypeSyntax (..),
+    IsSql92ReferentialActionSyntax (..),
+    IsSql92TableConstraintSyntax (..),
+    IsSql92UniqueIndexSyntax (..),
+    Sql92SerializableConstraintDefinitionSyntax (..),
+    Sql92SerializableDataTypeSyntax (..),
+  )
+import Database.Beam.Migrate.SQL.Builder (ConstraintAttributeTiming (..), SqlConstraintAttributesBuilder (..), sqlConstraintAttributesSerialized)
+import Database.Beam.Migrate.SQL.SQL92 (ForeignKeyAction (..))
+import Database.Beam.Migrate.Serialization
+  ( BeamSerializedConstraint,
+    BeamSerializedConstraintDefinition,
+    BeamSerializedDataType (..),
+    BeamSerializedExpression (..),
+    BeamSerializedMatchType,
+    BeamSerializedReferentialAction,
+    fromBeamSerializedConstraintDefinition,
+    fromBeamSerializedDataType,
+  )
 import Database.DuckDB.Simple (Null (Null))
 
 newtype DuckDBCommandSyntax = DuckDBCommandSyntax {fromDuckDBSyntax :: DuckDBSyntax}
@@ -96,6 +158,22 @@ instance IsSql92Syntax DuckDBCommandSyntax where
   insertCmd = DuckDBCommandSyntax . fromDuckDBInsert
   updateCmd = DuckDBCommandSyntax . fromDuckDBUpdate
   deleteCmd = DuckDBCommandSyntax . fromDuckDBDelete
+
+instance IsSql92DdlCommandSyntax DuckDBCommandSyntax where
+  type Sql92DdlCommandCreateTableSyntax DuckDBCommandSyntax = DuckDBCreateTableSyntax
+  type Sql92DdlCommandDropTableSyntax DuckDBCommandSyntax = DuckDBDropTableSyntax
+  type Sql92DdlCommandAlterTableSyntax DuckDBCommandSyntax = DuckDBAlterTableSyntax
+
+  createTableCmd = DuckDBCommandSyntax . fromDuckDBCreateTable
+  dropTableCmd = DuckDBCommandSyntax . fromDuckDBDropTable
+  alterTableCmd = DuckDBCommandSyntax . fromDuckDBAlterTable
+
+instance IsSql92DdlSchemaCommandSyntax DuckDBCommandSyntax where
+  type Sql92DdlCommandCreateSchemaSyntax DuckDBCommandSyntax = DuckDBCreateSchemaSyntax
+  type Sql92DdlCommandDropSchemaSyntax DuckDBCommandSyntax = DuckDBDropSchemaSyntax
+
+  createSchemaCmd = DuckDBCommandSyntax . fromDuckDBCreateSchema
+  dropSchemaCmd = DuckDBCommandSyntax . fromDuckDBDropSchema
 
 newtype DuckDBTableNameSyntax = DuckDBTableNameSyntax {fromDuckDBTableName :: DuckDBSyntax}
 
@@ -124,6 +202,57 @@ data DuckDBDataTypeSyntax = DuckDBDataTypeSyntax
   { duckDBDataType :: DuckDBSyntax,
     duckDBDataTypeSerialized :: BeamSerializedDataType
   }
+  deriving (Show)
+
+-- DDL syntax newtypes used by 'IsSql92DdlCommandSyntax' and friends.
+
+newtype DuckDBCreateTableSyntax = DuckDBCreateTableSyntax {fromDuckDBCreateTable :: DuckDBSyntax}
+
+data DuckDBTableOptionsSyntax = DuckDBTableOptionsSyntax DuckDBSyntax DuckDBSyntax
+
+newtype DuckDBDropTableSyntax = DuckDBDropTableSyntax {fromDuckDBDropTable :: DuckDBSyntax}
+
+newtype DuckDBAlterTableSyntax = DuckDBAlterTableSyntax {fromDuckDBAlterTable :: DuckDBSyntax}
+
+newtype DuckDBAlterTableActionSyntax = DuckDBAlterTableActionSyntax {fromDuckDBAlterTableAction :: DuckDBSyntax}
+
+newtype DuckDBAlterColumnActionSyntax = DuckDBAlterColumnActionSyntax {fromDuckDBAlterColumnAction :: DuckDBSyntax}
+
+newtype DuckDBCreateSchemaSyntax = DuckDBCreateSchemaSyntax {fromDuckDBCreateSchema :: DuckDBSyntax}
+
+newtype DuckDBDropSchemaSyntax = DuckDBDropSchemaSyntax {fromDuckDBDropSchema :: DuckDBSyntax}
+
+newtype DuckDBSchemaNameSyntax = DuckDBSchemaNameSyntax {fromDuckDBSchemaName :: DuckDBSyntax}
+
+newtype DuckDBColumnSchemaSyntax = DuckDBColumnSchemaSyntax {fromDuckDBColumnSchema :: DuckDBSyntax}
+  deriving (Show, Eq)
+
+data DuckDBColumnConstraintDefinitionSyntax = DuckDBColumnConstraintDefinitionSyntax
+  { fromDuckDBColumnConstraintDefinition :: DuckDBSyntax,
+    duckDBColumnConstraintDefinitionSerialized :: BeamSerializedConstraintDefinition
+  }
+  deriving (Show)
+
+data DuckDBColumnConstraintSyntax = DuckDBColumnConstraintSyntax
+  { fromDuckDBColumnConstraint :: DuckDBSyntax,
+    duckDBColumnConstraintSerialized :: BeamSerializedConstraint
+  }
+
+newtype DuckDBTableConstraintSyntax = DuckDBTableConstraintSyntax {fromDuckDBTableConstraint :: DuckDBSyntax}
+
+data DuckDBMatchTypeSyntax = DuckDBMatchTypeSyntax
+  { fromDuckDBMatchType :: DuckDBSyntax,
+    duckDBMatchTypeSerialized :: BeamSerializedMatchType
+  }
+
+data DuckDBReferentialActionSyntax = DuckDBReferentialActionSyntax
+  { fromDuckDBReferentialAction :: DuckDBSyntax,
+    duckDBReferentialActionSerialized :: BeamSerializedReferentialAction
+  }
+
+newtype DuckDBIndexOptions = DuckDBIndexOptions {duckDBIndexUnique :: Bool}
+  deriving stock (Show, Eq)
+  deriving newtype (Hashable)
 
 newtype DuckDBExtractFieldSyntax = DuckDBExtractFieldSyntax {fromDuckDBExtractField :: DuckDBSyntax}
 
@@ -349,6 +478,293 @@ instance IsSql99DataTypeSyntax DuckDBDataTypeSyntax where
             <> emitChar ')',
         duckDBDataTypeSerialized = rowType (map (second duckDBDataTypeSerialized) fields)
       }
+
+instance IsSql2008BigIntDataTypeSyntax DuckDBDataTypeSyntax where
+  bigIntType = DuckDBDataTypeSyntax (emit "BIGINT") bigIntType
+
+instance IsSql2003BinaryAndVarBinaryDataTypeSyntax DuckDBDataTypeSyntax where
+  binaryType sz =
+    DuckDBDataTypeSyntax
+      (emit "BLOB" <> optPrec sz)
+      (binaryType sz)
+  varBinaryType sz =
+    DuckDBDataTypeSyntax
+      (emit "BLOB" <> optPrec sz)
+      (varBinaryType sz)
+
+-- | Two 'DuckDBDataTypeSyntax' values are equal when their rendered SQL is
+-- equal. This is good enough for migration purposes, where the serialized
+-- JSON form is used as the canonical comparison key by @beam-migrate@.
+instance Eq DuckDBDataTypeSyntax where
+  DuckDBDataTypeSyntax a _ == DuckDBDataTypeSyntax b _ = a == b
+
+instance Hashable DuckDBDataTypeSyntax where
+  hashWithSalt salt (DuckDBDataTypeSyntax a _) = hashWithSalt salt a
+
+instance Sql92DisplaySyntax DuckDBDataTypeSyntax where
+  displaySyntax = displaySyntax . duckDBDataType
+
+instance Sql92SerializableDataTypeSyntax DuckDBDataTypeSyntax where
+  serializeDataType = fromBeamSerializedDataType . duckDBDataTypeSerialized
+
+-- | DuckDB doesn't allow user-defined domain types, so every data type is
+-- always available.
+instance HasDataTypeCreatedCheck DuckDBDataTypeSyntax where
+  dataTypeHasBeenCreated _ _ = True
+
+instance Sql92DisplaySyntax DuckDBColumnSchemaSyntax where
+  displaySyntax = displaySyntax . fromDuckDBColumnSchema
+
+instance Hashable DuckDBColumnSchemaSyntax where
+  hashWithSalt salt = hashWithSalt salt . fromDuckDBColumnSchema
+
+instance Eq DuckDBColumnConstraintDefinitionSyntax where
+  DuckDBColumnConstraintDefinitionSyntax a _ == DuckDBColumnConstraintDefinitionSyntax b _ = a == b
+
+instance Hashable DuckDBColumnConstraintDefinitionSyntax where
+  hashWithSalt salt = hashWithSalt salt . fromDuckDBColumnConstraintDefinition
+
+instance Sql92DisplaySyntax DuckDBColumnConstraintDefinitionSyntax where
+  displaySyntax = displaySyntax . fromDuckDBColumnConstraintDefinition
+
+instance Sql92SerializableConstraintDefinitionSyntax DuckDBColumnConstraintDefinitionSyntax where
+  serializeConstraint = fromBeamSerializedConstraintDefinition . duckDBColumnConstraintDefinitionSerialized
+
+instance IsSql92SchemaNameSyntax DuckDBSchemaNameSyntax where
+  schemaName s = DuckDBSchemaNameSyntax (quotedIdentifier s)
+
+instance IsSql92CreateSchemaSyntax DuckDBCreateSchemaSyntax where
+  type Sql92CreateSchemaSchemaNameSyntax DuckDBCreateSchemaSyntax = DuckDBSchemaNameSyntax
+
+  createSchemaSyntax sNm =
+    DuckDBCreateSchemaSyntax (emit "CREATE SCHEMA " <> fromDuckDBSchemaName sNm)
+
+instance IsSql92DropSchemaSyntax DuckDBDropSchemaSyntax where
+  type Sql92DropSchemaSchemaNameSyntax DuckDBDropSchemaSyntax = DuckDBSchemaNameSyntax
+
+  dropSchemaSyntax sNm =
+    DuckDBDropSchemaSyntax (emit "DROP SCHEMA " <> fromDuckDBSchemaName sNm)
+
+instance IsSql92DropTableSyntax DuckDBDropTableSyntax where
+  type Sql92DropTableTableNameSyntax DuckDBDropTableSyntax = DuckDBTableNameSyntax
+
+  dropTableSyntax tblNm =
+    DuckDBDropTableSyntax (emit "DROP TABLE " <> fromDuckDBTableName tblNm)
+
+instance IsSql92AlterTableSyntax DuckDBAlterTableSyntax where
+  type Sql92AlterTableAlterTableActionSyntax DuckDBAlterTableSyntax = DuckDBAlterTableActionSyntax
+  type Sql92AlterTableTableNameSyntax DuckDBAlterTableSyntax = DuckDBTableNameSyntax
+
+  alterTableSyntax tblNm action =
+    DuckDBAlterTableSyntax $
+      emit "ALTER TABLE "
+        <> fromDuckDBTableName tblNm
+        <> emit " "
+        <> fromDuckDBAlterTableAction action
+
+instance IsSql92AlterTableActionSyntax DuckDBAlterTableActionSyntax where
+  type Sql92AlterTableAlterColumnActionSyntax DuckDBAlterTableActionSyntax = DuckDBAlterColumnActionSyntax
+  type Sql92AlterTableColumnSchemaSyntax DuckDBAlterTableActionSyntax = DuckDBColumnSchemaSyntax
+
+  alterColumnSyntax colNm action =
+    DuckDBAlterTableActionSyntax $
+      emit "ALTER COLUMN "
+        <> quotedIdentifier colNm
+        <> emit " "
+        <> fromDuckDBAlterColumnAction action
+
+  addColumnSyntax colNm schema =
+    DuckDBAlterTableActionSyntax $
+      emit "ADD COLUMN "
+        <> quotedIdentifier colNm
+        <> emit " "
+        <> fromDuckDBColumnSchema schema
+
+  dropColumnSyntax colNm =
+    DuckDBAlterTableActionSyntax (emit "DROP COLUMN " <> quotedIdentifier colNm)
+
+  renameTableToSyntax newNm =
+    DuckDBAlterTableActionSyntax (emit "RENAME TO " <> quotedIdentifier newNm)
+
+  renameColumnToSyntax oldNm newNm =
+    DuckDBAlterTableActionSyntax $
+      emit "RENAME COLUMN "
+        <> quotedIdentifier oldNm
+        <> emit " TO "
+        <> quotedIdentifier newNm
+
+instance IsSql92AlterColumnActionSyntax DuckDBAlterColumnActionSyntax where
+  setNullSyntax = DuckDBAlterColumnActionSyntax (emit "DROP NOT NULL")
+  setNotNullSyntax = DuckDBAlterColumnActionSyntax (emit "SET NOT NULL")
+
+instance IsSql92CreateTableSyntax DuckDBCreateTableSyntax where
+  type Sql92CreateTableTableNameSyntax DuckDBCreateTableSyntax = DuckDBTableNameSyntax
+  type Sql92CreateTableColumnSchemaSyntax DuckDBCreateTableSyntax = DuckDBColumnSchemaSyntax
+  type Sql92CreateTableTableConstraintSyntax DuckDBCreateTableSyntax = DuckDBTableConstraintSyntax
+  type Sql92CreateTableOptionsSyntax DuckDBCreateTableSyntax = DuckDBTableOptionsSyntax
+
+  createTableSyntax options tblNm fieldTypes constraints =
+    let (beforeOptions, afterOptions) =
+          case options of
+            Nothing -> (emit " ", emit " ")
+            Just (DuckDBTableOptionsSyntax before after) ->
+              (emit " " <> before <> emit " ", emit " " <> after <> emit " ")
+     in DuckDBCreateTableSyntax $
+          emit "CREATE"
+            <> beforeOptions
+            <> emit "TABLE "
+            <> fromDuckDBTableName tblNm
+            <> emit " ("
+            <> sepBy
+              (emit ", ")
+              ( map (\(nm, ty) -> quotedIdentifier nm <> emit " " <> fromDuckDBColumnSchema ty) fieldTypes
+                  <> map fromDuckDBTableConstraint constraints
+              )
+            <> emit ")"
+            <> afterOptions
+
+duckDBForeignKeyAction :: ForeignKeyAction -> DuckDBSyntax
+duckDBForeignKeyAction ForeignKeyActionCascade = emit "CASCADE"
+duckDBForeignKeyAction ForeignKeyActionSetNull = emit "SET NULL"
+duckDBForeignKeyAction ForeignKeyActionSetDefault = emit "SET DEFAULT"
+duckDBForeignKeyAction ForeignKeyActionRestrict = emit "RESTRICT"
+duckDBForeignKeyAction ForeignKeyNoAction = emit "NO ACTION"
+
+instance IsSql92TableConstraintSyntax DuckDBTableConstraintSyntax where
+  primaryKeyConstraintSyntax fieldNames =
+    DuckDBTableConstraintSyntax $
+      emit "PRIMARY KEY("
+        <> sepBy (emit ", ") (map quotedIdentifier (NE.toList fieldNames))
+        <> emit ")"
+  foreignKeyConstraintSyntax localCols refTbl refCols onUpdate onDelete =
+    DuckDBTableConstraintSyntax $
+      emit "FOREIGN KEY("
+        <> sepBy (emit ", ") (map quotedIdentifier (NE.toList localCols))
+        <> emit ") REFERENCES "
+        <> quotedIdentifier refTbl
+        <> emit "("
+        <> sepBy (emit ", ") (map quotedIdentifier (NE.toList refCols))
+        <> emit ")"
+        <> emit " ON UPDATE "
+        <> duckDBForeignKeyAction onUpdate
+        <> emit " ON DELETE "
+        <> duckDBForeignKeyAction onDelete
+
+instance IsSql92ColumnSchemaSyntax DuckDBColumnSchemaSyntax where
+  type Sql92ColumnSchemaColumnTypeSyntax DuckDBColumnSchemaSyntax = DuckDBDataTypeSyntax
+  type Sql92ColumnSchemaExpressionSyntax DuckDBColumnSchemaSyntax = DuckDBExpressionSyntax
+  type Sql92ColumnSchemaColumnConstraintDefinitionSyntax DuckDBColumnSchemaSyntax = DuckDBColumnConstraintDefinitionSyntax
+
+  columnSchemaSyntax colType defaultClause constraints collation =
+    DuckDBColumnSchemaSyntax $
+      duckDBDataType colType
+        <> maybe mempty (\d -> emit " DEFAULT " <> fromDuckDBExpression d) defaultClause
+        <> ( case constraints of
+               [] -> mempty
+               _ -> foldMap (\c -> emit " " <> fromDuckDBColumnConstraintDefinition c) constraints
+           )
+        <> maybe mempty (\nm -> emit " COLLATE " <> quotedIdentifier nm) collation
+
+instance IsSql92MatchTypeSyntax DuckDBMatchTypeSyntax where
+  fullMatchSyntax = DuckDBMatchTypeSyntax (emit "FULL") fullMatchSyntax
+  partialMatchSyntax = DuckDBMatchTypeSyntax (emit "PARTIAL") partialMatchSyntax
+
+instance IsSql92ReferentialActionSyntax DuckDBReferentialActionSyntax where
+  referentialActionCascadeSyntax = DuckDBReferentialActionSyntax (emit "CASCADE") referentialActionCascadeSyntax
+  referentialActionNoActionSyntax = DuckDBReferentialActionSyntax (emit "NO ACTION") referentialActionNoActionSyntax
+  referentialActionSetDefaultSyntax = DuckDBReferentialActionSyntax (emit "SET DEFAULT") referentialActionSetDefaultSyntax
+  referentialActionSetNullSyntax = DuckDBReferentialActionSyntax (emit "SET NULL") referentialActionSetNullSyntax
+
+instance IsSql92ColumnConstraintDefinitionSyntax DuckDBColumnConstraintDefinitionSyntax where
+  type Sql92ColumnConstraintDefinitionConstraintSyntax DuckDBColumnConstraintDefinitionSyntax = DuckDBColumnConstraintSyntax
+  type Sql92ColumnConstraintDefinitionAttributesSyntax DuckDBColumnConstraintDefinitionSyntax = SqlConstraintAttributesBuilder
+
+  constraintDefinitionSyntax nm constraint attrs =
+    DuckDBColumnConstraintDefinitionSyntax syntax serialized
+    where
+      syntax =
+        maybe mempty (\n -> emit "CONSTRAINT " <> quotedIdentifier n <> emit " ") nm
+          <> fromDuckDBColumnConstraint constraint
+          <> maybe mempty (\a -> emit " " <> duckDBSqlConstraintAttributes a) attrs
+      serialized =
+        constraintDefinitionSyntax nm (duckDBColumnConstraintSerialized constraint) (fmap sqlConstraintAttributesSerialized attrs)
+
+-- | Emit a 'SqlConstraintAttributesBuilder' as DuckDB syntax. DuckDB does not
+-- support @DEFERRABLE@/@INITIALLY DEFERRED@ at the time of writing, but we
+-- still emit the corresponding SQL keywords so that user-supplied constraint
+-- attributes are not silently dropped. If DuckDB rejects them, the user will
+-- see an obvious error rather than a subtle behavioural difference.
+duckDBSqlConstraintAttributes :: SqlConstraintAttributesBuilder -> DuckDBSyntax
+duckDBSqlConstraintAttributes (SqlConstraintAttributesBuilder timing deferrable) =
+  maybe mempty timingBuilder timing <> maybe mempty deferrableBuilder deferrable
+  where
+    timingBuilder InitiallyDeferred = emit "INITIALLY DEFERRED"
+    timingBuilder InitiallyImmediate = emit "INITIALLY IMMEDIATE"
+    deferrableBuilder False = emit "NOT DEFERRABLE"
+    deferrableBuilder True = emit "DEFERRABLE"
+
+instance IsSql92ColumnConstraintSyntax DuckDBColumnConstraintSyntax where
+  type Sql92ColumnConstraintMatchTypeSyntax DuckDBColumnConstraintSyntax = DuckDBMatchTypeSyntax
+  type Sql92ColumnConstraintReferentialActionSyntax DuckDBColumnConstraintSyntax = DuckDBReferentialActionSyntax
+  type Sql92ColumnConstraintExpressionSyntax DuckDBColumnConstraintSyntax = DuckDBExpressionSyntax
+
+  notNullConstraintSyntax = DuckDBColumnConstraintSyntax (emit "NOT NULL") notNullConstraintSyntax
+  uniqueColumnConstraintSyntax = DuckDBColumnConstraintSyntax (emit "UNIQUE") uniqueColumnConstraintSyntax
+  primaryKeyColumnConstraintSyntax = DuckDBColumnConstraintSyntax (emit "PRIMARY KEY") primaryKeyColumnConstraintSyntax
+  checkColumnConstraintSyntax expr =
+    DuckDBColumnConstraintSyntax
+      (emit "CHECK(" <> fromDuckDBExpression expr <> emit ")")
+      ( checkColumnConstraintSyntax
+          ( BeamSerializedExpression
+              (duckDBRenderSyntaxScript (fromDuckDBExpression expr))
+          )
+      )
+  referencesConstraintSyntax tbl fields matchType onUpdate onDelete =
+    DuckDBColumnConstraintSyntax syntax serialized
+    where
+      syntax =
+        emit "REFERENCES "
+          <> quotedIdentifier tbl
+          <> emit "("
+          <> sepBy (emit ", ") (map quotedIdentifier fields)
+          <> emit ")"
+          <> maybe mempty (\m -> emit " " <> fromDuckDBMatchType m) matchType
+          <> maybe mempty (\a -> emit " ON UPDATE " <> fromDuckDBReferentialAction a) onUpdate
+          <> maybe mempty (\a -> emit " ON DELETE " <> fromDuckDBReferentialAction a) onDelete
+      serialized =
+        referencesConstraintSyntax
+          tbl
+          fields
+          (fmap duckDBMatchTypeSerialized matchType)
+          (fmap duckDBReferentialActionSerialized onUpdate)
+          (fmap duckDBReferentialActionSerialized onDelete)
+
+instance IsSql92CreateDropIndexSyntax DuckDBCommandSyntax where
+  type Sql92CreateIndexOptionsSyntax DuckDBCommandSyntax = DuckDBIndexOptions
+
+  defaultIndexOptions = DuckDBIndexOptions {duckDBIndexUnique = False}
+
+  createIndexCmd idxNm tblNm cols opts =
+    DuckDBCommandSyntax $
+      emit (if duckDBIndexUnique opts then "CREATE UNIQUE INDEX " else "CREATE INDEX ")
+        <> quotedIdentifier idxNm
+        <> emit " ON "
+        <> fromDuckDBTableName tblNm
+        <> parens (sepBy (emit ", ") (NE.toList (fmap quotedIdentifier cols)))
+
+  dropIndexCmd idxNm =
+    DuckDBCommandSyntax (emit "DROP INDEX " <> quotedIdentifier idxNm)
+
+  serializeIndexOptions opts =
+    object ["unique" .= duckDBIndexUnique opts]
+
+  deserializeIndexOptions =
+    withObject "DuckDBIndexOptions" $ \v ->
+      DuckDBIndexOptions <$> v .: "unique"
+
+instance IsSql92UniqueIndexSyntax DuckDBCommandSyntax where
+  setUniqueIndexOptions u opts = opts {duckDBIndexUnique = u}
+  indexIsUnique = duckDBIndexUnique
 
 optPrec :: Maybe Word -> DuckDBSyntax
 optPrec Nothing = mempty

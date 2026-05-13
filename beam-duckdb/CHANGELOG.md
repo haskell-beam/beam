@@ -2,6 +2,10 @@
 
 ## 0.3.1.0 -- unreleased
 
+* Added support for `beam-migrate`: the new `Database.Beam.DuckDB.Migrate`
+  module exposes a `migrationBackend :: BeamMigrationBackend DuckDB DuckDBM`
+  value, along with other utilities. This brings DuckDB on par with `beam-postgres`
+  and `beam-sqlite` for schema verification and migration script generation.
 * Added file-mode `COPY ... TO 'file'` / `COPY ... FROM 'file'` support
   via the new `MonadBeamCopyTo` / `MonadBeamCopyFrom` instances on
   `DuckDBM`. Smart constructors `copyToCSV` / `copyToParquet` /

@@ -19,11 +19,13 @@ module Database.Beam.DuckDB.Syntax.Builder
     commas,
     quotedIdentifier,
     withPlaceholder,
+    duckDBRenderSyntaxScript,
   )
 where
 
 import Data.DList (DList)
 import qualified Data.DList as DL
+import Data.Hashable (Hashable (..))
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -122,6 +124,10 @@ instance Eq DuckDBSyntax where
     -- TODO: is there a cleaner way to do this? Is it even important to have this instance?
     show vx == show vy
       && withPlaceholder sx == withPlaceholder sy
+
+instance Hashable DuckDBSyntax where
+  hashWithSalt salt (DuckDBSyntax s vs) =
+    hashWithSalt salt (Builder.toLazyText (withPlaceholder s), show vs)
 
 instance Semigroup DuckDBSyntax where
   DuckDBSyntax sx vx <> DuckDBSyntax sy vy =
