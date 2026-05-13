@@ -17,6 +17,14 @@
   role attribute and is the appropriate choice when the client and
   server are on different hosts — see
   `Database.Beam.Postgres.Extensions.Copy.Stream`.
+  
+## Bug fixes
+
+* Fixed an issue where a window function applied over the result of `nub_` (or
+  the Postgres-specific `pgNubBy_`) would emit `DISTINCT` and the window
+  expression in the same `SELECT`, causing the window to evaluate against the
+  pre-deduplicated rows. The inner select is now materialised as a subquery
+  whenever it carries `DISTINCT`, `GROUP BY`, or `HAVING` (#756).
 
 # 0.6.0.0
 
