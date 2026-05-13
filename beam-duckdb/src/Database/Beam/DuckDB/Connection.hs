@@ -16,6 +16,7 @@ module Database.Beam.DuckDB.Connection
     runBeamDuckDB,
     runBeamDuckDBDebug,
     runBeamDuckDBDebugString,
+    liftIOWithHandle,
     BeamDuckDBParams (..),
     BeamDuckDBRow (..),
   )
@@ -87,6 +88,12 @@ runBeamDuckDBDebug debug conn action =
 -- This is provided for compatibility with other backends
 runBeamDuckDBDebugString :: (String -> IO ()) -> Connection -> DuckDBM a -> IO a
 runBeamDuckDBDebugString debug = runBeamDuckDBDebug (debug . Text.unpack)
+
+-- | Run an IO action with access to the underlying DuckDB 'Connection'.
+-- This is mostly useful for migrate-backend implementors who need to issue
+-- raw queries against the connection.
+liftIOWithHandle :: (Connection -> IO a) -> DuckDBM a
+liftIOWithHandle f = DuckDBM $ ReaderT $ \(_, conn) -> f conn
 
 newtype BeamDuckDBParams = BeamDuckDBParams [SomeField]
 

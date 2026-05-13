@@ -17,6 +17,7 @@ import Data.Functor (($>), (<&>))
 import Data.Int (Int16, Int32, Int64, Int8)
 import Data.Scientific (Scientific, scientific)
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Time (Day, LocalTime, TimeOfDay, UTCTime)
 import Data.UUID.Types (UUID)
 import Data.Word (Word16, Word32, Word64, Word8)
@@ -42,6 +43,7 @@ import Database.Beam.DuckDB.Syntax.Builder
     parens,
   )
 import Database.Beam.DuckDB.Syntax.Extensions.Copy (DuckDBCopyFromSyntax, DuckDBCopyToSyntax)
+import Database.Beam.Migrate.SQL (BeamMigrateOnlySqlBackend)
 import Database.Beam.Query.SQL92 (buildSql92Query')
 import Database.Beam.Query.Types (HasQBuilder (..))
 import Database.DuckDB.Simple (Null)
@@ -52,6 +54,8 @@ data DuckDB
 type instance BeamSqlBackendSyntax DuckDB = DuckDBCommandSyntax
 
 instance BeamSqlBackend DuckDB
+
+instance BeamMigrateOnlySqlBackend DuckDB
 
 type instance BeamSqlBackendCopyToSyntax DuckDB = DuckDBCopyToSyntax
 
@@ -108,6 +112,13 @@ instance FromBackendRow DuckDB Word32
 instance FromBackendRow DuckDB Word64
 
 instance FromBackendRow DuckDB Text
+
+instance FromBackendRow DuckDB Char where
+  fromBackendRow = do
+    t <- fromBackendRow @DuckDB @Text
+    case Text.uncons t of
+      Just (c, _) -> pure c
+      Nothing -> fail "Need string of size one to parse Char"
 
 instance FromBackendRow DuckDB ByteString
 

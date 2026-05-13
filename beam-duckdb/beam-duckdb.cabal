@@ -36,9 +36,11 @@ common common
                  -Wredundant-constraints
                  -fhide-source-paths
                  -Wpartial-fields
+                 -Wunused-packages
 library
     import:           common
     exposed-modules:  Database.Beam.DuckDB
+                      Database.Beam.DuckDB.Migrate
     other-modules:    Database.Beam.DuckDB.Backend
                       Database.Beam.DuckDB.Connection
                       Database.Beam.DuckDB.Syntax
@@ -47,7 +49,8 @@ library
                       Database.Beam.DuckDB.Syntax.Extensions.Copy
                       Database.Beam.DuckDB.Syntax.Extensions.DataSource
                       Database.Beam.DuckDB.Syntax.Extensions.InsertOnConflict
-    build-depends:    base >=4.11 && <5
+    build-depends:    aeson >=1.0 && <2.3
+                    , base >=4.11 && <5
                     , beam-core >=0.11.1 && <0.12
                     , beam-migrate ^>=0.6
                     , bytestring >=0.10 && <0.13
@@ -56,6 +59,7 @@ library
                     , duckdb-simple (>=0.1.2 && <0.1.5) || (>=0.1.5.1 && <0.1.6)
                     , dlist >=0.8 && <1.1
                     , free >=4.12 && <5.3
+                    , hashable >=1.1 && <1.6
                     , scientific ^>=0.3
                     , text >=1.0 && <2.2
                     , time >=1.6 && <1.17
@@ -70,6 +74,7 @@ test-suite beam-duckdb-test
                       Database.Beam.DuckDB.Test.Extensions.DataSource
                       Database.Beam.DuckDB.Test.Extensions.InsertOnConflict
                       Database.Beam.DuckDB.Test.Extensions.Returning
+                      Database.Beam.DuckDB.Test.Migrate
                       Database.Beam.DuckDB.Test.Query
     type:             exitcode-stdio-1.0
     hs-source-dirs:   tests
@@ -77,6 +82,8 @@ test-suite beam-duckdb-test
     build-depends:    base >=4.11 && <5
                     , beam-core
                     , beam-duckdb
+                    , beam-migrate
+                    , bytestring
                     , duckdb-simple
                     , hedgehog
                     , tasty
@@ -85,3 +92,4 @@ test-suite beam-duckdb-test
                     , temporary
                     , text
                     , time
+                    , uuid-types
