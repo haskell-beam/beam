@@ -121,6 +121,8 @@ import Control.Monad.Identity
 import Control.Monad.Writer
 import Control.Monad.State.Strict
 
+import Data.List.NonEmpty (nonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Kind (Type)
 import Data.Functor.Const (Const(..))
 import Data.Text (Text)
@@ -158,12 +160,17 @@ selectWith :: forall be db res
               , HasQBuilder be, Projectible be res )
            => With be db (Q be db QBaseScope res) -> SqlSelect be (QExprToIdentity res)
 selectWith (CTE.With mkQ) =
-    let (q, (recursiveness, ctes)) = evalState (runWriterT mkQ) 0
-    in case recursiveness of
-         CTE.Nonrecursive -> SqlSelect (withSyntax ctes
-                                                   (buildSqlQuery "t" q))
-         CTE.Recursive    -> SqlSelect (withRecursiveSyntax ctes
-                                                            (buildSqlQuery "t" q))
+    let (q, (recursiveness, mctes)) = evalState (runWriterT mkQ) 0
+    in case (recursiveness, nonEmpty mctes) of
+         (CTE.Nonrecursive, Just ctes) -> SqlSelect (withSyntax (NonEmpty.toList ctes)
+                                                    (buildSqlQuery "t" q))
+         (CTE.Recursive, Just ctes)    -> SqlSelect (withRecursiveSyntax (NonEmpty.toList ctes)
+                                                    (buildSqlQuery "t" q))
+         -- If there are no subqueries, we don't want to generate
+         -- an empty 'WITH' statement, which would be malformed.
+         -- 
+         -- see: https://github.com/haskell-beam/beam/issues/760
+         (_, Nothing) -> SqlSelect (buildSqlQuery "t" q)
 
 -- | Convenience function to generate a 'SqlSelect' that looks up a table row
 --   given a primary key.

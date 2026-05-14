@@ -12,6 +12,7 @@
 module Database.Beam.DuckDB.Test.Query (tests) where
 
 import Control.Monad (void)
+import Data.Functor ((<&>))
 import Data.Int (Int32)
 import Data.List (nub, nubBy, sort, sortOn)
 import Data.Text (Text)
@@ -130,6 +131,7 @@ tests =
           testGroup
             "CTE"
             [ testCommonTableExpression,
+              testEmptyCommonTableExpression,
               testMultipleCommonTableExpressions,
               testRecursiveCommonTableExpression
             ],
@@ -420,6 +422,29 @@ testCommonTableExpression = testCase "Non-recursive common table expression" $ d
                 pure (_userName u, total)
 
       rows @?= [("Alice", 3), ("Bob", 1)]
+
+-- Regression test for https://github.com/haskell-beam/beam/issues/760
+--
+-- Note that this is testing functionality from 'beam-core', but the MockSqlBackend
+-- isn't powerful enough to express this test
+testEmptyCommonTableExpression :: TestTree
+testEmptyCommonTableExpression = testCase "No common table expression in `selectWith` is equivalent to `select`" $ do
+  let users =
+        [ User 1 "Alice" 30,
+          User 2 "Bob" 25,
+          User 3 "Charlie" 35
+        ]
+  withTestDb users [] [] $ \conn ->
+    do
+      rows <-
+        runBeamDuckDB conn
+          $ runSelectReturningList
+            . selectWith
+            . pure
+          $ all_ (_dbUsers testDb)
+            <&> _userName
+
+      rows @?= ["Alice", "Bob", "Charlie"]
 
 testMultipleCommonTableExpressions :: TestTree
 testMultipleCommonTableExpressions = testCase "Multiple common table expressions" $ do

@@ -1,3 +1,10 @@
+# 0.11.2.0
+
+## Bug fixes
+
+* Fixed an issue where using `selectWith` and no common-table expressions would lead to
+  invalid SQL at runtime.
+
 # 0.11.1.0
 
 ## New features
