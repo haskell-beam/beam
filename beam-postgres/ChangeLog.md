@@ -1,3 +1,10 @@
+# 0.6.2.0
+
+## Bug fixes
+
+* Fixed an issue where using `pgSelectWith` with no common-table expressions
+  would lead to an invalid SQL query at runtime.
+
 # 0.6.1.0
 
 ## Added features

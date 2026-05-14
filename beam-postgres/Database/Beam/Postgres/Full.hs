@@ -71,6 +71,8 @@ import           Control.Monad.Free.Church
 import           Control.Monad.State.Strict (evalState)
 import           Control.Monad.Writer (runWriterT)
 
+import           Data.List.NonEmpty (nonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Kind (Type)
 import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
@@ -289,18 +291,21 @@ lateral_ using mkSubquery = do
 --
 -- @beam-core@ offers 'selectWith' to produce a top-level 'SqlSelect'
 -- but these cannot be turned into 'Q' objects for use within joins.
---
--- The 'pgSelectWith' function is more flexible and indeed
--- 'selectWith' for @beam-postgres@ is equivalent to se
+-- The 'pgSelectWith' function is more flexible.
 pgSelectWith :: forall db s res
               . Projectible Postgres res
              => With Postgres db (Q Postgres db s res) -> Q Postgres db s res
 pgSelectWith (CTE.With mkQ) =
-    let (q, (recursiveness, ctes)) = evalState (runWriterT mkQ) 0
+    let (q, (recursiveness, mctes)) = evalState (runWriterT mkQ) 0
         fromSyntax tblPfx =
-            case recursiveness of
-              CTE.Nonrecursive -> withSyntax ctes (buildSqlQuery tblPfx q)
-              CTE.Recursive -> withRecursiveSyntax ctes (buildSqlQuery tblPfx q)
+            case (recursiveness, nonEmpty mctes) of
+              (CTE.Nonrecursive, Just ctes) -> withSyntax (NonEmpty.toList ctes) (buildSqlQuery tblPfx q)
+              (CTE.Recursive, Just ctes) -> withRecursiveSyntax (NonEmpty.toList ctes) (buildSqlQuery tblPfx q)
+               -- If there are no subqueries, we don't want to generate
+               -- an empty 'WITH' statement, which would be malformed.
+               -- 
+               -- see: https://github.com/haskell-beam/beam/issues/760
+              (_, Nothing) -> buildSqlQuery tblPfx q
     in Q (liftF (QAll (\tblPfx tName ->
                            let (_, names) = mkFieldNames @Postgres @res (qualifiedField tName)
                            in fromTable (PgTableSourceSyntax $
@@ -309,7 +314,7 @@ pgSelectWith (CTE.With mkQ) =
                       (\tName ->
                            let (projection, _) = mkFieldNames @Postgres @res (qualifiedField tName)
                            in projection)
-                      (\_ -> Nothing)
+                      (const Nothing)
                       snd))
 
 -- | By default, Postgres will throw an error when a conflict is detected. This
