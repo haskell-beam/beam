@@ -9,11 +9,12 @@ schema. We'll see how to use an intermediary table to create many-to-many
 relations and how to write LEFT JOINs. Finally, we'll see how to use `Nullable`
 to create optional foreign key references.
 
-Creating tables is easy now
+Creating table mappings is easy now
 =======
 
-Let's create our products table. By now, the pattern for adding a new table to
-the schema should be pretty familiar, so I'm going to skip the explanation.
+Let's create the mapping to our products table. By now, the pattern for adding a
+new table to the schema should be pretty familiar, so I'm going to skip the
+explanation.
 
 ```haskell
 data ProductT f = Product
@@ -87,7 +88,7 @@ some point, we will need to demonstrate to SQLite how to store values of type
 `ShippingCarrier`. We will come back to this later.
 
 We would also like to be able to associate a list of products with each order as
-line items. To do this we will create a table with two foreign keys. This table
+line items. To do this we will use a table with two foreign keys. This table
 will establish a many-to-many relationship between orders and products.
 
 ```haskell
@@ -673,11 +674,12 @@ Conclusion
 =======
 
 This tutorial completes our sequence on creating a shopping cart. Throughout the
-tutorials, we saw how to create tables using regular Haskell data types, how to
-link those tables up using relations, how to query tables using both the monadic
-interface and the list-like functions on queries. We saw ha few examples of
-using beam to generate advanced queries. More information on the Beam API is
-available on [hackage](https://hackage.haskell.org/package/beam-core). Happy beaming!
+tutorials, we saw how to represent tables using regular Haskell data types, how
+to link those tables up using relations, how to query tables using both the
+monadic interface and the list-like functions on queries. We saw ha few examples
+of using beam to generate advanced queries. More information on the Beam API is
+available on [hackage](https://hackage.haskell.org/package/beam-core). Happy
+beaming!
 
 Beam is a work in progress. Please submit bugs and patches
 on [GitHub](https://github.com/haskell-beam/beam).
