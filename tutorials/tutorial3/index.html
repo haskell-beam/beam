@@ -1522,9 +1522,10 @@ installment, we'll be adding support for products and orders to our database
 schema. We'll see how to use an intermediary table to create many-to-many
 relations and how to write LEFT JOINs. Finally, we'll see how to use <code>Nullable</code>
 to create optional foreign key references.</p>
-<h1 id="creating-tables-is-easy-now">Creating tables is easy now</h1>
-<p>Let's create our products table. By now, the pattern for adding a new table to
-the schema should be pretty familiar, so I'm going to skip the explanation.</p>
+<h1 id="creating-table-mappings-is-easy-now">Creating table mappings is easy now</h1>
+<p>Let's create the mapping to our products table. By now, the pattern for adding a
+new table to the schema should be pretty familiar, so I'm going to skip the
+explanation.</p>
 <div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">ProductT</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Product</span>
 <span class="w">                </span><span class="p">{</span><span class="w"> </span><span class="n">_productId</span><span class="w">          </span><span class="ow">::</span><span class="w"> </span><span class="kt">C</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Int32</span>
 <span class="w">                </span><span class="p">,</span><span class="w"> </span><span class="n">_productTitle</span><span class="w">       </span><span class="ow">::</span><span class="w"> </span><span class="kt">C</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="kt">Text</span>
@@ -1593,7 +1594,7 @@ Recall that beam lets you store any Haskell type in a <code>Columnar</code>. How
 some point, we will need to demonstrate to SQLite how to store values of type
 <code>ShippingCarrier</code>. We will come back to this later.</p>
 <p>We would also like to be able to associate a list of products with each order as
-line items. To do this we will create a table with two foreign keys. This table
+line items. To do this we will use a table with two foreign keys. This table
 will establish a many-to-many relationship between orders and products.</p>
 <div class="highlight"><pre><span></span><code><span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="p">(</span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">OrderT</span><span class="w"> </span><span class="kt">Identity</span><span class="p">)</span>
 <span class="kr">deriving</span><span class="w"> </span><span class="kr">instance</span><span class="w"> </span><span class="kt">Show</span><span class="w"> </span><span class="p">(</span><span class="kt">PrimaryKey</span><span class="w"> </span><span class="kt">ProductT</span><span class="w"> </span><span class="kt">Identity</span><span class="p">)</span>
@@ -1843,9 +1844,9 @@ resulting rows have a timestamp set by the database.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-0-Console">
-            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-05-21 22:17:11, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
-<span class="go">Order {_orderId = 2, _orderDate = 2026-05-21 22:17:11, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
-<span class="go">Order {_orderId = 3, _orderDate = 2026-05-21 22:17:11, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-06-06 14:46:51, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+<span class="go">Order {_orderId = 2, _orderDate = 2026-06-06 14:46:51, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}</span>
+<span class="go">Order {_orderId = 3, _orderDate = 2026-06-06 14:46:51, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
 </code></pre></div>
 
         </div>
@@ -1969,9 +1970,9 @@ orders.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-2-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2026-05-21 22:17:20, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
-<span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2026-05-21 22:17:20, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
-<span class="go">(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2026-05-21 22:17:20, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))</span>
+            <div class="highlight"><pre><span></span><code><span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 1, _orderDate = 2026-06-06 14:47:01, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
+<span class="go">(User {_userEmail = &quot;james@example.com&quot;, _userFirstName = &quot;James&quot;, _userLastName = &quot;Smith&quot;, _userPassword = &quot;b4cc344d25a2efe540adbf2678e2304c&quot;},Just (Order {_orderId = 3, _orderDate = 2026-06-06 14:47:01, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}))</span>
+<span class="go">(User {_userEmail = &quot;betty@example.com&quot;, _userFirstName = &quot;Betty&quot;, _userLastName = &quot;Jones&quot;, _userPassword = &quot;82b054bd83ffad9b6cf8bdb98ce3cc2f&quot;},Just (Order {_orderId = 2, _orderDate = 2026-06-06 14:47:01, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)}))</span>
 <span class="go">(User {_userEmail = &quot;sam@example.com&quot;, _userFirstName = &quot;Sam&quot;, _userLastName = &quot;Taylor&quot;, _userPassword = &quot;332532dcfaa1cbf61e2a266bd723612c&quot;},Nothing)</span>
 </code></pre></div>
 
@@ -2181,9 +2182,9 @@ order.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-5-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">(Order {_orderId = 1, _orderDate = 2026-05-21 22:17:38, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)</span>
-<span class="go">(Order {_orderId = 2, _orderDate = 2026-05-21 22:17:38, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)</span>
-<span class="go">(Order {_orderId = 3, _orderDate = 2026-05-21 22:17:38, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)</span>
+            <div class="highlight"><pre><span></span><code><span class="go">(Order {_orderId = 1, _orderDate = 2026-06-06 14:47:20, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 24500)</span>
+<span class="go">(Order {_orderId = 2, _orderDate = 2026-06-06 14:47:20, _orderForUser = UserId &quot;betty@example.com&quot;, _orderShipToAddress = AddressId 2, _orderShippingInfo = ShippingInfoId (Just 1)},Just 16500)</span>
+<span class="go">(Order {_orderId = 3, _orderDate = 2026-06-06 14:47:20, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing},Just 2500)</span>
 </code></pre></div>
 
         </div>
@@ -2472,8 +2473,8 @@ nullable primary keys to optionally include information.</p>
         </div>
     
         <div role="tabpanel" class="tab-pane " id="tab-8-Output">
-            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-05-21 22:17:57, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
-<span class="go">Order {_orderId = 3, _orderDate = 2026-05-21 22:17:57, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+            <div class="highlight"><pre><span></span><code><span class="go">Order {_orderId = 1, _orderDate = 2026-06-06 14:47:38, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
+<span class="go">Order {_orderId = 3, _orderDate = 2026-06-06 14:47:38, _orderForUser = UserId &quot;james@example.com&quot;, _orderShipToAddress = AddressId 1, _orderShippingInfo = ShippingInfoId Nothing}</span>
 </code></pre></div>
 
         </div>
@@ -2772,11 +2773,12 @@ generation of a sub <code>SELECT</code>.</p>
                     </p>
 <h1 id="conclusion">Conclusion</h1>
 <p>This tutorial completes our sequence on creating a shopping cart. Throughout the
-tutorials, we saw how to create tables using regular Haskell data types, how to
-link those tables up using relations, how to query tables using both the monadic
-interface and the list-like functions on queries. We saw ha few examples of
-using beam to generate advanced queries. More information on the Beam API is
-available on <a href="https://hackage.haskell.org/package/beam-core">hackage</a>. Happy beaming!</p>
+tutorials, we saw how to represent tables using regular Haskell data types, how
+to link those tables up using relations, how to query tables using both the
+monadic interface and the list-like functions on queries. We saw ha few examples
+of using beam to generate advanced queries. More information on the Beam API is
+available on <a href="https://hackage.haskell.org/package/beam-core">hackage</a>. Happy
+beaming!</p>
 <p>Beam is a work in progress. Please submit bugs and patches
 on <a href="https://github.com/haskell-beam/beam">GitHub</a>.</p>
 
