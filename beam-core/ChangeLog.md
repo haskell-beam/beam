@@ -5,6 +5,10 @@
 * Fixed an issue where using `selectWith` and no common-table expressions would lead to
   invalid SQL at runtime.
 
+## Documentation
+
+* Fixed a link to the documentation on extending beam using custom SQL in `Database.Beam.Query.CustomSQL`.
+
 # 0.11.1.0
 
 ## New features
