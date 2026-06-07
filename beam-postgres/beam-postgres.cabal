@@ -67,7 +67,7 @@ library
   default-language:   Haskell2010
   default-extensions: ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses, RankNTypes, FlexibleInstances,
                       DeriveDataTypeable, DeriveGeneric, StandaloneDeriving, TypeFamilies, GADTs, OverloadedStrings,
-                      CPP, TypeApplications, FlexibleContexts
+                      TypeApplications, FlexibleContexts
   ghc-options:        -Wall
                       -Widentities
                       -Wincomplete-uni-patterns
@@ -97,7 +97,7 @@ test-suite beam-postgres-tests
     beam-migrate,
     beam-postgres,
     bytestring,
-    hedgehog,
+    hedgehog >= 1.0,
     postgresql-simple,
     tasty-hunit,
     tasty,

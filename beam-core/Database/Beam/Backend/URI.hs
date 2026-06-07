@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 -- | Convenience methods for constructing backend-agnostic applications
 module Database.Beam.Backend.URI where
 

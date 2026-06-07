@@ -9,7 +9,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE CPP #-}
 
 -- | Postgres-specific types, functions, and operators
 module Database.Beam.Postgres.PgSpecific

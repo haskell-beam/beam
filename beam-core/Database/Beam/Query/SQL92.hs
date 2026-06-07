@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-unused-binds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
 
 module Database.Beam.Query.SQL92
     ( buildSql92Query' ) where

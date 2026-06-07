@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE CPP #-}
 
 -- | Definitions of interest to those implement a new beam backend.
 --

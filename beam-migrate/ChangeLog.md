@@ -1,3 +1,11 @@
+# 0.6.1.0
+
+## Updated dependencies
+
+* Tightened bounds on `haskell-src-exts`, with a minimum version of 1.23.
+* Tightened bounds on `hashable`, with a minimum version of 1.4.
+* Tightened bounds on `aeson`, with a minimum of version 2.0.
+
 # 0.6.0.0
 
 ## Interface changes

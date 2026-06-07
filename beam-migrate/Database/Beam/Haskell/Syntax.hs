@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE CPP #-}
 
 -- | Instances that allow us to use Haskell as a backend syntax. This allows us
 -- to use migrations defined a la 'Database.Beam.Migrate.SQL' to generate a beam
@@ -209,33 +208,21 @@ entityDbFieldName entity = "_" ++ getHsEntityName (hsEntityName entity)
 
 derivingDecl :: [Hs.InstRule ()] -> Hs.Deriving ()
 derivingDecl =
-#if MIN_VERSION_haskell_src_exts(1,20,0)
   Hs.Deriving () Nothing
-#else
-  Hs.Deriving ()
-#endif
 
 dataDecl :: Hs.DeclHead ()
          -> [Hs.QualConDecl ()]
          -> Maybe (Hs.Deriving ())
          -> Hs.Decl ()
 dataDecl declHead cons deriving_ =
-#if MIN_VERSION_haskell_src_exts(1,20,0)
   Hs.DataDecl () (Hs.DataType ()) Nothing declHead cons (maybeToList deriving_)
-#else
-  Hs.DataDecl () (Hs.DataType ()) Nothing declHead cons deriving_
-#endif
 
 insDataDecl :: Hs.Type ()
             -> [Hs.QualConDecl ()]
             -> Maybe (Hs.Deriving ())
             -> Hs.InstDecl ()
 insDataDecl declHead cons deriving_ =
-#if MIN_VERSION_haskell_src_exts(1,20,0)
    Hs.InsData () (Hs.DataType ()) declHead cons (maybeToList deriving_)
-#else
-   Hs.InsData () (Hs.DataType ()) declHead cons deriving_
-#endif
 
 databaseTypeDecl :: [ HsEntity ] -> Hs.Decl ()
 databaseTypeDecl entities =
@@ -950,11 +937,7 @@ hsInstance classNm params decls =
 
 hsDerivingInstance :: T.Text -> [ Hs.Type () ] -> Hs.Decl ()
 hsDerivingInstance classNm params =
-#if MIN_VERSION_haskell_src_exts(1,20,0)
   Hs.DerivDecl () Nothing Nothing (Hs.IRule () Nothing Nothing instHead)
-#else
-  Hs.DerivDecl () Nothing (Hs.IRule () Nothing Nothing instHead)
-#endif
   where
     instHead = foldl (Hs.IHApp ()) (Hs.IHCon () (Hs.UnQual () (Hs.Ident () (T.unpack classNm)))) params
 
@@ -974,11 +957,7 @@ inst = Hs.IRule () Nothing Nothing . Hs.IHCon () . Hs.UnQual () . Hs.Ident ()
 beamMigrateSqlBackend :: HsBackendConstraint
 beamMigrateSqlBackend =
   HsBackendConstraint $ \beTy ->
-#if MIN_VERSION_haskell_src_exts(1, 22, 0)
   Hs.TypeA () (Hs.TyApp () (Hs.TyCon () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend"))) beTy)
-#else
-  Hs.ClassA () (Hs.UnQual () (Hs.Ident () "BeamMigrateSqlBackend")) [ beTy ]
-#endif
 
 
 
@@ -991,12 +970,9 @@ instance Hashable (Hs.IPName ())
 instance Hashable (Hs.Asst ())
 instance Hashable (Hs.Literal ())
 instance Hashable (Hs.Name ())
-instance Hashable (Hs.Type ())
 instance Hashable (Hs.QOp ())
 instance Hashable (Hs.TyVarBind ())
-#if !MIN_VERSION_haskell_src_exts(1, 21, 0)
 instance Hashable (Hs.Kind ())
-#endif
 instance Hashable (Hs.Context ())
 instance Hashable (Hs.SpecialCon ())
 instance Hashable (Hs.Pat ())
@@ -1053,11 +1029,5 @@ instance Hashable (Hs.BangType ())
 instance Hashable (Hs.ImportSpec ())
 instance Hashable (Hs.Namespace ())
 instance Hashable (Hs.CName ())
-#if MIN_VERSION_haskell_src_exts(1,20,0)
 instance Hashable (Hs.DerivStrategy ())
 instance Hashable (Hs.MaybePromotedName ())
-#endif
-#if !MIN_VERSION_hashable(1, 3, 4)
-instance Hashable a => Hashable (S.Set a) where
-  hashWithSalt s a = hashWithSalt s (S.toList a)
-#endif

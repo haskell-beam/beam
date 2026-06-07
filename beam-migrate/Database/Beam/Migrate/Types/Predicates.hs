@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 -- | Common 'DatabasePredicate's used for defining schemas
 module Database.Beam.Migrate.Types.Predicates where
 

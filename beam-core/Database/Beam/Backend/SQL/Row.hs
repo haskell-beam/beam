@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PolyKinds #-}
@@ -86,9 +85,7 @@ instance Alternative (FromBackendRowM be) where
     FromBackendRowM (liftF (Alt a b id))
 
 parseOneField :: (BackendFromField be a, Typeable a) => FromBackendRowM be a
-parseOneField = do
-  x <- FromBackendRowM (liftF (ParseOneField id))
-  pure x
+parseOneField = FromBackendRowM (liftF (ParseOneField id))
 
 peekField :: (Typeable a, BackendFromField be a) => FromBackendRowM be (Maybe a)
 peekField = fmap Just (FromBackendRowM (liftF (ParseOneField id))) <|> pure Nothing

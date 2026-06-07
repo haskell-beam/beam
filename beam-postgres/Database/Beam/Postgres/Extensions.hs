@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
 
 -- | Postgres extensions are run-time loadable plugins that can extend Postgres
 -- functionality. Extensions are part of the database schema.

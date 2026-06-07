@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE CPP #-}
 
 -- | DDL syntax instances for 'SqlSyntaxBuilder'
 module Database.Beam.Migrate.SQL.Builder where

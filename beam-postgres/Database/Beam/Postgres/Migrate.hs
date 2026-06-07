@@ -60,7 +60,7 @@ import           Control.Arrow
 import           Control.Exception.Lifted (mask, onException)
 import           Control.Monad
 
-import           Data.Aeson hiding (json)
+import           Data.Aeson
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL

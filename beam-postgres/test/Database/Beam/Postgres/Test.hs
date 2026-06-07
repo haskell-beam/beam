@@ -1,9 +1,4 @@
-{-# LANGUAGE CPP #-}
 module Database.Beam.Postgres.Test where
-
-#if MIN_VERSION_base(4,12,0)
-import           Prelude hiding (fail)
-#endif
 
 import qualified Database.PostgreSQL.Simple as Pg
 
@@ -13,18 +8,6 @@ import           Control.Monad (void)
 
 import           Data.ByteString (ByteString)
 import           Data.String
-
-#if MIN_VERSION_base(4,12,0)
-#if !MIN_VERSION_hedgehog(1,0,0)
-import           Control.Monad.Fail (MonadFail(..))
-import qualified Hedgehog
--- TODO orphan instances are bad
--- Would be easier to say 'build-depends: hedgehog >= 1.0',
--- but it's difficult to propagate to older Stackage snapshots
-instance Monad m => MonadFail (Hedgehog.PropertyT m) where
-    fail _ = Hedgehog.failure
-#endif
-#endif
 
 withTestPostgres :: String -> IO ByteString -> (Pg.Connection -> IO a) -> IO a
 withTestPostgres dbName getConnStr action = do
