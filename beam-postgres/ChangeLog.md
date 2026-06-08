@@ -1,5 +1,11 @@
 # 0.6.2.0
 
+## Added features
+
+* Added instances for `BeamSqlBackendIsString Postgres (CI String)` and
+  `BeamSqlBackendIsString Postgres (CI Text)`, allowing the use of `toTsVector`
+  over colums of type `citext` (#818)
+
 ## Bug fixes
 
 * Fixed an issue where using `pgSelectWith` with no common-table expressions

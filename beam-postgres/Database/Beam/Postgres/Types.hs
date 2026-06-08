@@ -185,7 +185,10 @@ type instance BeamSqlBackendCopyFromStreamSyntax Postgres = PgCopyFromStreamSynt
 instance BeamSqlBackendIsString Postgres String
 instance BeamSqlBackendIsString Postgres Text
 
+-- | @since 0.6.2.0
 instance BeamSqlBackendIsString Postgres (CI String)
+
+-- | @since 0.6.2.0
 instance BeamSqlBackendIsString Postgres (CI Text)
 
 instance HasQBuilder Postgres where
