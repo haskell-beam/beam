@@ -89,8 +89,8 @@ the [compatibility matrix](about/compatibility.md).
 ## How to Contribute
 
 We always welcome contributions, especially to cover more database features or
-to add support for a new backend. Help is available on the
-[`beam-discussion` Google Group](https://groups.google.com/forum/#!forum/beam-discussion).
+to add support for a new backend. You can ask for help via [GitHub issues](https://github.com/haskell-beam/beam/issues),
+or via the [`beam-discussion` Google Group](https://groups.google.com/forum/#!forum/beam-discussion).
 The following is a quick step-by-step guide of contributing a new feature:
 
 1. Fork the github repository at `https://github.com/haskell-beam/beam`
