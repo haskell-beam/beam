@@ -5,6 +5,8 @@
 * Added instances for `BeamSqlBackendIsString Postgres (CI String)` and
   `BeamSqlBackendIsString Postgres (CI Text)`, allowing the use of `toTsVector`
   over colums of type `citext` (#818)
+* Exposed the functionality to implement user-defined extensions via
+  `Database.Beam.Postgres.Extensions` (#819)
 
 ## Bug fixes
 
@@ -30,7 +32,7 @@
   role attribute and is the appropriate choice when the client and
   server are on different hosts — see
   `Database.Beam.Postgres.Extensions.Copy.Stream`.
-  
+
 ## Bug fixes
 
 * Fixed an issue where a window function applied over the result of `nub_` (or

@@ -9,9 +9,29 @@
 -- the extension in a particular backend. @beam-postgres@ provides predicates
 -- and checks for @beam-migrate@ which allow extensions to be included as
 -- regular parts of beam migrations.
-module Database.Beam.Postgres.Extensions where
+module Database.Beam.Postgres.Extensions (
+  -- * Handling extensions
+  PgExtensionEntity,
+  getPgExtension,
+
+  -- * Defining extensions
+  IsPgExtension(..),
+  -- ** Helpers
+  PgExpr,
+  LiftPg,
+  funcE,
+
+  -- * Migrations
+  PgHasExtension(..),
+  pgCreateExtension,
+  pgDropExtension,
+  pgExtensionActionProvider,
+) where
 
 import           Database.Beam
+import           Database.Beam.Backend.SQL ( IsSql92ExpressionSyntax(..), IsSql92FieldNameSyntax(..),
+                                             IsSql99ExpressionSyntax, IsSql99FunctionExpressionSyntax(..)
+                                           )
 import           Database.Beam.Schema.Tables
 
 import           Database.Beam.Postgres.Types
@@ -121,6 +141,21 @@ getPgExtension :: DatabaseEntity Postgres db (PgExtensionEntity extension)
                -> extension
 getPgExtension (DatabaseEntity (PgDatabaseExtension _ ext)) = ext
 
+-- *** Helpers to write postgres user-defined extensions
+
+-- | @since 0.6.2.0
+type PgExpr ctxt s = QGenExpr ctxt Postgres s
+
+-- | @since 0.6.2.0
+type family LiftPg ctxt s fn where
+  LiftPg ctxt s (Maybe a -> b) = Maybe (PgExpr ctxt s a) -> LiftPg ctxt s b
+  LiftPg ctxt s (a -> b) = PgExpr ctxt s a -> LiftPg ctxt s b
+  LiftPg ctxt s a = PgExpr ctxt s a
+
+-- | @since 0.6.2.0
+funcE :: IsSql99ExpressionSyntax expr => Text -> [expr] -> expr
+funcE nm = functionCallE (fieldE (unqualifiedField nm))
+
 -- *** Migrations support for extensions
 
 -- | 'Migration' representing the Postgres @CREATE EXTENSION@ command. Because
@@ -191,3 +226,4 @@ pgDropExtensionProvider =
      pure (PotentialAction (HS.fromList [p extP]) mempty
                            (pure (MigrationCommand cmd MigrationKeepsData))
                            ("Unload the postgres extension " <> ext) 1)
+
