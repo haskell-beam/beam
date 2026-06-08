@@ -9,8 +9,7 @@ module Database.Beam.Postgres.PgCrypto
 import Database.Beam
 import Database.Beam.Backend.SQL
 
-import Database.Beam.Postgres.Extensions
-import Database.Beam.Postgres.Extensions.Internal
+import Database.Beam.Postgres.Extensions( LiftPg, PgExpr, IsPgExtension(..), funcE )
 
 import Data.Int
 import Data.Text (Text)

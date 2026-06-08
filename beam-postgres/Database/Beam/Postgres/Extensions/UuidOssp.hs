@@ -10,8 +10,7 @@ import           Data.Text (Text)
 import           Data.UUID.Types (UUID)
 
 import           Database.Beam
-import           Database.Beam.Postgres.Extensions
-import           Database.Beam.Postgres.Extensions.Internal
+import           Database.Beam.Postgres.Extensions ( LiftPg, IsPgExtension(..), funcE )
 
 -- | Data type representing definitions contained in the @uuid-ossp@ extension
 data UuidOssp = UuidOssp

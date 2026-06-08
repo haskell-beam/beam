@@ -23,16 +23,15 @@ library
                       Database.Beam.Postgres.Full
 
                       Database.Beam.Postgres.PgCrypto
+                      Database.Beam.Postgres.Extensions
                       Database.Beam.Postgres.Extensions.UuidOssp
 
                       Database.Beam.Postgres.TempTable
 
   other-modules:      Database.Beam.Postgres.Connection
                       Database.Beam.Postgres.Debug
-                      Database.Beam.Postgres.Extensions
                       Database.Beam.Postgres.Extensions.Copy.File
                       Database.Beam.Postgres.Extensions.Copy.Stream
-                      Database.Beam.Postgres.Extensions.Internal
                       Database.Beam.Postgres.PgSpecific
                       Database.Beam.Postgres.Types
 
