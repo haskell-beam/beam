@@ -33,6 +33,14 @@ nav:
         - 'UPDATE': 'user-guide/manipulation/update.md'
         - 'DELETE': 'user-guide/manipulation/delete.md'
         - 'COPY':   'user-guide/manipulation/copy.md'
+  - Cookbook:
+      - 'Introduction': 'cookbook/index.md'
+      - 'Selecting rows': 'cookbook/selecting-rows.md'
+      - 'Working with NULL': 'cookbook/null-handling.md'
+      - 'Joins': 'cookbook/joins.md'
+      - 'Aggregations': 'cookbook/aggregations.md'
+      - 'Subqueries': 'cookbook/subqueries.md'
+      - 'Window functions': 'cookbook/window-functions.md'
   - Schema management:
       - 'The Migrations Framework': 'schema-guide/migrations.md'
   - Backends:
