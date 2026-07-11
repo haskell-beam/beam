@@ -1,12 +1,12 @@
-# 0.6.2.0
+# 0.7.0.0
+
+## Interface changes
+
+* Restricted `pgSelectWith` to `CteNestedAllowed` blocks, preventing
+  PostgreSQL data-modifying CTEs from being embedded in subqueries.
 
 ## Added features
 
-* Added instances for `BeamSqlBackendIsString Postgres (CI String)` and
-  `BeamSqlBackendIsString Postgres (CI Text)`, allowing the use of `toTsVector`
-  over colums of type `citext` (#818)
-* Exposed the functionality to implement user-defined extensions via
-  `Database.Beam.Postgres.Extensions` (#819)
 * Added `cteInsertReturning`, `cteUpdateReturning`, and `cteDeleteReturning`
   for using PostgreSQL data-modifying statements in top-level common table
   expressions. Their placement index prevents them from being passed to
@@ -16,6 +16,21 @@
   top-level PostgreSQL `WITH` block with the corresponding data-modifying
   statement. These consumers accept both CTE placement indices and preserve
   recursive `SELECT` CTEs.
+
+## Bug fixes
+
+* Reject zero-column data-modifying CTE projections before rendering an empty
+  `RETURNING` list.
+
+# 0.6.2.0
+
+## Added features
+
+* Added instances for `BeamSqlBackendIsString Postgres (CI String)` and
+  `BeamSqlBackendIsString Postgres (CI Text)`, allowing the use of `toTsVector`
+  over colums of type `citext` (#818)
+* Exposed the functionality to implement user-defined extensions via
+  `Database.Beam.Postgres.Extensions` (#819)
 
 ## Bug fixes
 

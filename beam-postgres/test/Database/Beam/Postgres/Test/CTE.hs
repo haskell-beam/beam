@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -8,21 +9,24 @@
 -- checking.
 module Database.Beam.Postgres.Test.CTE (unitTests, integrationTests) where
 
-import Control.Exception (TypeError, evaluate, try)
+import Control.Exception (ErrorCall, TypeError, evaluate, try)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.ByteString (ByteString)
 import Data.Int (Int32)
+import Data.Kind (Type)
 import Data.List (isInfixOf, isPrefixOf)
 import Data.Text (Text)
 
 import Database.Beam
 import Database.Beam.Postgres
 import qualified Database.Beam.Postgres.Full as Pg
+import qualified Database.Beam.Query.CTE as CTE
 import Database.Beam.Postgres.Syntax
   ( PgDeleteSyntax(..)
   , PgInsertSyntax(..)
   , PgSelectSyntax(..)
   , PgUpdateSyntax(..)
+  , PostgresInaccessible
   , pgRenderSyntaxScript
   )
 import Database.PostgreSQL.Simple (execute_)
@@ -41,6 +45,12 @@ data CteRowT f = CteRow
 deriving instance Show (CteRowT Identity)
 deriving instance Eq (CteRowT Identity)
 
+-- A legal Haskell projection shape with no fields. PostgreSQL has no
+-- corresponding zero-column SELECT or RETURNING relation, so the CTE builders
+-- must reject it before rendering SQL.
+data EmptyCteT (f :: Type -> Type) = EmptyCte
+  deriving (Generic, Beamable)
+
 instance Table CteRowT where
   data PrimaryKey CteRowT f = CteRowKey (C f Int32)
     deriving (Generic, Beamable)
@@ -57,6 +67,7 @@ unitTests :: TestTree
 unitTests = testGroup "Common table expression tests"
   [ renderingTests
   , typeSafetyTests
+  , projectionValidationTests
   ]
 
 integrationTests :: IO ByteString -> TestTree
@@ -101,8 +112,16 @@ typeSafetyTests = testGroup "Common table expression type-safety tests"
       assertPlacementTypeError Negative.invalidCoercedPlacement
   , testCase "rejects a recursively self-referencing INSERT CTE" $
       assertDeferredTypeErrorContaining
-        ["MonadFix", "CteTopLevelOnly"]
+        ["CteTopLevelOnly", "CteNestedAllowed"]
         Negative.invalidRecursiveInsert
+  ]
+
+projectionValidationTests :: TestTree
+projectionValidationTests = testGroup "Common table expression projection validation tests"
+  [ testCase "rejects a zero-column SELECT CTE" $
+      assertEmptyProjectionError emptySelectProjection
+  , testCase "rejects a zero-column data-modifying CTE" $
+      assertEmptyProjectionError emptyDeleteProjection
   ]
 
 assertPlacementTypeError :: SqlSelect Postgres a -> Assertion
@@ -124,6 +143,16 @@ assertDeferredTypeErrorContaining expectedFragments sql = do
   where
     assertFragment message fragment =
       assertBool ("mentions " ++ fragment) (fragment `isInfixOf` message)
+
+assertEmptyProjectionError :: SqlSelect Postgres a -> Assertion
+assertEmptyProjectionError sql = do
+  result <- try (evaluate (BL.length (renderSelectBytes sql)))
+  case result of
+    Left (err :: ErrorCall) ->
+      assertBool "explains the non-empty projection requirement"
+        ("at least one column" `isInfixOf` show err)
+    Right _ ->
+      assertFailure "expected the zero-column CTE projection to be rejected"
 
 -- A single top-level WITH block may freely mix SELECT and data-modifying CTE
 -- bodies. Besides checking the individual keywords, this guards against
@@ -356,6 +385,23 @@ emptyDataModifyingCteSelect = selectWith $ do
     finalQuery :: Q Postgres CteDb QBaseScope (QExpr Postgres QBaseScope Int32)
     finalQuery = pure (val_ 1)
 
+-- Both expressions below are valid Beam projection shapes, but contain no
+-- fields from which SQL columns could be built. They exercise the shared
+-- validation for SELECT and data-modifying CTE bodies respectively.
+emptySelectProjection :: SqlSelect Postgres (EmptyCteT Identity)
+emptySelectProjection = selectWith $ do
+  rows <- selecting
+    (pure (EmptyCte :: EmptyCteT (QExpr Postgres CTE.QAnyScope)))
+  pure (reuse rows)
+
+emptyDeleteProjection :: SqlSelect Postgres (EmptyCteT Identity)
+emptyDeleteProjection = selectWith $ do
+  rows <- Pg.cteDeleteReturning
+    (dbCteRows cteDb)
+    (const (val_ False))
+    (const (EmptyCte :: EmptyCteT (QExpr Postgres PostgresInaccessible)))
+  pure (reuse rows)
+
 -- Copy one row selected by the CTE into a new row. insertFrom is what exposes
 -- the reusable query to the terminal INSERT source.
 insertWithStatement :: SqlInsert Postgres CteRowT
@@ -403,20 +449,18 @@ deleteWithStatement = Pg.pgDeleteWith $ do
 -- Recursion is completed while the block is still nested-safe. The terminal
 -- INSERT then consumes the recursive result at top level.
 recursiveInsertWithStatement :: SqlInsert Postgres CteRowT
-recursiveInsertWithStatement = Pg.pgInsertWith
-  (mdo
-    ids <- selecting $
-      pure (as_ @Int32 (val_ 1)) `unionAll_` do
-        previousId <- reuse ids
-        guard_ (previousId <. val_ 2)
-        pure (previousId + 1)
-    pure $ Pg.insert
-      (dbCteRows cteDb)
-      (insertFrom $ do
-        rowId <- reuse ids
-        pure (CteRow rowId (val_ "recursive")))
-      Pg.onConflictDefault
-  :: With Postgres CteDb 'CteNestedAllowed (SqlInsert Postgres CteRowT))
+recursiveInsertWithStatement = Pg.pgInsertWith $ mdo
+  ids <- selecting $
+    pure (as_ @Int32 (val_ 1)) `unionAll_` do
+      previousId <- reuse ids
+      guard_ (previousId <. val_ 2)
+      pure (previousId + 1)
+  pure $ Pg.insert
+    (dbCteRows cteDb)
+    (insertFrom $ do
+      rowId <- reuse ids
+      pure (CteRow rowId (val_ "recursive")))
+    Pg.onConflictDefault
 
 -- Adding a modifying CTE fixes the block to CteTopLevelOnly. pgDeleteWith is
 -- a top-level consumer, so this remains well-typed.

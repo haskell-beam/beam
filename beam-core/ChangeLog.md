@@ -1,4 +1,4 @@
-# 0.11.2.0
+# 0.12.0.0
 
 ## Interface changes
 
@@ -12,6 +12,15 @@
 
 * Added backend capability and syntax classes for data-modifying common table
   expressions.
+
+## Bug fixes
+
+* Reject zero-column common table expression projections before they can
+  produce malformed `SELECT` or `RETURNING` SQL.
+* Preserve placement inference for existing recursive `selectWith` call sites
+  while continuing to reject recursive data-modifying CTEs.
+
+# 0.11.2.0
 
 ## Bug fixes
 

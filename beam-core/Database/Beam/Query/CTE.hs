@@ -103,8 +103,14 @@ type role With nominal nominal nominal nominal
 -- Restrict the recursive knot to SELECT-only, nested-safe construction. A
 -- data-modifying operation fixes the placement to CteTopLevelOnly and therefore
 -- cannot recursively depend on its own RETURNING rows.
-instance IsSql99RecursiveCommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be)
-    => MonadFix (With be db 'CteNestedAllowed) where
+--
+-- Keep @placement@ variable in the instance head and refine it with an equality
+-- constraint. This lets recursive @selectWith@ call sites infer
+-- 'CteNestedAllowed' even though a top-level consumer does not otherwise expose
+-- the placement index in its result type.
+instance ( placement ~ 'CteNestedAllowed
+         , IsSql99RecursiveCommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be) )
+    => MonadFix (With be db placement) where
     mfix f = With (tell (Recursive, mempty) >> mfix (runWith . f))
 
 -- | Promote a nested-safe CTE block for composition with top-level-only CTEs.
@@ -157,6 +163,9 @@ reusableForCTE tblNm =
 -- >   row <- reuse reusableRows
 -- >   guard_ (isWanted row)
 -- >   pure row
+--
+-- The query must project at least one column. Empty projections cannot form a
+-- reusable SQL relation and are rejected while the @WITH@ block is built.
 selecting :: forall res be db placement
            . ( BeamSql99CommonTableExpressionBackend be, HasQBuilder be
              , Projectible be res
@@ -170,7 +179,9 @@ selecting q =
     let tblNm = fromString ("cte" ++ show cteId)
 
         (_ :: res, fieldNames) = mkFieldNames @be (qualifiedField tblNm)
-    tell (Nonrecursive, [ cteSubquerySyntax tblNm fieldNames (buildSqlQuery (tblNm <> "_") q) ])
+    case fieldNames of
+      [] -> error "Database.Beam.Query.CTE.selecting: a CTE must project at least one column"
+      _ -> tell (Nonrecursive, [ cteSubquerySyntax tblNm fieldNames (buildSqlQuery (tblNm <> "_") q) ])
 
     pure (reusableForCTE tblNm)
 
@@ -195,6 +206,10 @@ selecting q =
 -- @
 -- changed(res0) AS (DELETE FROM items WHERE expired RETURNING id)
 -- @
+--
+-- The statement must return at least one column. A zero-column result cannot
+-- be exposed as a reusable SQL relation and is rejected while the @WITH@ block
+-- is built.
 dataModifyingCte :: forall res be db
                   . ( BeamSql99DataModifyingCommonTableExpressionBackend be
                   , Projectible be res
@@ -209,7 +224,9 @@ dataModifyingCte body =
     let tblNm = fromString ("cte" ++ show cteId)
 
         (_ :: res, fieldNames) = mkFieldNames @be (qualifiedField tblNm)
-    tell (Nonrecursive, [ cteDataModifyingSyntax tblNm fieldNames body ])
+    case fieldNames of
+      [] -> error "Database.Beam.Query.CTE.dataModifyingCte: a CTE must return at least one column"
+      _ -> tell (Nonrecursive, [ cteDataModifyingSyntax tblNm fieldNames body ])
 
     pure (reusableForCTE tblNm)
 
