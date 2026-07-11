@@ -14,7 +14,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.ByteString (ByteString)
 import Data.Int (Int32)
 import Data.Kind (Type)
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf, sortOn)
 import Data.Text (Text)
 
 import Database.Beam
@@ -31,6 +31,9 @@ import Database.Beam.Postgres.Syntax
   )
 import Database.PostgreSQL.Simple (execute_)
 
+import qualified Hedgehog
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -74,6 +77,10 @@ integrationTests :: IO ByteString -> TestTree
 integrationTests getConn = testGroup "Common table expression integration tests"
   [ testMixedCteBodies getConn
   , testWithDmlConsumers getConn
+  , testCteParameterOrdering getConn
+  , testDataModifyingCteModel getConn
+  , testWithDmlConsumerModel getConn
+  , testRecursiveCteModel getConn
   ]
 
 renderingTests :: TestTree
@@ -290,6 +297,159 @@ testWithDmlConsumers getConn = testCase "WITH can terminate in INSERT, UPDATE, o
       ]
       remaining
 
+-- PostgreSQL receives Beam values separately from the rendered placeholders.
+-- Generate distinct values at each syntactic level so any disagreement between
+-- syntax construction order and parameter collection order becomes observable
+-- in the returned rows, rather than merely producing valid-looking SQL.
+testCteParameterOrdering :: IO ByteString -> TestTree
+testCteParameterOrdering getConn = testCase "preserves parameter order across CTE bodies and the terminal query" $
+  withTestPostgres "cte_parameter_ordering_property" getConn $ \conn -> do
+    passes <- Hedgehog.check . Hedgehog.property $ do
+      baseId <- Hedgehog.forAll (Gen.int (Range.linear (-100000) 100000))
+      firstOffset <- Hedgehog.forAll (Gen.int (Range.linear 1 1000))
+      secondOffset <- Hedgehog.forAll (Gen.int (Range.linear 1 1000))
+      payload <- Hedgehog.forAll (Gen.text (Range.linear 0 24) Gen.alphaNum)
+
+      let first = CteRow (fromIntegral baseId) ("first:" <> payload)
+          second = CteRow
+            (fromIntegral (baseId + firstOffset))
+            ("second:" <> payload)
+          terminal = CteRow
+            (fromIntegral (baseId + firstOffset + secondOffset))
+            ("terminal:" <> payload)
+
+      actual <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningList (parameterOrderingSelect first second terminal)
+
+      actual Hedgehog.=== [(first, second, terminal)]
+
+    assertBool "CTE parameter-ordering property failed" passes
+
+-- Model a statement containing all three kinds of data-modifying CTE. The
+-- operations use disjoint keys, avoiding PostgreSQL's deliberately unspecified
+-- ordering when sibling modifying CTEs affect the same row. Both RETURNING
+-- values and durable table state are compared with the pure expected result.
+testDataModifyingCteModel :: IO ByteString -> TestTree
+testDataModifyingCteModel getConn = testCase "data-modifying CTEs agree with a pure table model" $
+  withTestPostgres "data_modifying_cte_model_property" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+
+    passes <- Hedgehog.check . Hedgehog.property $ do
+      baseId <- Hedgehog.forAll (Gen.int (Range.linear (-100000) 96000))
+      payload <- Hedgehog.forAll (Gen.text (Range.linear 0 24) Gen.alphaNum)
+
+      let inserted = CteRow (fromIntegral baseId) ("inserted:" <> payload)
+          beforeUpdate = CteRow (fromIntegral (baseId + 1)) ("before-update:" <> payload)
+          updated = CteRow (cteId beforeUpdate) ("updated:" <> payload)
+          deleted = CteRow (fromIntegral (baseId + 2)) ("deleted:" <> payload)
+          untouched = CteRow (fromIntegral (baseId + 3)) ("untouched:" <> payload)
+          initial = [beforeUpdate, deleted, untouched]
+          expectedFinal = [inserted, updated, untouched]
+
+      Hedgehog.evalIO $ do
+        execute_ conn "TRUNCATE TABLE cte_rows"
+        runBeamPostgres conn $ runInsert $
+          insert (dbCteRows cteDb) (insertValues initial)
+
+      returned <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningList $
+          dataModifyingCteModelSelect inserted (cteId updated) (cteValue updated) (cteId deleted)
+
+      finalRows <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningList $ select $
+          orderBy_ (asc_ . cteId) $ all_ (dbCteRows cteDb)
+
+      returned Hedgehog.=== [(inserted, updated, deleted)]
+      finalRows Hedgehog.=== expectedFinal
+
+    assertBool "data-modifying CTE model property failed" passes
+
+-- Exercise each top-level WITH consumer with independently generated values.
+-- RETURNING results prove that the existing PostgreSQL execution instances can
+-- still consume the Sql* wrappers, while the final table comparison checks the
+-- combined INSERT, UPDATE, and DELETE behavior against a pure model.
+testWithDmlConsumerModel :: IO ByteString -> TestTree
+testWithDmlConsumerModel getConn = testCase "WITH DML consumers agree with a pure table model" $
+  withTestPostgres "with_dml_consumer_model_property" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+
+    passes <- Hedgehog.check . Hedgehog.property $ do
+      baseId <- Hedgehog.forAll (Gen.int (Range.linear (-100000) 95000))
+      payload <- Hedgehog.forAll (Gen.text (Range.linear 0 24) Gen.alphaNum)
+
+      let source = CteRow (fromIntegral baseId) ("source:" <> payload)
+          inserted = CteRow (fromIntegral (baseId + 1)) ("inserted:" <> payload)
+          beforeUpdate = CteRow (fromIntegral (baseId + 2)) ("before-update:" <> payload)
+          updated = CteRow (cteId beforeUpdate) ("updated:" <> payload)
+          deleted = CteRow (fromIntegral (baseId + 3)) ("deleted:" <> payload)
+          untouched = CteRow (fromIntegral (baseId + 4)) ("untouched:" <> payload)
+          initial = [source, beforeUpdate, deleted, untouched]
+          expectedFinal = [source, inserted, updated, untouched]
+
+      Hedgehog.evalIO $ do
+        execute_ conn "TRUNCATE TABLE cte_rows"
+        runBeamPostgres conn $ runInsert $
+          insert (dbCteRows cteDb) (insertValues initial)
+
+      (insertedRows, updatedRows, deletedRows) <- Hedgehog.evalIO $
+        runBeamPostgres conn $ do
+          insertedRows <- Pg.runPgInsertReturningList $ Pg.returning
+            (modelInsertWithStatement (cteId source) inserted) id
+          updatedRows <- Pg.runPgUpdateReturningList $ Pg.returning
+            (modelUpdateWithStatement (cteId updated) (cteValue updated)) id
+          deletedRows <- Pg.runPgDeleteReturningList $ Pg.returning
+            (modelDeleteWithStatement (cteId deleted)) id
+          pure (insertedRows, updatedRows, deletedRows)
+
+      finalRows <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningList $ select $
+          orderBy_ (asc_ . cteId) $ all_ (dbCteRows cteDb)
+
+      insertedRows Hedgehog.=== [inserted]
+      updatedRows Hedgehog.=== [updated]
+      deletedRows Hedgehog.=== [deleted]
+      finalRows Hedgehog.=== expectedFinal
+
+    assertBool "WITH DML consumer model property failed" passes
+
+-- Generate a bounded recursive sequence, use it to drive a DELETE CTE, and
+-- compare both the returned rows and remaining table against the corresponding
+-- Haskell lists. This executes the recursive SELECT, its toTopLevel promotion,
+-- and the following modifying CTE rather than checking only rendered keywords.
+testRecursiveCteModel :: IO ByteString -> TestTree
+testRecursiveCteModel getConn = testCase "recursive CTE execution agrees with a bounded sequence model" $
+  withTestPostgres "recursive_cte_model_property" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+
+    passes <- Hedgehog.check . Hedgehog.property $ do
+      start <- Hedgehog.forAll (Gen.int (Range.linear (-100000) 95000))
+      count <- Hedgehog.forAll (Gen.int (Range.linear 1 25))
+      payload <- Hedgehog.forAll (Gen.text (Range.linear 0 24) Gen.alphaNum)
+
+      let startId = fromIntegral start
+          endId = fromIntegral (start + count - 1)
+          recursiveRows =
+            [ CteRow (fromIntegral rowId) ("recursive:" <> payload)
+            | rowId <- [start .. start + count - 1]
+            ]
+          untouched = CteRow (fromIntegral (start + count)) ("untouched:" <> payload)
+
+      Hedgehog.evalIO $ do
+        execute_ conn "TRUNCATE TABLE cte_rows"
+        runBeamPostgres conn $ runInsert $
+          insert (dbCteRows cteDb) (insertValues (recursiveRows ++ [untouched]))
+
+      deletedRows <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningList (recursiveCteModelSelect startId endId)
+      finalRows <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningList $ select $
+          orderBy_ (asc_ . cteId) $ all_ (dbCteRows cteDb)
+
+      sortOn cteId deletedRows Hedgehog.=== recursiveRows
+      finalRows Hedgehog.=== [untouched]
+
+    assertBool "recursive CTE model property failed" passes
+
 -- Exercise the main user-facing flow: bind a normal SELECT CTE, perform each
 -- supported data modification, then join all four reusable results in the final
 -- SELECT. The placement of the complete block is inferred as top-level-only.
@@ -331,6 +491,141 @@ mixedCteSelect = selectWith $ topLevelOnly $ do
       deletedRow <- reuse deleted
       pure (selectedRow, insertedRow, updatedRow, deletedRow)
     _ -> error "Expected non-empty INSERT and UPDATE CTEs"
+
+-- Place values in two dependent CTE bodies and in the terminating SELECT. The
+-- dependency prevents the second CTE from becoming an unrelated test fragment,
+-- while the result exposes every bound value for exact comparison.
+parameterOrderingSelect
+  :: CteRowT Identity
+  -> CteRowT Identity
+  -> CteRowT Identity
+  -> SqlSelect Postgres
+       (CteRowT Identity, CteRowT Identity, CteRowT Identity)
+parameterOrderingSelect first second terminal = selectWith $ do
+  firstRows <- selecting $ pure (cteRowValues_ @CTE.QAnyScope first)
+  secondRows <- selecting $ do
+    _ <- reuse firstRows
+    pure (cteRowValues_ @CTE.QAnyScope second)
+  pure $ do
+    firstRow <- reuse firstRows
+    secondRow <- reuse secondRows
+    pure
+      ( firstRow
+      , secondRow
+      , cteRowValues_ @QBaseScope terminal
+      )
+
+cteRowValues_
+  :: forall scope. CteRowT Identity -> CteRowT (QExpr Postgres scope)
+cteRowValues_ row = CteRow (val_ (cteId row)) (val_ (cteValue row))
+
+-- The returned relation exposes the result of every modifying CTE. Keeping
+-- their keys disjoint gives the property a deterministic reference model while
+-- still exercising mixed syntax assembly and PostgreSQL execution semantics.
+dataModifyingCteModelSelect
+  :: CteRowT Identity
+  -> Int32
+  -> Text
+  -> Int32
+  -> SqlSelect Postgres
+       (CteRowT Identity, CteRowT Identity, CteRowT Identity)
+dataModifyingCteModelSelect inserted updateId updateValue deleteId =
+  selectWith $ do
+    insertedRows <- Pg.cteInsertReturning
+      (dbCteRows cteDb)
+      (insertValues [inserted])
+      Pg.onConflictDefault
+      id
+    updatedRows <- Pg.cteUpdateReturning
+      (dbCteRows cteDb)
+      (\row -> cteValue row <-. val_ updateValue)
+      (\row -> cteId row ==. val_ updateId)
+      id
+    deletedRows <- Pg.cteDeleteReturning
+      (dbCteRows cteDb)
+      (\row -> cteId row ==. val_ deleteId)
+      id
+
+    case (insertedRows, updatedRows) of
+      (Just insertedRows', Just updatedRows') -> pure $ do
+        insertedRow <- reuse insertedRows'
+        updatedRow <- reuse updatedRows'
+        deletedRow <- reuse deletedRows
+        pure (insertedRow, updatedRow, deletedRow)
+      _ -> error "Expected non-empty INSERT and UPDATE CTEs"
+
+-- The source key is selected in a CTE, then used to derive the inserted key.
+-- This keeps both the CTE and terminal INSERT semantically relevant.
+modelInsertWithStatement
+  :: Int32
+  -> CteRowT Identity
+  -> SqlInsert Postgres CteRowT
+modelInsertWithStatement sourceId inserted = Pg.pgInsertWith $ do
+  sourceIds <- selecting $ do
+    row <- all_ (dbCteRows cteDb)
+    guard_ (cteId row ==. val_ sourceId)
+    pure (cteId row)
+  pure $ Pg.insert
+    (dbCteRows cteDb)
+    (insertFrom $ do
+      selectedId <- reuse sourceIds
+      pure $ CteRow
+        (selectedId + val_ (cteId inserted - sourceId))
+        (val_ (cteValue inserted)))
+    Pg.onConflictDefault
+
+modelUpdateWithStatement
+  :: Int32
+  -> Text
+  -> SqlUpdate Postgres CteRowT
+modelUpdateWithStatement updateId updateValue = Pg.pgUpdateWith $ do
+  targetIds <- selecting $ do
+    row <- all_ (dbCteRows cteDb)
+    guard_ (cteId row ==. val_ updateId)
+    pure (cteId row)
+  pure $ update
+    (dbCteRows cteDb)
+    (\row -> cteValue row <-. val_ updateValue)
+    (\row -> exists_ $ do
+      targetId <- reuse targetIds
+      guard_ (cteId row ==. targetId)
+      pure targetId)
+
+modelDeleteWithStatement
+  :: Int32
+  -> SqlDelete Postgres CteRowT
+modelDeleteWithStatement deleteId = Pg.pgDeleteWith $ do
+  targetIds <- selecting $ do
+    row <- all_ (dbCteRows cteDb)
+    guard_ (cteId row ==. val_ deleteId)
+    pure (cteId row)
+  pure $ delete (dbCteRows cteDb) $ \row -> exists_ $ do
+    targetId <- reuse targetIds
+    guard_ (cteId row ==. targetId)
+    pure targetId
+
+recursiveCteModelSelect
+  :: Int32
+  -> Int32
+  -> SqlSelect Postgres (CteRowT Identity)
+recursiveCteModelSelect startId endId = selectWith $ do
+  recursiveIds <- toTopLevel $ mdo
+    ids <- selecting $
+      pure (as_ @Int32 (val_ startId)) `unionAll_` do
+        previousId <- reuse ids
+        guard_ (previousId <. val_ endId)
+        pure (previousId + 1)
+    pure ids
+
+  deletedRows <- Pg.cteDeleteReturning
+    (dbCteRows cteDb)
+    (\row -> exists_ $ do
+      recursiveId <- reuse recursiveIds
+      guard_ (cteId row ==. recursiveId)
+      pure recursiveId)
+    id
+
+  pure (reuse deletedRows)
 
 nestedSelectCteSelect :: SqlSelect Postgres (CteRowT Identity)
 nestedSelectCteSelect = select $ Pg.pgSelectWith $ nestedAllowed $ do
