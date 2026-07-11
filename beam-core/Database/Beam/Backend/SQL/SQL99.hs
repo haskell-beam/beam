@@ -9,6 +9,7 @@ module Database.Beam.Backend.SQL.SQL99
   , IsSql99AggregationExpressionSyntax(..)
   , IsSql99CommonTableExpressionSelectSyntax(..)
   , IsSql99CommonTableExpressionSyntax(..)
+  , IsSql99DataModifyingCommonTableExpressionSyntax(..)
   , IsSql99RecursiveCommonTableExpressionSelectSyntax(..)
   , IsSql99SelectSyntax(..)
   , IsSql99DataTypeSyntax(..) ) where
@@ -67,3 +68,19 @@ class IsSql99CommonTableExpressionSyntax syntax where
   type Sql99CTESelectSyntax syntax :: Type
 
   cteSubquerySyntax :: Text -> [Text] -> Sql99CTESelectSyntax syntax -> syntax
+
+-- | Extension of SQL99 common-table-expression syntax for backends that allow
+-- a CTE body to be a data-modifying statement rather than a @SELECT@.
+--
+-- The data-modifying body is kept distinct from 'Sql99CTESelectSyntax' so a
+-- backend must opt into this extension explicitly. 'cteDataModifyingSyntax'
+-- supplies the CTE name and output column names around a backend-specific
+-- statement such as @DELETE ... RETURNING ...@.
+class IsSql99CommonTableExpressionSyntax syntax
+    => IsSql99DataModifyingCommonTableExpressionSyntax syntax where
+
+  -- | Backend-specific syntax for the statement inside the CTE body.
+  type Sql99CTEDataModifyingSyntax syntax :: Type
+
+  -- | Wrap a data-modifying statement as one named CTE definition.
+  cteDataModifyingSyntax :: Text -> [Text] -> Sql99CTEDataModifyingSyntax syntax -> syntax

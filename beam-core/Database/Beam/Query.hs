@@ -100,7 +100,9 @@ import Prelude hiding (lookup)
 
 import Database.Beam.Query.Aggregate
 import Database.Beam.Query.Combinators
-import Database.Beam.Query.CTE ( With, ReusableQ, selecting, reuse )
+import Database.Beam.Query.CTE
+  ( CtePlacement(..), ReusableQ, With
+  , reuse, selecting, toTopLevel )
 import qualified Database.Beam.Query.CTE as CTE
 import Database.Beam.Query.CustomSQL
 import Database.Beam.Query.DataTypes
@@ -153,14 +155,25 @@ select :: forall be db res
 select q =
   SqlSelect (buildSqlQuery "t" q)
 
--- | Create a 'SqlSelect' for a query which may have common table
+-- | Create a top-level 'SqlSelect' for a query which may have common table
 -- expressions. See the documentation of 'With' for more details.
-selectWith :: forall be db res
+--
+-- Unlike a backend-specific nested CTE combinator, this is a top-level
+-- consumer and therefore accepts both 'CteNestedAllowed' and
+-- 'CteTopLevelOnly' blocks. For example:
+--
+-- > selectWith $ do
+-- >   reusableRows <- selecting someQuery
+-- >   pure (reuse reusableRows)
+--
+-- A backend-specific data-modifying CTE can appear in the same block; its
+-- operation fixes the inferred placement to 'CteTopLevelOnly'.
+selectWith :: forall be db placement res
             . ( BeamSqlBackend be, BeamSql99CommonTableExpressionBackend be
               , HasQBuilder be, Projectible be res )
-           => With be db (Q be db QBaseScope res) -> SqlSelect be (QExprToIdentity res)
-selectWith (CTE.With mkQ) =
-    let (q, (recursiveness, mctes)) = evalState (runWriterT mkQ) 0
+           => With be db placement (Q be db QBaseScope res) -> SqlSelect be (QExprToIdentity res)
+selectWith with =
+    let (q, (recursiveness, mctes)) = evalState (runWriterT (CTE.runWith with)) 0
     in case (recursiveness, nonEmpty mctes) of
          (CTE.Nonrecursive, Just ctes) -> SqlSelect (withSyntax (NonEmpty.toList ctes)
                                                     (buildSqlQuery "t" q))

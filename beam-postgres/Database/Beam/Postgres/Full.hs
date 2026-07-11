@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -19,14 +20,14 @@ module Database.Beam.Postgres.Full
 
   , locked_, lockAll_, withLocks_
 
-  -- ** Inner WITH queries
-  , pgSelectWith
+  -- ** @WITH@ statement consumers
+  , pgSelectWith, pgInsertWith, pgUpdateWith, pgDeleteWith
 
   -- ** Lateral joins
   , lateral_
 
   -- * @INSERT@ and @INSERT RETURNING@
-  , insert, insertReturning
+  , insert, insertReturning, cteInsertReturning
   , insertDefaults
   , runPgInsertReturningList
 
@@ -45,12 +46,12 @@ module Database.Beam.Postgres.Full
   -- * @UPDATE RETURNING@
   , PgUpdateReturning(..)
   , runPgUpdateReturningList
-  , updateReturning
+  , updateReturning, cteUpdateReturning
 
   -- * @DELETE RETURNING@
   , PgDeleteReturning(..)
   , runPgDeleteReturningList
-  , deleteReturning
+  , deleteReturning, cteDeleteReturning
 
   -- * Generalized @RETURNING@
   , PgReturning(..)
@@ -220,6 +221,52 @@ insertReturning (DatabaseEntity tbl@(DatabaseTable {}))
 
      tblSettings = dbTableSettings tbl
 
+-- | Introduce a PostgreSQL @INSERT ... RETURNING@ statement as a
+-- data-modifying common table expression. The returned value can be used in a
+-- subsequent query with 'reuse'.
+--
+-- Returns 'Nothing' when the supplied insert values are empty, because in that
+-- case there is no statement or common table expression to reuse.
+-- Data-modifying CTEs are restricted to top-level 'selectWith' blocks and
+-- cannot be used with 'pgSelectWith'.
+--
+-- For example, this inserts a row once and makes the rows produced by
+-- @RETURNING@ available to the final query:
+--
+-- > selectWith $ do
+-- >   inserted <- cteInsertReturning
+-- >     users
+-- >     (insertValues [newUser])
+-- >     onConflictDefault
+-- >     id
+-- >   case inserted of
+-- >     Nothing -> pure noRowsQuery
+-- >     Just rows -> pure (reuse rows)
+--
+-- The generated statement has the shape:
+--
+-- @
+-- WITH cte0 AS (INSERT INTO users ... RETURNING ...)
+-- SELECT ... FROM cte0
+-- @
+cteInsertReturning
+  :: ( Projectible Postgres a
+     , ThreadRewritable PostgresInaccessible a
+     , Projectible Postgres (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     , ThreadRewritable CTE.QAnyScope (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     )
+  => DatabaseEntity Postgres db (TableEntity table)
+  -> SqlInsertValues Postgres (table (QExpr Postgres s))
+  -> PgInsertOnConflict table
+  -> (table (QExpr Postgres PostgresInaccessible) -> a)
+  -> With Postgres db 'CTE.CteTopLevelOnly (Maybe (ReusableQ Postgres db (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)))
+cteInsertReturning table values onConflict_ mkProjection =
+  case insertReturning table values onConflict_ (Just mkProjection) of
+    PgInsertReturningEmpty -> pure Nothing
+    PgInsertReturning syntax ->
+      Just <$> CTE.dataModifyingCte
+        (PgDataModifyingCommonTableExpressionSyntax syntax)
+
 runPgInsertReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ PgCommandSyntax
@@ -290,12 +337,27 @@ lateral_ using mkSubquery = do
 --
 -- @beam-core@ offers 'selectWith' to produce a top-level 'SqlSelect'
 -- but these cannot be turned into 'Q' objects for use within joins.
--- The 'pgSelectWith' function is more flexible.
+-- The 'pgSelectWith' function is more flexible. Its 'CteNestedAllowed' index
+-- statically prevents PostgreSQL data-modifying CTEs from being embedded here;
+-- those must be consumed by top-level 'selectWith'.
+--
+-- > select $ pgSelectWith $ do
+-- >   reusableRows <- selecting someQuery
+-- >   pure (reuse reusableRows)
+--
+-- This can produce a subquery such as:
+--
+-- @
+-- SELECT ... FROM (WITH cte0 AS (SELECT ...) SELECT ... FROM cte0) AS nested
+-- @
+--
+-- Replacing 'selecting' above with 'cteDeleteReturning', for example, does not
+-- type-check because PostgreSQL requires data-modifying CTEs at the top level.
 pgSelectWith :: forall db s res
               . Projectible Postgres res
-             => With Postgres db (Q Postgres db s res) -> Q Postgres db s res
-pgSelectWith (CTE.With mkQ) =
-    let (q, (recursiveness, mctes)) = evalState (runWriterT mkQ) 0
+             => With Postgres db 'CTE.CteNestedAllowed (Q Postgres db s res) -> Q Postgres db s res
+pgSelectWith with =
+    let (q, (recursiveness, mctes)) = evalState (runWriterT (CTE.runWith with)) 0
         fromSyntax tblPfx =
             case (recursiveness, nonEmpty mctes) of
               (CTE.Nonrecursive, Just ctes) -> withSyntax (NonEmpty.toList ctes) (buildSqlQuery tblPfx q)
@@ -315,6 +377,104 @@ pgSelectWith (CTE.With mkQ) =
                            in projection)
                       (const Nothing)
                       snd))
+
+-- | Attach a common-table-expression block to a top-level PostgreSQL
+-- @INSERT@ statement.
+--
+-- Unlike 'pgSelectWith', this is a top-level statement consumer and therefore
+-- accepts both 'CteNestedAllowed' and 'CteTopLevelOnly' blocks. The final
+-- insert can read reusable rows produced by either SELECT CTEs or
+-- data-modifying CTEs:
+--
+-- > pgInsertWith $ do
+-- >   rows <- selecting sourceQuery
+-- >   pure $ insert destination (insertFrom (reuse rows)) onConflictDefault
+--
+-- This produces a statement with the following shape:
+--
+-- @
+-- WITH cte0 AS (SELECT ...)
+-- INSERT INTO destination ... SELECT ... FROM cte0
+-- @
+--
+-- If the final insert has no rows, the result remains 'SqlInsertNoRows'. There
+-- is then no terminal statement to which PostgreSQL could attach the @WITH@
+-- block, so none of its CTE bodies are executed.
+--
+-- Apply 'returning' to the resulting 'SqlInsert' when the terminal statement
+-- should return rows.
+pgInsertWith
+  :: With Postgres db placement (SqlInsert Postgres table)
+  -> SqlInsert Postgres table
+pgInsertWith with =
+  case runPgWith with of
+    (SqlInsertNoRows, _, _) -> SqlInsertNoRows
+    (SqlInsert settings (PgInsertSyntax statement), recursive, ctes) ->
+      SqlInsert settings (PgInsertSyntax (pgWithSyntax recursive ctes statement))
+
+-- | Attach a common-table-expression block to a top-level PostgreSQL
+-- @UPDATE@ statement.
+--
+-- Reusable CTE rows can be referenced from the final update predicate, for
+-- example through 'exists_':
+--
+-- > pgUpdateWith $ do
+-- >   wanted <- selecting wantedUsers
+-- >   pure $ update users
+-- >     (\user -> userEnabled user <-. val_ False)
+-- >     (\user -> exists_ $ do
+-- >        candidate <- reuse wanted
+-- >        guard_ (userId user ==. userId candidate))
+--
+-- An identity update remains 'SqlIdentityUpdate'; as with an empty insert,
+-- there is no terminal PostgreSQL statement and the accumulated CTEs are not
+-- executed.
+--
+-- Apply 'returning' to the resulting 'SqlUpdate' when the terminal statement
+-- should return rows.
+pgUpdateWith
+  :: With Postgres db placement (SqlUpdate Postgres table)
+  -> SqlUpdate Postgres table
+pgUpdateWith with =
+  case runPgWith with of
+    (SqlIdentityUpdate, _, _) -> SqlIdentityUpdate
+    (SqlUpdate settings (PgUpdateSyntax statement), recursive, ctes) ->
+      SqlUpdate settings (PgUpdateSyntax (pgWithSyntax recursive ctes statement))
+
+-- | Attach a common-table-expression block to a top-level PostgreSQL
+-- @DELETE@ statement.
+--
+-- > pgDeleteWith $ do
+-- >   expired <- selecting expiredUsers
+-- >   pure $ delete users $ \user -> exists_ $ do
+-- >     candidate <- reuse expired
+-- >     guard_ (userId user ==. userId candidate)
+--
+-- Since 'SqlDelete' always contains a statement, the accumulated CTE block is
+-- always preserved.
+-- Apply 'returning' to the result when the terminal statement should return
+-- deleted rows.
+pgDeleteWith
+  :: With Postgres db placement (SqlDelete Postgres table)
+  -> SqlDelete Postgres table
+pgDeleteWith with =
+  case runPgWith with of
+    (SqlDelete settings (PgDeleteSyntax statement), recursive, ctes) ->
+      SqlDelete settings (PgDeleteSyntax (pgWithSyntax recursive ctes statement))
+
+-- Evaluate a PostgreSQL CTE builder once and retain the information required
+-- by each top-level statement consumer. Keeping this helper local ensures that
+-- the backend-independent CTE API does not acquire PostgreSQL command types.
+runPgWith
+  :: With Postgres db placement a
+  -> (a, Bool, [BeamSql99BackendCTESyntax Postgres])
+runPgWith with =
+  let (result, (recursiveness, ctes)) =
+        evalState (runWriterT (CTE.runWith with)) 0
+      recursive = case recursiveness of
+        CTE.Nonrecursive -> False
+        CTE.Recursive -> True
+  in (result, recursive, ctes)
 
 -- | By default, Postgres will throw an error when a conflict is detected. This
 -- preserves that functionality.
@@ -388,6 +548,45 @@ updateReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSett
   where
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
 
+-- | Introduce a PostgreSQL @UPDATE ... RETURNING@ statement as a
+-- data-modifying common table expression. The returned value can be used in a
+-- subsequent query with 'reuse'.
+--
+-- Returns 'Nothing' when the assignments form an identity update, because in
+-- that case there is no statement or common table expression to reuse.
+-- Data-modifying CTEs are restricted to top-level 'selectWith' blocks and
+-- cannot be used with 'pgSelectWith'.
+--
+-- > selectWith $ do
+-- >   updated <- cteUpdateReturning
+-- >     users
+-- >     (\user -> userEnabled user <-. val_ False)
+-- >     (\user -> userId user ==. val_ wantedUserId)
+-- >     id
+-- >   case updated of
+-- >     Nothing -> pure noRowsQuery
+-- >     Just rows -> pure (reuse rows)
+--
+-- This renders the update once inside @WITH@ and reads its @RETURNING@ rows
+-- through the reusable CTE name.
+cteUpdateReturning
+  :: ( Projectible Postgres a
+     , ThreadRewritable PostgresInaccessible a
+     , Projectible Postgres (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     , ThreadRewritable CTE.QAnyScope (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     )
+  => DatabaseEntity Postgres db (TableEntity table)
+  -> (forall s. table (QField s) -> QAssignment Postgres s)
+  -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
+  -> (table (QExpr Postgres PostgresInaccessible) -> a)
+  -> With Postgres db 'CTE.CteTopLevelOnly (Maybe (ReusableQ Postgres db (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)))
+cteUpdateReturning table mkAssignments mkWhere mkProjection =
+  case updateReturning table mkAssignments mkWhere mkProjection of
+    PgUpdateReturningEmpty -> pure Nothing
+    PgUpdateReturning syntax ->
+      Just <$> CTE.dataModifyingCte
+        (PgDataModifyingCommonTableExpressionSyntax syntax)
+
 runPgUpdateReturningList
   :: ( MonadBeam be m
      , BeamSqlBackendSyntax be ~ PgCommandSyntax
@@ -428,6 +627,41 @@ deleteReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSett
   where
     SqlDelete _ pgDelete = delete table $ \t -> mkWhere t
     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (pure (fieldE (unqualifiedField (_fieldName f)))))) tblSettings
+
+-- | Introduce a PostgreSQL @DELETE ... RETURNING@ statement as a
+-- data-modifying common table expression. The returned value can be used in a
+-- subsequent query with 'reuse'.
+--
+-- Data-modifying CTEs are restricted to top-level 'selectWith' blocks and
+-- cannot be used with 'pgSelectWith'.
+--
+-- Unlike insert and update, delete always has a statement to introduce, so no
+-- 'Maybe' is required:
+--
+-- > selectWith $ do
+-- >   deleted <- cteDeleteReturning
+-- >     users
+-- >     (\user -> userExpired user ==. val_ True)
+-- >     id
+-- >   pure (reuse deleted)
+--
+-- The final query observes the deleted rows through @DELETE ... RETURNING@.
+-- This is also the supported way to communicate between data-modifying CTEs,
+-- since PostgreSQL executes sibling statements against the same snapshot.
+cteDeleteReturning
+  :: ( Projectible Postgres a
+     , ThreadRewritable PostgresInaccessible a
+     , Projectible Postgres (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     , ThreadRewritable CTE.QAnyScope (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     )
+  => DatabaseEntity Postgres db (TableEntity table)
+  -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
+  -> (table (QExpr Postgres PostgresInaccessible) -> a)
+  -> With Postgres db 'CTE.CteTopLevelOnly (ReusableQ Postgres db (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a))
+cteDeleteReturning table mkWhere mkProjection =
+  let PgDeleteReturning syntax = deleteReturning table mkWhere mkProjection
+  in CTE.dataModifyingCte
+       (PgDataModifyingCommonTableExpressionSyntax syntax)
 
 runPgDeleteReturningList
   :: ( MonadBeam be m

@@ -295,6 +295,34 @@ function for PostgreSQL, named `pgSelectWith`. For `beam-postgres`, `select (pgS
 equivalent to `selectWith x`. But, with the new type, we can reuse CTEs (including recursive ones)
 within other queries.
 
+PostgreSQL only permits data-modifying CTEs at the top level. Accordingly, `pgSelectWith` accepts a
+`With` block whose placement is `CteNestedAllowed`, while `cteInsertReturning`,
+`cteUpdateReturning`, and `cteDeleteReturning` produce `CteTopLevelOnly` blocks. Mixing ordinary
+`SELECT` CTEs with those operations remains valid under top-level `selectWith`, but attempting to
+pass such a block to `pgSelectWith` is rejected by the Haskell type checker.
+
+PostgreSQL also disallows a data-modifying CTE from recursively referring to itself. Recursive
+construction is therefore limited to `CteNestedAllowed` blocks. To combine a recursive `SELECT`
+CTE with a later data-modifying CTE, finish the recursive block first and promote it with
+`toTopLevel`; its result can then safely be reused by the modifying statement.
+
+A PostgreSQL `WITH` statement may also finish with `INSERT`, `UPDATE`, or `DELETE` instead of a
+final `SELECT`. The `pgInsertWith`, `pgUpdateWith`, and `pgDeleteWith` functions consume a `With`
+block in those cases. Because all three produce top-level statements, they accept both placement
+indices, including blocks containing data-modifying CTEs. For example:
+
+```haskell
+Pg.pgInsertWith $ do
+  customersToCopy <- selecting sourceCustomers
+  pure $ Pg.insert archiveCustomers
+    (insertFrom (reuse customersToCopy))
+    Pg.onConflictDefault
+```
+
+An empty terminal insert or identity update remains a no-op. PostgreSQL cannot execute a bare
+`WITH` block without a terminal statement, so CTE bodies accumulated before such a no-op are not
+executed.
+
 As an example using our Chinook schema, suppose we had an error with all orders in the month of
 September 2024, and needed to send out employees to customer homes to correct the issue. We want to
 find, for each order, an employee who lives in the same city as the customer, but we only want the

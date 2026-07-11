@@ -81,6 +81,8 @@ test-suite beam-postgres-tests
   hs-source-dirs: test
   main-is: Main.hs
   other-modules: Database.Beam.Postgres.Test,
+                 Database.Beam.Postgres.Test.CTE,
+                 Database.Beam.Postgres.Test.CTENegative,
                  Database.Beam.Postgres.Test.Copy,
                  Database.Beam.Postgres.Test.Marshal,
                  Database.Beam.Postgres.Test.Select,

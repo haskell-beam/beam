@@ -1,5 +1,18 @@
 # 0.11.2.0
 
+## Interface changes
+
+* Added a `CtePlacement` index to `With`. Ordinary `SELECT` CTEs are valid at
+  either placement, while backend-specific data-modifying CTEs are marked
+  `CteTopLevelOnly` so they cannot be embedded where a backend forbids them.
+  Recursive knots are restricted to nested-safe blocks; `toTopLevel` promotes a
+  completed recursive `SELECT` block for composition with data-modifying CTEs.
+
+## New features
+
+* Added backend capability and syntax classes for data-modifying common table
+  expressions.
+
 ## Bug fixes
 
 * Fixed an issue where using `selectWith` and no common-table expressions would lead to

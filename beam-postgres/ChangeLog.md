@@ -7,6 +7,15 @@
   over colums of type `citext` (#818)
 * Exposed the functionality to implement user-defined extensions via
   `Database.Beam.Postgres.Extensions` (#819)
+* Added `cteInsertReturning`, `cteUpdateReturning`, and `cteDeleteReturning`
+  for using PostgreSQL data-modifying statements in top-level common table
+  expressions. Their placement index prevents them from being passed to
+  `pgSelectWith`, since PostgreSQL does not allow data-modifying CTEs in
+  subqueries.
+* Added `pgInsertWith`, `pgUpdateWith`, and `pgDeleteWith` for terminating a
+  top-level PostgreSQL `WITH` block with the corresponding data-modifying
+  statement. These consumers accept both CTE placement indices and preserve
+  recursive `SELECT` CTEs.
 
 ## Bug fixes
 

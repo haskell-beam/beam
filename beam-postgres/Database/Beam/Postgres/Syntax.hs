@@ -21,7 +21,7 @@ module Database.Beam.Postgres.Syntax
 
     , emit, emitBuilder, escapeString
     , escapeBytea, escapeIdentifier
-    , pgParens
+    , pgParens, pgWithSyntax
     , pgStringLit, pgCharLit, pgBoolLit
     , nextSyntaxStep
 
@@ -30,6 +30,8 @@ module Database.Beam.Postgres.Syntax
     , PgInsertSyntax(..)
     , PgDeleteSyntax(..)
     , PgUpdateSyntax(..)
+    , PgCommonTableExpressionSyntax(..)
+    , PgDataModifyingCommonTableExpressionSyntax(..)
 
     , PgExpressionSyntax(..), PgFromSyntax(..), PgTableNameSyntax(..)
     , PgComparisonQuantifierSyntax(..)
@@ -274,6 +276,29 @@ data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLocking
                                                                , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
 newtype PgCommonTableExpressionSyntax
     = PgCommonTableExpressionSyntax { fromPgCommonTableExpression :: PgSyntax }
+
+-- | PostgreSQL syntax for the statement placed inside a data-modifying CTE.
+--
+-- The wrapped syntax is the body only, for example @DELETE ... RETURNING ...@.
+-- 'cteDataModifyingSyntax' supplies the CTE name, output column aliases,
+-- parentheses, and @AS@ wrapper.
+newtype PgDataModifyingCommonTableExpressionSyntax
+    = PgDataModifyingCommonTableExpressionSyntax { fromPgDataModifyingCommonTableExpression :: PgSyntax }
+
+-- | Prefix a PostgreSQL statement with a common-table-expression list.
+-- PostgreSQL accepts the same @WITH@ prefix before @SELECT@, @INSERT@,
+-- @UPDATE@, and @DELETE@, so this operation works on the shared raw syntax
+-- instead of giving the terminal statement a misleading type.
+--
+-- An empty list leaves the statement unchanged. The boolean selects
+-- @WITH RECURSIVE@ when the CTE builder used recursive bindings.
+pgWithSyntax :: Bool -> [PgCommonTableExpressionSyntax] -> PgSyntax -> PgSyntax
+pgWithSyntax _ [] statement = statement
+pgWithSyntax recursive ctes statement =
+    emit (if recursive then "WITH RECURSIVE " else "WITH ") <>
+    pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
+    emit " " <>
+    statement
 
 fromPgOrdering :: PgOrderingSyntax -> PgSyntax
 fromPgOrdering (PgOrderingSyntax s Nothing) = s
@@ -622,17 +647,11 @@ instance IsSql99CommonTableExpressionSelectSyntax PgSelectSyntax where
     type Sql99SelectCTESyntax PgSelectSyntax = PgCommonTableExpressionSyntax
 
     withSyntax ctes (PgSelectSyntax select) =
-        PgSelectSyntax $
-        emit "WITH " <>
-        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
-        select
+        PgSelectSyntax (pgWithSyntax False ctes select)
 
 instance IsSql99RecursiveCommonTableExpressionSelectSyntax PgSelectSyntax where
     withRecursiveSyntax ctes (PgSelectSyntax select) =
-        PgSelectSyntax $
-        emit "WITH RECURSIVE " <>
-        pgSepBy (emit ", ") (map fromPgCommonTableExpression ctes) <>
-        select
+        PgSelectSyntax (pgWithSyntax True ctes select)
 
 instance IsSql99CommonTableExpressionSyntax PgCommonTableExpressionSyntax where
     type Sql99CTESelectSyntax PgCommonTableExpressionSyntax = PgSelectSyntax
@@ -641,6 +660,18 @@ instance IsSql99CommonTableExpressionSyntax PgCommonTableExpressionSyntax where
         PgCommonTableExpressionSyntax $
         pgQuotedIdentifier tbl <> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier fields)) <>
         emit " AS " <> pgParens select
+
+instance IsSql99DataModifyingCommonTableExpressionSyntax PgCommonTableExpressionSyntax where
+    type Sql99CTEDataModifyingSyntax PgCommonTableExpressionSyntax = PgDataModifyingCommonTableExpressionSyntax
+
+    -- Render the same outer shape as a SELECT CTE, but preserve the raw
+    -- PostgreSQL data-modifying statement as its body:
+    --
+    -- @cte0(res0) AS (DELETE ... RETURNING ...)@
+    cteDataModifyingSyntax tbl fields (PgDataModifyingCommonTableExpressionSyntax body) =
+        PgCommonTableExpressionSyntax $
+        pgQuotedIdentifier tbl <> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier fields)) <>
+        emit " AS " <> pgParens body
 
 instance IsSql2008BigIntDataTypeSyntax PgDataTypeSyntax where
   bigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT") bigIntType
@@ -1587,4 +1618,3 @@ pgRenderSyntaxScript (PgSyntax mkQuery) =
       where
         quoteIdentifierChar '"' = char8 '"' <> char8 '"'
         quoteIdentifierChar c = char8 c
-
