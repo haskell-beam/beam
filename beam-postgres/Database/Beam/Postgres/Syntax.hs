@@ -31,7 +31,6 @@ module Database.Beam.Postgres.Syntax
     , PgDeleteSyntax(..)
     , PgUpdateSyntax(..)
     , PgCommonTableExpressionSyntax(..)
-    , PgDataModifyingCommonTableExpressionSyntax(..)
 
     , PgExpressionSyntax(..), PgFromSyntax(..), PgTableNameSyntax(..)
     , PgComparisonQuantifierSyntax(..)
@@ -274,21 +273,18 @@ data PgOrderingSyntax = PgOrderingSyntax { pgOrderingSyntax :: PgSyntax, pgOrder
 data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLockingClauseStrength :: PgSelectLockingStrength
                                                                , pgSelectLockingTables :: [T.Text]
                                                                , pgSelectLockingClauseOptions :: Maybe PgSelectLockingOptions }
+-- | One named definition in a PostgreSQL @WITH@ clause.
+--
+-- This is exported for PostgreSQL extension modules. Application code should
+-- normally construct CTEs through "Database.Beam.Postgres.Full".
 newtype PgCommonTableExpressionSyntax
     = PgCommonTableExpressionSyntax { fromPgCommonTableExpression :: PgSyntax }
 
--- | PostgreSQL syntax for the statement placed inside a data-modifying CTE.
---
--- The wrapped syntax is the body only, for example @DELETE ... RETURNING ...@.
--- 'cteDataModifyingSyntax' supplies the CTE name, output column aliases,
--- parentheses, and @AS@ wrapper.
-newtype PgDataModifyingCommonTableExpressionSyntax
-    = PgDataModifyingCommonTableExpressionSyntax { fromPgDataModifyingCommonTableExpression :: PgSyntax }
-
 -- | Prefix a PostgreSQL statement with a common-table-expression list.
--- PostgreSQL accepts the same @WITH@ prefix before @SELECT@, @INSERT@,
--- @UPDATE@, and @DELETE@, so this operation works on the shared raw syntax
--- instead of giving the terminal statement a misleading type.
+-- The public CTE consumers use this prefix before their @SELECT@, @INSERT@,
+-- @UPDATE@, and @DELETE@ terminal statements, so this operation works on the
+-- shared raw syntax instead of giving the terminal statement a misleading
+-- type.
 --
 -- An empty list leaves the statement unchanged. The boolean selects
 -- @WITH RECURSIVE@ when the CTE builder used recursive bindings.
@@ -656,22 +652,12 @@ instance IsSql99RecursiveCommonTableExpressionSelectSyntax PgSelectSyntax where
 instance IsSql99CommonTableExpressionSyntax PgCommonTableExpressionSyntax where
     type Sql99CTESelectSyntax PgCommonTableExpressionSyntax = PgSelectSyntax
 
+    cteSubquerySyntax _ [] _ =
+        error "Database.Beam.Query.CTE.selecting: a PostgreSQL CTE must project at least one column"
     cteSubquerySyntax tbl fields (PgSelectSyntax select) =
         PgCommonTableExpressionSyntax $
         pgQuotedIdentifier tbl <> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier fields)) <>
         emit " AS " <> pgParens select
-
-instance IsSql99DataModifyingCommonTableExpressionSyntax PgCommonTableExpressionSyntax where
-    type Sql99CTEDataModifyingSyntax PgCommonTableExpressionSyntax = PgDataModifyingCommonTableExpressionSyntax
-
-    -- Render the same outer shape as a SELECT CTE, but preserve the raw
-    -- PostgreSQL data-modifying statement as its body:
-    --
-    -- @cte0(res0) AS (DELETE ... RETURNING ...)@
-    cteDataModifyingSyntax tbl fields (PgDataModifyingCommonTableExpressionSyntax body) =
-        PgCommonTableExpressionSyntax $
-        pgQuotedIdentifier tbl <> pgParens (pgSepBy (emit ",") (map pgQuotedIdentifier fields)) <>
-        emit " AS " <> pgParens body
 
 instance IsSql2008BigIntDataTypeSyntax PgDataTypeSyntax where
   bigIntType = PgDataTypeSyntax (PgDataTypeDescrOid (Pg.typoid Pg.int8) Nothing) (emit "BIGINT") bigIntType

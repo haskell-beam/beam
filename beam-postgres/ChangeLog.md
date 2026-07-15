@@ -1,27 +1,3 @@
-# 0.7.0.0
-
-## Interface changes
-
-* Restricted `pgSelectWith` to `CteNestedAllowed` blocks, preventing
-  PostgreSQL data-modifying CTEs from being embedded in subqueries.
-
-## Added features
-
-* Added `cteInsertReturning`, `cteUpdateReturning`, and `cteDeleteReturning`
-  for using PostgreSQL data-modifying statements in top-level common table
-  expressions. Their placement index prevents them from being passed to
-  `pgSelectWith`, since PostgreSQL does not allow data-modifying CTEs in
-  subqueries.
-* Added `pgInsertWith`, `pgUpdateWith`, and `pgDeleteWith` for terminating a
-  top-level PostgreSQL `WITH` block with the corresponding data-modifying
-  statement. These consumers accept both CTE placement indices and preserve
-  recursive `SELECT` CTEs.
-
-## Bug fixes
-
-* Reject zero-column data-modifying CTE projections before rendering an empty
-  `RETURNING` list.
-
 # 0.6.2.0
 
 ## Added features
@@ -31,11 +7,30 @@
   over colums of type `citext` (#818)
 * Exposed the functionality to implement user-defined extensions via
   `Database.Beam.Postgres.Extensions` (#819)
+* Added the PostgreSQL-specific, placement-indexed `PgWith` CTE builder. It can
+  lift helpers built with the portable `With Postgres` API, while the new
+  data-modifying builders produce blocks which cannot be embedded in a
+  subquery.
+* Added `pgSelectingWith` for PostgreSQL 12+ `MATERIALIZED` and
+  `NOT MATERIALIZED` SELECT CTEs, with `pgSelecting` retaining PostgreSQL's
+  default planner policy.
+* Added `cteInsertReturning`, `cteUpdateReturning`, and `cteDeleteReturning`
+  for exposing the `RETURNING` rows of PostgreSQL data-modifying CTEs through
+  `reuse`.
+* Added `cteInsert`, `cteUpdate`, and `cteDelete` for data-modifying CTEs which
+  execute for their side effects and intentionally produce no reusable rows.
+* Added `pgSelectWithNested` and `pgSelectWithTopLevel` for consuming safe
+  nested and top-level `PgWith` blocks respectively, plus `pgInsertWith`,
+  `pgUpdateWith`, and `pgDeleteWith` for terminating a top-level `WITH` block
+  with a data-modifying statement.
 
 ## Bug fixes
 
 * Fixed an issue where using `pgSelectWith` with no common-table expressions
   would lead to an invalid SQL query at runtime.
+* Reject zero-column reusable CTE projections before Beam can render an invalid
+  empty column-alias list (`cte()`), or an empty `RETURNING` list for a
+  data-modifying CTE.
 
 # 0.6.1.0
 

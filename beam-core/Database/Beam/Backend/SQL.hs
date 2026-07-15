@@ -17,7 +17,6 @@ module Database.Beam.Backend.SQL
   , BeamSql99AggregationBackend
   , BeamSql99ConcatExpressionBackend
   , BeamSql99CommonTableExpressionBackend
-  , BeamSql99DataModifyingCommonTableExpressionBackend
   , BeamSql99RecursiveCTEBackend
   , BeamSql2003ExpressionBackend
 
@@ -269,20 +268,6 @@ type BeamSql99CommonTableExpressionBackend be =
     , IsSql99CommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be)
     , IsSql99CommonTableExpressionSyntax (BeamSql99BackendCTESyntax be)
     , Sql99CTESelectSyntax (BeamSql99BackendCTESyntax be) ~ BeamSqlBackendSelectSyntax be )
--- | A SQL99 CTE backend with an extension for data-modifying CTE bodies.
---
--- This capability is separate from 'BeamSql99CommonTableExpressionBackend'
--- because SQL99 only requires a @SELECT@ as the CTE body. Backends with this
--- extension can additionally render statements such as:
---
--- @
--- WITH changed AS (UPDATE items SET active = FALSE RETURNING id)
--- SELECT id FROM changed
--- @
-type BeamSql99DataModifyingCommonTableExpressionBackend be =
-    ( BeamSql99CommonTableExpressionBackend be
-    , IsSql99DataModifyingCommonTableExpressionSyntax (BeamSql99BackendCTESyntax be)
-    )
 type BeamSql99RecursiveCTEBackend be=
     ( BeamSql99CommonTableExpressionBackend be
     , IsSql99RecursiveCommonTableExpressionSelectSyntax (BeamSqlBackendSelectSyntax be) )

@@ -48,9 +48,11 @@ data CteRowT f = CteRow
 deriving instance Show (CteRowT Identity)
 deriving instance Eq (CteRowT Identity)
 
--- A legal Haskell projection shape with no fields. PostgreSQL has no
--- corresponding zero-column SELECT or RETURNING relation, so the CTE builders
--- must reject it before rendering SQL.
+-- A legal Haskell projection shape with no fields. PostgreSQL accepts a
+-- zero-column SELECT CTE only when its output alias list is omitted, whereas
+-- Beam's reusable CTE representation names every output column. It also cannot
+-- emit a bare RETURNING keyword. The builders therefore reject this shape
+-- instead of rendering cte() or an empty RETURNING list.
 data EmptyCteT (f :: Type -> Type) = EmptyCte
   deriving (Generic, Beamable)
 
@@ -76,9 +78,13 @@ unitTests = testGroup "Common table expression tests"
 integrationTests :: IO ByteString -> TestTree
 integrationTests getConn = testGroup "Common table expression integration tests"
   [ testMixedCteBodies getConn
+  , testSideEffectOnlyCtes getConn
+  , testMaterializationExecution getConn
+  , testLiftedWithExecution getConn
   , testWithDmlConsumers getConn
   , testCteParameterOrdering getConn
   , testDataModifyingCteModel getConn
+  , testSideEffectOnlyCteModel getConn
   , testWithDmlConsumerModel getConn
   , testRecursiveCteModel getConn
   ]
@@ -86,6 +92,11 @@ integrationTests getConn = testGroup "Common table expression integration tests"
 renderingTests :: TestTree
 renderingTests = testGroup "Common table expression rendering tests"
   [ testMixedCteRendering
+  , testMaterializationRendering
+  , testNestedMaterializedCteRendering
+  , testSideEffectOnlyRendering
+  , testSideEffectNoOps
+  , testLiftedWithNameSupply
   , testNestedSelectCteRendering
   , testRecursiveSelectThenDeleteRendering
   , testEmptyDataModifyingCtes
@@ -115,12 +126,18 @@ typeSafetyTests = testGroup "Common table expression type-safety tests"
       assertPlacementTypeError Negative.invalidNestedEmptyInsert
   , testCase "conservatively rejects an identity UPDATE inside pgSelectWith" $
       assertPlacementTypeError Negative.invalidNestedIdentityUpdate
+  , testCase "rejects a side-effect-only DELETE inside pgSelectWithNested" $
+      assertPlacementTypeError Negative.invalidNestedSideEffectDelete
   , testCase "placement cannot be bypassed with coerce" $
       assertPlacementTypeError Negative.invalidCoercedPlacement
   , testCase "rejects a recursively self-referencing INSERT CTE" $
       assertDeferredTypeErrorContaining
-        ["CteTopLevelOnly", "CteNestedAllowed"]
+        ["No instance", "MonadFix", "PgCteTopLevelOnly"]
         Negative.invalidRecursiveInsert
+  , testCase "side-effect-only CTE results cannot be reused" $
+      assertDeferredTypeErrorContaining
+        ["ReusableQ"]
+        Negative.invalidReuseSideEffect
   ]
 
 projectionValidationTests :: TestTree
@@ -133,7 +150,7 @@ projectionValidationTests = testGroup "Common table expression projection valida
 
 assertPlacementTypeError :: SqlSelect Postgres a -> Assertion
 assertPlacementTypeError =
-  assertDeferredTypeErrorContaining ["CteTopLevelOnly", "CteNestedAllowed"]
+  assertDeferredTypeErrorContaining ["PgCteTopLevelOnly", "PgCteNestedAllowed"]
 
 assertDeferredTypeErrorContaining
   :: [String]
@@ -149,7 +166,9 @@ assertDeferredTypeErrorContaining expectedFragments sql = do
       assertFailure "expected the expression to contain a deferred type error"
   where
     assertFragment message fragment =
-      assertBool ("mentions " ++ fragment) (fragment `isInfixOf` message)
+      assertBool
+        ("mentions " ++ fragment ++ "\nDeferred error was:\n" ++ message)
+        (fragment `isInfixOf` message)
 
 assertEmptyProjectionError :: SqlSelect Postgres a -> Assertion
 assertEmptyProjectionError sql = do
@@ -174,6 +193,64 @@ testMixedCteRendering = testCase "renders mixed SELECT, INSERT, UPDATE, and DELE
   assertBool "renders DELETE" ("DELETE FROM" `isInfixOf` sql)
   assertEqual "renders three RETURNING clauses" 3 (length (filter (== "RETURNING") (words sql)))
 
+-- Materialization is an explicit PostgreSQL 12+ spelling choice. Check the
+-- complete token rather than a loose MATERIALIZED substring, since the latter
+-- would make the NOT MATERIALIZED case pass the positive assertion too.
+testMaterializationRendering :: TestTree
+testMaterializationRendering = testCase "renders every SELECT CTE materialization policy" $ do
+  let defaultSql = renderSelect (materializationSelect Pg.PgCteDefault)
+      materializedSql = renderSelect (materializationSelect Pg.PgCteMaterialized)
+      notMaterializedSql = renderSelect (materializationSelect Pg.PgCteNotMaterialized)
+  assertBool "default omits MATERIALIZED"
+    (not (" MATERIALIZED (" `isInfixOf` defaultSql))
+  assertBool "default omits NOT MATERIALIZED"
+    (not (" NOT MATERIALIZED (" `isInfixOf` defaultSql))
+  assertBool "renders AS MATERIALIZED"
+    (" AS MATERIALIZED (" `isInfixOf` materializedSql)
+  assertBool "renders AS NOT MATERIALIZED"
+    (" AS NOT MATERIALIZED (" `isInfixOf` notMaterializedSql)
+
+-- pgSelectWithNested is the safe nested consumer for PostgreSQL-specific
+-- SELECT CTE features. This complements the compatibility test for the older
+-- pgSelectWith API below.
+testNestedMaterializedCteRendering :: TestTree
+testNestedMaterializedCteRendering = testCase "embeds a materialized PgWith block in a subquery" $ do
+  let sql = renderSelect nestedMaterializedCteSelect
+  assertBool "renders the nested WITH"
+    ("FROM (WITH " `isInfixOf` sql)
+  assertBool "retains the materialization modifier"
+    (" AS MATERIALIZED (" `isInfixOf` sql)
+
+-- DML without RETURNING is still executed by PostgreSQL but does not create a
+-- relation. Its CTE name must therefore have no empty column-alias list.
+testSideEffectOnlyRendering :: TestTree
+testSideEffectOnlyRendering = testCase "renders side-effect-only INSERT, UPDATE, and DELETE CTEs" $ do
+  let sql = renderSelect sideEffectOnlyCteSelect
+  assertBool "renders INSERT" ("INSERT INTO" `isInfixOf` sql)
+  assertBool "renders UPDATE" ("UPDATE" `isInfixOf` sql)
+  assertBool "renders DELETE" ("DELETE FROM" `isInfixOf` sql)
+  assertBool "does not render RETURNING" (not ("RETURNING" `isInfixOf` sql))
+  assertBool "does not render an empty alias list" (not ("() AS" `isInfixOf` sql))
+
+-- Empty inserts and identity updates should consume neither a name nor a CTE
+-- slot. With no other CTEs, the final query must not acquire an empty WITH.
+testSideEffectNoOps :: TestTree
+testSideEffectNoOps = testCase "omits side-effect-only empty INSERT and identity UPDATE" $ do
+  let sql = renderSelect sideEffectNoOpSelect
+  assertBool "does not render WITH" (not ("WITH " `isPrefixOf` sql))
+  assertBool "does not render INSERT" (not ("INSERT INTO" `isInfixOf` sql))
+  assertBool "does not render UPDATE" (not ("UPDATE" `isInfixOf` sql))
+
+-- Lifting a complete portable helper must not restart its State Int name
+-- supply. Four definitions from native/lifted/native construction should be
+-- allocated exactly once as cte0 through cte3.
+testLiftedWithNameSupply :: TestTree
+testLiftedWithNameSupply = testCase "shares CTE names across lifted and native builders" $ do
+  let sql = renderSelect liftedWithSelect
+  mapM_ (\name -> assertBool ("renders " ++ name) (("\"" ++ name ++ "\"") `isInfixOf` sql))
+    ["cte0", "cte1", "cte2", "cte3"]
+  assertBool "does not allocate cte4" (not ("\"cte4\"" `isInfixOf` sql))
+
 -- pgSelectWith remains available for its original purpose: embedding a
 -- SELECT-only WITH block as a subquery.
 testNestedSelectCteRendering :: TestTree
@@ -181,7 +258,7 @@ testNestedSelectCteRendering = testCase "SELECT CTEs remain valid inside pgSelec
   let sql = renderSelect nestedSelectCteSelect
   assertBool "renders an inner WITH" ("FROM (WITH " `isInfixOf` sql)
 
--- Closing the recursive SELECT portion with toTopLevel should preserve WITH
+-- Closing the recursive SELECT portion with pgToTopLevel should preserve WITH
 -- RECURSIVE while allowing a later DELETE CTE in the same top-level block.
 testRecursiveSelectThenDeleteRendering :: TestTree
 testRecursiveSelectThenDeleteRendering = testCase "recursive SELECT can feed a top-level DELETE CTE" $ do
@@ -215,7 +292,7 @@ testRecursiveInsertWithRendering = testCase "renders WITH RECURSIVE before a ter
   assertBool "starts with WITH RECURSIVE" ("WITH RECURSIVE " `isPrefixOf` sql)
   assertBool "renders terminal INSERT" (" INSERT INTO" `isInfixOf` sql)
 
--- Top-level DML consumers may accept the stronger CteTopLevelOnly placement.
+-- Top-level DML consumers may accept the stronger PgCteTopLevelOnly placement.
 -- A data-modifying CTE followed by DELETE exercises that fact at compile time
 -- as well as checking the resulting SQL shape.
 testTopLevelOnlyDmlConsumerRendering :: TestTree
@@ -273,6 +350,54 @@ testMixedCteBodies getConn = testCase "SELECT and data-modifying CTEs can be mix
       , CteRow 3 "updated"
       ]
       remaining
+
+-- PostgreSQL executes a modifying CTE exactly once even when it has no
+-- RETURNING clause and the terminal SELECT does not reference it. Verify that
+-- all three commands affect the final database state, not merely that their
+-- syntax parses.
+testSideEffectOnlyCtes :: IO ByteString -> TestTree
+testSideEffectOnlyCtes getConn = testCase "unreferenced side-effect-only CTEs execute once" $
+  withTestPostgres "side_effect_only_ctes" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+    execute_ conn "INSERT INTO cte_rows VALUES (1, 'unchanged'), (2, 'before-update'), (3, 'delete-me')"
+
+    marker <- runBeamPostgres conn $
+      runSelectReturningOne sideEffectOnlyCteSelect
+    assertEqual "terminal SELECT still runs" (Just (1 :: Int32)) marker
+
+    remaining <- runBeamPostgres conn $ runSelectReturningList $ select $
+      orderBy_ (asc_ . cteId) $ all_ (dbCteRows cteDb)
+    assertEqual "all side effects were applied exactly once"
+      [ CteRow 1 "unchanged"
+      , CteRow 2 "after-update"
+      , CteRow 4 "inserted"
+      ]
+      remaining
+
+-- Planner choices are deliberately not asserted because they may vary across
+-- PostgreSQL releases. Successful execution and equal results validate the two
+-- explicit PostgreSQL 12+ spellings without coupling the test to EXPLAIN.
+testMaterializationExecution :: IO ByteString -> TestTree
+testMaterializationExecution getConn = testCase "MATERIALIZED and NOT MATERIALIZED execute" $
+  withTestPostgres "cte_materialization" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+    execute_ conn "INSERT INTO cte_rows VALUES (1, 'one'), (2, 'two')"
+
+    materialized <- runBeamPostgres conn $ runSelectReturningList $
+      materializationSelect Pg.PgCteMaterialized
+    notMaterialized <- runBeamPostgres conn $ runSelectReturningList $
+      materializationSelect Pg.PgCteNotMaterialized
+    assertEqual "both policies preserve query results" materialized notMaterialized
+
+-- Rendering checks the shared name supply; execution additionally proves that
+-- ReusableQ values returned by a lifted multi-CTE helper retain their meaning.
+testLiftedWithExecution :: IO ByteString -> TestTree
+testLiftedWithExecution getConn = testCase "a lifted multi-CTE helper remains reusable" $
+  withTestPostgres "lifted_with_execution" getConn $ \conn -> do
+    lifted <- runBeamPostgres conn $ runSelectReturningList liftedWithSelect
+    assertEqual "a lifted multi-CTE helper remains reusable"
+      [(1, 11, 12)]
+      lifted
 
 -- Execute each terminal DML consumer against PostgreSQL. The three statements
 -- use SELECT CTEs to choose or construct their affected rows, proving that the
@@ -364,6 +489,43 @@ testDataModifyingCteModel getConn = testCase "data-modifying CTEs agree with a p
 
     assertBool "data-modifying CTE model property failed" passes
 
+-- Repeat the three-operation model without RETURNING. This catches parameter
+-- ordering or accidental omission in the optimized side-effect-only path by
+-- comparing durable state over generated inputs.
+testSideEffectOnlyCteModel :: IO ByteString -> TestTree
+testSideEffectOnlyCteModel getConn = testCase "side-effect-only CTEs agree with a pure table model" $
+  withTestPostgres "side_effect_only_cte_model_property" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+
+    passes <- Hedgehog.check . Hedgehog.property $ do
+      baseId <- Hedgehog.forAll (Gen.int (Range.linear (-100000) 96000))
+      payload <- Hedgehog.forAll (Gen.text (Range.linear 0 24) Gen.alphaNum)
+
+      let inserted = CteRow (fromIntegral baseId) ("inserted:" <> payload)
+          beforeUpdate = CteRow (fromIntegral (baseId + 1)) ("before-update:" <> payload)
+          updated = CteRow (cteId beforeUpdate) ("updated:" <> payload)
+          deleted = CteRow (fromIntegral (baseId + 2)) ("deleted:" <> payload)
+          untouched = CteRow (fromIntegral (baseId + 3)) ("untouched:" <> payload)
+          initial = [beforeUpdate, deleted, untouched]
+          expectedFinal = [inserted, updated, untouched]
+
+      Hedgehog.evalIO $ do
+        execute_ conn "TRUNCATE TABLE cte_rows"
+        runBeamPostgres conn $ runInsert $
+          insert (dbCteRows cteDb) (insertValues initial)
+
+      marker <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningOne $
+          sideEffectCteModelSelect inserted (cteId updated) (cteValue updated) (cteId deleted)
+      finalRows <- Hedgehog.evalIO $ runBeamPostgres conn $
+        runSelectReturningList $ select $
+          orderBy_ (asc_ . cteId) $ all_ (dbCteRows cteDb)
+
+      marker Hedgehog.=== Just (1 :: Int32)
+      finalRows Hedgehog.=== expectedFinal
+
+    assertBool "side-effect-only CTE model property failed" passes
+
 -- Exercise each top-level WITH consumer with independently generated values.
 -- RETURNING results prove that the existing PostgreSQL execution instances can
 -- still consume the Sql* wrappers, while the final table comparison checks the
@@ -414,7 +576,7 @@ testWithDmlConsumerModel getConn = testCase "WITH DML consumers agree with a pur
 
 -- Generate a bounded recursive sequence, use it to drive a DELETE CTE, and
 -- compare both the returned rows and remaining table against the corresponding
--- Haskell lists. This executes the recursive SELECT, its toTopLevel promotion,
+-- Haskell lists. This executes the recursive SELECT, its pgToTopLevel promotion,
 -- and the following modifying CTE rather than checking only rendered keywords.
 testRecursiveCteModel :: IO ByteString -> TestTree
 testRecursiveCteModel getConn = testCase "recursive CTE execution agrees with a bounded sequence model" $
@@ -450,6 +612,77 @@ testRecursiveCteModel getConn = testCase "recursive CTE execution agrees with a 
 
     assertBool "recursive CTE model property failed" passes
 
+materializationSelect
+  :: Pg.PgCteMaterialization
+  -> SqlSelect Postgres (CteRowT Identity)
+materializationSelect materialization = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.pgSelectingWith materialization $ all_ (dbCteRows cteDb)
+  pure (reuse rows)
+
+nestedMaterializedCteSelect :: SqlSelect Postgres (CteRowT Identity)
+nestedMaterializedCteSelect = select $ Pg.pgSelectWithNested $ do
+  rows <- Pg.pgSelectingWith Pg.PgCteMaterialized $
+    all_ (dbCteRows cteDb)
+  pure (reuse rows)
+
+sideEffectOnlyCteSelect :: SqlSelect Postgres Int32
+sideEffectOnlyCteSelect = Pg.pgSelectWithTopLevel $ do
+  Pg.cteInsert
+    (dbCteRows cteDb)
+    (insertValues [CteRow 4 "inserted"])
+    Pg.onConflictDefault
+  Pg.cteUpdate
+    (dbCteRows cteDb)
+    (\row -> cteValue row <-. val_ "after-update")
+    (\row -> cteId row ==. val_ 2)
+  Pg.cteDelete
+    (dbCteRows cteDb)
+    (\row -> cteId row ==. val_ 3)
+  pure finalMarkerQuery
+
+sideEffectNoOpSelect :: SqlSelect Postgres Int32
+sideEffectNoOpSelect = Pg.pgSelectWithTopLevel $ do
+  Pg.cteInsert
+    (dbCteRows cteDb)
+    SqlInsertValuesEmpty
+    Pg.onConflictDefault
+  Pg.cteUpdate
+    (dbCteRows cteDb)
+    (const mempty)
+    (const (val_ True))
+  pure finalMarkerQuery
+
+finalMarkerQuery
+  :: Q Postgres CteDb QBaseScope (QExpr Postgres QBaseScope Int32)
+finalMarkerQuery = pure (val_ 1)
+
+-- A complete two-CTE portable helper is lifted as one action. Its internal
+-- dependency also proves that lifting preserves ReusableQ values, not only the
+-- emitted syntax fragments.
+portableWithHelper
+  :: With Postgres CteDb
+       (ReusableQ Postgres CteDb (QExpr Postgres CTE.QAnyScope Int32))
+portableWithHelper = do
+  first <- selecting $ pure (as_ @Int32 (val_ 10))
+  selecting $ do
+    value <- reuse first
+    pure (value + 1)
+
+liftedWithSelect
+  :: SqlSelect Postgres
+       (Int32, Int32, Int32)
+liftedWithSelect = Pg.pgSelectWithTopLevel $ do
+  nativeBefore <- Pg.pgSelecting $ pure (as_ @Int32 (val_ 1))
+  lifted <- Pg.pgLiftWith portableWithHelper
+  nativeAfter <- Pg.pgSelecting $ do
+    value <- reuse lifted
+    pure (value + 1)
+  pure $ do
+    before <- reuse nativeBefore
+    middle <- reuse lifted
+    after <- reuse nativeAfter
+    pure (before, middle, after)
+
 -- Exercise the main user-facing flow: bind a normal SELECT CTE, perform each
 -- supported data modification, then join all four reusable results in the final
 -- SELECT. The placement of the complete block is inferred as top-level-only.
@@ -460,8 +693,8 @@ mixedCteSelect
        , CteRowT Identity
        , CteRowT Identity
        )
-mixedCteSelect = selectWith $ topLevelOnly $ do
-  selected <- selecting $ do
+mixedCteSelect = Pg.pgSelectWithTopLevel $ do
+  selected <- Pg.pgSelecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ 1)
     pure row
@@ -530,7 +763,7 @@ dataModifyingCteModelSelect
   -> SqlSelect Postgres
        (CteRowT Identity, CteRowT Identity, CteRowT Identity)
 dataModifyingCteModelSelect inserted updateId updateValue deleteId =
-  selectWith $ do
+  Pg.pgSelectWithTopLevel $ do
     insertedRows <- Pg.cteInsertReturning
       (dbCteRows cteDb)
       (insertValues [inserted])
@@ -554,6 +787,27 @@ dataModifyingCteModelSelect inserted updateId updateValue deleteId =
         pure (insertedRow, updatedRow, deletedRow)
       _ -> error "Expected non-empty INSERT and UPDATE CTEs"
 
+sideEffectCteModelSelect
+  :: CteRowT Identity
+  -> Int32
+  -> Text
+  -> Int32
+  -> SqlSelect Postgres Int32
+sideEffectCteModelSelect inserted updateId updateValue deleteId =
+  Pg.pgSelectWithTopLevel $ do
+    Pg.cteInsert
+      (dbCteRows cteDb)
+      (insertValues [inserted])
+      Pg.onConflictDefault
+    Pg.cteUpdate
+      (dbCteRows cteDb)
+      (\row -> cteValue row <-. val_ updateValue)
+      (\row -> cteId row ==. val_ updateId)
+    Pg.cteDelete
+      (dbCteRows cteDb)
+      (\row -> cteId row ==. val_ deleteId)
+    pure finalMarkerQuery
+
 -- The source key is selected in a CTE, then used to derive the inserted key.
 -- This keeps both the CTE and terminal INSERT semantically relevant.
 modelInsertWithStatement
@@ -561,7 +815,7 @@ modelInsertWithStatement
   -> CteRowT Identity
   -> SqlInsert Postgres CteRowT
 modelInsertWithStatement sourceId inserted = Pg.pgInsertWith $ do
-  sourceIds <- selecting $ do
+  sourceIds <- Pg.pgSelecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ sourceId)
     pure (cteId row)
@@ -579,7 +833,7 @@ modelUpdateWithStatement
   -> Text
   -> SqlUpdate Postgres CteRowT
 modelUpdateWithStatement updateId updateValue = Pg.pgUpdateWith $ do
-  targetIds <- selecting $ do
+  targetIds <- Pg.pgSelecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ updateId)
     pure (cteId row)
@@ -595,7 +849,7 @@ modelDeleteWithStatement
   :: Int32
   -> SqlDelete Postgres CteRowT
 modelDeleteWithStatement deleteId = Pg.pgDeleteWith $ do
-  targetIds <- selecting $ do
+  targetIds <- Pg.pgSelecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ deleteId)
     pure (cteId row)
@@ -608,9 +862,9 @@ recursiveCteModelSelect
   :: Int32
   -> Int32
   -> SqlSelect Postgres (CteRowT Identity)
-recursiveCteModelSelect startId endId = selectWith $ do
-  recursiveIds <- toTopLevel $ mdo
-    ids <- selecting $
+recursiveCteModelSelect startId endId = Pg.pgSelectWithTopLevel $ do
+  recursiveIds <- Pg.pgToTopLevel $ mdo
+    ids <- Pg.pgSelecting $
       pure (as_ @Int32 (val_ startId)) `unionAll_` do
         previousId <- reuse ids
         guard_ (previousId <. val_ endId)
@@ -628,7 +882,7 @@ recursiveCteModelSelect startId endId = selectWith $ do
   pure (reuse deletedRows)
 
 nestedSelectCteSelect :: SqlSelect Postgres (CteRowT Identity)
-nestedSelectCteSelect = select $ Pg.pgSelectWith $ nestedAllowed $ do
+nestedSelectCteSelect = select $ Pg.pgSelectWith $ do
   selected <- selecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ 1)
@@ -636,12 +890,12 @@ nestedSelectCteSelect = select $ Pg.pgSelectWith $ nestedAllowed $ do
   pure (reuse selected)
 
 -- PostgreSQL permits a recursive SELECT CTE to feed a later modifying CTE, but
--- not a modifying CTE to recursively reference itself. 'toTopLevel' closes the
+-- not a modifying CTE to recursively reference itself. 'pgToTopLevel' closes the
 -- recursive SELECT knot before the DELETE is added.
 recursiveSelectThenDeleteCteSelect :: SqlSelect Postgres (CteRowT Identity)
-recursiveSelectThenDeleteCteSelect = selectWith $ do
-  recursiveIds <- toTopLevel $ mdo
-    ids <- selecting $
+recursiveSelectThenDeleteCteSelect = Pg.pgSelectWithTopLevel $ do
+  recursiveIds <- Pg.pgToTopLevel $ mdo
+    ids <- Pg.pgSelecting $
       pure (as_ @Int32 (val_ 1)) `unionAll_` do
         previousId <- reuse ids
         guard_ (previousId <. val_ 2)
@@ -659,10 +913,10 @@ recursiveSelectThenDeleteCteSelect = selectWith $ do
   pure (reuse deleted)
 
 -- Empty INSERT values and identity UPDATE assignments do not produce SQL.
--- Their wrappers return Nothing, leaving selectWith to render the final query
+-- Their wrappers return Nothing, leaving pgSelectWithTopLevel to render the final query
 -- without an empty WITH clause.
 emptyDataModifyingCteSelect :: SqlSelect Postgres Int32
-emptyDataModifyingCteSelect = selectWith $ do
+emptyDataModifyingCteSelect = Pg.pgSelectWithTopLevel $ do
   inserted <- Pg.cteInsertReturning
     (dbCteRows cteDb)
     SqlInsertValuesEmpty
@@ -690,7 +944,7 @@ emptySelectProjection = selectWith $ do
   pure (reuse rows)
 
 emptyDeleteProjection :: SqlSelect Postgres (EmptyCteT Identity)
-emptyDeleteProjection = selectWith $ do
+emptyDeleteProjection = Pg.pgSelectWithTopLevel $ do
   rows <- Pg.cteDeleteReturning
     (dbCteRows cteDb)
     (const (val_ False))
@@ -701,7 +955,7 @@ emptyDeleteProjection = selectWith $ do
 -- the reusable query to the terminal INSERT source.
 insertWithStatement :: SqlInsert Postgres CteRowT
 insertWithStatement = Pg.pgInsertWith $ do
-  source <- selecting $ do
+  source <- Pg.pgSelecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ 1)
     pure row
@@ -716,7 +970,7 @@ insertWithStatement = Pg.pgInsertWith $ do
 -- the terminal UPDATE predicate.
 updateWithStatement :: SqlUpdate Postgres CteRowT
 updateWithStatement = Pg.pgUpdateWith $ do
-  targets <- selecting $ do
+  targets <- Pg.pgSelecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ 3)
     pure (cteId row)
@@ -732,7 +986,7 @@ updateWithStatement = Pg.pgUpdateWith $ do
 -- the third terminal syntax wrapper.
 deleteWithStatement :: SqlDelete Postgres CteRowT
 deleteWithStatement = Pg.pgDeleteWith $ do
-  targets <- selecting $ do
+  targets <- Pg.pgSelecting $ do
     row <- all_ (dbCteRows cteDb)
     guard_ (cteId row ==. val_ 4)
     pure (cteId row)
@@ -744,8 +998,12 @@ deleteWithStatement = Pg.pgDeleteWith $ do
 -- Recursion is completed while the block is still nested-safe. The terminal
 -- INSERT then consumes the recursive result at top level.
 recursiveInsertWithStatement :: SqlInsert Postgres CteRowT
-recursiveInsertWithStatement = Pg.pgInsertWith $ mdo
-  ids <- selecting $
+recursiveInsertWithStatement = Pg.pgInsertWith recursiveInsertWith
+
+recursiveInsertWith
+  :: Pg.PgWith CteDb 'Pg.PgCteNestedAllowed (SqlInsert Postgres CteRowT)
+recursiveInsertWith = mdo
+  ids <- Pg.pgSelecting $
     pure (as_ @Int32 (val_ 1)) `unionAll_` do
       previousId <- reuse ids
       guard_ (previousId <. val_ 2)
@@ -757,7 +1015,7 @@ recursiveInsertWithStatement = Pg.pgInsertWith $ mdo
       pure (CteRow rowId (val_ "recursive")))
     Pg.onConflictDefault
 
--- Adding a modifying CTE fixes the block to CteTopLevelOnly. pgDeleteWith is
+-- Adding a modifying CTE fixes the block to PgCteTopLevelOnly. pgDeleteWith is
 -- a top-level consumer, so this remains well-typed.
 topLevelOnlyDeleteWithStatement :: SqlDelete Postgres CteRowT
 topLevelOnlyDeleteWithStatement = Pg.pgDeleteWith $ do
@@ -771,7 +1029,7 @@ topLevelOnlyDeleteWithStatement = Pg.pgDeleteWith $ do
 
 emptyInsertWithStatement :: SqlInsert Postgres CteRowT
 emptyInsertWithStatement = Pg.pgInsertWith $ do
-  _ <- selecting $ all_ (dbCteRows cteDb)
+  _ <- Pg.pgSelecting $ all_ (dbCteRows cteDb)
   pure $ Pg.insert
     (dbCteRows cteDb)
     SqlInsertValuesEmpty
@@ -779,7 +1037,7 @@ emptyInsertWithStatement = Pg.pgInsertWith $ do
 
 identityUpdateWithStatement :: SqlUpdate Postgres CteRowT
 identityUpdateWithStatement = Pg.pgUpdateWith $ do
-  _ <- selecting $ all_ (dbCteRows cteDb)
+  _ <- Pg.pgSelecting $ all_ (dbCteRows cteDb)
   pure $ update
     (dbCteRows cteDb)
     (const mempty)
@@ -842,13 +1100,3 @@ renderSelect = BL.unpack . renderSelectBytes
 renderSelectBytes :: SqlSelect Postgres a -> BL.ByteString
 renderSelectBytes (SqlSelect (PgSelectSyntax syntax)) =
   pgRenderSyntaxScript syntax
-
-topLevelOnly
-  :: With be db 'CteTopLevelOnly a
-  -> With be db 'CteTopLevelOnly a
-topLevelOnly = id
-
-nestedAllowed
-  :: With be db 'CteNestedAllowed a
-  -> With be db 'CteNestedAllowed a
-nestedAllowed = id

@@ -45,8 +45,7 @@ setupTempPostgresDB = do
       password = "root"
       db = "testdb"
 
-  -- Pin the server version so normal CI runs are reproducible. Compatibility
-  -- with newer PostgreSQL releases can be exercised by a separate matrix job.
+  -- Pin the server version so normal CI runs are reproducible.
   postgresContainer <- TC.run $
     TC.containerRequest (TC.fromTag "postgres:18.4")
       TC.& TC.setExpose [5432]

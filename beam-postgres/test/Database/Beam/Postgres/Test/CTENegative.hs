@@ -14,8 +14,10 @@ module Database.Beam.Postgres.Test.CTENegative
   , invalidNestedDeleteThenSelect
   , invalidNestedEmptyInsert
   , invalidNestedIdentityUpdate
+  , invalidNestedSideEffectDelete
   , invalidCoercedPlacement
   , invalidRecursiveInsert
+  , invalidReuseSideEffect
   ) where
 
 import qualified Data.Coerce as Coerce
@@ -48,15 +50,16 @@ negativeCteDb :: DatabaseSettings Postgres NegativeCteDb
 negativeCteDb = defaultDbSettings
 
 -- Each of the following three expressions attempts to put a modifying CTE in
--- pgSelectWith. They must fail with CteTopLevelOnly versus CteNestedAllowed,
+-- pgSelectWithNested. They must fail with PgCteTopLevelOnly versus
+-- PgCteNestedAllowed,
 -- independently of which data-modifying command produced the CTE.
 invalidNestedDelete :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidNestedDelete = select $ Pg.pgSelectWith $ do
+invalidNestedDelete = select $ Pg.pgSelectWithNested $ do
   deleted <- topLevelDeleteCte
   pure (reuse deleted)
 
 invalidNestedInsert :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidNestedInsert = select $ Pg.pgSelectWith $ do
+invalidNestedInsert = select $ Pg.pgSelectWithNested $ do
   inserted <- Pg.cteInsertReturning
     (negativeCteRows negativeCteDb)
     (insertValues [NegativeCteRow 2 "inserted"])
@@ -67,7 +70,7 @@ invalidNestedInsert = select $ Pg.pgSelectWith $ do
     Just inserted' -> pure (reuse inserted')
 
 invalidNestedUpdate :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidNestedUpdate = select $ Pg.pgSelectWith $ do
+invalidNestedUpdate = select $ Pg.pgSelectWithNested $ do
   updated <- Pg.cteUpdateReturning
     (negativeCteRows negativeCteDb)
     (\row -> negativeCteValue row <-. val_ "updated")
@@ -80,13 +83,13 @@ invalidNestedUpdate = select $ Pg.pgSelectWith $ do
 -- Placement is a property of the whole With block. Reordering a normal SELECT
 -- CTE around the DELETE must not weaken the top-level-only requirement.
 invalidNestedSelectThenDelete :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidNestedSelectThenDelete = select $ Pg.pgSelectWith $ do
+invalidNestedSelectThenDelete = select $ Pg.pgSelectWithNested $ do
   _ <- nestedSelectCte
   deleted <- topLevelDeleteCte
   pure (reuse deleted)
 
 invalidNestedDeleteThenSelect :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidNestedDeleteThenSelect = select $ Pg.pgSelectWith $ do
+invalidNestedDeleteThenSelect = select $ Pg.pgSelectWithNested $ do
   deleted <- topLevelDeleteCte
   _ <- nestedSelectCte
   pure (reuse deleted)
@@ -95,7 +98,7 @@ invalidNestedDeleteThenSelect = select $ Pg.pgSelectWith $ do
 -- later discovers that the INSERT or UPDATE emits no statement. The placement
 -- invariant cannot depend on runtime values.
 invalidNestedEmptyInsert :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidNestedEmptyInsert = select $ Pg.pgSelectWith $ do
+invalidNestedEmptyInsert = select $ Pg.pgSelectWithNested $ do
   inserted <- Pg.cteInsertReturning
     (negativeCteRows negativeCteDb)
     SqlInsertValuesEmpty
@@ -106,7 +109,7 @@ invalidNestedEmptyInsert = select $ Pg.pgSelectWith $ do
     Just inserted' -> pure (reuse inserted')
 
 invalidNestedIdentityUpdate :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidNestedIdentityUpdate = select $ Pg.pgSelectWith $ do
+invalidNestedIdentityUpdate = select $ Pg.pgSelectWithNested $ do
   updated <- Pg.cteUpdateReturning
     (negativeCteRows negativeCteDb)
     (const mempty)
@@ -116,17 +119,26 @@ invalidNestedIdentityUpdate = select $ Pg.pgSelectWith $ do
     Nothing -> pure $ all_ (negativeCteRows negativeCteDb)
     Just updated' -> pure (reuse updated')
 
+-- A no-RETURNING modifying CTE has the same top-level placement requirement as
+-- its returning counterpart, even though it exposes no relation.
+invalidNestedSideEffectDelete :: SqlSelect Postgres (NegativeCteRowT Identity)
+invalidNestedSideEffectDelete = select $ Pg.pgSelectWithNested $ do
+  Pg.cteDelete
+    (negativeCteRows negativeCteDb)
+    (\row -> negativeCteId row ==. val_ 1)
+  pure $ all_ (negativeCteRows negativeCteDb)
+
 -- With has nominal roles and an abstract constructor, so Data.Coerce cannot be
 -- used to relabel a top-level-only block as nested-safe.
 invalidCoercedPlacement :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidCoercedPlacement = select $ Pg.pgSelectWith $ coercePlacement $ do
+invalidCoercedPlacement = select $ Pg.pgSelectWithNested $ coercePlacement $ do
   deleted <- topLevelDeleteCte
   pure (reuse deleted)
 
--- MonadFix exists only for CteNestedAllowed. This prevents an INSERT CTE from
+-- MonadFix exists only for PgCteNestedAllowed. This prevents an INSERT CTE from
 -- reading its own RETURNING rows recursively, which PostgreSQL rejects.
 invalidRecursiveInsert :: SqlSelect Postgres (NegativeCteRowT Identity)
-invalidRecursiveInsert = selectWith $ mdo
+invalidRecursiveInsert = Pg.pgSelectWithTopLevel $ mdo
   ~(Just inserted) <- Pg.cteInsertReturning
     (negativeCteRows negativeCteDb)
     (insertFrom (reuse inserted))
@@ -134,19 +146,32 @@ invalidRecursiveInsert = selectWith $ mdo
     id
   pure (reuse inserted)
 
+-- Side-effect-only CTEs deliberately return unit because a DML statement
+-- without RETURNING forms no temporary relation in PostgreSQL.
+invalidReuseSideEffect :: SqlSelect Postgres (NegativeCteRowT Identity)
+invalidReuseSideEffect = Pg.pgSelectWithTopLevel $ do
+  deleted <- Pg.cteDelete
+    (negativeCteRows negativeCteDb)
+    (\row -> negativeCteId row ==. val_ 1)
+  let impossible
+        :: ReusableQ Postgres NegativeCteDb
+             (NegativeCteRowT (QExpr Postgres CTE.QAnyScope))
+      impossible = deleted
+  pure (reuse impossible)
+
 coercePlacement
-  :: With Postgres NegativeCteDb 'CteTopLevelOnly a
-  -> With Postgres NegativeCteDb 'CteNestedAllowed a
+  :: Pg.PgWith NegativeCteDb 'Pg.PgCteTopLevelOnly a
+  -> Pg.PgWith NegativeCteDb 'Pg.PgCteNestedAllowed a
 coercePlacement = Coerce.coerce
 
 nestedSelectCte
-  :: With Postgres NegativeCteDb placement
+  :: Pg.PgWith NegativeCteDb placement
        (ReusableQ Postgres NegativeCteDb
          (NegativeCteRowT (QExpr Postgres CTE.QAnyScope)))
-nestedSelectCte = selecting $ all_ (negativeCteRows negativeCteDb)
+nestedSelectCte = Pg.pgSelecting $ all_ (negativeCteRows negativeCteDb)
 
 topLevelDeleteCte
-  :: With Postgres NegativeCteDb 'CteTopLevelOnly
+  :: Pg.PgWith NegativeCteDb 'Pg.PgCteTopLevelOnly
        (ReusableQ Postgres NegativeCteDb
          (NegativeCteRowT (QExpr Postgres CTE.QAnyScope)))
 topLevelDeleteCte = Pg.cteDeleteReturning

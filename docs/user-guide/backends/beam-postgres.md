@@ -276,10 +276,9 @@ runInsert $
 
 ### Inner CTEs
 
-Standard SQL only allows CTEs (`WITH` expressions) at the top-level SELECT. However, PostgreSQL
-allows them anywhere, including in subqueries for joins.
-
-For example, the following is valid Postgres, but not valid standard SQL.
+`beam-core`'s `selectWith` produces a top-level `SqlSelect`. PostgreSQL also accepts a SELECT-only
+`WITH` query in a derived table, which is useful when the result must participate in a larger Beam
+query. For example:
 
 ```sql
 SELECT a.column1, b.column2
@@ -287,41 +286,136 @@ FROM (WITH RECURSIVE ... SELECT ...) a
 INNER JOIN b
 ```
 
-`beam-core` enforces this by forcing `selectWith` to only return a `SqlSelect`, which represents a
-top-level SQL `SELECT` statement that can be executed against a backend. However, if we want to
-allow `WITH` expressions to appear within joins, then we will need a function similar to
-`selectWith` but returning a `Q` value, which is a re-usable query. `beam-postgres` provides this
-function for PostgreSQL, named `pgSelectWith`. For `beam-postgres`, `select (pgSelectWith x)` is
-equivalent to `selectWith x`. But, with the new type, we can reuse CTEs (including recursive ones)
-within other queries.
+`beam-postgres` provides `pgSelectWith` for this placement. It returns a `Q` value, so its result can
+be reused in joins. Calling `select (pgSelectWith x)` projects the same rows as `selectWith x`, but
+the generated SQL contains the derived-table wrapper shown above. `pgSelectWith` is useful precisely
+when that nested `Q` is required.
 
-PostgreSQL only permits data-modifying CTEs at the top level. Accordingly, `pgSelectWith` accepts a
-`With` block whose placement is `CteNestedAllowed`, while `cteInsertReturning`,
-`cteUpdateReturning`, and `cteDeleteReturning` produce `CteTopLevelOnly` blocks. Mixing ordinary
-`SELECT` CTEs with those operations remains valid under top-level `selectWith`, but attempting to
-pass such a block to `pgSelectWith` is rejected by the Haskell type checker.
+### PostgreSQL-specific CTEs
+
+PostgreSQL requires data-modifying CTEs to appear in a `WITH` clause attached to the top-level
+statement. `Database.Beam.Postgres.Full` provides `PgWith`, whose `PgCteNestedAllowed`
+and `PgCteTopLevelOnly` indices record that placement rule. `pgSelectWithNested` accepts only the
+nested-safe form; `pgSelectWithTopLevel`, `pgInsertWith`, `pgUpdateWith`, and `pgDeleteWith` accept
+either form because they all produce top-level statements. The existing portable `selecting`,
+`selectWith`, and `pgSelectWith` APIs keep their existing types; the PostgreSQL-specific builders
+are additive.
+
+The examples in this section use the module which exports these PostgreSQL-specific statement
+builders:
+
+```haskell
+import qualified Database.Beam.Postgres.Full as Pg
+```
+
+Use `pgSelecting` to define an ordinary SELECT CTE in `PgWith`. Existing helpers returning
+`With Postgres` can be composed without rewriting them by applying `pgLiftWith`; lifted and native
+CTEs share one name supply. For example, if one native CTE precedes a portable helper containing two
+CTEs, the generated names continue through the lifted action:
+
+```haskell
+Pg.pgSelectWithTopLevel $ do
+  nativeRows <- Pg.pgSelecting nativeQuery
+  portableRows <- Pg.pgLiftWith portableTwoCteHelper
+  pure $ (,) <$> reuse nativeRows <*> reuse portableRows
+```
+
+```sql
+WITH "cte0"("res0") AS (SELECT ...),
+     "cte1"("res0") AS (SELECT ...),
+     "cte2"("res0") AS (SELECT ... FROM "cte1")
+SELECT "t0"."res0", "t1"."res0"
+FROM "cte0" AS "t0" CROSS JOIN "cte2" AS "t1"
+```
+
+PostgreSQL 12 and later also support explicit materialization:
+
+```haskell
+Pg.pgSelectWithTopLevel $ do
+  expensiveRows <- Pg.pgSelectingWith Pg.PgCteMaterialized expensiveQuery
+  pure (reuse expensiveRows)
+```
+
+This produces SQL of the following form (Beam generates the `cteN` and `resN` names):
+
+```sql
+WITH "cte0"("res0", "res1") AS MATERIALIZED (SELECT ...)
+SELECT "t0"."res0", "t0"."res1" FROM "cte0" AS "t0"
+```
+
+`PgCteDefault` emits no modifier and leaves the choice to PostgreSQL. `PgCteMaterialized` requests
+separate calculation of the CTE, which can act as an optimization fence or prevent duplicated
+computation. `PgCteNotMaterialized` allows the CTE and parent query to be optimized together, but
+may duplicate work. PostgreSQL ignores `NOT MATERIALIZED` for recursive or non-side-effect-free
+queries. These rules, and the default behavior for single and multiple references, are described in
+the [PostgreSQL CTE materialization documentation](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION).
+
+`cteInsertReturning`, `cteUpdateReturning`, and `cteDeleteReturning` put the corresponding
+`... RETURNING` statement in a CTE and return rows which can be passed to `reuse`. Their
+side-effect-only counterparts, `cteInsert`, `cteUpdate`, and `cteDelete`, omit `RETURNING` and
+therefore return `()`:
+
+```haskell
+Pg.pgSelectWithTopLevel $ do
+  Pg.cteDelete expiredSessions isExpired
+  inserted <- Pg.cteInsertReturning
+    users
+    (insertValues [newUser])
+    Pg.onConflictDefault
+    id
+  case inserted of
+    Nothing -> pure noRowsQuery
+    Just rows -> pure (reuse rows)
+```
+
+The corresponding statement contains both modifications in one `WITH` block. The first definition
+has no output column list because it has no `RETURNING` relation; the second can be reused because
+its generated columns name the `RETURNING` output:
+
+```sql
+WITH "cte0" AS
+       (DELETE FROM "expired_sessions" AS "delete_target" WHERE ...),
+     "cte1"("res0", "res1") AS
+       (INSERT INTO "users" ... RETURNING "id", "name")
+SELECT "t0"."res0", "t0"."res1" FROM "cte1" AS "t0"
+```
+
+PostgreSQL executes every data-modifying CTE exactly once and to completion, even when its output
+is not referenced. Sibling modifying statements use the same snapshot and cannot observe one
+another's table changes; `RETURNING` rows are the supported way to communicate between them. Avoid
+having sibling statements modify the same row, since PostgreSQL does not define which modification
+wins.
+
+See PostgreSQL's [data-modifying `WITH` documentation](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING)
+for these execution and visibility rules.
 
 PostgreSQL also disallows a data-modifying CTE from recursively referring to itself. Recursive
-construction is therefore limited to `CteNestedAllowed` blocks. To combine a recursive `SELECT`
-CTE with a later data-modifying CTE, finish the recursive block first and promote it with
-`toTopLevel`; its result can then safely be reused by the modifying statement.
+construction is therefore limited to `PgCteNestedAllowed`. To let a recursive SELECT feed a later
+modifying CTE, finish the recursive block and promote it with `pgToTopLevel` before adding the
+modification.
 
-A PostgreSQL `WITH` statement may also finish with `INSERT`, `UPDATE`, or `DELETE` instead of a
-final `SELECT`. The `pgInsertWith`, `pgUpdateWith`, and `pgDeleteWith` functions consume a `With`
-block in those cases. Because all three produce top-level statements, they accept both placement
-indices, including blocks containing data-modifying CTEs. For example:
+A PostgreSQL `WITH` statement may finish with `INSERT`, `UPDATE`, or `DELETE` instead of a final
+SELECT. For example:
 
 ```haskell
 Pg.pgInsertWith $ do
-  customersToCopy <- selecting sourceCustomers
+  customersToCopy <- Pg.pgSelecting sourceCustomers
   pure $ Pg.insert archiveCustomers
     (insertFrom (reuse customersToCopy))
     Pg.onConflictDefault
 ```
 
-An empty terminal insert or identity update remains a no-op. PostgreSQL cannot execute a bare
-`WITH` block without a terminal statement, so CTE bodies accumulated before such a no-op are not
-executed.
+This produces one terminal `INSERT`, not a separate SELECT followed by an INSERT:
+
+```sql
+WITH "cte0"("res0", "res1") AS (SELECT ...)
+INSERT INTO "archive_customers"("id", "name")
+SELECT "t0"."res0", "t0"."res1" FROM "cte0" AS "t0"
+```
+
+An empty CTE insert or identity CTE update registers no definition. An empty terminal insert or
+identity terminal update remains a no-op: PostgreSQL cannot execute a bare `WITH` block, so CTE
+bodies accumulated before that missing terminal statement are not executed.
 
 As an example using our Chinook schema, suppose we had an error with all orders in the month of
 September 2024, and needed to send out employees to customer homes to correct the issue. We want to

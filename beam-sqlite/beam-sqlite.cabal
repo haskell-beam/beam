@@ -26,7 +26,7 @@ library
   other-modules:      Database.Beam.Sqlite.SqliteSpecific
   build-depends:      base          >=4.11 && <5,
 
-                      beam-core     >=0.11 && <0.13,
+                      beam-core     >=0.11 && <0.12,
                       beam-migrate  >=0.6 && <0.7,
 
                       sqlite-simple >=0.4  && <0.5,

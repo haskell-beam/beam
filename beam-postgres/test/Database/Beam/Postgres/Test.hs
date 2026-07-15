@@ -14,8 +14,8 @@ withTestPostgres dbName getConnStr action = do
   connStr <- getConnStr
 
   -- Create and drop isolated test databases from the administrative postgres
-  -- database. Connecting to template1 while cloning it is rejected by recent
-  -- PostgreSQL releases because the template database is already in use.
+  -- database, leaving template1 free to serve as CREATE DATABASE's default
+  -- template.
   let connStrAdmin = connStr <> " dbname=postgres"
       connStrDb = connStr <> " dbname=" <> fromString dbName
 

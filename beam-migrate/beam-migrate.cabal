@@ -56,7 +56,7 @@ library
                        Database.Beam.Migrate.Types.Predicates
 
   build-depends:       base                 >=4.11    && <5.0,
-                       beam-core            >=0.11    && <0.13,
+                       beam-core            >=0.11    && <0.12,
                        text                 >=1.2     && <2.2,
                        aeson                >=2.0     && <2.4,
                        bytestring           >=0.10    && <0.13,
