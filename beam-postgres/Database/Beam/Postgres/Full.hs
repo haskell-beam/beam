@@ -1097,7 +1097,7 @@ cteDelete
   -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
   -> PgWith db 'PgCteTopLevelOnly ()
 cteDelete table mkWhere =
-  case delete table mkWhere of
+  case delete table (\row -> mkWhere row) of
     SqlDelete _ (PgDeleteSyntax syntax) -> pgDataModifyingCte_ syntax
 
 -- | Introduce a PostgreSQL @DELETE ... RETURNING@ statement as a
