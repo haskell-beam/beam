@@ -9,7 +9,7 @@
 -- checking.
 module Database.Beam.Postgres.Test.CTE (unitTests, integrationTests) where
 
-import Control.Exception (ErrorCall, TypeError, evaluate, try)
+import Control.Exception (TypeError, evaluate, try)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.ByteString (ByteString)
 import Data.Int (Int32)
@@ -48,13 +48,15 @@ data CteRowT f = CteRow
 deriving instance Show (CteRowT Identity)
 deriving instance Eq (CteRowT Identity)
 
--- A legal Haskell projection shape with no fields. PostgreSQL accepts a
--- zero-column SELECT CTE only when its output alias list is omitted, whereas
--- Beam's reusable CTE representation names every output column. It also cannot
--- emit a bare RETURNING keyword. The builders therefore reject this shape
--- instead of rendering cte() or an empty RETURNING list.
+-- A legal Haskell projection shape with no fields. PostgreSQL represents this
+-- degree-zero relation by omitting the CTE column-alias list. Data-modifying
+-- CTEs with RETURNING use a private physical sentinel to satisfy PostgreSQL's
+-- grammar while retaining this zero-field shape at Beam's public boundary.
 data EmptyCteT (f :: Type -> Type) = EmptyCte
   deriving (Generic, Beamable)
+
+deriving instance Show (EmptyCteT Identity)
+deriving instance Eq (EmptyCteT Identity)
 
 instance Table CteRowT where
   data PrimaryKey CteRowT f = CteRowKey (C f Int32)
@@ -72,7 +74,6 @@ unitTests :: TestTree
 unitTests = testGroup "Common table expression tests"
   [ renderingTests
   , typeSafetyTests
-  , projectionValidationTests
   ]
 
 integrationTests :: IO ByteString -> TestTree
@@ -87,6 +88,9 @@ integrationTests getConn = testGroup "Common table expression integration tests"
   , testSideEffectOnlyCteModel getConn
   , testWithDmlConsumerModel getConn
   , testRecursiveCteModel getConn
+  , testDegreeZeroSelects getConn
+  , testDegreeZeroDataModifyingCtes getConn
+  , testDegreeZeroRepeatedReuse getConn
   ]
 
 renderingTests :: TestTree
@@ -105,6 +109,8 @@ renderingTests = testGroup "Common table expression rendering tests"
   , testTopLevelOnlyDmlConsumerRendering
   , testEmptyDmlConsumers
   , testReturningAfterDmlConsumers
+  , testDegreeZeroSelectRendering
+  , testDegreeZeroDataModifyingRendering
   ]
 
 -- These tests force expressions compiled with deferred type errors in the
@@ -140,14 +146,6 @@ typeSafetyTests = testGroup "Common table expression type-safety tests"
         Negative.invalidReuseSideEffect
   ]
 
-projectionValidationTests :: TestTree
-projectionValidationTests = testGroup "Common table expression projection validation tests"
-  [ testCase "rejects a zero-column SELECT CTE" $
-      assertEmptyProjectionError emptySelectProjection
-  , testCase "rejects a zero-column data-modifying CTE" $
-      assertEmptyProjectionError emptyDeleteProjection
-  ]
-
 assertPlacementTypeError :: SqlSelect Postgres a -> Assertion
 assertPlacementTypeError =
   assertDeferredTypeErrorContaining ["PgCteTopLevelOnly", "PgCteNestedAllowed"]
@@ -169,16 +167,6 @@ assertDeferredTypeErrorContaining expectedFragments sql = do
       assertBool
         ("mentions " ++ fragment ++ "\nDeferred error was:\n" ++ message)
         (fragment `isInfixOf` message)
-
-assertEmptyProjectionError :: SqlSelect Postgres a -> Assertion
-assertEmptyProjectionError sql = do
-  result <- try (evaluate (BL.length (renderSelectBytes sql)))
-  case result of
-    Left (err :: ErrorCall) ->
-      assertBool "explains the non-empty projection requirement"
-        ("at least one column" `isInfixOf` show err)
-    Right _ ->
-      assertFailure "expected the zero-column CTE projection to be rejected"
 
 -- A single top-level WITH block may freely mix SELECT and data-modifying CTE
 -- bodies. Besides checking the individual keywords, this guards against
@@ -221,8 +209,9 @@ testNestedMaterializedCteRendering = testCase "embeds a materialized PgWith bloc
   assertBool "retains the materialization modifier"
     (" AS MATERIALIZED (" `isInfixOf` sql)
 
--- DML without RETURNING is still executed by PostgreSQL but does not create a
--- relation. Its CTE name must therefore have no empty column-alias list.
+-- DML without RETURNING is still executed by PostgreSQL but forms no temporary
+-- table and exposes no reusable result. Its CTE name must therefore have no
+-- empty column-alias list.
 testSideEffectOnlyRendering :: TestTree
 testSideEffectOnlyRendering = testCase "renders side-effect-only INSERT, UPDATE, and DELETE CTEs" $ do
   let sql = renderSelect sideEffectOnlyCteSelect
@@ -276,8 +265,8 @@ testEmptyDataModifyingCtes = testCase "omits empty INSERT and identity UPDATE CT
   assertBool "does not render UPDATE" (not ("UPDATE" `isInfixOf` sql))
 
 -- Each PostgreSQL DML consumer must place the WITH block before, rather than
--- inside, its terminal statement. These rendering checks cover the three
--- independent Sql* wrappers reconstructed by the public functions.
+-- inside, its terminal statement. These rendering checks cover INSERT, UPDATE,
+-- and DELETE while retaining Beam's existing Sql* result types.
 testWithDmlConsumerRendering :: TestTree
 testWithDmlConsumerRendering = testCase "renders WITH before terminal INSERT, UPDATE, and DELETE" $ do
   assertWithTerminal "INSERT INTO" (renderInsert insertWithStatement)
@@ -321,6 +310,59 @@ testReturningAfterDmlConsumers = testCase "supports RETURNING after each termina
   assertReturning "INSERT" (renderInsertReturning (Pg.returning insertWithStatement id))
   assertReturning "UPDATE" (renderUpdateReturning (Pg.returning updateWithStatement id))
   assertReturning "DELETE" (renderDeleteReturning (Pg.returning deleteWithStatement id))
+
+-- PostgreSQL's syntax for a degree-zero CTE has no column-alias parentheses.
+-- Cover both the portable selecting renderer and the native renderer, including
+-- nested and explicit materialization forms, because they enter PostgreSQL
+-- syntax through different code paths.
+testDegreeZeroSelectRendering :: TestTree
+testDegreeZeroSelectRendering = testCase "renders reusable degree-zero SELECT CTEs" $ do
+  let portableSql = renderSelect emptySelectProjection
+      nativeSql = renderSelect
+        (emptyNativeSelectProjection Pg.PgCteDefault)
+      materializedSql = renderSelect
+        (emptyNativeSelectProjection Pg.PgCteMaterialized)
+      nestedSql = renderSelect nestedEmptySelectProjection
+
+  mapM_ assertDegreeZeroSelect
+    [portableSql, nativeSql, materializedSql, nestedSql]
+  assertBool "retains explicit materialization"
+    (" AS MATERIALIZED (" `isInfixOf` materializedSql)
+  assertBool "remains valid in a nested SELECT"
+    ("FROM (WITH " `isInfixOf` nestedSql)
+  where
+    assertDegreeZeroSelect sql = do
+      assertBool "does not render an empty CTE alias list"
+        (not ("\"cte0\"()" `isInfixOf` sql))
+      assertBool "the CTE body projects no columns"
+        ("SELECT  FROM" `isInfixOf` sql || "SELECT FROM" `isInfixOf` sql)
+      assertBool "the consumer projects no columns"
+        ("SELECT  FROM \"cte0\"" `isInfixOf` sql ||
+         "SELECT FROM \"cte0\"" `isInfixOf` sql)
+
+-- INSERT, UPDATE, and DELETE share the sentinel path but have independent
+-- RETURNING renderers. Assert every spelling, including that the physical
+-- sentinel is declared once and is not selected by the zero-field consumer.
+testDegreeZeroDataModifyingRendering :: TestTree
+testDegreeZeroDataModifyingRendering =
+  testCase "renders reusable degree-zero data-modifying CTEs" $
+    mapM_ assertDegreeZeroDml
+      [ ("INSERT", renderSelect (emptyInsertProjection [CteRow 1 "one"]))
+      , ("UPDATE", renderSelect (emptyUpdateProjection 1 "updated"))
+      , ("DELETE", renderSelect (emptyDeleteProjection 1))
+      ]
+  where
+    assertDegreeZeroDml (command, sql) = do
+      assertBool (command ++ " declares one physical sentinel")
+        ("\"cte0\"(\"res0\") AS" `isInfixOf` sql)
+      assertBool (command ++ " appends a valid RETURNING expression")
+        (" RETURNING NULL::boolean" `isInfixOf` sql)
+      assertEqual (command ++ " emits one RETURNING keyword")
+        1
+        (length (filter (== "RETURNING") (words sql)))
+      assertBool (command ++ " does not expose the sentinel")
+        ("SELECT  FROM \"cte0\"" `isInfixOf` sql ||
+         "SELECT FROM \"cte0\"" `isInfixOf` sql)
 
 -- Rendering alone cannot verify PostgreSQL's execution and snapshot semantics.
 -- This integration case checks both the RETURNING rows and the final table
@@ -367,7 +409,7 @@ testSideEffectOnlyCtes getConn = testCase "unreferenced side-effect-only CTEs ex
 
     remaining <- runBeamPostgres conn $ runSelectReturningList $ select $
       orderBy_ (asc_ . cteId) $ all_ (dbCteRows cteDb)
-    assertEqual "all side effects were applied exactly once"
+    assertEqual "all expected side effects were applied"
       [ CteRow 1 "unchanged"
       , CteRow 2 "after-update"
       , CteRow 4 "inserted"
@@ -490,7 +532,7 @@ testDataModifyingCteModel getConn = testCase "data-modifying CTEs agree with a p
     assertBool "data-modifying CTE model property failed" passes
 
 -- Repeat the three-operation model without RETURNING. This catches parameter
--- ordering or accidental omission in the optimized side-effect-only path by
+-- ordering or accidental omission in the side-effect-only path by
 -- comparing durable state over generated inputs.
 testSideEffectOnlyCteModel :: IO ByteString -> TestTree
 testSideEffectOnlyCteModel getConn = testCase "side-effect-only CTEs agree with a pure table model" $
@@ -611,6 +653,108 @@ testRecursiveCteModel getConn = testCase "recursive CTE execution agrees with a 
       finalRows Hedgehog.=== [untouched]
 
     assertBool "recursive CTE model property failed" passes
+
+-- A row need not contain a projected value. PostgreSQL still returns one
+-- zero-field result for every source row, and postgresql-simple must decode the
+-- final rows without expecting any result fields. Exercise both the portable
+-- and native builders and both explicit materialization policies.
+testDegreeZeroSelects :: IO ByteString -> TestTree
+testDegreeZeroSelects getConn = testCase "degree-zero SELECT CTEs preserve source cardinality" $
+  withTestPostgres "degree_zero_select_ctes" getConn $ \conn -> do
+    execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+
+    emptySummary <- runBeamPostgres conn $ runSelectReturningOne $
+      emptySelectSummary
+    assertEqual "an empty degree-zero relation has count zero and is not present"
+      (Just (0, False))
+      emptySummary
+
+    execute_ conn "INSERT INTO cte_rows VALUES (1, 'one'), (2, 'two'), (3, 'three')"
+
+    portable <- runBeamPostgres conn $
+      runSelectReturningList emptySelectProjection
+    native <- runBeamPostgres conn $ runSelectReturningList $
+      emptyNativeSelectProjection Pg.PgCteDefault
+    materialized <- runBeamPostgres conn $ runSelectReturningList $
+      emptyNativeSelectProjection Pg.PgCteMaterialized
+    notMaterialized <- runBeamPostgres conn $ runSelectReturningList $
+      emptyNativeSelectProjection Pg.PgCteNotMaterialized
+    populatedSummary <- runBeamPostgres conn $ runSelectReturningOne $
+      emptySelectSummary
+
+    let expected = replicate 3 EmptyCte
+    assertEqual "portable selecting preserves cardinality" expected portable
+    assertEqual "native default preserves cardinality" expected native
+    assertEqual "MATERIALIZED preserves cardinality" expected materialized
+    assertEqual "NOT MATERIALIZED preserves cardinality" expected notMaterialized
+    assertEqual "aggregates and EXISTS observe degree-zero rows"
+      (Just (3, True))
+      populatedSummary
+
+-- Each modifying command has a separate RETURNING renderer. Besides validating
+-- all three, this checks the boundary cases of several affected rows and no
+-- affected rows, verifies that the private sentinel is not passed to the row
+-- decoder, and compares the resulting durable table state.
+testDegreeZeroDataModifyingCtes :: IO ByteString -> TestTree
+testDegreeZeroDataModifyingCtes getConn =
+  testCase "degree-zero modifying CTEs preserve affected-row cardinality" $
+    withTestPostgres "degree_zero_modifying_ctes" getConn $ \conn -> do
+      execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+      execute_ conn "INSERT INTO cte_rows VALUES (1, 'one'), (2, 'two'), (3, 'three')"
+
+      inserted <- runBeamPostgres conn $ runSelectReturningList $
+        emptyInsertProjection [CteRow 4 "four", CteRow 5 "five"]
+      updated <- runBeamPostgres conn $ runSelectReturningList $
+        emptyUpdateProjection 2 "updated"
+      deleted <- runBeamPostgres conn $ runSelectReturningList $
+        emptyDeleteProjection 3
+      deletedNone <- runBeamPostgres conn $ runSelectReturningList $
+        emptyDeleteProjection 99
+
+      assertEqual "INSERT retains two affected rows"
+        (replicate 2 EmptyCte) inserted
+      assertEqual "UPDATE retains two affected rows"
+        (replicate 2 EmptyCte) updated
+      assertEqual "DELETE retains three affected rows"
+        (replicate 3 EmptyCte) deleted
+      assertEqual "a command affecting no rows returns an empty relation"
+        [] deletedNone
+
+      remaining <- runBeamPostgres conn $ runSelectReturningList $ select $
+        orderBy_ (asc_ . cteId) $ all_ (dbCteRows cteDb)
+      assertEqual "all modifying commands applied their side effects"
+        [CteRow 1 "updated", CteRow 2 "updated"]
+        remaining
+
+-- Reusing a degree-zero modifying CTE twice is a useful stress case: no field
+-- can carry cardinality through the query, so the nine rows show that both
+-- references read the same three-row RETURNING result. The final table state
+-- separately confirms that the DELETE removed every source row.
+testDegreeZeroRepeatedReuse :: IO ByteString -> TestTree
+testDegreeZeroRepeatedReuse getConn =
+  testCase "repeated degree-zero reuse preserves relational cardinality" $
+    withTestPostgres "degree_zero_repeated_reuse" getConn $ \conn -> do
+      execute_ conn "CREATE TABLE cte_rows (id INT PRIMARY KEY, value TEXT NOT NULL)"
+      execute_ conn "INSERT INTO cte_rows VALUES (1, 'one'), (2, 'two'), (3, 'three')"
+
+      summary <- runBeamPostgres conn $ runSelectReturningOne $
+        emptyDeleteSummary
+      assertEqual "COUNT and EXISTS observe every returned DELETE row"
+        (Just (3, True))
+        summary
+
+      execute_ conn "INSERT INTO cte_rows VALUES (1, 'one'), (2, 'two'), (3, 'three')"
+      products <- runBeamPostgres conn $ runSelectReturningList $
+        repeatedEmptyDeleteProjection
+      assertEqual "two references form the expected Cartesian product"
+        (replicate 9 EmptyCte)
+        products
+
+      remaining <- runBeamPostgres conn $ runSelectReturningList $ select $
+        all_ (dbCteRows cteDb)
+      assertEqual "the modifying CTE deletes every source row"
+        []
+        remaining
 
 materializationSelect
   :: Pg.PgCteMaterialization
@@ -913,8 +1057,8 @@ recursiveSelectThenDeleteCteSelect = Pg.pgSelectWithTopLevel $ do
   pure (reuse deleted)
 
 -- Empty INSERT values and identity UPDATE assignments do not produce SQL.
--- Their wrappers return Nothing, leaving pgSelectWithTopLevel to render the final query
--- without an empty WITH clause.
+-- Their wrappers return Nothing, leaving pgSelectWithTopLevel to render the
+-- final query without an empty WITH clause.
 emptyDataModifyingCteSelect :: SqlSelect Postgres Int32
 emptyDataModifyingCteSelect = Pg.pgSelectWithTopLevel $ do
   inserted <- Pg.cteInsertReturning
@@ -934,22 +1078,110 @@ emptyDataModifyingCteSelect = Pg.pgSelectWithTopLevel $ do
     finalQuery :: Q Postgres CteDb QBaseScope (QExpr Postgres QBaseScope Int32)
     finalQuery = pure (val_ 1)
 
--- Both expressions below are valid Beam projection shapes, but contain no
--- fields from which SQL columns could be built. They exercise the shared
--- validation for SELECT and data-modifying CTE bodies respectively.
+-- The portable builder reaches PostgreSQL through the SQL99-shaped compatibility
+-- instance. Each input table row contributes one row to the reusable
+-- degree-zero relation even though the projection contains no values.
 emptySelectProjection :: SqlSelect Postgres (EmptyCteT Identity)
 emptySelectProjection = selectWith $ do
-  rows <- selecting
-    (pure (EmptyCte :: EmptyCteT (QExpr Postgres CTE.QAnyScope)))
+  rows <- selecting $ do
+    _ <- all_ (dbCteRows cteDb)
+    pure (EmptyCte :: EmptyCteT (QExpr Postgres CTE.QAnyScope))
   pure (reuse rows)
 
-emptyDeleteProjection :: SqlSelect Postgres (EmptyCteT Identity)
-emptyDeleteProjection = Pg.pgSelectWithTopLevel $ do
+-- The native SELECT path additionally carries PostgreSQL's materialization
+-- policy. Its logical result is identical for all three policies.
+emptyNativeSelectProjection
+  :: Pg.PgCteMaterialization
+  -> SqlSelect Postgres (EmptyCteT Identity)
+emptyNativeSelectProjection materialization = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.pgSelectingWith materialization $ do
+    _ <- all_ (dbCteRows cteDb)
+    pure (EmptyCte :: EmptyCteT (QExpr Postgres CTE.QAnyScope))
+  pure (reuse rows)
+
+-- SELECT CTEs remain nestable when their relation has degree zero.
+nestedEmptySelectProjection :: SqlSelect Postgres (EmptyCteT Identity)
+nestedEmptySelectProjection = select $ Pg.pgSelectWithNested $ do
+  rows <- Pg.pgSelecting $ do
+    _ <- all_ (dbCteRows cteDb)
+    pure (EmptyCte :: EmptyCteT (QExpr Postgres CTE.QAnyScope))
+  pure (reuse rows)
+
+-- COUNT(*) and EXISTS do not need a projected field, so they are natural
+-- consumers of a degree-zero relation. Both references share one CTE body.
+emptySelectSummary :: SqlSelect Postgres (Int32, Bool)
+emptySelectSummary = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.pgSelecting $ do
+    _ <- all_ (dbCteRows cteDb)
+    pure (EmptyCte :: EmptyCteT (QExpr Postgres CTE.QAnyScope))
+  pure $ do
+    count <- aggregate_ (const (as_ @Int32 countAll_)) (reuse rows)
+    pure (count, exists_ (reuse rows))
+
+-- The next three fixtures deliberately return no logical values. PostgreSQL's
+-- RETURNING grammar is satisfied internally, while the outer SELECT exposes no
+-- physical columns and retains one row per affected table row.
+emptyInsertProjection
+  :: [CteRowT Identity]
+  -> SqlSelect Postgres (EmptyCteT Identity)
+emptyInsertProjection values = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.cteInsertReturning
+    (dbCteRows cteDb)
+    (insertValues values)
+    Pg.onConflictDefault
+    (const (EmptyCte :: EmptyCteT (QExpr Postgres PostgresInaccessible)))
+  case rows of
+    Just rows' -> pure (reuse rows')
+    Nothing -> error "Expected non-empty INSERT values"
+
+emptyUpdateProjection
+  :: Int32
+  -> Text
+  -> SqlSelect Postgres (EmptyCteT Identity)
+emptyUpdateProjection maximumId value = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.cteUpdateReturning
+    (dbCteRows cteDb)
+    (\row -> cteValue row <-. val_ value)
+    (\row -> cteId row <=. val_ maximumId)
+    (const (EmptyCte :: EmptyCteT (QExpr Postgres PostgresInaccessible)))
+  case rows of
+    Just rows' -> pure (reuse rows')
+    Nothing -> error "Expected a non-identity UPDATE"
+
+emptyDeleteProjection
+  :: Int32
+  -> SqlSelect Postgres (EmptyCteT Identity)
+emptyDeleteProjection minimumId = Pg.pgSelectWithTopLevel $ do
   rows <- Pg.cteDeleteReturning
     (dbCteRows cteDb)
-    (const (val_ False))
+    (\row -> cteId row >=. val_ minimumId)
     (const (EmptyCte :: EmptyCteT (QExpr Postgres PostgresInaccessible)))
   pure (reuse rows)
+
+-- Two references to the same modifying CTE must multiply its row cardinality,
+-- not execute the DELETE twice or expose its private sentinel.
+repeatedEmptyDeleteProjection :: SqlSelect Postgres (EmptyCteT Identity)
+repeatedEmptyDeleteProjection = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.cteDeleteReturning
+    (dbCteRows cteDb)
+    (const (val_ True))
+    (const (EmptyCte :: EmptyCteT (QExpr Postgres PostgresInaccessible)))
+  pure $ do
+    _ <- reuse rows
+    _ <- reuse rows
+    pure (EmptyCte :: EmptyCteT (QExpr Postgres QBaseScope))
+
+-- Aggregating the reusable DELETE result verifies that the private physical
+-- sentinel supplies relational rows without becoming a Beam expression.
+emptyDeleteSummary :: SqlSelect Postgres (Int32, Bool)
+emptyDeleteSummary = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.cteDeleteReturning
+    (dbCteRows cteDb)
+    (const (val_ True))
+    (const (EmptyCte :: EmptyCteT (QExpr Postgres PostgresInaccessible)))
+  pure $ do
+    count <- aggregate_ (const (as_ @Int32 countAll_)) (reuse rows)
+    pure (count, exists_ (reuse rows))
 
 -- Copy one row selected by the CTE into a new row. insertFrom is what exposes
 -- the reusable query to the terminal INSERT source.

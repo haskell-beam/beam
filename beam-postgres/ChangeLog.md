@@ -19,6 +19,10 @@
   `reuse`.
 * Added `cteInsert`, `cteUpdate`, and `cteDelete` for data-modifying CTEs which
   execute for their side effects and intentionally produce no reusable rows.
+* Added support for reusable zero-column CTE projections. SELECT CTEs omit the
+  optional output alias list, while data-modifying CTEs use a private
+  `NULL::boolean` `RETURNING` value to preserve one degree-zero result row per
+  affected row without exposing a value to Beam's result decoder.
 * Added `pgSelectWithNested` and `pgSelectWithTopLevel` for consuming safe
   nested and top-level `PgWith` blocks respectively, plus `pgInsertWith`,
   `pgUpdateWith`, and `pgDeleteWith` for terminating a top-level `WITH` block
@@ -28,9 +32,6 @@
 
 * Fixed an issue where using `pgSelectWith` with no common-table expressions
   would lead to an invalid SQL query at runtime.
-* Reject zero-column reusable CTE projections before Beam can render an invalid
-  empty column-alias list (`cte()`), or an empty `RETURNING` list for a
-  data-modifying CTE.
 
 # 0.6.1.0
 

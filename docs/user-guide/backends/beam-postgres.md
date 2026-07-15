@@ -301,46 +301,40 @@ either form because they all produce top-level statements. The existing portable
 `selectWith`, and `pgSelectWith` APIs keep their existing types; the PostgreSQL-specific builders
 are additive.
 
-The examples in this section use the module which exports these PostgreSQL-specific statement
-builders:
-
-```haskell
-import qualified Database.Beam.Postgres.Full as Pg
-```
+The examples in this section use `Database.Beam.Postgres.Full`, qualified as `Pg`, which exports
+these PostgreSQL-specific statement builders.
 
 Use `pgSelecting` to define an ordinary SELECT CTE in `PgWith`. Existing helpers returning
 `With Postgres` can be composed without rewriting them by applying `pgLiftWith`; lifted and native
 CTEs share one name supply. For example, if one native CTE precedes a portable helper containing two
 CTEs, the generated names continue through the lifted action:
 
+!beam-query
 ```haskell
-Pg.pgSelectWithTopLevel $ do
-  nativeRows <- Pg.pgSelecting nativeQuery
-  portableRows <- Pg.pgLiftWith portableTwoCteHelper
+!example chinookdml only:Postgres
+rows <- runSelectReturningList $ Pg.pgSelectWithTopLevel $ do
+  nativeRows <- Pg.pgSelecting $
+    pure (as_ @Int32 (val_ 1))
+  portableRows <- Pg.pgLiftWith $ do
+    first <- selecting $
+      pure (as_ @Int32 (val_ 2))
+    selecting $ do
+      value <- reuse first
+      pure (value + 1)
   pure $ (,) <$> reuse nativeRows <*> reuse portableRows
-```
-
-```sql
-WITH "cte0"("res0") AS (SELECT ...),
-     "cte1"("res0") AS (SELECT ...),
-     "cte2"("res0") AS (SELECT ... FROM "cte1")
-SELECT "t0"."res0", "t1"."res0"
-FROM "cte0" AS "t0" CROSS JOIN "cte2" AS "t1"
+putStrLn (show rows)
 ```
 
 PostgreSQL 12 and later also support explicit materialization:
 
+!beam-query
 ```haskell
-Pg.pgSelectWithTopLevel $ do
-  expensiveRows <- Pg.pgSelectingWith Pg.PgCteMaterialized expensiveQuery
-  pure (reuse expensiveRows)
-```
-
-This produces SQL of the following form (Beam generates the `cteN` and `resN` names):
-
-```sql
-WITH "cte0"("res0", "res1") AS MATERIALIZED (SELECT ...)
-SELECT "t0"."res0", "t0"."res1" FROM "cte0" AS "t0"
+!example chinookdml only:Postgres
+rows <- runSelectReturningList $ Pg.pgSelectWithTopLevel $ do
+  materializedRows <- Pg.pgSelectingWith Pg.PgCteMaterialized $
+    pure (as_ @Int32 (val_ 1), as_ @Int32 (val_ 2))
+  pure (reuse materializedRows)
+putStrLn (show rows)
 ```
 
 `PgCteDefault` emits no modifier and leaves the choice to PostgreSQL. `PgCteMaterialized` requests
@@ -351,34 +345,100 @@ queries. These rules, and the default behavior for single and multiple reference
 the [PostgreSQL CTE materialization documentation](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION).
 
 `cteInsertReturning`, `cteUpdateReturning`, and `cteDeleteReturning` put the corresponding
-`... RETURNING` statement in a CTE and return rows which can be passed to `reuse`. Their
-side-effect-only counterparts, `cteInsert`, `cteUpdate`, and `cteDelete`, omit `RETURNING` and
-therefore return `()`:
+`... RETURNING` statement in a CTE and return a `ReusableQ` handle to its output. Later CTEs or the
+final statement can read that output with `reuse`. Their side-effect-only counterparts,
+`cteInsert`, `cteUpdate`, and `cteDelete`, omit `RETURNING` and therefore return `()`:
 
+!beam-query
 ```haskell
-Pg.pgSelectWithTopLevel $ do
-  Pg.cteDelete expiredSessions isExpired
+!example chinookdml only:Postgres
+rows <- runSelectReturningList $ Pg.pgSelectWithTopLevel $ do
+  Pg.cteDelete
+    (playlist chinookDb)
+    (\row -> playlistId row ==. val_ 1000001)
   inserted <- Pg.cteInsertReturning
-    users
-    (insertValues [newUser])
+    (playlist chinookDb)
+    (insertValues [Playlist 1000000 (Just "PostgreSQL CTE example")])
     Pg.onConflictDefault
     id
   case inserted of
-    Nothing -> pure noRowsQuery
+    Nothing -> pure $
+      filter_ (const (val_ False)) $ all_ (playlist chinookDb)
     Just rows -> pure (reuse rows)
+putStrLn (show rows)
 ```
 
-The corresponding statement contains both modifications in one `WITH` block. The first definition
-has no output column list because it has no `RETURNING` relation; the second can be reused because
-its generated columns name the `RETURNING` output:
+The generated statement contains both modifications in one `WITH` block. The first definition has
+no output column list because it has no `RETURNING` output. The second exposes its `RETURNING`
+output through generated column names, so it can be reused.
+
+#### Zero-column CTE projections
+
+A Beam projection may have no fields—for example, a custom `Beamable` product with a single
+constructor and no record fields. Such a result is still a relation: it has no columns, but it has
+one row for every input row. `selecting`, `pgSelecting`, and `pgSelectingWith` preserve that
+cardinality. A projection type and query can be written as follows (the helper signature lets the
+query scope be inferred at each use):
+
+```haskell
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE KindSignatures #-}
+
+import Data.Kind (Type)
+import GHC.Generics (Generic)
+
+data NoColumns (f :: Type -> Type) = NoColumns
+  deriving (Generic, Beamable)
+
+noColumns :: NoColumns (QExpr Postgres scope)
+noColumns = NoColumns
+
+degreeZeroPlaylists = Pg.pgSelectWithTopLevel $ do
+  rows <- Pg.pgSelecting $ do
+    _ <- all_ (playlist chinookDb)
+    pure noColumns
+  pure (reuse rows)
+```
+
+PostgreSQL represents the result by omitting the optional CTE column-alias list and by using a
+SELECT with an empty target list:
 
 ```sql
 WITH "cte0" AS
-       (DELETE FROM "expired_sessions" AS "delete_target" WHERE ...),
-     "cte1"("res0", "res1") AS
-       (INSERT INTO "users" ... RETURNING "id", "name")
-SELECT "t0"."res0", "t0"."res1" FROM "cte1" AS "t0"
+       (SELECT FROM "source" AS "t0")
+SELECT FROM "cte0" AS "t0"
 ```
+
+When this query is run with `runSelectReturningList`, its result contains one zero-field Haskell
+value for every source row. The CTE can also be used with `EXISTS`, aggregation, or joins. Reusing
+it twice in a Cartesian product multiplies its row count in the same way as any other relation; the
+absence of columns does not make it a side-effect-only operation. The `MATERIALIZED` and
+`NOT MATERIALIZED` policies have their normal meaning for a zero-column SELECT CTE.
+
+PostgreSQL requires a data-modifying `RETURNING` clause to contain an expression. Therefore, when
+the projection supplied to `cteInsertReturning`, `cteUpdateReturning`, or `cteDeleteReturning` has
+no fields, `beam-postgres` adds one private boolean result inside the CTE:
+
+```sql
+WITH "cte0"("res0") AS
+       (DELETE FROM "source" AS "delete_target"
+        WHERE ...
+        RETURNING NULL::boolean)
+SELECT FROM "cte0" AS "t0"
+```
+
+The private `res0` value is not selected or passed to the Haskell result decoder. It exists only to
+satisfy PostgreSQL's grammar, and one sentinel row is returned for every affected row. This makes
+the degree-zero relation useful for counting, existence checks, and repeated reuse. A statement
+which affects no rows produces no result rows.
+
+When neither the final statement nor another CTE needs the rows affected by the operation, use
+`cteInsert`, `cteUpdate`, or `cteDelete`. These functions omit `RETURNING` and therefore do not
+produce a result that can be passed to `reuse`.
+
+The private-sentinel handling is specific to zero-field projections in these reusable CTE
+builders. A standalone `returning` call still requires a projection containing at least one value.
 
 PostgreSQL executes every data-modifying CTE exactly once and to completion, even when its output
 is not referenced. Sibling modifying statements use the same snapshot and cannot observe one
@@ -397,21 +457,20 @@ modification.
 A PostgreSQL `WITH` statement may finish with `INSERT`, `UPDATE`, or `DELETE` instead of a final
 SELECT. For example:
 
+!beam-query
 ```haskell
-Pg.pgInsertWith $ do
-  customersToCopy <- Pg.pgSelecting sourceCustomers
-  pure $ Pg.insert archiveCustomers
-    (insertFrom (reuse customersToCopy))
-    Pg.onConflictDefault
+!example chinookdml only:Postgres
+runInsert $ Pg.pgInsertWith $ do
+  playlistToInsert <- Pg.pgSelecting $
+    filter_ (\source -> playlistId source ==. val_ 1) $
+      all_ (playlist chinookDb)
+  pure $ Pg.insert
+    (playlist chinookDb)
+    (insertFrom (reuse playlistToInsert))
+    (Pg.onConflict Pg.anyConflict Pg.onConflictDoNothing)
 ```
 
-This produces one terminal `INSERT`, not a separate SELECT followed by an INSERT:
-
-```sql
-WITH "cte0"("res0", "res1") AS (SELECT ...)
-INSERT INTO "archive_customers"("id", "name")
-SELECT "t0"."res0", "t0"."res1" FROM "cte0" AS "t0"
-```
+This produces one terminal `INSERT`, not a separate SELECT followed by an INSERT.
 
 An empty CTE insert or identity CTE update registers no definition. An empty terminal insert or
 identity terminal update remains a no-op: PostgreSQL cannot execute a bare `WITH` block, so CTE

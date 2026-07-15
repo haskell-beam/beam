@@ -265,9 +265,18 @@ pgSelecting = pgSelectingWith PgCteDefault
 -- semantically valid, for example for a recursive query or a query containing
 -- volatile functions.
 --
--- Beam names every projected CTE column. A zero-column projection would make
--- that generated alias list @()@, which PostgreSQL rejects, so this function
--- rejects it before the SQL is sent.
+-- A projection with no fields is represented by omitting the CTE column-alias
+-- list. PostgreSQL then treats the CTE as a degree-zero relation: it has no
+-- columns, but it retains the row cardinality of @query@. For example, a query
+-- which produces two empty rows has the following shape:
+--
+-- @
+-- WITH "cte0" AS MATERIALIZED (SELECT FROM ...)
+-- SELECT FROM "cte0" AS "t0"
+-- @
+--
+-- Reusing such a CTE remains meaningful in joins, @EXISTS@, and aggregates
+-- even though no value can be projected from an individual row.
 pgSelectingWith
   :: forall res db placement
    . ( Projectible Postgres res
@@ -278,12 +287,10 @@ pgSelectingWith
 pgSelectingWith materialization q = do
   tblNm <- pgRegisterCte $ \name ->
     let (_ :: res, fields) = mkFieldNames @Postgres (qualifiedField name)
-    in pgOutputCteSyntax
-         "Database.Beam.Postgres.Full.pgSelectingWith"
-         name
-         fields
-         materialization
-         (fromPgSelect (buildSqlQuery (name <> "_") q))
+        body = fromPgSelect (buildSqlQuery (name <> "_") q)
+    in case nonEmpty fields of
+         Nothing -> pgCteSyntax name Nothing materialization body
+         Just fields' -> pgOutputCteSyntax name fields' materialization body
   pure (CTE.reusableForCTE tblNm)
 
 -- | An explicit lock against some tables. You can create a value of this type using the 'locked_'
@@ -446,7 +453,8 @@ insertReturning (DatabaseEntity tbl@(DatabaseTable {}))
 -- @
 --
 -- Empty insert values register no CTE. The result is still conservatively
--- 'PgCteTopLevelOnly', because placement cannot depend on a runtime value.
+-- 'PgCteTopLevelOnly', because the placement index cannot vary with the
+-- supplied values.
 cteInsert
   :: DatabaseEntity Postgres db (TableEntity table)
   -> SqlInsertValues Postgres (table (QExpr Postgres s))
@@ -482,9 +490,25 @@ cteInsert table values onConflict_ =
 -- The generated statement has the shape:
 --
 -- @
--- WITH cte0 AS (INSERT INTO users ... RETURNING ...)
--- SELECT ... FROM cte0
+-- WITH "cte0"("res0", ...) AS
+--        (INSERT INTO "users" ... RETURNING ...)
+-- SELECT ... FROM "cte0" AS "t0"
 -- @
+--
+-- The projection may contain no fields. In that case Beam preserves one
+-- degree-zero result row per inserted row. PostgreSQL requires at least one
+-- @RETURNING@ expression, so the CTE contains a private boolean sentinel while
+-- the final SELECT exposes no columns:
+--
+-- @
+-- WITH "cte0"("res0") AS
+--        (INSERT INTO "users" ... RETURNING NULL::boolean)
+-- SELECT FROM "cte0" AS "t0"
+-- @
+--
+-- The sentinel is not part of the returned Haskell value. If neither the final
+-- statement nor another CTE needs the inserted-row output, prefer 'cteInsert'.
+-- It omits @RETURNING@ and produces no reusable result.
 cteInsertReturning
   :: ( Projectible Postgres a
      , ThreadRewritable PostgresInaccessible a
@@ -500,8 +524,7 @@ cteInsertReturning table values onConflict_ mkProjection =
   case insertReturning table values onConflict_ (Just mkProjection) of
     PgInsertReturningEmpty -> pure Nothing
     PgInsertReturning syntax ->
-      Just <$> pgDataModifyingCte
-        "Database.Beam.Postgres.Full.cteInsertReturning" syntax
+      Just <$> pgDataModifyingCte syntax
 
 runPgInsertReturningList
   :: ( MonadBeam be m
@@ -708,8 +731,8 @@ pgInsertWith
 pgInsertWith with =
   case runPgWith with of
     (SqlInsertNoRows, _, _) -> SqlInsertNoRows
-    (SqlInsert settings (PgInsertSyntax statement), recursive, ctes) ->
-      SqlInsert settings (PgInsertSyntax (pgWithSyntax recursive ctes statement))
+    (SqlInsert settings (PgInsertSyntax statement), recursiveness, ctes) ->
+      SqlInsert settings (PgInsertSyntax (pgWithSyntax recursiveness ctes statement))
 
 -- | Attach a common-table-expression block to a top-level PostgreSQL
 -- @UPDATE@ statement.
@@ -747,8 +770,8 @@ pgUpdateWith
 pgUpdateWith with =
   case runPgWith with of
     (SqlIdentityUpdate, _, _) -> SqlIdentityUpdate
-    (SqlUpdate settings (PgUpdateSyntax statement), recursive, ctes) ->
-      SqlUpdate settings (PgUpdateSyntax (pgWithSyntax recursive ctes statement))
+    (SqlUpdate settings (PgUpdateSyntax statement), recursiveness, ctes) ->
+      SqlUpdate settings (PgUpdateSyntax (pgWithSyntax recursiveness ctes statement))
 
 -- | Attach a common-table-expression block to a top-level PostgreSQL
 -- @DELETE@ statement.
@@ -778,8 +801,8 @@ pgDeleteWith
   -> SqlDelete Postgres table
 pgDeleteWith with =
   case runPgWith with of
-    (SqlDelete settings (PgDeleteSyntax statement), recursive, ctes) ->
-      SqlDelete settings (PgDeleteSyntax (pgWithSyntax recursive ctes statement))
+    (SqlDelete settings (PgDeleteSyntax statement), recursiveness, ctes) ->
+      SqlDelete settings (PgDeleteSyntax (pgWithSyntax recursiveness ctes statement))
 
 -- Allocate a name and append one PostgreSQL CTE definition to beam-core's
 -- existing writer. All PgWith constructors use this path so lifted and native
@@ -795,30 +818,24 @@ pgRegisterCte mkCte = PgWith . CTE.With $ do
   tell (CTE.Nonrecursive, [mkCte tblNm])
   pure tblNm
 
--- Construct a reusable CTE and reject an empty output before PostgreSQL can
--- receive the malformed explicit alias list @name() AS (...)@. PostgreSQL can
--- represent a zero-column SELECT CTE when the alias list is omitted, but Beam's
--- reusable projection path assigns a name to every output column. The function
--- name is included in the error so failures identify the public builder which
--- accepted the empty projection.
+-- Construct a reusable CTE with a statically non-empty physical output. Keeping
+-- the invariant in the type prevents callers from accidentally rendering the
+-- invalid PostgreSQL spelling @name() AS (...)@.
 pgOutputCteSyntax
-  :: String
-  -> Text
-  -> [Text]
+  :: Text
+  -> NonEmpty Text
   -> PgCteMaterialization
   -> PgSyntax
   -> PgCommonTableExpressionSyntax
-pgOutputCteSyntax origin name fields materialization body =
-  case nonEmpty fields of
-    Nothing -> error (origin ++ ": a PostgreSQL CTE must project at least one column")
-    Just fields' -> pgCteSyntax name (Just fields') materialization body
+pgOutputCteSyntax name fields materialization body =
+  pgCteSyntax name (Just fields) materialization body
 
 -- Render the common outer shape for SELECT, returning DML, and
--- side-effect-only DML CTEs. A missing column list is meaningful only for a
--- modifying statement without RETURNING. Materialization is deliberately
--- passed as PgCteDefault for every DML caller: PostgreSQL's materialization
--- controls apply to SELECT CTE folding, while modifying CTEs always execute
--- exactly once and to completion.
+-- side-effect-only DML CTEs. A missing column list is used for degree-zero
+-- SELECT CTEs and for modifying statements without @RETURNING@. Materialization
+-- is deliberately passed as PgCteDefault for every DML caller: PostgreSQL's
+-- materialization controls apply to SELECT CTE folding, while modifying CTEs
+-- always execute exactly once and to completion.
 pgCteSyntax
   :: Text
   -> Maybe (NonEmpty Text)
@@ -840,24 +857,43 @@ pgCteSyntax name fields materialization body =
     materializationSyntax PgCteMaterialized = emit " MATERIALIZED"
     materializationSyntax PgCteNotMaterialized = emit " NOT MATERIALIZED"
 
--- Register a modifying CTE with RETURNING output and construct the reusable
+-- Register a modifying CTE with @RETURNING@ output and construct the reusable
 -- relation which refers to its generated name.
+--
+-- PostgreSQL requires @RETURNING@ to contain at least one expression. The
+-- existing INSERT, UPDATE, and DELETE returning renderers end in the keyword
+-- and a space when Beam's logical projection has no fields. In that case this
+-- CTE-specific path appends one private, constant boolean expression and gives
+-- it the physical name @res0@. 'CTE.reusableForCTE' is still instantiated at
+-- the original zero-field result type, so final Beam SELECTs project no
+-- physical columns and the sentinel is never exposed to result decoding.
+--
+-- One sentinel row is produced for every affected row. Consequently the
+-- degree-zero relation preserves the modifying statement's cardinality when it
+-- is reused by joins, @EXISTS@, or aggregates.
 pgDataModifyingCte
   :: forall res db
    . ( Projectible Postgres res
      , ThreadRewritable CTE.QAnyScope res )
-  => String
-  -> PgSyntax
+  => PgSyntax
   -> PgWith db 'PgCteTopLevelOnly (ReusableQ Postgres db res)
-pgDataModifyingCte origin body = do
+pgDataModifyingCte body = do
   tblNm <- pgRegisterCte $ \name ->
     let (_ :: res, fields) = mkFieldNames @Postgres (qualifiedField name)
-    in pgOutputCteSyntax origin name fields PgCteDefault body
+    in case nonEmpty fields of
+         Nothing ->
+           pgOutputCteSyntax
+             name
+             (NonEmpty.singleton "res0")
+             PgCteDefault
+             (body <> emit "NULL::boolean")
+         Just fields' -> pgOutputCteSyntax name fields' PgCteDefault body
   pure (CTE.reusableForCTE tblNm)
 
--- Register a modifying CTE without RETURNING. PostgreSQL executes the body but
--- creates no relation which could be passed to reuse, hence the unit result and
--- the absence of a column-alias list.
+-- Register a modifying CTE without @RETURNING@. PostgreSQL executes the body,
+-- but the CTE forms no temporary table and therefore has no result which can be
+-- passed to 'reuse'. This accounts for both the unit result and the absence of
+-- a column-alias list.
 pgDataModifyingCte_
   :: PgSyntax
   -> PgWith db 'PgCteTopLevelOnly ()
@@ -871,14 +907,14 @@ pgDataModifyingCte_ body = do
 -- the backend-independent CTE API does not acquire PostgreSQL command types.
 runPgWith
   :: PgWith db placement a
-  -> (a, Bool, [BeamSql99BackendCTESyntax Postgres])
+  -> (a, PgCteRecursiveness, [BeamSql99BackendCTESyntax Postgres])
 runPgWith (PgWith with) =
   let (result, (recursiveness, ctes)) =
         evalState (runWriterT (CTE.runWith with)) 0
-      recursive = case recursiveness of
-        CTE.Nonrecursive -> False
-        CTE.Recursive -> True
-  in (result, recursive, ctes)
+      pgRecursiveness = case recursiveness of
+        CTE.Nonrecursive -> PgCteNonrecursive
+        CTE.Recursive -> PgCteRecursive
+  in (result, pgRecursiveness, ctes)
 
 -- | By default, Postgres will throw an error when a conflict is detected. This
 -- preserves that functionality.
@@ -1012,6 +1048,12 @@ cteUpdate table@(DatabaseEntity (DatabaseTable {})) mkAssignments mkWhere =
 --         WHERE "id" = ... RETURNING "id", "enabled")
 -- SELECT "t0"."res0", "t0"."res1" FROM "cte0" AS "t0"
 -- @
+--
+-- As with 'cteInsertReturning', a projection containing no fields is supported.
+-- Beam emits @RETURNING NULL::boolean@ inside the CTE and @SELECT FROM "cte0"@
+-- outside it, retaining one zero-field row per updated row without exposing the
+-- private sentinel. If neither the final statement nor another CTE needs the
+-- updated-row output, use 'cteUpdate' instead.
 cteUpdateReturning
   :: ( Projectible Postgres a
      , ThreadRewritable PostgresInaccessible a
@@ -1027,8 +1069,7 @@ cteUpdateReturning table mkAssignments mkWhere mkProjection =
   case updateReturning table mkAssignments mkWhere mkProjection of
     PgUpdateReturningEmpty -> pure Nothing
     PgUpdateReturning syntax ->
-      Just <$> pgDataModifyingCte
-        "Database.Beam.Postgres.Full.cteUpdateReturning" syntax
+      Just <$> pgDataModifyingCte syntax
 
 runPgUpdateReturningList
   :: ( MonadBeam be m
@@ -1130,6 +1171,11 @@ cteDelete table mkWhere =
 -- The final query observes the deleted rows through @DELETE ... RETURNING@.
 -- This is also the supported way to communicate between data-modifying CTEs,
 -- since PostgreSQL executes sibling statements against the same snapshot.
+-- A projection containing no fields is also reusable: Beam emits a private
+-- @NULL::boolean@ returning expression and an outer zero-column SELECT, so its
+-- row count still equals the number of deleted rows. If neither the final
+-- statement nor another CTE needs the deleted-row output, use 'cteDelete'
+-- instead.
 cteDeleteReturning
   :: ( Projectible Postgres a
      , ThreadRewritable PostgresInaccessible a
@@ -1142,8 +1188,7 @@ cteDeleteReturning
   -> PgWith db 'PgCteTopLevelOnly (ReusableQ Postgres db (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a))
 cteDeleteReturning table mkWhere mkProjection =
   let PgDeleteReturning syntax = deleteReturning table mkWhere mkProjection
-  in pgDataModifyingCte
-       "Database.Beam.Postgres.Full.cteDeleteReturning" syntax
+  in pgDataModifyingCte syntax
 
 runPgDeleteReturningList
   :: ( MonadBeam be m

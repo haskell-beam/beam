@@ -94,9 +94,9 @@ invalidNestedDeleteThenSelect = select $ Pg.pgSelectWithNested $ do
   _ <- nestedSelectCte
   pure (reuse deleted)
 
--- The result is conservatively top-level-only even when a value-level check
--- later discovers that the INSERT or UPDATE emits no statement. The placement
--- invariant cannot depend on runtime values.
+-- The result is conservatively top-level-only even when the supplied values or
+-- assignments make the INSERT or UPDATE a no-op. The placement index cannot
+-- vary with that value-level outcome.
 invalidNestedEmptyInsert :: SqlSelect Postgres (NegativeCteRowT Identity)
 invalidNestedEmptyInsert = select $ Pg.pgSelectWithNested $ do
   inserted <- Pg.cteInsertReturning
@@ -128,8 +128,8 @@ invalidNestedSideEffectDelete = select $ Pg.pgSelectWithNested $ do
     (\row -> negativeCteId row ==. val_ 1)
   pure $ all_ (negativeCteRows negativeCteDb)
 
--- With has nominal roles and an abstract constructor, so Data.Coerce cannot be
--- used to relabel a top-level-only block as nested-safe.
+-- PgWith has nominal roles and an abstract constructor, so Data.Coerce cannot
+-- be used to relabel a top-level-only block as nested-safe.
 invalidCoercedPlacement :: SqlSelect Postgres (NegativeCteRowT Identity)
 invalidCoercedPlacement = select $ Pg.pgSelectWithNested $ coercePlacement $ do
   deleted <- topLevelDeleteCte
