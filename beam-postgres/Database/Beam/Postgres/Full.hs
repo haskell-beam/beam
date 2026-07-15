@@ -83,7 +83,7 @@ import           Control.Monad.Free.Church
 import           Control.Monad.State.Strict (evalState, get, put)
 import           Control.Monad.Writer (runWriterT, tell)
 
-import           Data.List.NonEmpty (NonEmpty, nonEmpty)
+import           Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Kind (Type)
 import           Data.Proxy (Proxy(..))
@@ -884,7 +884,7 @@ pgDataModifyingCte body = do
          Nothing ->
            pgOutputCteSyntax
              name
-             (NonEmpty.singleton "res0")
+             ("res0" :| [])
              PgCteDefault
              (body <> emit "NULL::boolean")
          Just fields' -> pgOutputCteSyntax name fields' PgCteDefault body
