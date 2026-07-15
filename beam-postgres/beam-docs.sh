@@ -4,7 +4,7 @@ set -e
 
 . ${BEAM_DOCS_LIBRARY}
 
-CHINOOK_POSTGRES_URL="https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_PostgreSql.sql"
+CHINOOK_POSTGRES_URL="https://raw.githubusercontent.com/lerocha/chinook-database/1b6138b3f70a8090db48011ff4abc0e3627b22b6/ChinookDatabase/DataSources/Chinook_PostgreSql.sql"
 EXPECTED_SHA256="6945d59e3bca94591e2a96451b9bd69084b026f7fb7dbda3d15d06114ffb34c4"
 
 PGCONNSTR=$1
