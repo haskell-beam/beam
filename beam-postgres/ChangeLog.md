@@ -1,12 +1,7 @@
-# 0.6.2.0
+# 0.6.3.0
 
 ## Added features
 
-* Added instances for `BeamSqlBackendIsString Postgres (CI String)` and
-  `BeamSqlBackendIsString Postgres (CI Text)`, allowing the use of `toTsVector`
-  over colums of type `citext` (#818)
-* Exposed the functionality to implement user-defined extensions via
-  `Database.Beam.Postgres.Extensions` (#819)
 * Added the PostgreSQL-specific, placement-indexed `PgWith` CTE builder. It can
   lift helpers built with the portable `With Postgres` API, while the new
   data-modifying builders produce blocks which cannot be embedded in a
@@ -32,6 +27,16 @@
 
 * Fixed an issue where using `pgSelectWith` with no common-table expressions
   would lead to an invalid SQL query at runtime.
+
+# 0.6.2.0
+
+## Added features
+
+* Added instances for `BeamSqlBackendIsString Postgres (CI String)` and
+  `BeamSqlBackendIsString Postgres (CI Text)`, allowing the use of `toTsVector`
+  over colums of type `citext` (#818)
+* Exposed the functionality to implement user-defined extensions via
+  `Database.Beam.Postgres.Extensions` (#819)
 
 # 0.6.1.0
 

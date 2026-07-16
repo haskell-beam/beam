@@ -101,6 +101,8 @@ import qualified Data.Text as T
 -- on 'PgWith' records that rule for the builders in this module, so invalid
 -- nesting is rejected by Haskell rather than by PostgreSQL. See PostgreSQL's
 -- <https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING data-modifying WITH documentation>.
+--
+-- @since 0.6.3.0
 data PgCtePlacement
   = PgCteNestedAllowed
     -- ^ The block contains only CTEs which may be nested.
@@ -119,6 +121,8 @@ data PgCtePlacement
 -- and 'cteInsert', 'cteUpdate', or 'cteDelete' for side-effect-only CTEs.
 -- Consume the completed block with 'pgSelectWithTopLevel', 'pgInsertWith',
 -- 'pgUpdateWith', or 'pgDeleteWith'.
+--
+-- @since 0.6.3.0
 newtype PgWith db (placement :: PgCtePlacement) a =
   PgWith { unPgWith :: With Postgres db a }
   deriving (Functor, Applicative, Monad)
@@ -163,6 +167,8 @@ instance MonadFix (PgWith db 'PgCteNestedAllowed) where
 --
 -- The 'With' constructor is public for low-level extension code. 'pgLiftWith'
 -- assumes such code preserves the portable API's SELECT-only invariant.
+--
+-- @since 0.6.3.0
 pgLiftWith :: With Postgres db a -> PgWith db placement a
 pgLiftWith = PgWith
 
@@ -192,6 +198,8 @@ pgLiftWith = PgWith
 --         WHERE EXISTS (SELECT ... FROM "cte0"))
 -- SELECT ...
 -- @
+--
+-- @since 0.6.3.0
 pgToTopLevel
   :: PgWith db 'PgCteNestedAllowed a
   -> PgWith db 'PgCteTopLevelOnly a
@@ -204,6 +212,8 @@ pgToTopLevel (PgWith with) = PgWith with
 -- planner behaviour and compatibility with earlier server versions.
 -- See PostgreSQL's
 -- <https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION CTE materialization documentation>.
+--
+-- @since 0.6.3.0
 data PgCteMaterialization
   = PgCteDefault
     -- ^ Let PostgreSQL decide whether to fold or materialize the CTE.
@@ -231,6 +241,8 @@ data PgCteMaterialization
 -- WITH "cte0"("res0", "res1") AS (SELECT ...)
 -- SELECT "t0"."res0", "t0"."res1" FROM "cte0" AS "t0"
 -- @
+--
+-- @since 0.6.3.0
 pgSelecting
   :: ( Projectible Postgres res
      , ThreadRewritable CTE.QAnyScope res )
@@ -277,6 +289,8 @@ pgSelecting = pgSelectingWith PgCteDefault
 --
 -- Reusing such a CTE remains meaningful in joins, @EXISTS@, and aggregates
 -- even though no value can be projected from an individual row.
+--
+-- @since 0.6.3.0
 pgSelectingWith
   :: forall res db placement
    . ( Projectible Postgres res
@@ -455,6 +469,8 @@ insertReturning (DatabaseEntity tbl@(DatabaseTable {}))
 -- Empty insert values register no CTE. The result is still conservatively
 -- 'PgCteTopLevelOnly', because the placement index cannot vary with the
 -- supplied values.
+--
+-- @since 0.6.3.0
 cteInsert
   :: DatabaseEntity Postgres db (TableEntity table)
   -> SqlInsertValues Postgres (table (QExpr Postgres s))
@@ -509,6 +525,8 @@ cteInsert table values onConflict_ =
 -- The sentinel is not part of the returned Haskell value. If neither the final
 -- statement nor another CTE needs the inserted-row output, prefer 'cteInsert'.
 -- It omits @RETURNING@ and produces no reusable result.
+--
+-- @since 0.6.3.0
 cteInsertReturning
   :: ( Projectible Postgres a
      , ThreadRewritable PostgresInaccessible a
@@ -630,6 +648,8 @@ pgSelectWith = pgSelectWith_
 --       SELECT "sub_t0"."res0", "sub_t0"."res1"
 --       FROM "cte0" AS "sub_t0") AS "t0"("res0", "res1")
 -- @
+--
+-- @since 0.6.3.0
 pgSelectWithNested
   :: forall db s res
    . Projectible Postgres res
@@ -693,6 +713,8 @@ pgSelectWith_ (CTE.With mkQ) =
 --
 -- The complete @WITH ... SELECT ...@ is one 'SqlSelect' and is sent to
 -- PostgreSQL in a single round trip.
+--
+-- @since 0.6.3.0
 pgSelectWithTopLevel
   :: Projectible Postgres res
   => PgWith db placement (Q Postgres db QBaseScope res)
@@ -725,6 +747,8 @@ pgSelectWithTopLevel = selectWith . unPgWith
 --
 -- Apply 'returning' to the resulting 'SqlInsert' when the terminal statement
 -- should return rows.
+--
+-- @since 0.6.3.0
 pgInsertWith
   :: PgWith db placement (SqlInsert Postgres table)
   -> SqlInsert Postgres table
@@ -764,6 +788,8 @@ pgInsertWith with =
 --
 -- Apply 'returning' to the resulting 'SqlUpdate' when the terminal statement
 -- should return rows.
+--
+-- @since 0.6.3.0
 pgUpdateWith
   :: PgWith db placement (SqlUpdate Postgres table)
   -> SqlUpdate Postgres table
@@ -796,6 +822,8 @@ pgUpdateWith with =
 -- always preserved.
 -- Apply 'returning' to the result when the terminal statement should return
 -- deleted rows.
+--
+-- @since 0.6.3.0
 pgDeleteWith
   :: PgWith db placement (SqlDelete Postgres table)
   -> SqlDelete Postgres table
@@ -1010,6 +1038,8 @@ updateReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSett
 --
 -- An identity assignment registers no CTE. As with 'cteInsert', its type
 -- remains 'PgCteTopLevelOnly' independently of that value-level result.
+--
+-- @since 0.6.3.0
 cteUpdate
   :: DatabaseEntity Postgres db (TableEntity table)
   -> (forall s. table (QField s) -> QAssignment Postgres s)
@@ -1054,6 +1084,8 @@ cteUpdate table@(DatabaseEntity (DatabaseTable {})) mkAssignments mkWhere =
 -- outside it, retaining one zero-field row per updated row without exposing the
 -- private sentinel. If neither the final statement nor another CTE needs the
 -- updated-row output, use 'cteUpdate' instead.
+--
+-- @since 0.6.3.0
 cteUpdateReturning
   :: ( Projectible Postgres a
      , ThreadRewritable PostgresInaccessible a
@@ -1133,6 +1165,8 @@ deleteReturning table@(DatabaseEntity (DatabaseTable { dbTableSettings = tblSett
 -- Sibling modifying CTEs use the same PostgreSQL snapshot and cannot observe
 -- one another's table changes. Use their @RETURNING@ output when one operation
 -- needs to communicate rows to another.
+--
+-- @since 0.6.3.0
 cteDelete
   :: DatabaseEntity Postgres db (TableEntity table)
   -> (forall s. table (QExpr Postgres s) -> QExpr Postgres s Bool)
@@ -1176,6 +1210,8 @@ cteDelete table mkWhere =
 -- row count still equals the number of deleted rows. If neither the final
 -- statement nor another CTE needs the deleted-row output, use 'cteDelete'
 -- instead.
+--
+-- @since 0.6.3.0
 cteDeleteReturning
   :: ( Projectible Postgres a
      , ThreadRewritable PostgresInaccessible a

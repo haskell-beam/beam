@@ -277,6 +277,8 @@ data PgSelectLockingClauseSyntax = PgSelectLockingClauseSyntax { pgSelectLocking
 --
 -- This is exported for PostgreSQL extension modules. Application code should
 -- normally construct CTEs through "Database.Beam.Postgres.Full".
+--
+-- @since 0.6.3.0
 newtype PgCommonTableExpressionSyntax
     = PgCommonTableExpressionSyntax { fromPgCommonTableExpression :: PgSyntax }
 
@@ -284,6 +286,8 @@ newtype PgCommonTableExpressionSyntax
 --
 -- Keeping this distinction explicit avoids assigning a context-dependent
 -- meaning to a 'Bool' at the low-level syntax boundary.
+--
+-- @since 0.6.3.0
 data PgCteRecursiveness
     = PgCteNonrecursive
       -- ^ Emit @WITH@.
@@ -299,6 +303,8 @@ data PgCteRecursiveness
 --
 -- An empty list leaves the statement unchanged. 'PgCteRecursive' selects
 -- @WITH RECURSIVE@ when the CTE builder used recursive bindings.
+--
+-- @since 0.6.3.0
 pgWithSyntax
     :: PgCteRecursiveness
     -> [PgCommonTableExpressionSyntax]
