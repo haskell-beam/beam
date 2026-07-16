@@ -1401,6 +1401,34 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#postgresql-specific-ctes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PostgreSQL-specific CTEs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PostgreSQL-specific CTEs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zero-column-cte-projections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-column CTE projections
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#copy-support" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1832,6 +1860,34 @@
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-specific-ctes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PostgreSQL-specific CTEs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PostgreSQL-specific CTEs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zero-column-cte-projections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-column CTE projections
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -2691,26 +2747,32 @@ first name and replace the old last name.</p>
                 </div>
                     </p>
 <h3 id="inner-ctes">Inner CTEs</h3>
-<p>Standard SQL only allows CTEs (<code>WITH</code> expressions) at the top-level SELECT. However, PostgreSQL
-allows them anywhere, including in subqueries for joins.</p>
-<p>For example, the following is valid Postgres, but not valid standard SQL.</p>
+<p><code>beam-core</code>'s <code>selectWith</code> produces a top-level <code>SqlSelect</code>. PostgreSQL also accepts a SELECT-only
+<code>WITH</code> query in a derived table, which is useful when the result must participate in a larger Beam
+query. For example:</p>
 <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">column1</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">column2</span>
 <span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="k">WITH</span><span class="w"> </span><span class="k">RECURSIVE</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="p">...)</span><span class="w"> </span><span class="n">a</span>
 <span class="k">INNER</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">b</span>
 </code></pre></div>
 
-<p><code>beam-core</code> enforces this by forcing <code>selectWith</code> to only return a <code>SqlSelect</code>, which represents a
-top-level SQL <code>SELECT</code> statement that can be executed against a backend. However, if we want to
-allow <code>WITH</code> expressions to appear within joins, then we will need a function similar to
-<code>selectWith</code> but returning a <code>Q</code> value, which is a re-usable query. <code>beam-postgres</code> provides this
-function for PostgreSQL, named <code>pgSelectWith</code>. For <code>beam-postgres</code>, <code>select (pgSelectWith x)</code> is
-equivalent to <code>selectWith x</code>. But, with the new type, we can reuse CTEs (including recursive ones)
-within other queries.</p>
-<p>As an example using our Chinook schema, suppose we had an error with all orders in the month of
-September 2024, and needed to send out employees to customer homes to correct the issue. We want to
-find, for each order, an employee who lives in the same city as the customer, but we only want the
-highest ranking employee for each customer.</p>
-<p>First, we order the employees by org structure so that managers appear first, followed by direct reports. We use a recursive query for this, and then join it against the orders.</p>
+<p><code>beam-postgres</code> provides <code>pgSelectWith</code> for this placement. It returns a <code>Q</code> value, so its result can
+be reused in joins. Calling <code>select (pgSelectWith x)</code> projects the same rows as <code>selectWith x</code>, but
+the generated SQL contains the derived-table wrapper shown above. <code>pgSelectWith</code> is useful precisely
+when that nested <code>Q</code> is required.</p>
+<h3 id="postgresql-specific-ctes">PostgreSQL-specific CTEs</h3>
+<p>PostgreSQL requires data-modifying CTEs to appear in a <code>WITH</code> clause attached to the top-level
+statement. <code>Database.Beam.Postgres.Full</code> provides <code>PgWith</code>, whose <code>PgCteNestedAllowed</code>
+and <code>PgCteTopLevelOnly</code> indices record that placement rule. <code>pgSelectWithNested</code> accepts only the
+nested-safe form; <code>pgSelectWithTopLevel</code>, <code>pgInsertWith</code>, <code>pgUpdateWith</code>, and <code>pgDeleteWith</code> accept
+either form because they all produce top-level statements. The existing portable <code>selecting</code>,
+<code>selectWith</code>, and <code>pgSelectWith</code> APIs keep their existing types; the PostgreSQL-specific builders
+are additive.</p>
+<p>The examples in this section use <code>Database.Beam.Postgres.Full</code>, qualified as <code>Pg</code>, which exports
+these PostgreSQL-specific statement builders.</p>
+<p>Use <code>pgSelecting</code> to define an ordinary SELECT CTE in <code>PgWith</code>. Existing helpers returning
+<code>With Postgres</code> can be composed without rewriting them by applying <code>pgLiftWith</code>; lifted and native
+CTEs share one name supply. For example, if one native CTE precedes a portable helper containing two
+CTEs, the generated names continue through the lifted action:</p>
 <p>
                 <div class="code-nav-container">
                     
@@ -2729,6 +2791,309 @@ highest ranking employee for each customer.</p>
         <div class="tab-content">
             
         <div role="tabpanel" class="tab-pane active" id="tab-14-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="nf">rows</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">runSelectReturningList</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelectWithTopLevel</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">  </span><span class="n">nativeRows</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelecting</span><span class="w"> </span><span class="o">$</span>
+<span class="w">    </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="n">as_</span><span class="w"> </span><span class="o">@</span><span class="kt">Int32</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">  </span><span class="n">portableRows</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgLiftWith</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">    </span><span class="n">first</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">selecting</span><span class="w"> </span><span class="o">$</span>
+<span class="w">      </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="n">as_</span><span class="w"> </span><span class="o">@</span><span class="kt">Int32</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">    </span><span class="n">selecting</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">      </span><span class="n">value</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">reuse</span><span class="w"> </span><span class="n">first</span>
+<span class="w">      </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">  </span><span class="n">pure</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="p">(,)</span><span class="w"> </span><span class="o">&lt;$&gt;</span><span class="w"> </span><span class="n">reuse</span><span class="w"> </span><span class="n">nativeRows</span><span class="w"> </span><span class="o">&lt;*&gt;</span><span class="w"> </span><span class="n">reuse</span><span class="w"> </span><span class="n">portableRows</span>
+<span class="nf">putStrLn</span><span class="w"> </span><span class="p">(</span><span class="n">show</span><span class="w"> </span><span class="n">rows</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-14-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="p">(</span><span class="ss">&quot;res0&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">),</span>
+<span class="w">     </span><span class="ss">&quot;cte1&quot;</span><span class="p">(</span><span class="ss">&quot;res0&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">),</span>
+<span class="w">     </span><span class="ss">&quot;cte2&quot;</span><span class="p">(</span><span class="ss">&quot;res0&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;cte2_0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span>
+<span class="w">   </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;cte2_0&quot;</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t1&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+<span class="k">CROSS</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="ss">&quot;cte2&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t1&quot;</span><span class="p">;</span>
+
+<span class="c1">-- Output: [(1,3)]</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>PostgreSQL 12 and later also support explicit materialization:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-15-Haskell" aria-controls="tab-15-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-15-Postgres" aria-controls="tab-15-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-15-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="nf">rows</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">runSelectReturningList</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelectWithTopLevel</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">  </span><span class="n">materializedRows</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelectingWith</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="kt">PgCteMaterialized</span><span class="w"> </span><span class="o">$</span>
+<span class="w">    </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="n">as_</span><span class="w"> </span><span class="o">@</span><span class="kt">Int32</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">as_</span><span class="w"> </span><span class="o">@</span><span class="kt">Int32</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">  </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="n">reuse</span><span class="w"> </span><span class="n">materializedRows</span><span class="p">)</span>
+<span class="nf">putStrLn</span><span class="w"> </span><span class="p">(</span><span class="n">show</span><span class="w"> </span><span class="n">rows</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-15-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="p">(</span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="ss">&quot;res1&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">MATERIALIZED</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
+
+<span class="c1">-- Output: [(1,2)]</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p><code>PgCteDefault</code> emits no modifier and leaves the choice to PostgreSQL. <code>PgCteMaterialized</code> requests
+separate calculation of the CTE, which can act as an optimization fence or prevent duplicated
+computation. <code>PgCteNotMaterialized</code> allows the CTE and parent query to be optimized together, but
+may duplicate work. PostgreSQL ignores <code>NOT MATERIALIZED</code> for recursive or non-side-effect-free
+queries. These rules, and the default behavior for single and multiple references, are described in
+the <a href="https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION">PostgreSQL CTE materialization documentation</a>.</p>
+<p><code>cteInsertReturning</code>, <code>cteUpdateReturning</code>, and <code>cteDeleteReturning</code> put the corresponding
+<code>... RETURNING</code> statement in a CTE and return a <code>ReusableQ</code> handle to its output. Later CTEs or the
+final statement can read that output with <code>reuse</code>. Their side-effect-only counterparts,
+<code>cteInsert</code>, <code>cteUpdate</code>, and <code>cteDelete</code>, omit <code>RETURNING</code> and therefore return <code>()</code>:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-16-Haskell" aria-controls="tab-16-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-16-Postgres" aria-controls="tab-16-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-16-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="nf">rows</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">runSelectReturningList</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelectWithTopLevel</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">  </span><span class="kt">Pg</span><span class="o">.</span><span class="n">cteDelete</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="p">(</span><span class="nf">\</span><span class="n">row</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">playlistId</span><span class="w"> </span><span class="n">row</span><span class="w"> </span><span class="o">==.</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="mi">1000001</span><span class="p">)</span>
+<span class="w">  </span><span class="n">inserted</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">cteInsertReturning</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="p">(</span><span class="n">insertValues</span><span class="w"> </span><span class="p">[</span><span class="kt">Playlist</span><span class="w"> </span><span class="mi">1000000</span><span class="w"> </span><span class="p">(</span><span class="kt">Just</span><span class="w"> </span><span class="s">&quot;PostgreSQL CTE example&quot;</span><span class="p">)])</span>
+<span class="w">    </span><span class="kt">Pg</span><span class="o">.</span><span class="n">onConflictDefault</span>
+<span class="w">    </span><span class="n">id</span>
+<span class="w">  </span><span class="kr">case</span><span class="w"> </span><span class="n">inserted</span><span class="w"> </span><span class="kr">of</span>
+<span class="w">    </span><span class="kt">Nothing</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">pure</span><span class="w"> </span><span class="o">$</span>
+<span class="w">      </span><span class="n">filter_</span><span class="w"> </span><span class="p">(</span><span class="n">const</span><span class="w"> </span><span class="p">(</span><span class="n">val_</span><span class="w"> </span><span class="kt">False</span><span class="p">))</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="kt">Just</span><span class="w"> </span><span class="n">rows</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="n">reuse</span><span class="w"> </span><span class="n">rows</span><span class="p">)</span>
+<span class="nf">putStrLn</span><span class="w"> </span><span class="p">(</span><span class="n">show</span><span class="w"> </span><span class="n">rows</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-16-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">  </span><span class="p">(</span><span class="k">DELETE</span>
+<span class="w">   </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
+<span class="w">   </span><span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;delete_target&quot;</span><span class="p">.</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1000001</span><span class="p">)),</span>
+<span class="w">     </span><span class="ss">&quot;cte1&quot;</span><span class="p">(</span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="ss">&quot;res1&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">  </span><span class="p">(</span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
+<span class="w">                          </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span>
+<span class="w">   </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span>
+<span class="w">           </span><span class="s1">&#39;PostgreSQL CTE example&#39;</span><span class="p">)</span><span class="w"> </span><span class="n">RETURNING</span><span class="w"> </span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
+<span class="w">                                               </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">;</span>
+
+<span class="c1">-- Output: [Playlist {playlistId = 1000000, playlistName = Just &quot;PostgreSQL CTE example&quot;}]</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>The generated statement contains both modifications in one <code>WITH</code> block. The first definition has
+no output column list because it has no <code>RETURNING</code> output. The second exposes its <code>RETURNING</code>
+output through generated column names, so it can be reused.</p>
+<h4 id="zero-column-cte-projections">Zero-column CTE projections</h4>
+<p>A Beam projection may have no fields—for example, a custom <code>Beamable</code> product with a single
+constructor and no record fields. Such a result is still a relation: it has no columns, but it has
+one row for every input row. <code>selecting</code>, <code>pgSelecting</code>, and <code>pgSelectingWith</code> preserve that
+cardinality. A projection type and query can be written as follows (the helper signature lets the
+query scope be inferred at each use):</p>
+<div class="highlight"><pre><span></span><code><span class="cm">{-# LANGUAGE DeriveAnyClass #-}</span>
+<span class="cm">{-# LANGUAGE DeriveGeneric #-}</span>
+<span class="cm">{-# LANGUAGE KindSignatures #-}</span>
+
+<span class="kr">import</span><span class="w"> </span><span class="nn">Data.Kind</span><span class="w"> </span><span class="p">(</span><span class="kt">Type</span><span class="p">)</span>
+<span class="kr">import</span><span class="w"> </span><span class="nn">GHC.Generics</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">)</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">NoColumns</span><span class="w"> </span><span class="p">(</span><span class="n">f</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Type</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Type</span><span class="p">)</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">NoColumns</span>
+<span class="w">  </span><span class="kr">deriving</span><span class="w"> </span><span class="p">(</span><span class="kt">Generic</span><span class="p">,</span><span class="w"> </span><span class="kt">Beamable</span><span class="p">)</span>
+
+<span class="nf">noColumns</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">NoColumns</span><span class="w"> </span><span class="p">(</span><span class="kt">QExpr</span><span class="w"> </span><span class="kt">Postgres</span><span class="w"> </span><span class="n">scope</span><span class="p">)</span>
+<span class="nf">noColumns</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">NoColumns</span>
+
+<span class="nf">degreeZeroPlaylists</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelectWithTopLevel</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">  </span><span class="n">rows</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelecting</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">    </span><span class="kr">_</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="n">pure</span><span class="w"> </span><span class="n">noColumns</span>
+<span class="w">  </span><span class="n">pure</span><span class="w"> </span><span class="p">(</span><span class="n">reuse</span><span class="w"> </span><span class="n">rows</span><span class="p">)</span>
+</code></pre></div>
+
+<p>PostgreSQL represents the result by omitting the optional CTE column-alias list and by using a
+SELECT with an empty target list:</p>
+<div class="highlight"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">       </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;source&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+</code></pre></div>
+
+<p>When this query is run with <code>runSelectReturningList</code>, its result contains one zero-field Haskell
+value for every source row. The CTE can also be used with <code>EXISTS</code>, aggregation, or joins. Reusing
+it twice in a Cartesian product multiplies its row count in the same way as any other relation; the
+absence of columns does not make it a side-effect-only operation. The <code>MATERIALIZED</code> and
+<code>NOT MATERIALIZED</code> policies have their normal meaning for a zero-column SELECT CTE.</p>
+<p>PostgreSQL requires a data-modifying <code>RETURNING</code> clause to contain an expression. Therefore, when
+the projection supplied to <code>cteInsertReturning</code>, <code>cteUpdateReturning</code>, or <code>cteDeleteReturning</code> has
+no fields, <code>beam-postgres</code> adds one private boolean result inside the CTE:</p>
+<div class="highlight"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="p">(</span><span class="ss">&quot;res0&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">       </span><span class="p">(</span><span class="k">DELETE</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;source&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
+<span class="w">        </span><span class="k">WHERE</span><span class="w"> </span><span class="p">...</span>
+<span class="w">        </span><span class="n">RETURNING</span><span class="w"> </span><span class="k">NULL</span><span class="p">::</span><span class="nb">boolean</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span>
+</code></pre></div>
+
+<p>The private <code>res0</code> value is not selected or passed to the Haskell result decoder. It exists only to
+satisfy PostgreSQL's grammar, and one sentinel row is returned for every affected row. This makes
+the degree-zero relation useful for counting, existence checks, and repeated reuse. A statement
+which affects no rows produces no result rows.</p>
+<p>When neither the final statement nor another CTE needs the rows affected by the operation, use
+<code>cteInsert</code>, <code>cteUpdate</code>, or <code>cteDelete</code>. These functions omit <code>RETURNING</code> and therefore do not
+produce a result that can be passed to <code>reuse</code>.</p>
+<p>The private-sentinel handling is specific to zero-field projections in these reusable CTE
+builders. A standalone <code>returning</code> call still requires a projection containing at least one value.</p>
+<p>PostgreSQL executes every data-modifying CTE exactly once and to completion, even when its output
+is not referenced. Sibling modifying statements use the same snapshot and cannot observe one
+another's table changes; <code>RETURNING</code> rows are the supported way to communicate between them. Avoid
+having sibling statements modify the same row, since PostgreSQL does not define which modification
+wins.</p>
+<p>See PostgreSQL's <a href="https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING">data-modifying <code>WITH</code> documentation</a>
+for these execution and visibility rules.</p>
+<p>PostgreSQL also disallows a data-modifying CTE from recursively referring to itself. Recursive
+construction is therefore limited to <code>PgCteNestedAllowed</code>. To let a recursive SELECT feed a later
+modifying CTE, finish the recursive block and promote it with <code>pgToTopLevel</code> before adding the
+modification.</p>
+<p>A PostgreSQL <code>WITH</code> statement may finish with <code>INSERT</code>, <code>UPDATE</code>, or <code>DELETE</code> instead of a final
+SELECT. For example:</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-17-Haskell" aria-controls="tab-17-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-17-Postgres" aria-controls="tab-17-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-17-Haskell">
+            <div class="highlight"><pre><span></span><code><span class="nf">runInsert</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgInsertWith</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">  </span><span class="n">playlistToInsert</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelecting</span><span class="w"> </span><span class="o">$</span>
+<span class="w">    </span><span class="n">filter_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="n">source</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">playlistId</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">==.</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">$</span>
+<span class="w">      </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">  </span><span class="n">pure</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">insert</span>
+<span class="w">    </span><span class="p">(</span><span class="n">playlist</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
+<span class="w">    </span><span class="p">(</span><span class="n">insertFrom</span><span class="w"> </span><span class="p">(</span><span class="n">reuse</span><span class="w"> </span><span class="n">playlistToInsert</span><span class="p">))</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">Pg</span><span class="o">.</span><span class="n">onConflict</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">anyConflict</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">onConflictDoNothing</span><span class="p">)</span>
+</code></pre></div>
+
+        </div>
+    
+        <div role="tabpanel" class="tab-pane " id="tab-17-Postgres">
+            <div class="highlight"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="p">(</span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="ss">&quot;res1&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span>
+<span class="w">  </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;cte0_0&quot;</span><span class="p">.</span><span class="ss">&quot;PlaylistId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="ss">&quot;cte0_0&quot;</span><span class="p">.</span><span class="ss">&quot;Name&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span>
+<span class="w">   </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;cte0_0&quot;</span>
+<span class="w">   </span><span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;cte0_0&quot;</span><span class="p">.</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
+<span class="w">                       </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">       </span><span class="ss">&quot;t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;t0&quot;</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">CONFLICT</span><span class="w"> </span><span class="k">DO</span><span class="w"> </span><span class="k">NOTHING</span><span class="p">;</span>
+</code></pre></div>
+
+        </div>
+    
+        </div>
+    
+                </div>
+                    </p>
+<p>This produces one terminal <code>INSERT</code>, not a separate SELECT followed by an INSERT.</p>
+<p>An empty CTE insert or identity CTE update registers no definition. An empty terminal insert or
+identity terminal update remains a no-op: PostgreSQL cannot execute a bare <code>WITH</code> block, so CTE
+bodies accumulated before that missing terminal statement are not executed.</p>
+<p>As an example using our Chinook schema, suppose we had an error with all orders in the month of
+September 2024, and needed to send out employees to customer homes to correct the issue. We want to
+find, for each order, an employee who lives in the same city as the customer, but we only want the
+highest ranking employee for each customer.</p>
+<p>First, we order the employees by org structure so that managers appear first, followed by direct reports. We use a recursive query for this, and then join it against the orders.</p>
+<p>
+                <div class="code-nav-container">
+                    
+        <ul class="nav nav-tabs">
+            
+        <li class="nav-item">
+            <a href="#tab-18-Haskell" aria-controls="tab-18-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+        </li>
+    
+        <li class="nav-item">
+            <a href="#tab-18-Postgres" aria-controls="tab-18-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+        </li>
+    
+        </ul>
+    
+        <div class="tab-content">
+            
+        <div role="tabpanel" class="tab-pane active" id="tab-18-Haskell">
             <div class="highlight"><pre><span></span><code><span class="nf">aggregate_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="p">(</span><span class="n">cust</span><span class="p">,</span><span class="w"> </span><span class="n">emp</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="p">(</span><span class="n">group_</span><span class="w"> </span><span class="n">cust</span><span class="p">,</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgArrayAgg</span><span class="w"> </span><span class="p">(</span><span class="n">employeeId</span><span class="w"> </span><span class="n">emp</span><span class="p">)))</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
 <span class="w">  </span><span class="n">inv</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">filter_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="n">i</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">invoiceDate</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&gt;=.</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">read</span><span class="w"> </span><span class="s">&quot;2024-09-01 00:00:00.000000&quot;</span><span class="p">)</span><span class="w">  </span><span class="o">&amp;&amp;.</span><span class="w"> </span><span class="n">invoiceDate</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=.</span><span class="w"> </span><span class="n">val_</span><span class="w"> </span><span class="p">(</span><span class="n">read</span><span class="w"> </span><span class="s">&quot;2024-10-01 00:00:00.000000&quot;</span><span class="p">))</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">invoice</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
 <span class="w">  </span><span class="n">cust</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="n">filter_</span><span class="w"> </span><span class="p">(</span><span class="nf">\</span><span class="n">c</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">pk</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">==.</span><span class="w"> </span><span class="n">invoiceCustomer</span><span class="w"> </span><span class="n">inv</span><span class="p">)</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="n">all_</span><span class="w"> </span><span class="p">(</span><span class="n">customer</span><span class="w"> </span><span class="n">chinookDb</span><span class="p">)</span>
@@ -2755,7 +3120,7 @@ highest ranking employee for each customer.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-14-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-18-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;t1&quot;</span><span class="p">.</span><span class="ss">&quot;CustomerId&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
 <span class="w">       </span><span class="ss">&quot;t1&quot;</span><span class="p">.</span><span class="ss">&quot;FirstName&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
 <span class="w">       </span><span class="ss">&quot;t1&quot;</span><span class="p">.</span><span class="ss">&quot;LastName&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
@@ -2827,23 +3192,23 @@ highest ranking employee for each customer.</p>
 <span class="w">                                         </span><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;cte0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;cte0_0&quot;</span>
 <span class="w">                                         </span><span class="k">CROSS</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="ss">&quot;Employee&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;cte0_1&quot;</span>
 <span class="w">                                         </span><span class="k">WHERE</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;cte0_1&quot;</span><span class="p">.</span><span class="ss">&quot;ReportsTo&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">DISTINCT</span>
-<span class="w">                                           </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;cte0_0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="p">)))</span><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res3&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res4&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res5&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res6&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res7&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res8&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res8&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res9&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res10&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res10&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res11&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res11&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res12&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res12&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res13&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res13&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res14&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res14&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res15&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res15&quot;</span><span class="p">,</span>
-<span class="w">                                                                          </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res16&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res16&quot;</span>
+<span class="w">                                           </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="ss">&quot;cte0_0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="p">)))</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res2&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res2&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res3&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res3&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res4&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res4&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res5&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res5&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res6&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res6&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res7&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res7&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res8&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res8&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res9&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res9&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res10&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res10&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res11&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res11&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res12&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res12&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res13&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res13&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res14&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res14&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res15&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res15&quot;</span><span class="p">,</span>
+<span class="w">                                                                           </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res16&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res16&quot;</span>
 <span class="w">   </span><span class="k">FROM</span>
 <span class="w">     </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res0&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res0&quot;</span><span class="p">,</span>
 <span class="w">             </span><span class="ss">&quot;sub_t0&quot;</span><span class="p">.</span><span class="ss">&quot;res1&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;res1&quot;</span><span class="p">,</span>
@@ -2928,18 +3293,18 @@ Both records have a default value to override selected fields against.</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-15-Haskell" aria-controls="tab-15-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-19-Haskell" aria-controls="tab-19-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-15-Postgres" aria-controls="tab-15-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-19-Postgres" aria-controls="tab-19-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-15-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-19-Haskell">
             <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
 <span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
 <span class="w">  </span><span class="n">copyTableTo</span>
@@ -2950,7 +3315,7 @@ Both records have a default value to override selected fields against.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-15-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-19-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">COPY</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
 <span class="w">                </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-playlists.txt&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="nb">text</span><span class="p">);</span>
 </code></pre></div>
@@ -2968,18 +3333,18 @@ Both records have a default value to override selected fields against.</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-16-Haskell" aria-controls="tab-16-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-20-Haskell" aria-controls="tab-20-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-16-Postgres" aria-controls="tab-16-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-20-Postgres" aria-controls="tab-20-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-16-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-20-Haskell">
             <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
 <span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Postgres</span>
 <span class="nf">runCopyTo</span><span class="w"> </span><span class="o">$</span>
@@ -2996,7 +3361,7 @@ Both records have a default value to override selected fields against.</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-16-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-20-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">COPY</span><span class="w"> </span><span class="ss">&quot;Playlist&quot;</span><span class="p">(</span><span class="ss">&quot;PlaylistId&quot;</span><span class="p">,</span>
 <span class="w">                </span><span class="ss">&quot;Name&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">&#39;/tmp/beam-docs-csv-options.csv&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">FORMAT</span><span class="w"> </span><span class="n">csv</span><span class="p">,</span>
 <span class="w">                                                             </span><span class="k">DELIMITER</span><span class="w"> </span><span class="s1">&#39;|&#39;</span><span class="p">,</span>
@@ -3059,18 +3424,18 @@ The example below prints every chunk without materializing the whole dataset:</p
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-17-Haskell" aria-controls="tab-17-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-21-Haskell" aria-controls="tab-21-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-17-Postgres" aria-controls="tab-17-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-21-Postgres" aria-controls="tab-21-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-17-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-21-Haskell">
             <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
 <span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Postgres</span>
 <span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="k">qualified</span><span class="w"> </span><span class="nn">Data.ByteString.Char8</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">BS</span>
@@ -3086,7 +3451,7 @@ The example below prints every chunk without materializing the whole dataset:</p
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-17-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-21-Postgres">
             <div class="highlight"><pre><span></span><code><span class="mi">1</span><span class="p">,</span>
 <span class="n">Music</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
 <span class="w">      </span><span class="n">Movies</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
@@ -3126,18 +3491,18 @@ transaction so the chinook database stays unchanged:</p>
         <ul class="nav nav-tabs">
             
         <li class="nav-item">
-            <a href="#tab-18-Haskell" aria-controls="tab-18-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
+            <a href="#tab-22-Haskell" aria-controls="tab-22-Haskell" role="tab" data-toggle="tab" data-lang="haskell">Haskell</a>
         </li>
     
         <li class="nav-item">
-            <a href="#tab-18-Postgres" aria-controls="tab-18-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
+            <a href="#tab-22-Postgres" aria-controls="tab-22-Postgres" role="tab" data-toggle="tab" data-lang="sql">Postgres</a>
         </li>
     
         </ul>
     
         <div class="tab-content">
             
-        <div role="tabpanel" class="tab-pane active" id="tab-18-Haskell">
+        <div role="tabpanel" class="tab-pane active" id="tab-22-Haskell">
             <div class="highlight"><pre><span></span><code><span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Backend.SQL.BeamExtensions</span>
 <span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="nn">Database.Beam.Postgres</span>
 <span class="o">--!</span><span class="w"> </span><span class="kr">import</span><span class="w"> </span><span class="k">qualified</span><span class="w"> </span><span class="nn">Data.ByteString</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">BS</span>
@@ -3166,7 +3531,7 @@ transaction so the chinook database stays unchanged:</p>
 
         </div>
     
-        <div role="tabpanel" class="tab-pane " id="tab-18-Postgres">
+        <div role="tabpanel" class="tab-pane " id="tab-22-Postgres">
             <div class="highlight"><pre><span></span><code><span class="k">DELETE</span>
 <span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;PlaylistTrack&quot;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="ss">&quot;delete_target&quot;</span>
 <span class="k">WHERE</span><span class="w"> </span><span class="k">true</span><span class="p">;</span>
