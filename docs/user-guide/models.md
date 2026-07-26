@@ -9,6 +9,29 @@ type with a `Beamable` instance) or an explicit column. A column is specified
 using the `Columnar` type family applied to the type's parameter and the
 underlying Haskell type of the field.
 
+## Schemas with many fields
+
+For schemas with many fields, the separate
+[`beam-large-records`](https://github.com/well-typed/large-records/tree/main/beam-large-records)
+package can reduce compilation time. It integrates Beam with
+`large-records` so that records marked with
+[`largeRecord`](https://hackage.haskell.org/package/large-records/docs/Data-Record-Plugin.html#v:largeRecord)
+can derive `Beamable`.
+
+Add `large-records`, `ghc-prim`, `large-generics`, `record-hasfield`, and
+`beam-large-records` to your build dependencies. Then enable the `large-records`
+plugin and import the Beam integration for its instances:
+
+```haskell
+{-# OPTIONS_GHC -fplugin=Data.Record.Plugin #-}
+
+import Data.Record.Beam ()
+
+{-# ANN type UserT largeRecord #-}
+```
+
+You can then define the `Table` and `Database` instances as usual.
+
 ## The `Table` type class
 
 `Table` is a type class that must be instantiated for all types that you would
