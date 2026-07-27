@@ -11,10 +11,19 @@ underlying Haskell type of the field.
 
 ## Schemas with many fields
 
-For schemas with many fields, the separate
+There is no fixed field-count cutoff: the benefit depends on the instances
+derived for the record, the GHC version, and the rest of the module. In the
+upstream [`large-records` benchmark](https://github.com/well-typed/large-records/tree/main/large-records-benchmarks/report),
+measured with GHC 8.8.4 and `-O0`, a module containing a synthetic 20-field
+record with `Eq`, `Show`, `Generic`, `HasField`, and `ToJSON` support compiled
+in 318 ms before and 80 ms with `large-records` (about 75% less); at 100 fields,
+the corresponding times were 2.28 s and 444 ms (about 81% less). Because this
+benchmark is not Beam-specific, profile your own schema rather than treating
+20 fields as a threshold.
+
+The separate
 [`beam-large-records`](https://github.com/well-typed/large-records/tree/main/beam-large-records)
-package can reduce compilation time. It integrates Beam with
-`large-records` so that records marked with
+package integrates Beam with `large-records` so that records marked with
 [`largeRecord`](https://hackage.haskell.org/package/large-records/docs/Data-Record-Plugin.html#v:largeRecord)
 can derive `Beamable`.
 
