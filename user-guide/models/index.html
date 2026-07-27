@@ -69,7 +69,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-table-type-class" class="md-skip">
+        <a href="#schemas-with-many-fields" class="md-skip">
           Skip to content
         </a>
       
@@ -520,6 +520,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#schemas-with-many-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schemas with many fields
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#the-table-type-class" class="md-nav__link">
@@ -1706,6 +1717,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#schemas-with-many-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schemas with many fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-table-type-class" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1908,6 +1930,32 @@ Tbl</code> for a table of type <code>Tbl</code>). <code>Table</code> is discusse
 type with a <code>Beamable</code> instance) or an explicit column. A column is specified
 using the <code>Columnar</code> type family applied to the type's parameter and the
 underlying Haskell type of the field.</p>
+<h2 id="schemas-with-many-fields">Schemas with many fields</h2>
+<p>There is no fixed field-count cutoff: the benefit depends on the instances
+derived for the record, the GHC version, and the rest of the module. In the
+upstream <a href="https://github.com/well-typed/large-records/tree/main/large-records-benchmarks/report"><code>large-records</code> benchmark</a>,
+measured with GHC 8.8.4 and <code>-O0</code>, a module containing a synthetic 20-field
+record with <code>Eq</code>, <code>Show</code>, <code>Generic</code>, <code>HasField</code>, and <code>ToJSON</code> support compiled
+in 318 ms before and 80 ms with <code>large-records</code> (about 75% less); at 100 fields,
+the corresponding times were 2.28 s and 444 ms (about 81% less). Because this
+benchmark is not Beam-specific, profile your own schema rather than treating
+20 fields as a threshold.</p>
+<p>The separate
+<a href="https://github.com/well-typed/large-records/tree/main/beam-large-records"><code>beam-large-records</code></a>
+package integrates Beam with <code>large-records</code> so that records marked with
+<a href="https://hackage.haskell.org/package/large-records/docs/Data-Record-Plugin.html#v:largeRecord"><code>largeRecord</code></a>
+can derive <code>Beamable</code>.</p>
+<p>Add <code>large-records</code>, <code>ghc-prim</code>, <code>large-generics</code>, <code>record-hasfield</code>, and
+<code>beam-large-records</code> to your build dependencies. Then enable the <code>large-records</code>
+plugin and import the Beam integration for its instances:</p>
+<div class="highlight"><pre><span></span><code><span class="cm">{-# OPTIONS_GHC -fplugin=Data.Record.Plugin #-}</span>
+
+<span class="kr">import</span><span class="w"> </span><span class="nn">Data.Record.Beam</span><span class="w"> </span><span class="p">()</span>
+
+<span class="cm">{-# ANN type UserT largeRecord #-}</span>
+</code></pre></div>
+
+<p>You can then define the <code>Table</code> and <code>Database</code> instances as usual.</p>
 <h2 id="the-table-type-class">The <code>Table</code> type class</h2>
 <p><code>Table</code> is a type class that must be instantiated for all types that you would
 like to use as a table. It has one associated <code>data</code> instance and one function.</p>
