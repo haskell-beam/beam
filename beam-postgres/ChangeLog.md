@@ -1,3 +1,12 @@
+# 0.6.3.1
+
+## Added features
+
+* Added `pgInsertOnly` for partial-column PostgreSQL inserts with `ON CONFLICT`
+  support. The resulting `SqlInsert` composes with `returning`, `pgCteInsert`,
+  and `pgCteInsertReturning`, allowing generated and defaulted columns to be
+  exposed by a data-modifying CTE without duplicating insert builders.
+
 # 0.6.3.0
 
 ## Added features
