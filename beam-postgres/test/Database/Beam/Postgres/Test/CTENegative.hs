@@ -15,9 +15,12 @@ module Database.Beam.Postgres.Test.CTENegative
   , invalidNestedEmptyInsert
   , invalidNestedIdentityUpdate
   , invalidNestedSideEffectDelete
+  , invalidNestedCommandInsert
+  , invalidNestedCommandInsertReturning
   , invalidCoercedPlacement
   , invalidRecursiveInsert
   , invalidReuseSideEffect
+  , invalidMismatchedPgInsertOnly
   ) where
 
 import qualified Data.Coerce as Coerce
@@ -128,6 +131,28 @@ invalidNestedSideEffectDelete = select $ Pg.pgSelectWithNested $ do
     (\row -> negativeCteId row ==. val_ 1)
   pure $ all_ (negativeCteRows negativeCteDb)
 
+invalidNestedCommandInsert :: SqlSelect Postgres (NegativeCteRowT Identity)
+invalidNestedCommandInsert = select $ Pg.pgSelectWithNested $ do
+  Pg.pgCteInsert $ Pg.pgInsertOnly
+    (negativeCteRows negativeCteDb)
+    id
+    (insertValues [NegativeCteRow 2 "inserted"])
+    Pg.onConflictDefault
+  pure $ all_ (negativeCteRows negativeCteDb)
+
+invalidNestedCommandInsertReturning :: SqlSelect Postgres (NegativeCteRowT Identity)
+invalidNestedCommandInsertReturning = select $ Pg.pgSelectWithNested $ do
+  inserted <- Pg.pgCteInsertReturning
+    (Pg.pgInsertOnly
+      (negativeCteRows negativeCteDb)
+      id
+      (insertValues [NegativeCteRow 2 "inserted"])
+      Pg.onConflictDefault)
+    id
+  case inserted of
+    Nothing -> pure $ all_ (negativeCteRows negativeCteDb)
+    Just inserted' -> pure (reuse inserted')
+
 -- PgWith has nominal roles and an abstract constructor, so Data.Coerce cannot
 -- be used to relabel a top-level-only block as nested-safe.
 invalidCoercedPlacement :: SqlSelect Postgres (NegativeCteRowT Identity)
@@ -158,6 +183,17 @@ invalidReuseSideEffect = Pg.pgSelectWithTopLevel $ do
              (NegativeCteRowT (QExpr Postgres CTE.QAnyScope))
       impossible = deleted
   pure (reuse impossible)
+
+invalidMismatchedPgInsertOnly :: SqlInsert Postgres NegativeCteRowT
+invalidMismatchedPgInsertOnly = Pg.pgInsertOnly
+  (negativeCteRows negativeCteDb)
+  (\row -> (negativeCteId row, negativeCteValue row))
+  singleIdValue
+  Pg.onConflictDefault
+
+singleIdValue
+  :: SqlInsertValues Postgres (QExpr Postgres s Int32)
+singleIdValue = insertData [val_ (1 :: Int32)]
 
 coercePlacement
   :: Pg.PgWith NegativeCteDb 'Pg.PgCteTopLevelOnly a

@@ -70,6 +70,29 @@ newtype CteDb entity = CteDb
 cteDb :: DatabaseSettings Postgres CteDb
 cteDb = defaultDbSettings
 
+partialCteRowValues
+  :: Text
+  -> Int32
+  -> SqlInsertValues Postgres
+       (QExpr Postgres s Text, QExpr Postgres s Int32)
+partialCteRowValues value key =
+  insertData [(val_ value, val_ key)]
+
+partialCteValueValues
+  :: Text
+  -> SqlInsertValues Postgres (QExpr Postgres s Text)
+partialCteValueValues value = insertData [val_ value]
+
+partialCteIdValues
+  :: Int32
+  -> SqlInsertValues Postgres (QExpr Postgres s Int32)
+partialCteIdValues key = insertData [val_ key]
+
+emptyPartialCteRowValues
+  :: SqlInsertValues Postgres
+       (QExpr Postgres s Text, QExpr Postgres s Int32)
+emptyPartialCteRowValues = SqlInsertValuesEmpty
+
 unitTests :: TestTree
 unitTests = testGroup "Common table expression tests"
   [ renderingTests
@@ -78,7 +101,8 @@ unitTests = testGroup "Common table expression tests"
 
 integrationTests :: IO ByteString -> TestTree
 integrationTests getConn = testGroup "Common table expression integration tests"
-  [ testMixedCteBodies getConn
+  [ testPartialInsertCommandCtes getConn
+  , testMixedCteBodies getConn
   , testSideEffectOnlyCtes getConn
   , testMaterializationExecution getConn
   , testLiftedWithExecution getConn
@@ -95,7 +119,14 @@ integrationTests getConn = testGroup "Common table expression integration tests"
 
 renderingTests :: TestTree
 renderingTests = testGroup "Common table expression rendering tests"
-  [ testMixedCteRendering
+  [ testPgInsertOnlyRendering
+  , testPgInsertOnlyFromAndEmptyRendering
+  , testPgCteInsertRendering
+  , testPgCteInsertReturningRendering
+  , testPgCteInsertNoOps
+  , testPgCteInsertReturningZeroProjection
+  , testLegacyInsertCteCompatibility
+  , testMixedCteRendering
   , testMaterializationRendering
   , testNestedMaterializedCteRendering
   , testSideEffectOnlyRendering
@@ -112,6 +143,147 @@ renderingTests = testGroup "Common table expression rendering tests"
   , testDegreeZeroSelectRendering
   , testDegreeZeroDataModifyingRendering
   ]
+
+testPgInsertOnlyRendering :: TestTree
+testPgInsertOnlyRendering = testCase "renders partial PostgreSQL inserts with ON CONFLICT" $ do
+  sql <- requireRenderedStatement . renderInsert $
+    Pg.pgInsertOnly
+      (dbCteRows cteDb)
+      (\row -> (cteValue row, cteId row))
+      (partialCteRowValues "partial" 7)
+      (Pg.onConflict
+        (Pg.conflictingFields cteId)
+        Pg.onConflictDoNothing)
+  assertBool ("renders only the selected columns in projection order:\n" ++ sql)
+    ("(\"value\", \"id\") VALUES" `isInfixOf` sql)
+  assertBool "renders the PostgreSQL conflict action"
+    ("ON CONFLICT (\"id\") DO NOTHING" `isInfixOf` sql)
+
+testPgInsertOnlyFromAndEmptyRendering :: TestTree
+testPgInsertOnlyFromAndEmptyRendering = testCase "renders partial INSERT FROM and preserves empty inserts" $ do
+  let fromStatement = Pg.pgInsertOnly
+        (dbCteRows cteDb)
+        (\row -> (cteValue row, cteId row))
+        (insertFrom $ do
+          row <- all_ (dbCteRows cteDb)
+          pure (cteValue row, cteId row))
+        Pg.onConflictDefault
+      emptyStatement = Pg.pgInsertOnly
+        (dbCteRows cteDb)
+        (\row -> (cteValue row, cteId row))
+        emptyPartialCteRowValues
+        Pg.onConflictDefault
+  fromSql <- requireRenderedStatement (renderInsert fromStatement)
+  assertBool ("renders the selected target columns before INSERT FROM:\n" ++ fromSql)
+    ("(\"value\", \"id\") SELECT" `isInfixOf` fromSql)
+  assertEqual "empty projected values still produce no statement"
+    Nothing
+    (renderInsert emptyStatement)
+
+testPgCteInsertRendering :: TestTree
+testPgCteInsertRendering = testCase "lifts a partial insert command into a side-effect-only CTE" $ do
+  let sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
+        Pg.pgCteInsert $ Pg.pgInsertOnly
+          (dbCteRows cteDb)
+          (\row -> (cteValue row, cteId row))
+          (partialCteRowValues "side-effect" 8)
+          Pg.onConflictDefault
+        pure $ do
+          guard_ (val_ False)
+          pure (as_ @Int32 (val_ 0))
+  assertBool "renders the command as a top-level CTE"
+    ("WITH " `isPrefixOf` sql)
+  assertBool ("retains the partial target projection:\n" ++ sql)
+    ("INSERT INTO \"cte_rows\"(\"value\", \"id\") VALUES" `isInfixOf` sql)
+  assertBool "does not add RETURNING to a side-effect-only CTE"
+    (not (" RETURNING " `isInfixOf` sql))
+
+testPgCteInsertReturningRendering :: TestTree
+testPgCteInsertReturningRendering = testCase "adds RETURNING when lifting a partial insert command" $ do
+  let sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
+        inserted <- Pg.pgCteInsertReturning
+          (Pg.pgInsertOnly
+            (dbCteRows cteDb)
+            (\row -> (cteValue row, cteId row))
+            (partialCteRowValues "returning" 9)
+            (Pg.onConflict
+              (Pg.conflictingFields cteId)
+              Pg.onConflictDoNothing))
+          id
+        pure $ case inserted of
+          Nothing -> do
+            guard_ (val_ False)
+            pure (CteRow (val_ 0) (val_ ""))
+          Just rows -> reuse rows
+  assertBool "renders the command as a top-level CTE"
+    ("WITH " `isPrefixOf` sql)
+  assertBool ("retains selected columns and ON CONFLICT:\n" ++ sql)
+    ("INSERT INTO \"cte_rows\"(\"value\", \"id\") VALUES" `isInfixOf` sql &&
+     "ON CONFLICT (\"id\") DO NOTHING" `isInfixOf` sql)
+  assertBool "adds a full-row RETURNING projection"
+    (" RETURNING \"id\", \"value\"" `isInfixOf` sql)
+
+testPgCteInsertNoOps :: TestTree
+testPgCteInsertNoOps = testCase "command-level CTE adapters preserve empty inserts" $ do
+  let emptyCommand = Pg.pgInsertOnly
+        (dbCteRows cteDb)
+        (\row -> (cteValue row, cteId row))
+        emptyPartialCteRowValues
+        Pg.onConflictDefault
+      sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
+        Pg.pgCteInsert emptyCommand
+        inserted <- Pg.pgCteInsertReturning emptyCommand id
+        pure $ case inserted of
+          Nothing -> pure (as_ @Int32 (val_ 1))
+          Just rows -> cteId <$> reuse rows
+  assertBool ("does not render an empty WITH block:\n" ++ sql)
+    (not ("WITH " `isPrefixOf` sql))
+  assertBool "renders the fallback query after receiving Nothing"
+    ("SELECT 1" `isPrefixOf` sql)
+
+testPgCteInsertReturningZeroProjection :: TestTree
+testPgCteInsertReturningZeroProjection = testCase "command-level returning CTEs preserve zero-field rows" $ do
+  let sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
+        inserted <- Pg.pgCteInsertReturning
+          (Pg.pgInsertOnly
+            (dbCteRows cteDb)
+            (\row -> (cteValue row, cteId row))
+            (partialCteRowValues "zero" 10)
+            Pg.onConflictDefault)
+          (const (EmptyCte :: EmptyCteT (QExpr Postgres PostgresInaccessible)))
+        pure $ case inserted of
+          Nothing -> pure EmptyCte
+          Just rows -> reuse rows
+  assertBool "adds the private sentinel to an empty RETURNING projection"
+    ("RETURNING NULL::boolean" `isInfixOf` sql)
+  assertBool ("does not expose the private sentinel in the terminal projection:\n" ++ sql)
+    ("SELECT  FROM" `isInfixOf` sql || "SELECT FROM" `isInfixOf` sql)
+
+testLegacyInsertCteCompatibility :: TestTree
+testLegacyInsertCteCompatibility = testCase "legacy insert CTE wrappers match command composition" $ do
+  let finish inserted = case inserted of
+        Nothing -> do
+          guard_ (val_ False)
+          pure (CteRow (val_ 0) (val_ ""))
+        Just rows -> reuse rows
+      legacy = Pg.pgSelectWithTopLevel $ do
+        inserted <- Pg.cteInsertReturning
+          (dbCteRows cteDb)
+          (insertValues [CteRow 11 "legacy"])
+          Pg.onConflictDefault
+          id
+        pure (finish inserted)
+      composed = Pg.pgSelectWithTopLevel $ do
+        inserted <- Pg.pgCteInsertReturning
+          (Pg.insert
+            (dbCteRows cteDb)
+            (insertValues [CteRow 11 "legacy"])
+            Pg.onConflictDefault)
+          id
+        pure (finish inserted)
+  assertEqual "legacy and command-composed SQL"
+    (renderSelect legacy)
+    (renderSelect composed)
 
 -- These tests force expressions compiled with deferred type errors in the
 -- isolated negative-fixture module. Checking fragments of GHC's error ensures
@@ -134,6 +306,10 @@ typeSafetyTests = testGroup "Common table expression type-safety tests"
       assertPlacementTypeError Negative.invalidNestedIdentityUpdate
   , testCase "rejects a side-effect-only DELETE inside pgSelectWithNested" $
       assertPlacementTypeError Negative.invalidNestedSideEffectDelete
+  , testCase "rejects a command-level INSERT inside pgSelectWithNested" $
+      assertPlacementTypeError Negative.invalidNestedCommandInsert
+  , testCase "rejects a command-level returning INSERT inside pgSelectWithNested" $
+      assertPlacementTypeError Negative.invalidNestedCommandInsertReturning
   , testCase "placement cannot be bypassed with coerce" $
       assertPlacementTypeError Negative.invalidCoercedPlacement
   , testCase "rejects a recursively self-referencing INSERT CTE" $
@@ -144,6 +320,10 @@ typeSafetyTests = testGroup "Common table expression type-safety tests"
       assertDeferredTypeErrorContaining
         ["ReusableQ"]
         Negative.invalidReuseSideEffect
+  , testCase "rejects values which do not match the selected insert columns" $
+      assertDeferredInsertTypeErrorContaining
+        ["Couldn't match", "QExprToField"]
+        Negative.invalidMismatchedPgInsertOnly
   ]
 
 assertPlacementTypeError :: SqlSelect Postgres a -> Assertion
@@ -162,6 +342,24 @@ assertDeferredTypeErrorContaining expectedFragments sql = do
       in mapM_ (assertFragment message) expectedFragments
     Right _ ->
       assertFailure "expected the expression to contain a deferred type error"
+  where
+    assertFragment message fragment =
+      assertBool
+        ("mentions " ++ fragment ++ "\nDeferred error was:\n" ++ message)
+        (fragment `isInfixOf` message)
+
+assertDeferredInsertTypeErrorContaining
+  :: [String]
+  -> SqlInsert Postgres table
+  -> Assertion
+assertDeferredInsertTypeErrorContaining expectedFragments statement = do
+  result <- try (evaluate (maybe 0 length (renderInsert statement)))
+  case result of
+    Left (err :: TypeError) ->
+      let message = show err
+      in mapM_ (assertFragment message) expectedFragments
+    Right _ ->
+      assertFailure "expected the insert to contain a deferred type error"
   where
     assertFragment message fragment =
       assertBool
@@ -363,6 +561,129 @@ testDegreeZeroDataModifyingRendering =
       assertBool (command ++ " does not expose the sentinel")
         ("SELECT  FROM \"cte0\"" `isInfixOf` sql ||
          "SELECT FROM \"cte0\"" `isInfixOf` sql)
+
+-- Exercise the command-composition path against PostgreSQL itself. Generated
+-- and defaulted columns must remain visible to RETURNING even though they are
+-- absent from the insert projection, and both conflict actions must retain
+-- their normal PostgreSQL semantics.
+testPartialInsertCommandCtes :: IO ByteString -> TestTree
+testPartialInsertCommandCtes getConn = testCase "partial insert commands preserve defaults and conflicts in CTEs" $
+  withTestPostgres "partial_insert_command_ctes" getConn $ \conn -> do
+    execute_ conn
+      "CREATE TABLE cte_rows (id SERIAL PRIMARY KEY, value TEXT UNIQUE NOT NULL DEFAULT 'db-default')"
+
+    generated <- runBeamPostgres conn $ runSelectReturningList $
+      partialValueReturning "generated" Pg.onConflictDefault
+    assertEqual "returns an omitted generated identity"
+      [CteRow 1 "generated"]
+      generated
+
+    execute_ conn "TRUNCATE TABLE cte_rows RESTART IDENTITY"
+    defaulted <- runBeamPostgres conn $ runSelectReturningList $
+      partialIdReturning 40 Pg.onConflictDefault
+    assertEqual "returns an omitted database-defaulted value"
+      [CteRow 40 "db-default"]
+      defaulted
+
+    execute_ conn "TRUNCATE TABLE cte_rows RESTART IDENTITY"
+    _ <- runBeamPostgres conn $ runSelectReturningList $
+      partialValueReturning "conflict" Pg.onConflictDefault
+    ignored <- runBeamPostgres conn $ runSelectReturningList $
+      partialValueReturning "conflict" $
+        Pg.onConflict
+          (Pg.conflictingFields cteValue)
+          Pg.onConflictDoNothing
+    assertEqual "DO NOTHING exposes a real but empty reusable relation"
+      []
+      ignored
+
+    updated <- runBeamPostgres conn $ runSelectReturningList $
+      partialValueReturning "conflict" $
+        Pg.onConflict
+          (Pg.conflictingFields cteValue)
+          (Pg.onConflictUpdateSet $ \target excluded ->
+            cteId target <-. cteId excluded)
+    case updated of
+      [row] -> do
+        assertEqual "DO UPDATE returns the conflicting value"
+          "conflict"
+          (cteValue row)
+        assertBool "DO UPDATE can use the generated excluded identity"
+          (cteId row > 1)
+      rows -> assertFailure ("expected one updated row, got " ++ show rows)
+
+    storedAfterUpdate <- runBeamPostgres conn $ runSelectReturningList $ select $
+      all_ (dbCteRows cteDb)
+    assertEqual "the reusable row agrees with durable table state"
+      updated
+      storedAfterUpdate
+
+    execute_ conn "TRUNCATE TABLE cte_rows RESTART IDENTITY"
+    _ <- runBeamPostgres conn $ runSelectReturningList $
+      partialValueReturning "parameter-order" Pg.onConflictDefault
+    parameterizedUpdate <- runBeamPostgres conn $ runSelectReturningList $
+      partialValueReturning "parameter-order" $
+        Pg.onConflict
+          (Pg.conflictingFields cteValue)
+          (Pg.onConflictUpdateSet $ \target _ ->
+            cteId target <-. val_ (77 :: Int32))
+    assertEqual "parameters remain ordered from insert values into the conflict action"
+      [CteRow 77 "parameter-order"]
+      parameterizedUpdate
+
+    execute_ conn "TRUNCATE TABLE cte_rows RESTART IDENTITY"
+    marker <- runBeamPostgres conn $ runSelectReturningOne $
+      Pg.pgSelectWithTopLevel $ do
+        Pg.pgCteInsert $ Pg.pgInsertOnly
+          (dbCteRows cteDb)
+          cteValue
+          (partialCteValueValues "side-effect")
+          Pg.onConflictDefault
+        pure (pure (as_ @Int32 (val_ 1)))
+    assertEqual "side-effect-only command CTE executes"
+      (Just 1)
+      marker
+    storedSideEffect <- runBeamPostgres conn $ runSelectReturningList $ select $
+      all_ (dbCteRows cteDb)
+    assertEqual "side-effect-only partial insert uses the generated identity"
+      [CteRow 1 "side-effect"]
+      storedSideEffect
+
+partialValueReturning
+  :: Text
+  -> Pg.PgInsertOnConflict CteRowT
+  -> SqlSelect Postgres (CteRowT Identity)
+partialValueReturning value conflict = Pg.pgSelectWithTopLevel $ do
+  inserted <- Pg.pgCteInsertReturning
+    (Pg.pgInsertOnly
+      (dbCteRows cteDb)
+      cteValue
+      (partialCteValueValues value)
+      conflict)
+    id
+  pure $ case inserted of
+    Nothing -> do
+      guard_ (val_ False)
+      pure (CteRow (val_ 0) (val_ ""))
+    Just rows -> reuse rows
+
+partialIdReturning
+  :: Int32
+  -> Pg.PgInsertOnConflict CteRowT
+  -> SqlSelect Postgres (CteRowT Identity)
+partialIdReturning key conflict = Pg.pgSelectWithTopLevel $ do
+  inserted <- Pg.pgCteInsertReturning
+    (Pg.pgInsertOnly
+      (dbCteRows cteDb)
+      cteId
+      (partialCteIdValues key)
+      conflict)
+    id
+  pure $ case inserted of
+    Nothing -> do
+      guard_ (val_ False)
+      pure (CteRow (val_ 0) (val_ ""))
+    Just rows -> reuse rows
 
 -- Rendering alone cannot verify PostgreSQL's execution and snapshot semantics.
 -- This integration case checks both the RETURNING rows and the final table

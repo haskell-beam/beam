@@ -372,6 +372,59 @@ The generated statement contains both modifications in one `WITH` block. The fir
 no output column list because it has no `RETURNING` output. The second exposes its `RETURNING`
 output through generated column names, so it can be reused.
 
+#### Partial-column inserts
+
+The full-row `insert` and `cteInsertReturning` builders require values for every table column. When
+PostgreSQL should generate an identity value or apply a column default, use `pgInsertOnly` to build
+an insert command from a selected subset of fields. Unlike the backend-independent `insertOnly`,
+`pgInsertOnly` also accepts `PgInsertOnConflict`:
+
+```haskell
+userNameValues
+  :: Text
+  -> SqlInsertValues Postgres (QExpr Postgres s Text)
+userNameValues name = insertData [val_ name]
+
+partialUserInsert = Pg.pgInsertOnly
+  (users appDb)
+  userName
+  (userNameValues "Alice")
+  (Pg.onConflict
+    (Pg.conflictingFields userName)
+    Pg.onConflictDoNothing)
+```
+
+The explicit result type on `userNameValues` fixes the arbitrary projection shape used by
+`insertData`. A query-backed `insertFrom` source normally supplies that type without an annotation.
+
+The resulting value is an ordinary `SqlInsert Postgres table`, so the operation to perform with it
+is selected independently:
+
+```haskell
+-- Execute it without RETURNING.
+runInsert partialUserInsert
+
+-- Execute it directly with RETURNING.
+Pg.runPgInsertReturningList $ Pg.returning partialUserInsert id
+
+-- Put it in a side-effect-only CTE.
+Pg.pgSelectWithTopLevel $ do
+  Pg.pgCteInsert partialUserInsert
+  pure finalQuery
+
+-- Return and reuse generated, defaulted, or supplied columns from the CTE.
+Pg.pgSelectWithTopLevel $ do
+  inserted <- Pg.pgCteInsertReturning partialUserInsert id
+  pure $ case inserted of
+    Nothing -> noRowsQuery
+    Just rows -> reuse rows
+```
+
+`pgCteInsertReturning` returns `Nothing` only when its command is `SqlInsertNoRows`. A real
+`ON CONFLICT DO NOTHING` statement still returns `Just rows`; PostgreSQL may simply produce zero
+rows from that reusable relation. Both command-level CTE builders remain top-level-only, like the
+other data-modifying CTE operations.
+
 #### Zero-column CTE projections
 
 A Beam projection may have no fields—for example, a custom `Beamable` product with a single
