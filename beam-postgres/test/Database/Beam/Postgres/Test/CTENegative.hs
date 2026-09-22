@@ -133,7 +133,7 @@ invalidNestedSideEffectDelete = select $ Pg.pgSelectWithNested $ do
 
 invalidNestedCommandInsert :: SqlSelect Postgres (NegativeCteRowT Identity)
 invalidNestedCommandInsert = select $ Pg.pgSelectWithNested $ do
-  Pg.pgCteInsert $ Pg.pgInsertOnly
+  Pg.cteInsertCommand $ Pg.pgInsertOnly
     (negativeCteRows negativeCteDb)
     id
     (insertValues [NegativeCteRow 2 "inserted"])
@@ -142,7 +142,7 @@ invalidNestedCommandInsert = select $ Pg.pgSelectWithNested $ do
 
 invalidNestedCommandInsertReturning :: SqlSelect Postgres (NegativeCteRowT Identity)
 invalidNestedCommandInsertReturning = select $ Pg.pgSelectWithNested $ do
-  inserted <- Pg.pgCteInsertReturning
+  inserted <- Pg.cteInsertCommandReturning
     (Pg.pgInsertOnly
       (negativeCteRows negativeCteDb)
       id

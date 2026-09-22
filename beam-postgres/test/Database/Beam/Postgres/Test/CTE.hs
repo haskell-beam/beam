@@ -121,10 +121,10 @@ renderingTests :: TestTree
 renderingTests = testGroup "Common table expression rendering tests"
   [ testPgInsertOnlyRendering
   , testPgInsertOnlyFromAndEmptyRendering
-  , testPgCteInsertRendering
-  , testPgCteInsertReturningRendering
-  , testPgCteInsertNoOps
-  , testPgCteInsertReturningZeroProjection
+  , testCteInsertCommandRendering
+  , testCteInsertCommandReturningRendering
+  , testCteInsertCommandNoOps
+  , testCteInsertCommandReturningZeroProjection
   , testLegacyInsertCteCompatibility
   , testMixedCteRendering
   , testMaterializationRendering
@@ -180,10 +180,10 @@ testPgInsertOnlyFromAndEmptyRendering = testCase "renders partial INSERT FROM an
     Nothing
     (renderInsert emptyStatement)
 
-testPgCteInsertRendering :: TestTree
-testPgCteInsertRendering = testCase "lifts a partial insert command into a side-effect-only CTE" $ do
+testCteInsertCommandRendering :: TestTree
+testCteInsertCommandRendering = testCase "lifts a partial insert command into a side-effect-only CTE" $ do
   let sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
-        Pg.pgCteInsert $ Pg.pgInsertOnly
+        Pg.cteInsertCommand $ Pg.pgInsertOnly
           (dbCteRows cteDb)
           (\row -> (cteValue row, cteId row))
           (partialCteRowValues "side-effect" 8)
@@ -198,10 +198,10 @@ testPgCteInsertRendering = testCase "lifts a partial insert command into a side-
   assertBool "does not add RETURNING to a side-effect-only CTE"
     (not (" RETURNING " `isInfixOf` sql))
 
-testPgCteInsertReturningRendering :: TestTree
-testPgCteInsertReturningRendering = testCase "adds RETURNING when lifting a partial insert command" $ do
+testCteInsertCommandReturningRendering :: TestTree
+testCteInsertCommandReturningRendering = testCase "adds RETURNING when lifting a partial insert command" $ do
   let sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
-        inserted <- Pg.pgCteInsertReturning
+        inserted <- Pg.cteInsertCommandReturning
           (Pg.pgInsertOnly
             (dbCteRows cteDb)
             (\row -> (cteValue row, cteId row))
@@ -223,16 +223,16 @@ testPgCteInsertReturningRendering = testCase "adds RETURNING when lifting a part
   assertBool "adds a full-row RETURNING projection"
     (" RETURNING \"id\", \"value\"" `isInfixOf` sql)
 
-testPgCteInsertNoOps :: TestTree
-testPgCteInsertNoOps = testCase "command-level CTE adapters preserve empty inserts" $ do
+testCteInsertCommandNoOps :: TestTree
+testCteInsertCommandNoOps = testCase "command-level CTE adapters preserve empty inserts" $ do
   let emptyCommand = Pg.pgInsertOnly
         (dbCteRows cteDb)
         (\row -> (cteValue row, cteId row))
         emptyPartialCteRowValues
         Pg.onConflictDefault
       sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
-        Pg.pgCteInsert emptyCommand
-        inserted <- Pg.pgCteInsertReturning emptyCommand id
+        Pg.cteInsertCommand emptyCommand
+        inserted <- Pg.cteInsertCommandReturning emptyCommand id
         pure $ case inserted of
           Nothing -> pure (as_ @Int32 (val_ 1))
           Just rows -> cteId <$> reuse rows
@@ -241,10 +241,10 @@ testPgCteInsertNoOps = testCase "command-level CTE adapters preserve empty inser
   assertBool "renders the fallback query after receiving Nothing"
     ("SELECT 1" `isPrefixOf` sql)
 
-testPgCteInsertReturningZeroProjection :: TestTree
-testPgCteInsertReturningZeroProjection = testCase "command-level returning CTEs preserve zero-field rows" $ do
+testCteInsertCommandReturningZeroProjection :: TestTree
+testCteInsertCommandReturningZeroProjection = testCase "command-level returning CTEs preserve zero-field rows" $ do
   let sql = renderSelect $ Pg.pgSelectWithTopLevel $ do
-        inserted <- Pg.pgCteInsertReturning
+        inserted <- Pg.cteInsertCommandReturning
           (Pg.pgInsertOnly
             (dbCteRows cteDb)
             (\row -> (cteValue row, cteId row))
@@ -274,7 +274,7 @@ testLegacyInsertCteCompatibility = testCase "legacy insert CTE wrappers match co
           id
         pure (finish inserted)
       composed = Pg.pgSelectWithTopLevel $ do
-        inserted <- Pg.pgCteInsertReturning
+        inserted <- Pg.cteInsertCommandReturning
           (Pg.insert
             (dbCteRows cteDb)
             (insertValues [CteRow 11 "legacy"])
@@ -634,7 +634,7 @@ testPartialInsertCommandCtes getConn = testCase "partial insert commands preserv
     execute_ conn "TRUNCATE TABLE cte_rows RESTART IDENTITY"
     marker <- runBeamPostgres conn $ runSelectReturningOne $
       Pg.pgSelectWithTopLevel $ do
-        Pg.pgCteInsert $ Pg.pgInsertOnly
+        Pg.cteInsertCommand $ Pg.pgInsertOnly
           (dbCteRows cteDb)
           cteValue
           (partialCteValueValues "side-effect")
@@ -654,7 +654,7 @@ partialValueReturning
   -> Pg.PgInsertOnConflict CteRowT
   -> SqlSelect Postgres (CteRowT Identity)
 partialValueReturning value conflict = Pg.pgSelectWithTopLevel $ do
-  inserted <- Pg.pgCteInsertReturning
+  inserted <- Pg.cteInsertCommandReturning
     (Pg.pgInsertOnly
       (dbCteRows cteDb)
       cteValue
@@ -672,7 +672,7 @@ partialIdReturning
   -> Pg.PgInsertOnConflict CteRowT
   -> SqlSelect Postgres (CteRowT Identity)
 partialIdReturning key conflict = Pg.pgSelectWithTopLevel $ do
-  inserted <- Pg.pgCteInsertReturning
+  inserted <- Pg.cteInsertCommandReturning
     (Pg.pgInsertOnly
       (dbCteRows cteDb)
       cteId

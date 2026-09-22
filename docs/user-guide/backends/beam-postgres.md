@@ -377,7 +377,29 @@ output through generated column names, so it can be reused.
 The full-row `insert` and `cteInsertReturning` builders require values for every table column. When
 PostgreSQL should generate an identity value or apply a column default, use `pgInsertOnly` to build
 an insert command from a selected subset of fields. Unlike the backend-independent `insertOnly`,
-`pgInsertOnly` also accepts `PgInsertOnConflict`:
+`pgInsertOnly` also accepts `PgInsertOnConflict`.
+
+Beam also provides backend-independent conflict handling through
+[`BeamHasInsertOnConflict`](https://hackage.haskell.org/package/beam-core/docs/Database-Beam-Backend-SQL-BeamExtensions.html#t:BeamHasInsertOnConflict).
+Its `insertOnConflict` method accepts full-table values; `pgInsertOnly` adds partial-target
+selection with conflict handling.
+
+Omitting columns is especially useful for query-backed inserts (`insertFrom`). Although `default_`
+can request a default in an `INSERT ... VALUES` list, PostgreSQL does not allow `DEFAULT` in a
+`SELECT` projection:
+
+```sql
+-- Valid: DEFAULT in a VALUES list.
+INSERT INTO users (id, name) VALUES (DEFAULT, 'Alice');
+
+-- Invalid: DEFAULT in a SELECT projection.
+INSERT INTO users (id, name) SELECT DEFAULT, source.name FROM source;
+
+-- Valid: omit the defaulted column from the insert target.
+INSERT INTO users (name) SELECT source.name FROM source;
+```
+
+Build a partial-target command with `pgInsertOnly`:
 
 ```haskell
 userNameValues
@@ -409,21 +431,24 @@ Pg.runPgInsertReturningList $ Pg.returning partialUserInsert id
 
 -- Put it in a side-effect-only CTE.
 Pg.pgSelectWithTopLevel $ do
-  Pg.pgCteInsert partialUserInsert
+  Pg.cteInsertCommand partialUserInsert
   pure finalQuery
 
 -- Return and reuse generated, defaulted, or supplied columns from the CTE.
 Pg.pgSelectWithTopLevel $ do
-  inserted <- Pg.pgCteInsertReturning partialUserInsert id
+  inserted <- Pg.cteInsertCommandReturning partialUserInsert id
   pure $ case inserted of
     Nothing -> noRowsQuery
     Just rows -> reuse rows
 ```
 
-`pgCteInsertReturning` returns `Nothing` only when its command is `SqlInsertNoRows`. A real
+`cteInsertCommandReturning` returns `Nothing` only when its command is `SqlInsertNoRows`. A real
 `ON CONFLICT DO NOTHING` statement still returns `Just rows`; PostgreSQL may simply produce zero
 rows from that reusable relation. Both command-level CTE builders remain top-level-only, like the
 other data-modifying CTE operations.
+
+For both `cteInsertCommand` and `cteInsertCommandReturning`, `SqlInsert` does not carry the target
+table's database type, so that type is not tied to the enclosing `PgWith` block.
 
 #### Zero-column CTE projections
 
