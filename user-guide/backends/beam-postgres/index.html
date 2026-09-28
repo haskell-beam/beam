@@ -1413,6 +1413,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#partial-column-inserts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Partial-column inserts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#zero-column-cte-projections" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1874,6 +1885,17 @@
   
     <nav class="md-nav" aria-label="PostgreSQL-specific CTEs">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#partial-column-inserts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Partial-column inserts
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#zero-column-cte-projections" class="md-nav__link">
@@ -2947,6 +2969,72 @@ final statement can read that output with <code>reuse</code>. Their side-effect-
 <p>The generated statement contains both modifications in one <code>WITH</code> block. The first definition has
 no output column list because it has no <code>RETURNING</code> output. The second exposes its <code>RETURNING</code>
 output through generated column names, so it can be reused.</p>
+<h4 id="partial-column-inserts">Partial-column inserts</h4>
+<p>The full-row <code>insert</code> and <code>cteInsertReturning</code> builders require values for every table column. When
+PostgreSQL should generate an identity value or apply a column default, use <code>pgInsertOnly</code> to build
+an insert command from a selected subset of fields. Unlike the backend-independent <code>insertOnly</code>,
+<code>pgInsertOnly</code> also accepts <code>PgInsertOnConflict</code>.</p>
+<p>Beam also provides backend-independent conflict handling through
+<a href="https://hackage.haskell.org/package/beam-core/docs/Database-Beam-Backend-SQL-BeamExtensions.html#t:BeamHasInsertOnConflict"><code>BeamHasInsertOnConflict</code></a>.
+Its <code>insertOnConflict</code> method accepts full-table values; <code>pgInsertOnly</code> adds partial-target
+selection with conflict handling.</p>
+<p>Omitting columns is especially useful for query-backed inserts (<code>insertFrom</code>). Although <code>default_</code>
+can request a default in an <code>INSERT ... VALUES</code> list, PostgreSQL does not allow <code>DEFAULT</code> in a
+<code>SELECT</code> projection:</p>
+<div class="highlight"><pre><span></span><code><span class="c1">-- Valid: DEFAULT in a VALUES list.</span>
+<span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="k">DEFAULT</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Alice&#39;</span><span class="p">);</span>
+
+<span class="c1">-- Invalid: DEFAULT in a SELECT projection.</span>
+<span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="k">DEFAULT</span><span class="p">,</span><span class="w"> </span><span class="k">source</span><span class="p">.</span><span class="n">name</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="k">source</span><span class="p">;</span>
+
+<span class="c1">-- Valid: omit the defaulted column from the insert target.</span>
+<span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="k">source</span><span class="p">.</span><span class="n">name</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="k">source</span><span class="p">;</span>
+</code></pre></div>
+
+<p>Build a partial-target command with <code>pgInsertOnly</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nf">userNameValues</span>
+<span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SqlInsertValues</span><span class="w"> </span><span class="kt">Postgres</span><span class="w"> </span><span class="p">(</span><span class="kt">QExpr</span><span class="w"> </span><span class="kt">Postgres</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="kt">Text</span><span class="p">)</span>
+<span class="nf">userNameValues</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="n">insertData</span><span class="w"> </span><span class="p">[</span><span class="n">val_</span><span class="w"> </span><span class="n">name</span><span class="p">]</span>
+
+<span class="nf">partialUserInsert</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">pgInsertOnly</span>
+<span class="w">  </span><span class="p">(</span><span class="n">users</span><span class="w"> </span><span class="n">appDb</span><span class="p">)</span>
+<span class="w">  </span><span class="n">userName</span>
+<span class="w">  </span><span class="p">(</span><span class="n">userNameValues</span><span class="w"> </span><span class="s">&quot;Alice&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="p">(</span><span class="kt">Pg</span><span class="o">.</span><span class="n">onConflict</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">Pg</span><span class="o">.</span><span class="n">conflictingFields</span><span class="w"> </span><span class="n">userName</span><span class="p">)</span>
+<span class="w">    </span><span class="kt">Pg</span><span class="o">.</span><span class="n">onConflictDoNothing</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The explicit result type on <code>userNameValues</code> fixes the arbitrary projection shape used by
+<code>insertData</code>. A query-backed <code>insertFrom</code> source normally supplies that type without an annotation.</p>
+<p>The resulting value is an ordinary <code>SqlInsert Postgres table</code>, so the operation to perform with it
+is selected independently:</p>
+<div class="highlight"><pre><span></span><code><span class="c1">-- Execute it without RETURNING.</span>
+<span class="nf">runInsert</span><span class="w"> </span><span class="n">partialUserInsert</span>
+
+<span class="c1">-- Execute it directly with RETURNING.</span>
+<span class="kt">Pg</span><span class="o">.</span><span class="n">runPgInsertReturningList</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">returning</span><span class="w"> </span><span class="n">partialUserInsert</span><span class="w"> </span><span class="n">id</span>
+
+<span class="c1">-- Put it in a side-effect-only CTE.</span>
+<span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelectWithTopLevel</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">  </span><span class="kt">Pg</span><span class="o">.</span><span class="n">cteInsertCommand</span><span class="w"> </span><span class="n">partialUserInsert</span>
+<span class="w">  </span><span class="n">pure</span><span class="w"> </span><span class="n">finalQuery</span>
+
+<span class="c1">-- Return and reuse generated, defaulted, or supplied columns from the CTE.</span>
+<span class="kt">Pg</span><span class="o">.</span><span class="n">pgSelectWithTopLevel</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">do</span>
+<span class="w">  </span><span class="n">inserted</span><span class="w"> </span><span class="ow">&lt;-</span><span class="w"> </span><span class="kt">Pg</span><span class="o">.</span><span class="n">cteInsertCommandReturning</span><span class="w"> </span><span class="n">partialUserInsert</span><span class="w"> </span><span class="n">id</span>
+<span class="w">  </span><span class="n">pure</span><span class="w"> </span><span class="o">$</span><span class="w"> </span><span class="kr">case</span><span class="w"> </span><span class="n">inserted</span><span class="w"> </span><span class="kr">of</span>
+<span class="w">    </span><span class="kt">Nothing</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">noRowsQuery</span>
+<span class="w">    </span><span class="kt">Just</span><span class="w"> </span><span class="n">rows</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">reuse</span><span class="w"> </span><span class="n">rows</span>
+</code></pre></div>
+
+<p><code>cteInsertCommandReturning</code> returns <code>Nothing</code> only when its command is <code>SqlInsertNoRows</code>. A real
+<code>ON CONFLICT DO NOTHING</code> statement still returns <code>Just rows</code>; PostgreSQL may simply produce zero
+rows from that reusable relation. Both command-level CTE builders remain top-level-only, like the
+other data-modifying CTE operations.</p>
+<p>For both <code>cteInsertCommand</code> and <code>cteInsertCommandReturning</code>, <code>SqlInsert</code> does not carry the target
+table's database type, so that type is not tied to the enclosing <code>PgWith</code> block.</p>
 <h4 id="zero-column-cte-projections">Zero-column CTE projections</h4>
 <p>A Beam projection may have no fields—for example, a custom <code>Beamable</code> product with a single
 constructor and no record fields. Such a result is still a relation: it has no columns, but it has
