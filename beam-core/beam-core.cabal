@@ -75,7 +75,7 @@ library
                        scientific   >=0.3     && <0.4,
                        vector       >=0.11    && <0.14,
                        vector-sized >=0.5     && <1.7,
-                       tagged       >=0.8     && <0.9
+                       tagged       >=0.8     && <0.10
 
   Default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables, OverloadedStrings, GADTs, RecursiveDo, FlexibleInstances, FlexibleContexts, TypeFamilies,
