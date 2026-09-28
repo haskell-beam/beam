@@ -38,7 +38,8 @@ module Database.Beam.Postgres.Full
   , lateral_
 
   -- * @INSERT@ and @INSERT RETURNING@
-  , insert, insertReturning, cteInsert, cteInsertReturning
+  , insert, pgInsertOnly, insertReturning
+  , cteInsert, cteInsertReturning, cteInsertCommand, cteInsertCommandReturning
   , insertDefaults
   , runPgInsertReturningList
 
@@ -69,6 +70,7 @@ module Database.Beam.Postgres.Full
   ) where
 
 import           Database.Beam hiding (insert, insertValues)
+import qualified Database.Beam as Beam
 import           Database.Beam.Backend.SQL
 import           Database.Beam.Backend.SQL.BeamExtensions
 import qualified Database.Beam.Query.CTE as CTE
@@ -397,18 +399,46 @@ insertDefaults = SqlInsertValues (PgInsertValuesSyntax (emit "DEFAULT VALUES"))
 -- | A @beam-postgres@-specific version of 'Database.Beam.Query.insert', which
 -- provides fuller support for the much richer Postgres @INSERT@ syntax. This
 -- allows you to specify @ON CONFLICT@ actions. For even more complete support,
--- see 'insertReturning'.
+-- see 'insertReturning'. For a partial target-column projection, see 'pgInsertOnly'.
 insert :: DatabaseEntity Postgres db (TableEntity table)
-       -> SqlInsertValues Postgres (table (QExpr Postgres s)) -- TODO arbitrary projectibles
+       -> SqlInsertValues Postgres (table (QExpr Postgres s))
        -> PgInsertOnConflict table
        -> SqlInsert Postgres table
-insert tbl@(DatabaseEntity dt@(DatabaseTable {})) values onConflict_ =
-  case insertReturning tbl values onConflict_
-         (Nothing :: Maybe (table (QExpr Postgres PostgresInaccessible) -> QExpr Postgres PostgresInaccessible Int)) of
-    PgInsertReturning a ->
-      SqlInsert (dbTableSettings dt) (PgInsertSyntax a)
-    PgInsertReturningEmpty ->
-      SqlInsertNoRows
+insert tbl@(DatabaseEntity (DatabaseTable {})) values =
+  pgInsertOnly tbl id values
+
+-- | Build a PostgreSQL insert over a caller-selected subset of table fields,
+-- with support for 'PgInsertOnConflict'. Beam's backend-independent
+-- 'Beam.insertOnly' owns the typed field projection and base @INSERT@
+-- rendering; this function adds PostgreSQL's @ON CONFLICT@ extension.
+--
+-- Beam also provides backend-independent conflict handling through
+-- 'BeamHasInsertOnConflict'. Its 'insertOnConflict' method accepts full-table
+-- values; 'pgInsertOnly' adds partial-target selection with conflict handling.
+-- This matters for @INSERT ... SELECT@: 'default_' can appear in an @INSERT@
+-- @VALUES@ list, but cannot stand in for an omitted column in a @SELECT@.
+--
+-- @since 0.6.4.0
+pgInsertOnly
+  :: ProjectibleWithPredicate AnyType () Text (QExprToField r)
+  => DatabaseEntity Postgres db (TableEntity table)
+  -> (table (QField s) -> QExprToField r)
+  -> SqlInsertValues Postgres r
+  -> PgInsertOnConflict table
+  -> SqlInsert Postgres table
+pgInsertOnly tbl@(DatabaseEntity dt@(DatabaseTable {})) mkProjection values
+             (PgInsertOnConflict mkOnConflict) =
+  case Beam.insertOnly tbl mkProjection values of
+    SqlInsertNoRows -> SqlInsertNoRows
+    SqlInsert settings (PgInsertSyntax syntax) ->
+      SqlInsert settings . PgInsertSyntax $
+        syntax <> emit " " <> fromPgInsertOnConflict (mkOnConflict tblFields)
+  where
+    tblFields =
+      changeBeamRep
+        (\(Columnar' f) ->
+          Columnar' (QField True (dbTableCurrentName dt) (_fieldName f)))
+        (dbTableSettings dt)
 
 -- | The most general kind of @INSERT@ that postgres can perform
 data PgInsertReturning a
@@ -429,25 +459,14 @@ insertReturning :: Projectible Postgres a
                 -> Maybe (table (QExpr Postgres PostgresInaccessible) -> a)
                 -> PgInsertReturning (QExprToIdentity a)
 
-insertReturning _ SqlInsertValuesEmpty _ _ = PgInsertReturningEmpty
-insertReturning (DatabaseEntity tbl@(DatabaseTable {}))
-                (SqlInsertValues (PgInsertValuesSyntax insertValues_))
-                (PgInsertOnConflict mkOnConflict)
+insertReturning table@(DatabaseEntity (DatabaseTable {})) values onConflict_
                 mMkProjection =
-  PgInsertReturning $
-  emit "INSERT INTO " <> fromPgTableName (tableName (dbTableSchema tbl) (dbTableCurrentName tbl)) <>
-  emit "(" <> pgSepBy (emit ", ") (allBeamValues (\(Columnar' f) -> pgQuotedIdentifier (_fieldName f)) tblSettings) <> emit ") " <>
-  insertValues_ <> emit " " <> fromPgInsertOnConflict (mkOnConflict tblFields) <>
-  (case mMkProjection of
-     Nothing -> mempty
-     Just mkProjection ->
-         emit " RETURNING " <>
-         pgSepBy (emit ", ") (map fromPgExpression (project (Proxy @Postgres) (mkProjection tblQ) "t")))
-   where
-     tblQ = changeBeamRep (\(Columnar' f) -> Columnar' (QExpr (\_ -> fieldE (unqualifiedField (_fieldName f))))) tblSettings
-     tblFields = changeBeamRep (\(Columnar' f) -> Columnar' (QField True (dbTableCurrentName tbl) (_fieldName f))) tblSettings
-
-     tblSettings = dbTableSettings tbl
+  case insert table values onConflict_ of
+    SqlInsertNoRows -> PgInsertReturningEmpty
+    statement@(SqlInsert _ (PgInsertSyntax syntax)) ->
+      case mMkProjection of
+        Nothing -> PgInsertReturning syntax
+        Just mkProjection -> returning statement mkProjection
 
 -- | Introduce a PostgreSQL @INSERT@ statement as a side-effect-only CTE.
 --
@@ -477,9 +496,27 @@ cteInsert
   -> PgInsertOnConflict table
   -> PgWith db 'PgCteTopLevelOnly ()
 cteInsert table values onConflict_ =
-  case insert table values onConflict_ of
-    SqlInsertNoRows -> pure ()
-    SqlInsert _ (PgInsertSyntax syntax) -> pgDataModifyingCte_ syntax
+  cteInsertCommand (insert table values onConflict_)
+
+-- | Introduce an already-built PostgreSQL @INSERT@ statement as a
+-- side-effect-only CTE. This is the command-level counterpart to 'cteInsert':
+-- it composes with any insert builder which produces 'SqlInsert', including
+-- 'pgInsertOnly'.
+--
+-- 'SqlInsert' does not carry the target table's database type, so that type is
+-- not tied to the enclosing 'PgWith' block.
+--
+-- Empty inserts register no CTE. The result remains conservatively indexed as
+-- 'PgCteTopLevelOnly', because the placement index cannot vary with the
+-- supplied command.
+--
+-- @since 0.6.4.0
+cteInsertCommand
+  :: SqlInsert Postgres table
+  -> PgWith db 'PgCteTopLevelOnly ()
+cteInsertCommand SqlInsertNoRows = pure ()
+cteInsertCommand (SqlInsert _ (PgInsertSyntax syntax)) =
+  pgDataModifyingCte_ syntax
 
 -- | Introduce a PostgreSQL @INSERT ... RETURNING@ statement as a
 -- data-modifying common table expression. The returned value can be used in a
@@ -538,8 +575,37 @@ cteInsertReturning
   -> PgInsertOnConflict table
   -> (table (QExpr Postgres PostgresInaccessible) -> a)
   -> PgWith db 'PgCteTopLevelOnly (Maybe (ReusableQ Postgres db (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)))
-cteInsertReturning table values onConflict_ mkProjection =
-  case insertReturning table values onConflict_ (Just mkProjection) of
+cteInsertReturning table@(DatabaseEntity (DatabaseTable {}))
+                   values onConflict_ mkProjection =
+  cteInsertCommandReturning
+    (insert table values onConflict_)
+    mkProjection
+
+-- | Attach a @RETURNING@ projection to an already-built PostgreSQL @INSERT@
+-- and introduce it as a reusable data-modifying CTE. Keeping insert
+-- construction separate lets this function compose with both full-row
+-- 'insert' and partial-row 'pgInsertOnly' commands.
+--
+-- 'SqlInsert' does not carry the target table's database type, so that type is
+-- not tied to the enclosing 'PgWith' block.
+--
+-- Returns 'Nothing' for 'SqlInsertNoRows'. A real command which affects no
+-- rows, such as @ON CONFLICT DO NOTHING@, still returns a reusable relation;
+-- that relation simply produces no rows when the statement executes.
+--
+-- @since 0.6.4.0
+cteInsertCommandReturning
+  :: ( Beamable table
+     , Projectible Postgres a
+     , ThreadRewritable PostgresInaccessible a
+     , Projectible Postgres (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     , ThreadRewritable CTE.QAnyScope (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)
+     )
+  => SqlInsert Postgres table
+  -> (table (QExpr Postgres PostgresInaccessible) -> a)
+  -> PgWith db 'PgCteTopLevelOnly (Maybe (ReusableQ Postgres db (WithRewrittenThread PostgresInaccessible CTE.QAnyScope a)))
+cteInsertCommandReturning statement mkProjection =
+  case returning statement mkProjection of
     PgInsertReturningEmpty -> pure Nothing
     PgInsertReturning syntax ->
       Just <$> pgDataModifyingCte syntax
