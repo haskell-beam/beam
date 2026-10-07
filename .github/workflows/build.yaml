@@ -18,21 +18,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - ghc-version: "8.10.7"
-          - ghc-version: "9.0.2"
-          - ghc-version: "9.2.8"
-          - ghc-version: "9.4.8"
-          - ghc-version: "9.6.7"
+          - ghc-version: "8.10"
+          - ghc-version: "9.0"
+          - ghc-version: "9.2"
+          - ghc-version: "9.4"
+          - ghc-version: "9.6"
             duckdb: true
-          - ghc-version: "9.8.4"
+          - ghc-version: "9.8"
             duckdb: true
-          - ghc-version: "9.10.3"
+          - ghc-version: "9.10"
             duckdb: true
             # Only one GHC version should have 'upload-documentation: true'
             upload-documentation: true
-          - ghc-version: "9.12.2"
+          - ghc-version: "9.12"
             duckdb: true
-          - ghc-version: "9.14.1"
+          - ghc-version: "9.14"
             duckdb: true
 
     steps:

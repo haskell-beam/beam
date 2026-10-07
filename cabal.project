@@ -7,8 +7,8 @@ packages:
   beam-duckdb
   beam-backend-bench
 
-tests: true
-benchmarks: true
+tests: True
+benchmarks: True
 
 -- Required to build with GHC 9.14
 allow-newer: base
