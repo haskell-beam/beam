@@ -2,7 +2,7 @@
 {-# LANGUAGE RecursiveDo #-}
 
 -- ! BUILD_COMMAND: runhaskell -XStandaloneDeriving -XTypeSynonymInstances -XDeriveGeneric -XOverloadedStrings -XFlexibleContexts -XFlexibleInstances -XTypeFamilies -XTypeApplications -XAllowAmbiguousTypes -XDeriveAnyClass -XPartialTypeSignatures -fno-warn-partial-type-signatures
--- ! BUILD_DIR: beam-sqlite/examples/
+-- ! BUILD_DIR: beam-duckdb/examples/
 -- ! FORMAT: sql
 module Main where
 
@@ -78,4 +78,4 @@ main = do
             print _ = pure ()
 
         BEAM_PLACEHOLDER
-      )
+    )
