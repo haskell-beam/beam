@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               beam-duckdb
-version:            0.3.1.0
+version:            0.3.2.0
 synopsis:           DuckDB backend for Beam
 description:        Beam driver for DuckDB, an analytics-focused open-source in-process database.
 license:            MIT
@@ -54,9 +54,7 @@ library
                     , beam-core >=0.11.1 && <0.12
                     , beam-migrate ^>=0.6
                     , bytestring >=0.10 && <0.13
-                    -- Version 0.1.5.0 contained a broken change (RowParser constructor not exposed)
-                    -- which was reverted in version 0.1.5.1
-                    , duckdb-simple (>=0.1.2 && <0.1.5) || (>=0.1.5.1 && <0.4) 
+                    , duckdb-simple >=1.0 && <1.1
                     , dlist >=0.8 && <1.1
                     , free >=4.12 && <5.3
                     , hashable >=1.1 && <1.6

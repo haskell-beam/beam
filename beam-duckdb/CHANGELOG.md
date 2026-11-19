@@ -1,5 +1,9 @@
 # Revision history for beam-duckdb
 
+## 0.3.2.0 -- 2026-11-19
+
+* `duckdb-simple-1.0` or later is now required.
+
 ## 0.3.1.0 -- 2026-05-13
 
 * Added support for `beam-migrate`: the new `Database.Beam.DuckDB.Migrate`

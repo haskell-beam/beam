@@ -4,13 +4,26 @@
       "flake": false,
       "locked": {
         "lastModified": 1000000000,
-        "narHash": "sha256-yzYN/zhcWa0318QWPLbP9YFrlKYEtj9tPl10mi4klcI=",
+        "narHash": "sha256-4OFbsapu08hLArPT/4SaTHUPLQAJQ0HRuwbZrU6V2yQ=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/duckdb-ffi-1.4.1.5/duckdb-ffi-1.4.1.5.tar.gz"
+        "url": "https://hackage.haskell.org/package/duckdb-ffi-2.0.0.0/duckdb-ffi-2.0.0.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/duckdb-ffi-1.4.1.5/duckdb-ffi-1.4.1.5.tar.gz"
+        "url": "https://hackage.haskell.org/package/duckdb-ffi-2.0.0.0/duckdb-ffi-2.0.0.0.tar.gz"
+      }
+    },
+    "duckdb-simple": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1000000000,
+        "narHash": "sha256-OWAwUrsiu8X52pMXvOCMVih2KqPGOtn72UU72F5LH8Y=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/duckdb-simple-1.0.0.0/duckdb-simple-1.0.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/duckdb-simple-1.0.0.0/duckdb-simple-1.0.0.0.tar.gz"
       }
     },
     "flake-parts": {
@@ -31,6 +44,19 @@
         "type": "github"
       }
     },
+    "geometry-simple": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1000000000,
+        "narHash": "sha256-nLFHkpTC1+HzsOuFaixrCFH/8e1oKAEuR92cPXZ4LNo=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/geometry-simple-0.1.1.0/geometry-simple-0.1.1.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/geometry-simple-0.1.1.0/geometry-simple-0.1.1.0.tar.gz"
+      }
+    },
     "haskell-flake": {
       "locked": {
         "lastModified": 1771200453,
@@ -44,6 +70,19 @@
         "owner": "srid",
         "repo": "haskell-flake",
         "type": "github"
+      }
+    },
+    "hs-bindgen-runtime": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1000000000,
+        "narHash": "sha256-BO80rhqLSrgm0zYU6tiJb6E5XjAXuQd2G/k6lTTNJ6o=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hs-bindgen-runtime-1.0.0.0/hs-bindgen-runtime-1.0.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hs-bindgen-runtime-1.0.0.0/hs-bindgen-runtime-1.0.0.0.tar.gz"
       }
     },
     "nixpkgs": {
@@ -79,8 +118,11 @@
     "root": {
       "inputs": {
         "duckdb-ffi": "duckdb-ffi",
+        "duckdb-simple": "duckdb-simple",
         "flake-parts": "flake-parts",
+        "geometry-simple": "geometry-simple",
         "haskell-flake": "haskell-flake",
+        "hs-bindgen-runtime": "hs-bindgen-runtime",
         "nixpkgs": "nixpkgs",
         "testcontainers": "testcontainers"
       }
