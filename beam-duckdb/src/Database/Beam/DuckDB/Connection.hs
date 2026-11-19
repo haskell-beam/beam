@@ -22,13 +22,14 @@ module Database.Beam.DuckDB.Connection
   )
 where
 
+import Control.Applicative ((<|>))
 import Control.Exception (SomeException (..))
 import Control.Monad (void)
 import Control.Monad.Free.Church (runF)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
-import Control.Monad.Trans.State.Strict (StateT (..), get, put)
+import Control.Monad.Trans.Reader (ReaderT (..), ask, mapReaderT)
+import Control.Monad.Trans.State.Strict (gets, mapStateT)
 import Data.Coerce (coerce)
 import qualified Data.DList as DL
 import Data.Data (cast)
@@ -59,8 +60,8 @@ import Database.Beam.DuckDB.Syntax.Extensions.Copy
     DuckDBCopyToSyntax (..),
   )
 import Database.DuckDB.Simple (Connection, FromRow, Query (Query), ResultError (..), RowParser, ToField (toField), ToRow (toRow), bind, execute, nextRow, withStatement)
+import Database.DuckDB.Simple.Conversion (conversionError, mapConversionErrors)
 import Database.DuckDB.Simple.FromRow (FromRow (..), RowParser (..), field)
-import Database.DuckDB.Simple.Ok (Ok (..))
 
 -- | 'MonadBeam' instance inside which DuckDB queries are run. See the
 -- <https://haskell-beam.github.io/beam/ user guide> for more information
@@ -184,27 +185,14 @@ instance (FromBackendRow DuckDB a) => FromRow (BeamDuckDBRow a) where
       finish = pure
 
       step :: forall a'. FromBackendRowF DuckDB (RowParser a') -> RowParser a'
-      step (ParseOneField next) =
-        RowParser $ ReaderT $ \ro -> StateT $ \st@(col, _) ->
-          case runStateT (runReaderT (runRowParser field) ro) st of
-            Ok (x, st') -> runStateT (runReaderT (runRowParser (next x)) ro) st'
-            Errors errs -> Errors (mapMaybe (translateErrors (Just col)) errs)
-      step (Alt (FromBackendRowM a) (FromBackendRowM b) next) = do
-        RowParser $ do
-          let RowParser a' = runF a finish step
-              RowParser b' = runF b finish step
-
-          st <- lift get
-          ro <- ask
-          case runStateT (runReaderT a' ro) st of
-            Ok (ra, st') -> do
-              lift $ put st'
-              runRowParser (next ra)
-            Errors aErrs ->
-              case runStateT (runReaderT b' ro) st of
-                Ok (rb, st') -> do
-                  lift $ put st'
-                  runRowParser (next rb)
-                Errors bErrs ->
-                  lift (lift (Errors (aErrs ++ bErrs)))
-      step (FailParseWith err) = RowParser (lift (lift (Errors [SomeException err])))
+      step (ParseOneField next) = do
+        col <- RowParser (lift (gets fst))
+        x <-
+          RowParser $
+            mapReaderT
+              (mapStateT (mapConversionErrors (mapMaybe (translateErrors (Just col)))))
+              (runRowParser field)
+        next x
+      step (Alt (FromBackendRowM a) (FromBackendRowM b) next) =
+        (runF a finish step <|> runF b finish step) >>= next
+      step (FailParseWith err) = RowParser (lift (lift (conversionError err)))

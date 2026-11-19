@@ -7,8 +7,18 @@
     testcontainers.url = "github:testcontainers/testcontainers-hs/e286bd2ba9747c2d8c3756a3a89910e579e318e3";
     testcontainers.flake = false;
 
-    duckdb-ffi.url = "https://hackage.haskell.org/package/duckdb-ffi-1.4.1.5/duckdb-ffi-1.4.1.5.tar.gz";
+    # duckdb-simple 1.0 and its dependencies are not in nixpkgs yet.
+    duckdb-ffi.url = "https://hackage.haskell.org/package/duckdb-ffi-2.0.0.0/duckdb-ffi-2.0.0.0.tar.gz";
     duckdb-ffi.flake = false;
+
+    duckdb-simple.url = "https://hackage.haskell.org/package/duckdb-simple-1.0.0.0/duckdb-simple-1.0.0.0.tar.gz";
+    duckdb-simple.flake = false;
+
+    geometry-simple.url = "https://hackage.haskell.org/package/geometry-simple-0.1.1.0/geometry-simple-0.1.1.0.tar.gz";
+    geometry-simple.flake = false;
+
+    hs-bindgen-runtime.url = "https://hackage.haskell.org/package/hs-bindgen-runtime-1.0.0.0/hs-bindgen-runtime-1.0.0.0.tar.gz";
+    hs-bindgen-runtime.flake = false;
   };
   outputs =
     inputs@{
@@ -29,6 +39,62 @@
           ...
         }:
         let
+          # duckdb-simple 1.0 requires exactly DuckDB 2.0.0
+          duckdb =
+            let
+              version = "2.0.0";
+              platform =
+                {
+                  x86_64-linux = "linux-amd64";
+                  aarch64-linux = "linux-arm64";
+                  x86_64-darwin = "osx-universal";
+                  aarch64-darwin = "osx-universal";
+                }
+                .${pkgs.stdenv.hostPlatform.system};
+              sha256 =
+                {
+                  shared-libs = {
+                    linux-amd64 = "993ad89e7dfca66cd6da994c2cad090c2fc160ddf9f550498a098ab4bb13cfb1";
+                    linux-arm64 = "c60eecf91143ca6bbac55c4f4d40dc22520488b0ac257c86e0fe9a2b451cf2b7";
+                    osx-universal = "14cd63180614cfd961f7959146ecd9087527ff20b67311efdc3fa1c29c18204d";
+                  };
+                  cli = {
+                    linux-amd64 = "c6507206baf7793c6013dbd82368469a45f20dc0e17a6f92f204602f652ed2bc";
+                    linux-arm64 = "859e1875d2a9515fbb4bf8871061437a14af82320da68c753f094c4b776348fe";
+                    osx-universal = "8a8f67e7c7f7d1392fa63ba3971948391392fe2a25fca63e7008e33c50beb4c2";
+                  };
+                };
+              fetchRelease =
+                kind:
+                pkgs.fetchurl {
+                  url = "https://github.com/duckdb/duckdb/releases/download/v${version}/duckdb-${kind}-${platform}.tar.gz";
+                  sha256 = sha256.${kind}.${platform};
+                };
+              libraryName = if pkgs.stdenv.hostPlatform.isDarwin then "libduckdb.dylib" else "libduckdb.so";
+            in
+            pkgs.stdenv.mkDerivation {
+              pname = "duckdb";
+              inherit version;
+              dontUnpack = true;
+              dontStrip = true;
+              nativeBuildInputs =
+                pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.autoPatchelfHook
+                # Rewriting the install name invalidates the code signature, which
+                # macOS enforces on Apple Silicon (the process is killed with SIGKILL).
+                ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+                  pkgs.fixDarwinDylibNames
+                  pkgs.darwin.autoSignDarwinBinariesHook
+                ];
+              buildInputs = pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.stdenv.cc.cc.lib;
+              installPhase = ''
+                mkdir -p $out/bin $out/lib $out/include
+                tar -xzf ${fetchRelease "shared-libs"} -C $out/lib ${libraryName}
+                tar -xzf ${fetchRelease "shared-libs"} -C $out/include --wildcards '*.h'
+                tar -xzf ${fetchRelease "cli"} -C $out/bin duckdb
+              '';
+              meta.mainProgram = "duckdb";
+            };
+
           pythonEnv = pkgs.python312.withPackages (ps: [
             ps.mkdocs
             ps.mkdocs-material
@@ -55,16 +121,20 @@
             packages = {
               testcontainers.source = inputs.testcontainers;
               duckdb-ffi.source = inputs.duckdb-ffi;
+              duckdb-simple.source = inputs.duckdb-simple;
+              geometry-simple.source = inputs.geometry-simple;
+              hs-bindgen-runtime.source = inputs.hs-bindgen-runtime;
             };
             settings = {
               testcontainers.check = false;
               beam-postgres.check = false;
               beam-duckdb.check = false;
               duckdb-simple.check = false;
-              duckdb-simple.jailbreak = true; # Version bounds are incompatible with GHC 9.10 it seems
               duckdb-ffi.broken = false;
               duckdb-ffi.check = false;
-              duckdb-ffi.extraLibraries = [ pkgs.duckdb ];
+              duckdb-ffi.extraLibraries = [ duckdb ];
+              geometry-simple.check = false;
+              hs-bindgen-runtime.check = false;
             };
 
             devShell = {
@@ -79,8 +149,8 @@
                   poetry
                   curl
                   pv
-                  duckdb
                   ;
+                inherit duckdb;
               };
             };
           };
@@ -138,7 +208,7 @@
               pkgs.sqlite
               pkgs.curl
               pkgs.pv
-              pkgs.duckdb
+              duckdb
             ];
 
             buildPhase = ''
